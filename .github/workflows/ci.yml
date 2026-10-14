@@ -35,7 +35,9 @@ jobs:
       - name: Log in to GitHub Packages
         # Winland.Ipc is a package of the winland repo, which grants this repo's workflows read access (ADR 0177).
         shell: pwsh
-        run: dotnet nuget update source github-dante-sparras --username dante-sparras --password "${{ github.token }}" --store-password-in-clear-text --configfile nuget.config
+        # The login goes in the runner's own NuGet config. Written into the repo's nuget.config, it would make the checkout
+        # changed, and every build a -dev version.
+        run: dotnet nuget add source https://nuget.pkg.github.com/dante-sparras/index.json --name github-dante-sparras --username dante-sparras --password "${{ github.token }}" --store-password-in-clear-text
 
       - name: Test
         run: dotnet test tests/Winshell.Tests/Winshell.Tests.csproj -c Release
