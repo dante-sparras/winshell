@@ -6,7 +6,7 @@ An ADR states one standing decision and why, in the present tense, and is true a
 
 ## Products
 
-- [Winoma ADR 0176](https://github.com/dante-sparras/winoma/blob/main/docs/adr/0176-the-repo-builds-three-products.md) Winland, Winshell, and Winoma are three products. The shell's application is the only one, and the shell draws the bar, panel, toast, and pill. An extension hands it a look and hands. `Winshell.Core` references only `Winland.Ipc`.
+- [Winoma ADR 0176](https://github.com/dante-sparras/winoma/blob/main/docs/adr/0176-three-products.md) Winland, Winshell, and Winoma are three products. The shell's application is the only one, and the shell draws the bar, panel, toast, and pill. An extension hands it a look and hands. `Winshell.Core` references only `Winland.Ipc`.
 - [Winoma ADR 0177](https://github.com/dante-sparras/winoma/blob/main/docs/adr/0177-three-products-are-three-repos.md) The three products are three repos. Winshell builds on the Winland.Ipc package and publishes Winshell.Core and Winshell.Kit as packages Winoma pins. A bug in another product is an issue in that product's repo.
 - [Winland ADR 0059](https://github.com/dante-sparras/winland/blob/main/docs/adr/0059-the-desktop-writes-down-the-windows-it-hides.md) `Winshell.Watch` waits for `Local\Winshell` and gives the taskbar back. It runs from a copy, so the live folder can be overwritten.
 
