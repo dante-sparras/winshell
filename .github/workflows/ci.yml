@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         # The login goes in the runner's own NuGet config. Written into the repo's nuget.config, it would make the checkout
         # changed, and every build a -dev version.
-        run: dotnet nuget add source https://nuget.pkg.github.com/dante-sparras/index.json --name github-dante-sparras --username dante-sparras --password "${{ github.token }}" --store-password-in-clear-text
+        run: dotnet nuget add source https://nuget.pkg.github.com/dante-sparras/index.json --name github-dante-sparras --username dante-sparras --password "${{ github.token }}" --store-password-in-clear-text --configfile (Join-Path $env:APPDATA 'NuGet/NuGet.Config')
 
       - name: Test
         run: dotnet test tests/Winshell.Tests/Winshell.Tests.csproj -c Release
