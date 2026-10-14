@@ -151,7 +151,8 @@ public sealed class ShellHostTests
     {
         var name = "Winshell.Test." + Guid.NewGuid().ToString("N");
         using var listening = new ManualResetEventSlim(false);
-        var server = Task.Run(() =>
+        // The server runs on a thread of its own: a cold CI runner can take seconds to give the thread pool one.
+        var server = Task.Factory.StartNew(() =>
         {
             using var pipe = new System.IO.Pipes.NamedPipeServerStream(
                 name,
@@ -165,13 +166,13 @@ public sealed class ShellHostTests
             reader.ReadLine().Should().Be("state -j");
             using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
             writer.WriteLine("panel none\nbar 0 top demo.sheet");
-        });
+        }, TaskCreationOptions.LongRunning);
 
-        listening.Wait(TimeSpan.FromSeconds(2)).Should().BeTrue();
+        listening.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
         var output = new StringWriter();
         var error = new StringWriter();
         var code = ShellClient.Ask(name, "state -j", output, error);
-        server.Wait(TimeSpan.FromSeconds(2)).Should().BeTrue();
+        server.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
         code.Should().Be(0);
         output.ToString().TrimEnd().Should().Be("panel none\nbar 0 top demo.sheet");
         error.ToString().Should().BeEmpty();
