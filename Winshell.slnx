@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Winshell.Cli/Winshell.Cli.csproj" />
+    <Project Path="src/Winshell.Core/Winshell.Core.csproj" />
+    <Project Path="src/Winshell.Kit/Winshell.Kit.csproj" />
+    <Project Path="src/Winshell/Winshell.csproj">
+      <Platform Project="x86" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Winshell.Tests/Winshell.Tests.csproj" />
+  </Folder>
+</Solution>

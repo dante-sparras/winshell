@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Winshell.Core</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <!-- winoma.exe is native code. Host code it can reach must not need reflection. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Winland.Ipc" Version="$(WinlandVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Winshell.Tests" />
+    <InternalsVisibleTo Include="Winoma.Tests" />
+    <!-- The desktop installs the chord check, the service map, and the family binder, and it still calls layout editors that were internal in one assembly. -->
+    <InternalsVisibleTo Include="Winoma.Core" />
+    <InternalsVisibleTo Include="Winshell.Kit" />
+  </ItemGroup>
+</Project>

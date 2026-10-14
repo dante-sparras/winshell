@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+# dev.ps1 -Local writes it.
+local.props
+
+# The Quickshell checkout and its manual. Not part of this repo. pwsh dev.ps1 brings them back after a clone.
+docs/agents/quickshell/
