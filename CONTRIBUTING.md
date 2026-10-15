@@ -25,6 +25,12 @@ Install the pre-push hook once. It runs the lint against the tip of each branch 
 pwsh -NoProfile -File scripts/check.ps1 -InstallHook
 ```
 
+Install the post-merge hook once. After a pull or merge updates `main`, it deletes a local feature branch whose GitHub head branch is gone when those changes are already on `main` or on a `release/*` line. It leaves `main`, `master`, `release/*`, a branch checked out in a worktree, and a branch that still has work that has not landed.
+
+```powershell
+pwsh -NoProfile -File scripts/install-post-merge.ps1
+```
+
 Maintainers merge with **Rebase and merge** so your commits stay yours. GitHub deletes the head branch when the pull request merges.
 
 ## What CI runs
