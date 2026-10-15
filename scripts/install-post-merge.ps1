@@ -1,9 +1,22 @@
-# Copy the post-merge hook into this checkout. The installed file is LF-only.
+# Copy the post-merge hook into the common hooks directory and point this
+# clone at it. The installed file is LF-only. Linked worktrees share it.
 #   pwsh -NoProfile -File scripts/install-post-merge.ps1
 $ErrorActionPreference = 'Stop'
 
-$hooks = git rev-parse --git-path hooks
+foreach ($name in @('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX')) {
+    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+}
+
+$root = Split-Path $PSScriptRoot -Parent
+$common = (& git -C $root rev-parse --git-common-dir).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'This directory is not a git checkout.' }
+if (-not [System.IO.Path]::IsPathRooted($common)) {
+    $common = Join-Path $root $common
+}
+$hooks = Join-Path $common 'hooks'
+New-Item -ItemType Directory -Force -Path $hooks | Out-Null
+& git -C $root config core.hooksPath $hooks
+if ($LASTEXITCODE -ne 0) { throw 'Could not set core.hooksPath.' }
 
 $source = Join-Path $PSScriptRoot 'hooks/post-merge'
 if (-not (Test-Path -LiteralPath $source)) { throw "Missing $source" }
