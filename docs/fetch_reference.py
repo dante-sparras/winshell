@@ -1,4 +1,4 @@
-# Fetches the Quickshell v0.3.2 documentation into markdown. dev.ps1 calls this.
+# Fetches the Quickshell v0.3.2 documentation into markdown. scripts/dev.ps1 calls this.
 # Do not edit the pages it writes.
 
 import argparse
@@ -26,7 +26,7 @@ SITE = {
     "hosts": {"quickshell.org"},
     "blurb": "A copy of the Quickshell v0.3.2 documentation.",
     "owners": "The text belongs to the Quickshell authors.",
-    "refresh": "pwsh dev.ps1 -Refresh",
+    "refresh": "pwsh scripts/dev.ps1 -Refresh",
 }
 
 
@@ -341,7 +341,7 @@ def one(site, url, files_by_key, image_dir):
     if not body.lstrip().startswith("#"):
         body = f"# {title}\n\n{body}"
     body = rewrite_links(body, site, url, target, files_by_key)
-    header = f"<!-- Source: {url} · fetched {TODAY}. Do not edit, run pwsh dev.ps1. -->\n\n"
+    header = f"<!-- Source: {url} · fetched {TODAY}. Do not edit, run pwsh scripts/dev.ps1. -->\n\n"
     return key, title, target, header + body
 
 
