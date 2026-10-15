@@ -1,4 +1,4 @@
-# Fetches a published doc site into markdown. dev.ps1 calls this for Omarchy, Quickshell, and Hyprland.
+# Fetches the Quickshell v0.3.2 documentation into markdown. dev.ps1 calls this.
 # Do not edit the pages it writes.
 
 import argparse
@@ -16,44 +16,17 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 
-USER_AGENT = "winoma-docs-fetch"
+USER_AGENT = "quickshell-docs-fetch"
 TODAY = date.today().isoformat()
 
-SITES = {
-    "omarchy": {
-        "entry": "https://omarchy.org/manual/",
-        "sitemap": None,
-        "prefix": "https://omarchy.org/manual/",
-        "extra": [
-            "https://plugins.omarchy.org/develop.html",
-            "https://plugins.omarchy.org/publish.html",
-        ],
-        "hosts": {"omarchy.org", "plugins.omarchy.org"},
-        "select": "omarchy",
-        "blurb": "A copy of the Omarchy manual and the plugin guides, kept here so Winoma can be checked against it.",
-        "owners": "The text belongs to the Omarchy authors.",
-        "refresh": "pwsh dev.ps1 -Refresh",
-    },
-    "quickshell": {
-        "entry": "https://quickshell.org/docs/v0.3.2/",
-        "sitemap": "https://quickshell.org/sitemap-0.xml",
-        "prefix": "https://quickshell.org/docs/v0.3.2/",
-        "hosts": {"quickshell.org"},
-        "select": "quickshell",
-        "blurb": "A copy of the Quickshell v0.3.2 documentation, kept here so Winoma can be checked against it.",
-        "owners": "The text belongs to the Quickshell authors.",
-        "refresh": "pwsh dev.ps1 -Refresh",
-    },
-    "hyprland": {
-        "entry": "https://wiki.hypr.land/",
-        "sitemap": "https://wiki.hypr.land/sitemap.xml",
-        "prefix": "https://wiki.hypr.land/",
-        "hosts": {"wiki.hypr.land"},
-        "select": "hyprland",
-        "blurb": "A copy of the Hyprland wiki, kept here so Winoma can be checked against it. The wiki tracks the latest Hyprland git commit, not a tagged release.",
-        "owners": "The text belongs to the Hyprland authors.",
-        "refresh": "pwsh dev.ps1 -Refresh",
-    },
+SITE = {
+    "entry": "https://quickshell.org/docs/v0.3.2/",
+    "sitemap": "https://quickshell.org/sitemap-0.xml",
+    "prefix": "https://quickshell.org/docs/v0.3.2/",
+    "hosts": {"quickshell.org"},
+    "blurb": "A copy of the Quickshell v0.3.2 documentation.",
+    "owners": "The text belongs to the Quickshell authors.",
+    "refresh": "pwsh dev.ps1 -Refresh",
 }
 
 
@@ -85,33 +58,17 @@ def sitemap_urls(site):
     urls = []
     seen = set()
     prefix = site["prefix"]
-    if site.get("sitemap"):
-        raw = fetch(site["sitemap"]).decode("utf-8", errors="replace")
-        for url in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", raw):
-            url = url.split("#", 1)[0]
-            if not url.startswith(prefix):
-                continue
-            if url.rstrip("/") in {"https://wiki.hypr.land/tags", "https://wiki.hypr.land/categories"}:
-                continue
+    raw = fetch(site["sitemap"]).decode("utf-8", errors="replace")
+    for url in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", raw):
+        url = url.split("#", 1)[0]
+        if url.startswith(prefix):
             add_url(urls, seen, url)
-    else:
-        soup = BeautifulSoup(fetch(site["entry"]), "html.parser")
-        for anchor in soup.select("a[href]"):
-            absolute = urllib.parse.urljoin(site["entry"], anchor.get("href") or "")
-            absolute = absolute.split("#", 1)[0]
-            if absolute.startswith(prefix):
-                add_url(urls, seen, absolute)
-    for url in site.get("extra") or []:
-        add_url(urls, seen, url)
     add_url(urls, seen, site["entry"])
     return urls
 
 
 def page_key(site, url):
-    parsed = urllib.parse.urlparse(url)
-    if parsed.netloc == "plugins.omarchy.org":
-        return "plugins/" + Path(parsed.path).stem
-    path = parsed.path
+    path = urllib.parse.urlparse(url).path
     prefix = urllib.parse.urlparse(site["prefix"]).path
     if path.startswith(prefix):
         path = path[len(prefix):]
@@ -126,42 +83,26 @@ def file_for(key, keys):
     return key + ".md"
 
 
-def clean_title(text, site_name):
+def clean_title(text):
     text = re.sub(r"\s+", " ", text or "").strip()
-    for suffix in (" – Hyprland Wiki", " - Hyprland Wiki", " – Quickshell", " - Quickshell", " | Quickshell", " - Omarchy Manual", " - Omarchy", " | Omarchy Plugins"):
+    for suffix in (" – Quickshell", " - Quickshell", " | Quickshell"):
         if text.endswith(suffix):
             text = text[: -len(suffix)].strip()
-    if site_name == "quickshell" and text.startswith("Quickshell - "):
+    if text.startswith("Quickshell - "):
         text = text[len("Quickshell - "):]
     return text or "Untitled"
 
 
 def prepare(site, html, page_url, image_dir, page_file):
     soup = BeautifulSoup(html, "html.parser")
-    if site["select"] == "quickshell":
-        node = soup.select_one("div.docs-content")
-    elif site["select"] == "omarchy":
-        node = soup.select_one("article") or soup.select_one("main.page-content") or soup.select_one("main")
-    else:
-        nodes = soup.select("div.content")
-        node = next((item for item in nodes if item.find(["h1", "h2"])), None)
-        if node is None and nodes:
-            node = nodes[-1]
+    node = soup.select_one("div.docs-content")
     if node is None:
         node = soup.select_one("main") or soup.select_one("article") or soup.body
     title_node = soup.find("title")
-    title = clean_title(title_node.get_text(" ", strip=True) if title_node else "", site["select"])
+    title = clean_title(title_node.get_text(" ", strip=True) if title_node else "")
 
     for tag in node.select("script, style, svg, button, nav, form, astro-island"):
         tag.decompose()
-
-    if site["select"] == "omarchy":
-        for header in node.select("header"):
-            header.decompose()
-        for mark in node.select(".manual__hash"):
-            mark.decompose()
-        for link in node.select("a.manual__heading-link"):
-            link.unwrap()
 
     heading = node.select_one("h2.typedocs-title-text")
     if heading is not None and node.find("h1") is None:
@@ -333,19 +274,9 @@ def rewrite_links(text, site, page_url, page_file, files_by_key):
 
 def sidebar(site, html):
     soup = BeautifulSoup(html, "html.parser")
-    if site["select"] == "hyprland":
-        anchors = soup.select("aside a[href]")
-    elif site["select"] == "omarchy":
-        anchors = []
-        for nav in soup.select("nav"):
-            found = nav.select("a[href]")
-            if len(found) > len(anchors):
-                anchors = found
-    else:
-        anchors = soup.select("a[href]")
     items = []
     seen = set()
-    for anchor in anchors:
+    for anchor in soup.select("a[href]"):
         href = anchor.get("href") or ""
         if href.startswith("#"):
             continue
@@ -355,7 +286,7 @@ def sidebar(site, html):
         key = page_key(site, absolute + "/")
         if key in seen:
             continue
-        if site["select"] == "quickshell" and key.startswith("types/") and key != "types":
+        if key.startswith("types/") and key != "types":
             continue
         title = re.sub(r"\s+", " ", anchor.get_text(" ", strip=True))
         if not title or title in {"v0.3.2"}:
@@ -367,7 +298,7 @@ def sidebar(site, html):
 
 def write_readme(site, root, pages, order):
     lines = [
-        f"# {site['select'].capitalize()} documentation",
+        "# Quickshell documentation",
         "",
         f"{site['blurb']} Fetched {TODAY}.",
         "",
@@ -376,12 +307,6 @@ def write_readme(site, root, pages, order):
         f"From <{site['entry']}>.",
         "",
     ]
-    if site["select"] == "hyprland":
-        lines += [
-            "Videos stay linked to `dl.hypr.land`. They are not copied into this folder.",
-            "",
-        ]
-    listed = set()
     lines.append("## Pages")
     lines.append("")
     for key, title in order:
@@ -391,7 +316,6 @@ def write_readme(site, root, pages, order):
         depth = 0 if key == "" else key.count("/")
         indent = "  " * depth
         lines.append(f"{indent}- [{title}]({target.replace(chr(92), '/')})")
-        listed.add(key)
     lines.append("")
     (root / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -423,11 +347,10 @@ def one(site, url, files_by_key, image_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--site", required=True, choices=sorted(SITES))
     parser.add_argument("--root", required=True)
     parser.add_argument("--only", action="append", default=[])
     args = parser.parse_args()
-    site = SITES[args.site]
+    site = SITE
     root = Path(args.root)
     all_urls = sitemap_urls(site)
     urls = all_urls
