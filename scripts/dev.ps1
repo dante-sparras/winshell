@@ -24,5 +24,5 @@ if (-not $Refresh -and (Test-Path (Join-Path $dest 'site/README.md'))) {
     Write-Output 'Manual already present'
     return
 }
-pwsh -NoProfile -File (Join-Path $root 'scripts/fetch-reference.ps1') -Root (Join-Path $dest 'site')
+dotnet run (Join-Path $root 'scripts/fetch-reference.cs') -- --root (Join-Path $dest 'site')
 if ($LASTEXITCODE -ne 0) { throw "Quickshell manual fetch failed with $LASTEXITCODE" }

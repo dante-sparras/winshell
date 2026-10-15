@@ -8,7 +8,7 @@ Run `pwsh scripts/dev.ps1` after cloning. It clones Quickshell into `docs/agents
 # Conventions
 
 - The Quickshell checkout and its manual are gitignored.
-- `scripts/fetch-reference.ps1` reads <https://quickshell.org/docs/v0.3.2/> and writes markdown under the manual folder. Leave those pages as the fetcher wrote them.
+- `scripts/fetch-reference.cs` reads <https://quickshell.org/docs/v0.3.2/> and writes markdown under the manual folder. Leave those pages as the fetcher wrote them.
 - Domain docs: `docs/agents/domain.md`.
 
 # Architecture
