@@ -16,7 +16,7 @@ A published release is an annotated tag `vX.Y.Z` and a GitHub release on that ta
 1. `git fetch origin main` and confirm the commit is on `origin/main`.
 2. Confirm it descends from the previous `vX.Y.Z`: `git merge-base --is-ancestor <previous> <commit>`.
 3. Choose the bump. Patch unless you mean a minor or major.
-4. Tag an annotated release candidate, push it, and open a **draft** GitHub release. Dispatch **CI** from `main` with **Release run** on, for that commit. The draft stays unpublished.
+4. Tag an annotated release candidate, push it, and open a **draft** GitHub release. Dispatch **CI** from `main` with **Release run** on. That run is the strict gate, and it includes mutation testing. The draft stays unpublished.
 5. When that run is green, create the annotated `vX.Y.Z` on the same commit, point the GitHub release at it, and publish.
 6. Do not press Publish on the draft in the GitHub UI. That skips the receipt tag.
 

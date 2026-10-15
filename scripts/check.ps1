@@ -9,9 +9,28 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Install-PrePushHook {
-    $hooks = git rev-parse --git-path hooks
+# A hook exports GIT_DIR. Clear it so git commands in this script use the checkout.
+foreach ($name in @('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX')) {
+    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+}
+
+$repoRoot = Split-Path $PSScriptRoot -Parent
+
+function Get-HooksDirectory([string]$Root) {
+    $common = (& git -C $Root rev-parse --git-common-dir).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'This directory is not a git checkout.' }
+    if (-not [System.IO.Path]::IsPathRooted($common)) {
+        $common = Join-Path $Root $common
+    }
+    $hooks = Join-Path $common 'hooks'
+    New-Item -ItemType Directory -Force -Path $hooks | Out-Null
+    & git -C $Root config core.hooksPath $hooks
+    if ($LASTEXITCODE -ne 0) { throw 'Could not set core.hooksPath.' }
+    return $hooks
+}
+
+function Install-PrePushHook {
+    $hooks = Get-HooksDirectory $repoRoot
     $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
     $path = Join-Path $hooks 'pre-push'
     $body = @"
@@ -31,22 +50,14 @@ done
 exit "`$status"
 "@
     $body = $body.Replace("`r`n", "`n")
-    [System.IO.File]::WriteAllText($path, $body)
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($path, $body, $utf8)
     Write-Output "Installed $path"
 }
 
 if ($InstallHook) {
     Install-PrePushHook
     if (-not $Ref) { exit 0 }
-}
-
-$scratch = $null
-$root = Split-Path $PSScriptRoot -Parent
-if ($Ref) {
-    $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("winshell-check-" + [guid]::NewGuid().ToString('n'))
-    New-Item -ItemType Directory -Path $scratch | Out-Null
-    $root = Join-Path $scratch 'tree'
-    New-Item -ItemType Directory -Path $root | Out-Null
 }
 
 function Get-LintFiles([string]$start, [string]$filter) {
@@ -56,7 +67,7 @@ function Get-LintFiles([string]$start, [string]$filter) {
     while ($stack.Count -gt 0) {
         $dir = $stack.Pop()
         $name = Split-Path $dir -Leaf
-        if ($name -in @('.git', 'bin', 'obj', 'quickshell', 'StrykerOutput', 'node_modules', '__pycache__')) {
+        if ($name -in @('.git', 'bin', 'obj', 'StrykerOutput', 'node_modules', '__pycache__', 'omarchy', 'quickshell', 'hyprland')) {
             continue
         }
         foreach ($file in [System.IO.Directory]::EnumerateFiles($dir, $filter)) {
@@ -70,25 +81,19 @@ function Get-LintFiles([string]$start, [string]$filter) {
 }
 
 $failed = 0
+$scratch = $null
+$root = $repoRoot
 try {
     if ($Ref) {
-        $listed = @(git ls-tree -r --name-only $Ref)
-        if ($LASTEXITCODE -ne 0) { throw "git ls-tree $Ref failed" }
-        foreach ($rel in $listed) {
-            if ($rel -notmatch '\.(py|ps1)$') { continue }
-            $dest = Join-Path $root ($rel.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
-            $parent = Split-Path $dest -Parent
-            if (-not (Test-Path $parent)) {
-                New-Item -ItemType Directory -Path $parent -Force | Out-Null
-            }
-            $proc = Start-Process -FilePath git -ArgumentList @('-c', 'core.pager=', 'cat-file', '-p', "${Ref}:${rel}") -RedirectStandardOutput $dest -NoNewWindow -Wait -PassThru
-            if ($proc.ExitCode -ne 0) { throw "git cat-file ${Ref}:${rel} failed" }
-        }
+        $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ("repo-check-" + [guid]::NewGuid().ToString('n'))
+        & git -C $repoRoot worktree add --detach $scratch $Ref
+        if ($LASTEXITCODE -ne 0) { throw "git worktree add $Ref failed" }
+        $root = $scratch
     }
 
     $python = Get-Command python -ErrorAction SilentlyContinue
     if (-not $python) { throw 'python is not on PATH. The lint compiles docs/fetch_reference.py.' }
-    $env:PYTHONPYCACHEPREFIX = Join-Path ([System.IO.Path]::GetTempPath()) 'winshell-pyc'
+    $env:PYTHONPYCACHEPREFIX = Join-Path ([System.IO.Path]::GetTempPath()) 'repo-pyc'
 
     $pyFiles = @(Get-LintFiles $root '*.py')
     if ($pyFiles.Count -eq 0) {
@@ -113,8 +118,27 @@ try {
             Write-Output "powershell parse $file"
         }
     }
+
+    $solutions = @()
+    $solutions += @(Get-ChildItem -Path $root -Filter *.slnx -File -ErrorAction SilentlyContinue)
+    if ($solutions.Count -eq 0) {
+        $solutions += @(Get-ChildItem -Path $root -Filter *.sln -File -ErrorAction SilentlyContinue)
+    }
+    if ($solutions.Count -eq 0) {
+        Write-Output 'No solution to build.'
+    }
+    foreach ($solution in $solutions) {
+        Write-Output "dotnet build $($solution.FullName)"
+        dotnet build $solution.FullName --configuration Release --nologo
+        if ($LASTEXITCODE -ne 0) { $failed = 1 }
+    }
 } finally {
-    if ($scratch) { Remove-Item -Recurse -Force $scratch }
+    if ($scratch) {
+        & git -C $repoRoot worktree remove --force $scratch
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output "Could not remove worktree $scratch"
+        }
+    }
 }
 
 exit $failed

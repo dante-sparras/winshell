@@ -19,13 +19,15 @@
 
 3. Fill in the pull request template.
 
-Install the pre-push hook once. It runs the lint against the tip of each branch you push, not against every commit in the push:
+`pwsh dev.ps1` installs both hooks. You can install them on their own.
+
+The pre-push hook runs the lint against the tip of each branch you push, not against every commit in the push:
 
 ```powershell
 pwsh -NoProfile -File scripts/check.ps1 -InstallHook
 ```
 
-Install the post-merge hook once. After a pull or merge updates `main`, it deletes a local feature branch whose GitHub head branch is gone when those changes are already on `main` or on a `release/*` line. It leaves `main`, `master`, `release/*`, a branch checked out in a worktree, and a branch that still has work that has not landed.
+The post-merge hook runs after a pull or merge updates `main`. It deletes a local feature branch whose GitHub head branch is gone when those changes are already on `main` or on a `release/*` line. It leaves `main`, `master`, `release/*`, a branch checked out in a worktree, and a branch that still has work that has not landed.
 
 ```powershell
 pwsh -NoProfile -File scripts/install-post-merge.ps1
@@ -37,9 +39,9 @@ Maintainers merge with **Rebase and merge** so your commits stay yours. GitHub d
 
 Pull requests and pushes to `main` run `.github/workflows/ci.yml`. The required check is **All required checks pass (v1)**. That job is the only name the ruleset knows.
 
-Lint compiles the Python in this repo and parses the PowerShell. The test lane runs `dotnet test` on each project under `tests/`. Until a test project exists, that lane passes. Mutation testing runs in the same situations as the test lane and passes until a test project exists. A pull request that does not touch .NET files skips both lanes. A push to `main`, and a manual run, run every lane.
+Lint compiles the Python in this repo, parses the PowerShell, and builds a solution at the repo root when one exists. The test lane runs `dotnet test` on each `*.Tests.csproj` under `tests/`, and it skips `*.Smoke.Tests.csproj`. Until a unit test project exists, that lane passes. A pull request that does not touch .NET files skips the test lane. A push to `main`, and a manual run, run the test lane.
 
-A release run is a manual dispatch of CI with **Release run** turned on. A lane that skipped is a failure on that run.
+Mutation testing is the slow lane. It runs only when CI is dispatched with **Release run** turned on, and it passes until a unit test project exists. On that release run, a lane that skipped is a failure.
 
 ## Rules on `main` and `release/*`
 

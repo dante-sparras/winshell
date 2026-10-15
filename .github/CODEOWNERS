@@ -6,10 +6,22 @@
 # Workflows decide what CI executes.
 /.github/                  @dante-sparras
 
-# An edit here changes what a build restores or what the mutation gate allows.
+# An edit here changes what a build restores, what the SDK is, or what the mutation gate allows.
 /nuget.config              @dante-sparras
 /.config/                  @dante-sparras
 /stryker-config.json       @dante-sparras
+/global.json               @dante-sparras
+/Directory.Build.props     @dante-sparras
+/Directory.Build.targets   @dante-sparras
+/Directory.Packages.props  @dante-sparras
+/version.ps1               @dante-sparras
+/scripts/                  @dante-sparras
+/dev.ps1                   @dante-sparras
+
+# Installers, lockfiles, images: an edit here changes what users run.
+/pyproject.toml            @dante-sparras
+/package.json              @dante-sparras
+/uv.lock                   @dante-sparras
 *package-lock.json         @dante-sparras
 *Dockerfile                @dante-sparras
 

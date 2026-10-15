@@ -1,16 +1,5 @@
 {
   "stryker-config": {
-    "ignore-mutations": [
-      "string",
-      "logical"
-    ],
-    "ignore-methods": [
-      "*Logs"
-    ],
-    "mutate": [
-      "!**/Migrations/*",
-      "!**/*.Designer.cs"
-    ],
     "reporters": [
       "html",
       "cleartext",

@@ -1,9 +1,14 @@
+# Shared by Winoma, Winshell, and Winland. Keep the copies identical.
 # One pull-request entry point. mutation.yml is workflow_call only.
 # Branch protection requires only the job name "All required checks pass (v1)".
 # When a required job is added, bump (v1) here and in
 # .github/rulesets/protect-main.json in the same change. A green check on a
 # commit stays green forever, so the new name is what makes an old green stop counting.
 # Do not add secrets to this workflow. pull_request runs the file from the pull request.
+#
+# Test and lint run on Windows. A net10.0-windows project does not build on Ubuntu.
+# Push runs only on main. A release/* branch is checked by pull_request, not by push.
+# Mutation testing is the slow lane. It runs when CI is dispatched with release=true.
 
 name: CI
 
@@ -42,6 +47,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       # Push and manual runs fail open so a bad classification cannot weaken main.
       - name: Classify the diff
         id: classify
@@ -60,7 +66,7 @@ jobs:
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
-              *.cs|*.csproj|*.sln|*.fsproj|nuget.config|stryker-config.json|global.json|Directory.Build.*|Directory.Packages.*|.config/*|tests/*)
+              *.cs|*.csproj|*.sln|*.slnx|*.fsproj|nuget.config|stryker-config.json|global.json|Directory.Build.*|Directory.Packages.*|.config/*|tests/*|scripts/*)
                 dotnet=true
                 ;;
             esac
@@ -72,9 +78,14 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
       - name: Run lint
         shell: pwsh
         run: ./scripts/check.ps1
@@ -86,9 +97,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
       - name: Run tests
         shell: pwsh
         run: ./scripts/test.ps1
@@ -101,6 +114,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Reject unrelated history
         run: |
           git fetch origin main
@@ -112,7 +126,7 @@ jobs:
   mutation:
     name: Mutation testing
     needs: detect
-    if: needs.detect.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.dotnet == 'true')
+    if: needs.detect.result == 'success' && inputs.release == true
     uses: ./.github/workflows/mutation.yml
 
   # The ruleset names this check and no other. An intentional skip of Test or

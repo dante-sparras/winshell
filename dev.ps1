@@ -8,6 +8,11 @@ param([switch]$Refresh)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
+pwsh -NoProfile -File (Join-Path $root 'scripts/check.ps1') -InstallHook
+if ($LASTEXITCODE -ne 0) { throw "pre-push hook install failed with $LASTEXITCODE" }
+pwsh -NoProfile -File (Join-Path $root 'scripts/install-post-merge.ps1')
+if ($LASTEXITCODE -ne 0) { throw "post-merge hook install failed with $LASTEXITCODE" }
+
 $dest = Join-Path $root 'docs/agents/quickshell'
 if (-not (Test-Path (Join-Path $dest '.git'))) {
     if (Test-Path $dest) { throw "$dest exists but is not a git checkout" }
