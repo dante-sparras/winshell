@@ -1,0 +1,161 @@
+# One pull-request entry point. mutation.yml is workflow_call only.
+# Branch protection requires only the job name "All required checks pass (v1)".
+# When a required job is added, bump (v1) here and in
+# .github/rulesets/protect-main.json in the same change. A green check on a
+# commit stays green forever, so the new name is what makes an old green stop counting.
+# Do not add secrets to this workflow. pull_request runs the file from the pull request.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release run: skipped required lanes fail"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  detect:
+    name: Detect
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.classify.outputs.dotnet }}
+    steps:
+      - name: Checkout the pull request head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      # Push and manual runs fail open so a bad classification cannot weaken main.
+      - name: Classify the diff
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "dotnet=true" >> "$GITHUB_OUTPUT"
+            echo "dotnet lane: true (fail open)"
+            exit 0
+          fi
+          git fetch origin "$BASE_REF"
+          dotnet=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              *.cs|*.csproj|*.sln|*.fsproj|nuget.config|stryker-config.json|global.json|Directory.Build.*|Directory.Packages.*|.config/*|tests/*)
+                dotnet=true
+                ;;
+            esac
+          done <<EOF
+          $(git diff --name-only "origin/${BASE_REF}...HEAD")
+          EOF
+          echo "dotnet=$dotnet" >> "$GITHUB_OUTPUT"
+          echo "dotnet lane: $dotnet"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Run lint
+        shell: pwsh
+        run: ./scripts/check.ps1
+
+  test:
+    name: Test
+    needs: detect
+    if: needs.detect.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.dotnet == 'true')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Run tests
+        shell: pwsh
+        run: ./scripts/test.ps1
+
+  history:
+    name: History shares an ancestor with main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Reject unrelated history
+        run: |
+          git fetch origin main
+          if ! git merge-base origin/main HEAD >/dev/null; then
+            echo "::error::This branch has no common ancestor with main."
+            exit 1
+          fi
+
+  mutation:
+    name: Mutation testing
+    needs: detect
+    if: needs.detect.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.dotnet == 'true')
+    uses: ./.github/workflows/mutation.yml
+
+  # The ruleset names this check and no other. An intentional skip of Test or
+  # Mutation is success. A skip of Detect, Lint, or History is a failure.
+  # inputs.release makes a skipped Test or Mutation a failure too.
+  all-checks-pass:
+    name: All required checks pass (v1)
+    needs: [detect, lint, test, history, mutation]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any required job failed
+        env:
+          RELEASE: ${{ inputs.release && 'true' || 'false' }}
+          DETECT: ${{ needs.detect.result }}
+          LINT: ${{ needs.lint.result }}
+          TEST: ${{ needs.test.result }}
+          HISTORY: ${{ needs.history.result }}
+          MUTATION: ${{ needs.mutation.result }}
+        run: |
+          failed=0
+          check() {
+            name="$1"
+            value="$2"
+            kind="$3"
+            echo "$name=$value"
+            case "$value" in
+              success) ;;
+              skipped)
+                if [ "$kind" = "always" ] || [ "$RELEASE" = "true" ]; then
+                  echo "::error::$name was skipped"
+                  failed=1
+                fi
+                ;;
+              *)
+                echo "::error::$name result is $value"
+                failed=1
+                ;;
+            esac
+          }
+          check DETECT "$DETECT" always
+          check LINT "$LINT" always
+          check HISTORY "$HISTORY" always
+          check TEST "$TEST" lane
+          check MUTATION "$MUTATION" lane
+          exit "$failed"

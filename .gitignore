@@ -3,6 +3,7 @@ obj/
 .vs/
 *.user
 TestResults/
+StrykerOutput/
 __pycache__/
 *.pyc
 
