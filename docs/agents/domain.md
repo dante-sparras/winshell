@@ -5,7 +5,7 @@ Read these before exploring. A missing file is skipped silently.
 - `CONTEXT.md` at the repo root: the glossary.
 - `docs/adr/README.md`: decisions by area. Read the ADRs it lists for the area you are about to work in, and keep the index in step when an ADR is added, rewritten, or deleted.
 
-`/domain-modeling` creates and edits these files when terms or decisions get resolved.
+This repo is one context. Neither `CONTEXT.md` nor `docs/adr/` exists yet. `/domain-modeling` creates and edits these files when terms or decisions get resolved.
 
 ## Vocabulary
 
@@ -15,4 +15,4 @@ Name a domain concept (in an issue title, a refactor proposal, a hypothesis, a t
 
 An output that contradicts an ADR says so:
 
-> _Contradicts ADR 0003 (a Workspace is a number) — but worth reopening because…_
+> _Contradicts ADR NNNN (<the decision's title>) — but worth reopening because…_
