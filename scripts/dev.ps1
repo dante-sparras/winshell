@@ -1,12 +1,13 @@
 # Prepares this repo. Git does not run scripts on clone.
-# After cloning, run: pwsh dev.ps1
+# After cloning, run: pwsh scripts/dev.ps1
 #
-#   pwsh dev.ps1           clones Quickshell into docs/agents/quickshell and fetches its manual into site/ there
-#   pwsh dev.ps1 -Refresh  downloads the manual again
+#   pwsh scripts/dev.ps1           clones Quickshell into docs/agents/quickshell and fetches its manual into site/ there
+#   pwsh scripts/dev.ps1 -Refresh  downloads the manual again
 param([switch]$Refresh)
 
 $ErrorActionPreference = 'Stop'
-$root = $PSScriptRoot
+# This file lives in scripts/. The repo root is the parent of this directory.
+$root = Split-Path -Parent $PSScriptRoot
 
 pwsh -NoProfile -File (Join-Path $root 'scripts/check.ps1') -InstallHook
 if ($LASTEXITCODE -ne 0) { throw "pre-push hook install failed with $LASTEXITCODE" }
