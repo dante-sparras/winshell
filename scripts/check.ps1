@@ -72,11 +72,18 @@ function Get-LintFiles([string]$start, [string]$filter) {
 $failed = 0
 try {
     if ($Ref) {
-        $archive = Join-Path $scratch 'src.tar'
-        git archive --format=tar -o $archive $Ref
-        if ($LASTEXITCODE -ne 0) { throw "git archive $Ref failed" }
-        tar -xf $archive -C $root
-        if ($LASTEXITCODE -ne 0) { throw "tar extract of $Ref failed" }
+        $listed = @(git ls-tree -r --name-only $Ref)
+        if ($LASTEXITCODE -ne 0) { throw "git ls-tree $Ref failed" }
+        foreach ($rel in $listed) {
+            if ($rel -notmatch '\.(py|ps1)$') { continue }
+            $dest = Join-Path $root ($rel.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+            $parent = Split-Path $dest -Parent
+            if (-not (Test-Path $parent)) {
+                New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            }
+            $proc = Start-Process -FilePath git -ArgumentList @('-c', 'core.pager=', 'cat-file', '-p', "${Ref}:${rel}") -RedirectStandardOutput $dest -NoNewWindow -Wait -PassThru
+            if ($proc.ExitCode -ne 0) { throw "git cat-file ${Ref}:${rel} failed" }
+        }
     }
 
     $python = Get-Command python -ErrorAction SilentlyContinue
