@@ -107,4 +107,4 @@ The ruleset files are in `.github/rulesets/`. To change the required check, chan
 
 ## Releases
 
-Tags and patch branches are described in `docs/releasing.md`. There is no publish workflow in this repo yet.
+Nothing is released from this repo. See `docs/releasing.md`.
