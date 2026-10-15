@@ -1,0 +1,16 @@
+# One owner, so the last-match rule does not matter.
+# The account is a user, not an organization, so this is @dante-sparras and not a team.
+# require_code_owner_review is on. Repository admins bypass it on pull requests,
+# because the only owner cannot approve their own pull request. See CONTRIBUTING.md.
+
+# Workflows decide what CI executes.
+/.github/                  @dante-sparras
+
+# An edit here changes what a build restores or what the mutation gate allows.
+/nuget.config              @dante-sparras
+/.config/                  @dante-sparras
+/stryker-config.json       @dante-sparras
+*package-lock.json         @dante-sparras
+*Dockerfile                @dante-sparras
+
+/SECURITY.md               @dante-sparras

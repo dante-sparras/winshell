@@ -1,0 +1,25 @@
+{
+  "stryker-config": {
+    "ignore-mutations": [
+      "string",
+      "logical"
+    ],
+    "ignore-methods": [
+      "*Logs"
+    ],
+    "mutate": [
+      "!**/Migrations/*",
+      "!**/*.Designer.cs"
+    ],
+    "reporters": [
+      "html",
+      "cleartext",
+      "progress"
+    ],
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 60
+    }
+  }
+}
