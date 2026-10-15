@@ -13,7 +13,7 @@ Run `pwsh scripts/dev.ps1` after cloning. It clones Quickshell into `docs/agents
 
 # Architecture
 
-This repo keeps a local copy of Quickshell v0.3.2 and its documentation.
+This repo keeps a local copy of Quickshell v0.3.2 and its documentation, and a hello-world app under `src/`. It has no tests yet.
 
 - Quickshell source: `docs/agents/quickshell/` (<https://github.com/quickshell-mirror/quickshell>, tag v0.3.2).
 - Quickshell manual: `docs/agents/quickshell/site/`.
