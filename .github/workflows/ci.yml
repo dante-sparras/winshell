@@ -8,14 +8,17 @@
 #
 # Every check is a step in one Windows job. A net10.0-windows project does not build on
 # Ubuntu, and GitHub bills each job by the started minute, so small separate jobs cost more
-# than the work they do. CI runs on pull requests, not on the push a merge makes to main.
-# A release run tests the exact commit it ships.
+# than the work they do. Pull requests and pushes to main run CI. A pull request run
+# cancels an older run of that same pull request. A later push does not cancel the run
+# a merge started. A release run tests the exact commit it ships.
 # Mutation testing is the slow lane. It runs when CI is dispatched with release=true.
 
 name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       release:
