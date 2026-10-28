@@ -7,6 +7,8 @@
 - .NET 10 SDK
 - Node.js, for `npx` when updating agent skills
 
+Reading Windows notifications additionally requires listener permission and a package identity declaring `userNotificationListener`; native toast sending requires an installed Windows AppUserModelID. Neither is needed to build or run automated tests. The unpackaged CLI does not provision these identities. See [Windows notifications](notifications.md) for deployment requirements, permission behavior and platform limits.
+
 ## First checkout
 
 ```sh

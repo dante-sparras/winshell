@@ -1,6 +1,6 @@
 # Migrating from Quickshell
 
-Winshell started as a port of Quickshell v0.3.2 and now has its own API ([ADR-0007](adr/0007-windows-first-api.md)). A Quickshell configuration does not load as it is. Rename its imports and types with the tables below. Properties, methods, signals and enum values keep their Quickshell names, so `Audio.defaultAudioSink.audio.volume` is `Pipewire.defaultAudioSink.audio.volume` renamed and nothing else.
+Winshell started as a port of Quickshell v0.3.2 and now has its own API ([ADR-0007](adr/0007-windows-first-api.md)). A Quickshell configuration does not load as it is. Rename its imports and types with the tables below. Most properties, methods, signals and enum values keep their Quickshell names; the module-specific changes below describe exceptions.
 
 The Qt Quick modules (`QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`, `QtQuick.Shapes`, `QtQuick.Effects`, `QtQml`) are unchanged.
 
@@ -76,3 +76,22 @@ These did nothing on Windows, or repeated what another type does.
 - `Shell.appId` is `winshell` unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets it.
 - `Shell.hasVersion` and `//@ if hasVersion(...)` still answer for version 0.3.
 - Log categories are short: `audio`, `media`, `power`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.
+
+## Notifications
+
+`Winshell.Notifications` is a Windows Notification Center model and native toast sender, rather than a Linux notification server. See [Windows notifications](notifications.md) for permission, deployment and API examples.
+
+| Former member | Windows API |
+| --- | --- |
+| `NotificationListener.trackedNotifications` | `notifications`, automatically populated; `groups` contains app sections |
+| `Notification.desktopEntry` | `appId` (Windows AppUserModelID) |
+| `Notification.summary` | `title` |
+| `Notification.expireTimeout` | `expiresAt` (Unix milliseconds, zero when absent); `createdAt` is also available |
+| `onNotification` and `notification.tracked = true` | `onNotificationAdded`; all readable toasts are already in the models |
+| `keepOnReload`, `lastGeneration` | Removed; every listener reads the current Windows snapshot |
+| Writable `*Supported` flags, `extraHints` | Removed; Windows determines listener capabilities |
+| `NotificationAction`, incoming `actions`, `sendInlineReply()` | Removed; Windows exposes no incoming toast actions or activation arguments; `canInvoke` is false and `invoke()` reports this limitation |
+| `appIcon`, `image`, `urgency`, `transient`, `resident`, `hasActionIcons`, `hasInlineReply`, `inlineReplyPlaceholder`, `hints` | Removed; the listener does not supply these fields |
+| `expire()`, `NotificationCloseReason`, `NotificationUrgency`, `closed(reason)` | Removed; use `dismiss()` and observe model removals or `destroyed` |
+
+`NotificationListener.requestAccess()` explicitly requests Windows permission. Importing or constructing the type never prompts. Read-only `accessStatus` and `error` distinguish cancellation, denial and unavailable access. Focus and Do Not Disturb are read-only states, with `Unknown` for unsupported Windows APIs. `ToastMessage` and `ToastAction` send native toasts with protocol activation under an installed Windows identity; this does not require listener access.
