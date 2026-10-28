@@ -6,6 +6,7 @@ namespace Winshell.Platform.Windows.Services.WindowList;
 internal static unsafe partial class NativeMethods
 {
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    public const uint EVENT_SYSTEM_DESKTOPSWITCH = 0x0020;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
     public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
     public const uint EVENT_OBJECT_CREATE = 0x8000;

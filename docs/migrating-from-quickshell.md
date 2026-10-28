@@ -117,6 +117,22 @@ Types not listed keep their names in the new module.
 
 `AppWindow` also has `executable`, the program's path, and `icon`, a path the icon provider can draw. `appId` is unchanged: the window's AppUserModelID, or the program's file name in lower case.
 
+## Virtual desktops
+
+`VirtualDesktops` is not a Quickshell type. It lists the desktops Task View shows. `supported` is false when Windows is outside builds 26100 through 26399, or when that method table cannot be read, and then `switchTo`, `create` and `remove` do nothing. `AppWindow.desktopId` and `moveToDesktop` use the supported window API and still work when the list does not. `desktop` is the matching object from `desktops` when the list is loaded. Winland's workspaces are unchanged.
+
+| Member | Meaning |
+| --- | --- |
+| `VirtualDesktops.desktops` | The desktops, in Task View order |
+| `VirtualDesktops.current` | The desktop the user is on |
+| `VirtualDesktops.switchTo(desktop)` | Switch to that desktop |
+| `VirtualDesktops.create()` | Create a desktop and return it |
+| `VirtualDesktops.remove(desktop)` | Remove a desktop, moving its windows to a neighbor. The last one stays |
+| `VirtualDesktop.id` | The desktop's id |
+| `VirtualDesktop.name` | The name Windows stored, or `Desktop N` when it stored none |
+| `AppWindow.desktopId` | The id of the desktop the window is on |
+| `AppWindow.moveToDesktop(desktop)` | Move the window onto that desktop |
+
 ## Removed
 
 These did nothing on Windows, or repeated what another type does.
