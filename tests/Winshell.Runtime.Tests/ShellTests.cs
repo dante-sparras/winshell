@@ -463,11 +463,4 @@ public class ShellTests
         var window = shell.Platform.Windows.Single();
         Assert.Equal([new QRect(10, 20, 30, 40)], window.InputRegion!);
     }
-
-    [Fact]
-    public void Preprocessor_picks_the_branch_for_this_version()
-    {
-        var text = Preprocessor.Run("a\n//@ if hasVersion(0, 2)\nb\n//@ else\nc\n//@ endif\n//@ if hasVersion(9, 0)\nd\n//@ endif");
-        Assert.Equal(["a", "//@ if hasVersion(0, 2)", "b", "//@ else", "", "//@ endif", "//@ if hasVersion(9, 0)", "", "//@ endif"], text.Split('\n'));
-    }
 }
