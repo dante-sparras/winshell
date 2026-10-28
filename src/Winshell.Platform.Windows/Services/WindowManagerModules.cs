@@ -1,36 +1,33 @@
-using Winshell.Platform.Windows.Services.DesktopEntries;
-using Winshell.Platform.Windows.Services.Hyprland;
-using Winshell.Platform.Windows.Services.Toplevels;
+using Winshell.Platform.Windows.Services.Apps;
+using Winshell.Platform.Windows.Services.Winland;
+using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
 
 namespace Winshell.Platform.Windows.Services;
 
 /// <summary>
-/// The window manager and app modules: <c>Quickshell.Hyprland</c> on Winland, <c>ToplevelManager</c> in
-/// <c>Quickshell.Wayland</c> on the taskbar's windows, and <c>DesktopEntries</c> in <c>Quickshell</c> on the Start menu.
+/// The window and app modules: <c>Apps</c> and <c>FocusGrab</c> in <c>Winshell</c>, <c>Winshell.Windows</c> on the
+/// taskbar's windows, and <c>Winshell.Winland</c> on Winland.
 /// </summary>
 internal static class WindowManagerModules
 {
     public static void Register(ModuleRegistry registry)
     {
-        registry.Module("Quickshell")
-            .Singleton(e => new DesktopEntries.DesktopEntries(e), "DesktopEntries")
-            .Uncreatable<DesktopEntry>("DesktopEntry")
-            .Uncreatable<DesktopAction>("DesktopAction");
+        registry.Module("Winshell")
+            .Singleton(e => new AppsService(e), "Apps")
+            .Uncreatable<AppEntry>("AppEntry")
+            .Uncreatable<AppAction>("AppAction")
+            .Type<FocusGrab>("FocusGrab");
 
-        registry.Module("Quickshell.Wayland")
-            .Singleton(e => new ToplevelManager(e), "ToplevelManager")
-            .Uncreatable<Toplevel>("Toplevel");
+        registry.Module("Winshell.Windows")
+            .Singleton(e => new WindowListService(e), "WindowList")
+            .Uncreatable<AppWindow>("AppWindow");
 
-        registry.Module("Quickshell.Hyprland")
-            .Singleton(e => new HyprlandIpc(e), "Hyprland")
-            .Uncreatable<HyprlandEvent>("HyprlandEvent")
-            .Uncreatable<HyprlandMonitor>("HyprlandMonitor")
-            .Uncreatable<HyprlandWorkspace>("HyprlandWorkspace")
-            .Uncreatable<HyprlandToplevel>("HyprlandToplevel", "HyprlandToplevel comes from Hyprland.toplevels, or as an attached object of a Toplevel", attached: HyprlandToplevel.Attach, attachedType: typeof(HyprlandToplevel))
-            .Uncreatable<HyprlandWindowAttached>("HyprlandWindow", "HyprlandWindow is only available as an attached object", attached: o => new HyprlandWindowAttached(o), attachedType: typeof(HyprlandWindowAttached))
-            .Type<GlobalShortcut>("GlobalShortcut")
-            .Type<HyprlandFocusGrab>("HyprlandFocusGrab");
+        registry.Module("Winshell.Winland")
+            .Singleton(e => new WinlandService(e), "Winland")
+            .Uncreatable<WinlandEvent>("WinlandEvent")
+            .Uncreatable<WinlandMonitor>("WinlandMonitor")
+            .Uncreatable<WinlandWorkspace>("WinlandWorkspace")
+            .Uncreatable<WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels, or as an attached object of an AppWindow", attached: WinlandWindow.Attach, attachedType: typeof(WinlandWindow));
     }
 }

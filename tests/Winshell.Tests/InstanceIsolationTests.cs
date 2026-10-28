@@ -22,8 +22,8 @@ public sealed class InstanceIsolationTests : IDisposable
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "shell.qml"), $$"""
             {{(shellId is null ? "" : $"//@ pragma ShellId {shellId}")}}
-            import Quickshell
-            import Quickshell.Io
+            import Winshell
+            import Winshell.Io
 
             ShellRoot {
               IpcHandler {
@@ -91,8 +91,8 @@ public sealed class InstanceIsolationTests : IDisposable
         var info = new ProcessStartInfo(Exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
         info.ArgumentList.Add("-p");
         info.ArgumentList.Add(configDir);
-        // QS_ variables the developer set must not change these instances.
-        info.Environment.Remove("QS_DISABLE_FILE_WATCHER");
+        // WINSHELL_ variables the developer set must not change these instances.
+        info.Environment.Remove("WINSHELL_DISABLE_FILE_WATCHER");
         var process = Process.Start(info)!;
         _started.Add(process);
         // Read the output so the instance never blocks on a full pipe.

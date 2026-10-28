@@ -4,7 +4,7 @@ using Microsoft.Win32;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows;
 
@@ -260,7 +260,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private string? _clipboardText;
     private const string ClipboardClass = "WinshellClipboard";
 
-    /// <summary>A message-only window, so another program copying text updates <c>Quickshell.clipboardText</c>.</summary>
+    /// <summary>A message-only window, so another program copying text updates <c>Shell.clipboardText</c>.</summary>
     private void ListenForClipboard()
     {
         fixed (char* name = ClipboardClass)
@@ -274,14 +274,14 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
             };
             if (Win32.RegisterClassExW(wc) == 0 && Marshal.GetLastWin32Error() != 1410)
             {
-                Log.Warn("quickshell", "Could not listen for clipboard changes");
+                Log.Warn("shell", "Could not listen for clipboard changes");
                 return;
             }
         }
         _clipboardWindow = Win32.CreateWindowExW(0, ClipboardClass, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
         if (_clipboardWindow == 0 || !Win32.AddClipboardFormatListener(_clipboardWindow))
         {
-            Log.Warn("quickshell", "Could not listen for clipboard changes");
+            Log.Warn("shell", "Could not listen for clipboard changes");
             if (_clipboardWindow != 0)
                 Win32.DestroyWindow(_clipboardWindow);
             _clipboardWindow = 0;

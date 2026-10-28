@@ -50,7 +50,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
     {
     }
 
-    protected override string Category => "quickshell.network";
+    protected override string Category => "network";
 
     protected override async Task StartAsync()
     {

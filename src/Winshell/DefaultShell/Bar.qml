@@ -1,5 +1,4 @@
-import Quickshell
-import Quickshell.Windows
+import Winshell
 import QtQuick
 import QtQuick.Layouts
 
@@ -31,7 +30,7 @@ PanelWindow {
     BarButton {
       icon: ""
       label: "Search"
-      onClicked: Quickshell.execDetached(["explorer.exe", "search-ms:"])
+      onClicked: Shell.execDetached(["explorer.exe", "search-ms:"])
     }
 
     Item { Layout.fillWidth: true }

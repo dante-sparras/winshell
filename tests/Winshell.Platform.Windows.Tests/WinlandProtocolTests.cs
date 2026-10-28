@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using Winshell.Platform.Windows.Services.Hyprland;
+using Winshell.Platform.Windows.Services.Winland;
 
 namespace Winshell.Platform.Windows.Tests;
 

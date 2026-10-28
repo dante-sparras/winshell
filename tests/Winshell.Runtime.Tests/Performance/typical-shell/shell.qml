@@ -1,6 +1,6 @@
-// A shell shaped like a typical Quickshell bar config: a bar per screen with workspaces, a tray, a clock,
+// A shell shaped like a typical bar config: a bar per screen with workspaces, a tray, a clock,
 // a volume slider and a calendar popup. The Jint budget loads it.
-import Quickshell
+import Winshell
 import QtQuick
 
 ShellRoot {

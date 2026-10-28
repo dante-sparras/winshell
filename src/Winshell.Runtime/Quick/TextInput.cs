@@ -144,7 +144,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private readonly FontGroup _fontGroup;
 
-    /// <summary>The font. Assigning a whole font, such as <c>font: WindowsTheme.typography.body</c>, copies it.</summary>
+    /// <summary>The font. Assigning a whole font, such as <c>font: Theme.typography.body</c>, copies it.</summary>
     [Qml]
     public FontGroup Font { get => _fontGroup; set => _fontGroup.CopyFrom(value); }
 
@@ -817,6 +817,6 @@ public interface IClipboard
 
     void SetText(string text);
 
-    /// <summary>The clipboard text changed outside this call, for <c>Quickshell.clipboardText</c>.</summary>
+    /// <summary>The clipboard text changed outside this call, for <c>Shell.clipboardText</c>.</summary>
     event Action? Changed;
 }

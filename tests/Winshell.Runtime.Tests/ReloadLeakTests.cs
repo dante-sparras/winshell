@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Runtime.Tests;
 
@@ -10,7 +10,7 @@ namespace Winshell.Runtime.Tests;
 public class ReloadLeakTests
 {
     private const string Config = """
-        import Quickshell
+        import Winshell
         import QtQuick
         import QtQuick.Controls
         import QtQuick.Layouts
@@ -21,12 +21,12 @@ public class ReloadLeakTests
           property int reloads: 0
 
           Connections {
-            target: Quickshell
+            target: Shell
             function onReloadCompleted() { root.reloads++ }
           }
 
           Variants {
-            model: Quickshell.screens
+            model: Shell.screens
 
             PanelWindow {
               required property var modelData
@@ -38,8 +38,8 @@ public class ReloadLeakTests
 
               RowLayout {
                 anchors.fill: parent
-                Text { text: Lib.greet(Quickshell.shellDir); Layout.preferredWidth: modelData.width / 10 }
-                Button { text: "button"; ToolTip.text: Quickshell.shellDir }
+                Text { text: Lib.greet(Shell.shellDir); Layout.preferredWidth: modelData.width / 10 }
+                Button { text: "button"; ToolTip.text: Shell.shellDir }
                 Slider { value: 0.5 }
                 TextField { text: "field" }
                 Repeater { model: 5; Rectangle { required property int index; width: 10 + index; height: 10 } }
@@ -53,8 +53,8 @@ public class ReloadLeakTests
           Timer { interval: 100; running: true; repeat: true }
 
           Component.onCompleted: {
-            Quickshell.reloadCompleted.connect(() => root.reloads++)
-            Quickshell.screensChanged.connect(() => {})
+            Shell.reloadCompleted.connect(() => root.reloads++)
+            Shell.screensChanged.connect(() => {})
           }
         }
         """;

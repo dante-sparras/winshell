@@ -5,7 +5,7 @@ using Winshell.Runtime;
 namespace Winshell.Platform.Windows.Services.Audio;
 
 /// <summary>
-/// The Windows audio devices and app sessions, seen as Pipewire's graph: each device is a sink or source node,
+/// The Windows audio devices and app sessions, seen as PipeWire's graph: each device is a sink or source node,
 /// each app's audio session is a stream node linked to its device. One graph serves the whole process, so a
 /// reload does not enumerate devices again. It lives on the UI thread; Windows' callbacks are posted to it.
 /// </summary>
@@ -17,8 +17,8 @@ internal sealed class AudioGraph
     private readonly Log _log;
     private readonly IMMDeviceEnumerator? _enumerator;
     private readonly DeviceNotifications? _notifications;
-    private readonly List<AudioNode> _nodes = [];
-    private readonly List<AudioLink> _links = [];
+    private readonly List<AudioGraphNode> _nodes = [];
+    private readonly List<AudioGraphLink> _links = [];
     private readonly Dictionary<string, EndpointNode> _endpoints = new(StringComparer.OrdinalIgnoreCase);
     private bool _syncPending;
     private int _nextId = 1;
@@ -40,7 +40,7 @@ internal sealed class AudioGraph
         }
         catch (COMException e)
         {
-            _log.Warn("pipewire", $"Windows audio is not available: {e.Message}");
+            _log.Warn("audio", $"Windows audio is not available: {e.Message}");
         }
         Ready = true;
     }
@@ -48,9 +48,9 @@ internal sealed class AudioGraph
     /// <summary>The graph, made on first use. Call on the UI thread.</summary>
     public static AudioGraph Get(IEventLoop loop, Log log) => _instance ??= new AudioGraph(loop, log);
 
-    public IReadOnlyList<AudioNode> Nodes => _nodes;
+    public IReadOnlyList<AudioGraphNode> Nodes => _nodes;
 
-    public IReadOnlyList<AudioLink> Links => _links;
+    public IReadOnlyList<AudioGraphLink> Links => _links;
 
     public bool Ready { get; }
 
@@ -60,13 +60,13 @@ internal sealed class AudioGraph
 
     public Log Log => _log;
 
-    public event Action<AudioNode>? NodeAdded;
+    public event Action<AudioGraphNode>? NodeAdded;
 
-    public event Action<AudioNode>? NodeRemoved;
+    public event Action<AudioGraphNode>? NodeRemoved;
 
-    public event Action<AudioLink>? LinkAdded;
+    public event Action<AudioGraphLink>? LinkAdded;
 
-    public event Action<AudioLink>? LinkRemoved;
+    public event Action<AudioGraphLink>? LinkRemoved;
 
     public event Action? DefaultsChanged;
 
@@ -80,7 +80,7 @@ internal sealed class AudioGraph
         }
         catch (Exception e) when (e is COMException or InvalidCastException or InvalidOperationException)
         {
-            _log.Warn("pipewire", e.Message);
+            _log.Warn("audio", e.Message);
         }
     });
 
@@ -95,7 +95,7 @@ internal sealed class AudioGraph
         }
         catch (Exception e) when (e is COMException or InvalidCastException)
         {
-            _log.Warn("pipewire", $"Cannot set the default audio device to \"{node.Description}\": {e.Message}");
+            _log.Warn("audio", $"Cannot set the default audio device to \"{node.Description}\": {e.Message}");
         }
     }
 
@@ -140,7 +140,7 @@ internal sealed class AudioGraph
                 }
                 catch (COMException e)
                 {
-                    _log.Warn("pipewire", $"Cannot open audio device {id}: {e.Message}");
+                    _log.Warn("audio", $"Cannot open audio device {id}: {e.Message}");
                 }
             }
         }
@@ -204,8 +204,8 @@ internal sealed class AudioGraph
         {
             AddNode(session);
             var link = session.IsSink
-                ? new AudioLink(NextId(), session, session.Endpoint)
-                : new AudioLink(NextId(), session.Endpoint, session);
+                ? new AudioGraphLink(NextId(), session, session.Endpoint)
+                : new AudioGraphLink(NextId(), session.Endpoint, session);
             link.Active = session.Active;
             session.Link = link;
             _links.Add(link);
@@ -223,13 +223,13 @@ internal sealed class AudioGraph
         }
     }
 
-    private void AddNode(AudioNode node)
+    private void AddNode(AudioGraphNode node)
     {
         _nodes.Add(node);
         NodeAdded?.Invoke(node);
     }
 
-    private void RemoveNode(AudioNode node)
+    private void RemoveNode(AudioGraphNode node)
     {
         _nodes.Remove(node);
         NodeRemoved?.Invoke(node);
@@ -257,7 +257,7 @@ internal sealed class AudioGraph
 }
 
 /// <summary>A node of the graph: a device or an app's session, with its volume.</summary>
-internal abstract class AudioNode(int id)
+internal abstract class AudioGraphNode(int id)
 {
     private float[] _volumes = [];
 
@@ -269,10 +269,10 @@ internal abstract class AudioNode(int id)
 
     public string Nickname { get; protected set; } = "";
 
-    /// <summary>The <c>PwNodeType</c> flags.</summary>
+    /// <summary>The <c>AudioNodeType</c> flags.</summary>
     public int Type { get; protected set; }
 
-    public bool IsSink => (Type & PwNodeTypes.Sink) != 0;
+    public bool IsSink => (Type & AudioNodeTypes.Sink) != 0;
 
     public Dictionary<string, string> Properties { get; protected set; } = [];
 
@@ -310,15 +310,15 @@ internal abstract class AudioNode(int id)
 }
 
 /// <summary>A connection from a stream to its device, or from a device to a recording stream.</summary>
-internal sealed class AudioLink(int id, AudioNode source, AudioNode target)
+internal sealed class AudioGraphLink(int id, AudioGraphNode source, AudioGraphNode target)
 {
     private bool _active;
 
     public int Id { get; } = id;
 
-    public AudioNode Source { get; } = source;
+    public AudioGraphNode Source { get; } = source;
 
-    public AudioNode Target { get; } = target;
+    public AudioGraphNode Target { get; } = target;
 
     /// <summary>True while audio flows (the session is active), false while the stream is open but idle.</summary>
     public bool Active
@@ -336,8 +336,8 @@ internal sealed class AudioLink(int id, AudioNode source, AudioNode target)
     public event Action? StateChanged;
 }
 
-/// <summary>The <c>PwNodeType</c> flags, as Quickshell defines them.</summary>
-internal static class PwNodeTypes
+/// <summary>The <c>AudioNodeType</c> flags.</summary>
+internal static class AudioNodeTypes
 {
     public const int Audio = 0b1;
     public const int Stream = 0b100;
@@ -346,7 +346,7 @@ internal static class PwNodeTypes
 }
 
 /// <summary>An audio device: a sink when it plays, a source when it records.</summary>
-internal sealed class EndpointNode : AudioNode
+internal sealed class EndpointNode : AudioGraphNode
 {
     private readonly AudioGraph _graph;
     private readonly IMMDevice _device;
@@ -365,11 +365,11 @@ internal sealed class EndpointNode : AudioNode
         _graph = graph;
         _device = device;
         DeviceId = deviceId;
-        Type = PwNodeTypes.Audio | (render ? PwNodeTypes.Sink : PwNodeTypes.Source);
+        Type = AudioNodeTypes.Audio | (render ? AudioNodeTypes.Sink : AudioNodeTypes.Source);
         device.OpenPropertyStore(0, out var store);
         Description = CoreAudio.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
         Nickname = CoreAudio.ReadString(store, CoreAudio.DeviceDescription) ?? "";
-        // node.name is Pipewire's stable identifier for a device; the Windows endpoint id is that here.
+        // node.name is PipeWire's stable identifier for a device; the Windows endpoint id is that here.
         Name = deviceId;
         var formFactor = CoreAudio.ReadUInt(store, CoreAudio.EndpointFormFactor);
         Properties = new Dictionary<string, string>
@@ -437,7 +437,7 @@ internal sealed class EndpointNode : AudioNode
     }
 
     /// <summary>
-    /// A capture device only meters while something records from it, as Pipewire's peak monitor records
+    /// A capture device only meters while something records from it, as PipeWire's peak monitor records
     /// from it too. This opens a shared recording stream while peaks are wanted.
     /// </summary>
     public override IDisposable? KeepRunning()
@@ -515,7 +515,7 @@ internal sealed class EndpointNode : AudioNode
         }
         catch (COMException e)
         {
-            _graph.Log.Warn("pipewire", $"Cannot list the audio sessions of \"{Description}\": {e.Message}");
+            _graph.Log.Warn("audio", $"Cannot list the audio sessions of \"{Description}\": {e.Message}");
         }
     }
 
@@ -608,7 +608,7 @@ internal sealed class EndpointNode : AudioNode
 /// Windows gives a session one volume, so every channel shows that volume, and setting the channels sets it to
 /// their average.
 /// </summary>
-internal sealed class SessionNode : AudioNode
+internal sealed class SessionNode : AudioGraphNode
 {
     private readonly AudioGraph _graph;
     private readonly IAudioSessionControl2 _control;
@@ -626,7 +626,7 @@ internal sealed class SessionNode : AudioNode
         Endpoint = endpoint;
         InstanceId = instanceId;
         Active = state == AudioSessionState.Active;
-        Type = PwNodeTypes.Audio | PwNodeTypes.Stream | (endpoint.IsSink ? PwNodeTypes.Sink : PwNodeTypes.Source);
+        Type = AudioNodeTypes.Audio | AudioNodeTypes.Stream | (endpoint.IsSink ? AudioNodeTypes.Sink : AudioNodeTypes.Source);
         Channels = endpoint.Channels;
         control.GetProcessId(out _processId);
         IsSystem = control.IsSystemSoundsSession() == 0;
@@ -646,7 +646,7 @@ internal sealed class SessionNode : AudioNode
     /// <summary>The session of Windows' own sounds, not of an app.</summary>
     public bool IsSystem { get; }
 
-    public AudioLink? Link { get; set; }
+    public AudioGraphLink? Link { get; set; }
 
     public override IAudioMeterInformation? Meter => _control as IAudioMeterInformation;
 
@@ -728,7 +728,7 @@ internal sealed class SessionNode : AudioNode
             ["node.description"] = Description,
             ["media.class"] = Endpoint.IsSink ? "Stream/Output/Audio" : "Stream/Input/Audio",
             ["application.name"] = appName,
-            // The program's own icon: IconImage and Quickshell.iconPath accept a program's path.
+            // The program's own icon: IconImage and Shell.iconPath accept a program's path.
             ["application.icon-name"] = system ? "audio-volume-high" : path ?? "",
             ["application.process.id"] = _processId.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["application.process.binary"] = binary,
@@ -810,13 +810,13 @@ internal sealed class SessionNode : AudioNode
     }
 }
 
-/// <summary>Maps a Windows speaker layout onto Pipewire's channel positions.</summary>
+/// <summary>Maps a Windows speaker layout onto PipeWire's channel positions.</summary>
 internal static class ChannelLayout
 {
     private const int Mono = 2;
     private const int AuxStart = 0x1000;
 
-    // SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, ... in bit order, as PwAudioChannel values.
+    // SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, ... in bit order, as AudioChannel values.
     private static readonly int[] MaskChannels =
     [
         3, // FrontLeft

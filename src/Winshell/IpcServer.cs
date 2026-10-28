@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell;
 

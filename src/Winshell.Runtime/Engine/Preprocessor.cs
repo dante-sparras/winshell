@@ -5,12 +5,12 @@ using System.Text.RegularExpressions;
 namespace Winshell.Runtime;
 
 /// <summary>
-/// Quickshell's preprocessor: <c>//@ if hasVersion(0, 3)</c> ... <c>//@ elif</c> ... <c>//@ else</c> ...
+/// The preprocessor: <c>//@ if hasVersion(0, 3)</c> ... <c>//@ elif</c> ... <c>//@ else</c> ...
 /// <c>//@ endif</c>. Lines in a branch that does not apply are blanked, so line numbers stay the same.
 /// </summary>
 public static partial class Preprocessor
 {
-    /// <summary>The Quickshell version Winshell matches.</summary>
+    /// <summary>The API version <c>hasVersion</c> checks: 0.3, the Quickshell version Winshell started from.</summary>
     public static readonly (int Major, int Minor) Version = (0, 3);
 
     /// <summary>The Qt version Winshell behaves as.</summary>

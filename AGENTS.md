@@ -1,6 +1,6 @@
 # Winshell
 
-A shell toolkit for Windows 11 that matches Quickshell.
+A desktop shell toolkit for Windows 11. A configuration written in QML describes the shell.
 
 ## Stack
 
@@ -18,8 +18,9 @@ A shell toolkit for Windows 11 that matches Quickshell.
 ├── docs/
 │   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
-│   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual; gitignored, made by scripts/dev.ps1
-│   └── development.md               # Setup, environment, and every command
+│   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
+│   ├── development.md               # Setup, environment, and every command
+│   └── migrating-from-quickshell.md # Quickshell names and their Winshell names
 ├── scripts/
 │   ├── check.ps1                    # Build with warnings as errors, then test
 │   ├── dev.ps1                      # Prepares a fresh clone
@@ -27,7 +28,7 @@ A shell toolkit for Windows 11 that matches Quickshell.
 ├── src/
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
 │   ├── Winshell.Qml/                # The QML parser
-│   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Quickshell modules
+│   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Winshell modules
 │   └── Winshell.Platform.Windows/   # Windows 11 windows, composition, and services
 ├── tests/
 │   ├── Winshell.Qml.Tests/

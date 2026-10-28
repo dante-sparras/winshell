@@ -5,13 +5,13 @@ using Winshell;
 using Winshell.Platform.Windows;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 return await Cli.Run(args);
 
 namespace Winshell
 {
-    /// <summary>The command line, matching Quickshell's <c>qs</c>.</summary>
+    /// <summary>The command line.</summary>
     internal static class Cli
     {
         private sealed class Options
@@ -62,7 +62,7 @@ namespace Winshell
                 case null:
                     if (args.Contains("-V") || args.Contains("--version"))
                     {
-                        Console.WriteLine($"winshell {Version} (Quickshell 0.3.2 compatible)");
+                        Console.WriteLine($"winshell {Version}");
                         return 0;
                     }
                     if (args.Contains("-h") || args.Contains("--help"))
@@ -149,7 +149,7 @@ namespace Winshell
         private static void PrintHelp()
         {
             Console.WriteLine($"""
-                winshell {Version}: Quickshell for Windows
+                winshell {Version}: a desktop shell for Windows 11
 
                 Usage: winshell [options]                  run a shell
                        winshell list [-a] [-j]             list running instances
@@ -180,10 +180,7 @@ namespace Winshell
         {
             var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
             var root = string.IsNullOrEmpty(xdg) ? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config") : xdg;
-            var winshell = System.IO.Path.Combine(root, "winshell");
-            var quickshell = System.IO.Path.Combine(root, "quickshell");
-            // A Quickshell config brought over from Linux works where it is.
-            return !Directory.Exists(winshell) && Directory.Exists(quickshell) ? quickshell : winshell;
+            return System.IO.Path.Combine(root, "winshell");
         }
 
         /// <summary>The root file of the shell to run, or null with a message when there is none.</summary>

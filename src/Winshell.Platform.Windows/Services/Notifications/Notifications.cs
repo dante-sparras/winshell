@@ -2,7 +2,7 @@ using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
 using Winshell.Platform.Windows.Services;
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Notifications;
 
@@ -20,7 +20,7 @@ public enum NotificationCloseReason
     CloseRequested = 3,
 }
 
-/// <summary>One Windows toast, reduced to the fields Quickshell's <c>Notification</c> exposes.</summary>
+/// <summary>One Windows toast, reduced to the fields <c>Notification</c> exposes.</summary>
 internal sealed record IncomingToast(
     uint NativeId,
     string AppName,
@@ -31,12 +31,12 @@ internal sealed record IncomingToast(
     double ExpireTimeout);
 
 /// <summary>
-/// Quickshell's <c>NotificationServer</c>. Windows has no desktop-notification bus, so this reads the toasts
+/// The <c>NotificationListener</c>. Windows has no desktop-notification bus, so this reads the toasts
 /// Action Center already has. An unpackaged shell is usually refused; the types still load and the refusal is logged.
 /// The capability flags are kept for configs and do not change which toasts Windows delivers.
 /// </summary>
 [QmlSignal("notification", "notification")]
-public sealed class NotificationServer : QObject
+public sealed class NotificationListener : QObject
 {
     private bool _keepOnReload = true;
     private bool _persistenceSupported;
@@ -52,14 +52,14 @@ public sealed class NotificationServer : QObject
     private HashSet<uint> _prior = [];
     private bool _accepting;
 
-    private const string Category = "quickshell.service.notifications";
+    private const string Category = "notifications";
 
-    public NotificationServer()
+    public NotificationListener()
         : this(listen: true)
     {
     }
 
-    internal NotificationServer(bool listen)
+    internal NotificationListener(bool listen)
     {
         TrackedNotifications = new ObjectModel();
         TrackedNotifications.SetOwner(this);
@@ -79,7 +79,7 @@ public sealed class NotificationServer : QObject
                 return;
             if (_accepting)
             {
-                (Engine?.Log ?? Log.Default).Error(Category, "Cannot set NotificationServer.keepOnReload after the server has been started.");
+                (Engine?.Log ?? Log.Default).Error(Category, "Cannot set NotificationListener.keepOnReload after the server has been started.");
                 return;
             }
             SetField(ref _keepOnReload, value);
@@ -178,7 +178,7 @@ public sealed class NotificationServer : QObject
     protected override void OnDestroy() => ToastHub.Leave(this);
 }
 
-/// <summary>Quickshell's <c>NotificationAction</c>. This listener does not receive toast buttons, so none are created.</summary>
+/// <summary>The <c>NotificationAction</c>. This listener does not receive toast buttons, so none are created.</summary>
 public sealed class NotificationAction : QObject
 {
     internal NotificationAction(string identifier, string text)
@@ -197,11 +197,11 @@ public sealed class NotificationAction : QObject
     }
 }
 
-/// <summary>Quickshell's <c>Notification</c> for one Windows toast.</summary>
+/// <summary>The <c>Notification</c> for one Windows toast.</summary>
 [QmlSignal("closed", "reason")]
 public sealed class ShellNotification : QObject, IRetainable
 {
-    private readonly NotificationServer _server;
+    private readonly NotificationListener _server;
     private readonly uint _nativeId;
     private bool _tracked;
     private bool _closed;
@@ -210,7 +210,7 @@ public sealed class ShellNotification : QObject, IRetainable
 
     void IRetainable.FinishRetain() => Destroy();
 
-    internal ShellNotification(NotificationServer server, IncomingToast toast, int id, bool lastGeneration)
+    internal ShellNotification(NotificationListener server, IncomingToast toast, int id, bool lastGeneration)
     {
         _server = server;
         _nativeId = toast.NativeId;
@@ -315,19 +315,19 @@ public sealed class ShellNotification : QObject, IRetainable
     }
 }
 
-/// <summary>The one listener for every <see cref="NotificationServer"/> in the process.</summary>
+/// <summary>The one listener for every <see cref="NotificationListener"/> in the process.</summary>
 internal static class ToastHub
 {
-    private const string Category = "quickshell.service.notifications";
+    private const string Category = "notifications";
     private static readonly object Gate = new();
-    private static readonly List<NotificationServer> Servers = [];
+    private static readonly List<NotificationListener> Servers = [];
     private static readonly Dictionary<uint, (IncomingToast Toast, int Id)> Current = [];
     private static UserNotificationListener? _listener;
     private static bool _started;
     private static int _nextId;
     private static int _pollFaults;
 
-    public static void Join(NotificationServer server)
+    public static void Join(NotificationListener server)
     {
         lock (Gate)
         {
@@ -343,7 +343,7 @@ internal static class ToastHub
     }
 
     /// <summary>The server's bindings have run, so it can take the toasts gathered so far.</summary>
-    public static void Accept(NotificationServer server)
+    public static void Accept(NotificationListener server)
     {
         List<(IncomingToast Toast, int Id)> replay;
         lock (Gate)
@@ -355,7 +355,7 @@ internal static class ToastHub
             server.Offer(toast, id, server.WasPrior(toast.NativeId));
     }
 
-    public static void Leave(NotificationServer server)
+    public static void Leave(NotificationListener server)
     {
         lock (Gate)
             Servers.Remove(server);
@@ -389,7 +389,7 @@ internal static class ToastHub
             var access = await listener.RequestAccessAsync();
             if (access != UserNotificationListenerAccessStatus.Allowed)
             {
-                Log.Default.Warn(Category, "Windows did not let the shell read notifications. An unpackaged app is refused the userNotificationListener capability, so NotificationServer stays empty.");
+                Log.Default.Warn(Category, "Windows did not let the shell read notifications. An unpackaged app is refused the userNotificationListener capability, so NotificationListener stays empty.");
                 return;
             }
             lock (Gate)
@@ -399,7 +399,7 @@ internal static class ToastHub
             await SnapshotAsync(listener);
             if (pushed)
                 return;
-            Log.Default.Info(Category, "Windows will not push notification changes to this app, so NotificationServer polls Action Center.");
+            Log.Default.Info(Category, "Windows will not push notification changes to this app, so NotificationListener polls Action Center.");
             await PollAsync(listener);
         }
         catch (Exception e) when (IsListenerFailure(e))
@@ -494,7 +494,7 @@ internal static class ToastHub
         if (toast is null)
             return;
         int id;
-        List<NotificationServer> servers;
+        List<NotificationListener> servers;
         lock (Gate)
         {
             if (Current.ContainsKey(toast.NativeId))
@@ -507,9 +507,9 @@ internal static class ToastHub
             server.Post(() => server.Offer(toast, id, prior: false));
     }
 
-    private static void Each(Action<NotificationServer> action)
+    private static void Each(Action<NotificationListener> action)
     {
-        List<NotificationServer> servers;
+        List<NotificationListener> servers;
         lock (Gate)
             servers = [.. Servers];
         foreach (var server in servers)
@@ -564,8 +564,8 @@ internal static class NotificationModule
 {
     public static void Register(ModuleRegistry registry)
     {
-        registry.Module("Quickshell.Services.Notifications")
-            .Type<NotificationServer>("NotificationServer")
+        registry.Module("Winshell.Notifications")
+            .Type<NotificationListener>("NotificationListener")
             .Uncreatable<ShellNotification>("Notification")
             .Uncreatable<NotificationAction>("NotificationAction")
             .Enum(static (NotificationUrgency u) => u.ToString())

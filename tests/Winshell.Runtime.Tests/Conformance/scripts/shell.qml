@@ -2,7 +2,7 @@
 import QtQml
 import "util.js" as Util
 import "widgets"
-import qs.widgets as W
+import config.widgets as W
 
 QtObject {
     property Label first: Label {}

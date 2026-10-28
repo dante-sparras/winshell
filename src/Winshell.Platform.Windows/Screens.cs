@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows;
 
@@ -36,7 +36,7 @@ internal static unsafe class Screens
                 result.Add(monitor);
         }
         _found = null;
-        // Quickshell lists screens in the order the system reports them; put the primary first as Windows does.
+        // Put the primary screen first, as Windows does.
         return result.OrderByDescending(m => m.Info.IsPrimary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top).ToList();
     }
 

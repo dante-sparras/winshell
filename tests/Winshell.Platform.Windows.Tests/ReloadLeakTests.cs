@@ -5,7 +5,7 @@ using Xunit.Abstractions;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Tests;
 
@@ -21,8 +21,7 @@ public class ReloadLeakTests(ITestOutputHelper output)
 
     /// <summary>Every other reload adds a floating window, so windows are made and destroyed as well as handed over.</summary>
     private static string Config(int reload, bool floating) => $$"""
-        import Quickshell
-        import Quickshell.Windows
+        import Winshell
         import QtQuick
         import QtQuick.Controls
 

@@ -1,4 +1,4 @@
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Runtime.Tests;
 

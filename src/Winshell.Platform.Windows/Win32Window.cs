@@ -3,11 +3,11 @@ using Winshell.Platform.Windows.Accessibility;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows;
 
-/// <summary>The native window behind a Quickshell window.</summary>
+/// <summary>The native window behind a shell window.</summary>
 internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 {
     private const string ClassName = "WinshellWindow";
@@ -515,7 +515,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
     }
 
-    internal bool IsLockSurface => _kind == WindowKind.Panel && _panel?.Namespace == "quickshell-lock";
+    internal bool IsLockSurface => _kind == WindowKind.Panel && _panel?.Namespace == "winshell-lock";
 
     /// <summary>Puts a lock window over every other window, and gives it the keyboard unless another lock window has it.</summary>
     internal void RaiseTopmost(bool takeFocus)

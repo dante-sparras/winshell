@@ -1,7 +1,7 @@
 using Windows.Devices.Enumeration;
 using Windows.Foundation;
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Bluetooth;
 
@@ -24,10 +24,10 @@ public enum BluetoothDeviceState
 
 internal static class BtLog
 {
-    public const string Category = "quickshell.bluetooth";
+    public const string Category = "bluetooth";
 }
 
-/// <summary>Quickshell's <c>BluetoothAdapter</c>: the PC's Bluetooth radio.</summary>
+/// <summary>The <c>BluetoothAdapter</c>: the PC's Bluetooth radio.</summary>
 public sealed class BluetoothAdapter : QObject
 {
     private readonly IEventLoop _loop;
@@ -151,7 +151,7 @@ public sealed class BluetoothAdapter : QObject
     public override string ToString() => $"BluetoothAdapter({_info.Name})";
 }
 
-/// <summary>Quickshell's <c>BluetoothDevice</c>.</summary>
+/// <summary>The <c>BluetoothDevice</c>.</summary>
 public sealed class BluetoothDevice : QObject
 {
     private readonly IEventLoop _loop;
@@ -394,7 +394,7 @@ public sealed class BluetoothDevice : QObject
     public override string ToString() => $"BluetoothDevice({_info.Address}, {_info.Name})";
 }
 
-/// <summary>Quickshell's <c>Bluetooth</c> singleton.</summary>
+/// <summary>The <c>Bluetooth</c> singleton.</summary>
 public sealed class BluetoothService : QObject
 {
     private readonly IEventLoop _loop;
@@ -470,7 +470,7 @@ internal static class BluetoothModule
 {
     public static void Register(ModuleRegistry registry)
     {
-        registry.Module("Quickshell.Bluetooth")
+        registry.Module("Winshell.Bluetooth")
             .Singleton(e => new BluetoothService(e), "Bluetooth")
             .Uncreatable<BluetoothAdapter>("BluetoothAdapter")
             .Uncreatable<BluetoothDevice>("BluetoothDevice")

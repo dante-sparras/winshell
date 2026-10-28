@@ -40,10 +40,10 @@ public sealed class ImportScope
         {
             switch (import.Kind)
             {
-                case ImportKind.Module when import.Uri == "qs" || import.Uri.StartsWith("qs.", StringComparison.Ordinal):
+                case ImportKind.Module when import.Uri == "config" || import.Uri.StartsWith("config.", StringComparison.Ordinal):
                     {
                         var shellDir = engine.ShellDir ?? dir;
-                        var relative = import.Uri.Length > 2 ? import.Uri[3..].Replace('.', System.IO.Path.DirectorySeparatorChar) : "";
+                        var relative = import.Uri.Length > 6 ? import.Uri[7..].Replace('.', System.IO.Path.DirectorySeparatorChar) : "";
                         _entries.Add(new DirectoryEntry(import.Qualifier, System.IO.Path.Combine(shellDir, relative)));
                         break;
                     }
@@ -271,7 +271,7 @@ public sealed class FileTypeObject : ObjectInstance
         property.IsString() && _members.TryGetValue(property.AsString(), out var v) ? v : base.Get(property, receiver);
 }
 
-/// <summary>An import qualifier in a script: <c>QS.Quickshell</c>.</summary>
+/// <summary>An import qualifier in a script: <c>WS.Shell</c>.</summary>
 public sealed class NamespaceObject : ObjectInstance
 {
     private readonly ImportScope _scope;

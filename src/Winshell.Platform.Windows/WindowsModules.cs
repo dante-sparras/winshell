@@ -1,12 +1,12 @@
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Quick.Controls;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows;
 
 /// <summary>
-/// The <c>WindowEffects</c> attached object of a Quickshell window: the Windows 11 material behind it and the
+/// The <c>WindowEffects</c> attached object of a window: the Windows 11 material behind it and the
 /// shape of its corners.
 /// </summary>
 public sealed class WindowEffectsAttached(QObject owner) : QObject
@@ -29,7 +29,7 @@ public sealed class WindowEffectsAttached(QObject owner) : QObject
         SmallRoundCorners = 3,
     }
 
-    private QsWindow? Window => owner as QsWindow;
+    private ShellWindow? Window => owner as ShellWindow;
 
     [Qml]
     public int Backdrop
@@ -57,7 +57,7 @@ public sealed class WindowEffectsAttached(QObject owner) : QObject
 }
 
 /// <summary>
-/// The <c>WindowsTheme</c> singleton: the Windows 11 theme as WinUI 3 has it, so a shell can look like the rest of
+/// The <c>Theme</c> singleton: the Windows 11 theme as WinUI 3 has it, so a shell can look like the rest of
 /// Windows. Every color token of <see cref="Theme"/> is a property with its WinUI name, first letter lowered, such
 /// as <c>textFillColorPrimary</c> or <c>accentFillColorDefault</c>. With the type ramp, the corner radii, the
 /// motion timings and the shadows, they follow the user's Windows settings as they change.
@@ -131,8 +131,8 @@ public sealed class WindowsTheme : QObject
 }
 
 /// <summary>
-/// <c>WindowsTheme.typography</c>: the Windows 11 type ramp in Segoe UI Variable. Each step is a font to assign
-/// whole, as in <c>font: WindowsTheme.typography.subtitle</c>.
+/// <c>Theme.typography</c>: the Windows 11 type ramp in Segoe UI Variable. Each step is a font to assign
+/// whole, as in <c>font: Theme.typography.subtitle</c>.
 /// </summary>
 public sealed class WindowsTypography : QObject
 {
@@ -180,18 +180,18 @@ public static class WindowsModules
         StandardModules.Registering += registry =>
         {
             Register(registry);
-            WaylandCompat.Register(registry);
             ServiceModules.Register(registry);
         };
         _ = platform;
     }
 
-    /// <summary>Adds <c>Quickshell.Windows</c>: the window effects and the theme.</summary>
+    /// <summary>Adds <c>WindowEffects</c> to <c>Winshell</c>, and <c>Winshell.Theme</c>.</summary>
     public static void Register(ModuleRegistry registry)
     {
-        registry.Module("Quickshell.Windows")
-            .Uncreatable<WindowEffectsAttached>("WindowEffects", "WindowEffects is only available as an attached object", attached: o => new WindowEffectsAttached(o), attachedType: typeof(WindowEffectsAttached))
-            .Singleton(_ => new WindowsTheme(), "WindowsTheme");
+        registry.Module("Winshell")
+            .Uncreatable<WindowEffectsAttached>("WindowEffects", "WindowEffects is only available as an attached object", attached: o => new WindowEffectsAttached(o), attachedType: typeof(WindowEffectsAttached));
+        registry.Module("Winshell.Theme")
+            .Singleton(_ => new WindowsTheme(), "Theme");
     }
 
     /// <summary>Gives a new engine the Windows services its singletons use.</summary>
@@ -199,5 +199,22 @@ public static class WindowsModules
     {
         _ = engine;
         _ = platform;
+    }
+}
+
+/// <summary>Where the service modules for Windows register.</summary>
+public static class ServiceModules
+{
+    public static void Register(ModuleRegistry registry)
+    {
+        Services.Power.PowerModule.Register(registry);
+        Services.Network.NetworkingModule.Register(registry);
+        Services.Bluetooth.BluetoothModule.Register(registry);
+        Services.Audio.AudioService.Register(registry);
+        Services.Media.MediaService.Register(registry);
+        Services.WindowManagerModules.Register(registry);
+        Services.SignIn.SignInModule.Register(registry);
+        Services.Tray.SystemTrayModule.Register(registry);
+        Services.Notifications.NotificationModule.Register(registry);
     }
 }

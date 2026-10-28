@@ -1,6 +1,6 @@
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows;
 

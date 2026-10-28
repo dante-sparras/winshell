@@ -1,10 +1,9 @@
 //@ pragma ShellId winshell-default
-import Quickshell
-
+import Winshell
 // Winshell's default shell. Copy this folder to %USERPROFILE%\.config\winshell to make it your own.
 ShellRoot {
   Variants {
-    model: Quickshell.screens
+    model: Shell.screens
 
     Bar {
       required property var modelData

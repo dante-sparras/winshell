@@ -1,4 +1,4 @@
-import Quickshell
+import Winshell
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

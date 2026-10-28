@@ -25,22 +25,22 @@ public class WindowsThemeTests
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "shell.qml"), """
             import QtQuick
-            import Quickshell.Windows
+            import Winshell.Theme
             Item {
-              property bool dark: WindowsTheme.dark
-              property bool contrast: WindowsTheme.highContrast
-              property color text: WindowsTheme.textFillColorPrimary
-              property color accent: WindowsTheme.accentFillColorDefault
-              property color window: WindowsTheme.systemColorWindowColor
-              property real shadowAlpha: WindowsTheme.flyoutShadow.color.a
-              property real controlRadius: WindowsTheme.controlCornerRadius
-              property real overlayRadius: WindowsTheme.overlayCornerRadius
-              property int fast: WindowsTheme.controlFastAnimationDuration
-              property var spline: WindowsTheme.controlFastOutSlowInKeySpline
+              property bool dark: Theme.dark
+              property bool contrast: Theme.highContrast
+              property color text: Theme.textFillColorPrimary
+              property color accent: Theme.accentFillColorDefault
+              property color window: Theme.systemColorWindowColor
+              property real shadowAlpha: Theme.flyoutShadow.color.a
+              property real controlRadius: Theme.controlCornerRadius
+              property real overlayRadius: Theme.overlayCornerRadius
+              property int fast: Theme.controlFastAnimationDuration
+              property var spline: Theme.controlFastOutSlowInKeySpline
               property real titleSize: title.font.pixelSize
               property int titleWeight: title.font.weight
-              property real captionSize: WindowsTheme.typography.caption.pixelSize
-              Text { id: title; font: WindowsTheme.typography.title }
+              property real captionSize: Theme.typography.caption.pixelSize
+              Text { id: title; font: Theme.typography.title }
             }
             """);
         var saved = Theme.Current;
@@ -103,10 +103,10 @@ public class WindowsThemeTests
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "shell.qml"), """
             import QtQuick
-            import Quickshell.Windows
+            import Winshell.Theme
             Item {
-              property color text: WindowsTheme.textFillColorPrimary
-              Component.onCompleted: WindowsTheme.textFillColorPrimary = "red"
+              property color text: Theme.textFillColorPrimary
+              Component.onCompleted: Theme.textFillColorPrimary = "red"
             }
             """);
         var messages = new List<string>();
