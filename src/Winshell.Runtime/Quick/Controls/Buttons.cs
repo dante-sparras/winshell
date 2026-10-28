@@ -518,9 +518,12 @@ public class Button : AbstractButton
     private bool _flat;
     private bool _highlighted;
 
+    private readonly ColorTransition _fill = new(Fluent.ControlFasterAnimationDuration);
+
     public Button()
     {
-        SetDefaultPadding(12, 5, 12, 7);
+        // WinUI's 11,5,11,6, inside a 1 pixel border.
+        SetDefaultPadding(12, 6, 12, 7);
         Spacing = 8;
     }
 
@@ -533,49 +536,42 @@ public class Button : AbstractButton
     /// <summary>Whether the button shows the accent color: highlighted, or a checked toggle button.</summary>
     public virtual bool IsAccent => (_highlighted || Checked) && !_flat;
 
-    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) => PaintBackground(c, i.Bounds), 120, Fluent.ControlHeight));
+    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, context) => PaintBackground(c, i.Bounds, context), 0, Fluent.ControlHeight));
 
     protected virtual float Radius(SKRect bounds) => Fluent.ControlCornerRadius;
 
-    protected void PaintBackground(SKCanvas canvas, SKRect r)
+    /// <summary>Paints WinUI's button. Its fill fades between states over 83 ms, as its brush transition does.</summary>
+    protected void PaintBackground(SKCanvas canvas, SKRect r, PaintContext context)
     {
         var t = Theme.Current;
         var radius = Radius(r);
-        var down = IsDown;
-        if (IsAccent)
-        {
-            if (!Enabled)
-            {
-                Fluent.FillRound(canvas, r, radius, t.AccentFillColorDisabled);
-                return;
-            }
-            var fill = down ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
-            if (down)
-                Fluent.FillRound(canvas, r, radius, fill);
-            else
-                Fluent.ElevatedRect(canvas, r, radius, fill, StrokeOnAccent, t.ControlStrokeColorOnAccentSecondary);
-            return;
-        }
+        bool enabled = Enabled, down = IsDown, hovered = Hovered;
         if (_flat || IsSubtle)
         {
-            var fill = !Enabled ? QColor.Transparent : down ? t.SubtleFillColorTertiary : Hovered ? t.SubtleFillColorSecondary : (_highlighted || Checked) ? t.SubtleFillColorSecondary : QColor.Transparent;
+            var subtle = !enabled ? QColor.Transparent : down ? t.SubtleFillColorTertiary : hovered ? t.SubtleFillColorSecondary : (_highlighted || Checked) ? t.SubtleFillColorSecondary : QColor.Transparent;
+            Fluent.FillRound(canvas, r, radius, _fill.Step(subtle, context));
+            return;
+        }
+        var accent = IsAccent;
+        var fill = _fill.Step((accent ? FluentResources.AccentButtonBackground(t) : FluentResources.ButtonBackground(t)).For(enabled, down, hovered), context);
+        if (t.IsHighContrast)
+        {
             Fluent.FillRound(canvas, r, radius, fill);
+            Fluent.StrokeRound(canvas, r, radius, (accent ? FluentResources.AccentButtonBorderBrush(t) : FluentResources.ButtonBorderBrush(t)).For(enabled, down, hovered));
             return;
         }
-        if (!Enabled)
+        if (!enabled || down)
         {
-            Fluent.ElevatedRect(canvas, r, radius, t.ControlFillColorDisabled, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
+            // Pressed and disabled buttons lose the elevation edge, and an accent button its border.
+            var border = accent ? QColor.Transparent : t.ControlStrokeColorDefault;
+            Fluent.ElevatedRect(canvas, r, radius, fill, border, border);
             return;
         }
-        if (down)
-        {
-            Fluent.ElevatedRect(canvas, r, radius, t.ControlFillColorTertiary, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
-            return;
-        }
-        Fluent.ElevatedRect(canvas, r, radius, Hovered ? t.ControlFillColorSecondary : t.ControlFillColorDefault, t.ControlStrokeColorDefault, t.ControlStrokeColorSecondary);
+        if (accent)
+            Fluent.ElevatedRect(canvas, r, radius, fill, t.ControlStrokeColorOnAccentDefault, t.ControlStrokeColorOnAccentSecondary);
+        else
+            Fluent.ElevatedRect(canvas, r, radius, fill, t.ControlStrokeColorDefault, t.ControlStrokeColorSecondary, edgeOnTop: t.IsDark);
     }
-
-    internal static QColor StrokeOnAccent => QColor.Parse("#14ffffff");
 
     /// <summary>Whether the button has no fill at rest, as a tool button.</summary>
     protected virtual bool IsSubtle => false;
@@ -585,9 +581,8 @@ public class Button : AbstractButton
         get
         {
             var t = Theme.Current;
-            if (IsAccent)
-                return !Enabled ? t.TextOnAccentFillColorDisabled : IsDown ? t.TextOnAccentFillColorSecondary : t.TextOnAccentFillColorPrimary;
-            return base.ContentColor;
+            var colors = IsAccent ? FluentResources.AccentButtonForeground(t) : FluentResources.ButtonForeground(t);
+            return colors.For(Enabled, IsDown, Hovered);
         }
     }
 }
@@ -613,7 +608,7 @@ public sealed class RoundButton : Button
 
     public override float FocusRadius => Radius(SKRect.Create((float)Width, (float)Height));
 
-    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) => PaintBackground(c, i.Bounds), Fluent.ControlHeight, Fluent.ControlHeight));
+    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, context) => PaintBackground(c, i.Bounds, context), Fluent.ControlHeight, Fluent.ControlHeight));
 }
 
 /// <summary>QtQuick.Controls' <c>ToolButton</c>: a button without a fill until hovered.</summary>
@@ -628,7 +623,7 @@ public sealed class ToolButton : Button
 
     public override bool IsAccent => false;
 
-    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) => PaintBackground(c, i.Bounds), Fluent.ControlHeight, Fluent.ControlHeight));
+    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, context) => PaintBackground(c, i.Bounds, context), Fluent.ControlHeight, Fluent.ControlHeight));
 
     public override QColor ContentColor
     {
@@ -670,6 +665,9 @@ public abstract class IndicatorButton : AbstractButton
     }
 
     protected override Item? CreateDefaultBackground() => null;
+
+    /// <summary>The text beside the indicator, which does not dim when pressed.</summary>
+    public override QColor ContentColor => FluentResources.ToggleForeground(Theme.Current).For(Enabled, IsDown, Hovered);
 }
 
 /// <summary>QtQuick.Controls' <c>CheckBox</c>, with a Windows 11 check box.</summary>
@@ -728,31 +726,34 @@ public sealed class CheckBox : IndicatorButton
         base.NextCheckState();
     }
 
-    protected override Item? CreateDefaultIndicator() => Part(new PaintedItem((c, i, _) =>
+    /// <summary>How much of the check mark is drawn: it draws itself in when the box is checked.</summary>
+    private readonly NumberTransition _mark = new(Fluent.ControlNormalAnimationDuration);
+
+    protected override Item? CreateDefaultIndicator() => Part(new PaintedItem((c, i, context) =>
     {
         var t = Theme.Current;
         var r = i.Bounds;
         var box = SKRect.Create(r.MidX - 10, r.MidY - 10, 20, 20);
-        var on = _checkState != 0;
-        if (on)
+        bool enabled = Enabled, down = IsDown, hovered = Hovered;
+        if (_checkState == 0)
         {
-            var fill = !Enabled ? t.AccentFillColorDisabled : IsDown ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
-            Fluent.FillRound(c, box, Fluent.ControlCornerRadius, fill);
-            var mark = !Enabled ? t.TextOnAccentFillColorDisabled : IsDown ? t.TextOnAccentFillColorSecondary : t.TextOnAccentFillColorPrimary;
-            if (_checkState == 2)
-            {
-                Fluent.DrawCheck(c, box.MidX, box.MidY, 12, mark);
-            }
-            else
-            {
-                using var paint = new SKPaint { Color = mark.ToSk(), IsAntialias = true };
-                c.DrawRoundRect(SKRect.Create(box.MidX - 4, box.MidY - 0.5f, 8, 1), 0.5f, 0.5f, paint);
-            }
+            _mark.Jump(0);
+            Fluent.FillRound(c, box, Fluent.ControlCornerRadius, FluentResources.CheckBoxCheckBackgroundFillUnchecked(t).For(enabled, down, hovered));
+            Fluent.StrokeRound(c, box, Fluent.ControlCornerRadius, FluentResources.CheckBoxCheckBackgroundStrokeUnchecked(t).For(enabled, down, hovered));
             return;
         }
-        var bg = !Enabled ? t.ControlAltFillColorSecondary : IsDown ? t.ControlAltFillColorTertiary.Darker(1.1) : Hovered ? t.ControlAltFillColorTertiary : t.ControlAltFillColorSecondary;
-        Fluent.FillRound(c, box, Fluent.ControlCornerRadius, bg);
-        Fluent.StrokeRound(c, box, Fluent.ControlCornerRadius, !Enabled ? t.ControlStrongStrokeColorDisabled : t.ControlStrongStrokeColorDefault);
+        var mixed = _checkState == 1;
+        Fluent.FillRound(c, box, Fluent.ControlCornerRadius, (mixed ? FluentResources.CheckBoxCheckBackgroundFillIndeterminate(t) : FluentResources.CheckBoxCheckBackgroundFillChecked(t)).For(enabled, down, hovered));
+        if (t.IsHighContrast)
+            Fluent.StrokeRound(c, box, Fluent.ControlCornerRadius, (mixed ? FluentResources.CheckBoxCheckBackgroundStrokeIndeterminate(t) : FluentResources.CheckBoxCheckBackgroundStrokeChecked(t)).For(enabled, down, hovered));
+        var glyph = (mixed ? FluentResources.CheckBoxCheckGlyphForegroundIndeterminate(t) : FluentResources.CheckBoxCheckGlyphForegroundChecked(t)).For(enabled, down, hovered);
+        if (mixed)
+        {
+            _mark.Jump(0);
+            Fluent.FillRound(c, SKRect.Create(box.MidX - 4, box.MidY - 1, 8, 2), 0, glyph);
+            return;
+        }
+        Fluent.DrawCheckMark(c, box, glyph, (float)_mark.Step(1, context));
     }, 20, 20));
 }
 
@@ -761,24 +762,35 @@ public sealed class RadioButton : IndicatorButton
 {
     protected override bool DefaultAutoExclusive => true;
 
-    protected override Item? CreateDefaultIndicator() => Part(new PaintedItem((c, i, _) =>
+    /// <summary>The diameter of the dot: 12 at rest, 14 hovered, 10 pressed, easing between them as in WinUI.</summary>
+    private readonly NumberTransition _dot = new(Fluent.ControlNormalAnimationDuration);
+
+    /// <summary>The dot an unchecked radio button shows while pressed, growing from 4 to 10.</summary>
+    private readonly NumberTransition _pressedDot = new(Fluent.ControlFastAnimationDuration);
+
+    protected override Item? CreateDefaultIndicator() => Part(new PaintedItem((c, i, context) =>
     {
         var t = Theme.Current;
         var r = i.Bounds;
         float cx = r.MidX, cy = r.MidY;
+        bool enabled = Enabled, down = IsDown, hovered = Hovered;
+        var glyph = FluentResources.RadioButtonCheckGlyphFill(t).For(enabled, down, hovered);
         if (Checked)
         {
-            var fill = !Enabled ? t.AccentFillColorDisabled : IsDown ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
-            Fluent.FillCircle(c, cx, cy, 10, fill);
-            var dot = IsDown ? 5f : Hovered ? 7f : 6f;
-            Fluent.FillCircle(c, cx, cy, dot, Enabled ? t.TextOnAccentFillColorPrimary : t.TextOnAccentFillColorDisabled);
+            _pressedDot.Jump(4);
+            Fluent.FillCircle(c, cx, cy, 10, FluentResources.RadioButtonOuterEllipseCheckedFill(t).For(enabled, down, hovered));
+            Fluent.StrokeCircle(c, cx, cy, 10, FluentResources.RadioButtonOuterEllipseCheckedStroke(t).For(enabled, down, hovered));
+            var size = _dot.Step(!enabled ? 12 : down ? 10 : hovered ? 14 : 12, context);
+            Fluent.FillCircle(c, cx, cy, (float)size / 2, glyph);
             return;
         }
-        var bg = IsDown ? t.ControlAltFillColorTertiary.Darker(1.1) : Hovered ? t.ControlAltFillColorTertiary : t.ControlAltFillColorSecondary;
-        Fluent.FillCircle(c, cx, cy, 10, bg);
-        Fluent.StrokeCircle(c, cx, cy, 10, !Enabled ? t.ControlStrongStrokeColorDisabled : t.ControlStrongStrokeColorDefault);
-        if (IsDown && Enabled)
-            Fluent.FillCircle(c, cx, cy, 5, t.ControlStrongFillColorDefault);
+        _dot.Jump(12);
+        Fluent.FillCircle(c, cx, cy, 10, FluentResources.RadioButtonOuterEllipseFill(t).For(enabled, down, hovered));
+        Fluent.StrokeCircle(c, cx, cy, 10, FluentResources.RadioButtonOuterEllipseStroke(t).For(enabled, down, hovered));
+        if (down && enabled)
+            Fluent.FillCircle(c, cx, cy, (float)_pressedDot.Step(10, context) / 2, glyph);
+        else
+            _pressedDot.Jump(4);
     }, 20, 20));
 }
 
@@ -803,34 +815,44 @@ public sealed class Switch : IndicatorButton
     [Qml]
     public double VisualPosition => Position;
 
-    protected override Item? CreateDefaultIndicator() => Part(new PaintedItem((c, i, _) =>
+    // The knob slides along the track, grows on hover and stretches when pressed, and the colors fade between
+    // off and on over 83 ms, as WinUI's toggle switch does.
+    private readonly NumberTransition _slide = new(Fluent.ControlNormalAnimationDuration);
+    private readonly NumberTransition _knobWidth = new(Fluent.ControlFasterAnimationDuration);
+    private readonly NumberTransition _knobHeight = new(Fluent.ControlFasterAnimationDuration);
+    private readonly ColorTransition _trackFill = new(Fluent.ControlFasterAnimationDuration);
+    private readonly ColorTransition _trackStroke = new(Fluent.ControlFasterAnimationDuration);
+    private readonly ColorTransition _knobFill = new(Fluent.ControlFasterAnimationDuration);
+
+    protected override Item? CreateDefaultIndicator() => Part(new PaintedItem((c, i, context) =>
     {
         var t = Theme.Current;
         var r = i.Bounds;
         var track = SKRect.Create(r.MidX - 20, r.MidY - 10, 40, 20);
-        var pos = _dragging ? _position : Checked ? 1 : 0;
-        var on = pos >= 0.5;
-        if (on)
+        bool enabled = Enabled, down = IsDown, hovered = Hovered;
+        double pos;
+        if (_dragging)
         {
-            var fill = !Enabled ? t.AccentFillColorDisabled : IsDown ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
-            Fluent.FillRound(c, track, 10, fill);
+            pos = _position;
+            _slide.Jump(pos);
         }
         else
         {
-            var fill = !Enabled ? t.ControlAltFillColorSecondary : IsDown ? t.ControlAltFillColorTertiary.Darker(1.1) : Hovered ? t.ControlAltFillColorTertiary : t.ControlAltFillColorSecondary;
-            Fluent.FillRound(c, track, 10, fill);
-            Fluent.StrokeRound(c, track, 10, !Enabled ? t.ControlStrongStrokeColorDisabled : t.ControlStrongStrokeColorDefault);
+            pos = _slide.Step(Checked ? 1 : 0, context);
         }
-        float kw = IsDown ? 17 : Hovered ? 14 : 12;
-        float kh = IsDown ? 14 : Hovered ? 14 : 12;
-        var minX = track.Left + 4 + kh / 2;
-        var maxX = track.Right - 4 - kh / 2;
-        var cx = (float)(minX + (maxX - minX) * pos);
-        if (IsDown)
-            cx += on ? -(kw - kh) / 2 : (kw - kh) / 2;
+        var on = _dragging ? _position >= 0.5 : Checked;
+        var fill = on ? FluentResources.ToggleSwitchFillOn(t) : FluentResources.ToggleSwitchFillOff(t);
+        var stroke = !on ? FluentResources.ToggleSwitchStrokeOff(t).For(enabled, down, hovered)
+            : t.IsHighContrast ? FluentResources.ToggleSwitchStrokeOn(t).For(enabled, down, hovered) : QColor.Transparent;
+        var knobFill = on ? FluentResources.ToggleSwitchKnobFillOn(t) : FluentResources.ToggleSwitchKnobFillOff(t);
+        Fluent.FillRound(c, track, 10, _trackFill.Step(fill.For(enabled, down, hovered), context));
+        Fluent.StrokeRound(c, track, 10, _trackStroke.Step(stroke, context));
+        var kw = (float)_knobWidth.Step(!enabled ? 12 : down ? 17 : hovered ? 14 : 12, context);
+        var kh = (float)_knobHeight.Step(!enabled ? 12 : down || hovered ? 14 : 12, context);
+        // The knob sits 10 pixels in from the end it rests at, and a stretched knob grows toward the middle.
+        var cx = (float)(track.Left + 10 + 20 * pos) + (kw - kh) / 2 * (float)(1 - 2 * pos);
         var knob = SKRect.Create(cx - kw / 2, track.MidY - kh / 2, kw, kh);
-        var knobColor = on ? (Enabled ? t.TextOnAccentFillColorPrimary : t.TextOnAccentFillColorDisabled) : (Enabled ? t.TextFillColorSecondary : t.TextFillColorDisabled);
-        Fluent.FillRound(c, knob, kh / 2, knobColor);
+        Fluent.FillRound(c, knob, kh / 2, _knobFill.Step(knobFill.For(enabled, down, hovered), context));
     }, 40, 20));
 
     public override bool PointerPress(double x, double y, int button, int buttons, int modifiers)

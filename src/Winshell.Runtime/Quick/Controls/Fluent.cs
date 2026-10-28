@@ -137,9 +137,11 @@ public static class Fluent
 
     /// <summary>
     /// Fills a rounded rectangle and draws the Fluent elevation border: one pixel of <paramref name="stroke"/>,
-    /// shading to <paramref name="bottomStroke"/> along the bottom edge, the way WinUI's buttons and fields look.
+    /// shading to <paramref name="edgeStroke"/> over three pixels at the bottom edge, or at the top edge when
+    /// <paramref name="edgeOnTop"/>. That is WinUI's <c>ControlElevationBorderBrush</c>: its edge is at the top in
+    /// dark and at the bottom in light.
     /// </summary>
-    public static void ElevatedRect(SKCanvas canvas, SKRect rect, float radius, QColor fill, QColor stroke, QColor bottomStroke)
+    public static void ElevatedRect(SKCanvas canvas, SKRect rect, float radius, QColor fill, QColor stroke, QColor edgeStroke, bool edgeOnTop = false)
     {
         if (rect.Width <= 0 || rect.Height <= 0)
             return;
@@ -149,19 +151,25 @@ public static class Fluent
             if (fill.A > 0)
                 canvas.DrawRoundRect(rr, paint);
         }
-        if (stroke.A <= 0 && bottomStroke.A <= 0)
+        if (stroke.A <= 0 && edgeStroke.A <= 0)
             return;
         var inner = SKRect.Inflate(rect, -0.5f, -0.5f);
         using var border = Round(inner, Math.Max(0, radius - 0.5f));
         var h = rect.Height;
         using var strokePaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1 };
-        if (h > 4 && stroke != bottomStroke)
+        if (h > 4 && stroke != edgeStroke)
         {
-            strokePaint.Shader = SKShader.CreateLinearGradient(
-                new SKPoint(0, rect.Top), new SKPoint(0, rect.Bottom),
-                [stroke.ToSk(), stroke.ToSk(), bottomStroke.ToSk(), bottomStroke.ToSk()],
-                [0, (h - 3) / h, (h - 1) / h, 1],
-                SKShaderTileMode.Clamp);
+            strokePaint.Shader = edgeOnTop
+                ? SKShader.CreateLinearGradient(
+                    new SKPoint(0, rect.Top), new SKPoint(0, rect.Bottom),
+                    [edgeStroke.ToSk(), edgeStroke.ToSk(), stroke.ToSk(), stroke.ToSk()],
+                    [0, 1 / h, 3 / h, 1],
+                    SKShaderTileMode.Clamp)
+                : SKShader.CreateLinearGradient(
+                    new SKPoint(0, rect.Top), new SKPoint(0, rect.Bottom),
+                    [stroke.ToSk(), stroke.ToSk(), edgeStroke.ToSk(), edgeStroke.ToSk()],
+                    [0, (h - 3) / h, (h - 1) / h, 1],
+                    SKShaderTileMode.Clamp);
         }
         else
         {
@@ -169,6 +177,32 @@ public static class Fluent
         }
         canvas.DrawRoundRect(border, strokePaint);
         strokePaint.Shader?.Dispose();
+    }
+
+    /// <summary>WinUI's check box mark, drawn as a path in a 20 pixel box.</summary>
+    public static void DrawCheckMark(SKCanvas canvas, SKRect box, QColor color, float progress = 1)
+    {
+        if (color.A <= 0 || progress <= 0)
+            return;
+        float s = box.Width / 20;
+        using var builder = new SKPathBuilder();
+        builder.MoveTo(box.Left + 5.5f * s, box.Top + 10.5f * s);
+        builder.LineTo(box.Left + 8.2f * s, box.Top + 13.2f * s);
+        builder.LineTo(box.Left + 14.5f * s, box.Top + 7f * s);
+        using var path = builder.Detach();
+        using var paint = new SKPaint { Color = color.ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f * s, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
+        if (progress >= 1)
+        {
+            canvas.DrawPath(path, paint);
+            return;
+        }
+        // The mark draws itself in from its left end, as WinUI's animated check does.
+        using var measure = new SKPathMeasure(path);
+        using var segment = new SKPathBuilder();
+        if (!measure.GetSegment(0, measure.Length * progress, segment, true))
+            return;
+        using var partial = segment.Detach();
+        canvas.DrawPath(partial, paint);
     }
 
     public static void FillRound(SKCanvas canvas, SKRect rect, float radius, QColor color)
@@ -229,6 +263,80 @@ public static class Fluent
         StrokeRound(canvas, outer, radius + 3, T.FocusStrokeColorOuter, 2);
         StrokeRound(canvas, SKRect.Inflate(outer, -2, -2), radius + 1, T.FocusStrokeColorInner, 1);
     }
+}
+
+/// <summary>
+/// The colors of one part of a control in each visual state, as WinUI's <c>…</c>, <c>…PointerOver</c>,
+/// <c>…Pressed</c> and <c>…Disabled</c> resources give them.
+/// </summary>
+public readonly record struct StateColors(QColor Rest, QColor Hover, QColor Pressed, QColor Disabled)
+{
+    public QColor For(bool enabled, bool pressed, bool hovered) =>
+        !enabled ? Disabled : pressed ? Pressed : hovered ? Hover : Rest;
+}
+
+/// <summary>
+/// A painted value that eases to a new target instead of jumping to it, as a WinUI visual state transition does.
+/// It starts moving on the first paint after the target changes and asks for frames until it arrives. Without a
+/// clock (a paint at time zero) it jumps.
+/// </summary>
+public abstract class Transition<T>(int milliseconds, bool easeOut) where T : struct
+{
+    private static readonly double[] FastOutSlowIn = [0, 0, 0, 1, 1, 1];
+    private T _from, _to;
+    private TimeSpan _start;
+    private bool _started;
+
+    protected abstract T Lerp(T from, T to, double t);
+
+    /// <summary>Moves to a value at once, so the next change eases from there.</summary>
+    public void Jump(T value)
+    {
+        _started = true;
+        _from = _to = value;
+        _start = TimeSpan.MinValue;
+    }
+
+    public T Step(T target, PaintContext context)
+    {
+        var now = context.Time;
+        if (!_started || now <= TimeSpan.Zero)
+        {
+            Jump(target);
+            return target;
+        }
+        if (!EqualityComparer<T>.Default.Equals(target, _to))
+        {
+            _from = At(now);
+            _to = target;
+            _start = now;
+        }
+        var value = At(now);
+        if (Progress(now) < 1)
+            context.WantsAnotherFrame = true;
+        return value;
+    }
+
+    private double Progress(TimeSpan now) =>
+        milliseconds <= 0 || _start == TimeSpan.MinValue ? 1 : Math.Clamp((now - _start).TotalMilliseconds / milliseconds, 0, 1);
+
+    private T At(TimeSpan now)
+    {
+        var p = Progress(now);
+        return Lerp(_from, _to, easeOut ? Easing.Value(Easing.BezierSpline, p, bezier: FastOutSlowIn) : p);
+    }
+}
+
+/// <summary>A number that eases to its target along WinUI's fast-out, slow-in curve.</summary>
+public sealed class NumberTransition(int milliseconds) : Transition<double>(milliseconds, easeOut: true)
+{
+    protected override double Lerp(double from, double to, double t) => from + (to - from) * t;
+}
+
+/// <summary>A color that fades to its target linearly, as WinUI's brush transitions do.</summary>
+public sealed class ColorTransition(int milliseconds) : Transition<QColor>(milliseconds, easeOut: false)
+{
+    protected override QColor Lerp(QColor from, QColor to, double t) => QColor.Blend(from, to, t);
 }
 
 /// <summary>Watches some properties of an object and runs an action when one changes.</summary>
