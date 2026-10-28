@@ -175,6 +175,7 @@ internal static class WaylandCompat
             .Type<IdleMonitor>("IdleMonitor")
             .Add(StandardModules.EnumType("WlrLayer", [new("Background", 0), new("Bottom", 1), new("Top", 2), new("Overlay", 3)], wayland.Name))
             .Add(StandardModules.EnumType("WlrKeyboardFocus", [new("None", 0), new("Exclusive", 1), new("OnDemand", 2)], wayland.Name));
+        Services.Unavailable.UnavailableModules.RegisterWayland(wayland);
     }
 }
 
@@ -192,5 +193,6 @@ public static class ServiceModules
         Services.Pam.PamModule.Register(registry);
         Services.Tray.SystemTrayModule.Register(registry);
         Services.Notifications.NotificationModule.Register(registry);
+        Services.Unavailable.UnavailableModules.Register(registry);
     }
 }

@@ -325,6 +325,116 @@ public sealed class WrapperMouseArea : MouseArea
 }
 
 /// <summary>
+/// Quickshell's <c>WrapperManager</c>: picks the one visual child of a wrapper item.
+/// A single child is used automatically. More than one child needs <see cref="Child"/> set, and the rest are unparented.
+/// </summary>
+public sealed class WrapperManager : QObject
+{
+    private Item? _wrapper;
+    private Item? _assignedWrapper;
+    private Item? _defaultChild;
+    private Item? _child;
+    private IDisposable? _destroyed;
+    private bool _ready;
+    private bool _assigned;
+    private bool _multiple;
+
+    /// <summary>The item whose visual child is wrapped. QML name is <c>wrapper</c>. The C# name avoids <see cref="QObject"/>'s script wrapper.</summary>
+    [Qml("wrapper")]
+    public Item? Wrapper_
+    {
+        get { TrackQml("wrapper"); return _wrapper ?? _assignedWrapper; }
+        set
+        {
+            if (_ready)
+            {
+                (Engine?.Log ?? Log.Default).Warn("scene", "Cannot set wrapper after WrapperManager initialization.");
+                return;
+            }
+            _assignedWrapper = value;
+            NotifyChanged("wrapper");
+        }
+    }
+
+    [Qml]
+    public Item? Child
+    {
+        get { Track(); return _child; }
+        set => Assign(value, value is null);
+    }
+
+    public override void ComponentComplete()
+    {
+        _wrapper = _assignedWrapper ?? Owner as Item;
+        _ready = true;
+        if (_wrapper is null)
+        {
+            (Engine?.Log ?? Log.Default).Warn("scene", "Parent of WrapperManager is not an Item.");
+            return;
+        }
+        var items = _wrapper.ChildItems.ToList();
+        if (items.Count == 1)
+            _defaultChild = items[0];
+        else if (items.Count > 1)
+            _multiple = true;
+        var chosen = _assigned ? _child : _defaultChild;
+        if (!_assigned && _multiple)
+            WarnMultiple();
+        foreach (var item in items)
+        {
+            if (!ReferenceEquals(item, chosen))
+                Detach(item);
+        }
+        Adopt(chosen);
+    }
+
+    private void Assign(Item? child, bool explicitNull)
+    {
+        _assigned = true;
+        if (!_ready)
+        {
+            _child = explicitNull ? null : child;
+            Watch(child);
+            return;
+        }
+        Adopt(explicitNull ? null : child);
+    }
+
+    private void Adopt(Item? child)
+    {
+        if (ReferenceEquals(child, _child) && (child is null || _wrapper is null || ReferenceEquals(child.ParentItem, _wrapper)))
+            return;
+        if (_child is { } previous && _wrapper is not null && ReferenceEquals(previous.ParentItem, _wrapper))
+            Detach(previous);
+        _child = child;
+        Watch(child);
+        if (child is not null && _wrapper is not null && !ReferenceEquals(child.ParentItem, _wrapper))
+            child.SetParentItem(_wrapper);
+        NotifyChanged("child");
+    }
+
+    private void Watch(Item? child)
+    {
+        _destroyed?.Dispose();
+        _destroyed = child?.Connect("destroyed", _ =>
+        {
+            _child = null;
+            NotifyChanged("child");
+        });
+    }
+
+    private void Detach(Item item)
+    {
+        item.SetParentItem(null);
+        if (item.Owner is null && _wrapper is not null)
+            item.SetOwner(_wrapper);
+    }
+
+    private void WarnMultiple() =>
+        (Engine?.Log ?? Log.Default).Warn("scene", "Wrapper component cannot have more than one visual child. Remove all additional children, or pick a specific component to wrap using the child property.");
+}
+
+/// <summary>
 /// Quickshell's <c>MarginWrapperManager</c>: gives the item it is declared in the margin behavior of a wrapper.
 /// </summary>
 public sealed class MarginWrapperManager : QObject

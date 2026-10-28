@@ -5,6 +5,45 @@ using Jint.Native;
 
 namespace Winshell.Runtime.Quickshell;
 
+/// <summary>
+/// Quickshell's <c>DataStream</c>: a source of bytes. Nothing is read until <see cref="Parser"/> is set.
+/// <see cref="SocketObject"/> is one.
+/// </summary>
+public class DataStream : QObject
+{
+    private DataStreamParser? _parser;
+    private readonly StringBuilder _buffer = new();
+
+    [Qml]
+    public DataStreamParser? Parser
+    {
+        get { Track(); return _parser; }
+        set
+        {
+            if (!SetField(ref _parser, value) || value is null)
+                return;
+            value.SetOwner(this);
+            if (_buffer.Length == 0)
+                return;
+            var pending = _buffer.ToString();
+            _buffer.Clear();
+            value.Feed(pending);
+        }
+    }
+
+    /// <summary>Hands text to the parser, or holds it until a parser is set.</summary>
+    protected void Deliver(string data)
+    {
+        if (_parser is null)
+            _buffer.Append(data);
+        else
+            _parser.Feed(data);
+    }
+
+    /// <summary>Tells the parser the source has closed.</summary>
+    protected void EndStream() => _parser?.End();
+}
+
 /// <summary>Quickshell's <c>DataStreamParser</c>: takes the bytes of a stream as they arrive.</summary>
 [QmlSignal("read", "data")]
 public abstract class DataStreamParser : QObject

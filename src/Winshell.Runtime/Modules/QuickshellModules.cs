@@ -55,6 +55,7 @@ public static partial class StandardModules
         io.Type<ProcessObject>("Process")
             .Type<StdioCollector>("StdioCollector")
             .Type<SplitParser>("SplitParser")
+            .Uncreatable<DataStream>("DataStream", "DataStream is a base class")
             .Uncreatable<DataStreamParser>("DataStreamParser")
             .Type<FileView>("FileView")
             .Uncreatable<FileViewAdapter>("FileViewAdapter")
@@ -72,6 +73,7 @@ public static partial class StandardModules
             .Type<WrapperItem>("WrapperItem")
             .Type<WrapperRectangle>("WrapperRectangle")
             .Type<WrapperMouseArea>("WrapperMouseArea")
-            .Type<MarginWrapperManager>("MarginWrapperManager");
+            .Type<MarginWrapperManager>("MarginWrapperManager")
+            .Type<WrapperManager>("WrapperManager");
     }
 }

@@ -168,11 +168,10 @@ public sealed class IpcException(string message) : Exception(message);
 /// (<c>\\.\pipe\name</c>).
 /// </summary>
 [QmlSignal("error", "error")]
-public sealed class SocketObject : QObject
+public sealed class SocketObject : DataStream
 {
     private string _path = "";
     private bool _connected;
-    private DataStreamParser? _parser;
     private Stream? _stream;
     private int _generation;
     private readonly StringBuilder _pending = new();
@@ -212,17 +211,6 @@ public sealed class SocketObject : QObject
                 Connect();
             else
                 Disconnect();
-        }
-    }
-
-    [Qml]
-    public DataStreamParser? Parser
-    {
-        get { Track(); return _parser; }
-        set
-        {
-            if (SetField(ref _parser, value))
-                value?.SetOwner(this);
         }
     }
 
@@ -307,7 +295,7 @@ public sealed class SocketObject : QObject
                     loop.Post(() =>
                     {
                         if (generation == _generation && !IsDestroyed)
-                            _parser?.Feed(text);
+                            Deliver(text);
                     });
                 }
             }
@@ -318,7 +306,7 @@ public sealed class SocketObject : QObject
             {
                 if (generation != _generation || IsDestroyed)
                     return;
-                _parser?.End();
+                EndStream();
                 Disconnect();
             });
         });
