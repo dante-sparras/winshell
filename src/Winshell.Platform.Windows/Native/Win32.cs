@@ -436,6 +436,13 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     public static partial nint SendMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
 
+    public const uint GR_GDIOBJECTS = 0;
+    public const uint GR_USEROBJECTS = 1;
+
+    /// <summary>How many GDI or USER objects a process has open.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial uint GetGuiResources(nint process, uint flags);
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool TrackMouseEvent(ref TRACKMOUSEEVENT tme);

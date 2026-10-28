@@ -24,6 +24,8 @@ public sealed class QObjectWrapper : ObjectInstance
 
     public QObject Target { get; }
 
+    internal JsRuntime Runtime => _runtime;
+
     public override JsValue Get(JsValue property, JsValue receiver)
     {
         if (!property.IsString())
@@ -157,10 +159,10 @@ public static class SignalFunction
             var thisValue = args.Length >= 2 ? args[0] : null;
             if (Slots.TryGetValue(target, out var other))
             {
-                slot.Connect(a => other.Owner.Emit(other.Definition.Name, a));
+                slot.ConnectFor(runtime, a => other.Owner.Emit(other.Definition.Name, a));
                 return JsValue.Undefined;
             }
-            slot.ConnectScript(target, thisValue);
+            slot.ConnectScript(target, thisValue, runtime);
             return JsValue.Undefined;
         }));
         function.Set("disconnect", new ClrFunction(engine, "disconnect", (_, args) =>

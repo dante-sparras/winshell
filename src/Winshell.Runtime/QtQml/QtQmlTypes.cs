@@ -186,7 +186,7 @@ public sealed class Connections : QObject
                     Engine.Log.Warn("scene", $"QML Connections: Detected function \"{Names.HandlerName(signal)}\" in Connections element. This is probably intended to be a signal handler but no signal of the target matches the name.");
                 continue;
             }
-            _connections.Add(slot.ConnectScript(function, thisValue));
+            _connections.Add(slot.ConnectScript(function, thisValue, Engine.Js));
         }
     }
 

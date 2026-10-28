@@ -379,6 +379,12 @@ public class QObject
             _owned.Clear();
         }
         OnDestroy();
+        // Attached objects, such as Layout or ToolTip, can hold bindings to objects that outlive this one.
+        if (_attached is not null)
+        {
+            foreach (var attached in _attached.Values)
+                attached.Destroy();
+        }
         if (_bindings is not null)
         {
             foreach (var binding in _bindings.Values)

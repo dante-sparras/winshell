@@ -13,19 +13,34 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
 
     public int Count => _handlers.Count;
 
-    public IDisposable Connect(Action<object?[]> handler)
+    public IDisposable Connect(Action<object?[]> handler) => Add(new Handler(handler, null, null, null));
+
+    /// <summary>
+    /// Connects a JavaScript function of <paramref name="runtime"/>, which runs it. <paramref name="thisValue"/> is
+    /// its <c>this</c>. The connection ends when the runtime's engine is disposed, as the signal's object may live on.
+    /// </summary>
+    public IDisposable ConnectScript(JsValue function, JsValue? thisValue, JsRuntime runtime) =>
+        Add(new Handler(null, function, thisValue, runtime));
+
+    /// <summary>Connects a C# handler made by script code of <paramref name="runtime"/>, such as a signal connected to a signal.</summary>
+    public IDisposable ConnectFor(JsRuntime runtime, Action<object?[]> handler) => Add(new Handler(handler, null, null, runtime));
+
+    private Disconnect Add(Handler handler)
     {
-        var h = new Handler(handler, null, null);
-        _handlers.Add(h);
-        return new Disconnect(this, h);
+        _handlers.Add(handler);
+        handler.Runtime?.Qml.ConnectedTo(this);
+        return new Disconnect(this, handler);
     }
 
-    /// <summary>Connects a JavaScript function. <paramref name="thisValue"/> is its <c>this</c>.</summary>
-    public IDisposable ConnectScript(JsValue function, JsValue? thisValue)
+    /// <summary>Removes the handlers a runtime connected, when its engine is disposed.</summary>
+    internal void DisconnectRuntime(JsRuntime runtime)
     {
-        var h = new Handler(null, function, thisValue);
-        _handlers.Add(h);
-        return new Disconnect(this, h);
+        foreach (var h in _handlers)
+        {
+            if (h.Runtime == runtime)
+                h.Removed = true;
+        }
+        _handlers.RemoveAll(h => h.Runtime == runtime);
     }
 
     public bool DisconnectScript(JsValue function)
@@ -53,9 +68,9 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
                 {
                     h.Native(args);
                 }
-                else if (Owner.Engine is { } engine)
+                else if ((h.Runtime ?? Owner.Engine?.Js) is { Qml.IsDisposed: false } runtime)
                 {
-                    engine.Js.CallFunction(h.Script!, h.This, args);
+                    runtime.CallFunction(h.Script!, h.This, args);
                 }
             }
             catch (Exception e)
@@ -72,8 +87,10 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
         _handlers.Clear();
     }
 
-    private sealed class Handler(Action<object?[]>? native, JsValue? script, JsValue? thisValue)
+    private sealed class Handler(Action<object?[]>? native, JsValue? script, JsValue? thisValue, JsRuntime? runtime)
     {
+        public JsRuntime? Runtime { get; } = runtime;
+
         public Action<object?[]>? Native { get; } = native;
 
         public JsValue? Script { get; } = script;

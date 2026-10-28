@@ -217,7 +217,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
         var body = ScriptCompiler.HandlerBody(script.Code, script.IsBlock);
         var scope = new ScopeObject(_js, scopeObject, context);
         var function = _js.Compile(body, slot.Definition.Parameters, scope, script.Location.ToString());
-        slot.ConnectScript(function, _js.Wrap(scopeObject));
+        slot.ConnectScript(function, _js.Wrap(scopeObject), _js);
     }
 
     private void AssignValue(QObject scopeObject, QObject target, string name, QmlValue value, ComponentContext context, QmlDocument doc, SourceLocation location)
