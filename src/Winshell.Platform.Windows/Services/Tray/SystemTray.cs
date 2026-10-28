@@ -34,7 +34,7 @@ public sealed class SystemTray : QObject
         Items.SetOwner(this);
         if (engine.GetService<IShellPlatform>() is not WindowsPlatform platform)
             return;
-        _host = TrayHost.Get(platform);
+        _host = platform.Tray;
         _host.Added += OnAdded;
         _host.Changed += OnChanged;
         _host.Removed += OnRemoved;
