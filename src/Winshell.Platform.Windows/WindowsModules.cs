@@ -216,5 +216,6 @@ public static class ServiceModules
         Services.SignIn.SignInModule.Register(registry);
         Services.Tray.SystemTrayModule.Register(registry);
         Services.Notifications.NotificationModule.Register(registry);
+        Services.Capture.CaptureModule.Register(registry);
     }
 }
