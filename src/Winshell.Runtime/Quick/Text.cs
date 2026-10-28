@@ -413,8 +413,7 @@ public class Text : Item
     {
         // The implicit width is the width of the text without wrapping, like Qt's.
         var spans = Spans();
-        var natural = TextLayout.Build(spans, double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, LineHeightValue, ProportionalLineHeight);
-        _layout = null;
+        using var natural = TextLayout.Build(spans, double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, LineHeightValue, ProportionalLineHeight);
         _dirty = true;
         ImplicitWidth = Math.Ceiling(natural.Width) + _leftPadding + _rightPadding;
         EnsureLayout();
@@ -454,6 +453,7 @@ public class Text : Item
         var wrap = (TextLayout.Wrap)(_wrapMode == 2 ? 1 : _wrapMode);
         var elide = (TextLayout.Elide)_elide;
         var maxLines = _maximumLineCount == int.MaxValue ? 0 : _maximumLineCount;
+        _layout?.Dispose();
         _layout = TextLayout.Build(Spans(), available, wrap, elide, maxLines, LineHeightValue, ProportionalLineHeight);
     }
 
@@ -480,36 +480,14 @@ public class Text : Item
             offsetY += (boxHeight - _layout.Height) / 2;
         canvas.Save();
         canvas.Translate((float)_leftPadding, 0);
-        Action<SKCanvas, SKTextBlob, SKPaint>? decorate = null;
-        if (_style != 0)
-        {
-            var styleColor = _styleColor.ToSk();
-            var style = _style;
-            decorate = (c, blob, _) =>
-            {
-                using var p = new SKPaint { Color = styleColor, IsAntialias = true };
-                switch (style)
-                {
-                    case (int)TextStyle.Outline:
-                        p.Style = SKPaintStyle.Stroke;
-                        p.StrokeWidth = 2;
-                        c.DrawText(blob, 0, 0, p);
-                        break;
-                    case (int)TextStyle.Raised:
-                        c.DrawText(blob, 0, 1, p);
-                        break;
-                    case (int)TextStyle.Sunken:
-                        c.DrawText(blob, 0, -1, p);
-                        break;
-                }
-            };
-        }
-        _layout.Draw(canvas, boxWidth, _horizontalAlignment, _color, offsetY, Antialiasing, decorate);
+        _layout.Draw(canvas, boxWidth, _horizontalAlignment, _color, offsetY, Antialiasing, paint: context, textStyle: _style, styleColor: _styleColor);
         canvas.Restore();
     }
 
     protected override void OnDestroy()
     {
+        _layout?.Dispose();
+        _layout = null;
         Theme.Changed -= OnThemeChanged;
         base.OnDestroy();
     }

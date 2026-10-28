@@ -644,6 +644,7 @@ public sealed class IconLabel : Item
 
     private void Relayout()
     {
+        _layout?.Dispose();
         _layout = _text.Length == 0 ? null : TextLayout.Build([new TextSpan(_text, _font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
         double w = 0, h = 0;
         var textW = ShowsText ? Math.Ceiling(_layout!.Width) : 0;
@@ -661,7 +662,10 @@ public sealed class IconLabel : Item
             h = Math.Max(textH, iconH);
         }
         if (!ShowsText && !ShowsIcon)
-            h = Math.Ceiling(TextLayout.Build([new TextSpan("Ag", _font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true).Height);
+        {
+            using var probe = TextLayout.Build([new TextSpan("Ag", _font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+            h = Math.Ceiling(probe.Height);
+        }
         ImplicitWidth = w + _leftPadding + _rightPadding;
         ImplicitHeight = h;
         Update();
@@ -694,8 +698,12 @@ public sealed class IconLabel : Item
         var gap = showIcon && showText ? _spacing : 0;
         var textAvail = under ? boxW : Math.Max(0, boxW - iconW - gap);
         var layout = _layout;
+        TextLayout? elided = null;
         if (showText && layout!.Width > textAvail + 0.5)
-            layout = TextLayout.Build([new TextSpan(_text, _font)], textAvail, TextLayout.Wrap.NoWrap, TextLayout.Elide.Right, 1, 1, true);
+        {
+            elided = TextLayout.Build([new TextSpan(_text, _font)], textAvail, TextLayout.Wrap.NoWrap, TextLayout.Elide.Right, 1, 1, true);
+            layout = elided;
+        }
         var textW = showText ? Math.Min(layout!.Width, textAvail) : 0;
         var textH = showText ? layout!.Height : 0;
         var contentW = under ? Math.Max(iconW, textW) : iconW + gap + textW;
@@ -720,9 +728,17 @@ public sealed class IconLabel : Item
             var ty = under ? y + iconH + gap : y + (contentH - textH) / 2;
             canvas.Save();
             canvas.Translate((float)tx, 0);
-            layout!.Draw(canvas, textW, QtEnums.AlignLeft, ColorSource(), ty, true);
+            layout!.Draw(canvas, textW, QtEnums.AlignLeft, ColorSource(), ty, true, paint: context);
             canvas.Restore();
         }
+        elided?.Dispose();
+    }
+
+    protected override void OnDestroy()
+    {
+        _layout?.Dispose();
+        _layout = null;
+        base.OnDestroy();
     }
 }
 

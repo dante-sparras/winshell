@@ -12,6 +12,9 @@ public sealed class PaintContext
 
     /// <summary>Set by an item whose drawing keeps changing, such as a busy indicator, to get another frame.</summary>
     public bool WantsAnotherFrame { get; set; }
+
+    /// <summary>Text is drawn over a backdrop or a translucent window, so ClearType must not be used.</summary>
+    public bool TextOnBackdrop { get; init; }
 }
 
 public static class SkiaExtensions

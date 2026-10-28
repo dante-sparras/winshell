@@ -692,6 +692,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 }
             case Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN:
                 {
+                    _ime.ClearPending();
                     var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers(), IsAutoRepeat = ((long)lParam & (1L << 30)) != 0, NativeScanCode = (int)(((long)lParam >> 16) & 0xff) };
                     if (scene.KeyPress(e))
                         return 0;
@@ -707,6 +708,38 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                     var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers() };
                     scene.KeyRelease(e);
                     return msg == Win32.WM_SYSKEYUP ? null : 0;
+                }
+            case ImeSession.WmImeSetContext:
+                return Win32.DefWindowProcW(Handle, msg, wParam, ImeSession.HideDefaultCompositionWindow(lParam));
+            case ImeSession.WmImeNotify:
+                if ((int)wParam is ImeSession.ImnOpenCandidate or ImeSession.ImnChangeCandidate)
+                    PlaceIme(scene);
+                return null;
+            case ImeSession.WmImeStartComposition:
+                PlaceIme(scene);
+                return 0;
+            case ImeSession.WmImeEndComposition:
+                ApplyIme(scene, _ime.OnEnd());
+                return 0;
+            case ImeSession.WmImeComposition:
+                {
+                    var flags = (int)lParam;
+                    var text = "";
+                    if ((flags & (ImeSession.GcsResultStr | ImeSession.GcsCompStr)) != 0)
+                    {
+                        var index = (flags & ImeSession.GcsResultStr) != 0 ? ImeSession.GcsResultStr : ImeSession.GcsCompStr;
+                        text = ImeNative.CompositionString(Handle, index);
+                    }
+                    ApplyIme(scene, _ime.OnComposition(flags, text));
+                    PlaceIme(scene);
+                    return 0;
+                }
+            case ImeSession.WmImeChar:
+                {
+                    var action = _ime.OnImeChar((char)wParam);
+                    if (action.Kind == ImeActionKind.Insert)
+                        InsertImeChar(scene, action.Text[0]);
+                    return 0;
                 }
             case Win32.WM_CHAR:
                 {
@@ -781,6 +814,46 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     }
 
     private char? _pendingHigh;
+    private readonly ImeSession _ime = new();
+
+    private void ApplyIme(Scene scene, ImeAction action)
+    {
+        switch (action.Kind)
+        {
+            case ImeActionKind.Preedit:
+                scene.SetComposition(action.Text);
+                break;
+            case ImeActionKind.Commit:
+                scene.CommitComposition(action.Text);
+                break;
+            case ImeActionKind.Cancel:
+                scene.CancelComposition();
+                break;
+            case ImeActionKind.Insert:
+                if (action.Text.Length > 0)
+                    InsertImeChar(scene, action.Text[0]);
+                break;
+        }
+    }
+
+    private void InsertImeChar(Scene scene, char c)
+    {
+        if (char.IsHighSurrogate(c))
+        {
+            _pendingHigh = c;
+            return;
+        }
+        var text = _pendingHigh is { } high ? new string([high, c]) : c.ToString();
+        _pendingHigh = null;
+        if (!char.IsControl(text[0]))
+            scene.TextInput(text);
+    }
+
+    private void PlaceIme(Scene scene)
+    {
+        var caret = scene.ImeCaret();
+        ImeNative.Place(Handle, (int)Math.Round(caret.X * _scale), (int)Math.Round((caret.Y + caret.Height) * _scale));
+    }
 
     private (double X, double Y) Point(nint lParam) => (Win32.LowWord(lParam) / _scale, Win32.HighWord(lParam) / _scale);
 

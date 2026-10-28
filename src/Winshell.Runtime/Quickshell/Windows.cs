@@ -222,7 +222,11 @@ public abstract class QsWindow : Reloadable, IWindowClient, IGlobalPosition, IPr
             ApplyBackdrop();
     }
 
-    private void ApplyBackdrop() => _backend?.SetBackdrop(_backdrop, _corners, Theme.Current.IsDark);
+    private void ApplyBackdrop()
+    {
+        Scene.TextOnBackdrop = _backdrop != WindowBackdrop.None || _color.A < 1;
+        _backend?.SetBackdrop(_backdrop, _corners, Theme.Current.IsDark);
+    }
 
     public QPoint GlobalOrigin => _backend?.Origin ?? new QPoint(0, 0);
 

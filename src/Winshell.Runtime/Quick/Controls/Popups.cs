@@ -1549,7 +1549,10 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         var font = Font.Spec;
         var widest = 0.0;
         for (var i = 0; i < Math.Min(_rows.Count, 50); i++)
-            widest = Math.Max(widest, TextLayout.Build([new TextSpan(TextAt(i), font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true).Width);
+        {
+            using var row = TextLayout.Build([new TextSpan(TextAt(i), font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+            widest = Math.Max(widest, row.Width);
+        }
         return (Math.Max(w, Math.Ceiling(widest) + LeftPadding + RightPadding), h);
     }
 

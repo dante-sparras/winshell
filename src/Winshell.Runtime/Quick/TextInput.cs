@@ -30,6 +30,9 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private readonly List<(string Text, int Cursor)> _undo = [];
     private double _padding, _leftPadding, _rightPadding, _topPadding, _bottomPadding;
     private int _dragAnchor = -1;
+    private string _composition = "";
+    private TextLayout? _visual;
+    private bool _visualDirty = true;
 
     public TextInput()
     {
@@ -72,6 +75,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             value = value[.._maximumLength];
         if (_text == value)
             return;
+        _composition = "";
         if (fromUser)
         {
             _undo.Add((_text, _cursorPosition));
@@ -108,6 +112,9 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public int Length { get { Track("text"); return _text.Length; } }
 
+    /// <summary>The IME preedit. It is drawn, and it is not part of <see cref="Text_"/> until it commits.</summary>
+    internal string CompositionText => _composition;
+
     [Qml]
     public QColor Color
     {
@@ -138,6 +145,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             value = Math.Clamp(value, 0, _text.Length);
             if (SetField(ref _cursorPosition, value))
             {
+                if (_composition.Length > 0)
+                    _visualDirty = true;
                 RestartBlink();
                 EnsureCursorVisible();
                 NotifyChanged("cursorRectangle");
@@ -347,18 +356,10 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     public int PositionAt(double x, double y = 0, int position = 0)
     {
         x = x - _leftPadding + _scrollX;
-        var best = 0;
-        var bestDistance = double.MaxValue;
-        for (var i = 0; i <= _text.Length; i++)
-        {
-            var d = Math.Abs(OffsetOf(i) - x);
-            if (d < bestDistance)
-            {
-                bestDistance = d;
-                best = i;
-            }
-        }
-        return best;
+        var layout = VisualLayout();
+        if (layout is null)
+            return 0;
+        return FromVisual(layout.PositionAt(x, 0));
     }
 
     [Qml]
@@ -393,19 +394,12 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         get
         {
-            var layout = TextLayout.Build([new TextSpan("Ag", Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+            using var layout = TextLayout.Build([new TextSpan("Ag", Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
             return layout.Height;
         }
     }
 
-    private double OffsetOf(int position)
-    {
-        var shown = DisplayTextRaw;
-        position = Math.Clamp(position, 0, shown.Length);
-        if (position == 0)
-            return 0;
-        return TextLayout.Shape(shown[..position], new TextSpan("", Spec)).Sum(r => r.Width);
-    }
+    private int Insertion => Math.Clamp(_cursorPosition, 0, DisplayTextRaw.Length);
 
     private string DisplayTextRaw => _echoMode switch
     {
@@ -414,8 +408,93 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         _ => _text,
     };
 
+    /// <summary>Committed echo with the preedit inserted at the caret. Password fields show the preedit as typed.</summary>
+    private string VisualText()
+    {
+        var raw = DisplayTextRaw;
+        if (_composition.Length == 0)
+            return raw;
+        return raw.Insert(Insertion, _composition);
+    }
+
+    private int ToVisual(int index)
+    {
+        index = Math.Clamp(index, 0, DisplayTextRaw.Length);
+        if (_composition.Length == 0 || index < Insertion)
+            return index;
+        return index + _composition.Length;
+    }
+
+    private int FromVisual(int visual)
+    {
+        var start = Insertion;
+        if (_composition.Length == 0)
+            return Math.Clamp(visual, 0, _text.Length);
+        if (visual < start + _composition.Length)
+            return Math.Clamp(_cursorPosition, 0, _text.Length);
+        return Math.Clamp(visual - _composition.Length, 0, _text.Length);
+    }
+
+    private TextLayout? VisualLayout()
+    {
+        if (!_visualDirty)
+            return _visual;
+        _visual?.Dispose();
+        _visual = null;
+        var shown = VisualText();
+        if (shown.Length > 0)
+        {
+            _visual = TextLayout.Build([new TextSpan(shown, Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+            if (_composition.Length > 0)
+                _visual.UnderlineRange(Insertion, _composition.Length);
+        }
+        _visualDirty = false;
+        return _visual;
+    }
+
+    private double OffsetOf(int position) => VisualLayout()?.CaretX(ToVisual(position)) ?? 0;
+
+    public void SetComposition(string text)
+    {
+        text ??= "";
+        if (_readOnly)
+            return;
+        if (_composition.Length == 0 && text.Length > 0)
+            DeleteSelection(fromUser: true);
+        if (_composition == text)
+            return;
+        _composition = text;
+        UpdateImplicit();
+        NotifyChanged("cursorRectangle");
+    }
+
+    public void CommitComposition(string text)
+    {
+        _composition = "";
+        UpdateImplicit();
+        if (!string.IsNullOrEmpty(text))
+            InsertText(text);
+        NotifyChanged("cursorRectangle");
+    }
+
+    public void CancelComposition()
+    {
+        if (_composition.Length == 0)
+            return;
+        _composition = "";
+        UpdateImplicit();
+        NotifyChanged("cursorRectangle");
+    }
+
+    public QRect ImeCaret()
+    {
+        var x = OffsetOf(_cursorPosition) - _scrollX + _leftPadding;
+        return new QRect(x, _topPadding, 1, LineHeight);
+    }
+
     private void UpdateImplicit()
     {
+        _visualDirty = true;
         using var _ = DependencyTracker.Suspend();
         ImplicitWidth = Math.Ceiling(OffsetOf(_text.Length)) + _leftPadding + _rightPadding + 1;
         ImplicitHeight = Math.Ceiling(LineHeight) + _topPadding + _bottomPadding;
@@ -664,7 +743,6 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public override void Paint(SKCanvas canvas, PaintContext context)
     {
-        var shown = DisplayTextRaw;
         var available = Width - _leftPadding - _rightPadding;
         var lineHeight = LineHeight;
         var y = _topPadding;
@@ -672,7 +750,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             y = (Height - lineHeight) / 2;
         else if ((_verticalAlignment & QtEnums.AlignBottom) != 0)
             y = Height - _bottomPadding - lineHeight;
-        var total = OffsetOf(_text.Length);
+        var layout = VisualLayout();
+        var total = layout?.Width ?? 0;
         var alignOffset = 0.0;
         if (total < available)
         {
@@ -691,11 +770,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             using var sel = new SKPaint { Color = _selectionColor.ToSk() };
             canvas.DrawRect(SKRect.Create((float)sx, 0, (float)(ex - sx), (float)lineHeight), sel);
         }
-        if (shown.Length > 0)
-        {
-            var layout = TextLayout.Build([new TextSpan(shown, Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
-            layout.Draw(canvas, total, QtEnums.AlignLeft, _color, 0, Antialiasing);
-        }
+        layout?.Draw(canvas, Math.Max(total, 1), QtEnums.AlignLeft, _color, 0, Antialiasing, paint: context);
         if (_cursorVisible && ActiveFocus && _blinkOn && !_readOnly)
         {
             var cx = (float)Math.Round(OffsetOf(_cursorPosition));
@@ -707,6 +782,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     protected override void OnDestroy()
     {
+        _visual?.Dispose();
+        _visual = null;
         _blink?.Dispose();
         Theme.Changed -= OnTheme;
         base.OnDestroy();
