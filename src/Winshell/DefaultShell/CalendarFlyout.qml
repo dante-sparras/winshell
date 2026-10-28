@@ -12,7 +12,7 @@ PopupWindow {
   readonly property date shown: new Date(date.getFullYear(), date.getMonth() + monthOffset, 1)
 
   implicitWidth: 336
-  implicitHeight: 360
+  implicitHeight: 400
   color: "transparent"
   grabFocus: true
   WindowEffects.backdrop: WindowEffects.Acrylic

@@ -218,7 +218,7 @@ public sealed class Grid : Positioner
 
     protected override void Arrange()
     {
-        var items = ChildItems.Where(c => c.IsVisibleFlag).ToList();
+        var items = Placed();
         var count = items.Count;
         int columns, rows;
         if (_columns > 0)
