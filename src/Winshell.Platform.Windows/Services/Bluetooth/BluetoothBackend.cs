@@ -2,315 +2,279 @@ using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
-using Windows.Foundation;
 using WinAdapter = Windows.Devices.Bluetooth.BluetoothAdapter;
 using WinClassicDevice = Windows.Devices.Bluetooth.BluetoothDevice;
 using WinLeDevice = Windows.Devices.Bluetooth.BluetoothLEDevice;
 
 namespace Winshell.Platform.Windows.Services.Bluetooth;
 
-internal sealed record BluetoothAdapterInfo(string Id, string Name, string Address, BluetoothAdapterState State, bool Discovering);
-
-internal sealed record BluetoothDeviceInfo(
-    string Id,
-    string Address,
-    string Name,
-    bool Connected,
-    bool Paired,
-    double? Battery,
-    string Icon,
-    Guid? Container);
-
-internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapter, IReadOnlyList<BluetoothDeviceInfo> Devices)
+internal sealed record BluetoothAdapterInfo(string Id, string Name, string Address, BluetoothAdapterState State);
+internal sealed record BluetoothEndpointInfo(string Id, string Address, string Name, bool Connected, bool Paired,
+    bool Present, bool CanPair, Guid? Container);
+internal sealed record BluetoothDeviceInfo(string Key, string Id, string Address, string Name, bool Connected,
+    bool Paired, bool Present, bool CanPair, double? Battery, Guid? Container, IReadOnlyList<string> PairedIds);
+internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapter, IReadOnlyList<BluetoothDeviceInfo> Devices,
+    bool Discovering = false, string Error = "")
 {
     public static readonly BluetoothSnapshot Initial = new(false, null, []);
 }
 
 /// <summary>
-/// The Bluetooth adapter and devices of this PC. Windows has one Bluetooth adapter at a time. Paired
-/// devices come from device watchers over the paired association endpoints (classic and LE); while
-/// discovering, more watchers add the unpaired devices in range. Battery levels are the Bluetooth
-/// battery property Windows puts on a device's device nodes.
+/// Reads only Windows adapter and enumeration properties. In particular, reading state never opens
+/// BluetoothDevice/BluetoothLEDevice or GATT handles, which can prompt or affect a device connection.
+/// Each shell generation owns and stops its own nearby-device watchers.
 /// </summary>
-internal sealed partial class BluetoothBackend : SnapshotSource<BluetoothSnapshot>
+internal sealed partial class BluetoothBackend : IBluetoothBackend
 {
-    public static readonly BluetoothBackend Instance = new();
-
     private const string AddressKey = "System.Devices.Aep.DeviceAddress";
     private const string ConnectedKey = "System.Devices.Aep.IsConnected";
     private const string PairedKey = "System.Devices.Aep.IsPaired";
+    private const string PresentKey = "System.Devices.Aep.IsPresent";
     private const string ContainerKey = "System.Devices.Aep.ContainerId";
     private const string BatteryKey = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
-    private static readonly string[] EndpointProperties = [AddressKey, ConnectedKey, PairedKey, ContainerKey];
-
+    private static readonly string[] EndpointProperties = [AddressKey, ConnectedKey, PairedKey, PresentKey, ContainerKey];
     private readonly object _lock = new();
-    private readonly Dictionary<string, DeviceInformation> _endpoints = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _icons = new(StringComparer.Ordinal);
-    private readonly Dictionary<Guid, (double? Level, DateTime Read)> _batteries = [];
-    private readonly List<DeviceWatcher> _paired = [];
-    private readonly List<DeviceWatcher> _discovery = [];
-    private WinAdapter? _adapter;
-    private string _adapterName = "";
-    private Radio? _radio;
+    private readonly SemaphoreSlim _readGate = new(1, 1);
+    private readonly Dictionary<string, BluetoothEndpointInfo> _nearby = new(StringComparer.Ordinal);
+    private readonly List<DeviceWatcher> _watchers = [];
+    private readonly Dictionary<Guid, (double? Level, DateTimeOffset Read)> _batteries = [];
+    private string? _adapterId;
+    private string _discoveryError = "";
+    private bool _disposed;
 
-    private BluetoothBackend()
-        : base(BluetoothSnapshot.Initial)
+    public async Task<BluetoothSnapshot> ReadAsync()
     {
-    }
-
-    protected override string Category => "bluetooth";
-
-    protected override async Task StartAsync()
-    {
-        var adapter = await WinAdapter.GetDefaultAsync();
-        if (adapter is null)
-        {
-            await RefreshNowAsync().ConfigureAwait(false);
-            return;
-        }
-        var name = (await DeviceInformation.CreateFromIdAsync(adapter.DeviceId))?.Name ?? "Bluetooth";
-        Radio? radio = null;
+        await _readGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (await Radio.RequestAccessAsync() == RadioAccessStatus.Allowed)
-                radio = await adapter.GetRadioAsync();
+            lock (_lock) ObjectDisposedException.ThrowIf(_disposed, this);
+            var adapter = await WinAdapter.GetDefaultAsync();
+            if (adapter is null)
+            {
+                StopDiscovery();
+                return new(true, null, []);
+            }
+            var name = (await DeviceInformation.CreateFromIdAsync(adapter.DeviceId))?.Name ?? "Bluetooth";
+            Radio? radio = null;
+            try { radio = await adapter.GetRadioAsync(); }
+            catch (Exception e) when (IsExpectedFailure(e)) { }
+            var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
+                ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State));
+            if ((_adapterId is not null && _adapterId != adapter.DeviceId) ||
+                adapterInfo.State is BluetoothAdapterState.Off or BluetoothAdapterState.Disabled)
+                StopDiscovery();
+            _adapterId = adapter.DeviceId;
+            List<BluetoothEndpointInfo> endpoints = [];
+            foreach (var selector in PairedSelectors())
+            {
+                var devices = await DeviceInformation.FindAllAsync(selector, EndpointProperties, DeviceInformationKind.AssociationEndpoint);
+                endpoints.AddRange(devices.Select(ReadEndpoint));
+            }
+            bool discovering;
+            string discoveryError;
+            lock (_lock)
+            {
+                discovering = _watchers.Any(w => w.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted);
+                discoveryError = _discoveryError;
+                endpoints.AddRange(_nearby.Values.Where(e => e.Present));
+            }
+            var devicesByKey = MergeEndpoints(endpoints);
+            var result = new List<BluetoothDeviceInfo>();
+            foreach (var device in devicesByKey)
+            {
+                // Windows' cached device property only: do not query the remote Battery GATT service.
+                var battery = device.Connected && device.Container is { } container
+                    ? await ReadBatteryAsync(container).ConfigureAwait(false) : null;
+                result.Add(device with { Battery = battery });
+            }
+            return new(true, adapterInfo, result, discovering, discoveryError);
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception e) when (IsExpectedFailure(e))
         {
+            StopDiscovery();
+            throw;
         }
-        if (radio is not null)
-            radio.StateChanged += (_, _) => Refresh();
+        finally { _readGate.Release(); }
+    }
+
+    private static string[] PairedSelectors() =>
+        [WinClassicDevice.GetDeviceSelectorFromPairingState(true), WinLeDevice.GetDeviceSelectorFromPairingState(true)];
+
+    private static BluetoothEndpointInfo ReadEndpoint(DeviceInformation info) =>
+        new(info.Id, info.Properties.GetValueOrDefault(AddressKey) as string ?? "", info.Name,
+            info.Properties.GetValueOrDefault(ConnectedKey) is true,
+            info.Properties.GetValueOrDefault(PairedKey) is true || info.Pairing.IsPaired,
+            info.Properties.GetValueOrDefault(PresentKey) is true, info.Pairing.CanPair,
+            info.Properties.GetValueOrDefault(ContainerKey) is Guid container && container != Guid.Empty ? container : null);
+
+    internal static BluetoothAdapterState MapRadioState(RadioState? state) => state switch
+    {
+        RadioState.On => BluetoothAdapterState.On,
+        RadioState.Off => BluetoothAdapterState.Off,
+        RadioState.Disabled => BluetoothAdapterState.Disabled,
+        _ => BluetoothAdapterState.Unknown,
+    };
+
+    internal static IReadOnlyList<BluetoothDeviceInfo> MergeEndpoints(IEnumerable<BluetoothEndpointInfo> endpoints)
+    {
+        // Prefer the fresh paired snapshot to a stale discovery event for the same endpoint.
+        var unique = endpoints.DistinctBy(e => e.Id).ToArray();
+        return unique.GroupBy(e => e.Container is { } container ? "container:" + container :
+                e.Address.Length > 0 ? "address:" + e.Address.ToUpperInvariant() : "endpoint:" + e.Id,
+                StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var first = group.OrderByDescending(e => e.Paired).ThenByDescending(e => e.CanPair)
+                    .ThenBy(e => e.Id, StringComparer.Ordinal).First();
+                var name = group.Select(e => e.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)) ?? first.Address;
+                return new BluetoothDeviceInfo(group.Key, first.Id, first.Address.ToUpperInvariant(), name,
+                    group.Any(e => e.Connected), group.Any(e => e.Paired), group.Any(e => e.Present),
+                    group.Any(e => e.CanPair), null, first.Container,
+                    group.Where(e => e.Paired).Select(e => e.Id).ToArray());
+            }).OrderByDescending(d => d.Connected).ThenByDescending(d => d.Paired)
+            .ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    internal static double? BatteryLevel(object? value) => value switch
+    {
+        byte b when b <= 100 => b / 100.0,
+        ushort n when n <= 100 => n / 100.0,
+        uint n when n <= 100 => n / 100.0,
+        int n when n is >= 0 and <= 100 => n / 100.0,
+        _ => null,
+    };
+
+    private async Task<double?> ReadBatteryAsync(Guid container)
+    {
+        if (_batteries.TryGetValue(container, out var cached) && DateTimeOffset.UtcNow - cached.Read < TimeSpan.FromSeconds(30))
+            return cached.Level;
+        double? level = null;
+        try
+        {
+            var nodes = await DeviceInformation.FindAllAsync($"System.Devices.ContainerId:=\"{{{container}}}\"", [BatteryKey], DeviceInformationKind.Device);
+            level = nodes.Select(n => BatteryLevel(n.Properties.GetValueOrDefault(BatteryKey))).FirstOrDefault(n => n.HasValue);
+        }
+        catch (Exception e) when (IsExpectedFailure(e)) { }
+        _batteries[container] = (level, DateTimeOffset.UtcNow);
+        return level;
+    }
+
+    public void StartDiscovery()
+    {
         lock (_lock)
         {
-            _adapter = adapter;
-            _adapterName = name;
-            _radio = radio;
-        }
-
-        lock (_lock)
-        {
-            StartWatcher(WinClassicDevice.GetDeviceSelectorFromPairingState(true), _paired);
-            StartWatcher(WinLeDevice.GetDeviceSelectorFromPairingState(true), _paired);
-        }
-        await RefreshNowAsync().ConfigureAwait(false);
-
-        // Battery levels change without an event this code can see; read them again now and then.
-        while (true)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(60)).ConfigureAwait(false);
-            Refresh();
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_watchers.Count > 0) return;
+            _discoveryError = "";
+            try
+            {
+                StartWatcher(WinClassicDevice.GetDeviceSelectorFromPairingState(false));
+                StartWatcher(WinLeDevice.GetDeviceSelectorFromPairingState(false));
+            }
+            catch
+            {
+                StopDiscovery();
+                throw;
+            }
         }
     }
 
-    private void StartWatcher(string selector, List<DeviceWatcher> into)
+    private void StartWatcher(string selector)
     {
         var watcher = DeviceInformation.CreateWatcher(selector, EndpointProperties, DeviceInformationKind.AssociationEndpoint);
+        // DeviceInformation.Update needs its original object; keep it local to this watcher.
+        var entries = new Dictionary<string, DeviceInformation>(StringComparer.Ordinal);
         watcher.Added += (_, info) =>
         {
             lock (_lock)
-                _endpoints[info.Id] = info;
-            ServiceSupport.Run(Category, () => ReadIconAsync(info.Id));
-            Refresh();
+            {
+                if (_disposed || !_watchers.Contains(watcher)) return;
+                entries[info.Id] = info;
+                _nearby[info.Id] = ReadEndpoint(info);
+            }
         };
         watcher.Updated += (_, update) =>
         {
             lock (_lock)
             {
-                if (_endpoints.TryGetValue(update.Id, out var info))
-                    info.Update(update);
+                if (_disposed || !_watchers.Contains(watcher) || !entries.TryGetValue(update.Id, out var info)) return;
+                info.Update(update);
+                _nearby[info.Id] = ReadEndpoint(info);
             }
-            Refresh();
         };
         watcher.Removed += (_, update) =>
         {
             lock (_lock)
-                _endpoints.Remove(update.Id);
-            Refresh();
+            {
+                if (!_watchers.Contains(watcher)) return;
+                entries.Remove(update.Id);
+                _nearby.Remove(update.Id);
+            }
         };
-        into.Add(watcher);
+        watcher.Stopped += (_, _) =>
+        {
+            lock (_lock)
+            {
+                if (!_watchers.Remove(watcher)) return;
+                foreach (var id in entries.Keys) _nearby.Remove(id);
+                if (watcher.Status == DeviceWatcherStatus.Aborted)
+                    _discoveryError = "Windows aborted Bluetooth discovery. Check Bluetooth access and try again.";
+            }
+        };
+        _watchers.Add(watcher);
         watcher.Start();
     }
 
-    /// <summary>The device's icon, from its class of device (classic) or appearance (LE), as BlueZ names them.</summary>
-    private async Task ReadIconAsync(string id)
+    public void StopDiscovery()
     {
-        string icon;
-        if (id.StartsWith("BluetoothLE#", StringComparison.Ordinal))
-        {
-            using var device = await WinLeDevice.FromIdAsync(id);
-            icon = device is null ? "" : AppearanceIcon(device.Appearance.RawValue);
-        }
-        else
-        {
-            using var device = await WinClassicDevice.FromIdAsync(id);
-            icon = device is null ? "" : ClassIcon(device.ClassOfDevice.RawValue);
-        }
-        lock (_lock)
-            _icons[id] = icon;
-        Refresh();
-    }
-
-    protected override async Task<BluetoothSnapshot> ReadAsync()
-    {
-        WinAdapter? adapter;
-        Radio? radio;
-        string adapterName;
-        bool discovering;
-        List<DeviceInformation> endpoints;
-        Dictionary<string, string> icons;
+        DeviceWatcher[] watchers;
         lock (_lock)
         {
-            adapter = _adapter;
-            radio = _radio;
-            adapterName = _adapterName;
-            discovering = _discovery.Count > 0;
-            endpoints = [.. _endpoints.Values];
-            icons = new Dictionary<string, string>(_icons, StringComparer.Ordinal);
+            watchers = _watchers.ToArray();
+            _watchers.Clear();
+            _nearby.Clear();
         }
-        if (adapter is null)
-            return new BluetoothSnapshot(true, null, []);
-
-        var state = radio?.State switch
+        foreach (var watcher in watchers)
         {
-            RadioState.On => BluetoothAdapterState.Enabled,
-            RadioState.Disabled => BluetoothAdapterState.Blocked,
-            RadioState.Off => BluetoothAdapterState.Disabled,
-            // Without access to the radio, an adapter Windows reports is taken as on.
-            _ => BluetoothAdapterState.Enabled,
-        };
-        var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, adapterName, ServiceSupport.FormatMac(adapter.BluetoothAddress), state, discovering);
-
-        // A dual-mode device has a classic and an LE endpoint with one address: it is one device.
-        var devices = new List<BluetoothDeviceInfo>();
-        foreach (var group in endpoints.GroupBy(e => Address(e) ?? e.Id, StringComparer.OrdinalIgnoreCase))
-        {
-            var first = group.OrderBy(e => e.Id.StartsWith("BluetoothLE#", StringComparison.Ordinal)).First();
-            var address = (Address(first) ?? "").ToUpperInvariant();
-            var connected = group.Any(e => Bool(e, ConnectedKey));
-            var paired = group.Any(e => Bool(e, PairedKey) || e.Pairing.IsPaired);
-            var container = group.Select(e => e.Properties.TryGetValue(ContainerKey, out var c) && c is Guid g ? g : (Guid?)null).FirstOrDefault(g => g is not null);
-            var name = group.Select(e => e.Name).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? address.Replace(':', '-');
-            var icon = group.Select(e => icons.GetValueOrDefault(e.Id)).FirstOrDefault(i => !string.IsNullOrEmpty(i)) ?? "";
-            var battery = connected && container is { } id ? await BatteryAsync(id).ConfigureAwait(false) : null;
-            devices.Add(new BluetoothDeviceInfo(first.Id, address, name, connected, paired, battery, icon, container));
-        }
-        return new BluetoothSnapshot(true, adapterInfo, devices);
-    }
-
-    private static string? Address(DeviceInformation info) =>
-        info.Properties.TryGetValue(AddressKey, out var a) && a is string s && s.Length > 0 ? s : null;
-
-    private static bool Bool(DeviceInformation info, string key) =>
-        info.Properties.TryGetValue(key, out var v) && v is true;
-
-    /// <summary>The battery level Windows shows in Settings, from 0 to 1, read at most every 30 seconds.</summary>
-    private async Task<double?> BatteryAsync(Guid container)
-    {
-        lock (_lock)
-        {
-            if (_batteries.TryGetValue(container, out var cached) && DateTime.UtcNow - cached.Read < TimeSpan.FromSeconds(30))
-                return cached.Level;
-        }
-        double? level = null;
-        try
-        {
-            var nodes = await DeviceInformation.FindAllAsync($"System.Devices.ContainerId:=\"{{{container}}}\"", [BatteryKey], DeviceInformationKind.Device);
-            foreach (var node in nodes)
+            if (watcher.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted)
             {
-                if (node.Properties.TryGetValue(BatteryKey, out var value) && value is not null)
+                try { watcher.Stop(); }
+                catch (Exception e) when (IsExpectedFailure(e))
                 {
-                    level = Math.Clamp(Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture) / 100, 0, 1);
-                    break;
+                    lock (_lock) _discoveryError = e.Message;
                 }
             }
         }
-        catch (ArgumentException)
-        {
-        }
-        lock (_lock)
-            _batteries[container] = (level, DateTime.UtcNow);
-        return level;
     }
 
-    // Actions.
-
-    public async Task<bool> SetEnabledAsync(bool enabled)
+    public async Task<string?> PairAsync(string id, CancellationToken cancellation)
     {
-        Radio? radio;
-        lock (_lock)
-            radio = _radio;
-        if (radio is null)
-            return false;
-        var ok = await radio.SetStateAsync(enabled ? RadioState.On : RadioState.Off) == RadioAccessStatus.Allowed;
-        Refresh();
-        return ok;
+        cancellation.ThrowIfCancellationRequested();
+        var info = await DeviceInformation.CreateFromIdAsync(id, null, DeviceInformationKind.AssociationEndpoint);
+        cancellation.ThrowIfCancellationRequested();
+        if (info is null) return "The device is no longer available.";
+        if (info.Pairing.IsPaired) return null;
+        if (!info.Pairing.CanPair) return "Windows reports that this device cannot be paired.";
+        // Basic pairing lets Windows perform the consent/PIN ceremony; never auto-accept PIN matches.
+        var result = await info.Pairing.PairAsync().AsTask(cancellation).ConfigureAwait(false);
+        return PairingError(result.Status);
     }
 
-    /// <summary>Starts or stops looking for unpaired devices in range.</summary>
-    public void SetDiscovering(bool discovering)
+    public async Task<string?> UnpairAsync(string id)
     {
-        List<DeviceWatcher> stopped = [];
-        lock (_lock)
-        {
-            if (_adapter is null || discovering == _discovery.Count > 0)
-                return;
-            if (discovering)
-            {
-                StartWatcher(WinClassicDevice.GetDeviceSelectorFromPairingState(false), _discovery);
-                StartWatcher(WinLeDevice.GetDeviceSelectorFromPairingState(false), _discovery);
-            }
-            else
-            {
-                stopped.AddRange(_discovery);
-                _discovery.Clear();
-                // Unpaired devices found while discovering go when discovering stops.
-                foreach (var id in _endpoints.Where(kv => !Bool(kv.Value, PairedKey) && !Bool(kv.Value, ConnectedKey)).Select(kv => kv.Key).ToList())
-                    _endpoints.Remove(id);
-            }
-        }
-        foreach (var watcher in stopped)
-        {
-            if (watcher.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted)
-                watcher.Stop();
-        }
-        Refresh();
-    }
-
-    public async Task<string?> PairAsync(string id, Action<IAsyncOperation<DevicePairingResult>> started)
-    {
-        var info = await DeviceInformation.CreateFromIdAsync(id);
-        if (info.Pairing.IsPaired)
-            return null;
-        if (!info.Pairing.CanPair)
-            return "the device cannot be paired";
-        // Without a pairing agent to show a PIN, pairing accepts the confirmations Windows asks for.
-        var custom = info.Pairing.Custom;
-        custom.PairingRequested += (_, args) =>
-        {
-            if (args.PairingKind is DevicePairingKinds.ConfirmPinMatch or DevicePairingKinds.DisplayPin)
-                Winshell.Runtime.Log.Default.Info(Category, $"Pairing {info.Name} with PIN {args.Pin}");
-            args.Accept();
-        };
-        var operation = custom.PairAsync(DevicePairingKinds.ConfirmOnly | DevicePairingKinds.ConfirmPinMatch | DevicePairingKinds.DisplayPin);
-        started(operation);
-        var result = await operation;
-        Refresh();
-        return result.Status is DevicePairingResultStatus.Paired or DevicePairingResultStatus.AlreadyPaired ? null : result.Status.ToString();
-    }
-
-    public async Task<string?> ForgetAsync(string id)
-    {
-        var info = await DeviceInformation.CreateFromIdAsync(id);
+        var info = await DeviceInformation.CreateFromIdAsync(id, null, DeviceInformationKind.AssociationEndpoint);
+        if (info is null) return "The device is no longer available.";
         var result = await info.Pairing.UnpairAsync();
-        Refresh();
-        return result.Status is DeviceUnpairingResultStatus.Unpaired or DeviceUnpairingResultStatus.AlreadyUnpaired ? null : result.Status.ToString();
+        lock (_lock) _nearby.Remove(id);
+        return UnpairingError(result.Status);
     }
 
-    /// <summary>
-    /// Connects or disconnects a Bluetooth audio device, as the Connect button in Settings does: a one-shot
-    /// reconnect or disconnect request to the device's kernel streaming audio filters. Windows has no API to
-    /// connect other kinds of devices; they connect on their own when they are paired and in range.
-    /// </summary>
+    internal static string? PairingError(DevicePairingResultStatus status) =>
+        status is DevicePairingResultStatus.Paired or DevicePairingResultStatus.AlreadyPaired ? null : status.ToString();
+    internal static string? UnpairingError(DeviceUnpairingResultStatus status) =>
+        status is DeviceUnpairingResultStatus.Unpaired or DeviceUnpairingResultStatus.AlreadyUnpaired ? null : status.ToString();
+
+    /// <summary>Requests a Bluetooth audio driver connection change. Other device types reconnect through Windows.</summary>
     public async Task<bool> SetAudioConnectionAsync(Guid container, bool connect)
     {
         var aqs = $"System.Devices.InterfaceClassGuid:=\"{{6994AD04-93EF-11D0-A3CC-00A0C9223196}}\" AND System.Devices.ContainerId:=\"{{{container}}}\" AND System.Devices.InterfaceEnabled:=System.StructuredQueryType.Boolean#True";
@@ -318,7 +282,6 @@ internal sealed partial class BluetoothBackend : SnapshotSource<BluetoothSnapsho
         var any = false;
         foreach (var filter in filters)
             any |= KsOneShot(filter.Id, connect ? 0u : 1u);
-        Refresh();
         return any;
     }
 
@@ -333,93 +296,23 @@ internal sealed partial class BluetoothBackend : SnapshotSource<BluetoothSnapsho
     private static unsafe bool KsOneShot(string path, uint property)
     {
         using var handle = CreateFileW(path, 0xC0000000, 3, 0, 3, 0, 0);
-        if (handle.IsInvalid)
-            return false;
-        // KSPROPSETID_BtAudio, KSPROPERTY_ONESHOT_RECONNECT (0) or _DISCONNECT (1), KSPROPERTY_TYPE_GET.
+        if (handle.IsInvalid) return false;
         var request = new KSPROPERTY { Set = new Guid("7fa06c40-b8f6-4c7e-8556-e8c33a12e54d"), Id = property, Flags = 1 };
         return DeviceIoControl(handle, 0x2F0003, &request, (uint)sizeof(KSPROPERTY), null, 0, out _, 0);
     }
 
     [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     private static partial SafeFileHandle CreateFileW(string fileName, uint access, uint share, nint security, uint creation, uint flags, nint template);
-
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static unsafe partial bool DeviceIoControl(SafeFileHandle device, uint code, void* input, uint inputSize, void* output, uint outputSize, out uint returned, nint overlapped);
 
-    // BlueZ's icon names (src/dbus-common.c, class_to_icon and gap_appearance_to_icon).
+    internal static bool IsExpectedFailure(Exception e) => e is UnauthorizedAccessException or COMException
+        or InvalidOperationException or NotSupportedException or ArgumentException or IOException;
 
-    private static string ClassIcon(uint cls)
+    public void Dispose()
     {
-        switch ((cls & 0x1f00) >> 8)
-        {
-            case 0x01:
-                return "computer";
-            case 0x02:
-                return ((cls & 0xfc) >> 2) switch
-                {
-                    0x01 or 0x02 or 0x03 or 0x05 => "phone",
-                    0x04 => "modem",
-                    _ => "",
-                };
-            case 0x03:
-                return "network-wireless";
-            case 0x04:
-                return ((cls & 0xfc) >> 2) switch
-                {
-                    0x01 or 0x02 => "audio-headset",
-                    0x06 => "audio-headphones",
-                    0x0b or 0x0c or 0x0d => "camera-video",
-                    _ => "audio-card",
-                };
-            case 0x05:
-                switch ((cls & 0xc0) >> 6)
-                {
-                    case 0x00:
-                        return ((cls & 0x1e) >> 2) is 0x01 or 0x02 ? "input-gaming" : "";
-                    case 0x01:
-                        return "input-keyboard";
-                    case 0x02:
-                        return ((cls & 0x1e) >> 2) == 0x05 ? "input-tablet" : "input-mouse";
-                }
-                return "";
-            case 0x06:
-                if ((cls & 0x80) != 0)
-                    return "printer";
-                if ((cls & 0x20) != 0)
-                    return "camera-photo";
-                return "";
-            default:
-                return "";
-        }
-    }
-
-    private static string AppearanceIcon(ushort appearance)
-    {
-        switch ((appearance & 0xffc0) >> 6)
-        {
-            case 0x01:
-                return "phone";
-            case 0x02:
-                return "computer";
-            case 0x05:
-                return "video-display";
-            case 0x0a:
-                return "multimedia-player";
-            case 0x0b:
-                return "scanner";
-            case 0x0f:
-                return (appearance & 0x3f) switch
-                {
-                    0x01 => "input-keyboard",
-                    0x02 => "input-mouse",
-                    0x03 or 0x04 => "input-gaming",
-                    0x05 => "input-tablet",
-                    0x08 => "scanner",
-                    _ => "",
-                };
-            default:
-                return "";
-        }
+        lock (_lock) _disposed = true;
+        StopDiscovery();
     }
 }
