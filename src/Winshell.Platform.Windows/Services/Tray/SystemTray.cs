@@ -6,22 +6,21 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Tray;
 
-public enum Status
+/// <summary>The icon a balloon notification asked for, from its <c>NIIF_</c> flags.</summary>
+public enum BalloonIcon
 {
-    Passive = 0,
-    Active = 1,
-    NeedsAttention = 2,
+    None = 0,
+    Info = 1,
+    Warning = 2,
+    Error = 3,
+    /// <summary>The app's own icon.</summary>
+    App = 4,
 }
 
-public enum Category
-{
-    Hardware = 0,
-    SystemServices = 1,
-    ApplicationStatus = 2,
-    Communications = 3,
-}
-
-/// <summary>The <c>SystemTray</c>: the notification area icons of every app.</summary>
+/// <summary>
+/// The <c>SystemTray</c>: the notification area icons of every app, in the order they were added. An icon the app
+/// hid is left out until the app shows it again.
+/// </summary>
 public sealed class SystemTray : QObject
 {
     private readonly TrayHost? _host;
@@ -32,31 +31,36 @@ public sealed class SystemTray : QObject
         Engine = engine;
         Items = new ObjectModel();
         Items.SetOwner(this);
-        if (engine.GetService<IShellPlatform>() is not WindowsPlatform platform)
+        _host = engine.GetService<TrayHost>() ?? (engine.GetService<IShellPlatform>() as WindowsPlatform)?.Tray;
+        if (_host is null)
             return;
-        _host = platform.Tray;
-        _host.Added += OnAdded;
+        _host.Added += OnChanged;
         _host.Changed += OnChanged;
         _host.Removed += OnRemoved;
+        _host.Balloon += OnBalloon;
         foreach (var icon in _host.Icons)
-            OnAdded(icon);
+            OnChanged(icon);
     }
 
     [Qml] public ObjectModel Items { get; }
 
-    private void OnAdded(TrayIcon icon)
+    private void OnChanged(TrayIcon icon)
     {
-        var item = new SystemTrayItem(_host!, icon) { Engine = Engine };
+        if (_items.TryGetValue(icon.Key, out var item))
+        {
+            if (icon.Hidden)
+                OnRemoved(icon);
+            else
+                item.Refresh();
+            return;
+        }
+        if (icon.Hidden)
+            return;
+        item = new SystemTrayItem(_host!, icon) { Engine = Engine };
         item.SetOwner(this);
         _items[icon.Key] = item;
         Items.Insert(Items.Rows.Count, item);
         Engine?.Loop.Post(() => item.Emit("ready"));
-    }
-
-    private void OnChanged(TrayIcon icon)
-    {
-        if (_items.TryGetValue(icon.Key, out var item))
-            item.Refresh();
     }
 
     private void OnRemoved(TrayIcon icon)
@@ -67,22 +71,31 @@ public sealed class SystemTray : QObject
         item.Destroy();
     }
 
+    private void OnBalloon(TrayIcon icon, string title, string message, uint flags)
+    {
+        if (!_items.TryGetValue(icon.Key, out var item))
+            return;
+        var kind = (int)(flags & 0xf);
+        item.Emit("balloon", title, message, kind <= (int)BalloonIcon.App ? kind : (int)BalloonIcon.None);
+    }
+
     protected override void OnDestroy()
     {
         if (_host is null)
             return;
-        _host.Added -= OnAdded;
+        _host.Added -= OnChanged;
         _host.Changed -= OnChanged;
         _host.Removed -= OnRemoved;
+        _host.Balloon -= OnBalloon;
     }
 }
 
 /// <summary>
 /// The <c>SystemTrayItem</c> for an app's notification area icon. Its menu belongs to the app, which only
 /// shows it itself: <c>display()</c> and <c>MenuAnchor</c> open it, while <c>MenuOpener</c> sees no entries.
-/// Windows has no scroll action for these icons.
 /// </summary>
 [QmlSignal("ready")]
+[QmlSignal("balloon", "title", "message", "icon")]
 public sealed class SystemTrayItem : QObject
 {
     private readonly TrayHost _host;
@@ -94,15 +107,15 @@ public sealed class SystemTrayItem : QObject
         _icon = icon;
         Menu = new TrayMenu(this);
         Menu.SetOwner(this);
-        var program = icon.ProgramPath;
-        Id = program.Length > 0 ? Path.GetFileNameWithoutExtension(program) : icon.Key;
-        Title = Id;
-        if (program.Length > 0)
+        Executable = icon.ProgramPath;
+        Id = Executable.Length > 0 ? Path.GetFileNameWithoutExtension(Executable) : icon.Key;
+        AppName = Id;
+        if (Executable.Length > 0)
         {
             try
             {
-                if (FileVersionInfo.GetVersionInfo(program).FileDescription is { Length: > 0 } description)
-                    Title = description;
+                if (FileVersionInfo.GetVersionInfo(Executable).FileDescription is { Length: > 0 } description)
+                    AppName = description;
             }
             catch (FileNotFoundException)
             {
@@ -110,23 +123,22 @@ public sealed class SystemTrayItem : QObject
         }
     }
 
+    /// <summary>The program's file name without its extension.</summary>
     [Qml] public string Id { get; }
 
-    [Qml] public string Title { get; }
+    /// <summary>The program's description, as Task Manager shows it, or its file name.</summary>
+    [Qml] public string AppName { get; }
 
-    [Qml] public int Status { get { Track(); return (int)(_icon.Hidden ? Tray.Status.Passive : Tray.Status.Active); } }
-
-    [Qml] public int Category => (int)Tray.Category.ApplicationStatus;
+    /// <summary>The full path of the program that added the icon.</summary>
+    [Qml] public string Executable { get; }
 
     [Qml] public string Icon { get { Track(); return $"image://trayicon/{_icon.Key}/{_icon.ImageGeneration}"; } }
 
-    [Qml] public string TooltipTitle { get { Track(); return FirstLine(_icon.Tip); } }
+    /// <summary>The icon's tooltip, which may run over several lines.</summary>
+    [Qml] public string Tooltip { get { Track(); return _icon.Tip; } }
 
-    [Qml] public string TooltipDescription { get { Track(); return Rest(_icon.Tip); } }
-
-    [Qml] public bool HasMenu => true;
-
-    [Qml] public bool OnlyMenu => false;
+    /// <summary>Windows shows this icon in the hidden icons flyout, not in the taskbar. Users choose in Settings.</summary>
+    [Qml] public bool Overflow { get { Track(); return _icon.Overflow; } }
 
     [Qml] public MenuHandle Menu { get; }
 
@@ -137,23 +149,14 @@ public sealed class SystemTrayItem : QObject
     public void SecondaryActivate() => _host.Click(_icon, 2, null);
 
     [Qml]
-    public void Scroll(double delta, bool horizontal)
-    {
-    }
-
-    [Qml]
     public void Display(ShellWindow? parentWindow, double relativeX, double relativeY) =>
         _host.Click(_icon, 1, MenuHandle.ScreenPoint(parentWindow, relativeX, relativeY));
 
     internal void Refresh()
     {
-        foreach (var name in new[] { "status", "icon", "tooltipTitle", "tooltipDescription" })
+        foreach (var name in new[] { "icon", "tooltip", "overflow" })
             NotifyChanged(name);
     }
-
-    private static string FirstLine(string text) => text.Split('\n', 2)[0].TrimEnd('\r');
-
-    private static string Rest(string text) => text.Split('\n', 2) is [_, var rest] ? rest.Trim() : "";
 
     private sealed class TrayMenu(SystemTrayItem item) : MenuHandle
     {
@@ -184,7 +187,6 @@ internal static class SystemTrayModule
         registry.Module("Winshell.Tray")
             .Singleton(e => new SystemTray(e), "SystemTray")
             .Uncreatable<SystemTrayItem>("SystemTrayItem")
-            .Enum<Status>(s => s.ToString())
-            .Enum<Category>(c => c.ToString());
+            .Enum<BalloonIcon>(b => b.ToString());
     }
 }

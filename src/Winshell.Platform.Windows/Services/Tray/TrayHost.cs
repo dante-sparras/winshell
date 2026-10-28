@@ -22,7 +22,11 @@ internal sealed class TrayIcon
 
     public string Tip { get; set; } = "";
 
+    /// <summary>The app hid the icon (<c>NIS_HIDDEN</c>); Explorer does not show it.</summary>
     public bool Hidden { get; set; }
+
+    /// <summary>Windows shows the icon in the hidden icons flyout rather than in the taskbar.</summary>
+    public bool Overflow { get; set; } = true;
 
     public SKImage? Image { get; set; }
 
@@ -65,6 +69,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private readonly Dictionary<string, TrayIcon> _icons = [];
     private readonly Dictionary<(nint Window, uint Id), TrayIcon> _byWindow = [];
     private readonly Dictionary<Guid, TrayIcon> _byGuid = [];
+    private IReadOnlyList<TrayIconSetting> _settings = [];
+    private IDisposable? _settingsWatch;
     private nint _hwnd;
     private nint _answered;
     private bool _waiting;
@@ -92,6 +98,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
     public event Action<TrayIcon>? Changed;
 
     public event Action<TrayIcon>? Removed;
+
+    /// <summary>The app asked for a balloon notification: its title, its text, and its <c>NIIF_</c> flags.</summary>
+    public event Action<TrayIcon, string, string, uint>? Balloon;
 
     public TrayIcon? Find(string key) => _icons.GetValueOrDefault(key);
 
@@ -139,6 +148,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
         ChangeWindowMessageFilterEx(_hwnd, TaskbarCreated, MSGFLT_ALLOW, 0);
         ChangeWindowMessageFilterEx(_hwnd, WM_COPYDATA, MSGFLT_ALLOW, 0);
         _answered = ExplorerTray();
+        UseSettings(TrayIconSettings.Read());
+        _settingsWatch = TrayIconSettings.Watch(_loop, () => UseSettings(TrayIconSettings.Read()));
         KeepInFront();
         // Every app adds its icons again, now to this window.
         _broadcast();
@@ -153,7 +164,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
         _timer?.Dispose();
         _answer?.Dispose();
         _cursorRestore?.Dispose();
-        _timer = _answer = _cursorRestore = null;
+        _settingsWatch?.Dispose();
+        _timer = _answer = _cursorRestore = _settingsWatch = null;
         if (_hwnd != 0)
         {
             Hosts.Remove(_hwnd);
@@ -306,9 +318,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
                 }
                 if (hasGuid)
                     icon.Guid = call.Guid;
-                // The same field is a balloon timeout on other messages. Only 3 and 4 are interface versions.
-                if (call.TimeoutOrVersion is TrayProtocol.Version or TrayProtocol.Version4)
-                    icon.Version = call.TimeoutOrVersion;
                 if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
                     icon.CallbackMessage = call.CallbackMessage;
                 if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
@@ -322,18 +331,22 @@ internal sealed unsafe partial class TrayHost : IDisposable
                     icon.ImageGeneration++;
                 }
                 Index(icon);
-                if (!_icons.ContainsKey(icon.Key))
+                var added = !_icons.ContainsKey(icon.Key);
+                if (added)
                 {
                     GetWindowThreadProcessId(icon.Window, out var pid);
                     icon.ProcessId = (int)pid;
                     icon.ProgramPath = ProgramPath(pid);
                     _icons[icon.Key] = icon;
+                }
+                icon.Overflow = TrayIconSettings.InOverflow(_settings, icon.Guid, icon.ProgramPath, icon.Id);
+                if (added)
                     Added?.Invoke(icon);
-                }
                 else
-                {
                     Changed?.Invoke(icon);
-                }
+                // An empty text takes a balloon down; Explorer does that itself.
+                if ((call.Flags & TrayProtocol.NIF_INFO) != 0 && call.Info.Length > 0)
+                    Balloon?.Invoke(icon, call.InfoTitle, call.Info, call.InfoFlags);
                 break;
             }
             case TrayProtocol.Delete:
@@ -341,9 +354,24 @@ internal sealed unsafe partial class TrayHost : IDisposable
                     Remove(icon.Key);
                 break;
             case TrayProtocol.SetVersion:
+                // The only message where this field is a version; elsewhere it is a balloon timeout.
                 if (icon is not null)
                     icon.Version = call.TimeoutOrVersion;
                 break;
+        }
+    }
+
+    /// <summary>Takes Windows' choices for which icons the taskbar shows, and updates the icons they changed.</summary>
+    internal void UseSettings(IReadOnlyList<TrayIconSetting> settings)
+    {
+        _settings = settings;
+        foreach (var icon in _icons.Values.ToArray())
+        {
+            var overflow = TrayIconSettings.InOverflow(settings, icon.Guid, icon.ProgramPath, icon.Id);
+            if (overflow == icon.Overflow)
+                continue;
+            icon.Overflow = overflow;
+            Changed?.Invoke(icon);
         }
     }
 
