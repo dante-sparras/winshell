@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- A new SDK feature band must not add analyzer warnings on its own. Raise this deliberately. -->
+    <AnalysisLevel>10.0</AnalysisLevel>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- A build without Version is 0.0.0-dev. Projects are not packable unless they opt in. -->
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+    <IsPackable>false</IsPackable>
+    <Authors>dante-sparras</Authors>
+  </PropertyGroup>
+</Project>

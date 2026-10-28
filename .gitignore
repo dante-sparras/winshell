@@ -27,3 +27,10 @@ desktop.ini
 .claude/worktrees/
 CLAUDE.local.md
 AGENTS.override.md
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
+TestResults/
