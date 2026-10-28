@@ -8,23 +8,23 @@ namespace Winshell.Platform.Windows.Services.Power;
 
 /// <summary>One power device, read from Windows.</summary>
 internal sealed record PowerDeviceInfo(
-    string NativePath,
+    string DeviceId,
     string Model,
     PowerDeviceType Type,
-    bool PowerSupply,
+    bool PowersTheSystem,
     bool IsPresent,
     PowerDeviceState State,
     double Percentage,
-    double Energy,
-    double EnergyCapacity,
-    double ChangeRate,
+    double RemainingCapacity,
+    double FullChargeCapacity,
+    double ChargeRate,
     double TimeToEmpty,
     double TimeToFull,
     double HealthPercentage,
     string IconName)
 {
-    /// <summary>The display device of a PC without a battery, as UPower reports it.</summary>
-    public static readonly PowerDeviceInfo NoBattery = new("", "", PowerDeviceType.Unknown, false, false, PowerDeviceState.Unknown, 0, 0, 0, 0, 0, 0, 0, "battery-missing-symbolic");
+    /// <summary>What a PC with no battery reports.</summary>
+    public static readonly PowerDeviceInfo NoBattery = new("", "", PowerDeviceType.Unknown, false, false, PowerDeviceState.Unknown, 0, 0, 0, 0, 0, 0, 0, "battery-missing");
 }
 
 internal sealed record PowerSnapshot(bool Ready, PowerDeviceInfo Display, IReadOnlyList<PowerDeviceInfo> Devices, bool OnBattery)
@@ -122,7 +122,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             var percentage = status.BatteryLifePercent / 100.0;
             var charging = (status.BatteryFlag & 8) != 0;
             var state = charging ? PowerDeviceState.Charging
-                : status.ACLineStatus == 1 ? (percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.PendingCharge)
+                : status.ACLineStatus == 1 ? (percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.NotCharging)
                 : PowerDeviceState.Discharging;
             var timeToEmpty = state == PowerDeviceState.Discharging && status.BatteryLifeTime != uint.MaxValue ? status.BatteryLifeTime : 0;
             return new PowerDeviceInfo("", "", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0, timeToEmpty, 0, 0, IconName(state, percentage));
@@ -154,11 +154,11 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
         }
     }
 
-    /// <summary>A battery report, as UPower describes a battery.</summary>
+    /// <summary>A battery report. Capacities are watt-hours and the charge rate is watts.</summary>
     private static PowerDeviceInfo Describe(WinBatteryReport report, string nativePath, string model, double? timeToEmptyHint)
     {
         if (report.Status == BatteryStatus.NotPresent)
-            return PowerDeviceInfo.NoBattery with { NativePath = nativePath, Model = model, Type = PowerDeviceType.Battery, PowerSupply = true };
+            return PowerDeviceInfo.NoBattery with { DeviceId = nativePath, Model = model, Type = PowerDeviceType.Battery, PowersTheSystem = true };
         var remaining = report.RemainingCapacityInMilliwattHours / 1000.0;
         var full = report.FullChargeCapacityInMilliwattHours / 1000.0;
         var design = report.DesignCapacityInMilliwattHours / 1000.0;
@@ -179,7 +179,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             BatteryStatus.Charging => PowerDeviceState.Charging,
             BatteryStatus.Discharging => percentage <= 0 ? PowerDeviceState.Empty : PowerDeviceState.Discharging,
             // Idle: on line power and not charging, either full or held below full.
-            BatteryStatus.Idle => percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.PendingCharge,
+            BatteryStatus.Idle => percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.NotCharging,
             _ => PowerDeviceState.Unknown,
         };
         var timeToEmpty = 0.0;
@@ -193,17 +193,17 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             Math.Round(timeToEmpty), Math.Round(timeToFull), health, IconName(state, percentage));
     }
 
-    /// <summary>UPower's icon name for a battery, such as <c>battery-good-charging-symbolic</c>.</summary>
+    /// <summary>A shell icon name for a battery, such as <c>battery-good-charging</c>.</summary>
     public static string IconName(PowerDeviceState state, double percentage)
     {
         var level = percentage < 0.10 ? "caution" : percentage < 0.30 ? "low" : percentage < 0.60 ? "good" : "full";
         return state switch
         {
-            PowerDeviceState.FullyCharged => "battery-full-charged-symbolic",
-            PowerDeviceState.Empty => "battery-empty-symbolic",
-            PowerDeviceState.Charging or PowerDeviceState.PendingCharge => $"battery-{level}-charging-symbolic",
-            PowerDeviceState.Discharging or PowerDeviceState.PendingDischarge => $"battery-{level}-symbolic",
-            _ => "battery-missing-symbolic",
+            PowerDeviceState.FullyCharged => "battery-full",
+            PowerDeviceState.Empty => "battery-empty",
+            PowerDeviceState.Charging => $"battery-{level}-charging",
+            PowerDeviceState.Discharging or PowerDeviceState.NotCharging => $"battery-{level}",
+            _ => "battery-missing",
         };
     }
 
