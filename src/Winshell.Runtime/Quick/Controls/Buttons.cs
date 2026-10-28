@@ -40,6 +40,8 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
         };
     }
 
+    protected override int DefaultFocusPolicy => StrongFocus;
+
     [QmlEnum]
     public enum DisplayValue
     {
@@ -469,6 +471,13 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
 
     public virtual bool KeyPress(KeyEvent e)
     {
+        // Enter clicks a button at once, as it does in Windows; a check box, radio button or switch takes only Space.
+        if (e.Key is 0x01000004 or 0x01000005 && Enabled && this is not IndicatorButton)
+        {
+            if (!e.IsAutoRepeat)
+                Click();
+            return true;
+        }
         if (e.Key != 0x20 || !Enabled)
             return false;
         if (!e.IsAutoRepeat)
@@ -601,6 +610,8 @@ public sealed class RoundButton : Button
     }
 
     protected override float Radius(SKRect bounds) => (float)(_radius ?? Math.Min(bounds.Width, bounds.Height) / 2);
+
+    public override float FocusRadius => Radius(SKRect.Create((float)Width, (float)Height));
 
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) => PaintBackground(c, i.Bounds), Fluent.ControlHeight, Fluent.ControlHeight));
 }
@@ -973,6 +984,8 @@ public sealed class ButtonGroup : QObject
 
     [Qml]
     public bool Exclusive { get { Track(); return _exclusive; } set => SetField(ref _exclusive, value); }
+
+    internal IReadOnlyList<AbstractButton> ButtonList => _buttons;
 
     [Qml]
     public AbstractButton? CheckedButton

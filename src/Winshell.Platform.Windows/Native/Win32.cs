@@ -175,6 +175,7 @@ internal static partial class Win32
 
     public const uint WM_CREATE = 0x0001;
     public const uint WM_DESTROY = 0x0002;
+    public const uint WM_GETOBJECT = 0x003D;
     public const uint WM_MOVE = 0x0003;
     public const uint WM_SIZE = 0x0005;
     public const uint WM_ACTIVATE = 0x0006;

@@ -427,7 +427,22 @@ public class Item : QObject
     }
 
     [Qml]
-    public bool ActiveFocusOnTab { get; set; }
+    public bool ActiveFocusOnTab
+    {
+        get { Track(); return _activeFocusOnTab ?? DefaultActiveFocusOnTab; }
+        set
+        {
+            if (_activeFocusOnTab == value)
+                return;
+            _activeFocusOnTab = value;
+            NotifyChanged("activeFocusOnTab");
+        }
+    }
+
+    private bool? _activeFocusOnTab;
+
+    /// <summary>Whether Tab reaches the item when QML does not say, as it does a button or a text field.</summary>
+    protected virtual bool DefaultActiveFocusOnTab => false;
 
     // Tree
 

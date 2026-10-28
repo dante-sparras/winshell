@@ -39,6 +39,13 @@ public sealed class PopupOverlay : Item, IPointerTarget, IWheelTarget
         return Overlays.GetValue(root, r => new PopupOverlay(r) { Engine = r.Engine });
     }
 
+    /// <summary>The popup layers of the items a window shows.</summary>
+    public static IEnumerable<PopupOverlay> Of(IItemHost host) =>
+        Overlays.Select(entry => entry.Value).Where(overlay => overlay.Host == host && !overlay.IsDestroyed);
+
+    /// <summary>The open popups of a window, the topmost last.</summary>
+    public static IEnumerable<Popup> OpenIn(IItemHost host) => Of(host).SelectMany(overlay => overlay.OpenPopups);
+
     /// <summary>The popups closed by the press being delivered now, so the control that opened one does not reopen it.</summary>
     internal static HashSet<Popup> ClosedByPress { get; } = [];
 
@@ -202,7 +209,8 @@ public sealed class PopupItem : Pane, IPointerTarget, IWheelTarget, IKeyTarget
             _popup.Close();
             return true;
         }
-        return _popup.Modal;
+        // A modal popup keeps keys from the window under it, but Tab and the arrow keys still move focus inside it.
+        return _popup.Modal && e.Key is not (0x01000001 or 0x01000002 or 0x01000012 or 0x01000013 or 0x01000014 or 0x01000015);
     }
 
     public bool KeyRelease(KeyEvent e) => false;
@@ -252,6 +260,7 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
     private bool _repositioning;
     private bool _focus;
     private PopupOverlay? _overlay;
+    private Item? _restoreFocus;
 
     private static readonly string[] Forwarded =
     [
@@ -519,7 +528,12 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
             _overlay.Add(this);
             _opened = true;
             Reposition();
-            if (_focus)
+            // A flyout opened from the keyboard takes focus, as in Windows, and gives it back when it closes.
+            var scene = _item.Host as Scene;
+            _restoreFocus = scene?.FocusItem;
+            if (scene is { FocusVisible: true })
+                (FocusNavigation.TabStops(_item).FirstOrDefault() ?? _item).ForceActiveFocus();
+            else if (_focus)
                 _item.ForceActiveFocus();
             NotifyChanged("opened");
             Emit("opened");
@@ -528,9 +542,16 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
         {
             Emit("aboutToHide");
             _overlay?.Remove(this);
-            if (_item.ActiveFocus)
-                _item.Host?.SetFocusItem(null);
+            var host = _item.Host;
+            var hadFocus = false;
+            for (var f = host?.FocusItem; f is not null && !hadFocus; f = f.ParentItem)
+                hadFocus = f == _item;
+            if (hadFocus)
+                host!.SetFocusItem(null);
             _item.SetParentItem(null);
+            if (hadFocus && _restoreFocus is { IsDestroyed: false } restore && restore.Host == host && restore.Visible)
+                restore.ForceActiveFocus();
+            _restoreFocus = null;
             _overlay = null;
             _opened = false;
             NotifyChanged("opened");
@@ -1218,6 +1239,8 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         SetDefaultPadding(11, 5, 38, 7);
     }
 
+    protected override int DefaultFocusPolicy => StrongFocus;
+
     [Qml]
     public object? Model
     {
@@ -1588,7 +1611,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
             }
             else
             {
-                var row = new ComboBoxRow(this, index) { Engine = Engine, Text = TextAt(i) };
+                var row = new Row(this, index) { Engine = Engine, Text = TextAt(i) };
                 CopyFont(Font, row.Font);
                 row.MarkComplete();
                 row.SetParentItem(popup.Column);
@@ -1685,19 +1708,35 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 
     public bool KeyPress(KeyEvent e)
     {
+        var alt = (e.Modifiers & QtEnums.AltModifier) != 0;
         switch (e.Key)
         {
+            // Alt+Down and F4 open the list, as they do in Windows.
+            case 0x01000015 when alt:
+            case 0x01000033:
+            case 0x20 or 0x01000004 or 0x01000005:
+                OpenPopup();
+                return true;
             case 0x01000013:
                 DecrementCurrentIndex();
                 return true;
             case 0x01000015:
                 IncrementCurrentIndex();
                 return true;
-            case 0x20:
-                OpenPopup();
-                return true;
         }
         return false;
+    }
+
+    /// <summary>Whether the list is open.</summary>
+    public bool IsPopupOpen => _popup?.Opened == true;
+
+    /// <summary>Opens or closes the list, as UI Automation's expand and collapse do.</summary>
+    public void SetPopupOpen(bool open)
+    {
+        if (open && !IsPopupOpen)
+            OpenPopup();
+        else if (!open && IsPopupOpen)
+            _popup?.Close();
     }
 
     public bool KeyRelease(KeyEvent e) => false;
@@ -1723,8 +1762,10 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     }
 
     /// <summary>The default row of the list: an item delegate marked when it is the current entry.</summary>
-    private sealed class ComboBoxRow(ComboBox box, int index) : ItemDelegate
+    internal sealed class Row(ComboBox box, int index) : ItemDelegate
     {
-        protected override bool ShowsSelection => box.CurrentIndex == index;
+        public bool IsCurrent => box.CurrentIndex == index;
+
+        protected override bool ShowsSelection => IsCurrent;
     }
 }

@@ -10,6 +10,9 @@ public sealed class PaintContext
     /// <summary>The time of this frame, for items that animate while they draw.</summary>
     public TimeSpan Time { get; init; }
 
+    /// <summary>The item to draw the keyboard focus rectangle around, or null.</summary>
+    public Item? FocusRing { get; init; }
+
     /// <summary>Set by an item whose drawing keeps changing, such as a busy indicator, to get another frame.</summary>
     public bool WantsAnotherFrame { get; set; }
 

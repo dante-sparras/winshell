@@ -100,6 +100,8 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
         Theme.Changed += OnThemeChanged;
     }
 
+    protected override bool DefaultActiveFocusOnTab => true;
+
     private void OnThemeChanged()
     {
         if (!IsDestroyed)

@@ -49,6 +49,21 @@ public sealed class Scene : IItemHost
 
     public Item? FocusItem => _focusItem;
 
+    /// <summary>
+    /// Whether focus last moved by the keyboard. The focused item shows a focus rectangle only then, as in Windows;
+    /// a press of the pointer hides it again.
+    /// </summary>
+    public bool FocusVisible { get; private set; }
+
+    private void SetFocusVisible(bool value)
+    {
+        if (FocusVisible == value)
+            return;
+        FocusVisible = value;
+        (_focusItem as Controls.Control)?.VisualFocusChanged();
+        RequestUpdate();
+    }
+
     /// <summary>Raised when something in the scene changed and the window should draw again.</summary>
     public event Action? UpdateRequested;
 
@@ -79,7 +94,16 @@ public sealed class Scene : IItemHost
         // Siblings in the same focus scope lose their focus flag.
         if (old is not null && item is not null && old.Focus)
             old.Focus = false;
+        if (FocusVisible)
+            RequestUpdate();
         FocusChanged?.Invoke(item);
+    }
+
+    /// <summary>Moves focus from the keyboard, so the focused item shows its focus rectangle.</summary>
+    public void MoveFocus(Item item)
+    {
+        SetFocusVisible(true);
+        item.ForceActiveFocus();
     }
 
     // Painting
@@ -89,7 +113,8 @@ public sealed class Scene : IItemHost
     {
         PolishQueue.Flush();
         IsDirty = false;
-        var context = new PaintContext { DevicePixelRatio = DevicePixelRatio, Time = time, TextOnBackdrop = TextOnBackdrop };
+        var ring = FocusVisible && _focusItem is { } focused && focused is not Quick.TextInput && focused.Visible ? focused : null;
+        var context = new PaintContext { DevicePixelRatio = DevicePixelRatio, Time = time, TextOnBackdrop = TextOnBackdrop, FocusRing = ring };
         canvas.Save();
         canvas.Scale((float)DevicePixelRatio);
         using (DependencyTracker.Suspend())
@@ -128,6 +153,8 @@ public sealed class Scene : IItemHost
         {
             PaintContent(item, canvas, context);
         }
+        if (context.FocusRing == item)
+            Controls.Fluent.FocusRing(canvas, SKRect.Create((float)item.Width, (float)item.Height), (item as Controls.Control)?.FocusRadius ?? Controls.Fluent.CornerRadius);
         if (layered)
             canvas.Restore();
         canvas.Restore();
@@ -290,6 +317,7 @@ public sealed class Scene : IItemHost
     public void PointerPress(double x, double y, int button, int modifiers = 0, bool doubleClick = false)
     {
         _buttons |= button;
+        SetFocusVisible(false);
         _pressSceneX = x;
         _pressSceneY = y;
         if (_grabber is not null && _grabberItem is not null)
@@ -484,7 +512,10 @@ public sealed class Scene : IItemHost
 
     // Keys
 
-    /// <summary>Delivers a key press to the focused item, then up through its parents.</summary>
+    /// <summary>
+    /// Delivers a key press to the focused item, then up through its parents. A key none of them takes moves focus:
+    /// Tab and Shift+Tab to the next tab stop, an arrow key within a group, Escape out of the topmost popup.
+    /// </summary>
     public bool KeyPress(KeyEvent e)
     {
         for (var item = _focusItem; item is not null; item = item.ParentItem)
@@ -495,6 +526,39 @@ public sealed class Scene : IItemHost
                 return true;
             if (item.FindAttached(typeof(KeysAttached)) is KeysAttached after && after.Priority == 1 && after.Press(e))
                 return true;
+        }
+        return Navigate(e);
+    }
+
+    private bool Navigate(KeyEvent e)
+    {
+        var mods = e.Modifiers & (QtEnums.ShiftModifier | QtEnums.ControlModifier | QtEnums.AltModifier);
+        switch (e.Key)
+        {
+            case 0x01000001 or 0x01000002 when (mods & ~QtEnums.ShiftModifier) == 0:
+                {
+                    var forward = e.Key == 0x01000001 && mods == 0;
+                    if (FocusNavigation.Next(Root, _focusItem, forward) is not { } next)
+                        return false;
+                    MoveFocus(next);
+                    return true;
+                }
+            case 0x01000012 or 0x01000013 or 0x01000014 or 0x01000015 when mods == 0 && _focusItem is not null:
+                {
+                    if (FocusNavigation.Arrow(_focusItem, e.Key) is not { } arrow)
+                        return false;
+                    MoveFocus(arrow.Target);
+                    arrow.Select?.Invoke(arrow.Target);
+                    return true;
+                }
+            case 0x01000000:
+                {
+                    var popup = Controls.PopupOverlay.OpenIn(this).LastOrDefault(p => p.Interactive && (p.ClosePolicy & (int)Controls.Popup.ClosePolicyValue.CloseOnEscape) != 0);
+                    if (popup is null)
+                        return false;
+                    popup.Close();
+                    return true;
+                }
         }
         return false;
     }
