@@ -84,6 +84,10 @@ _Avoid_: brush, resource, variable
 A top-level window of another program, as the taskbar and Alt+Tab list it.
 _Avoid_: toplevel, client
 
+**Virtual desktop**:
+A desktop Task View lists and can switch to. An app window is on one of them.
+_Avoid_: workspace
+
 **App**:
 A program the Start menu lists: a shortcut or a packaged app.
 _Avoid_: desktop entry, application

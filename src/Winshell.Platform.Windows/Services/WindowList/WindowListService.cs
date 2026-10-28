@@ -73,6 +73,12 @@ public sealed class WindowListService : QObject
             window.SetActivated(window == active);
     }
 
+    internal void NotifyDesktopsChanged()
+    {
+        foreach (var window in _byHwnd.Values)
+            window.NotifyDesktop();
+    }
+
     protected override void OnDestroy()
     {
         WindowTracker.Changed -= Sync;
@@ -110,6 +116,21 @@ public sealed class AppWindow : QObject
 
     /// <summary>A path the icon provider draws: a packaged app's Start icon, or the program's own icon.</summary>
     [Qml] public string Icon { get { Track(); return _info?.Icon ?? ""; } }
+
+    /// <summary>The virtual desktop this window is on, or empty when Windows does not report one. This uses the supported desktop API.</summary>
+    [Qml] public string DesktopId { get { Track(); return VirtualDesktopBroker.WindowDesktopId(Hwnd); } }
+
+    /// <summary>The desktop in <c>VirtualDesktops</c> whose id is <see cref="DesktopId"/>, when that list is loaded.</summary>
+    [Qml]
+    public VirtualDesktop? Desktop
+    {
+        get
+        {
+            Track();
+            var id = VirtualDesktopBroker.WindowDesktopId(Hwnd);
+            return id.Length == 0 ? null : Engine?.FindNativeSingleton<VirtualDesktopsService>()?.Find(id);
+        }
+    }
 
     [Qml] public bool Activated { get { Track(); return _activated; } }
 
@@ -153,6 +174,24 @@ public sealed class AppWindow : QObject
 
     /// <summary>Moves the window onto a monitor. Its logical size stays, and a maximized window is maximized again there.</summary>
     [Qml] public void MoveTo(ShellScreen? screen) => WindowTracker.MoveToMonitor(Hwnd, screen?.Id ?? "");
+
+    /// <summary>Moves the window onto a virtual desktop. This uses the supported desktop API.</summary>
+    [Qml]
+    public void MoveToDesktop(VirtualDesktop? desktop)
+    {
+        if (desktop is null || !Guid.TryParse(desktop.Id, out var id) || id == Guid.Empty)
+            return;
+        if (!VirtualDesktopBroker.MoveWindow(Hwnd, id))
+            return;
+        NotifyChanged("desktopId");
+        NotifyChanged("desktop");
+    }
+
+    internal void NotifyDesktop()
+    {
+        NotifyChanged("desktopId");
+        NotifyChanged("desktop");
+    }
 
     internal void Update(WindowInfo info)
     {

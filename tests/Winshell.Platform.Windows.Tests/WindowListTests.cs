@@ -130,6 +130,9 @@ public class WindowListTests
         Assert.True(window.Methods.ContainsKey("activate"));
         Assert.True(window.Methods.ContainsKey("close"));
         Assert.True(window.Methods.ContainsKey("moveTo"));
+        Assert.True(window.Properties.ContainsKey("desktopId"));
+        Assert.True(window.Properties.ContainsKey("desktop"));
+        Assert.True(window.Methods.ContainsKey("moveToDesktop"));
         Assert.False(window.Methods.ContainsKey("fullscreenOn"));
         Assert.False(window.Methods.ContainsKey("setRectangle"));
         Assert.False(window.Methods.ContainsKey("unsetRectangle"));
