@@ -195,6 +195,8 @@ public static class ValueConverter
                 list.Add(FromJs(array[i]));
             return list;
         }
+        if (js is Jint.Runtime.Interop.ObjectWrapper objectWrapper)
+            return objectWrapper.Target;
         var clr = js.ToObject();
         if (clr is QColor or QPoint or QSize or QRect or QmlComponent or QObject)
             return clr;

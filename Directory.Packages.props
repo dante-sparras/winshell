@@ -7,6 +7,7 @@
     <PackageVersion Include="Jint" Version="4.17.0" />
     <PackageVersion Include="SkiaSharp" Version="4.154.0" />
     <PackageVersion Include="SkiaSharp.HarfBuzz" Version="4.154.0" />
+    <PackageVersion Include="Svg.Skia" Version="5.2.3" />
     <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.367" />
     <PackageVersion Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageVersion Include="Vortice.DirectComposition" Version="3.8.3" />

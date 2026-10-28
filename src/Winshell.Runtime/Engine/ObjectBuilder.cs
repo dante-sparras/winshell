@@ -184,7 +184,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             name = path[(dot + 1)..];
         }
 
-        if (Names.SignalOfHandler(name) is { } signalName && !target.HasProperty(name))
+        if (Names.SignalOfHandler(name) is { } signalName && !target.HasProperty(name) && target is not Quick.IAcceptsAnyProperty)
         {
             var slot = target.GetSignal(signalName) ?? target.GetSignal(name[2..]);
             if (slot is null && target is QtQml.Connections connections && value is QmlScriptValue handler)
@@ -215,6 +215,8 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
 
     private void AssignValue(QObject scopeObject, QObject target, string name, QmlValue value, ComponentContext context, QmlDocument doc, SourceLocation location)
     {
+        if (!target.HasProperty(name) && target is Quick.IAcceptsAnyProperty)
+            target.AddDynamicProperty(new DynamicProperty(target, name, "var"));
         if (!target.HasProperty(name))
             throw new QmlCompileException($"Cannot assign to non-existent property \"{name}\"", location);
 
