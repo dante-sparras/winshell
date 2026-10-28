@@ -21,6 +21,8 @@ public static partial class StandardModules
             .Type<ColorQuantizer>("ColorQuantizer")
             .Type<TransformWatcher>("TransformWatcher")
             .Type<BoundComponent>("BoundComponent")
+            .Uncreatable<RetainableHook>("Retainable", "Retainable can only be used as an attached object.", attached: RetainableHook.Attach, attachedType: typeof(RetainableHook))
+            .Type<RetainableLock>("RetainableLock")
             .Uncreatable<QsMenuHandle>("QsMenuHandle")
             .Uncreatable<QsMenuEntry>("QsMenuEntry")
             .Uncreatable<QsMenuButtonType>("QsMenuButtonType")

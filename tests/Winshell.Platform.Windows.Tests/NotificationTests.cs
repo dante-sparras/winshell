@@ -1,4 +1,5 @@
 using Winshell.Platform.Windows.Services.Notifications;
+using Winshell.Runtime.Quickshell;
 
 namespace Winshell.Platform.Windows.Tests;
 
@@ -99,6 +100,31 @@ public class NotificationTests
 
         Assert.NotNull(seen);
         Assert.False(seen!.LastGeneration);
+    }
+
+    [Fact]
+    public void A_locked_notification_stays_until_the_lock_is_released()
+    {
+        var server = new NotificationServer(listen: false);
+        ShellNotification? seen = null;
+        server.Connect("notification", args =>
+        {
+            seen = (ShellNotification)args[0]!;
+            seen.Tracked = true;
+        });
+        server.Deliver(Sample(), 9, lastGeneration: false);
+        var hook = RetainableHook.Get(seen!, create: true)!;
+        hook.Lock();
+
+        seen!.Dismiss();
+
+        Assert.True(hook.Retained);
+        Assert.False(seen.IsDestroyed);
+        Assert.Empty(server.TrackedNotifications.Rows);
+
+        hook.Unlock();
+
+        Assert.True(seen.IsDestroyed);
     }
 
     [Fact]

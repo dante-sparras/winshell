@@ -199,12 +199,16 @@ public sealed class NotificationAction : QObject
 
 /// <summary>Quickshell's <c>Notification</c> for one Windows toast.</summary>
 [QmlSignal("closed", "reason")]
-public sealed class ShellNotification : QObject
+public sealed class ShellNotification : QObject, IRetainable
 {
     private readonly NotificationServer _server;
     private readonly uint _nativeId;
     private bool _tracked;
     private bool _closed;
+
+    RetainableHook? IRetainable.RetainHook { get; set; }
+
+    void IRetainable.FinishRetain() => Destroy();
 
     internal ShellNotification(NotificationServer server, IncomingToast toast, int id, bool lastGeneration)
     {
@@ -307,7 +311,7 @@ public sealed class ShellNotification : QObject
         if (tellWindows)
             ToastHub.Remove(_nativeId);
         Emit("closed", (int)reason);
-        Destroy();
+        RetainableHook.Release(this);
     }
 }
 

@@ -26,6 +26,7 @@ public class QObject
     private List<QObject>? _owned;
     private QObject? _owner;
     private string _objectName = "";
+    private bool _destroying;
 
     public QObject()
     {
@@ -338,8 +339,9 @@ public class QObject
     /// <summary>Destroys this object and the objects it owns.</summary>
     public void Destroy()
     {
-        if (IsDestroyed)
+        if (IsDestroyed || _destroying)
             return;
+        _destroying = true;
         if (_attached is not null)
         {
             foreach (var attached in _attached.Values)
