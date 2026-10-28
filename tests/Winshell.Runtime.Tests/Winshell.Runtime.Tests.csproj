@@ -13,5 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Conformance\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Performance\typical-shell\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
