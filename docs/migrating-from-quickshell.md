@@ -217,6 +217,21 @@ Types not listed keep their names in the new module.
 
 `Brightness`, `BrightnessMonitor`, `BrightnessConnection`, and `EffectivePowerMode` are new.
 
+### Tray
+
+`SystemTray.items` lists the notification area icons Explorer would show. An icon the app hid (`NIS_HIDDEN`) is left out until the app shows it again. See [Windows notification area](tray.md).
+
+| Quickshell | Winshell |
+| --- | --- |
+| `SystemTrayItem.title` | `appName`, the program's description |
+| `SystemTrayItem.tooltipTitle`, `tooltipDescription` | `tooltip`, the whole text |
+| `SystemTrayItem.status`, `Status` | Removed. Hidden icons are not listed, and `overflow` says where Windows shows the rest |
+| `SystemTrayItem.category`, `Category` | Removed. Windows has no categories |
+| `SystemTrayItem.hasMenu`, `onlyMenu` | Removed. Every icon's app may show a menu; `display()` asks it to |
+| `SystemTrayItem.scroll()` | Removed. Windows does not send scrolls to tray icons |
+
+`executable`, `overflow`, the `balloon(title, message, icon)` signal and the `BalloonIcon` enum are new.
+
 ## Hotkeys
 
 `Winshell.Input` `Hotkey` registers a Windows hotkey. A normal chord, including `Win+E`, uses `RegisterHotKey`. The Windows key by itself, and the keys after the first chord of a sequence, use a low-level keyboard hook only while one of those hotkeys is enabled or a sequence is in progress. See [Windows hotkeys](hotkeys.md).

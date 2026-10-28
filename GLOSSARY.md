@@ -116,6 +116,14 @@ _Avoid_: power profile, overlay scheme, power plan
 The brightness setting of a connected monitor.
 _Avoid_: backlight
 
+**Tray icon**:
+An app's icon in the notification area, which the app adds, changes and removes itself.
+_Avoid_: status notifier item, SNI, indicator
+
+**Overflow**:
+The hidden icons flyout behind the taskbar's chevron. Settings chooses which tray icons the taskbar shows; the rest are in the overflow.
+_Avoid_: hidden icons (an app can also hide its own icon), drawer
+
 **Hotkey**:
 A key chord or a short sequence of chords that works anywhere in Windows, such as `Ctrl+Shift+K` or `Win`.
 _Avoid_: global shortcut, keybind, accelerator, bind
