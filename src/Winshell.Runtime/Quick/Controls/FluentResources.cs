@@ -156,4 +156,69 @@ public static class FluentResources
 
     /// <summary>The track of an expanded scroll bar: WinUI's in-app acrylic, here its fallback color.</summary>
     public static QColor ScrollBarTrackFill(Theme t) => t.IsHighContrast ? t.SystemColorWindowColor : t.AcrylicBackgroundFillColorDefault;
+
+    // Text box. Its pressed column is its focused state.
+
+    public static StateColors TextControlBackground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonFace, s => s.ButtonFace, s => s.ButtonFace, s => s.ButtonFace)
+        : new(t.ControlFillColorDefault, t.ControlFillColorSecondary, t.ControlFillColorInputActive, t.ControlFillColorDisabled);
+
+    public static StateColors TextControlForeground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.ButtonText, s => s.ButtonText, s => s.GrayText)
+        : new(t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorDisabled);
+
+    /// <summary>The border in a contrast theme. In light and dark it is a plain border over a strong bottom line.</summary>
+    public static StateColors TextControlBorderBrush(Theme t) =>
+        Contrast(t, s => s.ButtonText, s => s.Highlight, s => s.Highlight, s => s.GrayText);
+
+    /// <summary>The bottom line: strong at rest, accent and 2 pixels when focused.</summary>
+    public static QColor TextControlBottomLine(Theme t, bool focused) =>
+        focused ? (t.IsHighContrast ? t.SystemColorHighlightColor : t.AccentFillColorDefault) : (t.IsHighContrast ? t.SystemColorButtonTextColor : t.ControlStrongStrokeColorDefault);
+
+    public static StateColors TextControlButtonBackground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => QColor.Transparent, s => QColor.Transparent, s => s.Highlight, s => QColor.Transparent)
+        : new(QColor.Transparent, t.SubtleFillColorSecondary, t.SubtleFillColorTertiary, QColor.Transparent);
+
+    public static StateColors TextControlButtonForeground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.Highlight, s => s.HighlightText, s => s.GrayText)
+        : new(t.TextFillColorSecondary, t.TextFillColorSecondary, t.TextFillColorTertiary, t.TextFillColorDisabled);
+
+    // Combo box
+
+    public static StateColors ComboBoxBackground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonFace, s => s.Window, s => s.ButtonFace, s => s.ButtonFace)
+        : new(t.ControlFillColorDefault, t.ControlFillColorSecondary, t.ControlFillColorTertiary, t.ControlFillColorDisabled);
+
+    public static StateColors ComboBoxForeground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.ButtonText, s => s.ButtonText, s => s.GrayText)
+        : new(t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorSecondary, t.TextFillColorDisabled);
+
+    public static StateColors ComboBoxDropDownGlyphForeground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.ButtonText, s => s.ButtonText, s => s.GrayText)
+        : new(t.TextFillColorSecondary, t.TextFillColorSecondary, t.TextFillColorSecondary, t.TextFillColorDisabled);
+
+    /// <summary>The border in a contrast theme. In light and dark it is the elevation border, plain when pressed or disabled.</summary>
+    public static StateColors ComboBoxBorderBrush(Theme t) =>
+        Contrast(t, s => s.ButtonText, s => s.Highlight, s => s.Highlight, s => s.GrayText);
+
+    // List item
+
+    public static StateColors ListViewItemBackground(Theme t, bool selected) => t.IsHighContrast
+        ? (selected
+            ? Contrast(t, s => s.Highlight, s => s.Highlight, s => s.Highlight, s => s.Window)
+            : Contrast(t, s => s.Window, s => s.Highlight, s => s.Highlight, s => s.Window))
+        : (selected
+            ? new(t.SubtleFillColorSecondary, t.SubtleFillColorTertiary, t.SubtleFillColorSecondary, t.SubtleFillColorSecondary)
+            : new(QColor.Transparent, t.SubtleFillColorSecondary, t.SubtleFillColorTertiary, QColor.Transparent));
+
+    /// <summary>A list item's text, which does not dim when pressed.</summary>
+    public static StateColors ListViewItemForeground(Theme t, bool selected) => t.IsHighContrast
+        ? (selected
+            ? Contrast(t, s => s.HighlightText, s => s.HighlightText, s => s.HighlightText, s => s.GrayText)
+            : Contrast(t, s => s.ButtonText, s => s.HighlightText, s => s.HighlightText, s => s.GrayText))
+        : new(t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorDisabled);
+
+    public static StateColors ListViewItemSelectionIndicator(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.HighlightText, s => s.HighlightText, s => s.HighlightText, s => s.GrayText)
+        : new(t.AccentFillColorDefault, t.AccentFillColorDefault, t.AccentFillColorDefault, t.AccentFillColorDisabled);
 }

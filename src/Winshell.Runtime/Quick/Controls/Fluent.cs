@@ -45,6 +45,7 @@ public static class Fluent
     public const string CaretRightSolid = "\uEDDA";
     public const string CaretUpSolid = "\uEDDB";
     public const string CaretDownSolid = "\uEDDC";
+    public const string Cancel = "\uE894";
 
     public static Theme T => Theme.Current;
 
