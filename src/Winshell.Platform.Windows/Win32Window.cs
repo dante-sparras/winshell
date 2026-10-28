@@ -515,16 +515,6 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
     }
 
-    internal bool IsLockSurface => _kind == WindowKind.Panel && _panel?.Namespace == "winshell-lock";
-
-    /// <summary>Puts a lock window over every other window, and gives it the keyboard unless another lock window has it.</summary>
-    internal void RaiseTopmost(bool takeFocus)
-    {
-        Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
-        if (takeFocus && Win32.GetForegroundWindow() is var fg && !_platform.IsLockWindow(fg))
-            SetKeyboardFocus(true);
-    }
-
     public void Raise() => Win32.SetWindowPos(Handle, Win32.HWND_TOP, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
 
     public void StartSystemMove()

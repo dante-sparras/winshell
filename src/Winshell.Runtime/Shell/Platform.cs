@@ -152,14 +152,6 @@ public interface IShellPlatform
     event Action? ScreensChanged;
 
     IWindowBackend CreateWindow(WindowKind kind, IWindowClient client);
-
-    /// <summary>
-    /// The session lock started or ended. While locked the platform keeps the lock surfaces in front and keeps the
-    /// session from being reached around them; if the shell dies while locked, the session must stay locked.
-    /// </summary>
-    void SetSessionLocked(bool locked)
-    {
-    }
 }
 
 [Flags]

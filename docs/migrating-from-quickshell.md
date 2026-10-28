@@ -12,7 +12,7 @@ The Qt Quick modules (`QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`, `QtQuick
 | `Quickshell.Io` | `Winshell.Io` |
 | `Quickshell.Widgets` | `Winshell.Widgets` |
 | `Quickshell.Windows` | `Winshell` for `WindowEffects`, `Winshell.Theme` for the theme |
-| `Quickshell.Wayland` | `Winshell` for the session lock, `Winshell.Power` for idle, `Winshell.Windows` for the window list |
+| `Quickshell.Wayland` | `Winshell.Power` for idle, `Winshell.Windows` for the window list; the session lock is [removed](#session-lock) |
 | `Quickshell.Services.Pipewire` | `Winshell.Audio` |
 | `Quickshell.Services.Mpris` | `Winshell.Media` |
 | `Quickshell.Networking` | `Winshell.Network` |
@@ -20,7 +20,7 @@ The Qt Quick modules (`QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`, `QtQuick
 | `Quickshell.Services.UPower` | `Winshell.Power` |
 | `Quickshell.Services.Notifications` | `Winshell.Notifications` |
 | `Quickshell.Services.SystemTray` | `Winshell.Tray` |
-| `Quickshell.Services.Pam` | `Winshell` |
+| `Quickshell.Services.Pam` | [Removed](#session-lock) |
 | `Quickshell.Hyprland` | `Winshell.Winland` |
 | `import qs.widgets` | `import config.widgets` |
 
@@ -35,8 +35,6 @@ Types not listed keep their names in the new module.
 | `QsWindow` | `ShellWindow` | `Winshell` |
 | `QsMenuHandle`, `QsMenuEntry`, `QsMenuButtonType`, `QsMenuOpener`, `QsMenuAnchor` | `MenuHandle`, `MenuEntry`, `MenuButtonType`, `MenuOpener`, `MenuAnchor` | `Winshell` |
 | `DesktopEntries`, `DesktopEntry` | `Apps`, `AppEntry` | `Winshell.Apps` |
-| `WlSessionLock`, `WlSessionLockSurface` | `SessionLock`, `SessionLockSurface` | `Winshell` |
-| `PamContext`, `PamResult`, `PamError` | `SignInContext`, `SignInResult`, `SignInError` | `Winshell` |
 | `HyprlandFocusGrab` | `FocusGrab` | `Winshell` |
 | `WindowsTheme` | `Theme` | `Winshell.Theme` |
 | `Pipewire` | `Audio` | `Winshell.Audio` |
@@ -228,6 +226,17 @@ Types not listed keep their names in the new module.
 | | `sequence`, `enabled`, `active`, `taken`, `error` |
 
 `sequence` uses `Win`, `Ctrl`, `Alt` and `Shift`.
+
+## Session lock
+
+Windows locks the session, not Winshell ([ADR-0008](adr/0008-windows-owns-the-lock-screen.md)). A lock drawn by the shell sits on the user's own desktop, where anything running as the user can kill it, and a password prompt there looks like phishing. Call `Session.lock()` from `Winshell` instead. It asks Windows to lock, as Win+L does, and returns whether Windows took the request. Windows' lock screen then handles sign-in, Windows Hello, every monitor, and Narrator. Set its look in Windows Settings, under Personalization > Lock screen.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `WlSessionLock`, `WlSessionLockSurface`, `locked: true` | `Session.lock()` |
+| `PamContext`, `PamResult`, `PamError` | Removed. Winshell never asks for the Windows password |
+
+There are no surfaces to draw, no `secure` property and no unlock: Windows unlocks.
 
 ## Removed
 

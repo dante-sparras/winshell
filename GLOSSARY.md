@@ -24,6 +24,10 @@ _Avoid_: generation, session
 One load of a configuration. A reload retires it and starts the next.
 _Avoid_: instance, session
 
+**Windows session**:
+The signed-in Windows user session the shell runs in. Windows locks and unlocks it; the shell can only ask it to lock.
+_Avoid_: logon session, user session
+
 **Reload**:
 Replacing the running generation with a new load of the same configuration.
 _Avoid_: restart, refresh
