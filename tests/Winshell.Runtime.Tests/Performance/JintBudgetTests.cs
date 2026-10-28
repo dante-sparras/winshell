@@ -6,9 +6,10 @@ namespace Winshell.Runtime.Tests.Performance;
 
 /// <summary>
 /// What starting an engine, evaluating bindings and loading a typical shell may cost. Times are the median of
-/// several warm runs and have wide headroom, so a slow runner passes and a clear regression fails. Allocations and
-/// compile counts barely vary between runs, so their budgets are tight. check.ps1 runs these alone, after the
-/// other tests, so nothing competes with them for the CPU.
+/// several warm runs, and their budgets are about 3.5 times what CI's windows-latest runner measured, so a slow
+/// runner passes and a clear regression fails. Allocations and compile counts barely vary between machines, so their
+/// budgets are about 1.5 times the measurement, and exact. check.ps1 runs these alone, after the other tests, so
+/// nothing competes with them for the CPU. Raise a budget deliberately, with the reason in the PR.
 /// </summary>
 [Trait("Category", "Performance")]
 [Collection(nameof(JintBudgetTests))]
@@ -28,8 +29,9 @@ public class JintBudgetTests(ITestOutputHelper output)
             engine.CreateRoot(path);
         });
         Report("start an engine", result, "ms");
-        Assert.InRange(result.Milliseconds, 0, 40);
-        Assert.InRange(result.AllocatedBytes, 0, 3_000_000);
+        // CI: 1.1 ms, 269 KB.
+        Assert.InRange(result.Milliseconds, 0, 4);
+        Assert.InRange(result.AllocatedBytes, 0, 400_000);
     }
 
     [Fact]
@@ -67,8 +69,9 @@ public class JintBudgetTests(ITestOutputHelper output)
         var perEvaluation = new Result(result.Milliseconds * 1000 / Evaluations, result.AllocatedBytes / Evaluations);
         Report("evaluate one binding", perEvaluation, "µs");
         Assert.Empty(shell.Messages);
+        // CI: 5.7 µs, 640 bytes.
         Assert.InRange(perEvaluation.Milliseconds, 0, 20);
-        Assert.InRange(perEvaluation.AllocatedBytes, 0, 4_000);
+        Assert.InRange(perEvaluation.AllocatedBytes, 0, 1_000);
     }
 
     [Fact]
@@ -89,10 +92,11 @@ public class JintBudgetTests(ITestOutputHelper output)
         Report("load the typical shell", result, "ms");
         output.WriteLine($"compiled functions: {compiled}");
         Assert.Empty(messages);
-        Assert.InRange(result.Milliseconds, 0, 400);
-        Assert.InRange(result.AllocatedBytes, 0, 60_000_000);
-        // Code compiles once per place it is written, however many delegates run it.
-        Assert.InRange(compiled, 0, 80);
+        // CI: 83 ms, 9.4 MB, 38 functions.
+        Assert.InRange(result.Milliseconds, 0, 300);
+        Assert.InRange(result.AllocatedBytes, 0, 14_000_000);
+        // Code compiles once per place it is written, however many screens and delegates run it.
+        Assert.InRange(compiled, 0, 38);
     }
 
     private sealed record Result(double Milliseconds, long AllocatedBytes);
