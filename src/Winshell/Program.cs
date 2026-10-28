@@ -163,7 +163,8 @@ namespace Winshell
 
                 Config selection:
                   -p, --path <path>      a shell.qml, or the folder it is in
-                  -c, --config <name>    a named config in {ConfigBase()}
+                  -c, --config <name>    a named config in {ConfigPaths.Root()}
+                                         ({ConfigPaths.OverrideVariable} overrides that folder)
                 Instance selection:
                   -i, --id <id>          an instance id, or the start of one
                       --pid <pid>        an instance's process id
@@ -173,14 +174,6 @@ namespace Winshell
                   -v, --verbose          log debug messages
                   -V, --version          print the version
                 """);
-        }
-
-        /// <summary>Where configs live: %XDG_CONFIG_HOME%\winshell, else %USERPROFILE%\.config\winshell.</summary>
-        private static string ConfigBase()
-        {
-            var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-            var root = string.IsNullOrEmpty(xdg) ? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config") : xdg;
-            return System.IO.Path.Combine(root, "winshell");
         }
 
         /// <summary>The root file of the shell to run, or null with a message when there is none.</summary>
@@ -198,7 +191,8 @@ namespace Winshell
                 error = $"No shell.qml at {full}";
                 return null;
             }
-            var baseDir = ConfigBase();
+            CopyLegacyConfig();
+            var baseDir = ConfigPaths.Root();
             if (o.Config is { } name)
             {
                 var named = System.IO.Path.Combine(baseDir, name, "shell.qml");
@@ -226,6 +220,23 @@ namespace Winshell
             }
             // No config yet: run the Windows 11 shell Winshell ships with.
             return DefaultShell.Install();
+        }
+
+        /// <summary>Copies <c>%USERPROFILE%\.config\winshell</c> into the default config root once. A set override skips it.</summary>
+        private static void CopyLegacyConfig()
+        {
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConfigPaths.OverrideVariable)))
+                return;
+            try
+            {
+                var message = ConfigPaths.MigrateLegacy();
+                if (message is not null)
+                    Console.Error.WriteLine(message);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not copy the old configuration from \"{ConfigPaths.LegacyRoot()}\": {e.Message}");
+            }
         }
 
         private static int RunShell(Options o, string[] originalArgs)

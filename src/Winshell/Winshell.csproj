@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="DefaultShell\**\*" LogicalName="DefaultShell/%(RecursiveDir)%(Filename)%(Extension)" />
+    <InternalsVisibleTo Include="Winshell.Tests" />
   </ItemGroup>
 </Project>

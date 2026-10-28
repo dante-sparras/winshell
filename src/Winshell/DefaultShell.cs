@@ -1,3 +1,5 @@
+using Winshell.Runtime.Shell;
+
 namespace Winshell;
 
 /// <summary>The shell Winshell runs when there is no config: a Windows 11 style bar, written out as QML.</summary>
@@ -6,7 +8,7 @@ internal static class DefaultShell
     /// <summary>Writes the default shell's files to a folder of their own and returns its shell.qml.</summary>
     public static string Install()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "winshell", "default-shell");
+        var dir = ShellLocations.DefaultShellRoot;
         Directory.CreateDirectory(dir);
         var assembly = typeof(DefaultShell).Assembly;
         foreach (var name in assembly.GetManifestResourceNames())

@@ -82,10 +82,9 @@ public sealed class ShellHost : IShellHost, IDisposable
         AppId = string.IsNullOrEmpty(pragmas.AppId) ? (string.IsNullOrEmpty(appFromEnv) ? "winshell" : appFromEnv) : pragmas.AppId;
         LaunchTime = DateTime.Now;
         InstanceId = Base36(Environment.ProcessId) + Base36(new DateTimeOffset(LaunchTime).ToUnixTimeSeconds());
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        DataDir = Expand(pragmas.DataDir, Path.Combine(local, "winshell", "data")) ?? Path.Combine(local, "winshell", "data", "by-shell", ShellId);
-        StateDir = Expand(pragmas.StateDir, Path.Combine(local, "winshell", "state")) ?? Path.Combine(local, "winshell", "state", "by-shell", ShellId);
-        CacheDir = Expand(pragmas.CacheDir, Path.Combine(local, "winshell", "cache")) ?? Path.Combine(local, "winshell", "cache", "by-shell", ShellId);
+        DataDir = Expand(pragmas.DataDir, ShellLocations.DataRoot) ?? Path.Combine(ShellLocations.DataRoot, "by-shell", ShellId);
+        StateDir = Expand(pragmas.StateDir, ShellLocations.StateRoot) ?? Path.Combine(ShellLocations.StateRoot, "by-shell", ShellId);
+        CacheDir = Expand(pragmas.CacheDir, ShellLocations.CacheRoot) ?? Path.Combine(ShellLocations.CacheRoot, "by-shell", ShellId);
         foreach (var (k, v) in pragmas.Env)
             Environment.SetEnvironmentVariable(k, v);
     }

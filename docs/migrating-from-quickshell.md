@@ -263,8 +263,9 @@ Stopping clears the preview and all retained pixels. Export with `saveToFile()` 
 
 ## Everything else
 
-- The configuration lives in `%XDG_CONFIG_HOME%\winshell` or `%USERPROFILE%\.config\winshell`. A `quickshell` folder there is no longer used.
-- The environment variables are `WINSHELL_APP_ID`, `WINSHELL_DISABLE_FILE_WATCHER` and `WINSHELL_NO_RELOAD_POPUP`, not `QS_APP_ID`, `QS_DISABLE_FILE_WATCHER` and `QS_NO_RELOAD_POPUP`.
+- Configurations live in `%APPDATA%\winshell`. `WINSHELL_CONFIG_DIR` selects another folder for that run. The first time Winshell uses the default folder, it copies `%USERPROFILE%\.config\winshell` when that folder exists, and it leaves the old folder in place. `%XDG_CONFIG_HOME%` is not read. A `quickshell` folder is not used.
+- Cache is `%LOCALAPPDATA%\winshell\cache`, state is `%LOCALAPPDATA%\winshell\state`, per-shell data is `%LOCALAPPDATA%\winshell\data`, and an instance's log is `%LOCALAPPDATA%\winshell\run\<id>\log.txt`. `Shell.dataDir`, `Shell.stateDir`, and `Shell.cacheDir` are those per-shell folders. `//@ pragma DataDir`, `StateDir`, and `CacheDir` still override them; `$BASE` is the folder above `by-shell`.
+- The environment variables are `WINSHELL_CONFIG_DIR`, `WINSHELL_APP_ID`, `WINSHELL_DISABLE_FILE_WATCHER` and `WINSHELL_NO_RELOAD_POPUP`, not `XDG_CONFIG_HOME`, `QS_APP_ID`, `QS_DISABLE_FILE_WATCHER` and `QS_NO_RELOAD_POPUP`.
 - `Shell.appId` is `winshell` unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets it.
 - `Shell.hasVersion` and `//@ if hasVersion(...)` still answer for version 0.3.
 - Log categories are short: `audio`, `media`, `power`, `hotkey`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.

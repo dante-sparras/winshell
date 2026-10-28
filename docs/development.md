@@ -34,9 +34,22 @@ A running shell reads these. None is needed to build or test.
 
 | Variable | What it does |
 | --- | --- |
+| `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. This run does not copy an old `~/.config/winshell`. |
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
 | `WINSHELL_NO_RELOAD_POPUP` | `1` hides the popup that reports a reload. |
+
+## Where files live
+
+| What | Where |
+| --- | --- |
+| User configurations | `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR` when it is set |
+| Cache | `%LOCALAPPDATA%\winshell\cache` |
+| State | `%LOCALAPPDATA%\winshell\state` |
+| Per-shell data | `%LOCALAPPDATA%\winshell\data` |
+| Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
+
+The first launch that uses the default config folder copies `%USERPROFILE%\.config\winshell` into `%APPDATA%\winshell` when the old folder exists. The copy leaves the old folder in place, and it does not replace a file already in the new folder.
 
 ## Releasing
 
