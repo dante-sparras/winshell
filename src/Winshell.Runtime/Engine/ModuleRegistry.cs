@@ -24,6 +24,9 @@ public sealed class TypeEntry
     public Type? AttachedType { get; init; }
 
     public IReadOnlyDictionary<string, int> Enums { get; init; } = new Dictionary<string, int>();
+
+    /// <summary>The <c>toString(value)</c> of an enum type, such as <c>UPowerDeviceState.toString(state)</c>.</summary>
+    public Func<int, string>? EnumToString { get; init; }
 }
 
 public sealed class QmlModule(string name)

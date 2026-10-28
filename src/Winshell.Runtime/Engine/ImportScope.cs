@@ -217,6 +217,8 @@ public sealed class TypeObject : ObjectInstance
         var name = property.AsString();
         if (Entry.Enums.TryGetValue(name, out var value))
             return value;
+        if (name == "toString" && Entry.EnumToString is { } toString)
+            return new Jint.Runtime.Interop.ClrFunction(Engine, name, (_, args) => toString(args.Length > 0 ? (int)TypeConverter.ToNumber(args[0]) : 0));
         if (Attached is { } attached)
         {
             var wrapper = (QObjectWrapper)_runtime.Wrap(attached);

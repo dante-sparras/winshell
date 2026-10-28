@@ -183,6 +183,9 @@ public static partial class ServiceModules
 {
     public static void Register(ModuleRegistry registry)
     {
+        Services.Power.UPowerModule.Register(registry);
+        Services.Network.NetworkingModule.Register(registry);
+        Services.Bluetooth.BluetoothModule.Register(registry);
         foreach (var register in Registrations)
             register(registry);
     }
