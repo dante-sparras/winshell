@@ -21,7 +21,7 @@ public class Control : Item, IHoverTarget
     private double? _autoImplicitWidth, _autoImplicitHeight;
     private bool _userImplicitWidth, _userImplicitHeight;
     private bool _settingImplicit;
-    private int _focusPolicy;
+    private int? _focusPolicy;
     private bool _wheelEnabled;
     private bool _inLayout;
 
@@ -506,14 +506,48 @@ public class Control : Item, IHoverTarget
     {
     }
 
+    /// <summary>How the control takes focus: <c>Qt.TabFocus</c>, <c>Qt.ClickFocus</c>, both or neither.</summary>
     [Qml]
-    public int FocusPolicy { get { Track(); return _focusPolicy; } set => SetField(ref _focusPolicy, value); }
+    public int FocusPolicy
+    {
+        get { Track(); return _focusPolicy ?? DefaultFocusPolicy; }
+        set
+        {
+            if (_focusPolicy == value)
+                return;
+            _focusPolicy = value;
+            NotifyChanged("focusPolicy");
+            NotifyChanged("activeFocusOnTab");
+        }
+    }
+
+    /// <summary>The focus policy when QML sets none. Interactive controls take <c>Qt.StrongFocus</c>.</summary>
+    protected virtual int DefaultFocusPolicy => 0;
+
+    protected const int StrongFocus = 11;
+
+    protected override bool DefaultActiveFocusOnTab => (FocusPolicy & 1) != 0;
 
     [Qml]
     public int FocusReason { get; set; }
 
+    /// <summary>Whether the control has focus that came from the keyboard, so it shows a focus rectangle.</summary>
     [Qml]
-    public bool VisualFocus => false;
+    public bool VisualFocus
+    {
+        get { Track(); return ActiveFocus && Host is Scene { FocusVisible: true }; }
+    }
+
+    internal void VisualFocusChanged() => NotifyChanged("visualFocus");
+
+    /// <summary>The corner radius of the control's shape, which its focus rectangle follows.</summary>
+    public virtual float FocusRadius => Fluent.CornerRadius;
+
+    protected override void OnActiveFocusChanged(bool focused)
+    {
+        base.OnActiveFocusChanged(focused);
+        VisualFocusChanged();
+    }
 
     [Qml]
     public bool WheelEnabled { get { Track(); return _wheelEnabled; } set => SetField(ref _wheelEnabled, value); }

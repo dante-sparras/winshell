@@ -47,6 +47,7 @@ public static partial class StandardModules
             .Type<WheelHandler>("WheelHandler")
             .Type<DragHandler>("DragHandler")
             .Uncreatable<KeysAttached>("Keys", "Keys is only available via attached properties", attached: _ => new KeysAttached(), attachedType: typeof(KeysAttached))
+            .Uncreatable<AccessibleAttached>("Accessible", "Accessible is only available via attached properties", attached: o => new AccessibleAttached(o), attachedType: typeof(AccessibleAttached))
             .Add(EnumType("Easing", Easing.Enums, quick.Name))
             .Add(EnumType("Font", Enum.GetValues<FontGroup.Weights>().Select(w => new KeyValuePair<string, int>(w.ToString(), (int)w))
                 .Concat([new("MixedCase", 0), new("AllUppercase", 1), new("AllLowercase", 2), new("SmallCaps", 3), new("Capitalize", 4)]), quick.Name));

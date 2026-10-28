@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Winshell.Platform.Windows.Accessibility;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -19,6 +20,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private GCHandle _self;
     private IWindowClient _client;
     private CompositionSurface? _surface;
+    private WindowAutomation _automation;
     private double _scale = 1;
     private int _physicalWidth = 1;
     private int _physicalHeight = 1;
@@ -51,6 +53,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         Handle = Win32.CreateWindowExW(exStyle, ClassName, "", style, 0, 0, 1, 1, 0, 0, Win32.GetModuleHandleW(null), 0);
         if (Handle == 0)
             throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
+        // Messages reach OnMessage once the window points back at this object.
+        _automation = new WindowAutomation(this, client.Scene, platform.Loop, platform.Log);
         _self = GCHandle.Alloc(this);
         Win32.SetWindowLongPtr(Handle, Win32.GWLP_USERDATA, GCHandle.ToIntPtr(_self));
         _scale = Win32.GetDpiForWindow(Handle) / 96.0;
@@ -82,6 +86,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     public void Rebind(IWindowClient client)
     {
         _client = client;
+        // A reload brings a new scene: its items are a new tree.
+        _automation.Dispose();
+        _automation = new WindowAutomation(this, client.Scene, _platform.Loop, _platform.Log);
         RequestFrame();
     }
 
@@ -589,6 +596,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         {
             _platform.Log.Error("render", $"Could not draw a frame: {e.Message}");
         }
+        _automation.AfterFrame();
     }
 
     // Messages
@@ -787,6 +795,13 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED:
                 _platform.SystemChanged(msg, wParam);
                 return null;
+            case Win32.WM_GETOBJECT:
+                return _automation.GetObject(wParam, lParam);
+        }
+        if (msg == WindowAutomation.RunMessage)
+        {
+            _automation.RunPosted(lParam);
+            return 0;
         }
         if (msg == TaskbarCreated && _kind == WindowKind.Panel)
         {
@@ -880,6 +895,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             return;
         _platform.UpdatePopupGrab(this, false);
         RemoveAppBar();
+        _automation.Dispose();
         _surface?.Dispose();
         _surface = null;
         var h = Handle;

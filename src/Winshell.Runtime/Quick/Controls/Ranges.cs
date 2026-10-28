@@ -13,6 +13,8 @@ public interface IKeepsPointerGrab
 [QmlSignal("moved")]
 public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, IKeepsPointerGrab
 {
+    protected override int DefaultFocusPolicy => StrongFocus;
+
     private double _from, _to = 1, _value, _stepSize;
     private int _snapMode;
     private int _orientation = 1;
@@ -932,6 +934,8 @@ public sealed class SpinButton : QObject
 [QmlSignal("valueModified")]
 public sealed class SpinBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 {
+    protected override int DefaultFocusPolicy => StrongFocus;
+
     private int _from, _to = 99, _value, _stepSize = 1;
     private bool _editable, _wrap;
     private object? _textFromValue, _valueFromText;
