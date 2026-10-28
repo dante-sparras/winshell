@@ -250,7 +250,7 @@ public sealed class Scene : IItemHost
         if (_grabber is not null && _grabberItem is not null)
         {
             // A Flickable under the grabber can take a drag over.
-            if (_grabber is not Flickable && !(_grabber is MouseArea { PreventStealing: true }))
+            if (_grabber is not Flickable && !(_grabber is MouseArea { PreventStealing: true }) && !(_grabber is Controls.IKeepsPointerGrab { KeepsGrab: true }))
             {
                 for (var p = _grabberItem.ParentItem; p is not null; p = p.ParentItem)
                 {

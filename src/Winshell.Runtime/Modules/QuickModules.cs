@@ -51,6 +51,8 @@ public static partial class StandardModules
             .Add(EnumType("Font", Enum.GetValues<FontGroup.Weights>().Select(w => new KeyValuePair<string, int>(w.ToString(), (int)w))
                 .Concat([new("MixedCase", 0), new("AllUppercase", 1), new("AllLowercase", 2), new("SmallCaps", 3), new("Capitalize", 4)]), quick.Name));
 
+        RegisterControlsModules(registry);
+
         var models = registry.Module("QtQml.Models");
         models.Type<ListModel>("ListModel").Type<ListElement>("ListElement");
 
