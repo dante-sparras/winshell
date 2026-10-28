@@ -16,13 +16,7 @@ public class QsMenuHandle : QObject
     }
 
     /// <summary>The point on the virtual desktop, in physical pixels, of a point relative to a window.</summary>
-    public static (int X, int Y)? ScreenPoint(QsWindow? window, double x, double y)
-    {
-        if (window?.Backend is not { } backend)
-            return null;
-        var ratio = window.DevicePixelRatio;
-        return ((int)Math.Round((backend.Origin.X + x) * ratio), (int)Math.Round((backend.Origin.Y + y) * ratio));
-    }
+    public static (int X, int Y)? ScreenPoint(QsWindow? window, double x, double y) => window?.Backend?.MapToScreen(x, y);
 }
 
 /// <summary>Quickshell's <c>QsMenuEntry</c>: one entry of a menu.</summary>

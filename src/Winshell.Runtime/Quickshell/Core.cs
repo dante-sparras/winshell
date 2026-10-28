@@ -23,19 +23,24 @@ public sealed class ShellScreen : QObject
         var old = _info;
         _info = info;
         if (old.Name != info.Name) NotifyChanged("name");
+        if (old.Model != info.Model) NotifyChanged("model");
         if (old.Geometry != info.Geometry)
         {
             NotifyChanged("x");
             NotifyChanged("y");
             NotifyChanged("width");
             NotifyChanged("height");
+            NotifyChanged("orientation");
+            NotifyChanged("primaryOrientation");
         }
-        if (old.DevicePixelRatio != info.DevicePixelRatio)
+        if (old.Geometry != info.Geometry || old.DevicePixelRatio != info.DevicePixelRatio || old.PhysicalWidthMm != info.PhysicalWidthMm)
         {
             NotifyChanged("devicePixelRatio");
             NotifyChanged("logicalPixelDensity");
             NotifyChanged("physicalPixelDensity");
         }
+        if (old.WorkArea != info.WorkArea) NotifyChanged("workArea");
+        if (old.RefreshRate != info.RefreshRate) NotifyChanged("refreshRate");
     }
 
     [Qml] public string Name { get { Track(); return _info.Name; } }
@@ -53,6 +58,12 @@ public sealed class ShellScreen : QObject
     [Qml] public double Width { get { Track(); return _info.Geometry.Width; } }
 
     [Qml] public double Height { get { Track(); return _info.Geometry.Height; } }
+
+    /// <summary>
+    /// A Windows extension: the part of the screen windows maximize into, without the taskbar and the zones other
+    /// app bars reserve, in the same logical coordinates as <c>x</c> and <c>y</c>.
+    /// </summary>
+    [Qml] public QRect WorkArea { get { Track(); return _info.WorkArea; } }
 
     [Qml] public double DevicePixelRatio { get { Track(); return _info.DevicePixelRatio; } }
 
@@ -76,7 +87,7 @@ public sealed class ShellScreen : QObject
         }
     }
 
-    [Qml] public int Orientation => _info.Geometry.Width >= _info.Geometry.Height ? 2 : 1;
+    [Qml] public int Orientation { get { Track(); return _info.Geometry.Width >= _info.Geometry.Height ? 2 : 1; } }
 
     [Qml] public int PrimaryOrientation => Orientation;
 

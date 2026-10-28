@@ -21,6 +21,7 @@ public abstract class QsWindow : Reloadable, IWindowClient, IGlobalPosition, IPr
     private QColor _color = QColor.White;
     private Region? _mask;
     private ShellScreen? _screen;
+    private string? _shownOnScreenId;
     private bool _updatesEnabled = true;
     private double _devicePixelRatio = 1;
     private bool _opaqueSet;
@@ -153,11 +154,21 @@ public abstract class QsWindow : Reloadable, IWindowClient, IGlobalPosition, IPr
     [Qml]
     public virtual ShellScreen? Screen
     {
-        get { Track(); return _screen ?? Engine?.GetService<ScreenRegistry>()?.Primary; }
+        get { Track(); return _screen ?? ShownOn; }
         set
         {
             if (SetField(ref _screen, value))
                 OnPlacementChanged();
+        }
+    }
+
+    /// <summary>The screen the window is on now, which a dragged window or an unplugged screen can make differ from <see cref="Screen"/>.</summary>
+    internal ShellScreen? ShownOn
+    {
+        get
+        {
+            var screens = Engine?.GetService<ScreenRegistry>();
+            return (_shownOnScreenId is { } id ? screens?.Find(id) : null) ?? _screen ?? screens?.Primary;
         }
     }
 
@@ -372,7 +383,6 @@ public abstract class QsWindow : Reloadable, IWindowClient, IGlobalPosition, IPr
             return;
         if (SetField(ref _devicePixelRatio, devicePixelRatio, nameof(DevicePixelRatio)))
             Scene.DevicePixelRatio = devicePixelRatio;
-        Scene.DevicePixelRatio = devicePixelRatio;
         var changed = false;
         if (_width != width)
         {
@@ -435,6 +445,9 @@ public abstract class QsWindow : Reloadable, IWindowClient, IGlobalPosition, IPr
 
     public void OnScreenChanged(string screenId)
     {
+        if (IsDestroyed || _shownOnScreenId == screenId)
+            return;
+        _shownOnScreenId = screenId;
         if (_screen is null)
             NotifyChanged("screen");
     }

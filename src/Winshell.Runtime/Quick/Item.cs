@@ -580,8 +580,16 @@ public class Item : QObject
             host.SetFocusItem(this);
     }
 
+    /// <summary>The host changed, or its pixel ratio did.</summary>
     protected virtual void OnHostChanged()
     {
+    }
+
+    internal void PixelRatioChanged()
+    {
+        foreach (var child in _children.Snapshot)
+            child.PixelRatioChanged();
+        OnHostChanged();
     }
 
     /// <summary>Schedules a repaint of the window this item is in.</summary>

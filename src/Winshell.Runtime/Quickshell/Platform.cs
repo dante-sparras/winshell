@@ -2,7 +2,10 @@ using SkiaSharp;
 
 namespace Winshell.Runtime.Quickshell;
 
-/// <summary>A monitor, as the platform reports it. Coordinates are logical pixels on the virtual desktop.</summary>
+/// <summary>
+/// A monitor, as the platform reports it. Coordinates are logical pixels on the virtual desktop: a monitor keeps its
+/// physical top-left corner and its size is divided by its scale, so monitors of mixed DPI never overlap.
+/// </summary>
 public sealed record ScreenInfo(
     string Id,
     string Name,
@@ -113,6 +116,9 @@ public interface IWindowBackend : IDisposable
 
     /// <summary>The window's origin on the virtual desktop, in logical pixels.</summary>
     QPoint Origin { get; }
+
+    /// <summary>A point in logical window coordinates, in physical pixels on the virtual desktop.</summary>
+    (int X, int Y) MapToScreen(double x, double y);
 }
 
 /// <summary>What a window backend tells the window it shows.</summary>

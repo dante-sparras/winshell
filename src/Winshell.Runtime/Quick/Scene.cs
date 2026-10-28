@@ -28,7 +28,21 @@ public sealed class Scene : IItemHost
 
     public QObject? WindowObject { get; }
 
-    public double DevicePixelRatio { get; set; } = 1;
+    /// <summary>Physical pixels per logical pixel. Items that raster at it, as images and canvases do, redraw when it changes.</summary>
+    public double DevicePixelRatio
+    {
+        get => _devicePixelRatio;
+        set
+        {
+            if (_devicePixelRatio == value)
+                return;
+            _devicePixelRatio = value;
+            Root.PixelRatioChanged();
+            RequestUpdate();
+        }
+    }
+
+    private double _devicePixelRatio = 1;
 
     public Item? FocusItem => _focusItem;
 

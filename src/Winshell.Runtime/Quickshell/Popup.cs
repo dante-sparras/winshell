@@ -214,7 +214,8 @@ public sealed class PopupWindow : QsWindow, IItemContainerChild
         using var _ = DependencyTracker.Suspend();
         var origin = parent.GlobalOrigin;
         var anchor = Anchor.AnchorRectInWindow();
-        var screen = parent.Screen?.Info;
+        // The parent's origin is in the coordinates of the screen it is on, so the popup is placed and clamped there.
+        var screen = parent.ShownOn?.Info;
         var rect = Place(
             new QRect(anchor.X + origin.X, anchor.Y + origin.Y, anchor.Width, anchor.Height),
             ImplicitWidth,

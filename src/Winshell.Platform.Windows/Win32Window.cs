@@ -12,6 +12,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private const string ClassName = "WinshellWindow";
     private static bool _registered;
     private static readonly uint AppBarMessage = Win32.WM_APP + 1;
+    private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
 
     private readonly WindowsPlatform _platform;
     private readonly WindowKind _kind;
@@ -37,6 +38,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _clickThrough;
     private bool _focusable;
     private QPoint _origin;
+    private string _screenId = "";
+    private bool _placing;
 
     public Win32Window(WindowsPlatform platform, WindowKind kind, IWindowClient client)
     {
@@ -143,79 +146,34 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     {
         if (_panel is not { } p)
             return;
-        var screenId = p.Screen?.Id ?? _platform.PrimaryScreenId;
-        var monitor = Screens.PhysicalBounds(screenId, out var work);
-        if (monitor.Width == 0)
+        // A panel whose screen was unplugged moves to the primary screen until that screen comes back.
+        var monitor = (p.Screen is { } screen ? Screens.Find(screen.Id) : null) ?? Screens.Find(_platform.PrimaryScreenId);
+        if (monitor is null)
             return;
-        var monitorHandle = Screens.HandleOf(screenId);
-        Win32.GetDpiForMonitor(monitorHandle, 0, out var dpi, out _);
-        _scale = dpi == 0 ? 1 : dpi / 96.0;
-        var s = _scale;
+        _scale = monitor.Scale;
         var edge = ExclusionEdge(p.Anchors);
-        var zone = (int)Math.Round(p.ExclusiveZone * s);
-        RECT baseRect;
+        var zone = (int)Math.Round(p.ExclusiveZone * _scale);
+        RECT area;
         if (p.ExclusionMode == 1)
         {
             // Ignore: the whole monitor, over the taskbar and other bars.
             RemoveAppBar();
-            baseRect = monitor;
+            area = monitor.Bounds;
         }
         else if (edge is { } e && zone > 0 && _visible)
         {
-            baseRect = ReserveAppBar(e, zone, monitor);
+            area = ReserveAppBar(e, zone, monitor.Bounds);
         }
         else
         {
             RemoveAppBar();
-            baseRect = work.Width > 0 ? work : monitor;
+            area = monitor.Area;
         }
-
-        var anchors = p.Anchors;
-        var ml = (int)Math.Round(p.MarginLeft * s);
-        var mr = (int)Math.Round(p.MarginRight * s);
-        var mt = (int)Math.Round(p.MarginTop * s);
-        var mb = (int)Math.Round(p.MarginBottom * s);
-        var w = (int)Math.Round(p.Width * s);
-        var h = (int)Math.Round(p.Height * s);
-        int x, y;
-        if (anchors.HasFlag(Edges.Left) && anchors.HasFlag(Edges.Right))
-        {
-            x = baseRect.Left + ml;
-            w = baseRect.Width - ml - mr;
-        }
-        else if (anchors.HasFlag(Edges.Left))
-        {
-            x = baseRect.Left + ml;
-        }
-        else if (anchors.HasFlag(Edges.Right))
-        {
-            x = baseRect.Right - w - mr;
-        }
-        else
-        {
-            x = baseRect.Left + (baseRect.Width - w) / 2;
-        }
-        if (anchors.HasFlag(Edges.Top) && anchors.HasFlag(Edges.Bottom))
-        {
-            y = baseRect.Top + mt;
-            h = baseRect.Height - mt - mb;
-        }
-        else if (anchors.HasFlag(Edges.Top))
-        {
-            y = baseRect.Top + mt;
-        }
-        else if (anchors.HasFlag(Edges.Bottom))
-        {
-            y = baseRect.Bottom - h - mb;
-        }
-        else
-        {
-            y = baseRect.Top + (baseRect.Height - h) / 2;
-        }
+        var rect = DesktopSpace.Anchor(area, p, _scale);
         var topmost = p.AboveWindows && !_fullscreenAppActive;
         SetExStyle(Win32.WS_EX_TOPMOST, topmost);
         var after = p.AboveWindows ? (topmost ? Win32.HWND_TOPMOST : Win32.HWND_NOTOPMOST) : Win32.HWND_BOTTOM;
-        Move(x, y, Math.Max(1, w), Math.Max(1, h), after);
+        Move(rect.Left, rect.Top, rect.Width, rect.Height, after);
     }
 
     private static Edges? ExclusionEdge(Edges anchors)
@@ -311,17 +269,15 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     {
         _popup = placement;
         SetExStyle(Win32.WS_EX_NOACTIVATE, !placement.GrabFocus);
-        var monitor = Win32.MonitorFromPoint(new POINT { X = (int)(placement.Rect.X * _scale), Y = (int)(placement.Rect.Y * _scale) }, Win32.MONITOR_DEFAULTTONEAREST);
-        if (placement.Screen is { } screen)
-        {
-            var handle = Screens.HandleOf(screen.Id);
-            if (handle != 0)
-                monitor = handle;
-        }
-        Win32.GetDpiForMonitor(monitor, 0, out var dpi, out _);
-        _scale = dpi == 0 ? 1 : dpi / 96.0;
-        var r = placement.Rect;
-        Move((int)Math.Round(r.X * _scale), (int)Math.Round(r.Y * _scale), (int)Math.Round(r.Width * _scale), (int)Math.Round(r.Height * _scale), Win32.HWND_TOPMOST);
+        // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
+        var monitors = Screens.Enumerate();
+        var at = DesktopSpace.MonitorAt(new QPoint(placement.Rect.X, placement.Rect.Y), monitors.Select(m => m.Info.Geometry).ToList());
+        var monitor = monitors.FirstOrDefault(m => m.Info.Id == placement.Screen?.Id) ?? (at is { } i ? monitors[i] : monitors.FirstOrDefault());
+        if (monitor is null)
+            return;
+        _scale = monitor.Scale;
+        var r = DesktopSpace.ToPhysical(placement.Rect, monitor.Bounds, _scale);
+        Move(r.Left, r.Top, r.Width, r.Height, Win32.HWND_TOPMOST);
         _platform.UpdatePopupGrab(this, _visible && placement.GrabFocus);
     }
 
@@ -342,9 +298,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             int x, y;
             if (first)
             {
-                var screenId = placement.Screen?.Id ?? _platform.PrimaryScreenId;
-                var monitor = Screens.PhysicalBounds(screenId, out var work);
-                var area = work.Width > 0 ? work : monitor;
+                var area = Screens.Find(placement.Screen?.Id ?? _platform.PrimaryScreenId)?.Area ?? default;
                 x = area.Left + (area.Width - client.Width) / 2;
                 y = area.Top + (area.Height - client.Height) / 2;
             }
@@ -370,9 +324,35 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     private double _lastFloatingWidth = -1, _lastFloatingHeight = -1;
 
+    private void Replace()
+    {
+        if (Handle == 0)
+            return;
+        if (_kind == WindowKind.Panel)
+            PlacePanel();
+        else if (_popup is { } popup)
+            SetPopup(popup);
+    }
+
+    public (int X, int Y) MapToScreen(double x, double y)
+    {
+        var pt = new POINT { X = (int)Math.Round(x * _scale), Y = (int)Math.Round(y * _scale) };
+        Win32.ClientToScreen(Handle, ref pt);
+        return (pt.X, pt.Y);
+    }
+
     private void Move(int x, int y, int w, int h, nint after)
     {
-        Win32.SetWindowPos(Handle, after, x, y, w, h, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
+        // Moving onto a monitor of another DPI sends WM_DPICHANGED from inside SetWindowPos; this rect is already right for it.
+        _placing = true;
+        try
+        {
+            Win32.SetWindowPos(Handle, after, x, y, w, h, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
+        }
+        finally
+        {
+            _placing = false;
+        }
         UpdateSize();
     }
 
@@ -389,7 +369,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         Win32.GetClientRect(Handle, out var rc);
         var origin = new POINT();
         Win32.ClientToScreen(Handle, ref origin);
-        _origin = new QPoint(origin.X / _scale, origin.Y / _scale);
+        var (device, monitor) = Screens.Of(Handle);
+        _origin = DesktopSpace.ToLogical(origin, monitor, _scale);
         var changed = rc.Width != _physicalWidth || rc.Height != _physicalHeight;
         _physicalWidth = Math.Max(1, rc.Width);
         _physicalHeight = Math.Max(1, rc.Height);
@@ -397,6 +378,12 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         _client.OnMoved(_origin.X, _origin.Y);
         if (changed)
             RenderNow();
+        // Last, since a binding on the window's screen can place the window again.
+        if (device != _screenId)
+        {
+            _screenId = device;
+            _client.OnScreenChanged(device);
+        }
     }
 
     public void SetVisible(bool visible)
@@ -620,13 +607,20 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 return null;
             case Win32.WM_DPICHANGED:
                 {
-                    _scale = Win32.HighWord(wParam) / 96.0;
+                    _scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
                     var suggested = *(RECT*)lParam;
                     if (_kind == WindowKind.Floating)
+                    {
+                        // The user dragged it to another monitor, or that monitor's scale changed: Windows' rect keeps the logical size.
                         Win32.SetWindowPos(Handle, 0, suggested.Left, suggested.Top, suggested.Width, suggested.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-                    else if (_kind == WindowKind.Panel)
-                        PlacePanel();
+                    }
+                    else if (!_placing)
+                    {
+                        // A panel or popup only changes DPI on its own when its monitor's scale changes: place it again from its logical size.
+                        _platform.Loop.Post(Replace);
+                    }
                     UpdateSize();
+                    _platform.ScreensMayHaveChanged();
                     return 0;
                 }
             case Win32.WM_MOUSEACTIVATE:
@@ -758,8 +752,15 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 RenderNow();
                 return null;
             case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED:
-                _platform.SystemChanged(msg);
+                _platform.SystemChanged(msg, wParam);
                 return null;
+        }
+        if (msg == TaskbarCreated && _kind == WindowKind.Panel)
+        {
+            // Explorer restarted and forgot every app bar: reserve the edge again.
+            RemoveAppBar();
+            _platform.Loop.Post(PlacePanel);
+            return 0;
         }
         if (msg == AppBarMessage)
         {

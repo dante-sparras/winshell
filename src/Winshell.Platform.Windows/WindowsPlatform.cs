@@ -25,7 +25,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         Log = log;
         _current = this;
         Win32.SetProcessDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        _screens = Platform.Windows.Screens.Enumerate().Select(s => s.Info).ToList();
+        _screens = Platform.Windows.Screens.Enumerate().Select(m => m.Info).ToList();
         ReadTheme();
         ListenForClipboard();
         SystemEvents.DisplaySettingsChanged += (_, _) => Loop.Post(RefreshScreens);
@@ -65,7 +65,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     private void RefreshScreens()
     {
-        var next = Platform.Windows.Screens.Enumerate().Select(s => s.Info).ToList();
+        var next = Platform.Windows.Screens.Enumerate().Select(m => m.Info).ToList();
         if (next.SequenceEqual(_screens))
             return;
         _screens = next;
@@ -73,22 +73,35 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         WorkAreaMayHaveChanged();
     }
 
-    internal void SystemChanged(uint message)
+    internal void SystemChanged(uint message, nint wParam)
     {
         if (message == Win32.WM_DISPLAYCHANGE)
         {
-            _screenRefresh?.Dispose();
-            _screenRefresh = Loop.Schedule(TimeSpan.FromMilliseconds(200), RefreshScreens);
+            ScreensMayHaveChanged();
         }
         else if (message == Win32.WM_SETTINGCHANGE)
         {
-            WorkAreaMayHaveChanged();
+            // The taskbar moved, resized, or started or stopped hiding.
+            if (wParam == Win32.SPI_SETWORKAREA)
+                WorkAreaMayHaveChanged();
+            else
+                ScreensMayHaveChanged();
             Loop.Post(ReadTheme);
         }
         else
         {
             Loop.Post(ReadTheme);
         }
+    }
+
+    /// <summary>
+    /// Reads the monitors again soon, once a burst of display messages settles: a monitor was plugged in or out, or
+    /// its resolution or scale changed. Panels are placed again only if something changed.
+    /// </summary>
+    internal void ScreensMayHaveChanged()
+    {
+        _screenRefresh?.Dispose();
+        _screenRefresh = Loop.Schedule(TimeSpan.FromMilliseconds(200), RefreshScreens);
     }
 
     /// <summary>
