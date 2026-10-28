@@ -153,6 +153,46 @@ public sealed class SystemTrayTests : IDisposable
     }
 
     [Fact]
+    public void An_icon_from_a_resource_is_drawn_again_at_the_size_asked_for()
+    {
+        // A 16-pixel icon from shell32's resources, as an app loads it at 100%, and a copy that no longer knows its resource.
+        var shell32 = LoadLibraryExW(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 0, 0x2 | 0x20);
+        var loaded = LoadImageW(shell32, 4, 1, 16, 16, 0);
+        var copied = CopyIcon(loaded);
+        TrayIconProvider.Host = _host;
+        try
+        {
+            Call(TrayProtocol.Add, TrayProtocol.NIF_ICON, icon: loaded, id: 1);
+            Call(TrayProtocol.Add, TrayProtocol.NIF_ICON, icon: copied, id: 2);
+            var fromResource = _host.Icons.Single(i => i.Id == 1);
+            var drawn = _host.Icons.Single(i => i.Id == 2);
+            Assert.NotNull(fromResource.Resource);
+            Assert.Null(drawn.Resource);
+            Assert.Equal(16, fromResource.Image?.Width);
+
+            // An Image without a sourceSize gets the app's bitmap; with one, sourceSize times the screen's scale.
+            Assert.Equal(16, Width(fromResource, 0));
+            Assert.Equal(16, Width(fromResource, 16));
+            Assert.Equal(24, Width(fromResource, 24));
+            Assert.Equal(32, Width(fromResource, 32));
+            Assert.Equal(16, Width(drawn, 32));
+        }
+        finally
+        {
+            TrayIconProvider.Host = null;
+            DestroyIcon(copied);
+            DestroyIcon(loaded);
+            FreeLibrary(shell32);
+        }
+
+        static int? Width(TrayIcon icon, int size)
+        {
+            using var image = TrayIconProvider.Instance.Load($"{icon.Key}/{icon.ImageGeneration}", size, size);
+            return image?.Width;
+        }
+    }
+
+    [Fact]
     public void Overflow_settings_match_by_guid_or_by_program_and_id()
     {
         var guid = Guid.NewGuid();
@@ -182,13 +222,28 @@ public sealed class SystemTrayTests : IDisposable
         Assert.All(settings.Where(s => s.ExecutablePath.Length > 0), s => Assert.False(s.ExecutablePath.StartsWith('{'), s.ExecutablePath));
     }
 
-    private void Call(uint message, uint flags, string tip = "", uint state = 0, uint stateMask = 0, string info = "", string infoTitle = "", uint infoFlags = 0, uint timeoutOrVersion = 0)
+    private void Call(uint message, uint flags, string tip = "", uint state = 0, uint stateMask = 0, string info = "", string infoTitle = "", uint infoFlags = 0, uint timeoutOrVersion = 0, nint icon = 0, uint id = 1)
     {
-        var call = TrayProtocol.Read(TrayCall.Build(message, (int)_app, 1, flags, tip: tip, state: state, stateMask: stateMask, info: info,
+        var call = TrayProtocol.Read(TrayCall.Build(message, (int)_app, id, flags, icon: (int)icon, tip: tip, state: state, stateMask: stateMask, info: info,
             infoTitle: infoTitle, infoFlags: infoFlags, timeoutOrVersion: timeoutOrVersion));
         _host.OnNotifyIcon(call!);
         _loop.Process();
     }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern nint LoadLibraryExW(string fileName, nint file, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool FreeLibrary(nint module);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint LoadImageW(nint instance, nint name, uint type, int width, int height, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint CopyIcon(nint icon);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool DestroyIcon(nint icon);
 
     public void Dispose()
     {

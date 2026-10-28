@@ -28,7 +28,11 @@ internal sealed class TrayIcon
     /// <summary>Windows shows the icon in the hidden icons flyout rather than in the taskbar.</summary>
     public bool Overflow { get; set; } = true;
 
+    /// <summary>The icon as the app drew it, at the size it chose.</summary>
     public SKImage? Image { get; set; }
+
+    /// <summary>The module and resource the icon was loaded from, when Windows knows, so it can be drawn at any size.</summary>
+    public IconResource? Resource { get; set; }
 
     public int ImageGeneration { get; set; }
 
@@ -36,6 +40,9 @@ internal sealed class TrayIcon
 
     public string ProgramPath { get; set; } = "";
 }
+
+/// <summary>An icon resource in a program or library: a numeric id, or a name when the id is 0.</summary>
+internal sealed record IconResource(string Module, ushort Id, string Name);
 
 /// <summary>
 /// The window class the host registers, the taskbar class it passes messages on to, and the name that makes one
@@ -327,7 +334,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
                 if ((call.Flags & TrayProtocol.NIF_ICON) != 0)
                 {
                     icon.Image?.Dispose();
+                    // The app may destroy the icon once this returns, so it is read now.
                     icon.Image = IconImage(call.Icon);
+                    icon.Resource = ResourceOf(call.Icon);
                     icon.ImageGeneration++;
                 }
                 Index(icon);
@@ -489,15 +498,66 @@ internal sealed unsafe partial class TrayHost : IDisposable
     }
 
     /// <summary>Draws an icon into a straight-alpha image. Icons without alpha take it from their mask.</summary>
-    private static SKImage? IconImage(nint icon)
+    /// <summary>Where the icon was loaded from, or null for an icon the app drew or copied.</summary>
+    private static IconResource? ResourceOf(nint icon)
+    {
+        var info = new ICONINFOEXW { cbSize = (uint)sizeof(ICONINFOEXW) };
+        if (icon == 0 || !GetIconInfoExW(icon, ref info))
+            return null;
+        if (info.hbmColor != 0)
+            DeleteObject(info.hbmColor);
+        if (info.hbmMask != 0)
+            DeleteObject(info.hbmMask);
+        var module = new string(info.szModName);
+        var name = new string(info.szResName);
+        return module.Length > 0 && (info.wResID != 0 || name.Length > 0) ? new IconResource(module, info.wResID, name) : null;
+    }
+
+    /// <summary>
+    /// Draws an icon from its resource at a size in pixels, so it is sharp at any scale. Null when the module or the
+    /// resource is gone. The library is only mapped as data.
+    /// </summary>
+    public static SKImage? ResourceImage(IconResource resource, int size)
+    {
+        var module = LoadLibraryExW(resource.Module, 0, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+        if (module == 0)
+            return null;
+        try
+        {
+            // Windows picks the image in the icon group closest to the size, and scales it only if none matches.
+            var icon = resource.Id != 0
+                ? LoadImageW(module, resource.Id, IMAGE_ICON, size, size, 0)
+                : LoadImageW(module, resource.Name, IMAGE_ICON, size, size, 0);
+            if (icon == 0)
+                return null;
+            try
+            {
+                return IconImage(icon, size);
+            }
+            finally
+            {
+                DestroyIcon(icon);
+            }
+        }
+        finally
+        {
+            FreeLibrary(module);
+        }
+    }
+
+    /// <summary>Draws an icon into a straight-alpha image, at its own size unless one is given.</summary>
+    private static SKImage? IconImage(nint icon, int size = 0)
     {
         if (icon == 0 || !GetIconInfo(icon, out var info))
             return null;
         try
         {
-            var size = 32;
-            if (GetObjectW(info.hbmColor != 0 ? info.hbmColor : info.hbmMask, sizeof(BITMAP), out var bmp) != 0)
-                size = Math.Clamp(bmp.bmWidth, 16, 256);
+            if (size <= 0)
+            {
+                size = 32;
+                if (GetObjectW(info.hbmColor != 0 ? info.hbmColor : info.hbmMask, sizeof(BITMAP), out var bmp) != 0)
+                    size = Math.Clamp(bmp.bmWidth, 16, 256);
+            }
             var header = new BITMAPINFOHEADER { biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = size, biHeight = -size, biPlanes = 1, biBitCount = 32 };
             var dc = CreateCompatibleDC(0);
             var dib = CreateDIBSection(dc, &header, 0, out var bits, 0, 0);
@@ -550,6 +610,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const uint DI_MASK = 0x1, DI_NORMAL = 0x3;
     private const uint LwaAlpha = 0x2;
+    private const uint LOAD_LIBRARY_AS_DATAFILE = 0x2, LOAD_LIBRARY_AS_IMAGE_RESOURCE = 0x20;
+    private const uint IMAGE_ICON = 1;
     private const uint MSGFLT_ALLOW = 1;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -568,6 +630,20 @@ internal sealed unsafe partial class TrayHost : IDisposable
         public uint yHotspot;
         public nint hbmMask;
         public nint hbmColor;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ICONINFOEXW
+    {
+        public uint cbSize;
+        public int fIcon;
+        public uint xHotspot;
+        public uint yHotspot;
+        public nint hbmMask;
+        public nint hbmColor;
+        public ushort wResID;
+        public fixed char szModName[260];
+        public fixed char szResName[260];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -679,6 +755,27 @@ internal sealed unsafe partial class TrayHost : IDisposable
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetIconInfo(nint icon, out ICONINFO info);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetIconInfoExW(nint icon, ref ICONINFOEXW info);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyIcon(nint icon);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint LoadImageW(nint module, nint name, uint type, int width, int height, uint flags);
+
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint LoadImageW(nint module, string name, uint type, int width, int height, uint flags);
+
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint LoadLibraryExW(string fileName, nint file, uint flags);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FreeLibrary(nint module);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
