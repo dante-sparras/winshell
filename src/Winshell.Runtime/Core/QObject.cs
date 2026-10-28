@@ -34,8 +34,11 @@ public class QObject
 
     public MetaType Meta { get; }
 
-    /// <summary>The engine this object belongs to. Set when the object is created by the engine.</summary>
-    public QmlEngine? Engine { get; internal set; }
+    /// <summary>
+    /// The engine this object belongs to. Set when the object is created by the engine, or by a service for the
+    /// objects it makes itself, so their signals reach script handlers.
+    /// </summary>
+    public QmlEngine? Engine { get; set; }
 
     /// <summary>The object that owns this one and destroys it with itself.</summary>
     public QObject? Owner => _owner;
