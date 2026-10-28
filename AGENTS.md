@@ -1,22 +1,55 @@
-# Project instructions
+# Winshell
 
-Run `pwsh scripts/dev.ps1` after cloning. It clones Quickshell into `docs/agents/quickshell/` and fetches the v0.3.2 manual into `site/` there. `pwsh scripts/dev.ps1 -Refresh` downloads the manual again.
+A shell toolkit for Windows 11 that matches Quickshell.
 
-- Issues: `docs/agents/issue-tracker.md`.
-- Triage labels: `docs/agents/triage-labels.md`.
+## Stack
 
-# Conventions
+- PowerShell 7 for `scripts/dev.ps1`
+- .NET 10 SDK for the file-based app `scripts/fetch-reference.cs`
+- TODO: add the app's stack
 
-- Branch names, commit messages, pull-request approval, evidence, and how a pull request lands are in `CONTRIBUTING.md`. Open a pull request only when the maintainer asks.
-- Commands: `pwsh -NoProfile -File scripts/check.ps1` lints and builds. `dotnet test` the test project that covers the change. CI runs `scripts/test.ps1`. `scripts/mutate.ps1` is the release lane.
-- Update a document when this change makes it false, and edit it in place. When to leave a document alone is in `CONTRIBUTING.md`.
-- The Quickshell checkout and its manual are gitignored.
-- `scripts/fetch-reference.cs` reads <https://quickshell.org/docs/v0.3.2/> and writes markdown under the manual folder. Leave those pages as the fetcher wrote them.
-- Domain docs: `docs/agents/domain.md`.
+## Project Structure
 
-# Architecture
+```text
+.
+├── .github/                   # CI, issue and PR templates, Dependabot
+├── docs/
+│   ├── agents/                # How the engineering skills use this repo
+│   │   └── quickshell/        # Quickshell v0.3.2 checkout and manual; gitignored, made by scripts/dev.ps1
+│   └── development.md         # Setup, environment, and every command
+├── scripts/
+│   ├── dev.ps1                # Prepares a fresh clone
+│   └── fetch-reference.cs     # Fetches the Quickshell manual as markdown
+├── .agents/skills/            # Agent skills; a copy in .claude/skills/
+├── CONTRIBUTING.md            # Branches, commit and PR titles, PR rules
+└── # TODO: add source directories once code exists
+```
 
-This repo keeps a local copy of Quickshell v0.3.2 and its documentation, and a hello-world app under `src/`. It has no tests yet.
+## Before you finish
 
-- Quickshell source: `docs/agents/quickshell/` (<https://github.com/quickshell-mirror/quickshell>, tag v0.3.2).
-- Quickshell manual: `docs/agents/quickshell/site/`.
+- Run `TODO: add the check command once the stack exists`. Everything must pass.
+- Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
+- Say what you couldn't verify.
+- Added or changed a command, prerequisite, environment variable, or top-level folder? Update [docs/development.md](docs/development.md) or Project Structure.
+- Don't edit `.agents/skills/` or `.claude/skills/`; the `skills` CLI overwrites them.
+- Never commit `.env` files or credentials.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for dante-sparras/winshell, used through `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Notes
+
+I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
+
+Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to honor the dev's intent in both a minimal and realistic fashion.
