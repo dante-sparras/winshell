@@ -179,17 +179,15 @@ internal static class WaylandCompat
 }
 
 /// <summary>Where the Quickshell.Services modules for Windows register.</summary>
-public static partial class ServiceModules
+public static class ServiceModules
 {
     public static void Register(ModuleRegistry registry)
     {
         Services.Power.UPowerModule.Register(registry);
         Services.Network.NetworkingModule.Register(registry);
         Services.Bluetooth.BluetoothModule.Register(registry);
-        foreach (var register in Registrations)
-            register(registry);
+        Services.Audio.Pipewire.Register(registry);
+        Services.Media.Mpris.Register(registry);
+        Services.WindowManagerModules.Register(registry);
     }
-
-    /// <summary>The registrations of each service module.</summary>
-    public static List<Action<ModuleRegistry>> Registrations { get; } = [];
 }

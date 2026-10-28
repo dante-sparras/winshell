@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Winshell.Runtime\Winshell.Runtime.csproj" />
+    <InternalsVisibleTo Include="Winshell.Platform.Windows.Tests" />
   </ItemGroup>
 </Project>

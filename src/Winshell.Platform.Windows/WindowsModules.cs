@@ -182,8 +182,6 @@ public static class WindowsModules
         if (_installed)
             return;
         _installed = true;
-        ServiceModules.Registrations.Add(Services.Audio.Pipewire.Register);
-        ServiceModules.Registrations.Add(Services.Media.Mpris.Register);
         StandardModules.Registering += registry =>
         {
             var windows = registry.Module("Quickshell.Windows");
