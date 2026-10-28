@@ -441,7 +441,7 @@ internal interface ISimpleAudioVolume
 
 /// <summary>
 /// The undocumented policy interface Windows' own sound settings use to change the default device. It has been
-/// stable since Windows 7; when it is missing, setting a preferred default device does nothing.
+/// stable since Windows 7; when it is missing, setting the default device does nothing.
 /// </summary>
 [ComImport]
 [Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
