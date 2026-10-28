@@ -81,6 +81,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         }
         else if (message == Win32.WM_SETTINGCHANGE)
         {
+            TextRaster.Refresh();
             // The taskbar moved, resized, or started or stopped hiding.
             if (wParam == Win32.SPI_SETWORKAREA)
                 WorkAreaMayHaveChanged();

@@ -44,6 +44,9 @@ public sealed class Scene : IItemHost
 
     private double _devicePixelRatio = 1;
 
+    /// <summary>The window is showing a backdrop, or its color is translucent, so text is grayscale.</summary>
+    public bool TextOnBackdrop { get; set; }
+
     public Item? FocusItem => _focusItem;
 
     /// <summary>Raised when something in the scene changed and the window should draw again.</summary>
@@ -86,7 +89,7 @@ public sealed class Scene : IItemHost
     {
         PolishQueue.Flush();
         IsDirty = false;
-        var context = new PaintContext { DevicePixelRatio = DevicePixelRatio, Time = time };
+        var context = new PaintContext { DevicePixelRatio = DevicePixelRatio, Time = time, TextOnBackdrop = TextOnBackdrop };
         canvas.Save();
         canvas.Scale((float)DevicePixelRatio);
         using (DependencyTracker.Suspend())
@@ -514,6 +517,36 @@ public sealed class Scene : IItemHost
         if (_focusItem is ITextTarget target)
             target.InsertText(text);
     }
+
+    /// <summary>The focused field shows this string as an IME preedit. It is not committed text.</summary>
+    public void SetComposition(string text)
+    {
+        if (_focusItem is ITextTarget target)
+            target.SetComposition(text);
+    }
+
+    /// <summary>The IME finished a composition. The string is inserted at the caret.</summary>
+    public void CommitComposition(string text)
+    {
+        if (_focusItem is ITextTarget target)
+            target.CommitComposition(text);
+    }
+
+    /// <summary>The IME cancelled the preedit.</summary>
+    public void CancelComposition()
+    {
+        if (_focusItem is ITextTarget target)
+            target.CancelComposition();
+    }
+
+    /// <summary>The caret, in the content item's coordinates, so the candidate window can sit under it.</summary>
+    public QRect ImeCaret()
+    {
+        if (_focusItem is not ITextTarget target)
+            return default;
+        var local = target.ImeCaret();
+        return _focusItem.MapToItem(Root, local.X, local.Y, local.Width, local.Height) is QRect rect ? rect : default;
+    }
 }
 
 /// <summary>An item that draws on top of its children too, such as a focus ring.</summary>
@@ -532,6 +565,14 @@ public interface IItemEffect
 public interface ITextTarget
 {
     void InsertText(string text);
+
+    void SetComposition(string text) { }
+
+    void CommitComposition(string text) { }
+
+    void CancelComposition() { }
+
+    QRect ImeCaret() => default;
 }
 
 /// <summary>An item that takes keyboard focus when it is pressed, such as a text field.</summary>

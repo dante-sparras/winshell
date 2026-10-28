@@ -247,7 +247,8 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     {
         if (_placeholderText.Length == 0)
             return 0;
-        return Math.Ceiling(TextLayout.Build([new TextSpan(_placeholderText, Font.Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true).Width);
+        using var layout = TextLayout.Build([new TextSpan(_placeholderText, Font.Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+        return Math.Ceiling(layout.Width);
     }
 
     public override void Paint(SKCanvas canvas, PaintContext context)
@@ -258,11 +259,11 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     {
         if (Text_.Length == 0 && _placeholderText.Length > 0)
         {
-            var layout = TextLayout.Build([new TextSpan(_placeholderText, Font.Spec)], Math.Max(0, Width - LeftPadding - RightPadding), TextLayout.Wrap.NoWrap, TextLayout.Elide.Right, 1, 1, true);
+            using var layout = TextLayout.Build([new TextSpan(_placeholderText, Font.Spec)], Math.Max(0, Width - LeftPadding - RightPadding), TextLayout.Wrap.NoWrap, TextLayout.Elide.Right, 1, 1, true);
             var y = (VerticalAlignment & QtEnums.AlignVCenter) != 0 ? (Height - layout.Height) / 2 : TopPadding;
             canvas.Save();
             canvas.Translate((float)LeftPadding, 0);
-            layout.Draw(canvas, Math.Max(0, Width - LeftPadding - RightPadding), HorizontalAlignment, Enabled ? PlaceholderTextColor : Theme.Current.TextDisabled, y, true);
+            layout.Draw(canvas, Math.Max(0, Width - LeftPadding - RightPadding), HorizontalAlignment, Enabled ? PlaceholderTextColor : Theme.Current.TextDisabled, y, true, paint: context);
             canvas.Restore();
         }
         base.Paint(canvas, context);

@@ -107,8 +107,10 @@ internal sealed class CompositionSurface : IDisposable
             _bitmap?.Dispose();
             _bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
         }
-        using (var canvas = new SKCanvas(_bitmap))
+        using (var pixmap = new SKPixmap(_bitmap.Info, _bitmap.GetPixels(), _bitmap.RowBytes))
+        using (var surface = SKSurface.Create(pixmap))
         {
+            var canvas = surface.Canvas;
             canvas.Clear(SKColors.Transparent);
             paint(canvas);
             canvas.Flush();

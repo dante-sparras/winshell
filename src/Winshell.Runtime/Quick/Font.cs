@@ -11,7 +11,7 @@ public readonly record struct FontSpec(string Family, double PixelSize, int Weig
     /// The font text uses when none is set: Segoe UI Variable, the Windows 11 interface font, at the size
     /// Windows 11 uses for body text.
     /// </summary>
-    public static string DefaultFamily { get; set; } = "Segoe UI Variable Text";
+    public static string DefaultFamily { get; set; } = "Segoe UI Variable";
 
     public static double DefaultPixelSize { get; set; } = 14;
 
@@ -269,10 +269,10 @@ public static class FontCache
         if (family.Equals("monospace", StringComparison.OrdinalIgnoreCase))
             yield return "Cascadia Mono";
         if (family.Equals("sans-serif", StringComparison.OrdinalIgnoreCase) || family.Equals("sans", StringComparison.OrdinalIgnoreCase))
-            yield return "Segoe UI Variable Text";
+            yield return "Segoe UI Variable";
         if (family.Equals("serif", StringComparison.OrdinalIgnoreCase))
             yield return "Cambria";
-        yield return "Segoe UI Variable Text";
+        yield return "Segoe UI Variable";
         yield return "Segoe UI";
     }
 
