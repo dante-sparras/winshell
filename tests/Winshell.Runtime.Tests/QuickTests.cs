@@ -45,6 +45,28 @@ public class QuickTests
     }
 
     [Fact]
+    public void A_polish_request_is_flushed_by_its_loop_even_when_another_loop_never_ran()
+    {
+        var abandoned = new ManualEventLoop();
+        var loop = new ManualEventLoop();
+        var first = new Polishable();
+        var second = new Polishable();
+        PolishQueue.Request(first, abandoned);
+        PolishQueue.Request(second, loop);
+        loop.Process();
+        // Before, the flush waited on the abandoned loop, and the queue kept both items for good.
+        Assert.Equal(1, second.Polished);
+        Assert.Equal(1, first.Polished);
+    }
+
+    private sealed class Polishable : IPolishable
+    {
+        public int Polished { get; private set; }
+
+        public void UpdatePolish() => Polished++;
+    }
+
+    [Fact]
     public void Anchors_fill_center_and_margins()
     {
         var (root, _, shell) = Show("""
