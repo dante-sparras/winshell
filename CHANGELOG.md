@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0](https://github.com/dante-sparras/winshell/compare/v0.3.0...v0.4.0) (2026-10-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **shell:** report the winshell release from hasVersion ([#78](https://github.com/dante-sparras/winshell/issues/78))
+* **tray:** send clicks the way Explorer does, without taking the keyboard ([#77](https://github.com/dante-sparras/winshell/issues/77))
+* **session:** hand locking to Windows and remove the shell lock screen ([#75](https://github.com/dante-sparras/winshell/issues/75))
+* **tray:** name tray icons for Windows, with overflow, hidden icons and balloons ([#76](https://github.com/dante-sparras/winshell/issues/76))
+* **config:** load configurations from roaming app data
+
+### Features
+
+* **config:** load configurations from roaming app data ([94eea6c](https://github.com/dante-sparras/winshell/commit/94eea6ca419381a542cb78513a81458fb5d629e1))
+* **session:** hand locking to Windows and remove the shell lock screen ([#75](https://github.com/dante-sparras/winshell/issues/75)) ([f07bfed](https://github.com/dante-sparras/winshell/commit/f07bfed66543a6fe185672d7f91c35524c4565f9))
+* **tray:** draw tray icons sharp at every monitor scale ([#79](https://github.com/dante-sparras/winshell/issues/79)) ([31b6f9f](https://github.com/dante-sparras/winshell/commit/31b6f9f0ed578f7223e66523506c6d8919644539))
+* **tray:** name tray icons for Windows, with overflow, hidden icons and balloons ([#76](https://github.com/dante-sparras/winshell/issues/76)) ([8d35f8f](https://github.com/dante-sparras/winshell/commit/8d35f8f2b73d62aa5d7e4394b8617530f874143e))
+
+
+### Bug Fixes
+
+* **shell:** report the winshell release from hasVersion ([#78](https://github.com/dante-sparras/winshell/issues/78)) ([151a17b](https://github.com/dante-sparras/winshell/commit/151a17bc9111d249211f913c71d716fa71c9b3bd))
+* **tray:** send clicks the way Explorer does, without taking the keyboard ([#77](https://github.com/dante-sparras/winshell/issues/77)) ([c33b8f0](https://github.com/dante-sparras/winshell/commit/c33b8f05b6576a6e1b7e36f36251085f07eb05f4))
+* **tray:** survive Explorer restarts and hand the tray over between instances ([#71](https://github.com/dante-sparras/winshell/issues/71)) ([b15bc2b](https://github.com/dante-sparras/winshell/commit/b15bc2ba3cf79e3a4a705fcf5c2c98d0e9e8f965))
+
 ## [0.3.0](https://github.com/dante-sparras/winshell/compare/v0.2.0...v0.3.0) (2026-10-28)
 
 
