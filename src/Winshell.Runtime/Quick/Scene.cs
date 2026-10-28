@@ -154,7 +154,7 @@ public sealed class Scene : IItemHost
             PaintContent(item, canvas, context);
         }
         if (context.FocusRing == item)
-            Controls.Fluent.FocusRing(canvas, SKRect.Create((float)item.Width, (float)item.Height), (item as Controls.Control)?.FocusRadius ?? Controls.Fluent.CornerRadius);
+            Controls.Fluent.FocusRing(canvas, SKRect.Create((float)item.Width, (float)item.Height), (item as Controls.Control)?.FocusRadius ?? Controls.Fluent.ControlCornerRadius);
         if (layered)
             canvas.Restore();
         canvas.Restore();

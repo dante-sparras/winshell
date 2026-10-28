@@ -1,5 +1,6 @@
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
+using Winshell.Runtime.Quick.Controls;
 using Winshell.Runtime.Quickshell;
 
 namespace Winshell.Platform.Windows;
@@ -56,118 +57,112 @@ public sealed class WindowEffectsAttached(QObject owner) : QObject
 }
 
 /// <summary>
-/// The <c>WindowsTheme</c> singleton: whether Windows is in dark mode, the accent color, and the Fluent design
-/// tokens, so a shell can look like the rest of Windows 11.
+/// The <c>WindowsTheme</c> singleton: the Windows 11 theme as WinUI 3 has it, so a shell can look like the rest of
+/// Windows. Every color token of <see cref="Theme"/> is a property with its WinUI name, first letter lowered, such
+/// as <c>textFillColorPrimary</c> or <c>accentFillColorDefault</c>. With the type ramp, the corner radii, the
+/// motion timings and the shadows, they follow the user's Windows settings as they change.
 /// </summary>
 public sealed class WindowsTheme : QObject
 {
-    private static readonly string[] Props =
-    [
-        "dark", "accent", "accentLight1", "accentLight2", "accentLight3", "accentDark1", "accentDark2", "accentDark3",
-        "textPrimary", "textSecondary", "textTertiary", "textDisabled", "textOnAccent", "accentText", "controlFill",
-        "controlFillSecondary", "controlFillTertiary", "controlStroke", "controlStrokeSecondary", "controlStrongFill",
-        "subtleFillSecondary", "subtleFillTertiary", "accentFill", "accentFillSecondary", "accentFillTertiary", "cardBackground",
-        "cardStroke", "layerFill", "solidBackground", "flyoutBackground", "dividerStroke", "surfaceStroke", "focusStroke",
-        "critical", "success", "caution",
-    ];
+    private static readonly (string Name, Func<Theme, QColor> Get)[] Colors = typeof(Theme).GetProperties()
+        .Where(p => p.PropertyType == typeof(QColor) && p.GetMethod is { IsStatic: false })
+        .Select(p => (Names.ToQml(p.Name), (Func<Theme, QColor>)p.GetMethod!.CreateDelegate(typeof(Func<Theme, QColor>))))
+        .ToArray();
+
+    private static readonly string[] ThemeProps = ["dark", "highContrast", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
 
     public WindowsTheme()
     {
+        foreach (var (name, get) in Colors)
+            AddDynamicProperty(new DynamicProperty(this, name, "color") { IsReadonly = true }).Write(get(Theme.Current));
         Theme.Changed += OnChanged;
     }
 
     private void OnChanged()
     {
-        foreach (var p in Props)
+        var theme = Theme.Current;
+        foreach (var (name, get) in Colors)
+            GetDynamicProperty(name)!.Write(get(theme));
+        foreach (var p in ThemeProps)
             NotifyChanged(p);
     }
 
-    private Theme T
-    {
-        get
-        {
-            TrackQml("dark");
-            return Theme.Current;
-        }
-    }
+    [Qml] public bool Dark { get { Track(); return Theme.Current.IsDark; } }
 
-    [Qml] public bool Dark => T.IsDark;
-
-    [Qml] public QColor Accent => T.Accent;
-
-    [Qml] public QColor AccentLight1 => T.AccentLight1;
-
-    [Qml] public QColor AccentLight2 => T.AccentLight2;
-
-    [Qml] public QColor AccentLight3 => T.AccentLight3;
-
-    [Qml] public QColor AccentDark1 => T.AccentDark1;
-
-    [Qml] public QColor AccentDark2 => T.AccentDark2;
-
-    [Qml] public QColor AccentDark3 => T.AccentDark3;
-
-    [Qml] public QColor TextPrimary => T.TextColor;
-
-    [Qml] public QColor TextSecondary => T.TextSecondary;
-
-    [Qml] public QColor TextTertiary => T.TextTertiary;
-
-    [Qml] public QColor TextDisabled => T.TextDisabled;
-
-    [Qml] public QColor TextOnAccent => T.TextOnAccent;
-
-    [Qml] public QColor AccentText => T.AccentText;
-
-    [Qml] public QColor ControlFill => T.ControlFill;
-
-    [Qml] public QColor ControlFillSecondary => T.ControlFillSecondary;
-
-    [Qml] public QColor ControlFillTertiary => T.ControlFillTertiary;
-
-    [Qml] public QColor ControlStroke => T.ControlStroke;
-
-    [Qml] public QColor ControlStrokeSecondary => T.ControlStrokeSecondary;
-
-    [Qml] public QColor ControlStrongFill => T.ControlStrongFill;
-
-    [Qml] public QColor SubtleFillSecondary => T.SubtleFillSecondary;
-
-    [Qml] public QColor SubtleFillTertiary => T.SubtleFillTertiary;
-
-    [Qml] public QColor AccentFill => T.AccentFill;
-
-    [Qml] public QColor AccentFillSecondary => T.AccentFillSecondary;
-
-    [Qml] public QColor AccentFillTertiary => T.AccentFillTertiary;
-
-    [Qml] public QColor CardBackground => T.CardBackground;
-
-    [Qml] public QColor CardStroke => T.CardStroke;
-
-    [Qml] public QColor LayerFill => T.LayerFill;
-
-    [Qml] public QColor SolidBackground => T.SolidBackground;
-
-    [Qml] public QColor FlyoutBackground => T.FlyoutBackground;
-
-    [Qml] public QColor DividerStroke => T.DividerStroke;
-
-    [Qml] public QColor SurfaceStroke => T.SurfaceStroke;
-
-    [Qml] public QColor FocusStroke => T.FocusStrokeOuter;
-
-    [Qml] public QColor Critical => T.SystemCritical;
-
-    [Qml] public QColor Success => T.SystemSuccess;
-
-    [Qml] public QColor Caution => T.SystemCaution;
+    /// <summary>Whether a contrast theme is on. Every color token is then one of the system colors.</summary>
+    [Qml] public bool HighContrast { get { Track(); return Theme.Current.IsHighContrast; } }
 
     [Qml] public string FontFamily => FontSpec.DefaultFamily;
 
     [Qml] public string IconFontFamily => "Segoe Fluent Icons";
 
+    [Qml] public WindowsTypography Typography { get; } = new();
+
+    [Qml] public double ControlCornerRadius => Fluent.ControlCornerRadius;
+
+    [Qml] public double OverlayCornerRadius => Fluent.OverlayCornerRadius;
+
+    [Qml] public int ControlFasterAnimationDuration => Fluent.ControlFasterAnimationDuration;
+
+    [Qml] public int ControlFastAnimationDuration => Fluent.ControlFastAnimationDuration;
+
+    [Qml] public int ControlNormalAnimationDuration => Fluent.ControlNormalAnimationDuration;
+
+    /// <summary>The curve as <c>easing.bezierCurve</c> takes it: two control points, then the end point.</summary>
+    [Qml]
+    public List<object?> ControlFastOutSlowInKeySpline
+    {
+        get
+        {
+            var (x1, y1, x2, y2) = Fluent.ControlFastOutSlowInKeySpline;
+            return [x1, y1, x2, y2, 1.0, 1.0];
+        }
+    }
+
+    [Qml] public WindowsShadow CardShadow { get { Track(); return new(Theme.Current.CardShadow); } }
+
+    [Qml] public WindowsShadow TooltipShadow { get { Track(); return new(Theme.Current.TooltipShadow); } }
+
+    [Qml] public WindowsShadow FlyoutShadow { get { Track(); return new(Theme.Current.FlyoutShadow); } }
+
+    [Qml] public WindowsShadow DialogShadow { get { Track(); return new(Theme.Current.DialogShadow); } }
+
     protected override void OnDestroy() => Theme.Changed -= OnChanged;
+}
+
+/// <summary>
+/// <c>WindowsTheme.typography</c>: the Windows 11 type ramp in Segoe UI Variable. Each step is a font to assign
+/// whole, as in <c>font: WindowsTheme.typography.subtitle</c>.
+/// </summary>
+public sealed class WindowsTypography : QObject
+{
+    private static FontGroup Font(TypeStyle style) => new(FontSpec.DefaultFamily, style.PixelSize, style.Weight);
+
+    [Qml] public FontGroup Caption => Font(Fluent.Caption);
+
+    [Qml] public FontGroup Body => Font(Fluent.Body);
+
+    [Qml] public FontGroup BodyStrong => Font(Fluent.BodyStrong);
+
+    [Qml] public FontGroup BodyLarge => Font(Fluent.BodyLarge);
+
+    [Qml] public FontGroup Subtitle => Font(Fluent.Subtitle);
+
+    [Qml] public FontGroup Title => Font(Fluent.Title);
+
+    [Qml] public FontGroup TitleLarge => Font(Fluent.TitleLarge);
+
+    [Qml] public FontGroup Display => Font(Fluent.Display);
+}
+
+/// <summary>A shadow of the Windows 11 elevation: its blur, how far it falls, and its color.</summary>
+public sealed class WindowsShadow(Elevation elevation) : QObject
+{
+    [Qml] public double Blur => elevation.Blur;
+
+    [Qml] public double VerticalOffset => elevation.OffsetY;
+
+    [Qml] public QColor Color => elevation.Color;
 }
 
 /// <summary>Registers the Windows modules and the services the shell's engine gets from Windows.</summary>
@@ -184,13 +179,19 @@ public static class WindowsModules
         _installed = true;
         StandardModules.Registering += registry =>
         {
-            var windows = registry.Module("Quickshell.Windows");
-            windows.Uncreatable<WindowEffectsAttached>("WindowEffects", "WindowEffects is only available as an attached object", attached: o => new WindowEffectsAttached(o), attachedType: typeof(WindowEffectsAttached))
-                .Singleton(_ => new WindowsTheme(), "WindowsTheme");
+            Register(registry);
             WaylandCompat.Register(registry);
             ServiceModules.Register(registry);
         };
         _ = platform;
+    }
+
+    /// <summary>Adds <c>Quickshell.Windows</c>: the window effects and the theme.</summary>
+    public static void Register(ModuleRegistry registry)
+    {
+        registry.Module("Quickshell.Windows")
+            .Uncreatable<WindowEffectsAttached>("WindowEffects", "WindowEffects is only available as an attached object", attached: o => new WindowEffectsAttached(o), attachedType: typeof(WindowEffectsAttached))
+            .Singleton(_ => new WindowsTheme(), "WindowsTheme");
     }
 
     /// <summary>Gives a new engine the Windows services its singletons use.</summary>

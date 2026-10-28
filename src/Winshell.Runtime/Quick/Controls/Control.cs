@@ -27,7 +27,7 @@ public class Control : Item, IHoverTarget
 
     public Control()
     {
-        Font = new FontGroup(this);
+        _fontGroup = new FontGroup(this);
         Font.Changed += () =>
         {
             NotifyChanged("font");
@@ -472,8 +472,11 @@ public class Control : Item, IHoverTarget
     /// <summary>Called when something the default visuals show changed: hover, press, check, enabled.</summary>
     protected virtual void StateChanged() => Update();
 
+    private readonly FontGroup _fontGroup;
+
+    /// <summary>The font. Assigning a whole font, such as <c>font: WindowsTheme.typography.body</c>, copies it.</summary>
     [Qml]
-    public FontGroup Font { get; }
+    public FontGroup Font { get => _fontGroup; set => _fontGroup.CopyFrom(value); }
 
     /// <summary>Called when the font changes, so the default content can follow it.</summary>
     protected virtual void OnFontChanged()
@@ -541,7 +544,7 @@ public class Control : Item, IHoverTarget
     internal void VisualFocusChanged() => NotifyChanged("visualFocus");
 
     /// <summary>The corner radius of the control's shape, which its focus rectangle follows.</summary>
-    public virtual float FocusRadius => Fluent.CornerRadius;
+    public virtual float FocusRadius => Fluent.ControlCornerRadius;
 
     protected override void OnActiveFocusChanged(bool focused)
     {
@@ -620,7 +623,7 @@ public sealed class IconLabel : Item
     private TextLayout? _layout;
 
     /// <summary>The text color, read each time the label draws.</summary>
-    public Func<QColor> ColorSource { get; set; } = () => Theme.Current.TextColor;
+    public Func<QColor> ColorSource { get; set; } = () => Theme.Current.TextFillColorPrimary;
 
     /// <summary>The icon tint, read each time the label draws. Transparent draws the icon untinted.</summary>
     public Func<QColor> IconColorSource { get; set; } = () => QColor.Transparent;

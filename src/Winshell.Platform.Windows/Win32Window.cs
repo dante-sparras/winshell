@@ -792,7 +792,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             case Win32.WM_PAINT:
                 RenderNow();
                 return null;
-            case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED:
+            case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED or Win32.WM_SYSCOLORCHANGE or Win32.WM_THEMECHANGED:
                 _platform.SystemChanged(msg, wParam);
                 return null;
             case Win32.WM_GETOBJECT:

@@ -18,8 +18,8 @@ public readonly record struct FontSpec(string Family, double PixelSize, int Weig
     public static FontSpec Default => new(DefaultFamily, DefaultPixelSize, 400, false, false, false, 0, 0);
 }
 
-/// <summary>An item's <c>font</c> group.</summary>
-public sealed class FontGroup(Item owner) : QObject
+/// <summary>An item's <c>font</c> group, or a font of its own, such as a step of the type ramp.</summary>
+public sealed class FontGroup(Item? owner) : QObject
 {
     private string? _family;
     private double _pixelSize = -1;
@@ -55,7 +55,7 @@ public sealed class FontGroup(Item owner) : QObject
     private void Raise()
     {
         Changed?.Invoke();
-        owner.Update();
+        owner?.Update();
     }
 
     [Qml]
@@ -223,6 +223,37 @@ public sealed class FontGroup(Item owner) : QObject
         {
             using (DependencyTracker.Suspend())
                 return new FontSpec(Family, PixelSize, _weight, _italic, _underline, _strikeout, _letterSpacing, _capitalization);
+        }
+    }
+
+    /// <summary>A font of its own, not an item's.</summary>
+    public FontGroup(string family, double pixelSize, int weight)
+        : this(null)
+    {
+        _family = family;
+        _pixelSize = pixelSize;
+        _weight = weight;
+    }
+
+    /// <summary>Takes every value of another font, as assigning a whole font does.</summary>
+    public void CopyFrom(FontGroup other)
+    {
+        if (ReferenceEquals(other, this))
+            return;
+        using (DependencyTracker.Suspend())
+        {
+            Family = other._family ?? "";
+            if (other._pointSize > 0)
+                PointSize = other._pointSize;
+            else
+                PixelSize = other.PixelSize;
+            Weight = other._weight;
+            Italic = other._italic;
+            Underline = other._underline;
+            Strikeout = other._strikeout;
+            LetterSpacing = other._letterSpacing;
+            WordSpacing = other._wordSpacing;
+            Capitalization = other._capitalization;
         }
     }
 

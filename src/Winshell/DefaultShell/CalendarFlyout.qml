@@ -29,7 +29,7 @@ PopupWindow {
       text: Qt.formatDateTime(root.date, "dddd, MMMM d")
       font.pixelSize: 14
       font.weight: Font.DemiBold
-      color: WindowsTheme.textPrimary
+      color: WindowsTheme.textFillColorPrimary
     }
 
     RowLayout {
@@ -40,7 +40,7 @@ PopupWindow {
         text: Qt.formatDateTime(root.shown, "MMMM yyyy")
         font.pixelSize: 14
         font.weight: Font.DemiBold
-        color: WindowsTheme.textPrimary
+        color: WindowsTheme.textFillColorPrimary
       }
 
       MonthArrow { glyph: ""; onClicked: root.monthOffset-- }
@@ -62,7 +62,7 @@ PopupWindow {
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter
           font.pixelSize: 12
-          color: WindowsTheme.textSecondary
+          color: WindowsTheme.textFillColorSecondary
         }
       }
 
@@ -80,13 +80,13 @@ PopupWindow {
           width: 40
           height: 40
           radius: 20
-          color: today ? WindowsTheme.accentFill : dayMouse.containsMouse ? WindowsTheme.subtleFillSecondary : "transparent"
+          color: today ? WindowsTheme.accentFillColorDefault : dayMouse.containsMouse ? WindowsTheme.subtleFillColorSecondary : "transparent"
 
           Text {
             anchors.centerIn: parent
             text: parent.day.getDate()
             font.pixelSize: 13
-            color: parent.today ? WindowsTheme.textOnAccent : parent.inMonth ? WindowsTheme.textPrimary : WindowsTheme.textDisabled
+            color: parent.today ? WindowsTheme.textOnAccentFillColorPrimary : parent.inMonth ? WindowsTheme.textFillColorPrimary : WindowsTheme.textFillColorDisabled
           }
 
           MouseArea {
@@ -109,7 +109,7 @@ PopupWindow {
     Rectangle {
       anchors.fill: parent
       radius: 4
-      color: arrow.pressed ? WindowsTheme.subtleFillTertiary : arrow.containsMouse ? WindowsTheme.subtleFillSecondary : "transparent"
+      color: arrow.pressed ? WindowsTheme.subtleFillColorTertiary : arrow.containsMouse ? WindowsTheme.subtleFillColorSecondary : "transparent"
     }
 
     Text {
@@ -117,7 +117,7 @@ PopupWindow {
       text: arrow.glyph
       font.family: WindowsTheme.iconFontFamily
       font.pixelSize: 12
-      color: WindowsTheme.textPrimary
+      color: WindowsTheme.textFillColorPrimary
     }
   }
 }

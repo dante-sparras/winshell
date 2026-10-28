@@ -2,15 +2,39 @@ using SkiaSharp;
 
 namespace Winshell.Runtime.Quick.Controls;
 
+/// <summary>A step of the Windows 11 type ramp, in Segoe UI Variable.</summary>
+public readonly record struct TypeStyle(double PixelSize, int Weight);
+
 /// <summary>
-/// The Windows 11 Fluent look the default control visuals share: sizes, the elevation border of buttons and
-/// fields, and the Segoe Fluent Icons glyphs.
+/// The Windows 11 Fluent look the default control visuals share: sizes, corner radii, the type ramp, motion, the
+/// elevation border of buttons and fields, and the Segoe Fluent Icons glyphs. The values and names are WinUI 3's.
 /// </summary>
 public static class Fluent
 {
     public const double ControlHeight = 32;
-    public const float CornerRadius = 4;
+    public const float ControlCornerRadius = 4;
     public const float OverlayCornerRadius = 8;
+
+    public static readonly TypeStyle Caption = new(12, 400);
+    public static readonly TypeStyle Body = new(14, 400);
+    public static readonly TypeStyle BodyStrong = new(14, 600);
+    public static readonly TypeStyle BodyLarge = new(18, 400);
+    public static readonly TypeStyle Subtitle = new(20, 600);
+    public static readonly TypeStyle Title = new(28, 600);
+    public static readonly TypeStyle TitleLarge = new(40, 600);
+    public static readonly TypeStyle Display = new(68, 600);
+
+    /// <summary>Milliseconds a control takes for a state change, such as a color on hover.</summary>
+    public const int ControlFasterAnimationDuration = 83;
+
+    /// <summary>Milliseconds a control takes for a short move, such as a toggle switch's knob.</summary>
+    public const int ControlFastAnimationDuration = 167;
+
+    /// <summary>Milliseconds a control takes for a longer move, such as a flyout opening.</summary>
+    public const int ControlNormalAnimationDuration = 250;
+
+    /// <summary>The cubic Bézier control points of the curve WinUI's controls move along: fast out, slow in.</summary>
+    public static readonly (double X1, double Y1, double X2, double Y2) ControlFastOutSlowInKeySpline = (0, 0, 0, 1);
 
     public const string CheckMark = "";
     public const string ChevronDown = "";
@@ -183,18 +207,17 @@ public static class Fluent
     }
 
     /// <summary>The soft shadow under a flyout, menu or tooltip.</summary>
-    public static void Shadow(SKCanvas canvas, SKRect rect, float radius, float blur, float offsetY, double opacity)
+    public static void Shadow(SKCanvas canvas, SKRect rect, float radius, Elevation elevation)
     {
-        if (rect.Width <= 0 || rect.Height <= 0)
+        if (rect.Width <= 0 || rect.Height <= 0 || elevation.Color.A <= 0)
             return;
-        var alpha = T.IsDark ? opacity * 1.8 : opacity;
         using var paint = new SKPaint
         {
-            Color = new SKColor(0, 0, 0, (byte)Math.Clamp(alpha * 255, 0, 255)),
+            Color = elevation.Color.ToSk(),
             IsAntialias = true,
-            MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, blur / 2),
+            MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, elevation.Blur / 2),
         };
-        rect.Offset(0, offsetY);
+        rect.Offset(0, elevation.OffsetY);
         using var rr = Round(rect, radius);
         canvas.DrawRoundRect(rr, paint);
     }
@@ -203,8 +226,8 @@ public static class Fluent
     public static void FocusRing(SKCanvas canvas, SKRect rect, float radius)
     {
         var outer = SKRect.Inflate(rect, 3, 3);
-        StrokeRound(canvas, outer, radius + 3, T.FocusStrokeOuter, 2);
-        StrokeRound(canvas, SKRect.Inflate(outer, -2, -2), radius + 1, T.FocusStrokeInner, 1);
+        StrokeRound(canvas, outer, radius + 3, T.FocusStrokeColorOuter, 2);
+        StrokeRound(canvas, SKRect.Inflate(outer, -2, -2), radius + 1, T.FocusStrokeColorInner, 1);
     }
 }
 

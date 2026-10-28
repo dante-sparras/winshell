@@ -201,8 +201,8 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
         var oy = (float)(TopPadding - i.Y);
         var aw = (float)AvailableWidth;
         var ah = (float)AvailableHeight;
-        var trackColor = Enabled ? t.ControlStrongFill : t.ControlStrongFillDisabled;
-        var valueColor = Enabled ? t.AccentFill : t.AccentFillDisabled;
+        var trackColor = Enabled ? t.ControlStrongFillColorDefault : t.ControlStrongFillColorDisabled;
+        var valueColor = Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled;
         if (!vertical)
         {
             var track = SKRect.Create(ox, oy + ah / 2 - 2, aw, 4);
@@ -230,10 +230,10 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
     {
         var t = Theme.Current;
         float cx = r.MidX, cy = r.MidY;
-        Fluent.FillCircle(c, cx, cy, 10, t.ControlSolidFill);
+        Fluent.FillCircle(c, cx, cy, 10, t.ControlSolidFillColorDefault);
         Fluent.StrokeCircle(c, cx, cy, 10, t.IsDark ? QColor.Parse("#23ffffff") : QColor.Parse("#29000000"));
         var inner = !Enabled ? 6f : _pressed ? 5f : Hovered ? 7f : 6f;
-        Fluent.FillCircle(c, cx, cy, inner, Enabled ? (_pressed ? t.AccentFillTertiary : Hovered ? t.AccentFillSecondary : t.AccentFill) : t.AccentFillDisabled);
+        Fluent.FillCircle(c, cx, cy, inner, Enabled ? (_pressed ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault) : t.AccentFillColorDisabled);
     }
 
     protected override void LayoutParts()
@@ -542,8 +542,8 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeepsPointerGrab
         var ox = (float)(LeftPadding - i.X);
         var oy = (float)(TopPadding - i.Y);
         const float hw = 20;
-        var trackColor = Enabled ? t.ControlStrongFill : t.ControlStrongFillDisabled;
-        var valueColor = Enabled ? t.AccentFill : t.AccentFillDisabled;
+        var trackColor = Enabled ? t.ControlStrongFillColorDefault : t.ControlStrongFillColorDisabled;
+        var valueColor = Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled;
         if (_orientation == 2)
         {
             Fluent.FillRound(c, SKRect.Create(ox + aw / 2 - 2, oy, 4, ah), 2, trackColor);
@@ -571,10 +571,10 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeepsPointerGrab
                 {
                     var t = Theme.Current;
                     var r = i.Bounds;
-                    Fluent.FillCircle(c, r.MidX, r.MidY, 10, t.ControlSolidFill);
+                    Fluent.FillCircle(c, r.MidX, r.MidY, 10, t.ControlSolidFillColorDefault);
                     Fluent.StrokeCircle(c, r.MidX, r.MidY, 10, t.IsDark ? QColor.Parse("#23ffffff") : QColor.Parse("#29000000"));
                     var inner = n.Pressed ? 5f : n.Hovered ? 7f : 6f;
-                    Fluent.FillCircle(c, r.MidX, r.MidY, inner, Enabled ? t.AccentFill : t.AccentFillDisabled);
+                    Fluent.FillCircle(c, r.MidX, r.MidY, inner, Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled);
                 }, 20, 20));
                 handle.SetParentItem(this);
                 handle.Z = 1;
@@ -731,7 +731,7 @@ public sealed class ProgressBar : Control
         if (_indeterminate)
             return;
         var r = i.Bounds;
-        using var paint = new SKPaint { Color = (Enabled ? t.ControlStrongStroke : t.ControlStrongStrokeDisabled).ToSk(), IsAntialias = true };
+        using var paint = new SKPaint { Color = (Enabled ? t.ControlStrongStrokeColorDefault : t.ControlStrongStrokeColorDisabled).ToSk(), IsAntialias = true };
         c.DrawRect(SKRect.Create(r.Left, MathF.Round(r.MidY) - 0.5f, r.Width, 1), paint);
     }, 200, 4));
 
@@ -739,7 +739,7 @@ public sealed class ProgressBar : Control
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var color = Enabled ? t.AccentFill : t.AccentFillDisabled;
+        var color = Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled;
         var bar = SKRect.Create(r.Left, r.MidY - 1.5f, r.Width, 3);
         if (_indeterminate)
         {
@@ -791,7 +791,7 @@ public sealed class BusyIndicator : Control
         var start = (float)(seconds * 360 % 360 + (phase < 0.5 ? 0 : 260 * Ease((phase - 0.5) * 2)));
         using var paint = new SKPaint
         {
-            Color = (Enabled ? t.AccentFill : t.AccentFillDisabled).ToSk(),
+            Color = (Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled).ToSk(),
             IsAntialias = true,
             Style = SKPaintStyle.Stroke,
             StrokeWidth = stroke,
@@ -859,17 +859,17 @@ public sealed class Dial : Control, IPointerTarget, IKeepsPointerGrab
         var r = i.Bounds;
         var size = Math.Min(r.Width, r.Height) - 8;
         var oval = SKRect.Create(r.MidX - size / 2, r.MidY - size / 2, size, size);
-        using var track = new SKPaint { Color = t.ControlStrongFill.ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4, StrokeCap = SKStrokeCap.Round };
+        using var track = new SKPaint { Color = t.ControlStrongFillColorDefault.ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4, StrokeCap = SKStrokeCap.Round };
         c.DrawArc(oval, 130, 280, false, track);
-        using var value = new SKPaint { Color = (Enabled ? t.AccentFill : t.AccentFillDisabled).ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4, StrokeCap = SKStrokeCap.Round };
+        using var value = new SKPaint { Color = (Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled).ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4, StrokeCap = SKStrokeCap.Round };
         if (Position > 0)
             c.DrawArc(oval, 130, (float)(280 * Position), false, value);
         var a = (Angle - 90) * Math.PI / 180;
         var hx = r.MidX + (float)Math.Cos(a) * size / 2;
         var hy = r.MidY + (float)Math.Sin(a) * size / 2;
-        Fluent.FillCircle(c, hx, hy, 10, t.ControlSolidFill);
+        Fluent.FillCircle(c, hx, hy, 10, t.ControlSolidFillColorDefault);
         Fluent.StrokeCircle(c, hx, hy, 10, t.IsDark ? QColor.Parse("#23ffffff") : QColor.Parse("#29000000"));
-        Fluent.FillCircle(c, hx, hy, _pressed ? 5 : Hovered ? 7 : 6, Enabled ? t.AccentFill : t.AccentFillDisabled);
+        Fluent.FillCircle(c, hx, hy, _pressed ? 5 : Hovered ? 7 : 6, Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled);
     }, 120, 120));
 
     private void SetFrom(double x, double y)
@@ -1083,17 +1083,17 @@ public sealed class SpinBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var fill = !Enabled ? t.ControlFillDisabled : Hovered ? t.ControlFillSecondary : t.ControlFill;
-        Fluent.ElevatedRect(c, r, Fluent.CornerRadius, fill, t.ControlStroke, t.ControlStrongStroke);
+        var fill = !Enabled ? t.ControlFillColorDisabled : Hovered ? t.ControlFillColorSecondary : t.ControlFillColorDefault;
+        Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrongStrokeColorDefault);
         foreach (var (rect, button, glyph) in new[] { (UpRect, Up, Fluent.ChevronUp), (DownRect, Down, Fluent.ChevronDown) })
         {
             var rr = rect;
             rr.Offset(-(float)i.X, -(float)i.Y);
             if (button.Pressed)
-                Fluent.FillRound(c, rr, Fluent.CornerRadius, t.SubtleFillTertiary);
+                Fluent.FillRound(c, rr, Fluent.ControlCornerRadius, t.SubtleFillColorTertiary);
             else if (button.Hovered)
-                Fluent.FillRound(c, rr, Fluent.CornerRadius, t.SubtleFillSecondary);
-            Fluent.DrawChevron(c, glyph, rr.MidX, rr.MidY, 12, Enabled ? (button.Pressed ? t.TextTertiary : t.TextSecondary) : t.TextDisabled);
+                Fluent.FillRound(c, rr, Fluent.ControlCornerRadius, t.SubtleFillColorSecondary);
+            Fluent.DrawChevron(c, glyph, rr.MidX, rr.MidY, 12, Enabled ? (button.Pressed ? t.TextFillColorTertiary : t.TextFillColorSecondary) : t.TextFillColorDisabled);
         }
     }, 160, Fluent.ControlHeight));
 

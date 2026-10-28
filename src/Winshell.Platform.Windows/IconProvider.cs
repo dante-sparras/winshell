@@ -140,7 +140,7 @@ public sealed class IconProvider : IImageProvider, IIconLookup
         var canvas = surface.Canvas;
         canvas.Clear(SKColors.Transparent);
         using var font = new SKFont(Fluent, size * 0.8f);
-        using var paint = new SKPaint { IsAntialias = true, Color = Theme.Current.TextColor.ToSk() };
+        using var paint = new SKPaint { IsAntialias = true, Color = Theme.Current.TextFillColorPrimary.ToSk() };
         var text = glyph.ToString();
         var width = font.MeasureText(text, paint);
         font.GetFontMetrics(out var m);

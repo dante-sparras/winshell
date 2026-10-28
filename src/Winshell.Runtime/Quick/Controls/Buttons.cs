@@ -272,8 +272,8 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
         {
             var t = Theme.Current;
             if (!Enabled)
-                return t.TextDisabled;
-            return IsDown ? t.TextSecondary : t.TextColor;
+                return t.TextFillColorDisabled;
+            return IsDown ? t.TextFillColorSecondary : t.TextFillColorPrimary;
         }
     }
 
@@ -535,7 +535,7 @@ public class Button : AbstractButton
 
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) => PaintBackground(c, i.Bounds), 120, Fluent.ControlHeight));
 
-    protected virtual float Radius(SKRect bounds) => Fluent.CornerRadius;
+    protected virtual float Radius(SKRect bounds) => Fluent.ControlCornerRadius;
 
     protected void PaintBackground(SKCanvas canvas, SKRect r)
     {
@@ -546,33 +546,33 @@ public class Button : AbstractButton
         {
             if (!Enabled)
             {
-                Fluent.FillRound(canvas, r, radius, t.AccentFillDisabled);
+                Fluent.FillRound(canvas, r, radius, t.AccentFillColorDisabled);
                 return;
             }
-            var fill = down ? t.AccentFillTertiary : Hovered ? t.AccentFillSecondary : t.AccentFill;
+            var fill = down ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
             if (down)
                 Fluent.FillRound(canvas, r, radius, fill);
             else
-                Fluent.ElevatedRect(canvas, r, radius, fill, StrokeOnAccent, t.AccentStrokeSecondary);
+                Fluent.ElevatedRect(canvas, r, radius, fill, StrokeOnAccent, t.ControlStrokeColorOnAccentSecondary);
             return;
         }
         if (_flat || IsSubtle)
         {
-            var fill = !Enabled ? QColor.Transparent : down ? t.SubtleFillTertiary : Hovered ? t.SubtleFillSecondary : (_highlighted || Checked) ? t.SubtleFillSecondary : QColor.Transparent;
+            var fill = !Enabled ? QColor.Transparent : down ? t.SubtleFillColorTertiary : Hovered ? t.SubtleFillColorSecondary : (_highlighted || Checked) ? t.SubtleFillColorSecondary : QColor.Transparent;
             Fluent.FillRound(canvas, r, radius, fill);
             return;
         }
         if (!Enabled)
         {
-            Fluent.ElevatedRect(canvas, r, radius, t.ControlFillDisabled, t.ControlStroke, t.ControlStroke);
+            Fluent.ElevatedRect(canvas, r, radius, t.ControlFillColorDisabled, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
             return;
         }
         if (down)
         {
-            Fluent.ElevatedRect(canvas, r, radius, t.ControlFillTertiary, t.ControlStroke, t.ControlStroke);
+            Fluent.ElevatedRect(canvas, r, radius, t.ControlFillColorTertiary, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
             return;
         }
-        Fluent.ElevatedRect(canvas, r, radius, Hovered ? t.ControlFillSecondary : t.ControlFill, t.ControlStroke, t.ControlStrokeSecondary);
+        Fluent.ElevatedRect(canvas, r, radius, Hovered ? t.ControlFillColorSecondary : t.ControlFillColorDefault, t.ControlStrokeColorDefault, t.ControlStrokeColorSecondary);
     }
 
     internal static QColor StrokeOnAccent => QColor.Parse("#14ffffff");
@@ -586,7 +586,7 @@ public class Button : AbstractButton
         {
             var t = Theme.Current;
             if (IsAccent)
-                return !Enabled ? t.TextOnAccentDisabled : IsDown ? t.TextOnAccentSecondary : t.TextOnAccent;
+                return !Enabled ? t.TextOnAccentFillColorDisabled : IsDown ? t.TextOnAccentFillColorSecondary : t.TextOnAccentFillColorPrimary;
             return base.ContentColor;
         }
     }
@@ -636,10 +636,10 @@ public sealed class ToolButton : Button
         {
             var t = Theme.Current;
             if (!Enabled)
-                return t.TextDisabled;
+                return t.TextFillColorDisabled;
             if (Checked)
-                return t.AccentText;
-            return IsDown ? t.TextSecondary : t.TextColor;
+                return t.AccentTextFillColorPrimary;
+            return IsDown ? t.TextFillColorSecondary : t.TextFillColorPrimary;
         }
     }
 }
@@ -736,9 +736,9 @@ public sealed class CheckBox : IndicatorButton
         var on = _checkState != 0;
         if (on)
         {
-            var fill = !Enabled ? t.AccentFillDisabled : IsDown ? t.AccentFillTertiary : Hovered ? t.AccentFillSecondary : t.AccentFill;
-            Fluent.FillRound(c, box, Fluent.CornerRadius, fill);
-            var mark = !Enabled ? t.TextOnAccentDisabled : IsDown ? t.TextOnAccentSecondary : t.TextOnAccent;
+            var fill = !Enabled ? t.AccentFillColorDisabled : IsDown ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
+            Fluent.FillRound(c, box, Fluent.ControlCornerRadius, fill);
+            var mark = !Enabled ? t.TextOnAccentFillColorDisabled : IsDown ? t.TextOnAccentFillColorSecondary : t.TextOnAccentFillColorPrimary;
             if (_checkState == 2)
             {
                 Fluent.DrawCheck(c, box.MidX, box.MidY, 12, mark);
@@ -750,9 +750,9 @@ public sealed class CheckBox : IndicatorButton
             }
             return;
         }
-        var bg = !Enabled ? t.ControlAltFillSecondary : IsDown ? t.ControlAltFillTertiary.Darker(1.1) : Hovered ? t.ControlAltFillTertiary : t.ControlAltFillSecondary;
-        Fluent.FillRound(c, box, Fluent.CornerRadius, bg);
-        Fluent.StrokeRound(c, box, Fluent.CornerRadius, !Enabled ? t.ControlStrongStrokeDisabled : t.ControlStrongStroke);
+        var bg = !Enabled ? t.ControlAltFillColorSecondary : IsDown ? t.ControlAltFillColorTertiary.Darker(1.1) : Hovered ? t.ControlAltFillColorTertiary : t.ControlAltFillColorSecondary;
+        Fluent.FillRound(c, box, Fluent.ControlCornerRadius, bg);
+        Fluent.StrokeRound(c, box, Fluent.ControlCornerRadius, !Enabled ? t.ControlStrongStrokeColorDisabled : t.ControlStrongStrokeColorDefault);
     }, 20, 20));
 }
 
@@ -768,17 +768,17 @@ public sealed class RadioButton : IndicatorButton
         float cx = r.MidX, cy = r.MidY;
         if (Checked)
         {
-            var fill = !Enabled ? t.AccentFillDisabled : IsDown ? t.AccentFillTertiary : Hovered ? t.AccentFillSecondary : t.AccentFill;
+            var fill = !Enabled ? t.AccentFillColorDisabled : IsDown ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
             Fluent.FillCircle(c, cx, cy, 10, fill);
             var dot = IsDown ? 5f : Hovered ? 7f : 6f;
-            Fluent.FillCircle(c, cx, cy, dot, Enabled ? t.TextOnAccent : t.TextOnAccentDisabled);
+            Fluent.FillCircle(c, cx, cy, dot, Enabled ? t.TextOnAccentFillColorPrimary : t.TextOnAccentFillColorDisabled);
             return;
         }
-        var bg = IsDown ? t.ControlAltFillTertiary.Darker(1.1) : Hovered ? t.ControlAltFillTertiary : t.ControlAltFillSecondary;
+        var bg = IsDown ? t.ControlAltFillColorTertiary.Darker(1.1) : Hovered ? t.ControlAltFillColorTertiary : t.ControlAltFillColorSecondary;
         Fluent.FillCircle(c, cx, cy, 10, bg);
-        Fluent.StrokeCircle(c, cx, cy, 10, !Enabled ? t.ControlStrongStrokeDisabled : t.ControlStrongStroke);
+        Fluent.StrokeCircle(c, cx, cy, 10, !Enabled ? t.ControlStrongStrokeColorDisabled : t.ControlStrongStrokeColorDefault);
         if (IsDown && Enabled)
-            Fluent.FillCircle(c, cx, cy, 5, t.ControlStrongFill);
+            Fluent.FillCircle(c, cx, cy, 5, t.ControlStrongFillColorDefault);
     }, 20, 20));
 }
 
@@ -812,14 +812,14 @@ public sealed class Switch : IndicatorButton
         var on = pos >= 0.5;
         if (on)
         {
-            var fill = !Enabled ? t.AccentFillDisabled : IsDown ? t.AccentFillTertiary : Hovered ? t.AccentFillSecondary : t.AccentFill;
+            var fill = !Enabled ? t.AccentFillColorDisabled : IsDown ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault;
             Fluent.FillRound(c, track, 10, fill);
         }
         else
         {
-            var fill = !Enabled ? t.ControlAltFillSecondary : IsDown ? t.ControlAltFillTertiary.Darker(1.1) : Hovered ? t.ControlAltFillTertiary : t.ControlAltFillSecondary;
+            var fill = !Enabled ? t.ControlAltFillColorSecondary : IsDown ? t.ControlAltFillColorTertiary.Darker(1.1) : Hovered ? t.ControlAltFillColorTertiary : t.ControlAltFillColorSecondary;
             Fluent.FillRound(c, track, 10, fill);
-            Fluent.StrokeRound(c, track, 10, !Enabled ? t.ControlStrongStrokeDisabled : t.ControlStrongStroke);
+            Fluent.StrokeRound(c, track, 10, !Enabled ? t.ControlStrongStrokeColorDisabled : t.ControlStrongStrokeColorDefault);
         }
         float kw = IsDown ? 17 : Hovered ? 14 : 12;
         float kh = IsDown ? 14 : Hovered ? 14 : 12;
@@ -829,7 +829,7 @@ public sealed class Switch : IndicatorButton
         if (IsDown)
             cx += on ? -(kw - kh) / 2 : (kw - kh) / 2;
         var knob = SKRect.Create(cx - kw / 2, track.MidY - kh / 2, kw, kh);
-        var knobColor = on ? (Enabled ? t.TextOnAccent : t.TextOnAccentDisabled) : (Enabled ? t.TextSecondary : t.TextDisabled);
+        var knobColor = on ? (Enabled ? t.TextOnAccentFillColorPrimary : t.TextOnAccentFillColorDisabled) : (Enabled ? t.TextFillColorSecondary : t.TextFillColorDisabled);
         Fluent.FillRound(c, knob, kh / 2, knobColor);
     }, 40, 20));
 
@@ -908,12 +908,12 @@ public class ItemDelegate : AbstractButton
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var fill = !Enabled ? QColor.Transparent : IsDown ? t.SubtleFillTertiary : Hovered || ShowsSelection ? t.SubtleFillSecondary : QColor.Transparent;
-        Fluent.FillRound(c, r, Fluent.CornerRadius, fill);
+        var fill = !Enabled ? QColor.Transparent : IsDown ? t.SubtleFillColorTertiary : Hovered || ShowsSelection ? t.SubtleFillColorSecondary : QColor.Transparent;
+        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, fill);
         if (ShowsSelection && Enabled)
         {
             var h = IsDown ? 10f : 16f;
-            Fluent.FillRound(c, SKRect.Create(r.Left, r.MidY - h / 2, 3, h), 1.5f, t.AccentFill);
+            Fluent.FillRound(c, SKRect.Create(r.Left, r.MidY - h / 2, 3, h), 1.5f, t.AccentFillColorDefault);
         }
     }, 100, 40));
 }
@@ -936,10 +936,10 @@ public sealed class TabButton : AbstractButton
         {
             var t = Theme.Current;
             if (!Enabled)
-                return t.TextDisabled;
+                return t.TextFillColorDisabled;
             if (Checked)
-                return t.TextColor;
-            return IsDown ? t.TextTertiary : Hovered ? t.TextColor : t.TextSecondary;
+                return t.TextFillColorPrimary;
+            return IsDown ? t.TextFillColorTertiary : Hovered ? t.TextFillColorPrimary : t.TextFillColorSecondary;
         }
     }
 
@@ -948,11 +948,11 @@ public sealed class TabButton : AbstractButton
         var t = Theme.Current;
         var r = i.Bounds;
         if (Hovered && !Checked && Enabled)
-            Fluent.FillRound(c, SKRect.Inflate(r, -2, -2), Fluent.CornerRadius, t.SubtleFillSecondary);
+            Fluent.FillRound(c, SKRect.Inflate(r, -2, -2), Fluent.ControlCornerRadius, t.SubtleFillColorSecondary);
         if (Checked)
         {
             var w = IsDown ? 10f : 16f;
-            Fluent.FillRound(c, SKRect.Create(r.MidX - w / 2, r.Bottom - 3, w, 3), 1.5f, Enabled ? t.AccentFill : t.AccentFillDisabled);
+            Fluent.FillRound(c, SKRect.Create(r.MidX - w / 2, r.Bottom - 3, w, 3), 1.5f, Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled);
         }
     }, 60, Fluent.ControlHeight + 4));
 }

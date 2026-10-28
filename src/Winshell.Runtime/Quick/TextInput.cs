@@ -9,10 +9,10 @@ namespace Winshell.Runtime.Quick;
 public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerTarget, IHoverTarget
 {
     private string _text = "";
-    private QColor _color = Theme.Current.TextColor;
+    private QColor _color = Theme.Current.TextFillColorPrimary;
     private bool _colorSet;
-    private QColor _selectionColor = Theme.Current.AccentFill;
-    private QColor _selectedTextColor = Theme.Current.TextOnAccent;
+    private QColor _selectionColor = Theme.Current.AccentFillColorDefault;
+    private QColor _selectedTextColor = Theme.Current.TextOnAccentFillColorPrimary;
     private int _cursorPosition;
     private int _selectionStart;
     private int _selectionEnd;
@@ -36,7 +36,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public TextInput()
     {
-        Font = new FontGroup(this);
+        _fontGroup = new FontGroup(this);
         Font.Changed += UpdateImplicit;
         Theme.Changed += OnTheme;
     }
@@ -54,11 +54,11 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         if (!_colorSet && !IsDestroyed)
         {
-            _color = Theme.Current.TextColor;
+            _color = Theme.Current.TextFillColorPrimary;
             NotifyChanged("color");
         }
-        _selectionColor = Theme.Current.AccentFill;
-        _selectedTextColor = Theme.Current.TextOnAccent;
+        _selectionColor = Theme.Current.AccentFillColorDefault;
+        _selectedTextColor = Theme.Current.TextOnAccentFillColorPrimary;
         Update();
     }
 
@@ -133,8 +133,11 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public QColor SelectedTextColor { get { Track(); return _selectedTextColor; } set { if (SetField(ref _selectedTextColor, value)) Update(); } }
 
+    private readonly FontGroup _fontGroup;
+
+    /// <summary>The font. Assigning a whole font, such as <c>font: WindowsTheme.typography.body</c>, copies it.</summary>
     [Qml]
-    public FontGroup Font { get; }
+    public FontGroup Font { get => _fontGroup; set => _fontGroup.CopyFrom(value); }
 
     [Qml]
     public int CursorPosition

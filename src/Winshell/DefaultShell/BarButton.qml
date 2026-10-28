@@ -15,9 +15,9 @@ MouseArea {
   Rectangle {
     anchors.fill: parent
     radius: 4
-    color: root.pressed ? WindowsTheme.subtleFillTertiary : root.containsMouse ? WindowsTheme.subtleFillSecondary : "transparent"
+    color: root.pressed ? WindowsTheme.subtleFillColorTertiary : root.containsMouse ? WindowsTheme.subtleFillColorSecondary : "transparent"
     border.width: root.containsMouse ? 1 : 0
-    border.color: WindowsTheme.controlStroke
+    border.color: WindowsTheme.controlStrokeColorDefault
 
     Behavior on color { ColorAnimation { duration: 83 } }
   }
@@ -33,7 +33,7 @@ MouseArea {
       text: root.icon
       font.family: WindowsTheme.iconFontFamily
       font.pixelSize: 16
-      color: WindowsTheme.textPrimary
+      color: WindowsTheme.textFillColorPrimary
     }
 
     Text {
@@ -43,7 +43,7 @@ MouseArea {
       horizontalAlignment: Text.AlignRight
       font.pixelSize: 12
       lineHeight: 1.1
-      color: WindowsTheme.textPrimary
+      color: WindowsTheme.textFillColorPrimary
     }
   }
 }

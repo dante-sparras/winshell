@@ -93,7 +93,7 @@ public class Pane : Control
 
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
     {
-        using var paint = new SKPaint { Color = Theme.Current.SolidBackground.ToSk() };
+        using var paint = new SKPaint { Color = Theme.Current.SolidBackgroundFillColorBase.ToSk() };
         c.DrawRect(i.Bounds, paint);
     }));
 
@@ -112,8 +112,8 @@ public class Frame : Pane
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
     {
         var t = Theme.Current;
-        Fluent.FillRound(c, i.Bounds, Fluent.OverlayCornerRadius, t.CardBackground);
-        Fluent.StrokeRound(c, i.Bounds, Fluent.OverlayCornerRadius, t.CardStroke.A > 0 ? (t.IsDark ? t.ControlStroke : t.CardStroke) : t.ControlStroke);
+        Fluent.FillRound(c, i.Bounds, Fluent.OverlayCornerRadius, t.CardBackgroundFillColorDefault);
+        Fluent.StrokeRound(c, i.Bounds, Fluent.OverlayCornerRadius, t.CardStrokeColorDefault.A > 0 ? (t.IsDark ? t.ControlStrokeColorDefault : t.CardStrokeColorDefault) : t.ControlStrokeColorDefault);
     }));
 }
 
@@ -251,7 +251,7 @@ public sealed class ToolBar : Pane
 
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
     {
-        using var paint = new SKPaint { Color = Theme.Current.SolidBackgroundTertiary.ToSk() };
+        using var paint = new SKPaint { Color = Theme.Current.SolidBackgroundFillColorTertiary.ToSk() };
         c.DrawRect(i.Bounds, paint);
     }, 0, 48));
 }
@@ -274,7 +274,7 @@ public sealed class ToolSeparator : Control
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
     {
-        using var paint = new SKPaint { Color = Theme.Current.DividerStroke.ToSk() };
+        using var paint = new SKPaint { Color = Theme.Current.DividerStrokeColorDefault.ToSk() };
         var r = i.Bounds;
         if (_orientation == 2)
             c.DrawRect(SKRect.Create(MathF.Round(r.MidX), r.Top, 1, r.Height), paint);
@@ -386,7 +386,7 @@ public sealed class ApplicationWindow : Page
 {
     private QColor? _color;
 
-    [Qml] public QColor Color { get { Track(); return _color ?? Theme.Current.SolidBackground; } set { _color = value; NotifyChanged("color"); Update(); } }
+    [Qml] public QColor Color { get { Track(); return _color ?? Theme.Current.SolidBackgroundFillColorBase; } set { _color = value; NotifyChanged("color"); Update(); } }
 
     [Qml] public Item? MenuBar { get; set; }
 

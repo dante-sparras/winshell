@@ -142,8 +142,8 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
             return;
         var t = Theme.Current;
         var r = i.Bounds;
-        Fluent.FillRound(c, r, 6, t.FlyoutBackground.WithAlpha(0.92));
-        Fluent.StrokeRound(c, r, 6, t.ControlStroke);
+        Fluent.FillRound(c, r, 6, t.AcrylicBackgroundFillColorDefault.WithAlpha(0.92));
+        Fluent.StrokeRound(c, r, 6, t.ControlStrokeColorDefault);
     }, 12, 12));
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
@@ -153,7 +153,7 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
         var t = Theme.Current;
         var r = i.Bounds;
         var thickness = Expanded ? 6f : 2f;
-        var color = _pressed ? t.ControlStrongFill.WithAlpha(Math.Min(1, t.ControlStrongFill.A * 1.2)) : t.ControlStrongFill;
+        var color = _pressed ? t.ControlStrongFillColorDefault.WithAlpha(Math.Min(1, t.ControlStrongFillColorDefault.A * 1.2)) : t.ControlStrongFillColorDefault;
         var rect = _orientation == 2
             ? SKRect.Create(r.MidX - thickness / 2 + (Expanded ? 0 : 2), r.Top, thickness, r.Height)
             : SKRect.Create(r.Left, r.MidY - thickness / 2 + (Expanded ? 0 : 2), r.Width, thickness);
@@ -607,7 +607,7 @@ public sealed class ScrollIndicator : Control
         if (_size >= 1)
             return;
         var r = i.Bounds;
-        var color = Theme.Current.ControlStrongFill;
+        var color = Theme.Current.ControlStrongFillColorDefault;
         var rect = _orientation == 2
             ? SKRect.Create(r.MidX - 1, r.Top + (float)(_position * r.Height), 2, (float)(_size * r.Height))
             : SKRect.Create(r.Left + (float)(_position * r.Width), r.MidY - 1, (float)(_size * r.Width), 2);

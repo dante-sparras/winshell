@@ -125,7 +125,7 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     [Qml]
     public QColor PlaceholderTextColor
     {
-        get { Track(); return _placeholderColor ?? Theme.Current.TextSecondary; }
+        get { Track(); return _placeholderColor ?? Theme.Current.TextFillColorSecondary; }
         set { _placeholderColor = value; NotifyChanged("placeholderTextColor"); Update(); }
     }
 
@@ -191,15 +191,15 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     {
         var t = Theme.Current;
         var focused = ActiveFocus && !ReadOnly;
-        var fill = !Enabled ? t.ControlFillDisabled : focused ? t.ControlFillInputActive : _hovered ? t.ControlFillSecondary : t.ControlFill;
-        Fluent.ElevatedRect(canvas, r, Fluent.CornerRadius, fill, t.ControlStroke, t.ControlStroke);
+        var fill = !Enabled ? t.ControlFillColorDisabled : focused ? t.ControlFillColorInputActive : _hovered ? t.ControlFillColorSecondary : t.ControlFillColorDefault;
+        Fluent.ElevatedRect(canvas, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
         if (!Enabled)
             return;
         canvas.Save();
-        using (var clip = Fluent.Round(r, Fluent.CornerRadius))
+        using (var clip = Fluent.Round(r, Fluent.ControlCornerRadius))
             canvas.ClipRoundRect(clip, SKClipOperation.Intersect, true);
         var lineHeight = focused ? 2f : 1f;
-        using var paint = new SKPaint { Color = (focused ? t.AccentFill : t.ControlStrongStroke).ToSk(), IsAntialias = false };
+        using var paint = new SKPaint { Color = (focused ? t.AccentFillColorDefault : t.ControlStrongStrokeColorDefault).ToSk(), IsAntialias = false };
         canvas.DrawRect(SKRect.Create(r.Left, r.Bottom - lineHeight, r.Width, lineHeight), paint);
         canvas.Restore();
     }
@@ -265,7 +265,7 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
             var y = (VerticalAlignment & QtEnums.AlignVCenter) != 0 ? (Height - layout.Height) / 2 : TopPadding;
             canvas.Save();
             canvas.Translate((float)LeftPadding, 0);
-            layout.Draw(canvas, Math.Max(0, Width - LeftPadding - RightPadding), HorizontalAlignment, Enabled ? PlaceholderTextColor : Theme.Current.TextDisabled, y, true, paint: context);
+            layout.Draw(canvas, Math.Max(0, Width - LeftPadding - RightPadding), HorizontalAlignment, Enabled ? PlaceholderTextColor : Theme.Current.TextFillColorDisabled, y, true, paint: context);
             canvas.Restore();
         }
         base.Paint(canvas, context);
