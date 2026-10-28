@@ -198,6 +198,7 @@ public static class WindowsModules
     public static void AddServices(QmlEngine engine, WindowsPlatform platform)
     {
         engine.AddService<Services.Input.IHotkeyRegistrar>(platform.Hotkeys);
+        engine.AddService<Services.Session.IWorkstationLock>(Services.Session.WindowsWorkstationLock.Instance);
     }
 }
 
@@ -212,7 +213,7 @@ public static class ServiceModules
         Services.Audio.AudioService.Register(registry);
         Services.Media.MediaService.Register(registry);
         Services.WindowManagerModules.Register(registry);
-        Services.SignIn.SignInModule.Register(registry);
+        Services.Session.SessionModule.Register(registry);
         Services.Tray.SystemTrayModule.Register(registry);
         Services.Notifications.NotificationModule.Register(registry);
         Services.Capture.CaptureModule.Register(registry);

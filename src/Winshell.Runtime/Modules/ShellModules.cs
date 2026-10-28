@@ -37,8 +37,6 @@ public static partial class StandardModules
             .Type<PanelWindow>("PanelWindow")
             .Type<FloatingWindow>("FloatingWindow")
             .Type<PopupWindow>("PopupWindow")
-            .Type<SessionLock>("SessionLock")
-            .Type<SessionLockSurface>("SessionLockSurface")
             .Uncreatable<ShellScreen>("ShellScreen")
             .Uncreatable<PopupAnchor>("PopupAnchor")
             .Uncreatable<ShellWindowAttached>("ShellWindow", "ShellWindow is the base of the shell's windows", attached: o => new ShellWindowAttached(o), attachedType: typeof(ShellWindowAttached))

@@ -647,7 +647,7 @@ public sealed class PanelWindow : ShellWindow
         }
     }
 
-    /// <summary>What the panel is for. A session lock surface is <c>winshell-lock</c>.</summary>
+    /// <summary>What the panel is for, such as <c>bar</c>.</summary>
     public string Namespace
     {
         get => _namespace;
