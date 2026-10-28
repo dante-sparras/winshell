@@ -8,10 +8,19 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <!-- A build without Version is 0.0.0-dev. Projects are not packable unless they opt in. -->
+  <!-- The product version is the release-please manifest. -p:Version= overrides it.
+       A build that cannot read the manifest is 0.0.0-dev. Projects are not packable unless they opt in. -->
   <PropertyGroup>
-    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+    <_WinshellReleaseManifest>$(MSBuildThisFileDirectory).release-please-manifest.json</_WinshellReleaseManifest>
     <IsPackable>false</IsPackable>
     <Authors>dante-sparras</Authors>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Version)' == '' and Exists('$(_WinshellReleaseManifest)')">
+    <_WinshellReleaseManifestText>$([System.IO.File]::ReadAllText('$(_WinshellReleaseManifest)'))</_WinshellReleaseManifestText>
+    <_WinshellReleaseVersion>$([System.Text.RegularExpressions.Regex]::Match($(_WinshellReleaseManifestText), '\d+\.\d+\.\d+').Value)</_WinshellReleaseVersion>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == '' and '$(_WinshellReleaseVersion)' != ''">$(_WinshellReleaseVersion)</Version>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
   </PropertyGroup>
 </Project>

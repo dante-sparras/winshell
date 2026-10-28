@@ -293,7 +293,7 @@ Stopping clears the preview and all retained pixels. Export with `saveToFile()` 
 - Cache is `%LOCALAPPDATA%\winshell\cache`, state is `%LOCALAPPDATA%\winshell\state`, per-shell data is `%LOCALAPPDATA%\winshell\data`, and an instance's log is `%LOCALAPPDATA%\winshell\run\<id>\log.txt`. `Shell.dataDir`, `Shell.stateDir`, and `Shell.cacheDir` are those per-shell folders. `//@ pragma DataDir`, `StateDir`, and `CacheDir` still override them; `$BASE` is the folder above `by-shell`.
 - The environment variables are `WINSHELL_CONFIG_DIR`, `WINSHELL_APP_ID`, `WINSHELL_DISABLE_FILE_WATCHER` and `WINSHELL_NO_RELOAD_POPUP`, not `XDG_CONFIG_HOME`, `QS_APP_ID`, `QS_DISABLE_FILE_WATCHER` and `QS_NO_RELOAD_POPUP`.
 - `Shell.appId` is `winshell` unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets it.
-- `Shell.hasVersion` and `//@ if hasVersion(...)` still answer for version 0.3.
+- `Shell.hasVersion` and `//@ if hasVersion(...)` answer for the Winshell release stamped into the build from `.release-please-manifest.json`, not Quickshell 0.3. `hasVersion(0, 3)` is true on 0.3.0 and any later release. A feature list names unreleased features of that exact release; none are declared, so `hasVersion(0, 3, ["feature"])` is false on 0.3.0 and true on a later release. `Shell.hasQtVersion` and `//@ if hasQtVersion(...)` still check the Qt Quick language level this runtime implements, which is 6.10.
 - Log categories are short: `audio`, `media`, `power`, `hotkey`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.
 
 ## Notifications

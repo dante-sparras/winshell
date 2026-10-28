@@ -7,11 +7,12 @@ namespace Winshell.Runtime;
 /// <summary>
 /// The preprocessor: <c>//@ if hasVersion(0, 3)</c> ... <c>//@ elif</c> ... <c>//@ else</c> ...
 /// <c>//@ endif</c>. Lines in a branch that does not apply are blanked, so line numbers stay the same.
+/// <c>hasVersion</c> checks the Winshell release stamped into this build.
 /// </summary>
 public static partial class Preprocessor
 {
-    /// <summary>The API version <c>hasVersion</c> checks: 0.3, the Quickshell version Winshell started from.</summary>
-    public static readonly (int Major, int Minor) Version = (0, 3);
+    /// <summary>The Winshell release <c>hasVersion</c> checks, from the assembly informational version.</summary>
+    public static (int Major, int Minor) Version => (ProductVersion.Current.Major, ProductVersion.Current.Minor);
 
     /// <summary>The Qt version Winshell behaves as.</summary>
     public static readonly (int Major, int Minor) QtVersion = (6, 10);
@@ -74,9 +75,17 @@ public static partial class Preprocessor
         {
             var major = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
             var minor = int.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
-            var features = m.Groups[4].Success && m.Groups[4].Value.Contains('"', StringComparison.Ordinal);
-            var target = m.Groups[1].Value == "hasQtVersion" ? QtVersion : Version;
-            var ok = target.Major > major || (target.Major == major && target.Minor > minor) || (target == (major, minor) && !features);
+            var features = FeatureNames(m.Groups[4].Value);
+            bool ok;
+            if (m.Groups[1].Value == "hasQtVersion")
+            {
+                // hasQtVersion has no feature list. A list keeps the exact language level from matching.
+                ok = QtVersion.Major > major || (QtVersion.Major == major && QtVersion.Minor > minor) || (QtVersion == (major, minor) && features.Count == 0);
+            }
+            else
+            {
+                ok = ProductVersion.Current.Satisfies(major, minor, features);
+            }
             return ok ? "true" : "false";
         });
         try
@@ -92,4 +101,17 @@ public static partial class Preprocessor
 
     [GeneratedRegex(@"(hasVersion|hasQtVersion)\(\s*(\d+)\s*,\s*(\d+)\s*(,\s*\[[^\]]*\])?\s*\)")]
     private static partial Regex HasVersion();
+
+    [GeneratedRegex("\"([^\"]*)\"")]
+    private static partial Regex FeatureName();
+
+    private static List<string> FeatureNames(string list)
+    {
+        if (!list.Contains('"', StringComparison.Ordinal))
+            return [];
+        var names = new List<string>();
+        foreach (Match name in FeatureName().Matches(list))
+            names.Add(name.Groups[1].Value);
+        return names;
+    }
 }

@@ -379,15 +379,15 @@ public sealed class ShellGlobal : QObject
     [Qml]
     public void InhibitReloadPopup() => Host?.InhibitReloadPopup();
 
-    /// <summary>Winshell's API is version 0.3, with no unreleased features: the Quickshell version it started from.</summary>
+    /// <summary>
+    /// True when this Winshell release is at least <paramref name="major"/>.<paramref name="minor"/>
+    /// and every named unreleased feature is present. A newer release includes those features.
+    /// None are declared, so a feature list matches only on a newer release. The release is the
+    /// assembly informational version, stamped from the release-please manifest.
+    /// </summary>
     [Qml]
     public bool HasVersion(int major, int minor, object? features = null) =>
-        (major, minor) switch
-        {
-            (0, <= 3) => ValueConverter.ToList(features).Count == 0 || minor < 3,
-            ( < 0, _) => true,
-            _ => false,
-        };
+        ProductVersion.Current.Satisfies(major, minor, ValueConverter.ToList(features).Select(ValueConverter.ToQmlString).ToList());
 
     [Qml]
     public bool HasQtVersion(int major, int minor) => major < 6 || (major == 6 && minor <= 10);
