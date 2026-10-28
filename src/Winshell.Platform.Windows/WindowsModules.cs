@@ -197,8 +197,7 @@ public static class WindowsModules
     /// <summary>Gives a new engine the Windows services its singletons use.</summary>
     public static void AddServices(QmlEngine engine, WindowsPlatform platform)
     {
-        _ = engine;
-        _ = platform;
+        engine.AddService<Services.Input.IHotkeyRegistrar>(platform.Hotkeys);
     }
 }
 
@@ -217,5 +216,6 @@ public static class ServiceModules
         Services.Tray.SystemTrayModule.Register(registry);
         Services.Notifications.NotificationModule.Register(registry);
         Services.Capture.CaptureModule.Register(registry);
+        Services.Input.InputModule.Register(registry);
     }
 }

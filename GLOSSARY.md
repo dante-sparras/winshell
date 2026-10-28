@@ -116,6 +116,10 @@ _Avoid_: power profile, overlay scheme, power plan
 The brightness setting of a connected monitor.
 _Avoid_: backlight
 
+**Hotkey**:
+A key chord or a short sequence of chords that works anywhere in Windows, such as `Ctrl+Shift+K` or `Win`.
+_Avoid_: global shortcut, keybind, accelerator, bind
+
 ## The language
 
 **Module**:
