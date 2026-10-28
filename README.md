@@ -1,10 +1,12 @@
 # Winshell
 
-A shell toolkit for Windows 11 that matches Quickshell.
+A desktop shell toolkit for Windows 11. A configuration written in QML describes the shell.
 
 ## Getting started
 
 See the [development runbook](docs/development.md) for prerequisites, first checkout, and commands.
+
+Coming from Quickshell? See [Migrating from Quickshell](docs/migrating-from-quickshell.md).
 
 ## Contributing
 

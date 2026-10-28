@@ -9,10 +9,10 @@ public class QmlParserTests
             pragma Singleton
             pragma ComponentBehavior: Bound
             import QtQuick 6.0
-            import Quickshell as QS
+            import Winshell as WS
             import "myjs.js" as MyJs
             import "./widgets"
-            import qs.services
+            import config.services
 
             Item {}
             """);
@@ -21,10 +21,10 @@ public class QmlParserTests
         Assert.Equal("Bound", doc.Pragma("ComponentBehavior"));
         Assert.Collection(doc.Imports,
             i => { Assert.Equal(ImportKind.Module, i.Kind); Assert.Equal("QtQuick", i.Uri); Assert.Equal("6.0", i.Version); },
-            i => { Assert.Equal("Quickshell", i.Uri); Assert.Equal("QS", i.Qualifier); },
+            i => { Assert.Equal("Winshell", i.Uri); Assert.Equal("WS", i.Qualifier); },
             i => { Assert.Equal(ImportKind.Script, i.Kind); Assert.Equal("MyJs", i.Qualifier); },
             i => { Assert.Equal(ImportKind.Directory, i.Kind); Assert.Equal("./widgets", i.Uri); },
-            i => Assert.Equal("qs.services", i.Uri));
+            i => Assert.Equal("config.services", i.Uri));
         Assert.Equal("Item", doc.Root.TypeName);
     }
 

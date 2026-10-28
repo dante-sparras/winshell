@@ -23,7 +23,7 @@ internal sealed partial class PowerProfilesBackend : SnapshotSource<PowerProfile
     {
     }
 
-    protected override string Category => "quickshell.service.powerprofiles";
+    protected override string Category => "power";
 
     protected override async Task StartAsync()
     {

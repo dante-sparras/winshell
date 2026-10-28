@@ -25,7 +25,7 @@ public sealed class TypeEntry
 
     public IReadOnlyDictionary<string, int> Enums { get; init; } = new Dictionary<string, int>();
 
-    /// <summary>The <c>toString(value)</c> of an enum type, such as <c>UPowerDeviceState.toString(state)</c>.</summary>
+    /// <summary>The <c>toString(value)</c> of an enum type, such as <c>PowerDeviceState.toString(state)</c>.</summary>
     public Func<int, string>? EnumToString { get; init; }
 }
 
@@ -83,7 +83,7 @@ public sealed class QmlModule(string name)
         });
     }
 
-    /// <summary>A singleton: <c>Quickshell.screens</c>.</summary>
+    /// <summary>A singleton: <c>Shell.screens</c>.</summary>
     public QmlModule Singleton<T>(Func<QmlEngine, T> create, string? name = null)
         where T : QObject
     {

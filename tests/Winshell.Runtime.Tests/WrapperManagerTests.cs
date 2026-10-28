@@ -1,5 +1,5 @@
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Runtime.Tests;
 
@@ -10,7 +10,7 @@ public class WrapperManagerTests
     {
         var root = (Item)TestShell.Run("""
             import QtQuick
-            import Quickshell.Widgets
+            import Winshell.Widgets
             Item {
               WrapperManager { }
               Text { objectName: "only"; text: "only" }
@@ -30,7 +30,7 @@ public class WrapperManagerTests
     {
         var root = (Item)TestShell.Run("""
             import QtQuick
-            import Quickshell.Widgets
+            import Winshell.Widgets
             Item {
               WrapperManager { }
               Text { objectName: "a"; text: "a" }
@@ -56,7 +56,7 @@ public class WrapperManagerTests
     {
         var root = (Item)TestShell.Run("""
             import QtQuick
-            import Quickshell.Widgets
+            import Winshell.Widgets
             Item {
               WrapperManager { child: a }
               Text { id: a; objectName: "a"; text: "a" }
@@ -78,7 +78,7 @@ public class WrapperManagerTests
     {
         var root = (Item)TestShell.Run("""
             import QtQuick
-            import Quickshell.Widgets
+            import Winshell.Widgets
             Item {
               WrapperManager {
                 child: Text { objectName: "inline"; text: "in" }
@@ -98,7 +98,7 @@ public class WrapperManagerTests
     {
         var root = (Item)TestShell.Run("""
             import QtQuick
-            import Quickshell.Widgets
+            import Winshell.Widgets
             Item {
               id: root
               WrapperManager { id: manager }
@@ -118,7 +118,7 @@ public class WrapperManagerTests
     {
         var root = TestShell.Run("""
             import QtQml
-            import Quickshell.Widgets
+            import Winshell.Widgets
             QtObject {
               property var manager: WrapperManager { }
               property var wrapped: manager.child

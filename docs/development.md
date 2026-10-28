@@ -26,6 +26,16 @@ pwsh scripts/dev.ps1
 
 Before opening a PR, run the checks CI runs: `pwsh scripts/check.ps1`.
 
+## Environment variables
+
+A running shell reads these. None is needed to build or test.
+
+| Variable | What it does |
+| --- | --- |
+| `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
+| `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
+| `WINSHELL_NO_RELOAD_POPUP` | `1` hides the popup that reports a reload. |
+
 ## Releasing
 
 release-please keeps a release PR open that collects the changes merged into `main`, with the next version and its changelog. Merging that PR tags the release and publishes it.

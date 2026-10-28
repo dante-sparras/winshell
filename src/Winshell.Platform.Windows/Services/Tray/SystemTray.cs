@@ -2,7 +2,7 @@ using System.Diagnostics;
 using SkiaSharp;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Tray;
 
@@ -21,7 +21,7 @@ public enum Category
     Communications = 3,
 }
 
-/// <summary>Quickshell's <c>SystemTray</c>: the notification area icons of every app.</summary>
+/// <summary>The <c>SystemTray</c>: the notification area icons of every app.</summary>
 public sealed class SystemTray : QObject
 {
     private readonly TrayHost? _host;
@@ -78,8 +78,8 @@ public sealed class SystemTray : QObject
 }
 
 /// <summary>
-/// Quickshell's <c>SystemTrayItem</c> for an app's notification area icon. Its menu belongs to the app, which only
-/// shows it itself: <c>display()</c> and <c>QsMenuAnchor</c> open it, while <c>QsMenuOpener</c> sees no entries.
+/// The <c>SystemTrayItem</c> for an app's notification area icon. Its menu belongs to the app, which only
+/// shows it itself: <c>display()</c> and <c>MenuAnchor</c> open it, while <c>MenuOpener</c> sees no entries.
 /// Windows has no scroll action for these icons.
 /// </summary>
 [QmlSignal("ready")]
@@ -128,7 +128,7 @@ public sealed class SystemTrayItem : QObject
 
     [Qml] public bool OnlyMenu => false;
 
-    [Qml] public QsMenuHandle Menu { get; }
+    [Qml] public MenuHandle Menu { get; }
 
     [Qml]
     public void Activate() => _host.Click(_icon, 0, null);
@@ -142,8 +142,8 @@ public sealed class SystemTrayItem : QObject
     }
 
     [Qml]
-    public void Display(QsWindow? parentWindow, double relativeX, double relativeY) =>
-        _host.Click(_icon, 1, QsMenuHandle.ScreenPoint(parentWindow, relativeX, relativeY));
+    public void Display(ShellWindow? parentWindow, double relativeX, double relativeY) =>
+        _host.Click(_icon, 1, MenuHandle.ScreenPoint(parentWindow, relativeX, relativeY));
 
     internal void Refresh()
     {
@@ -155,9 +155,9 @@ public sealed class SystemTrayItem : QObject
 
     private static string Rest(string text) => text.Split('\n', 2) is [_, var rest] ? rest.Trim() : "";
 
-    private sealed class TrayMenu(SystemTrayItem item) : QsMenuHandle
+    private sealed class TrayMenu(SystemTrayItem item) : MenuHandle
     {
-        public override void Display(QsWindow? window, double x, double y) => item.Display(window, x, y);
+        public override void Display(ShellWindow? window, double x, double y) => item.Display(window, x, y);
     }
 }
 
@@ -181,7 +181,7 @@ internal static class SystemTrayModule
     public static void Register(ModuleRegistry registry)
     {
         ImageLoader.AddProvider("trayicon", TrayIconProvider.Instance);
-        registry.Module("Quickshell.Services.SystemTray")
+        registry.Module("Winshell.Tray")
             .Singleton(e => new SystemTray(e), "SystemTray")
             .Uncreatable<SystemTrayItem>("SystemTrayItem")
             .Enum<Status>(s => s.ToString())

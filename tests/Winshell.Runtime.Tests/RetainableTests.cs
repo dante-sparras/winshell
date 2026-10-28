@@ -1,4 +1,4 @@
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Runtime.Tests;
 
@@ -93,7 +93,7 @@ public class RetainableTests
     {
         var root = TestShell.Run("""
             import QtQuick
-            import Quickshell
+            import Winshell
             Item {
               property alias hold: hold
               RetainableLock { id: hold }

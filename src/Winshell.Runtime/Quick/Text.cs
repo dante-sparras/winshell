@@ -157,7 +157,7 @@ public class Text : Item
 
     private readonly FontGroup _fontGroup;
 
-    /// <summary>The font. Assigning a whole font, such as <c>font: WindowsTheme.typography.body</c>, copies it.</summary>
+    /// <summary>The font. Assigning a whole font, such as <c>font: Theme.typography.body</c>, copies it.</summary>
     [Qml]
     public FontGroup Font { get => _fontGroup; set => _fontGroup.CopyFrom(value); }
 

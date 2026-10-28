@@ -187,7 +187,7 @@ public sealed class AccessibleTree
         Check(AccessibleProperty.TextSelection, a.TextSelection, b.TextSelection);
     }
 
-    private static Role RootRole(Scene scene) => scene.WindowObject is Quickshell.FloatingWindow ? Role.Window : Role.Pane;
+    private static Role RootRole(Scene scene) => scene.WindowObject is Shell.FloatingWindow ? Role.Window : Role.Pane;
 
     /// <summary>What a built-in item is when QML does not say.</summary>
     internal static Role DefaultRole(Item item) => item switch
@@ -273,7 +273,7 @@ public sealed partial class AccessibleNode
                 return attached.Name;
             var name = Item switch
             {
-                _ when IsRoot => Tree.Scene.WindowObject is Quickshell.FloatingWindow window ? window.Title : "",
+                _ when IsRoot => Tree.Scene.WindowObject is Shell.FloatingWindow window ? window.Title : "",
                 AbstractButton button => button.Text,
                 TextField textField => textField.PlaceholderText,
                 Text text => PlainText(text),

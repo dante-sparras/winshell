@@ -58,7 +58,7 @@ internal sealed partial class BluetoothBackend : SnapshotSource<BluetoothSnapsho
     {
     }
 
-    protected override string Category => "quickshell.bluetooth";
+    protected override string Category => "bluetooth";
 
     protected override async Task StartAsync()
     {

@@ -1,5 +1,5 @@
-import Quickshell
-import Quickshell.Windows
+import Winshell
+import Winshell.Theme
 import QtQuick
 import QtQuick.Layouts
 
@@ -29,7 +29,7 @@ PopupWindow {
       text: Qt.formatDateTime(root.date, "dddd, MMMM d")
       font.pixelSize: 14
       font.weight: Font.DemiBold
-      color: WindowsTheme.textFillColorPrimary
+      color: Theme.textFillColorPrimary
     }
 
     RowLayout {
@@ -40,7 +40,7 @@ PopupWindow {
         text: Qt.formatDateTime(root.shown, "MMMM yyyy")
         font.pixelSize: 14
         font.weight: Font.DemiBold
-        color: WindowsTheme.textFillColorPrimary
+        color: Theme.textFillColorPrimary
       }
 
       MonthArrow { glyph: ""; onClicked: root.monthOffset-- }
@@ -62,7 +62,7 @@ PopupWindow {
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter
           font.pixelSize: 12
-          color: WindowsTheme.textFillColorSecondary
+          color: Theme.textFillColorSecondary
         }
       }
 
@@ -80,13 +80,13 @@ PopupWindow {
           width: 40
           height: 40
           radius: 20
-          color: today ? WindowsTheme.accentFillColorDefault : dayMouse.containsMouse ? WindowsTheme.subtleFillColorSecondary : "transparent"
+          color: today ? Theme.accentFillColorDefault : dayMouse.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
 
           Text {
             anchors.centerIn: parent
             text: parent.day.getDate()
             font.pixelSize: 13
-            color: parent.today ? WindowsTheme.textOnAccentFillColorPrimary : parent.inMonth ? WindowsTheme.textFillColorPrimary : WindowsTheme.textFillColorDisabled
+            color: parent.today ? Theme.textOnAccentFillColorPrimary : parent.inMonth ? Theme.textFillColorPrimary : Theme.textFillColorDisabled
           }
 
           MouseArea {
@@ -109,15 +109,15 @@ PopupWindow {
     Rectangle {
       anchors.fill: parent
       radius: 4
-      color: arrow.pressed ? WindowsTheme.subtleFillColorTertiary : arrow.containsMouse ? WindowsTheme.subtleFillColorSecondary : "transparent"
+      color: arrow.pressed ? Theme.subtleFillColorTertiary : arrow.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
     }
 
     Text {
       anchors.centerIn: parent
       text: arrow.glyph
-      font.family: WindowsTheme.iconFontFamily
+      font.family: Theme.iconFontFamily
       font.pixelSize: 12
-      color: WindowsTheme.textFillColorPrimary
+      color: Theme.textFillColorPrimary
     }
   }
 }

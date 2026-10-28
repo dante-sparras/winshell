@@ -22,12 +22,12 @@ public class ClipboardTests
     }
 
     [Fact]
-    public void An_outside_clipboard_change_updates_quickshell()
+    public void An_outside_clipboard_change_updates_the_shell_singleton()
     {
         using var shell = new TestShell(("shell.qml", """
             import QtQml
-            import Quickshell
-            QtObject { property string clip: Quickshell.clipboardText }
+            import Winshell
+            QtObject { property string clip: Shell.clipboardText }
             """));
         var clip = new FakeClipboard();
         shell.Engine.AddService<IClipboard>(clip);

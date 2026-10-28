@@ -1,4 +1,4 @@
-import Quickshell
+import Winshell
 import QtQuick
 import QtQuick.Layouts
 import "dates.js" as Dates

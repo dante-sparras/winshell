@@ -14,7 +14,7 @@ public enum LogLevel
     Fatal,
 }
 
-/// <summary>Writes messages in Quickshell's format: <c> WARN scene: shell.qml[36:-1]: ReferenceError: ...</c>.</summary>
+/// <summary>Writes messages as <c> WARN scene: shell.qml[36:-1]: ReferenceError: ...</c>.</summary>
 public sealed partial class Log
 {
     public static readonly Log Default = new();

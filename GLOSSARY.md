@@ -36,7 +36,7 @@ _Avoid_: form, view
 
 **Panel**:
 A window anchored to an edge of a screen. It can reserve that edge.
-_Avoid_: bar, taskbar, dock
+_Avoid_: bar, taskbar, dock, layer surface
 
 **Popup window**:
 A frameless window placed next to another window.
@@ -78,10 +78,24 @@ _Avoid_: skin, style, palette
 A named color, corner radius, font or timing of the Windows 11 look, made from the theme. It has the name of its WinUI 3 theme resource.
 _Avoid_: brush, resource, variable
 
+## What it reads from Windows
+
+**App window**:
+A top-level window of another program, as the taskbar and Alt+Tab list it.
+_Avoid_: toplevel, client
+
+**App**:
+A program the Start menu lists: a shortcut or a packaged app.
+_Avoid_: desktop entry, application
+
+**Media session**:
+A program playing media that Windows lets the shell see and control.
+_Avoid_: player, MPRIS player
+
 ## The language
 
 **Module**:
-A named group of QML types a document imports.
+A named group of QML types a document imports. Winshell's own are `Winshell` and `Winshell.*`; the Qt Quick ones are `QtQuick` and `QtQuick.*`.
 _Avoid_: package, library, namespace
 
 **Binding**:

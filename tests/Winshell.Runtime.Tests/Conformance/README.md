@@ -17,7 +17,7 @@ To add a case, write the configuration and its `// expect:` lines from what Qt 6
 | File types, inline components, `Component`, `createObject`, `destroy`, `Loader`, `Qt.createComponent`, required properties | `components/`, `loader-errors/` |
 | `Repeater` over a count, an array and a `ListModel` | `repeater.qml` |
 | States, `PropertyChanges` by target and by id, transitions | `states.qml` |
-| JavaScript imports, `.pragma library`, `.import`, directory and `qs` imports | `scripts/` |
+| JavaScript imports, `.pragma library`, `.import`, directory and `config` imports | `scripts/` |
 | Enums, default and list properties, `readonly`, `Behavior`, `Qt.callLater` | `objects/` |
 | Errors name the file and line: bindings, handlers, scripts, binding loops, unknown types and properties, syntax errors | `error-*.qml`, `error-in-script/`, `loader-errors/` |
 

@@ -1,11 +1,11 @@
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Runtime.Tests;
 
 public class ShellIdentityTests
 {
     [Fact]
-    public void Instance_ids_use_quickshells_reversed_base_36()
+    public void Instance_ids_use_reversed_base_36()
     {
         Assert.Equal("0", ShellHost.Base36(0));
         Assert.Equal("1", ShellHost.Base36(1));
@@ -18,14 +18,14 @@ public class ShellIdentityTests
         using var files = new TestShell(("shell.qml", """
             //@ pragma ShellId demo
             //@ pragma AppId org.example.shell
-            import Quickshell
+            import Winshell
             ShellRoot {
-              property string sid: Quickshell.shellId
-              property string aid: Quickshell.appId
-              property string iid: Quickshell.instanceId
-              property bool watching: Quickshell.watchFiles
+              property string sid: Shell.shellId
+              property string aid: Shell.appId
+              property string iid: Shell.instanceId
+              property bool watching: Shell.watchFiles
               property bool fromSettings: settings.watchFiles
-              property QuickshellSettings shared: settings
+              property ShellSettings shared: settings
             }
             """));
         var host = new ShellHost(Path.Combine(files.Directory, "shell.qml"), files.Loop, null, files.Log);
@@ -34,13 +34,13 @@ public class ShellIdentityTests
             Assert.True(host.Start(), string.Join('\n', files.Messages));
             files.Loop.Process();
             var root = host.Root!;
-            var quickshell = host.Engine!.FindNativeSingleton<QuickshellGlobal>()!;
+            var shell = host.Engine!.FindNativeSingleton<ShellGlobal>()!;
 
             Assert.Equal("demo", root.ReadProperty("sid"));
             Assert.Equal("org.example.shell", root.ReadProperty("aid"));
-            Assert.Equal(host.ShellId, quickshell.ShellId);
-            Assert.Equal(host.AppId, quickshell.AppId);
-            Assert.Equal(host.LaunchTime, quickshell.LaunchTime);
+            Assert.Equal(host.ShellId, shell.ShellId);
+            Assert.Equal(host.AppId, shell.AppId);
+            Assert.Equal(host.LaunchTime, shell.LaunchTime);
             Assert.Equal(
                 ShellHost.Base36(Environment.ProcessId) + ShellHost.Base36(new DateTimeOffset(host.LaunchTime).ToUnixTimeSeconds()),
                 host.InstanceId);
@@ -51,7 +51,7 @@ public class ShellIdentityTests
             Assert.True((bool)root.ReadProperty("fromSettings")!);
 
             var closed = 0;
-            quickshell.Connect("lastWindowClosed", _ => closed++);
+            shell.Connect("lastWindowClosed", _ => closed++);
             host.Settings.Emit("lastWindowClosed");
 
             Assert.Equal(1, closed);
@@ -70,7 +70,7 @@ public class ShellIdentityTests
     public void Reloadable_and_settings_cannot_be_created()
     {
         using var shell = new TestShell(("shell.qml", """
-            import Quickshell
+            import Winshell
             Reloadable { }
             """));
         var error = Assert.Throws<QmlCompileException>(() => shell.Load());

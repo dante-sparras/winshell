@@ -39,7 +39,7 @@ public sealed class QmlEngine : IDisposable
 
     public JsRuntime Js { get; }
 
-    /// <summary>The folder <c>shell.qml</c> is in. <c>import qs.foo</c> is relative to it.</summary>
+    /// <summary>The folder <c>shell.qml</c> is in. <c>import config.foo</c> is relative to it.</summary>
     public string? ShellDir { get; }
 
     /// <summary>Folders searched for a module that is not built in, such as <c>import Foo.Bar</c>.</summary>

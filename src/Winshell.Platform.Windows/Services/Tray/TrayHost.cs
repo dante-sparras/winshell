@@ -89,7 +89,7 @@ internal sealed unsafe partial class TrayHost
         if (!TryOwn())
         {
             if (_timer is null)
-                _platform.Log.Info("quickshell.service.sni", "Another winshell instance is the notification area; this one takes over when it exits");
+                _platform.Log.Info("tray", "Another winshell instance is the notification area; this one takes over when it exits");
             _timer = _platform.Loop.Schedule(TimeSpan.FromSeconds(2), Start);
             return;
         }
@@ -110,7 +110,7 @@ internal sealed unsafe partial class TrayHost
             ClassName, "", Win32.WS_POPUP, 0, 0, 0, 0, 0, 0, Win32.GetModuleHandleW(null), 0);
         if (_hwnd == 0)
         {
-            _platform.Log.Warn("quickshell.service.sni", "Could not create the notification area window; the system tray stays empty");
+            _platform.Log.Warn("tray", "Could not create the notification area window; the system tray stays empty");
             return;
         }
         SetLayeredWindowAttributes(_hwnd, 0, 0, LwaAlpha);
@@ -186,7 +186,7 @@ internal sealed unsafe partial class TrayHost
             catch (Exception e)
 #pragma warning restore CA1031
             {
-                host._platform.Log.Warn("quickshell.service.sni", e.Message);
+                host._platform.Log.Warn("tray", e.Message);
                 return 0;
             }
         }

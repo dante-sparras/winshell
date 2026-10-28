@@ -22,7 +22,7 @@ public sealed record QmlPragma(string Name, string? Value, SourceLocation Locati
 
 public enum ImportKind
 {
-    /// <summary><c>import QtQuick</c> or <c>import qs.widgets</c>.</summary>
+    /// <summary><c>import QtQuick</c> or <c>import config.widgets</c>.</summary>
     Module,
 
     /// <summary><c>import "dir"</c>.</summary>

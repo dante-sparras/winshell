@@ -7,8 +7,8 @@ namespace Winshell.Platform.Windows.Services;
 internal static class ServiceSupport
 {
     /// <summary>
-    /// Registers a C# enum as a Quickshell enum type: <c>UPowerDeviceState.Charging</c> and
-    /// <c>UPowerDeviceState.toString(state)</c>.
+    /// Registers a C# enum as a QML enum type: <c>PowerDeviceState.Charging</c> and
+    /// <c>PowerDeviceState.toString(state)</c>.
     /// </summary>
     public static QmlModule Enum<T>(this QmlModule module, Func<T, string> toString, string? name = null)
         where T : struct, Enum

@@ -1,5 +1,5 @@
 using Winshell.Runtime;
-using Winshell.Runtime.Quickshell;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Network;
 
@@ -12,7 +12,7 @@ public enum NetworkConnectivity
     Full = 4,
 }
 
-/// <summary>Quickshell's backends, and <c>Windows</c> for this one.</summary>
+/// <summary>The backend a network device uses. On Windows it is always <c>Windows</c>.</summary>
 public enum NetworkBackendType
 {
     None = 0,
@@ -73,18 +73,18 @@ public enum WifiDeviceMode
 
 internal static class NetLog
 {
-    public const string Category = "quickshell.network";
+    public const string Category = "network";
 }
 
-/// <summary>Quickshell's <c>NMSettings</c>. Windows has no NetworkManager profiles, so there are none of these.</summary>
-public sealed class NMSettings : QObject
+/// <summary>The <c>NetworkProfile</c>. Windows has no NetworkManager profiles, so there are none of these.</summary>
+public sealed class NetworkProfile : QObject
 {
     [Qml] public string Id => "";
 
     [Qml] public string Uuid => "";
 }
 
-/// <summary>Quickshell's <c>Network</c>: a network a device can connect to.</summary>
+/// <summary>The <c>Network</c>: a network a device can connect to.</summary>
 [QmlSignal("connectionFailed", "reason")]
 public class QmlNetwork : QObject
 {
@@ -102,7 +102,7 @@ public class QmlNetwork : QObject
     [Qml] public NetworkDevice Device { get; }
 
     /// <summary>NetworkManager settings profiles; Windows has none.</summary>
-    [Qml] public IReadOnlyList<NMSettings> NmSettings => [];
+    [Qml] public IReadOnlyList<NetworkProfile> NmSettings => [];
 
     [Qml] public bool Connected { get { Track(); return State == ConnectionState.Connected; } }
 
@@ -157,7 +157,7 @@ public class QmlNetwork : QObject
     }
 
     [Qml]
-    public void ConnectWithSettings(NMSettings? settings) =>
+    public void ConnectWithSettings(NetworkProfile? settings) =>
         ServiceSupport.Warn(this, NetLog.Category, "connectWithSettings is only valid for the NetworkManager backend");
 
     [Qml]
@@ -177,7 +177,7 @@ public class QmlNetwork : QObject
     public override string ToString() => $"{TypeName}({_info.Name})";
 }
 
-/// <summary>Quickshell's <c>WifiNetwork</c>.</summary>
+/// <summary>The <c>WifiNetwork</c>.</summary>
 public sealed class WifiNetwork : QmlNetwork
 {
     internal WifiNetwork(NetworkDevice device, NetworkInfo info)
@@ -216,7 +216,7 @@ public sealed class WifiNetwork : QmlNetwork
     }
 }
 
-/// <summary>Quickshell's <c>NetworkDevice</c>: a network adapter.</summary>
+/// <summary>The <c>NetworkDevice</c>: a network adapter.</summary>
 public abstract class NetworkDevice : QObject
 {
     private readonly Dictionary<string, QmlNetwork> _networks = new(StringComparer.Ordinal);
@@ -365,7 +365,7 @@ public abstract class NetworkDevice : QObject
     public override string ToString() => $"{TypeName}({_info.Name})";
 }
 
-/// <summary>Quickshell's <c>WifiDevice</c>.</summary>
+/// <summary>The <c>WifiDevice</c>.</summary>
 public sealed class WifiDevice : NetworkDevice
 {
     private bool _scannerEnabled;
@@ -404,7 +404,7 @@ public sealed class WifiDevice : NetworkDevice
     }
 }
 
-/// <summary>Quickshell's <c>WiredDevice</c>.</summary>
+/// <summary>The <c>WiredDevice</c>.</summary>
 public sealed class WiredDevice : NetworkDevice
 {
     private QmlNetwork? _network;
@@ -438,7 +438,7 @@ public sealed class WiredDevice : NetworkDevice
         ServiceSupport.Warn(this, NetLog.Category, $"Windows cannot disconnect the wired device {this} without disabling the adapter");
 }
 
-/// <summary>Quickshell's <c>Networking</c> singleton.</summary>
+/// <summary>The <c>Networking</c> singleton.</summary>
 public sealed class NetworkingService : QObject
 {
     private readonly IEventLoop _loop;
@@ -540,14 +540,14 @@ internal static class NetworkingModule
 {
     public static void Register(ModuleRegistry registry)
     {
-        registry.Module("Quickshell.Networking")
+        registry.Module("Winshell.Network")
             .Singleton(e => new NetworkingService(e), "Networking")
             .Uncreatable<NetworkDevice>("NetworkDevice", "Devices can only be acquired through Network")
             .Uncreatable<WifiDevice>("WifiDevice")
             .Uncreatable<WiredDevice>("WiredDevice")
             .Uncreatable<QmlNetwork>("Network", "Network can only be aqcuired through networking devices")
             .Uncreatable<WifiNetwork>("WifiNetwork", "WifiNetwork can only be acquired through WifiDevice")
-            .Uncreatable<NMSettings>("NMSettings")
+            .Uncreatable<NetworkProfile>("NetworkProfile")
             .Enum<NetworkConnectivity>(c => c switch
             {
                 NetworkConnectivity.None => "Not connected to a network",

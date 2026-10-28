@@ -275,7 +275,7 @@ public class AccessibilityTests
             Item {}
             """);
         using var _ = shell;
-        var window = new Quickshell.FloatingWindow { Title = "Settings" };
+        var window = new Shell.FloatingWindow { Title = "Settings" };
         var tree = new AccessibleTree(new Scene(window));
         Assert.Equal(Role.Window, tree.Root.Role);
         Assert.Equal("Settings", tree.Root.Name);

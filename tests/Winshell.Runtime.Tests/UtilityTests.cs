@@ -8,7 +8,7 @@ public class UtilityTests
     public void EasingCurve_evaluates_and_interpolates()
     {
         var root = TestShell.Run("""
-            import Quickshell
+            import Winshell
             EasingCurve { curve.type: 0 }
             """, out var shell);
         using var _ = shell;
@@ -20,7 +20,7 @@ public class UtilityTests
     public async Task ColorQuantizer_finds_the_colors_of_an_image()
     {
         using var shell = new TestShell(("shell.qml", """
-            import Quickshell
+            import Winshell
             ColorQuantizer { source: "halves.png"; depth: 1 }
             """));
         // Left half red, right half blue.
@@ -58,7 +58,7 @@ public class UtilityTests
                 """),
             ("shell.qml", """
                 import QtQuick
-                import Quickshell
+                import Winshell
                 Item {
                   property alias bound: bound
                   property int pokes: 0
