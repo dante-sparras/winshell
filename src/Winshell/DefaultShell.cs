@@ -19,9 +19,16 @@ internal static class DefaultShell
             using var stream = assembly.GetManifestResourceStream(name)!;
             using var reader = new StreamReader(stream);
             var text = reader.ReadToEnd();
-            // Keep the files as they ship, so a newer Winshell brings its newer shell.
-            if (!File.Exists(target) || File.ReadAllText(target) != text)
-                File.WriteAllText(target, text);
+            // Keep the files as they ship, so a newer Winshell brings its newer shell. Another instance starting at
+            // the same time may be writing the same file; then it is left to that one.
+            try
+            {
+                if (!File.Exists(target) || File.ReadAllText(target) != text)
+                    File.WriteAllText(target, text);
+            }
+            catch (IOException)
+            {
+            }
         }
         return Path.Combine(dir, "shell.qml");
     }

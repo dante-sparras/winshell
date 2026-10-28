@@ -177,15 +177,18 @@ public sealed class ShellHost : IShellHost, IDisposable
             service(engine);
         _configure?.Invoke(engine);
         QObject root;
+        // A configuration can make the runtime throw anything, not only QML errors. It is reported, and the shell
+        // keeps running the generation it had, or nothing, until the files change.
         try
         {
             root = engine.CreateRoot(_rootFile);
         }
-        catch (Exception e) when (e is Qml.QmlSyntaxException or QmlCompileException or QmlException or IOException or Jint.Runtime.JavaScriptException)
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
             var message = Log.Describe(e, _rootFile);
             Log.Error("scene", (initial ? "Failed to load configuration: " : "Failed to reload configuration: ") + message);
-            engine.Dispose();
+            Log.Debug("scene", e.ToString());
+            DisposeFailed(engine);
             WatchFilesOf(oldEngine ?? engine);
             if (oldEngine?.FindNativeSingleton<QuickshellGlobal>() is { } oldQs)
                 oldQs.Emit("reloadFailed", message);
@@ -196,12 +199,21 @@ public sealed class ShellHost : IShellHost, IDisposable
         _root = root;
         Ipc = ipc;
         _inhibitPopup = false;
-        // Hand the old objects to the new ones, then end the reload stage.
-        if (root is Reloadable reloadable)
-            reloadable.Reload(hard ? null : oldRoot);
-        else
-            Reloadable.ReloadChildrenRecursive(root, hard ? null : oldRoot);
-        engine.FinishReload();
+        // Hand the old objects to the new ones, then end the reload stage. The new generation exists by now, so a
+        // failure here is reported and the shell goes on with it.
+        try
+        {
+            if (root is Reloadable reloadable)
+                reloadable.Reload(hard ? null : oldRoot);
+            else
+                Reloadable.ReloadChildrenRecursive(root, hard ? null : oldRoot);
+            engine.FinishReload();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            Log.Error("scene", "Failed to hand the old configuration's objects to the new one: " + Log.Describe(e, _rootFile));
+            Log.Debug("scene", e.ToString());
+        }
         oldEngine?.Dispose();
         WatchFilesOf(engine);
         if (!initial)
@@ -209,6 +221,19 @@ public sealed class ShellHost : IShellHost, IDisposable
         engine.FindNativeSingleton<QuickshellGlobal>()?.Emit("reloadCompleted");
         Reloaded?.Invoke(null);
         return true;
+    }
+
+    /// <summary>Disposes the engine of a load that failed, which may have failed halfway through making its objects.</summary>
+    private void DisposeFailed(QmlEngine engine)
+    {
+        try
+        {
+            engine.Dispose();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            Log.Debug("scene", e.ToString());
+        }
     }
 
     /// <summary>Whether the reload popup should show for the reload that just ran.</summary>

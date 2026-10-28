@@ -555,11 +555,13 @@ internal static class MprisPlaybackStates
 
 /// <summary>
 /// Track art from Windows comes as image data, not a url. It is written to a file in the temp folder, named by
-/// its content, so the same art is one file, and given to QML as a <c>file:///</c> url.
+/// its content, so the same art is one file, and given to QML as a <c>file:///</c> url. Each process has a folder
+/// of its own: an instance deletes the art it no longer uses, which must not be art another instance shows.
 /// </summary>
 internal static class ArtCache
 {
-    private static readonly string Folder = Path.Combine(Path.GetTempPath(), "winshell", "mpris-art");
+    private static readonly string Root = Path.Combine(Path.GetTempPath(), "winshell", "mpris-art");
+    private static readonly string Folder = Path.Combine(Root, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
     private static readonly Dictionary<string, int> Uses = [];
     private static readonly Lock Gate = new();
 
@@ -615,17 +617,22 @@ internal static class ArtCache
         }
     }
 
-    /// <summary>Deletes art left behind by earlier runs.</summary>
+    /// <summary>Deletes art left behind by earlier runs, and their folders once empty.</summary>
     public static void CleanOld()
     {
         try
         {
-            if (!Directory.Exists(Folder))
+            if (!Directory.Exists(Root))
                 return;
-            foreach (var file in Directory.EnumerateFiles(Folder))
+            foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
             {
                 if (File.GetLastWriteTimeUtc(file) < DateTime.UtcNow.AddDays(-1))
                     File.Delete(file);
+            }
+            foreach (var dir in Directory.EnumerateDirectories(Root))
+            {
+                if (!string.Equals(dir, Folder, StringComparison.OrdinalIgnoreCase) && !Directory.EnumerateFileSystemEntries(dir).Any())
+                    Directory.Delete(dir);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
