@@ -6,8 +6,7 @@ using Winshell.Runtime.Shell;
 namespace Winshell.Platform.Windows.Services.Audio;
 
 /// <summary>
-/// The <c>Audio</c> singleton, backed by Windows audio: every playback and recording device is a sink
-/// or source node, and every app's audio session is a stream node linked to its device.
+/// The <c>Audio</c> singleton: every playback and recording device, and every app's audio session on a device.
 /// </summary>
 public sealed class AudioService : QObject
 {
@@ -36,45 +35,31 @@ public sealed class AudioService : QObject
         _graph.DefaultsChanged += OnDefaultsChanged;
     }
 
-    /// <summary>Every node: devices and app streams.</summary>
+    /// <summary>Every node: devices and app sessions.</summary>
     [Qml]
     public ObjectModel Nodes { get; }
 
-    /// <summary>Every link. Windows has one connection per stream, so there is one link per link group.</summary>
+    /// <summary>Every link. Windows has one connection per session, so there is one link per link group.</summary>
     [Qml]
     public ObjectModel Links { get; }
 
     [Qml]
     public ObjectModel LinkGroups { get; }
 
+    /// <summary>The default playback device. Setting it makes that device the Windows default.</summary>
     [Qml]
-    public AudioNode? DefaultAudioSink
+    public AudioNode? DefaultPlaybackDevice
     {
-        get { Track(); return Find(_graph.DefaultSink); }
+        get { Track(); return Find(_graph.DefaultPlayback); }
+        set => SetDefault(value, playback: true);
     }
 
+    /// <summary>The default recording device. Setting it makes that device the Windows default.</summary>
     [Qml]
-    public AudioNode? DefaultAudioSource
+    public AudioNode? DefaultRecordingDevice
     {
-        get { Track(); return Find(_graph.DefaultSource); }
-    }
-
-    /// <summary>
-    /// Windows has no separate preference: this reads as the current default device, and setting it makes the node
-    /// the Windows default device.
-    /// </summary>
-    [Qml]
-    public AudioNode? PreferredDefaultAudioSink
-    {
-        get { Track(); return Find(_graph.DefaultSink); }
-        set => SetDefault(value, sink: true);
-    }
-
-    [Qml]
-    public AudioNode? PreferredDefaultAudioSource
-    {
-        get { Track(); return Find(_graph.DefaultSource); }
-        set => SetDefault(value, sink: false);
+        get { Track(); return Find(_graph.DefaultRecording); }
+        set => SetDefault(value, playback: false);
     }
 
     [Qml]
@@ -90,12 +75,12 @@ public sealed class AudioService : QObject
 
     internal AudioNode? Find(AudioGraphNode? node) => node is not null && _nodes.TryGetValue(node, out var wrapper) ? wrapper : null;
 
-    private void SetDefault(AudioNode? node, bool sink)
+    private void SetDefault(AudioNode? node, bool playback)
     {
-        if (node?.Node is not EndpointNode endpoint || endpoint.IsSink != sink)
+        if (node?.Node is not EndpointNode endpoint || endpoint.IsPlayback != playback)
         {
             if (node is not null)
-                Engine?.Log.Warn("audio", $"Cannot make {node.Description} the default {(sink ? "sink" : "source")}: it is not a {(sink ? "sink" : "source")} device");
+                Engine?.Log.Warn("audio", $"Cannot make {node.Description} the default {(playback ? "playback" : "recording")} device: it is not a {(playback ? "playback" : "recording")} device");
             return;
         }
         _graph.SetDefault(endpoint);
@@ -121,12 +106,12 @@ public sealed class AudioService : QObject
     {
         if (Find(link.Source) is not { } source || Find(link.Target) is not { } target)
             return;
-        var pwLink = new AudioLink(link, source, target) { Engine = Engine };
+        var audioLink = new AudioLink(link, source, target) { Engine = Engine };
         var group = new AudioLinkGroup(link, source, target) { Engine = Engine };
-        pwLink.SetOwner(this);
+        audioLink.SetOwner(this);
         group.SetOwner(this);
-        _links[link] = (pwLink, group);
-        Links.Add(pwLink);
+        _links[link] = (audioLink, group);
+        Links.Add(audioLink);
         LinkGroups.Add(group);
         LinkGroupsChanged?.Invoke();
     }
@@ -144,10 +129,8 @@ public sealed class AudioService : QObject
 
     private void OnDefaultsChanged()
     {
-        NotifyChanged("defaultAudioSink");
-        NotifyChanged("defaultAudioSource");
-        NotifyChanged("preferredDefaultAudioSink");
-        NotifyChanged("preferredDefaultAudioSource");
+        NotifyChanged("defaultPlaybackDevice");
+        NotifyChanged("defaultRecordingDevice");
     }
 
     protected override void OnDestroy()
@@ -171,17 +154,16 @@ public sealed class AudioService : QObject
             .Type<AudioLinkTracker>("AudioLinkTracker")
             .Type<AudioPeakMonitor>("AudioPeakMonitor")
             .Add(StandardModules.EnumType("AudioNodeType", [
-                new("Untracked", 0), new("Audio", 0b1), new("Video", 0b10), new("Stream", 0b100), new("Source", 0b1000),
-                new("Sink", 0b10000), new("AudioSink", 0b10001), new("AudioSource", 0b1001), new("AudioDuplex", 0b11001),
-                new("AudioOutStream", 0b10101), new("AudioInStream", 0b1101), new("VideoSource", 0b1010), new("VideoSink", 0b10010)], module.Name))
+                new("Untracked", 0), new("Audio", 0b1), new("Session", 0b100), new("Recording", 0b1000),
+                new("Playback", 0b10000), new("PlaybackDevice", 0b10001), new("RecordingDevice", 0b1001),
+                new("PlaybackSession", 0b10101), new("RecordingSession", 0b1101)], module.Name))
             .Add(StandardModules.EnumType("AudioLinkState", [
-                new("Error", -2), new("Unlinked", -1), new("Init", 0), new("Negotiating", 1), new("Allocating", 2),
-                new("Paused", 3), new("Active", 4)], module.Name))
+                new("Inactive", 0), new("Active", 1)], module.Name))
             .Add(StandardModules.EnumType("AudioChannel", AudioChannels.Values, module.Name));
     }
 }
 
-/// <summary>The <c>AudioNode</c>: a device or an app stream.</summary>
+/// <summary>The <c>AudioNode</c>: a playback or recording device, or an app's audio session.</summary>
 public sealed class AudioNode : QObject
 {
     private readonly AudioGraphNode _node;
@@ -211,14 +193,17 @@ public sealed class AudioNode : QObject
         get { Track(); return _node.Description; }
     }
 
+    /// <summary>The interface name, such as the adapter a playback device sits on. Empty for a session.</summary>
     [Qml]
-    public string Nickname => _node.Nickname;
+    public string InterfaceName => _node.InterfaceName;
 
+    /// <summary>True for a playback device and for a session that plays to one.</summary>
     [Qml]
-    public bool IsSink => _node.IsSink;
+    public bool IsPlayback => _node.IsPlayback;
 
+    /// <summary>True for an app's audio session, false for a device.</summary>
     [Qml]
-    public bool IsStream => (_node.Type & AudioNodeTypes.Stream) != 0;
+    public bool IsSession => (_node.Type & AudioNodeTypes.Session) != 0;
 
     /// <summary>The <c>AudioNodeType</c> flags.</summary>
     [Qml]
@@ -348,11 +333,11 @@ public sealed class AudioLink : QObject
     [Qml]
     public AudioNode Target { get; }
 
-    /// <summary><c>AudioLinkState.Active</c> while the app plays or records, <c>Paused</c> while its stream is idle.</summary>
+    /// <summary><c>AudioLinkState.Active</c> while the app plays or records, <c>Inactive</c> while its session is idle.</summary>
     [Qml]
     public int State
     {
-        get { Track(); return _link.Active ? 4 : 3; }
+        get { Track(); return _link.Active ? 1 : 0; }
     }
 
     private void OnStateChanged() => NotifyChanged("state");
@@ -382,7 +367,7 @@ public sealed class AudioLinkGroup : QObject
     [Qml]
     public int State
     {
-        get { Track(); return _link.Active ? 4 : 3; }
+        get { Track(); return _link.Active ? 1 : 0; }
     }
 
     private void OnStateChanged() => NotifyChanged("state");
@@ -436,8 +421,7 @@ public sealed class AudioLinkTracker : QObject
     }
 
     /// <summary>
-    /// For a sink, the groups that play into it; for a source, the groups that record from it. Windows has no
-    /// monitor streams, so none are left out.
+    /// For a playback device, the groups that play into it. For a recording device, the groups that record from it.
     /// </summary>
     [Qml]
     public IReadOnlyList<AudioLinkGroup> LinkGroups
@@ -450,7 +434,7 @@ public sealed class AudioLinkTracker : QObject
         var node = _node;
         var groups = node is null || _service is null
             ? []
-            : _service.AllLinkGroups.Where(g => node.IsSink ? g.Target == node : g.Source == node).ToList();
+            : _service.AllLinkGroups.Where(g => node.IsPlayback ? g.Target == node : g.Source == node).ToList();
         if (groups.SequenceEqual(_linkGroups))
             return;
         _linkGroups = groups;
@@ -471,7 +455,7 @@ public sealed class AudioLinkTracker : QObject
 
 /// <summary>
 /// The <c>AudioPeakMonitor</c>: the peak level of a node's channels, read from the Windows peak meter
-/// about 30 times a second while enabled. Windows meters a device after its volume is applied, unlike PipeWire.
+/// about 30 times a second while enabled. Windows meters a device after its volume is applied.
 /// </summary>
 public sealed class AudioPeakMonitor : QObject
 {
@@ -609,7 +593,7 @@ public sealed class AudioPeakMonitor : QObject
     protected override void OnDestroy() => Stop();
 }
 
-/// <summary>PipeWire's channel positions, with the values of <c>spa_audio_channel</c>.</summary>
+/// <summary>Speaker positions. <see cref="ChannelLayout"/> maps a Windows speaker mask onto these ids.</summary>
 internal static class AudioChannels
 {
     public static readonly KeyValuePair<string, int>[] Values =

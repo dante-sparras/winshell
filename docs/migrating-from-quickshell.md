@@ -1,6 +1,6 @@
 # Migrating from Quickshell
 
-Winshell started as a port of Quickshell v0.3.2 and now has its own API ([ADR-0007](adr/0007-windows-first-api.md)). A Quickshell configuration does not load as it is. Rename its imports and types with the tables below. Most properties, methods, signals and enum values keep their Quickshell names; the module-specific changes below describe exceptions.
+Winshell started as a port of Quickshell v0.3.2 and now has its own API ([ADR-0007](adr/0007-windows-first-api.md)). A Quickshell configuration does not load as it is. Rename its imports and types with the tables below. A property, method, signal, or enum value that is not listed under [Properties](#properties) or [Notifications](#notifications) keeps its Quickshell name. `Pipewire.defaultAudioSink.audio.volume` is `Audio.defaultPlaybackDevice.audio.volume`.
 
 The Qt Quick modules (`QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`, `QtQuick.Shapes`, `QtQuick.Effects`, `QtQml`) are unchanged.
 
@@ -53,6 +53,55 @@ Types not listed keep their names in the new module.
 | `ToplevelManager`, `Toplevel` | `WindowList`, `AppWindow` | `Winshell.Windows` |
 | `Hyprland`, `HyprlandEvent`, `HyprlandMonitor`, `HyprlandWorkspace` | `Winland`, `WinlandEvent`, `WinlandMonitor`, `WinlandWorkspace` | `Winshell.Winland` |
 | `HyprlandToplevel` | `WinlandWindow` | `Winshell.Winland` |
+
+## Properties
+
+### Audio
+
+`Audio.defaultPlaybackDevice` and `Audio.defaultRecordingDevice` read and write the Windows default device. Quickshell's preferred default is not a separate device on Windows.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `defaultAudioSink` | `defaultPlaybackDevice` |
+| `defaultAudioSource` | `defaultRecordingDevice` |
+| `preferredDefaultAudioSink` | `defaultPlaybackDevice` |
+| `preferredDefaultAudioSource` | `defaultRecordingDevice` |
+| `PwNode.isSink` | `AudioNode.isPlayback` |
+| `PwNode.isStream` | `AudioNode.isSession` |
+| `PwNode.nickname` | `AudioNode.interfaceName` |
+| `properties["node.name"]` | `properties["endpointId"]` on a device, `properties["sessionId"]` on a session |
+| `properties["node.description"]` | `properties["friendlyName"]` |
+| `properties["node.nick"]` | `properties["interfaceName"]` |
+| `properties["media.class"]` | `properties["flow"]`, `playback` or `recording` |
+| `properties["device.description"]` | `properties["adapter"]` |
+| `properties["device.icon-name"]` | `properties["icon"]` |
+| `properties["device.form-factor"]` | `properties["formFactor"]` |
+| `properties["application.name"]` | `properties["appName"]` |
+| `properties["application.icon-name"]` | `properties["icon"]` |
+| `properties["application.process.id"]` | `properties["processId"]` |
+| `properties["application.process.binary"]` | `properties["processName"]` |
+| `properties["object.id"]` | `AudioNode.id` |
+
+`AudioNodeType.Playback`, `Recording`, and `Session` use the bits of `Sink`, `Source`, and `Stream`.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `Sink` | `Playback` |
+| `Source` | `Recording` |
+| `Stream` | `Session` |
+| `AudioSink` | `PlaybackDevice` |
+| `AudioSource` | `RecordingDevice` |
+| `AudioOutStream` | `PlaybackSession` |
+| `AudioInStream` | `RecordingSession` |
+| `Video`, `VideoSource`, `VideoSink`, `AudioDuplex` | Removed. A Windows audio node is not a video node. |
+
+`AudioLinkState.Active` is 1 and `Inactive` is 0.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `Paused` | `Inactive` |
+| `Active` | `Active` |
+| `Error`, `Unlinked`, `Init`, `Negotiating`, `Allocating` | Removed. A session is playing or it is not. |
 
 ## Removed
 

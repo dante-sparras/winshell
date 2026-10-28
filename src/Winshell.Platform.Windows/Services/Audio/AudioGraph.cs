@@ -5,9 +5,9 @@ using Winshell.Runtime;
 namespace Winshell.Platform.Windows.Services.Audio;
 
 /// <summary>
-/// The Windows audio devices and app sessions, seen as PipeWire's graph: each device is a sink or source node,
-/// each app's audio session is a stream node linked to its device. One graph serves the whole process, so a
-/// reload does not enumerate devices again. It lives on the UI thread; Windows' callbacks are posted to it.
+/// The Windows playback and recording devices, and each app's audio session on a device. One graph serves the
+/// whole process, so a reload does not enumerate devices again. It lives on the UI thread; Windows' callbacks
+/// are posted to it.
 /// </summary>
 internal sealed class AudioGraph
 {
@@ -54,9 +54,9 @@ internal sealed class AudioGraph
 
     public bool Ready { get; }
 
-    public EndpointNode? DefaultSink { get; private set; }
+    public EndpointNode? DefaultPlayback { get; private set; }
 
-    public EndpointNode? DefaultSource { get; private set; }
+    public EndpointNode? DefaultRecording { get; private set; }
 
     public Log Log => _log;
 
@@ -158,16 +158,16 @@ internal sealed class AudioGraph
 
     private void ReadDefaults()
     {
-        var sink = DefaultOf(EDataFlow.Render);
-        var source = DefaultOf(EDataFlow.Capture);
-        if (sink == DefaultSink && source == DefaultSource)
+        var playback = DefaultOf(EDataFlow.Render);
+        var recording = DefaultOf(EDataFlow.Capture);
+        if (playback == DefaultPlayback && recording == DefaultRecording)
             return;
-        DefaultSink = sink;
-        DefaultSource = source;
+        DefaultPlayback = playback;
+        DefaultRecording = recording;
         foreach (var endpoint in _endpoints.Values)
         {
             foreach (var session in endpoint.Sessions.Where(s => s.IsSystem))
-                SetShown(session, endpoint == DefaultSink);
+                SetShown(session, endpoint == DefaultPlayback);
         }
         DefaultsChanged?.Invoke();
     }
@@ -186,7 +186,7 @@ internal sealed class AudioGraph
     /// Shows a session the endpoint started tracking. Windows keeps a System Sounds session on every playback
     /// device, though only the default one plays them, so only that one is shown, as one stream.
     /// </summary>
-    internal void AddSession(SessionNode session) => SetShown(session, !session.IsSystem || session.Endpoint == DefaultSink);
+    internal void AddSession(SessionNode session) => SetShown(session, !session.IsSystem || session.Endpoint == DefaultPlayback);
 
     internal void RemoveSession(SessionNode session)
     {
@@ -203,7 +203,7 @@ internal sealed class AudioGraph
         if (shown)
         {
             AddNode(session);
-            var link = session.IsSink
+            var link = session.IsPlayback
                 ? new AudioGraphLink(NextId(), session, session.Endpoint)
                 : new AudioGraphLink(NextId(), session.Endpoint, session);
             link.Active = session.Active;
@@ -267,12 +267,13 @@ internal abstract class AudioGraphNode(int id)
 
     public string Description { get; protected set; } = "";
 
-    public string Nickname { get; protected set; } = "";
+    public string InterfaceName { get; protected set; } = "";
 
     /// <summary>The <c>AudioNodeType</c> flags.</summary>
     public int Type { get; protected set; }
 
-    public bool IsSink => (Type & AudioNodeTypes.Sink) != 0;
+    /// <summary>True for a playback device and for an app session that plays to one.</summary>
+    public bool IsPlayback => (Type & AudioNodeTypes.Playback) != 0;
 
     public Dictionary<string, string> Properties { get; protected set; } = [];
 
@@ -340,12 +341,12 @@ internal sealed class AudioGraphLink(int id, AudioGraphNode source, AudioGraphNo
 internal static class AudioNodeTypes
 {
     public const int Audio = 0b1;
-    public const int Stream = 0b100;
-    public const int Source = 0b1000;
-    public const int Sink = 0b10000;
+    public const int Session = 0b100;
+    public const int Recording = 0b1000;
+    public const int Playback = 0b10000;
 }
 
-/// <summary>An audio device: a sink when it plays, a source when it records.</summary>
+/// <summary>An audio endpoint: a playback device, or a recording device.</summary>
 internal sealed class EndpointNode : AudioGraphNode
 {
     private readonly AudioGraph _graph;
@@ -365,23 +366,21 @@ internal sealed class EndpointNode : AudioGraphNode
         _graph = graph;
         _device = device;
         DeviceId = deviceId;
-        Type = AudioNodeTypes.Audio | (render ? AudioNodeTypes.Sink : AudioNodeTypes.Source);
+        Type = AudioNodeTypes.Audio | (render ? AudioNodeTypes.Playback : AudioNodeTypes.Recording);
         device.OpenPropertyStore(0, out var store);
         Description = CoreAudio.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
-        Nickname = CoreAudio.ReadString(store, CoreAudio.DeviceDescription) ?? "";
-        // node.name is PipeWire's stable identifier for a device; the Windows endpoint id is that here.
+        InterfaceName = CoreAudio.ReadString(store, CoreAudio.DeviceDescription) ?? "";
         Name = deviceId;
         var formFactor = CoreAudio.ReadUInt(store, CoreAudio.EndpointFormFactor);
         Properties = new Dictionary<string, string>
         {
-            ["node.name"] = Name,
-            ["node.description"] = Description,
-            ["node.nick"] = Nickname,
-            ["media.class"] = render ? "Audio/Sink" : "Audio/Source",
-            ["device.description"] = CoreAudio.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
-            ["device.icon-name"] = IconName(formFactor, render),
-            ["device.form-factor"] = FormFactorName(formFactor),
-            ["object.id"] = Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["endpointId"] = Name,
+            ["friendlyName"] = Description,
+            ["interfaceName"] = InterfaceName,
+            ["flow"] = render ? "playback" : "recording",
+            ["adapter"] = CoreAudio.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
+            ["icon"] = IconName(formFactor, render),
+            ["formFactor"] = FormFactorName(formFactor),
         };
         var format = CoreAudio.ReadBlob(store, CoreAudio.EngineDeviceFormat);
 
@@ -437,12 +436,12 @@ internal sealed class EndpointNode : AudioGraphNode
     }
 
     /// <summary>
-    /// A capture device only meters while something records from it, as PipeWire's peak monitor records
-    /// from it too. This opens a shared recording stream while peaks are wanted.
+    /// A recording device only meters while something records from it. This opens a shared recording
+    /// stream while peaks are wanted.
     /// </summary>
     public override IDisposable? KeepRunning()
     {
-        if (IsSink)
+        if (IsPlayback)
             return null;
         if (_keepAliveCount++ == 0)
         {
@@ -528,7 +527,7 @@ internal sealed class EndpointNode : AudioGraphNode
             return;
         control.GetState(out var state);
         // A recording device's System Sounds session records nothing.
-        if (state == AudioSessionState.Expired || (!IsSink && control.IsSystemSoundsSession() == 0))
+        if (state == AudioSessionState.Expired || (!IsPlayback && control.IsSystemSoundsSession() == 0))
             return;
         SessionNode session;
         try
@@ -626,7 +625,7 @@ internal sealed class SessionNode : AudioGraphNode
         Endpoint = endpoint;
         InstanceId = instanceId;
         Active = state == AudioSessionState.Active;
-        Type = AudioNodeTypes.Audio | AudioNodeTypes.Stream | (endpoint.IsSink ? AudioNodeTypes.Sink : AudioNodeTypes.Source);
+        Type = AudioNodeTypes.Audio | AudioNodeTypes.Session | (endpoint.IsPlayback ? AudioNodeTypes.Playback : AudioNodeTypes.Recording);
         Channels = endpoint.Channels;
         control.GetProcessId(out _processId);
         IsSystem = control.IsSystemSoundsSession() == 0;
@@ -724,18 +723,17 @@ internal sealed class SessionNode : AudioGraphNode
         Description = appName;
         Properties = new Dictionary<string, string>
         {
-            ["node.name"] = Name,
-            ["node.description"] = Description,
-            ["media.class"] = Endpoint.IsSink ? "Stream/Output/Audio" : "Stream/Input/Audio",
-            ["application.name"] = appName,
+            ["sessionId"] = InstanceId,
+            ["friendlyName"] = Description,
+            ["flow"] = Endpoint.IsPlayback ? "playback" : "recording",
+            ["appName"] = appName,
             // The program's own icon: IconImage and Shell.iconPath accept a program's path.
-            ["application.icon-name"] = system ? "audio-volume-high" : path ?? "",
-            ["application.process.id"] = _processId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["application.process.binary"] = binary,
-            ["object.id"] = Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["icon"] = system ? "audio-volume-high" : path ?? "",
+            ["processId"] = _processId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["processName"] = binary,
         };
-        if (path is null)
-            Properties.Remove("application.icon-name");
+        if (path is null && !system)
+            Properties.Remove("icon");
     }
 
     private static string? FileDescription(string? path)
@@ -810,7 +808,7 @@ internal sealed class SessionNode : AudioGraphNode
     }
 }
 
-/// <summary>Maps a Windows speaker layout onto PipeWire's channel positions.</summary>
+/// <summary>Maps a Windows speaker mask onto <c>AudioChannel</c> values.</summary>
 internal static class ChannelLayout
 {
     private const int Mono = 2;

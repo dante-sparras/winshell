@@ -88,6 +88,18 @@ _Avoid_: toplevel, client
 A program the Start menu lists: a shortcut or a packaged app.
 _Avoid_: desktop entry, application
 
+**Playback device**:
+A Windows audio endpoint that plays sound, such as speakers or headphones.
+_Avoid_: sink, audio sink, render device
+
+**Recording device**:
+A Windows audio endpoint that records sound, such as a microphone.
+_Avoid_: source, audio source, capture device
+
+**Audio session**:
+One program's volume and mute on a playback or recording device, as the volume mixer lists it.
+_Avoid_: stream, sink input
+
 **Media session**:
 A program playing media that Windows lets the shell see and control.
 _Avoid_: player, MPRIS player
