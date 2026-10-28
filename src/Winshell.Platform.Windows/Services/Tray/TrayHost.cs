@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using SkiaSharp;
 using Winshell.Platform.Windows.Native;
+using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Tray;
 
@@ -33,46 +34,56 @@ internal sealed class TrayIcon
 }
 
 /// <summary>
+/// The window class the host registers, the taskbar class it passes messages on to, and the name that makes one
+/// host in the session the owner. Tests use their own, so they never see or disturb the real notification area.
+/// </summary>
+internal sealed record TrayNames(string Window, string Explorer, string Owner)
+{
+    public static readonly TrayNames Session = new("Shell_TrayWnd", "Shell_TrayWnd", @"Local\winshell-notification-area");
+}
+
+/// <summary>
 /// Sees the notification area icons of every app, the way an alternative Windows shell does. Apps send their icons to
 /// the first <c>Shell_TrayWnd</c> window they find, so this makes one and keeps it in front of Explorer's, then
 /// passes every message on to Explorer so its own tray and the app bars keep working. Apps are asked to add their
 /// icons again with the <c>TaskbarCreated</c> broadcast.
 /// </summary>
-internal sealed unsafe partial class TrayHost
+internal sealed unsafe partial class TrayHost : IDisposable
 {
-    private const string ClassName = "Shell_TrayWnd";
     private const uint WM_COPYDATA = 0x004A;
-    private const int TrayDataSignature = 0x34753423;
-    private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
-    private const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_STATE = 0x8, NIF_GUID = 0x20;
-    private const uint NIS_HIDDEN = 0x1;
+    private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
+    private static readonly Dictionary<nint, TrayHost> Hosts = [];
+    private static readonly HashSet<string> Registered = [];
 
-    // Apps send their icons to one window, so one instance in the session at a time is the notification area. The
+    private readonly IEventLoop _loop;
+    private readonly Log _log;
+    private readonly TrayNames _names;
+    private readonly Action _broadcast;
+    // Apps send their icons to one window, so one host in the session at a time is the notification area. The
     // others wait, and the first to notice takes over when it exits, even if it crashed.
-    private static readonly Mutex Owner = new(false, @"Local\winshell-notification-area");
-
-    private static TrayHost? _instance;
-    private readonly WindowsPlatform _platform;
+    private readonly Mutex _owner;
     private readonly Dictionary<string, TrayIcon> _icons = [];
     private readonly Dictionary<(nint Window, uint Id), TrayIcon> _byWindow = [];
     private readonly Dictionary<Guid, TrayIcon> _byGuid = [];
     private nint _hwnd;
+    private nint _answered;
+    private bool _waiting;
     private IDisposable? _timer;
+    private IDisposable? _answer;
     private IDisposable? _cursorRestore;
 
-    private TrayHost(WindowsPlatform platform) => _platform = platform;
-
-    /// <summary>The host, started the first time a shell uses the system tray.</summary>
-    public static TrayHost Get(WindowsPlatform platform)
+    /// <param name="broadcast">Asks every app to add its icons again; <see cref="BroadcastTaskbarCreated"/> in a shell.</param>
+    public TrayHost(IEventLoop loop, Log log, TrayNames names, Action broadcast)
     {
-        if (_instance is null)
-        {
-            _instance = new TrayHost(platform);
-            TrayIconProvider.Host = _instance;
-            _instance.Start();
-        }
-        return _instance;
+        _loop = loop;
+        _log = log;
+        _names = names;
+        _broadcast = broadcast;
+        _owner = new Mutex(false, names.Owner);
     }
+
+    /// <summary>The notification area window, or 0 while another host owns the tray.</summary>
+    public nint Window => _hwnd;
 
     public IReadOnlyCollection<TrayIcon> Icons => _icons.Values;
 
@@ -84,64 +95,108 @@ internal sealed unsafe partial class TrayHost
 
     public TrayIcon? Find(string key) => _icons.GetValueOrDefault(key);
 
-    private void Start()
+    /// <summary>Becomes the notification area, or waits for the host that has it to exit. Call on the loop's thread.</summary>
+    public void Start()
     {
+        _timer = null;
         if (!TryOwn())
         {
-            if (_timer is null)
-                _platform.Log.Info("tray", "Another winshell instance is the notification area; this one takes over when it exits");
-            _timer = _platform.Loop.Schedule(TimeSpan.FromSeconds(2), Start);
+            if (!_waiting)
+                _log.Info("tray", "Another winshell instance is the notification area; this one takes over when it exits");
+            _waiting = true;
+            _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), Start);
             return;
         }
-        fixed (char* name = ClassName)
+        _waiting = false;
+        if (Registered.Add(_names.Window))
         {
-            var wc = new WNDCLASSEXW
+            fixed (char* name = _names.Window)
             {
-                cbSize = (uint)sizeof(WNDCLASSEXW),
-                lpfnWndProc = &WndProc,
-                hInstance = Win32.GetModuleHandleW(null),
-                lpszClassName = name,
-            };
-            Win32.RegisterClassExW(wc);
+                var wc = new WNDCLASSEXW
+                {
+                    cbSize = (uint)sizeof(WNDCLASSEXW),
+                    lpfnWndProc = &WndProc,
+                    hInstance = Win32.GetModuleHandleW(null),
+                    lpszClassName = name,
+                };
+                Win32.RegisterClassExW(wc);
+            }
         }
         // Layered and transparent so the window can report Explorer's taskbar rectangle without taking its clicks.
         _hwnd = Win32.CreateWindowExW(
             Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_LAYERED | Win32.WS_EX_TRANSPARENT,
-            ClassName, "", Win32.WS_POPUP, 0, 0, 0, 0, 0, 0, Win32.GetModuleHandleW(null), 0);
+            _names.Window, "", Win32.WS_POPUP, 0, 0, 0, 0, 0, 0, Win32.GetModuleHandleW(null), 0);
         if (_hwnd == 0)
         {
-            _platform.Log.Warn("tray", "Could not create the notification area window; the system tray stays empty");
+            _owner.ReleaseMutex();
+            _log.Warn("tray", "Could not create the notification area window; the system tray stays empty");
             return;
         }
+        Hosts[_hwnd] = this;
         SetLayeredWindowAttributes(_hwnd, 0, 0, LwaAlpha);
+        // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
+        // start, and an app at a lower level can still add its icon.
+        ChangeWindowMessageFilterEx(_hwnd, TaskbarCreated, MSGFLT_ALLOW, 0);
+        ChangeWindowMessageFilterEx(_hwnd, WM_COPYDATA, MSGFLT_ALLOW, 0);
+        _answered = ExplorerTray();
         KeepInFront();
-        AppDomain.CurrentDomain.ProcessExit += static (_, _) => BroadcastTaskbarCreated();
         // Every app adds its icons again, now to this window.
-        BroadcastTaskbarCreated();
+        _broadcast();
     }
 
-    private static bool TryOwn()
+    /// <summary>
+    /// Gives the notification area up: the window goes, the next host may take over, and apps are asked to add
+    /// their icons again to whichever taskbar window is first now. Call on the loop's thread.
+    /// </summary>
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _answer?.Dispose();
+        _cursorRestore?.Dispose();
+        _timer = _answer = _cursorRestore = null;
+        if (_hwnd != 0)
+        {
+            Hosts.Remove(_hwnd);
+            Win32.DestroyWindow(_hwnd);
+            _hwnd = 0;
+            _owner.ReleaseMutex();
+            _broadcast();
+        }
+        _owner.Dispose();
+    }
+
+    private bool TryOwn()
     {
         try
         {
-            return Owner.WaitOne(0);
+            return _owner.WaitOne(0);
         }
         catch (AbandonedMutexException)
         {
-            // The instance that had it ended without letting go; this thread owns it now.
+            // The host that had it ended without letting go; this thread owns it now.
             return true;
         }
     }
 
     /// <summary>Asks every app to register its icons with whichever taskbar window is first.</summary>
-    private static void BroadcastTaskbarCreated() =>
-        Win32.PostMessageW(HWND_BROADCAST, Win32.RegisterWindowMessageW("TaskbarCreated"), 0, 0);
+    public static void BroadcastTaskbarCreated() => Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
 
     /// <summary>
     /// Keeps this window ahead of Explorer's taskbar, which puts itself in front when used, so apps keep finding it,
     /// and drops the icons of apps that ended without removing them.
     /// </summary>
     private void KeepInFront()
+    {
+        Raise();
+        foreach (var icon in _icons.Values.ToArray())
+        {
+            if (!IsWindow(icon.Window))
+                Remove(icon.Key);
+        }
+        _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), KeepInFront);
+    }
+
+    private void Raise()
     {
         var explorer = ExplorerTray();
         if (explorer != 0 && GetWindowRect(explorer, out var r))
@@ -153,19 +208,35 @@ internal sealed unsafe partial class TrayHost
         {
             Win32.SetWindowPos(_hwnd, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
         }
-        foreach (var icon in _icons.Values.ToArray())
+    }
+
+    /// <summary>
+    /// Explorer broadcasts <c>TaskbarCreated</c> when it makes a new taskbar: after a restart, a crash or an update.
+    /// Apps then add their icons to whichever taskbar window is first, which can be Explorer's new one. This window
+    /// gets back in front and asks once more a moment later, so every app registers through it. A broadcast while
+    /// Explorer's taskbar is the one already answered is not answered: this host's own, or another host's.
+    /// </summary>
+    private void OnTaskbarCreated()
+    {
+        Raise();
+        var explorer = ExplorerTray();
+        if (explorer == 0 || explorer == _answered)
+            return;
+        _answered = explorer;
+        _log.Info("tray", "Explorer made a new taskbar; asking apps to add their icons again");
+        _answer?.Dispose();
+        _answer = _loop.Schedule(TimeSpan.FromSeconds(1), () =>
         {
-            if (!IsWindow(icon.Window))
-                Remove(icon.Key);
-        }
-        _timer = _platform.Loop.Schedule(TimeSpan.FromMilliseconds(500), KeepInFront);
+            _answer = null;
+            _broadcast();
+        });
     }
 
     /// <summary>Explorer's own taskbar window, found past this one.</summary>
     private nint ExplorerTray()
     {
         nint hwnd = 0;
-        while ((hwnd = FindWindowExW(0, hwnd, ClassName, null)) != 0)
+        while ((hwnd = FindWindowExW(0, hwnd, _names.Explorer, null)) != 0)
         {
             if (hwnd != _hwnd)
                 return hwnd;
@@ -176,7 +247,9 @@ internal sealed unsafe partial class TrayHost
     [UnmanagedCallersOnly]
     private static nint WndProc(nint hwnd, uint msg, nint wParam, nint lParam)
     {
-        if (msg == WM_COPYDATA && _instance is { } host && hwnd == host._hwnd)
+        if (!Hosts.TryGetValue(hwnd, out var host))
+            return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
+        if (msg == WM_COPYDATA)
         {
             try
             {
@@ -186,72 +259,66 @@ internal sealed unsafe partial class TrayHost
             catch (Exception e)
 #pragma warning restore CA1031
             {
-                host._platform.Log.Warn("tray", e.Message);
+                host._log.Warn("tray", e.Message);
                 return 0;
             }
+        }
+        if (msg == TaskbarCreated)
+        {
+            host.OnTaskbarCreated();
+            return 0;
         }
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
     private nint OnCopyData(nint sender, COPYDATASTRUCT* data)
     {
-        if (data->dwData == 1 && data->cbData >= 8 + 24)
-        {
-            var tray = (SHELLTRAYDATA*)data->lpData;
-            if (tray->dwSignature == TrayDataSignature)
-            {
-                // Older apps send a shorter structure: copy what was sent over a zeroed one.
-                var nid = default(NOTIFYICONDATA32);
-                var size = (int)Math.Min(data->cbData - 8, (uint)sizeof(NOTIFYICONDATA32));
-                Buffer.MemoryCopy(&tray->nid, &nid, sizeof(NOTIFYICONDATA32), size);
-                OnNotifyIcon(tray->dwMessage, &nid, size);
-            }
-        }
+        if (data->dwData == TrayProtocol.NotifyIconData && TrayProtocol.Read(new ReadOnlySpan<byte>(data->lpData, (int)data->cbData)) is { } call)
+            OnNotifyIcon(call);
         // Explorer keeps its own tray, app bars and icon positions: it gets every message, and its answer is the answer.
         var explorer = ExplorerTray();
         if (explorer == 0)
             return 1;
         SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, SMTO_ABORTIFHUNG, 2000, out var result);
-        return data->dwData == 1 ? 1 : result;
+        return data->dwData == TrayProtocol.NotifyIconData ? 1 : result;
     }
 
-    private void OnNotifyIcon(uint message, NOTIFYICONDATA32* nid, int size)
+    internal void OnNotifyIcon(NotifyIconCall call)
     {
-        var hasGuid = (nid->uFlags & NIF_GUID) != 0 && size >= (int)Marshal.OffsetOf<NOTIFYICONDATA32>(nameof(NOTIFYICONDATA32.hBalloonIcon));
-        var window = (nint)(int)nid->hWnd;
-        var guid = hasGuid ? nid->guidItem : Guid.Empty;
+        var hasGuid = call.Guid != Guid.Empty;
+        var window = call.Window;
         // NIM_SETVERSION often leaves the GUID flag off, so an icon added by GUID is also found by its window.
-        var icon = Lookup(window, nid->uID, guid);
-        var key = icon?.Key ?? (hasGuid ? guid.ToString("N") : $"{nid->hWnd:x}-{nid->uID}");
-        switch (message)
+        var icon = Lookup(window, call.Id, call.Guid);
+        var key = icon?.Key ?? (hasGuid ? call.Guid.ToString("N") : $"{(uint)window:x}-{call.Id}");
+        switch (call.Message)
         {
-            case NIM_ADD:
-            case NIM_MODIFY:
+            case TrayProtocol.Add:
+            case TrayProtocol.Modify:
             {
-                if (icon is null && message == NIM_MODIFY)
+                if (icon is null && call.Message == TrayProtocol.Modify)
                     return;
                 icon ??= new TrayIcon { Key = key };
                 Unindex(icon);
                 if (window != 0)
                 {
                     icon.Window = window;
-                    icon.Id = nid->uID;
+                    icon.Id = call.Id;
                 }
                 if (hasGuid)
-                    icon.Guid = guid;
+                    icon.Guid = call.Guid;
                 // The same field is a balloon timeout on other messages. Only 3 and 4 are interface versions.
-                if (nid->uTimeoutOrVersion is TrayProtocol.Version or TrayProtocol.Version4)
-                    icon.Version = nid->uTimeoutOrVersion;
-                if ((nid->uFlags & NIF_MESSAGE) != 0)
-                    icon.CallbackMessage = nid->uCallbackMessage;
-                if ((nid->uFlags & NIF_TIP) != 0)
-                    icon.Tip = new string(nid->szTip).TrimEnd('\0');
-                if ((nid->uFlags & NIF_STATE) != 0 && (nid->dwStateMask & NIS_HIDDEN) != 0)
-                    icon.Hidden = (nid->dwState & NIS_HIDDEN) != 0;
-                if ((nid->uFlags & NIF_ICON) != 0)
+                if (call.TimeoutOrVersion is TrayProtocol.Version or TrayProtocol.Version4)
+                    icon.Version = call.TimeoutOrVersion;
+                if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
+                    icon.CallbackMessage = call.CallbackMessage;
+                if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
+                    icon.Tip = call.Tip;
+                if ((call.Flags & TrayProtocol.NIF_STATE) != 0 && (call.StateMask & TrayProtocol.NIS_HIDDEN) != 0)
+                    icon.Hidden = (call.State & TrayProtocol.NIS_HIDDEN) != 0;
+                if ((call.Flags & TrayProtocol.NIF_ICON) != 0)
                 {
                     icon.Image?.Dispose();
-                    icon.Image = IconImage((nint)(int)nid->hIcon);
+                    icon.Image = IconImage(call.Icon);
                     icon.ImageGeneration++;
                 }
                 Index(icon);
@@ -269,13 +336,13 @@ internal sealed unsafe partial class TrayHost
                 }
                 break;
             }
-            case NIM_DELETE:
+            case TrayProtocol.Delete:
                 if (icon is not null)
                     Remove(icon.Key);
                 break;
-            case NIM_SETVERSION:
+            case TrayProtocol.SetVersion:
                 if (icon is not null)
-                    icon.Version = nid->uTimeoutOrVersion;
+                    icon.Version = call.TimeoutOrVersion;
                 break;
         }
     }
@@ -376,7 +443,7 @@ internal sealed unsafe partial class TrayHost
         GetCursorPos(out var previous);
         SetCursorPos(target.X, target.Y);
         _cursorRestore?.Dispose();
-        _cursorRestore = _platform.Loop.Schedule(TimeSpan.FromMilliseconds(400), () => SetCursorPos(previous.X, previous.Y));
+        _cursorRestore = _loop.Schedule(TimeSpan.FromMilliseconds(400), () => SetCursorPos(previous.X, previous.Y));
     }
 
     private static void Send(TrayIcon icon, uint message, (int X, int Y) point)
@@ -470,6 +537,7 @@ internal sealed unsafe partial class TrayHost
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const uint DI_MASK = 0x1, DI_NORMAL = 0x3;
     private const uint LwaAlpha = 0x2;
+    private const uint MSGFLT_ALLOW = 1;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct COPYDATASTRUCT
@@ -477,34 +545,6 @@ internal sealed unsafe partial class TrayHost
         public nuint dwData;
         public uint cbData;
         public void* lpData;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct NOTIFYICONDATA32
-    {
-        public uint cbSize;
-        public uint hWnd;
-        public uint uID;
-        public uint uFlags;
-        public uint uCallbackMessage;
-        public uint hIcon;
-        public fixed char szTip[128];
-        public uint dwState;
-        public uint dwStateMask;
-        public fixed char szInfo[256];
-        public uint uTimeoutOrVersion;
-        public fixed char szInfoTitle[64];
-        public uint dwInfoFlags;
-        public Guid guidItem;
-        public uint hBalloonIcon;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SHELLTRAYDATA
-    {
-        public int dwSignature;
-        public uint dwMessage;
-        public NOTIFYICONDATA32 nid;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -567,6 +607,10 @@ internal sealed unsafe partial class TrayHost
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool IsWindow(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ChangeWindowMessageFilterEx(nint hwnd, uint message, uint action, nint changeFilter);
 
     [LibraryImport("user32.dll")]
     private static partial nint SendMessageTimeoutW(nint hwnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);

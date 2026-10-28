@@ -18,6 +18,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private nint _mouseHook;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
+    private Services.Tray.TrayHost? _tray;
     private static WindowsPlatform? _current;
 
     public WindowsPlatform(WinEventLoop loop, Log log)
@@ -48,6 +49,21 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     public IReadOnlyList<ScreenInfo> Screens => _screens;
 
     public event Action? ScreensChanged;
+
+    /// <summary>The notification area host, started the first time a shell uses the system tray.</summary>
+    internal Services.Tray.TrayHost Tray
+    {
+        get
+        {
+            if (_tray is null)
+            {
+                _tray = new Services.Tray.TrayHost(Loop, Log, Services.Tray.TrayNames.Session, Services.Tray.TrayHost.BroadcastTaskbarCreated);
+                Services.Tray.TrayIconProvider.Host = _tray;
+                _tray.Start();
+            }
+            return _tray;
+        }
+    }
 
     /// <summary>The native windows that exist now.</summary>
     internal IReadOnlyList<Win32Window> Windows => _windows;
@@ -377,6 +393,13 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     public void Dispose()
     {
         Hotkeys.Dispose();
+        // The next instance takes the notification area over, and apps register with it.
+        if (_tray is not null)
+        {
+            Services.Tray.TrayIconProvider.Host = null;
+            _tray.Dispose();
+            _tray = null;
+        }
         Unhook();
         if (_clipboardWindow != 0)
         {
