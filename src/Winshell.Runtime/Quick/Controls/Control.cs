@@ -9,7 +9,9 @@ namespace Winshell.Runtime.Quick.Controls;
 public class Control : Item, IHoverTarget
 {
     private double _padding;
+    private bool _paddingSet;
     private double? _horizontalPadding, _verticalPadding, _leftPadding, _rightPadding, _topPadding, _bottomPadding;
+    private double? _defaultLeft, _defaultTop, _defaultRight, _defaultBottom;
     private double _topInset, _bottomInset, _leftInset, _rightInset;
     private double _spacing;
     private bool _hovered;
@@ -47,7 +49,9 @@ public class Control : Item, IHoverTarget
         get { Track(); return _padding; }
         set
         {
-            if (SetField(ref _padding, value))
+            var first = !_paddingSet;
+            _paddingSet = true;
+            if (SetField(ref _padding, value) || first)
                 PaddingChanged();
         }
     }
@@ -69,40 +73,43 @@ public class Control : Item, IHoverTarget
     [Qml]
     public double LeftPadding
     {
-        get { Track(); return _leftPadding ?? _horizontalPadding ?? _padding; }
+        get { Track(); return _leftPadding ?? _horizontalPadding ?? Fallback(_defaultLeft); }
         set { _leftPadding = value; PaddingChanged(); }
     }
 
     [Qml]
     public double RightPadding
     {
-        get { Track(); return _rightPadding ?? _horizontalPadding ?? _padding; }
+        get { Track(); return _rightPadding ?? _horizontalPadding ?? Fallback(_defaultRight); }
         set { _rightPadding = value; PaddingChanged(); }
     }
 
     [Qml]
     public double TopPadding
     {
-        get { Track(); return _topPadding ?? _verticalPadding ?? _padding; }
+        get { Track(); return _topPadding ?? _verticalPadding ?? Fallback(_defaultTop); }
         set { _topPadding = value; PaddingChanged(); }
     }
 
     [Qml]
     public double BottomPadding
     {
-        get { Track(); return _bottomPadding ?? _verticalPadding ?? _padding; }
+        get { Track(); return _bottomPadding ?? _verticalPadding ?? Fallback(_defaultBottom); }
         set { _bottomPadding = value; PaddingChanged(); }
     }
 
-    /// <summary>Sets default padding from C#, without counting as set from QML.</summary>
+    /// <summary>Sets the style's padding for each side. Any padding QML sets, even <c>padding</c> alone, wins over it.</summary>
     protected void SetDefaultPadding(double left, double top, double right, double bottom)
     {
-        _leftPadding = left;
-        _topPadding = top;
-        _rightPadding = right;
-        _bottomPadding = bottom;
+        _defaultLeft = left;
+        _defaultTop = top;
+        _defaultRight = right;
+        _defaultBottom = bottom;
         PaddingChanged();
     }
+
+    /// <summary>A side's padding when nothing more specific is set: <c>padding</c> once set, else the style's default.</summary>
+    private double Fallback(double? styleDefault) => _paddingSet ? _padding : styleDefault ?? _padding;
 
     private void PaddingChanged()
     {

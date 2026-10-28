@@ -158,12 +158,31 @@ public sealed class PopupItem : Pane, IPointerTarget, IWheelTarget, IKeyTarget
 {
     private readonly Popup _popup;
 
+    private readonly bool _ownContent;
+
     internal PopupItem(Popup popup)
     {
         _popup = popup;
-        SetDefaultPadding(12, 12, 12, 12);
+        // WinUI's FlyoutContentPadding, 16,15,16,17, inside a 1 pixel border.
+        SetDefaultPadding(17, 16, 17, 18);
         if (popup.CreateContentItem() is { } content)
+        {
             InitContentItem(content);
+            _ownContent = true;
+        }
+    }
+
+    // A popup that brings its own content item, such as a menu's column or a tool tip's label, is as big as that
+    // item. Other popups are as big as their one child, as a pane is.
+
+    public override double ImplicitContentWidth => _ownContent ? OwnContentSize(true) : base.ImplicitContentWidth;
+
+    public override double ImplicitContentHeight => _ownContent ? OwnContentSize(false) : base.ImplicitContentHeight;
+
+    private double OwnContentSize(bool width)
+    {
+        TrackQml(width ? "implicitContentWidth" : "implicitContentHeight");
+        return width ? ContentItem?.ImplicitWidth ?? 0 : ContentItem?.ImplicitHeight ?? 0;
     }
 
     public Popup Popup => _popup;
@@ -310,8 +329,8 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
         var t = Theme.Current;
         var r = i.Bounds;
         Fluent.Shadow(c, r, Fluent.OverlayCornerRadius, t.FlyoutShadow);
-        Fluent.FillRound(c, r, Fluent.OverlayCornerRadius, t.AcrylicBackgroundFillColorDefault);
-        Fluent.StrokeRound(c, r, Fluent.OverlayCornerRadius, t.SurfaceStrokeColorDefault);
+        Fluent.FillRound(c, r, Fluent.OverlayCornerRadius, FluentResources.FlyoutPresenterBackground(t));
+        Fluent.StrokeRound(c, r, Fluent.OverlayCornerRadius, FluentResources.FlyoutPresenterBorderBrush(t), FluentResources.FlyoutBorderThickness(t));
     });
 
     /// <summary>The content item the popup starts with, or null for a plain item.</summary>
@@ -651,9 +670,10 @@ public sealed class ToolTip : Popup
 
     public ToolTip()
     {
-        Padding = 8;
-        TopPadding = 5;
-        BottomPadding = 7;
+        // WinUI's ToolTipBorderThemePadding, 8,5,8,7, inside a 1 pixel border.
+        Padding = 9;
+        TopPadding = 6;
+        BottomPadding = 8;
         SetDefaultMargins(6);
         ClosePolicy = (int)(ClosePolicyValue.CloseOnEscape | ClosePolicyValue.CloseOnPressOutsideParent | ClosePolicyValue.CloseOnReleaseOutsideParent);
     }
@@ -680,8 +700,8 @@ public sealed class ToolTip : Popup
         var t = Theme.Current;
         var r = i.Bounds;
         Fluent.Shadow(c, r, Fluent.ControlCornerRadius, t.TooltipShadow);
-        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, t.AcrylicBackgroundFillColorDefault);
-        Fluent.StrokeRound(c, r, Fluent.ControlCornerRadius, t.SurfaceStrokeColorDefault);
+        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, FluentResources.ToolTipBackground(t));
+        Fluent.StrokeRound(c, r, Fluent.ControlCornerRadius, FluentResources.ToolTipBorderBrush(t));
     });
 
     internal override Item? CreateContentItem()
@@ -710,7 +730,8 @@ public sealed class ToolTip : Popup
         private void Fit()
         {
             using var _ = DependencyTracker.Suspend();
-            const double max = 320;
+            // WinUI's ToolTipMaxWidth of 320, less the padding and border on each side.
+            const double max = 320 - 18;
             if (_label.ImplicitWidth > max && !_label.HasExplicitWidth)
                 _label.Width = max;
             ImplicitWidth = Math.Min(_label.ImplicitWidth, max);
@@ -967,9 +988,10 @@ public sealed class Menu : Popup
 
     public Menu()
     {
-        Padding = 0;
-        TopPadding = 2;
-        BottomPadding = 2;
+        // WinUI's MenuFlyoutPresenterThemePadding, 0,2,0,2, inside a 1 pixel border.
+        Padding = 1;
+        TopPadding = 3;
+        BottomPadding = 3;
         SetDefaultMargins(0);
     }
 
@@ -1087,7 +1109,9 @@ public sealed class MenuItem : AbstractButton
 
     public MenuItem()
     {
-        SetDefaultPadding(12, 8, 12, 9);
+        // WinUI's MenuFlyoutItemMargin of 4,2 and MenuFlyoutItemThemePaddingNarrow of 11,4,11,5, the rows of a
+        // menu opened with the mouse: 32 pixels apart.
+        SetDefaultPadding(15, 6, 15, 7);
         TopInset = 2;
         BottomInset = 2;
         LeftInset = 4;
@@ -1121,11 +1145,12 @@ public sealed class MenuItem : AbstractButton
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var fill = !Enabled ? QColor.Transparent : IsDown ? t.SubtleFillColorTertiary : Hovered || _highlighted ? t.SubtleFillColorSecondary : QColor.Transparent;
-        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, fill);
+        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, FluentResources.MenuFlyoutItemBackground(t).For(Enabled, IsDown, Hovered || _highlighted));
         if (Checkable && Checked)
             Fluent.DrawCheck(c, r.Left + (float)(LeftPadding - LeftInset) + 8, r.MidY, 12, ContentColor);
-    }, 120, 36));
+    }, 120, 28));
+
+    public override QColor ContentColor => FluentResources.MenuFlyoutItemForeground(Theme.Current).For(Enabled, IsDown, Hovered || _highlighted);
 }
 
 /// <summary>QtQuick.Controls' <c>MenuSeparator</c>: a line between groups of menu items.</summary>
@@ -1133,12 +1158,13 @@ public sealed class MenuSeparator : Control
 {
     public MenuSeparator()
     {
-        SetDefaultPadding(0, 4, 0, 4);
+        // WinUI's MenuFlyoutSeparatorThemePadding: a pixel above and below, across the whole menu.
+        SetDefaultPadding(0, 1, 0, 1);
     }
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
     {
-        using var paint = new SKPaint { Color = Theme.Current.DividerStrokeColorDefault.ToSk() };
+        using var paint = new SKPaint { Color = FluentResources.MenuFlyoutSeparatorBackground(Theme.Current).ToSk() };
         c.DrawRect(SKRect.Create(0, MathF.Round(i.Bounds.MidY), i.Bounds.Width, 1), paint);
     }, 120, 1));
 }
@@ -1205,6 +1231,9 @@ internal sealed class ComboBoxPopup : Popup
         _list.ContentY = Math.Max(0, scroll);
         return new QPoint(0, -(rowY - _list.ContentY) - TopPadding + (_box.Height - rowH) / 2);
     }
+
+    /// <summary>However it is opened, from the box or by <c>popup.open()</c>, the list shows the current rows.</summary>
+    protected override void OnAboutToShow() => _box.PrepareRows();
 
     protected override void OnClosed() => _box.OnPopupClosed();
 }
@@ -1664,13 +1693,20 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     {
         if (_popup is null)
             return;
+        if (_popup is not ComboBoxPopup)
+            PrepareRows();
+        _popup.Open();
+        NotifyChanged("down");
+        Update();
+    }
+
+    /// <summary>Builds the rows, fits the default list to them, and highlights the current one.</summary>
+    internal void PrepareRows()
+    {
         BuildRows();
         if (_popup is ComboBoxPopup popup)
             popup.Fit();
         SetHighlighted(_currentIndex);
-        _popup.Open();
-        NotifyChanged("down");
-        Update();
     }
 
     internal void OnPopupClosed()
