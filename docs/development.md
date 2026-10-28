@@ -44,3 +44,7 @@ release-please keeps a release PR open that collects the changes merged into `ma
 
 - **Pick the version yourself:** when merging a PR, add `Release-As: x.y.z` to the end of the squash commit message.
 - **The release PR's checks don't start:** without the `RELEASE_PLEASE_TOKEN` secret, close and reopen the release PR right before merging it.
+
+## Network permissions
+
+Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires Windows Wi-Fi/location access and an explicit `Networking.requestAccess()` call; packaged deployments also need `wiFiControl`. No network or radio changes are made by the automated tests: actions use a fake backend, and native smoke tests only read state. See [Windows networking](network.md).

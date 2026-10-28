@@ -1,4 +1,5 @@
 using System.Net.NetworkInformation;
+using Microsoft.Win32;
 using Windows.Devices.Radios;
 using Windows.Devices.WiFi;
 using Windows.Networking.Connectivity;
@@ -20,12 +21,20 @@ internal sealed record NetworkDeviceInfo(
     uint LinkSpeed,
     IReadOnlyList<NetworkInfo> Networks);
 
+internal sealed record NetworkProfileInfo(string Id, string Name, Guid AdapterId, NetworkConnectivity Connectivity,
+    NetworkCost Cost, bool Roaming, bool OverDataLimit, double? SignalStrength);
+
 internal sealed record NetworkSnapshot(
     bool Ready,
     IReadOnlyList<NetworkDeviceInfo> Devices,
     NetworkConnectivity Connectivity,
     bool WifiEnabled,
-    bool WifiHardwareEnabled)
+    bool WifiHardwareEnabled,
+    IReadOnlyList<NetworkProfileInfo>? Profiles = null,
+    NetworkAccessStatus Access = NetworkAccessStatus.Unspecified,
+    AirplaneModeState AirplaneMode = AirplaneModeState.Unknown,
+    string Error = "",
+    WifiRadioState WifiState = WifiRadioState.Unknown)
 {
     public static readonly NetworkSnapshot Initial = new(false, [], NetworkConnectivity.Unknown, false, false);
 }
@@ -35,15 +44,16 @@ internal sealed record NetworkSnapshot(
 /// networks from WinRT's WiFiAdapter, which needs the location permission for desktop apps; saved
 /// networks and connection states from wlanapi; connectivity from WinRT's NetworkInformation.
 /// </summary>
-internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
+internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetworkBackend
 {
     public static readonly NetworkBackend Instance = new();
 
     private readonly object _lock = new();
     private readonly Dictionary<Guid, WiFiAdapter> _wifiAdapters = [];
-    private readonly Dictionary<Guid, int> _scanners = [];
+    private NetworkAccessStatus _access;
+    private readonly SemaphoreSlim _accessGate = new(1, 1);
     private readonly List<Radio> _radios = [];
-    private bool _wifiAccess;
+
 
     private NetworkBackend()
         : base(NetworkSnapshot.Initial)
@@ -60,48 +70,76 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
         NetworkNative.Listen(Refresh);
         await RefreshNowAsync().ConfigureAwait(false);
 
+        // Reading radio state needs no control permission and must never prompt on import.
         try
         {
-            if (await Radio.RequestAccessAsync() == RadioAccessStatus.Allowed)
+            foreach (var radio in (await Radio.GetRadiosAsync()).Where(r => r.Kind == RadioKind.WiFi))
             {
-                foreach (var radio in (await Radio.GetRadiosAsync()).Where(r => r.Kind == RadioKind.WiFi))
-                {
-                    radio.StateChanged += (_, _) => Refresh();
-                    lock (_lock)
-                        _radios.Add(radio);
-                }
+                radio.StateChanged += (_, _) => Refresh();
+                lock (_lock) _radios.Add(radio);
             }
         }
-        catch (UnauthorizedAccessException)
-        {
-        }
-
-        // The list of Wi-Fi networks needs this access. A desktop app has it when location is on for
-        // desktop apps; without it, a Wi-Fi device only shows the network it is connected to.
-        var access = await WiFiAdapter.RequestAccessAsync();
-        if (access == WiFiAccessStatus.Allowed)
-        {
-            foreach (var adapter in await WiFiAdapter.FindAllAdaptersAsync())
-            {
-                adapter.AvailableNetworksChanged += (_, _) => Refresh();
-                lock (_lock)
-                    _wifiAdapters[adapter.NetworkAdapter.NetworkAdapterId] = adapter;
-            }
-            lock (_lock)
-                _wifiAccess = true;
-        }
-        else
-        {
-            Winshell.Runtime.Log.Default.Info(Category, $"Windows denied access to Wi-Fi networks ({access}); turn on location for desktop apps to list them");
-        }
+        catch (UnauthorizedAccessException) { }
         await RefreshNowAsync().ConfigureAwait(false);
     }
 
+    public async Task RequestAccessAsync()
+    {
+        await _accessGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var access = await WiFiAdapter.RequestAccessAsync();
+            var adapters = access == WiFiAccessStatus.Allowed ? await WiFiAdapter.FindAllAdaptersAsync() : null;
+            lock (_lock)
+            {
+                _wifiAdapters.Clear();
+                if (adapters is not null)
+                {
+                    foreach (var adapter in adapters)
+                        _wifiAdapters[adapter.NetworkAdapter.NetworkAdapterId] = adapter;
+                }
+
+                _access = MapAccess(access);
+            }
+        }
+        catch (Exception e) when (IsExpectedFailure(e))
+        {
+            lock (_lock)
+            {
+                _wifiAdapters.Clear();
+                _access = NetworkAccessStatus.Unspecified;
+            }
+            throw;
+        }
+        finally
+        {
+            _accessGate.Release();
+            await RefreshNowAsync().ConfigureAwait(false);
+        }
+    }
+
+    internal static NetworkAccessStatus MapAccess(WiFiAccessStatus status) => status switch
+    {
+        WiFiAccessStatus.Allowed => NetworkAccessStatus.Allowed,
+        WiFiAccessStatus.DeniedByUser => NetworkAccessStatus.DeniedByUser,
+        WiFiAccessStatus.DeniedBySystem => NetworkAccessStatus.DeniedBySystem,
+        _ => NetworkAccessStatus.Unspecified,
+    };
+    internal static bool IsExpectedFailure(Exception e) => e is UnauthorizedAccessException or System.Runtime.InteropServices.COMException
+        or InvalidOperationException or NotSupportedException or ArgumentException or System.ComponentModel.Win32Exception or IOException;
+
     protected override Task<NetworkSnapshot> ReadAsync()
     {
-        var profiles = WinNetworkInformation.GetConnectionProfiles()
-            .Where(p => p.NetworkAdapter is not null && p.GetNetworkConnectivityLevel() != NetworkConnectivityLevel.None)
-            .ToList();
+        try { return ReadStateAsync(); }
+        catch (Exception e) when (IsExpectedFailure(e))
+        {
+            return Task.FromResult(NetworkSnapshot.Initial with { Error = e.Message });
+        }
+    }
+
+    private Task<NetworkSnapshot> ReadStateAsync()
+    {
+        var profiles = WinNetworkInformation.GetConnectionProfiles().Where(p => p.NetworkAdapter is not null).ToList();
         var wlanStates = InterfaceStates();
 
         var devices = new List<NetworkDeviceInfo>();
@@ -149,23 +187,28 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
             }
         }
 
-        var connectivity = WinNetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel() switch
-        {
-            NetworkConnectivityLevel.InternetAccess => NetworkConnectivity.Full,
-            NetworkConnectivityLevel.ConstrainedInternetAccess => NetworkConnectivity.Portal,
-            NetworkConnectivityLevel.LocalAccess => NetworkConnectivity.Limited,
-            _ => NetworkConnectivity.None,
-        };
+        var connectivity = MapConnectivity(WinNetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel() ?? NetworkConnectivityLevel.None);
 
         bool wifiEnabled, wifiHardware;
+        WifiRadioState wifiState;
         lock (_lock)
         {
-            // Without a Wi-Fi radio to ask, a Wi-Fi adapter that exists is on.
-            var hasWifi = devices.Any(d => d.Type == DeviceType.Wifi);
-            wifiEnabled = _radios.Count > 0 ? _radios.Any(r => r.State == RadioState.On) : hasWifi;
-            wifiHardware = _radios.Count > 0 ? _radios.Any(r => r.State != RadioState.Disabled) : hasWifi;
+
+            wifiEnabled = _radios.Any(r => r.State == RadioState.On);
+            wifiHardware = _radios.Any(r => r.State is RadioState.On or RadioState.Off);
+            wifiState = wifiEnabled ? WifiRadioState.On : _radios.Count == 0 ? WifiRadioState.Unknown :
+                _radios.All(r => r.State == RadioState.Disabled) ? WifiRadioState.Disabled : WifiRadioState.Off;
         }
-        return Task.FromResult(new NetworkSnapshot(true, devices, connectivity, wifiEnabled, wifiHardware));
+        var connectionProfiles = profiles.Select(p =>
+        {
+            var cost = p.GetConnectionCost();
+            return new NetworkProfileInfo(p.NetworkAdapter.NetworkAdapterId + ":" + p.ProfileName, p.ProfileName,
+                p.NetworkAdapter.NetworkAdapterId, MapConnectivity(p.GetNetworkConnectivityLevel()),
+                MapCost(cost.NetworkCostType), cost.Roaming, cost.OverDataLimit,
+                p.GetSignalBars() is { } bars ? bars / 5.0 : null);
+        }).ToArray();
+        return Task.FromResult(new NetworkSnapshot(true, devices, connectivity, wifiEnabled, wifiHardware,
+            connectionProfiles, _access, ReadAirplaneMode(), WifiState: wifiState));
     }
 
     private List<NetworkInfo> ReadWifiNetworks(Guid id, ConnectionState deviceState, ConnectionProfile? profile)
@@ -202,7 +245,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
     {
         if (!profile.IsWlanConnectionProfile)
             return null;
-        // The SSID needs the location permission; the profile name is the SSID unless renamed.
+        // Unlike scan/BSSID access, reading the connected SSID does not request location consent.
         var ssid = profile.WlanConnectionProfileDetails?.GetConnectedSsid();
         return string.IsNullOrEmpty(ssid) ? profile.ProfileName : ssid;
     }
@@ -245,21 +288,23 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
             .OrderByDescending(n => n.NetworkRssiInDecibelMilliwatts)
             .FirstOrDefault();
         if (adapter is null || network is null)
-            return ConnectionFailReason.WifiNetworkLost;
+            return ConnectionFailReason.NetworkUnavailable;
         var result = psk is null
             ? await adapter.ConnectAsync(network, WiFiReconnectionKind.Automatic)
             : await adapter.ConnectAsync(network, WiFiReconnectionKind.Automatic, new PasswordCredential { Password = psk });
         Refresh();
-        return result.ConnectionStatus switch
+        return MapConnectionResult(result.ConnectionStatus);
+    }
+
+    internal static ConnectionFailReason? MapConnectionResult(WiFiConnectionStatus status) => status switch
         {
             WiFiConnectionStatus.Success => null,
-            WiFiConnectionStatus.InvalidCredential => ConnectionFailReason.NoSecrets,
-            WiFiConnectionStatus.Timeout => ConnectionFailReason.WifiAuthTimeout,
-            WiFiConnectionStatus.NetworkNotAvailable => ConnectionFailReason.WifiNetworkLost,
-            WiFiConnectionStatus.UnsupportedAuthenticationProtocol => ConnectionFailReason.WifiClientFailed,
+            WiFiConnectionStatus.InvalidCredential => ConnectionFailReason.InvalidPassword,
+            WiFiConnectionStatus.Timeout => ConnectionFailReason.Timeout,
+            WiFiConnectionStatus.NetworkNotAvailable => ConnectionFailReason.NetworkUnavailable,
+            WiFiConnectionStatus.UnsupportedAuthenticationProtocol => ConnectionFailReason.UnsupportedAuthentication,
             _ => ConnectionFailReason.Unknown,
         };
-    }
 
     /// <summary>Disconnects a Wi-Fi device. False when Windows gave no access to it.</summary>
     public bool Disconnect(Guid device)
@@ -278,62 +323,60 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>
         return error;
     }
 
-    public bool CanScan(Guid device) => Adapter(device) is not null;
-
-    /// <summary>Scans for networks every few seconds while any engine wants to.</summary>
-    public void SetScanning(Guid device, bool scanning)
+    public async Task ScanAsync(Guid device)
     {
-        bool start;
-        lock (_lock)
-        {
-            var count = _scanners.GetValueOrDefault(device) + (scanning ? 1 : -1);
-            start = scanning && count == 1;
-            if (count <= 0)
-                _scanners.Remove(device);
-            else
-                _scanners[device] = count;
-        }
-        if (start)
-            ServiceSupport.Run(Category, () => ScanLoopAsync(device));
-    }
-
-    private async Task ScanLoopAsync(Guid device)
-    {
-        while (true)
+        var adapter = Adapter(device) ?? throw new UnauthorizedAccessException("Call Networking.requestAccess() before scanning Wi-Fi networks.");
+        try { await adapter.ScanAsync(); }
+        catch (UnauthorizedAccessException)
         {
             lock (_lock)
             {
-                if (!_scanners.ContainsKey(device))
-                    return;
+                _wifiAdapters.Clear();
+
+                _access = NetworkAccessStatus.DeniedBySystem;
             }
-            if (Adapter(device) is { } adapter)
-                await adapter.ScanAsync();
-            Refresh();
-            await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+            throw;
         }
+        finally { Refresh(); }
     }
 
-    /// <summary>Turns the Wi-Fi radios on or off. False when Windows gave no access to them.</summary>
-    public async Task<bool> SetWifiEnabledAsync(bool enabled)
+    internal static NetworkConnectivity MapConnectivity(NetworkConnectivityLevel value) => value switch
     {
-        List<Radio> radios;
-        lock (_lock)
-            radios = [.. _radios];
-        if (radios.Count == 0)
-            return false;
-        var ok = true;
-        foreach (var radio in radios)
-            ok &= await radio.SetStateAsync(enabled ? RadioState.On : RadioState.Off) == RadioAccessStatus.Allowed;
-        Refresh();
-        return ok;
-    }
+        NetworkConnectivityLevel.InternetAccess => NetworkConnectivity.InternetAccess,
+        NetworkConnectivityLevel.ConstrainedInternetAccess => NetworkConnectivity.CaptivePortal,
+        NetworkConnectivityLevel.LocalAccess => NetworkConnectivity.LocalAccess,
+        _ => NetworkConnectivity.None,
+    };
 
-    public bool HasWifiAccess
+    internal static NetworkCost MapCost(NetworkCostType value) => value switch
     {
-        get
+        NetworkCostType.Unrestricted => NetworkCost.Unrestricted,
+        NetworkCostType.Fixed => NetworkCost.Fixed,
+        NetworkCostType.Variable => NetworkCost.Variable,
+        _ => NetworkCost.Unknown,
+    };
+
+    // Windows exposes no public WinRT aggregate airplane-mode API. Read the system's persisted
+    // RadioManagement flag when present; never infer it from individual radios (which can be overridden).
+    internal static AirplaneModeState MapAirplaneMode(object? value) => value switch
+    {
+        0 => AirplaneModeState.Off,
+        1 => AirplaneModeState.On,
+        _ => AirplaneModeState.Unknown,
+    };
+
+    private static AirplaneModeState ReadAirplaneMode()
+    {
+        try
         {
-            lock (_lock)
-                return _wifiAccess;
+            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\RadioManagement");
+            return MapAirplaneMode(key?.GetValue("SystemRadioState"));
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            return AirplaneModeState.Unknown;
         }
     }
+
+    internal Task<NetworkSnapshot> ReadForTestAsync() => ReadAsync();
 }
