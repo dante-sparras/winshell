@@ -29,7 +29,7 @@ Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that
 | `id` | The program's file name without its extension |
 | `appName` | The program's description, or its file name |
 | `executable` | The program's full path |
-| `icon` | An `image://trayicon/…` source for the icon the app set |
+| `icon` | An `image://trayicon/…` source for the icon the app set, sharp at the screen's scale (see below) |
 | `tooltip` | The tooltip text, which may run over several lines |
 | `overflow` | Windows shows the icon in the hidden icons flyout, not in the taskbar |
 | `menu` | A `MenuHandle` for `MenuAnchor`; the app draws the menu itself |
@@ -42,6 +42,10 @@ Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that
 `overflow` follows Settings > Personalization > Taskbar > Other system tray icons, and changes as soon as the user flips a switch there. Windows keeps that choice per icon in `HKCU\Control Panel\NotifyIconSettings`. An icon Windows has not stored a choice for yet is in the overflow, as Windows 11 does with a new icon.
 
 An icon the app hid with `NIS_HIDDEN` is not in `items`, because Explorer does not show it either. A balloon still reaches Explorer, which shows it as a toast. The signal lets a shell show it as well.
+
+## Icons at every scale
+
+An app hands over one bitmap, usually sized for the primary monitor. Give the `Image` a `sourceSize` in logical pixels, and the shell asks for that size times the scale of the monitor the image is on, and asks again when the image moves to a monitor with another scale. When Windows knows the program or library the icon came from, the shell loads that icon again at the asked size. An icon the app drew itself, such as one with a badge, has no resource, and the `Image` scales the app's bitmap.
 
 ## Clicks
 
@@ -63,3 +67,4 @@ Automated tests run hosts under private window classes and never broadcast to th
 3. Turn an icon on in Settings > Other system tray icons, and confirm its `overflow` turns false.
 4. Click a tray icon in a bar whose panel does not take focus while typing in another window. An app that shows nothing (a toggle) leaves the keyboard in that window. An app with a menu opens it at the bar, and the menu closes when you click elsewhere.
 5. When an app shows a balloon (for example, a download finishing in a tray app), confirm `onBalloon` fires with its title and text, and that Explorer still shows the toast.
+6. On a monitor at 150% or 200%, compare a bar's tray icons with a `sourceSize` against Explorer's. Icons from a resource are sharp, not blurred by scaling.

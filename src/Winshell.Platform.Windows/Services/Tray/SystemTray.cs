@@ -177,11 +177,19 @@ internal sealed class TrayIconProvider : IImageProvider
 
     public static TrayHost? Host { get; set; }
 
+    /// <summary>
+    /// The icon at the size asked for, which an <c>Image</c> with a <c>sourceSize</c> sets to that size times its
+    /// screen's scale. An icon loaded from a resource is drawn again at that size. Any other is the app's own bitmap.
+    /// </summary>
     public SKImage? Load(string id, int requestedWidth, int requestedHeight)
     {
-        var key = id.Split('/')[0];
+        if (Host?.Find(id.Split('/')[0]) is not { Image: { } image } icon)
+            return null;
+        var size = Math.Max(requestedWidth, requestedHeight);
+        if (size > 0 && size != image.Width && icon.Resource is { } resource && TrayHost.ResourceImage(resource, size) is { } sharp)
+            return sharp;
         // The host keeps the image; the cache gets a copy it may dispose of.
-        return Host?.Find(key)?.Image is { } image ? SKImage.FromBitmap(SKBitmap.FromImage(image)) : null;
+        return SKImage.FromBitmap(SKBitmap.FromImage(image));
     }
 }
 
