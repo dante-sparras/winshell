@@ -40,6 +40,16 @@ internal sealed record NotifyIconCall
     public Guid Guid { get; init; }
 }
 
+/// <summary>A click on a tray icon, as the app receives it.</summary>
+internal enum TrayClick
+{
+    Left,
+    Double,
+    Middle,
+    /// <summary>A right click, which asks the app for its menu.</summary>
+    Menu,
+}
+
 /// <summary>How Explorer and apps talk about notification-area icons.</summary>
 internal static class TrayProtocol
 {
@@ -102,6 +112,28 @@ internal static class TrayProtocol
             InfoTitle = Text(nid, InfoTitleOffset, InfoTitleChars),
             InfoFlags = U32(nid, InfoFlagsOffset),
             Guid = (flags & NIF_GUID) != 0 && sent.Length >= GuidOffset + 16 ? new Guid(nid.Slice(GuidOffset, 16)) : Guid.Empty,
+        };
+    }
+
+    private const uint WM_CONTEXTMENU = 0x007B, NIN_SELECT = 0x0400;
+    private const uint WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_LBUTTONDBLCLK = 0x0203;
+    private const uint WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205, WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
+
+    /// <summary>
+    /// The messages a click sends, in order: the mouse messages a window would get, and from version 3 on,
+    /// <c>NIN_SELECT</c> after each left button release and <c>WM_CONTEXTMENU</c> after a right one.
+    /// </summary>
+    public static uint[] ClickMessages(TrayClick click, uint version)
+    {
+        var current = version >= Version;
+        return click switch
+        {
+            TrayClick.Left => current ? [WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT] : [WM_LBUTTONDOWN, WM_LBUTTONUP],
+            TrayClick.Double => current
+                ? [WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT, WM_LBUTTONDBLCLK, WM_LBUTTONUP, NIN_SELECT]
+                : [WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_LBUTTONUP],
+            TrayClick.Middle => [WM_MBUTTONDOWN, WM_MBUTTONUP],
+            _ => current ? [WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU] : [WM_RBUTTONDOWN, WM_RBUTTONUP],
         };
     }
 

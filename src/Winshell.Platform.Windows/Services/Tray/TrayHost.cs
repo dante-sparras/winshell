@@ -412,47 +412,32 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     // Clicks, sent the way Explorer sends them
 
-    private const uint WM_CONTEXTMENU = 0x007B, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
-    private const uint WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208, NIN_SELECT = 0x0400;
-
-    public void Click(TrayIcon icon, int button, (int X, int Y)? at)
+    public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at)
     {
         if (!IsWindow(icon.Window) || icon.CallbackMessage == 0)
             return;
         var point = at ?? CursorPosition();
-        // Apps read the cursor when they open a menu, and ignore the point in the message.
+        // Apps read the cursor when they open a menu, and many ignore the point in the message.
         if (at is { } target)
             PlaceCursor(target);
-        // A menu only appears if the app may take the foreground. A programmatic click has not just
-        // received input, so join the foreground thread long enough to hand that right over.
         LetAppTakeForeground(icon);
-        switch (button)
-        {
-            case 0:
-                Send(icon, WM_LBUTTONDOWN, point);
-                Send(icon, WM_LBUTTONUP, point);
-                if (icon.Version >= TrayProtocol.Version)
-                    Send(icon, NIN_SELECT, point);
-                break;
-            case 1:
-                Send(icon, WM_RBUTTONDOWN, point);
-                Send(icon, WM_RBUTTONUP, point);
-                if (icon.Version >= TrayProtocol.Version)
-                    Send(icon, WM_CONTEXTMENU, point);
-                break;
-            default:
-                Send(icon, WM_MBUTTONDOWN, point);
-                Send(icon, WM_MBUTTONUP, point);
-                break;
-        }
+        foreach (var message in TrayProtocol.ClickMessages(click, icon.Version))
+            Send(icon, message, point);
     }
 
-    private void LetAppTakeForeground(TrayIcon icon)
+    /// <summary>
+    /// Lets the app take the foreground for its menu or window. Nothing is activated for it, so the window the user
+    /// works in keeps the keyboard when the app shows nothing.
+    /// </summary>
+    private static void LetAppTakeForeground(TrayIcon icon)
     {
-        var foreground = GetForegroundWindow();
-        var foregroundThread = GetWindowThreadProcessId(foreground, out _);
+        // A click on a shell window is input this process just received, which lets it pass the right on.
+        if (AllowSetForegroundWindow((uint)icon.ProcessId))
+            return;
+        // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
+        var foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
         var thread = GetCurrentThreadId();
-        var attached = foregroundThread != thread && AttachThreadInput(foregroundThread, thread, true);
+        var attached = foregroundThread != 0 && foregroundThread != thread && AttachThreadInput(foregroundThread, thread, true);
         try
         {
             SetForegroundWindow(icon.Window);

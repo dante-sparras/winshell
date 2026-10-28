@@ -29,6 +29,17 @@ public class TrayProtocolTests
         Assert.Equal((nint)(0xfff8u | (100u << 16)), w);
     }
 
+    [Theory]
+    [InlineData(TrayClick.Left, 0u, new uint[] { 0x0201, 0x0202 })]
+    [InlineData(TrayClick.Left, 4u, new uint[] { 0x0201, 0x0202, 0x0400 })]
+    [InlineData(TrayClick.Double, 0u, new uint[] { 0x0201, 0x0202, 0x0203, 0x0202 })]
+    [InlineData(TrayClick.Double, 3u, new uint[] { 0x0201, 0x0202, 0x0400, 0x0203, 0x0202, 0x0400 })]
+    [InlineData(TrayClick.Middle, 4u, new uint[] { 0x0207, 0x0208 })]
+    [InlineData(TrayClick.Menu, 0u, new uint[] { 0x0204, 0x0205 })]
+    [InlineData(TrayClick.Menu, 3u, new uint[] { 0x0204, 0x0205, 0x007B })]
+    internal void Clicks_send_what_explorer_sends(TrayClick click, uint version, uint[] messages) =>
+        Assert.Equal(messages, TrayProtocol.ClickMessages(click, version));
+
     [Fact]
     public void A_full_structure_reads_every_field()
     {
