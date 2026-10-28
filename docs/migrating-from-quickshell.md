@@ -201,8 +201,25 @@ These did nothing on Windows, or repeated what another type does.
 | `BackgroundEffect.blurRegion` | `WindowEffects.backdrop: WindowEffects.Acrylic` |
 | `GlobalShortcut` | An `IpcHandler`, and a key bound in Winland or another hotkey tool to run `winshell ipc call` |
 | `HyprlandWindow` | Nothing |
-| `ScreencopyView`, `ShortcutInhibitor` | Nothing |
+| `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
+| `ShortcutInhibitor` | Nothing |
 | `Quickshell.Services.Greetd`, `Quickshell.Services.Polkit`, `Quickshell.I3`, `Quickshell.DBusMenu`, `Quickshell.WindowManager` | Nothing |
+
+## Capture
+
+`Quickshell.Wayland.ScreencopyView` becomes a `CaptureSession` plus a `CaptureView` from `Winshell.Capture`. See [Windows capture](capture.md) for complete examples, export methods and Windows access rules. No Wayland compositor or protocol names remain in the module.
+
+| Former member | Windows API |
+| --- | --- |
+| `captureSource` | `CaptureSession.target`: an `AppWindow` or `ShellScreen` |
+| `paintCursor` | `CaptureSession.includeCursor`, applied on start |
+| `live`, `captureFrame()` | Explicit `start()` / `stop()`; for a still export on the first `frameReady`, then stop |
+| `hasContent` | `CaptureSession.hasFrame` |
+| `sourceSize` | `CaptureSession.pixelSize`, in physical pixels |
+| `constraintSize` | `CaptureView.width` / `height`, in logical pixels; the image fits with its aspect ratio preserved |
+| `stopped` | Observe `runningChanged`; read `error` for access or device failures |
+
+Stopping clears the preview and all retained pixels. Export with `saveToFile()` or `copyToClipboard()` before stopping if a still must outlive the session. There are no aliases for the old type or properties.
 
 ## Everything else
 
