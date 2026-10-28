@@ -191,5 +191,6 @@ public static class ServiceModules
         Services.WindowManagerModules.Register(registry);
         Services.Pam.PamModule.Register(registry);
         Services.Tray.SystemTrayModule.Register(registry);
+        Services.Notifications.NotificationModule.Register(registry);
     }
 }
