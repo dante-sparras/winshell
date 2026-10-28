@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.3.0](https://github.com/dante-sparras/winshell/compare/v0.2.0...v0.3.0) (2026-10-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **input:** register global hotkeys from qml
+* **apps:** index Start menu apps with search and usage
+* **power:** name the battery, power mode, and monitor brightness for Windows
+* **media:** name system media sessions for Windows
+* **bluetooth:** expose Windows state and explicit device actions ([#60](https://github.com/dante-sparras/winshell/issues/60))
+* **windows:** name the window list for Windows and move windows between monitors ([#51](https://github.com/dante-sparras/winshell/issues/51))
+* **network:** expose Windows profiles and explicit Wi-Fi actions ([#56](https://github.com/dante-sparras/winshell/issues/56))
+* **audio:** name playback devices and sessions for Windows
+* **notifications:** add a Windows notification center and native toast sender ([#50](https://github.com/dante-sparras/winshell/issues/50))
+* **api:** windows-first module names ([#44](https://github.com/dante-sparras/winshell/issues/44))
+
+### Features
+
+* **api:** windows-first module names ([#44](https://github.com/dante-sparras/winshell/issues/44)) ([c4e38f2](https://github.com/dante-sparras/winshell/commit/c4e38f2061ad46d0177712adc6275f720cdaaaeb))
+* **apps:** index Start menu apps with search and usage ([2e9deb7](https://github.com/dante-sparras/winshell/commit/2e9deb74921c8a6dd8fdfe8e191a43fb0521ebd2))
+* **audio:** name playback devices and sessions for Windows ([93525d0](https://github.com/dante-sparras/winshell/commit/93525d0c43176c67136c4ba8322dd9779e40f104)), closes [#47](https://github.com/dante-sparras/winshell/issues/47)
+* **bluetooth:** expose Windows state and explicit device actions ([#60](https://github.com/dante-sparras/winshell/issues/60)) ([c0927ca](https://github.com/dante-sparras/winshell/commit/c0927ca47ebf4cb7a48cc4949b2c040d2396ca2d))
+* **capture:** add Windows screen capture and live previews ([#65](https://github.com/dante-sparras/winshell/issues/65)) ([e54df4d](https://github.com/dante-sparras/winshell/commit/e54df4d5a8550f5f2fb6eaaa34a265c32dbbb8e3))
+* **input:** register global hotkeys from qml ([6fa5286](https://github.com/dante-sparras/winshell/commit/6fa528684b1ef4fb090ac12a6822bcf2b6e90b8d))
+* **media:** name system media sessions for Windows ([f92b879](https://github.com/dante-sparras/winshell/commit/f92b879ee4d2f83934410820b6a3fb6b0d9f2e15)), closes [#54](https://github.com/dante-sparras/winshell/issues/54)
+* **network:** expose Windows profiles and explicit Wi-Fi actions ([#56](https://github.com/dante-sparras/winshell/issues/56)) ([757b7c7](https://github.com/dante-sparras/winshell/commit/757b7c794f6797c486ca9cd4cbe29e9a31342a23))
+* **notifications:** add a Windows notification center and native toast sender ([#50](https://github.com/dante-sparras/winshell/issues/50)) ([8fb4014](https://github.com/dante-sparras/winshell/commit/8fb40147a167d4dc55a41367ecedbd96c6b72f29))
+* **power:** name the battery, power mode, and monitor brightness for Windows ([721e92f](https://github.com/dante-sparras/winshell/commit/721e92fb42e48b774986eed7f9ac4138336279ed)), closes [#58](https://github.com/dante-sparras/winshell/issues/58)
+* **windows:** list and switch virtual desktops ([#59](https://github.com/dante-sparras/winshell/issues/59)) ([c0a3573](https://github.com/dante-sparras/winshell/commit/c0a357399aa3beabbdbf6afa94f05b65932c043f))
+* **windows:** name the window list for Windows and move windows between monitors ([#51](https://github.com/dante-sparras/winshell/issues/51)) ([d010162](https://github.com/dante-sparras/winshell/commit/d0101623a855214e91b9a1c2382a52216ac4d253))
+
 ## [0.2.0](https://github.com/dante-sparras/winshell/compare/v0.1.6...v0.2.0) (2026-10-28)
 
 
