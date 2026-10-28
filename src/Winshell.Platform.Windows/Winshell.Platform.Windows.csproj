@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.DirectComposition" />
+    <PackageReference Include="Vortice.DXGI" />
+    <PackageReference Include="Microsoft.Win32.SystemEvents" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Winshell.Runtime\Winshell.Runtime.csproj" />
+    <InternalsVisibleTo Include="Winshell.Platform.Windows.Tests" />
+  </ItemGroup>
+</Project>

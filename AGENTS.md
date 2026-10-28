@@ -4,30 +4,44 @@ A shell toolkit for Windows 11 that matches Quickshell.
 
 ## Stack
 
-- PowerShell 7 for `scripts/dev.ps1`
-- .NET 10 SDK for the file-based app `scripts/fetch-reference.cs`
-- TODO: add the app's stack
+- Windows 11. The host and the platform target `net10.0-windows10.0.22621.0`. The parser and the runtime target `net10.0`.
+- .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
+- C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
+- xUnit for `tests/`.
+- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, and the file-based app `scripts/fetch-reference.cs`.
 
 ## Project Structure
 
 ```text
 .
-├── .github/                   # CI, issue and PR templates, Dependabot
+├── .github/                         # CI, issue and PR templates, Dependabot
 ├── docs/
-│   ├── agents/                # How the engineering skills use this repo
-│   │   └── quickshell/        # Quickshell v0.3.2 checkout and manual; gitignored, made by scripts/dev.ps1
-│   └── development.md         # Setup, environment, and every command
+│   ├── adr/                         # Decisions already made
+│   ├── agents/                      # How the engineering skills use this repo
+│   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual; gitignored, made by scripts/dev.ps1
+│   └── development.md               # Setup, environment, and every command
 ├── scripts/
-│   ├── dev.ps1                # Prepares a fresh clone
-│   └── fetch-reference.cs     # Fetches the Quickshell manual as markdown
-├── .agents/skills/            # Agent skills; a copy in .claude/skills/
-├── CONTRIBUTING.md            # Branches, commit and PR titles, PR rules
-└── # TODO: add source directories once code exists
+│   ├── check.ps1                    # Build with warnings as errors, then test
+│   ├── dev.ps1                      # Prepares a fresh clone
+│   └── fetch-reference.cs           # Fetches the Quickshell manual as markdown
+├── src/
+│   ├── Winshell/                    # The winshell CLI and the process that runs a shell
+│   ├── Winshell.Qml/                # The QML parser
+│   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Quickshell modules
+│   └── Winshell.Platform.Windows/   # Windows 11 windows, composition, and services
+├── tests/
+│   ├── Winshell.Qml.Tests/
+│   ├── Winshell.Runtime.Tests/
+│   └── Winshell.Platform.Windows.Tests/
+├── winshell.slnx                    # The solution the check builds
+├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
+├── CONTRIBUTING.md                  # Branches, commit and PR titles, PR rules
+└── GLOSSARY.md                      # The words this repo uses
 ```
 
 ## Before you finish
 
-- Run `TODO: add the check command once the stack exists`. Everything must pass.
+- Run `pwsh scripts/check.ps1`. Everything must pass.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.
 - Added or changed a command, prerequisite, environment variable, or top-level folder? Update [docs/development.md](docs/development.md) or Project Structure.

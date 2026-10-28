@@ -1,0 +1,237 @@
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+using SkiaSharp;
+using Winshell.Runtime.Quick;
+using Winshell.Runtime.Quickshell;
+
+namespace Winshell.Platform.Windows;
+
+/// <summary>
+/// Icons for <c>image://icon/name</c>: a file or program's icon from the Windows shell, an image file, or a
+/// freedesktop icon name drawn with the matching Segoe Fluent Icons glyph.
+/// </summary>
+public sealed class IconProvider : IImageProvider, IIconLookup
+{
+    public static readonly IconProvider Instance = new();
+
+    private readonly ConcurrentDictionary<(string, int), SKImage?> _cache = new();
+
+    private IconProvider()
+    {
+        Theme.Changed += () => _cache.Clear();
+    }
+
+    /// <summary>Freedesktop icon names, and the Segoe Fluent Icons glyph that means the same.</summary>
+    private static readonly Dictionary<string, char> Glyphs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["audio-volume-high"] = '', ["audio-volume-medium"] = '', ["audio-volume-low"] = '',
+        ["audio-volume-muted"] = '', ["audio-volume-off"] = '', ["audio-speakers"] = '',
+        ["audio-headphones"] = '', ["audio-headset"] = '', ["audio-card"] = '',
+        ["audio-input-microphone"] = '', ["microphone-sensitivity-muted"] = '', ["microphone-disabled"] = '',
+        ["battery"] = '', ["battery-full"] = '', ["battery-good"] = '', ["battery-medium"] = '',
+        ["battery-low"] = '', ["battery-caution"] = '', ["battery-empty"] = '', ["battery-missing"] = '',
+        ["battery-full-charging"] = '', ["battery-good-charging"] = '', ["battery-medium-charging"] = '',
+        ["battery-low-charging"] = '', ["battery-caution-charging"] = '', ["battery-empty-charging"] = '',
+        ["ac-adapter"] = '',
+        ["network-wireless"] = '', ["network-wireless-signal-excellent"] = '', ["network-wireless-signal-good"] = '',
+        ["network-wireless-signal-ok"] = '', ["network-wireless-signal-weak"] = '', ["network-wireless-signal-none"] = '',
+        ["network-wireless-offline"] = '', ["network-wireless-disconnected"] = '', ["network-wired"] = '',
+        ["network-offline"] = '', ["network-error"] = '', ["airplane-mode"] = '', ["network-vpn"] = '',
+        ["bluetooth"] = '', ["bluetooth-active"] = '', ["bluetooth-disabled"] = '',
+        ["system-shutdown"] = '', ["system-reboot"] = '', ["system-restart"] = '', ["system-lock-screen"] = '',
+        ["system-log-out"] = '', ["system-suspend"] = '', ["system-hibernate"] = '', ["system-search"] = '',
+        ["system-run"] = '', ["system-file-manager"] = '', ["system-settings"] = '', ["preferences-system"] = '',
+        ["applications-system"] = '', ["configure"] = '', ["settings"] = '',
+        ["edit-copy"] = '', ["edit-paste"] = '', ["edit-cut"] = '', ["edit-delete"] = '',
+        ["edit-clear"] = '', ["edit-find"] = '', ["edit-undo"] = '', ["edit-redo"] = '',
+        ["window-close"] = '', ["window-minimize"] = '', ["window-maximize"] = '', ["window-restore"] = '',
+        ["go-next"] = '', ["go-previous"] = '', ["go-up"] = '', ["go-down"] = '', ["go-home"] = '',
+        ["media-playback-start"] = '', ["media-playback-pause"] = '', ["media-playback-stop"] = '',
+        ["media-skip-forward"] = '', ["media-skip-backward"] = '', ["media-seek-forward"] = '',
+        ["media-seek-backward"] = '', ["media-playlist-shuffle"] = '', ["media-playlist-repeat"] = '',
+        ["media-playlist-repeat-song"] = '', ["media-record"] = '', ["multimedia-player"] = '',
+        ["folder"] = '', ["folder-open"] = '', ["user-home"] = '', ["user-desktop"] = '',
+        ["user-trash"] = '', ["document"] = '', ["text-x-generic"] = '', ["image-x-generic"] = '',
+        ["user"] = '', ["avatar-default"] = '', ["user-available"] = '',
+        ["x-office-calendar"] = '', ["calendar"] = '', ["appointment"] = '', ["clock"] = '',
+        ["preferences-system-time"] = '', ["alarm"] = '',
+        ["video-display"] = '', ["computer"] = '', ["input-keyboard"] = '', ["input-mouse"] = '',
+        ["input-gaming"] = '', ["printer"] = '', ["camera-photo"] = '', ["camera-web"] = '',
+        ["phone"] = '', ["drive-harddisk"] = '', ["drive-removable-media"] = '', ["media-optical"] = '',
+        ["mail"] = '', ["mail-unread"] = '', ["internet-mail"] = '', ["web-browser"] = '',
+        ["internet-web-browser"] = '', ["help-browser"] = '', ["help"] = '',
+        ["display-brightness"] = '', ["brightness"] = '', ["night-light"] = '', ["weather-clear"] = '',
+        ["weather-clear-night"] = '', ["weather-few-clouds"] = '', ["weather-overcast"] = '',
+        ["weather-showers"] = '', ["weather-snow"] = '', ["weather-storm"] = '',
+        ["dialog-information"] = '', ["dialog-warning"] = '', ["dialog-error"] = '', ["dialog-question"] = '',
+        ["emblem-ok"] = '', ["object-select"] = '', ["checkbox-checked"] = '',
+        ["list-add"] = '', ["list-remove"] = '', ["view-more"] = '', ["view-more-horizontal"] = '',
+        ["view-refresh"] = '', ["view-grid"] = '', ["view-list"] = '', ["open-menu"] = '',
+        ["application-menu"] = '', ["view-pin"] = '', ["pin"] = '', ["window-pin"] = '',
+        ["notifications"] = '', ["notification"] = '', ["preferences-desktop-notification"] = '',
+        ["notifications-disabled"] = '', ["start-here"] = '', ["applications-all"] = '',
+        ["system-users"] = '', ["security-high"] = '', ["security-medium"] = '', ["security-low"] = '',
+        ["changes-prevent"] = '', ["changes-allow"] = '', ["accessories-calculator"] = '',
+        ["accessories-text-editor"] = '', ["utilities-terminal"] = '', ["terminal"] = '',
+        ["image-missing"] = '', ["application-x-executable"] = '', ["package"] = '', ["download"] = '',
+        ["upload"] = '', ["send"] = '', ["star"] = '', ["starred"] = '', ["favorite"] = '',
+        ["power-profile-performance"] = '', ["power-profile-balanced"] = '', ["power-profile-power-saver"] = '',
+    };
+
+    private static SKTypeface? _fluent;
+
+    private static SKTypeface Fluent => _fluent ??= SKFontManager.Default.MatchFamily("Segoe Fluent Icons") ?? SKFontManager.Default.MatchFamily("Segoe MDL2 Assets") ?? SKTypeface.Default;
+
+    public bool HasIcon(string name)
+    {
+        var key = Normalize(name);
+        return Glyphs.ContainsKey(key) || File.Exists(Expand(name)) || IsApplication(name) || DesktopEntriesLookup?.Invoke(name) is not null;
+    }
+
+    private static string Normalize(string name)
+    {
+        var n = name.EndsWith("-symbolic", StringComparison.OrdinalIgnoreCase) ? name[..^9] : name;
+        return n;
+    }
+
+    private static string Expand(string name) => Environment.ExpandEnvironmentVariables(Uri.UnescapeDataString(name).Replace("file://", "", StringComparison.OrdinalIgnoreCase).TrimStart('/'));
+
+    private static bool IsApplication(string name) => ProcessLauncher.Which(name) is not null;
+
+    public SKImage? Load(string id, int requestedWidth, int requestedHeight)
+    {
+        var size = Math.Max(16, Math.Max(requestedWidth, requestedHeight));
+        if (requestedWidth <= 0 && requestedHeight <= 0)
+            size = 64;
+        return _cache.GetOrAdd((id, size), key => LoadUncached(key.Item1, key.Item2));
+    }
+
+    private static SKImage? LoadUncached(string id, int size)
+    {
+        // "name?path=..." and "name?fallback=..." from tray items; the part before the query names the icon.
+        var query = id.IndexOf('?');
+        var name = query >= 0 ? id[..query] : id;
+        var path = Expand(name);
+        if (path.Length > 2 && (File.Exists(path) || Directory.Exists(path)))
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext is ".png" or ".jpg" or ".jpeg" or ".svg" or ".webp" or ".bmp" or ".gif")
+                return ImageLoader.Load(path, null, size, size, cache: false);
+            return ShellIcon(path, size);
+        }
+        var key = Normalize(name);
+        if (Glyphs.TryGetValue(key, out var glyph))
+            return GlyphImage(glyph, size);
+        if (ProcessLauncher.Which(name) is { } program)
+            return ShellIcon(program, size);
+        // A name like "org.mozilla.firefox" or "firefox": try the start menu's apps.
+        if (DesktopEntriesLookup?.Invoke(name) is { } app)
+            return ShellIcon(app, size);
+        return null;
+    }
+
+    /// <summary>Set by the desktop entries service: the file for an app id, so icons follow the start menu.</summary>
+    public static Func<string, string?>? DesktopEntriesLookup { get; set; }
+
+    private static SKImage GlyphImage(char glyph, int size)
+    {
+        var info = new SKImageInfo(size, size, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info);
+        var canvas = surface.Canvas;
+        canvas.Clear(SKColors.Transparent);
+        using var font = new SKFont(Fluent, size * 0.8f);
+        using var paint = new SKPaint { IsAntialias = true, Color = Theme.Current.TextColor.ToSk() };
+        var text = glyph.ToString();
+        var width = font.MeasureText(text, paint);
+        font.GetFontMetrics(out var m);
+        var x = (size - width) / 2;
+        var y = (size - (m.Descent - m.Ascent)) / 2 - m.Ascent;
+        canvas.DrawText(text, x, y, SKTextAlign.Left, font, paint);
+        return surface.Snapshot();
+    }
+
+    [ComImport]
+    [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemImageFactory
+    {
+        [PreserveSig]
+        int GetImage(SIZE size, int flags, out nint bitmap);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SIZE
+    {
+        public int Cx;
+        public int Cy;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAP
+    {
+        public int bmType;
+        public int bmWidth;
+        public int bmHeight;
+        public int bmWidthBytes;
+        public ushort bmPlanes;
+        public ushort bmBitsPixel;
+        public nint bmBits;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    private static extern void SHCreateItemFromParsingName(string path, nint bindContext, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory item);
+
+    [DllImport("gdi32.dll")]
+    private static extern int GetObjectW(nint handle, int size, out BITMAP bitmap);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(nint handle);
+
+    /// <summary>The icon the Windows shell shows for a file or program, at the size asked.</summary>
+    public static SKImage? ShellIcon(string path, int size)
+    {
+        try
+        {
+            SHCreateItemFromParsingName(path, 0, typeof(IShellItemImageFactory).GUID, out var factory);
+            // SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK
+            if (factory.GetImage(new SIZE { Cx = size, Cy = size }, 0x4 | 0x1, out var hbitmap) != 0 || hbitmap == 0)
+                return null;
+            try
+            {
+                if (GetObjectW(hbitmap, Marshal.SizeOf<BITMAP>(), out var bmp) == 0 || bmp.bmBits == 0 || bmp.bmBitsPixel != 32)
+                    return null;
+                var info = new SKImageInfo(bmp.bmWidth, Math.Abs(bmp.bmHeight), SKColorType.Bgra8888, SKAlphaType.Premul);
+                using var bitmap = new SKBitmap(info);
+                var rows = Math.Abs(bmp.bmHeight);
+                unsafe
+                {
+                    var dst = (byte*)bitmap.GetPixels();
+                    var src = (byte*)bmp.bmBits;
+                    for (var y = 0; y < rows; y++)
+                    {
+                        // The bitmap is stored bottom up.
+                        var from = src + (bmp.bmHeight > 0 ? rows - 1 - y : y) * bmp.bmWidthBytes;
+                        Buffer.MemoryCopy(from, dst + y * bitmap.RowBytes, bitmap.RowBytes, Math.Min(bitmap.RowBytes, bmp.bmWidthBytes));
+                    }
+                }
+                return SKImage.FromBitmap(bitmap);
+            }
+            finally
+            {
+                DeleteObject(hbitmap);
+            }
+        }
+        catch (COMException)
+        {
+            return null;
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+}
