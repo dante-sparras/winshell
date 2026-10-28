@@ -169,10 +169,12 @@ public sealed class AudioTests : IDisposable
         for (var i = 0; i < 50; i++)
         {
             _loop.Process();
+            // Another test in this process can leave an inactive session with the same pid. Use the one that is playing.
             var session = audio.Nodes.Values.OfType<AudioNode>().FirstOrDefault(n =>
-                n.IsSession && n.IsPlayback && n.Properties.TryGetValue("processId", out var id) && (string?)id == pid);
-            if (session is not null
-                && audio.Links.Values.OfType<AudioLink>().FirstOrDefault(l => ReferenceEquals(l.Source, session)) is { State: 1 })
+                n.IsSession && n.IsPlayback
+                && n.Properties.TryGetValue("processId", out var id) && (string?)id == pid
+                && audio.Links.Values.OfType<AudioLink>().FirstOrDefault(l => ReferenceEquals(l.Source, n)) is { State: 1 });
+            if (session is not null)
                 return session;
             await Task.Delay(100);
         }

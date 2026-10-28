@@ -48,6 +48,7 @@ Types not listed keep their names in the new module.
 | `NMSettings` | `NetworkProfile` | `Winshell.Network` |
 | `UPower`, `UPowerDevice` | `Power`, `PowerDevice` | `Winshell.Power` |
 | `UPowerDeviceState`, `UPowerDeviceType` | `PowerDeviceState`, `PowerDeviceType` | `Winshell.Power` |
+| `PowerProfiles`, `PowerProfile` | `PowerMode`, `PowerModeLevel` | `Winshell.Power` |
 | `IdleInhibitor` | `KeepAwake` | `Winshell.Power` |
 | `NotificationServer` | `NotificationListener` | `Winshell.Notifications` |
 | `ToplevelManager`, `Toplevel` | `WindowList`, `AppWindow` | `Winshell.Windows` |
@@ -162,6 +163,31 @@ Types not listed keep their names in the new module.
 | `VirtualDesktop.name` | The name Windows stored, or `Desktop N` when it stored none |
 | `AppWindow.desktopId` | The id of the desktop the window is on |
 | `AppWindow.moveToDesktop(desktop)` | Move the window onto that desktop |
+
+### Power
+
+`PowerMode.mode` is the Windows power mode slider. `PowerMode.effective` is the mode Windows is applying. `Brightness.monitors` lists each monitor that reports a brightness.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `PowerProfiles.profile` | `PowerMode.mode` |
+| `PowerProfile.PowerSaver` | `PowerModeLevel.BestEfficiency` |
+| `PowerProfile.Balanced` | `PowerModeLevel.Balanced` |
+| `PowerProfile.Performance` | `PowerModeLevel.BestPerformance` |
+| `PowerProfiles.hasPerformanceProfile`, `degradationReason`, `holds` | Removed. `PowerMode.available` says whether Windows answered. |
+| `PowerDevice.nativePath` | `deviceId` |
+| `PowerDevice.powerSupply` | `powersTheSystem` |
+| `PowerDevice.energy` | `remainingCapacity`, watt-hours |
+| `PowerDevice.energyCapacity` | `fullChargeCapacity`, watt-hours |
+| `PowerDevice.changeRate` | `chargeRate`, watts |
+| `PowerDevice.isLaptopBattery` | `isSystemBattery` |
+| `PowerDevice.iconName` values ending in `-symbolic` | The same name without `-symbolic`. A full battery is `battery-full`. |
+| `PowerDeviceState.PendingCharge` | `NotCharging` |
+| `PowerDeviceState.PendingDischarge` | Removed. |
+| `PowerDeviceType` values other than `Unknown` and `Battery` | Removed. Windows reports batteries. |
+| `IdleMonitor.respectInhibitors` | `respectKeepAwake` |
+
+`Brightness`, `BrightnessMonitor`, `BrightnessConnection`, and `EffectivePowerMode` are new.
 
 ## Removed
 

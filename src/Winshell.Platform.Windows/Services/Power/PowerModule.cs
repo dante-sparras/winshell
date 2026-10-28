@@ -10,55 +10,33 @@ public enum PowerDeviceState
     Discharging = 2,
     Empty = 3,
     FullyCharged = 4,
-    PendingCharge = 5,
-    PendingDischarge = 6,
+    NotCharging = 5,
 }
 
 public enum PowerDeviceType
 {
     Unknown = 0,
-    LinePower = 1,
     Battery = 2,
-    Ups = 3,
-    Monitor = 4,
-    Mouse = 5,
-    Keyboard = 6,
-    Pda = 7,
-    Phone = 8,
-    MediaPlayer = 9,
-    Tablet = 10,
-    Computer = 11,
-    GamingInput = 12,
-    Pen = 13,
-    Touchpad = 14,
-    Modem = 15,
-    Network = 16,
-    Headset = 17,
-    Speakers = 18,
-    Headphones = 19,
-    Video = 20,
-    OtherAudio = 21,
-    RemoteControl = 22,
-    Printer = 23,
-    Scanner = 24,
-    Camera = 25,
-    Wearable = 26,
-    Toy = 27,
-    BluetoothGeneric = 28,
 }
 
-public enum PowerProfile
+/// <summary>The three positions of the Windows power mode slider.</summary>
+public enum PowerModeLevel
 {
-    PowerSaver = 0,
+    BestEfficiency = 0,
     Balanced = 1,
-    Performance = 2,
+    BestPerformance = 2,
 }
 
-public enum PerformanceDegradationReason
+/// <summary>The power mode Windows is applying, including energy saver and game mode.</summary>
+public enum EffectivePowerMode
 {
-    None = 0,
-    LapDetected = 1,
-    HighTemperature = 2,
+    EnergySaver = 0,
+    BetterBattery = 1,
+    Balanced = 2,
+    HighPerformance = 3,
+    MaxPerformance = 4,
+    GameMode = 5,
+    MixedReality = 6,
 }
 
 /// <summary>The <c>PowerDevice</c>: a battery, or the aggregate display device.</summary>
@@ -69,19 +47,22 @@ public sealed class PowerDevice : QObject
 
     [Qml] public PowerDeviceType Type { get { Track(); return _info.Type; } }
 
-    [Qml] public bool PowerSupply { get { Track(); return _info.PowerSupply; } }
+    [Qml] public bool PowersTheSystem { get { Track(); return _info.PowersTheSystem; } }
 
-    [Qml] public double Energy { get { Track(); return _info.Energy; } }
+    /// <summary>Remaining capacity, in watt-hours.</summary>
+    [Qml] public double RemainingCapacity { get { Track(); return _info.RemainingCapacity; } }
 
-    [Qml] public double EnergyCapacity { get { Track(); return _info.EnergyCapacity; } }
+    /// <summary>Full-charge capacity, in watt-hours.</summary>
+    [Qml] public double FullChargeCapacity { get { Track(); return _info.FullChargeCapacity; } }
 
-    [Qml] public double ChangeRate { get { Track(); return _info.ChangeRate; } }
+    /// <summary>Charge rate, in watts. Negative while discharging.</summary>
+    [Qml] public double ChargeRate { get { Track(); return _info.ChargeRate; } }
 
     [Qml] public double TimeToEmpty { get { Track(); return _info.TimeToEmpty; } }
 
     [Qml] public double TimeToFull { get { Track(); return _info.TimeToFull; } }
 
-    /// <summary>The charge, from 0 to 1 (UPower reports 0 to 100).</summary>
+    /// <summary>The charge, from 0 to 1.</summary>
     [Qml] public double Percentage { get { Track(); return _info.Percentage; } }
 
     [Qml] public bool IsPresent { get { Track(); return _info.IsPresent; } }
@@ -95,9 +76,9 @@ public sealed class PowerDevice : QObject
 
     [Qml] public string IconName { get { Track(); return _info.IconName; } }
 
-    [Qml] public bool IsLaptopBattery { get { Track(); return _info.Type == PowerDeviceType.Battery && _info.PowerSupply; } }
+    [Qml] public bool IsSystemBattery { get { Track(); return _info.Type == PowerDeviceType.Battery && _info.PowersTheSystem; } }
 
-    [Qml] public string NativePath { get { Track(); return _info.NativePath; } }
+    [Qml] public string DeviceId { get { Track(); return _info.DeviceId; } }
 
     [Qml] public string Model { get { Track(); return _info.Model; } }
 
@@ -108,10 +89,10 @@ public sealed class PowerDevice : QObject
         var old = _info;
         _info = info;
         Changed(old.Type != info.Type, "type");
-        Changed(old.PowerSupply != info.PowerSupply, "powerSupply");
-        Changed(old.Energy != info.Energy, "energy");
-        Changed(old.EnergyCapacity != info.EnergyCapacity, "energyCapacity");
-        Changed(old.ChangeRate != info.ChangeRate, "changeRate");
+        Changed(old.PowersTheSystem != info.PowersTheSystem, "powersTheSystem");
+        Changed(old.RemainingCapacity != info.RemainingCapacity, "remainingCapacity");
+        Changed(old.FullChargeCapacity != info.FullChargeCapacity, "fullChargeCapacity");
+        Changed(old.ChargeRate != info.ChargeRate, "chargeRate");
         Changed(old.TimeToEmpty != info.TimeToEmpty, "timeToEmpty");
         Changed(old.TimeToFull != info.TimeToFull, "timeToFull");
         Changed(old.Percentage != info.Percentage, "percentage");
@@ -120,8 +101,8 @@ public sealed class PowerDevice : QObject
         Changed(old.HealthPercentage != info.HealthPercentage, "healthPercentage");
         Changed((old.HealthPercentage != 0) != (info.HealthPercentage != 0), "healthSupported");
         Changed(old.IconName != info.IconName, "iconName");
-        Changed((old.Type == PowerDeviceType.Battery && old.PowerSupply) != (info.Type == PowerDeviceType.Battery && info.PowerSupply), "isLaptopBattery");
-        Changed(old.NativePath != info.NativePath, "nativePath");
+        Changed((old.Type == PowerDeviceType.Battery && old.PowersTheSystem) != (info.Type == PowerDeviceType.Battery && info.PowersTheSystem), "isSystemBattery");
+        Changed(old.DeviceId != info.DeviceId, "deviceId");
         Changed(old.Model != info.Model, "model");
         SetField(ref _ready, ready, nameof(Ready));
     }
@@ -132,7 +113,7 @@ public sealed class PowerDevice : QObject
             NotifyChanged(property);
     }
 
-    public override string ToString() => $"PowerDevice({(_info.NativePath.Length > 0 ? _info.NativePath : "DisplayDevice")})";
+    public override string ToString() => $"PowerDevice({(_info.DeviceId.Length > 0 ? _info.DeviceId : "DisplayDevice")})";
 }
 
 /// <summary>The <c>Power</c> singleton, backed by the batteries Windows reports.</summary>
@@ -164,11 +145,10 @@ public sealed class PowerService : QObject
         DisplayDevice.Update(snapshot.Display, snapshot.Ready);
         SetField(ref _onBattery, snapshot.OnBattery, nameof(OnBattery));
 
-        // Devices are matched by their native path, so an object stays the same while its battery does.
         var next = new List<PowerDevice>();
         foreach (var info in snapshot.Devices)
         {
-            var device = _deviceObjects.FirstOrDefault(d => d.NativePath == info.NativePath && !next.Contains(d));
+            var device = _deviceObjects.FirstOrDefault(d => d.DeviceId == info.DeviceId && !next.Contains(d));
             if (device is null)
             {
                 device = new PowerDevice();
@@ -187,56 +167,53 @@ public sealed class PowerService : QObject
     protected override void OnDestroy() => _subscription.Dispose();
 }
 
-/// <summary>The <c>PowerProfiles</c> singleton, backed by the Windows power mode.</summary>
-public sealed class PowerProfilesService : QObject
+/// <summary>The <c>PowerMode</c> singleton. Assigning <c>mode</c> changes the slider for the supply in use.</summary>
+public sealed class PowerModeService : QObject
 {
     private readonly IDisposable _subscription;
-    private PowerProfile _profile = PowerProfile.Balanced;
-    private bool _hasPerformanceProfile;
+    private PowerModeLevel _mode = PowerModeLevel.Balanced;
+    private EffectivePowerMode _effective = EffectivePowerMode.Balanced;
+    private bool _available;
+    private bool _ready;
 
-    internal PowerProfilesService(QmlEngine engine)
+    internal PowerModeService(QmlEngine engine)
     {
-        Apply(PowerProfilesBackend.Instance.Current);
-        _subscription = PowerProfilesBackend.Instance.Subscribe(s => engine.Loop.Post(() => Apply(s)));
+        Apply(PowerModeBackend.Instance.Current);
+        _subscription = PowerModeBackend.Instance.Subscribe(s => engine.Loop.Post(() => Apply(s)));
     }
 
     [Qml]
-    public PowerProfile Profile
+    public PowerModeLevel Mode
     {
-        get { Track(); return _profile; }
+        get { Track(); return _mode; }
         set
         {
-            if (value == PowerProfile.Performance && !_hasPerformanceProfile)
-            {
-                ServiceSupport.Warn(this, "power", "Cannot set the profile to Performance, as the system has no performance profile");
-                return;
-            }
             if (!Enum.IsDefined(value))
             {
-                ServiceSupport.Warn(this, "power", $"Cannot set the profile to {(int)value}, which is not a PowerProfile");
+                ServiceSupport.Warn(this, "power", $"Cannot set the power mode to {(int)value}, which is not a PowerModeLevel.");
                 return;
             }
-            var error = PowerProfilesBackend.Instance.Set(value);
+            var error = PowerModeBackend.Instance.Set(value);
             if (error != 0)
-                ServiceSupport.Warn(this, "power", $"Windows did not set the power mode (error {error}). The power mode only applies to the Balanced power plan.");
+                ServiceSupport.Warn(this, "power", $"Windows did not set the power mode (error {error}).");
         }
     }
 
-    /// <summary>Windows has the Best performance power mode wherever it has power modes at all.</summary>
-    [Qml] public bool HasPerformanceProfile { get { Track(); return _hasPerformanceProfile; } }
+    [Qml] public EffectivePowerMode Effective { get { Track(); return _effective; } }
 
-    /// <summary>Windows does not say why it limits performance, so this is always None.</summary>
-    [Qml] public PerformanceDegradationReason DegradationReason => PerformanceDegradationReason.None;
+    /// <summary>The public power-mode API answered. When this is false, <c>mode</c> stays Balanced.</summary>
+    [Qml] public bool Available { get { Track(); return _available; } }
 
-    /// <summary>Windows has no profile holds that other applications can see.</summary>
-    [Qml] public IReadOnlyList<object> Holds => [];
+    [Qml] public bool Ready { get { Track(); return _ready; } }
 
-    private void Apply(PowerProfileSnapshot snapshot)
+    private void Apply(PowerModeSnapshot snapshot)
     {
         if (IsDestroyed)
             return;
-        SetField(ref _profile, snapshot.Profile, nameof(Profile));
-        SetField(ref _hasPerformanceProfile, snapshot.Available, nameof(HasPerformanceProfile));
+        SetField(ref _mode, snapshot.Mode, nameof(Mode));
+        SetField(ref _effective, snapshot.Effective, nameof(Effective));
+        SetField(ref _available, snapshot.Available, nameof(Available));
+        SetField(ref _ready, snapshot.Ready, nameof(Ready));
     }
 
     protected override void OnDestroy() => _subscription.Dispose();
@@ -248,10 +225,12 @@ internal static class PowerModule
     {
         registry.Module("Winshell.Power")
             .Singleton(e => new PowerService(e), "Power")
-            .Singleton(e => new PowerProfilesService(e), "PowerProfiles")
+            .Singleton(e => new PowerModeService(e), "PowerMode")
+            .Singleton(e => new BrightnessService(e), "Brightness")
             .Type<KeepAwake>("KeepAwake")
             .Type<IdleMonitor>("IdleMonitor")
             .Uncreatable<PowerDevice>("PowerDevice", "PowerDevices can only be acquired from Power")
+            .Uncreatable<BrightnessMonitor>("BrightnessMonitor", "BrightnessMonitors can only be acquired from Brightness")
             .Enum<PowerDeviceState>(s => s switch
             {
                 PowerDeviceState.Unknown => "Unknown",
@@ -259,22 +238,17 @@ internal static class PowerModule
                 PowerDeviceState.Discharging => "Discharging",
                 PowerDeviceState.Empty => "Empty",
                 PowerDeviceState.FullyCharged => "Fully Charged",
-                PowerDeviceState.PendingCharge => "Pending Charge",
-                PowerDeviceState.PendingDischarge => "Pending Discharge",
+                PowerDeviceState.NotCharging => "Not Charging",
                 _ => "Invalid Status",
             })
-            .Enum<PowerDeviceType>(t => t switch
+            .Enum<PowerDeviceType>(t => Enum.IsDefined(t) ? t.ToString() : "Invalid Type")
+            .Enum<PowerModeLevel>(m => Enum.IsDefined(m) ? m.ToString() : "Invalid")
+            .Enum<EffectivePowerMode>(m => Enum.IsDefined(m) ? m.ToString() : "Invalid")
+            .Enum<BrightnessConnection>(c => c switch
             {
-                PowerDeviceType.LinePower => "Line Power",
-                PowerDeviceType.MediaPlayer => "Media Player",
-                PowerDeviceType.GamingInput => "Gaming Input",
-                PowerDeviceType.OtherAudio => "Other Audio",
-                PowerDeviceType.RemoteControl => "Remote Control",
-                PowerDeviceType.BluetoothGeneric => "Bluetooth Generic",
-                _ when Enum.IsDefined(t) => t.ToString(),
-                _ => "Invalid Type",
-            })
-            .Enum<PowerProfile>(p => Enum.IsDefined(p) ? p.ToString() : "Invalid")
-            .Enum<PerformanceDegradationReason>(r => r is PerformanceDegradationReason.LapDetected or PerformanceDegradationReason.HighTemperature ? r.ToString() : "Invalid");
+                BrightnessConnection.Internal => "Internal",
+                BrightnessConnection.External => "External",
+                _ => "Invalid",
+            });
     }
 }

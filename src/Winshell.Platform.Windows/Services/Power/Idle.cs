@@ -50,7 +50,7 @@ public sealed class IdleMonitor : QObject
 {
     private bool _enabled = true;
     private double _timeout;
-    private bool _respectInhibitors = true;
+    private bool _respectKeepAwake = true;
     private bool _isIdle;
     private IDisposable? _timer;
 
@@ -58,7 +58,8 @@ public sealed class IdleMonitor : QObject
 
     [Qml] public double Timeout { get { Track(); return _timeout; } set { if (SetField(ref _timeout, value)) Schedule(); } }
 
-    [Qml] public bool RespectInhibitors { get { Track(); return _respectInhibitors; } set => SetField(ref _respectInhibitors, value); }
+    /// <summary>When a <c>KeepAwake</c> is on, this monitor does not report idle.</summary>
+    [Qml] public bool RespectKeepAwake { get { Track(); return _respectKeepAwake; } set => SetField(ref _respectKeepAwake, value); }
 
     [Qml] public bool IsIdle { get { Track(); return _isIdle; } }
 
@@ -84,7 +85,7 @@ public sealed class IdleMonitor : QObject
     {
         if (IsDestroyed || Engine is null)
             return;
-        var idle = _enabled && _timeout > 0 && IdleSeconds() >= _timeout && !(_respectInhibitors && KeepAwake.AnyActive);
+        var idle = _enabled && _timeout > 0 && IdleSeconds() >= _timeout && !(_respectKeepAwake && KeepAwake.AnyActive);
         SetField(ref _isIdle, idle, nameof(IsIdle));
         // Poll faster while idle, so the end of idleness shows quickly.
         var next = idle ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromSeconds(Math.Clamp(_timeout - IdleSeconds(), 0.25, 5));

@@ -108,6 +108,14 @@ _Avoid_: stream, sink input
 A program playing media that Windows lets the shell see and control.
 _Avoid_: player, MPRIS player
 
+**Power mode**:
+The slider Windows offers for Best power efficiency, Balanced, or Best performance.
+_Avoid_: power profile, overlay scheme, power plan
+
+**Monitor brightness**:
+The brightness setting of a connected monitor.
+_Avoid_: backlight
+
 ## The language
 
 **Module**:
