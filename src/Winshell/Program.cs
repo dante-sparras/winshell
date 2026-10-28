@@ -284,6 +284,14 @@ namespace Winshell
                 }
             };
 
+            // A crash is reported in the instance's log, where winshell log finds it, before the process ends.
+            AppDomain.CurrentDomain.UnhandledException += (_, e) => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {e.ExceptionObject}");
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                log.Error("", $"A background task failed: {e.Exception}");
+                e.SetObserved();
+            };
+
             using var loop = new WinEventLoop { Log = log };
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);

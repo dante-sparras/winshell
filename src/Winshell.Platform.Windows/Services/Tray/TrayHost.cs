@@ -47,6 +47,10 @@ internal sealed unsafe partial class TrayHost
     private const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_STATE = 0x8, NIF_GUID = 0x20;
     private const uint NIS_HIDDEN = 0x1;
 
+    // Apps send their icons to one window, so one instance in the session at a time is the notification area. The
+    // others wait, and the first to notice takes over when it exits, even if it crashed.
+    private static readonly Mutex Owner = new(false, @"Local\winshell-notification-area");
+
     private static TrayHost? _instance;
     private readonly WindowsPlatform _platform;
     private readonly Dictionary<string, TrayIcon> _icons = [];
@@ -82,6 +86,13 @@ internal sealed unsafe partial class TrayHost
 
     private void Start()
     {
+        if (!TryOwn())
+        {
+            if (_timer is null)
+                _platform.Log.Info("quickshell.service.sni", "Another winshell instance is the notification area; this one takes over when it exits");
+            _timer = _platform.Loop.Schedule(TimeSpan.FromSeconds(2), Start);
+            return;
+        }
         fixed (char* name = ClassName)
         {
             var wc = new WNDCLASSEXW
@@ -107,6 +118,19 @@ internal sealed unsafe partial class TrayHost
         AppDomain.CurrentDomain.ProcessExit += static (_, _) => BroadcastTaskbarCreated();
         // Every app adds its icons again, now to this window.
         BroadcastTaskbarCreated();
+    }
+
+    private static bool TryOwn()
+    {
+        try
+        {
+            return Owner.WaitOne(0);
+        }
+        catch (AbandonedMutexException)
+        {
+            // The instance that had it ended without letting go; this thread owns it now.
+            return true;
+        }
     }
 
     /// <summary>Asks every app to register its icons with whichever taskbar window is first.</summary>

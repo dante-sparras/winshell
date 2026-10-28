@@ -32,7 +32,8 @@ A shell toolkit for Windows 11 that matches Quickshell.
 ├── tests/
 │   ├── Winshell.Qml.Tests/
 │   ├── Winshell.Runtime.Tests/
-│   └── Winshell.Platform.Windows.Tests/
+│   ├── Winshell.Platform.Windows.Tests/
+│   └── Winshell.Tests/              # Runs winshell.exe instances side by side
 ├── winshell.slnx                    # The solution the check builds
 ├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
 ├── CONTRIBUTING.md                  # Branches, commit and PR titles, PR rules
