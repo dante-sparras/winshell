@@ -5,11 +5,11 @@ using Winshell.Runtime.Quick;
 namespace Winshell.Runtime.Quickshell;
 
 /// <summary>The settings a shell gives with <c>//@ pragma</c> comments at the top of its root file.</summary>
-public sealed record ShellPragmas(string? ShellId, string? DataDir, string? StateDir, string? CacheDir, string? IconTheme, IReadOnlyDictionary<string, string> Env)
+public sealed record ShellPragmas(string? ShellId, string? AppId, string? DataDir, string? StateDir, string? CacheDir, string? IconTheme, IReadOnlyDictionary<string, string> Env)
 {
     public static ShellPragmas Read(string rootFile)
     {
-        string? id = null, data = null, state = null, cache = null, icons = null;
+        string? id = null, appId = null, data = null, state = null, cache = null, icons = null;
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (File.Exists(rootFile))
         {
@@ -29,6 +29,7 @@ public sealed record ShellPragmas(string? ShellId, string? DataDir, string? Stat
                 switch (parts[1])
                 {
                     case "ShellId": id = value; break;
+                    case "AppId": appId = value; break;
                     case "DataDir": data = value; break;
                     case "StateDir": state = value; break;
                     case "CacheDir": cache = value; break;
@@ -41,7 +42,7 @@ public sealed record ShellPragmas(string? ShellId, string? DataDir, string? Stat
                 }
             }
         }
-        return new ShellPragmas(id, data, state, cache, icons, env);
+        return new ShellPragmas(id, appId, data, state, cache, icons, env);
     }
 }
 
@@ -56,6 +57,7 @@ public sealed class ShellHost : IShellHost, IDisposable
     private readonly IShellPlatform? _platform;
     private readonly Func<ModuleRegistry> _modules;
     private readonly Action<QmlEngine>? _configure;
+    private readonly QuickshellSettings _settings = new();
     private readonly List<FileSystemWatcher> _watchers = [];
     private ScreenRegistry? _screens;
     private QmlEngine? _engine;
@@ -73,9 +75,13 @@ public sealed class ShellHost : IShellHost, IDisposable
         _modules = modules ?? StandardModules.Create;
         _configure = configure;
         ShellDir = Path.GetDirectoryName(_rootFile)!;
+        var appFromEnv = Environment.GetEnvironmentVariable("QS_APP_ID");
         var pragmas = ShellPragmas.Read(_rootFile);
         Pragmas = pragmas;
         ShellId = pragmas.ShellId ?? Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(_rootFile.ToLowerInvariant())));
+        AppId = string.IsNullOrEmpty(pragmas.AppId) ? (string.IsNullOrEmpty(appFromEnv) ? "org.quickshell" : appFromEnv) : pragmas.AppId;
+        LaunchTime = DateTime.Now;
+        InstanceId = Base36(Environment.ProcessId) + Base36(new DateTimeOffset(LaunchTime).ToUnixTimeSeconds());
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         DataDir = Expand(pragmas.DataDir, Path.Combine(local, "winshell", "data")) ?? Path.Combine(local, "winshell", "data", "by-shell", ShellId);
         StateDir = Expand(pragmas.StateDir, Path.Combine(local, "winshell", "state")) ?? Path.Combine(local, "winshell", "state", "by-shell", ShellId);
@@ -93,6 +99,14 @@ public sealed class ShellHost : IShellHost, IDisposable
 
     public string ShellId { get; }
 
+    public string InstanceId { get; }
+
+    public string AppId { get; }
+
+    public DateTime LaunchTime { get; }
+
+    public QuickshellSettings Settings => _settings;
+
     public string ShellDir { get; }
 
     public string DataDir { get; }
@@ -101,7 +115,26 @@ public sealed class ShellHost : IShellHost, IDisposable
 
     public string CacheDir { get; }
 
-    public bool WatchFiles { get; set; } = true;
+    public bool WatchFiles
+    {
+        get => _settings.Watching;
+        set => _settings.WatchFiles = value;
+    }
+
+    /// <summary>Quickshell's instance id encoding: standard base 36, then reversed.</summary>
+    internal static string Base36(long number)
+    {
+        const string digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+        var result = new StringBuilder();
+        do
+        {
+            result.Insert(0, digits[(int)(number % 36)]);
+            number /= 36;
+        } while (number > 0);
+        var chars = result.ToString().ToCharArray();
+        Array.Reverse(chars);
+        return new string(chars);
+    }
 
     public QmlEngine? Engine => _engine;
 
@@ -133,6 +166,8 @@ public sealed class ShellHost : IShellHost, IDisposable
         var oldRoot = _root;
         var engine = new QmlEngine(_modules(), _loop, Log, ShellDir);
         engine.AddService<IShellHost>(this);
+        _settings.Engine = engine;
+        engine.AddService(_settings);
         if (_platform is not null)
             engine.AddService(_platform);
         engine.AddService(_screens ?? new ScreenRegistry(_platform));
@@ -230,6 +265,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         foreach (var w in _watchers)
             w.Dispose();
         _engine?.Dispose();
+        _settings.Destroy();
         _screens?.Destroy();
         _ = Theme.Current;
     }

@@ -167,6 +167,14 @@ public interface IShellHost
 {
     string ShellId { get; }
 
+    /// <summary>This process's id, as Quickshell encodes it: reversed base 36 of the pid, then of the launch time.</summary>
+    string InstanceId { get; }
+
+    /// <summary>The desktop application id. A <c>//@ pragma AppId</c> or <c>QS_APP_ID</c> overrides <c>org.quickshell</c>.</summary>
+    string AppId { get; }
+
+    DateTime LaunchTime { get; }
+
     string ShellDir { get; }
 
     string DataDir { get; }
@@ -190,12 +198,22 @@ public sealed class QuickshellGlobal : QObject
 {
     private readonly ScreenRegistry _screens;
 
+    private readonly QuickshellSettings _settings;
+    private readonly IDisposable _lastWindow;
+
     public QuickshellGlobal(QmlEngine engine)
     {
         Engine = engine;
+        _settings = engine.GetService<QuickshellSettings>() ?? new QuickshellSettings { Engine = engine };
+        if (engine.GetService<QuickshellSettings>() is null)
+            engine.AddService(_settings);
+        _settings.Mirrored += name => NotifyChanged(name);
+        _lastWindow = _settings.Connect("lastWindowClosed", _ => Emit("lastWindowClosed"));
         _screens = engine.GetService<ScreenRegistry>() ?? new ScreenRegistry(null);
         _screens.AddObserver("screens", new Forward(this));
     }
+
+    protected override void OnDestroy() => _lastWindow.Dispose();
 
     private IShellHost? Host => Engine?.GetService<IShellHost>();
 
@@ -237,27 +255,36 @@ public sealed class QuickshellGlobal : QObject
 
     [Qml] public int ProcessId => Environment.ProcessId;
 
+    [Qml] public string InstanceId { get { Track(); return Host?.InstanceId ?? ""; } }
+
+    [Qml] public string ShellId { get { Track(); return Host?.ShellId ?? ""; } }
+
+    [Qml] public string AppId { get { Track(); return Host?.AppId ?? "org.quickshell"; } }
+
+    [Qml] public DateTime LaunchTime { get { Track(); return Host?.LaunchTime ?? default; } }
+
     [Qml]
     public string WorkingDirectory
     {
-        get => Environment.CurrentDirectory;
-        set
+        get
         {
-            Environment.CurrentDirectory = value;
-            NotifyChanged("workingDirectory");
+            Track();
+            using (DependencyTracker.Suspend())
+                return _settings.WorkingDirectory;
         }
+        set => _settings.WorkingDirectory = value;
     }
 
     [Qml]
     public bool WatchFiles
     {
-        get { Track(); return Host?.WatchFiles ?? true; }
-        set
+        get
         {
-            if (Host is { } host)
-                host.WatchFiles = value;
-            NotifyChanged("watchFiles");
+            Track();
+            using (DependencyTracker.Suspend())
+                return _settings.WatchFiles;
         }
+        set => _settings.WatchFiles = value;
     }
 
     [Qml]

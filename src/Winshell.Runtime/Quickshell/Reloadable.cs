@@ -134,27 +134,66 @@ public class Scope : Reloadable
 /// <summary>Quickshell's <c>ShellRoot</c>: the root of a shell.</summary>
 public sealed class ShellRoot : Scope
 {
+    private QuickshellSettings? _settings;
+
+    /// <summary>The process settings object. Every <c>ShellRoot</c> and the <c>Quickshell</c> singleton share it.</summary>
     [Qml]
-    public QuickshellSettings Settings { get; } = new();
+    public QuickshellSettings Settings
+    {
+        get
+        {
+            Track();
+            var shared = Engine?.GetService<QuickshellSettings>();
+            if (shared is not null)
+                return _settings = shared;
+            if (_settings is not null)
+                return _settings;
+            _settings = new QuickshellSettings();
+            if (Engine is not null)
+            {
+                _settings.Engine = Engine;
+                Engine.AddService(_settings);
+            }
+            return _settings;
+        }
+    }
 }
 
-/// <summary>The <c>settings</c> of a ShellRoot.</summary>
+/// <summary>The <c>settings</c> of a ShellRoot. One object per shell, shared with the Quickshell singleton.</summary>
+[QmlSignal("lastWindowClosed")]
 public sealed class QuickshellSettings : QObject
 {
     private bool _watchFiles = true;
 
+    /// <summary>Tells the Quickshell singleton that a property it mirrors has changed.</summary>
+    internal event Action<string>? Mirrored;
+
+    /// <summary>Whether the shell should reload when its files change, including <c>QS_DISABLE_FILE_WATCHER</c>.</summary>
+    internal bool Watching => _watchFiles && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("QS_DISABLE_FILE_WATCHER"));
+
     [Qml]
     public bool WatchFiles
     {
-        get { Track(); return _watchFiles; }
-        set => SetField(ref _watchFiles, value);
+        get { Track(); return Watching; }
+        set
+        {
+            if (SetField(ref _watchFiles, value))
+                Mirrored?.Invoke("watchFiles");
+        }
     }
 
     [Qml]
     public string WorkingDirectory
     {
-        get => Environment.CurrentDirectory;
-        set => Environment.CurrentDirectory = value;
+        get { Track(); return Environment.CurrentDirectory; }
+        set
+        {
+            if (Environment.CurrentDirectory == value)
+                return;
+            Environment.CurrentDirectory = value;
+            NotifyChanged("workingDirectory");
+            Mirrored?.Invoke("workingDirectory");
+        }
     }
 }
 

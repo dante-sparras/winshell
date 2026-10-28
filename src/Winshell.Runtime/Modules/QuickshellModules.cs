@@ -11,6 +11,8 @@ public static partial class StandardModules
         var qs = registry.Module("Quickshell");
         qs.Singleton(e => new QuickshellGlobal(e), "Quickshell")
             .Type<ShellRoot>("ShellRoot")
+            .Uncreatable<Reloadable>("Reloadable", "Reloadable is a base class")
+            .Uncreatable<QuickshellSettings>("QuickshellSettings", "QuickshellSettings is ShellRoot.settings")
             .Type<Scope>("Scope")
             .Type<Singleton>("Singleton")
             .Type<Variants>("Variants")

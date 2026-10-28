@@ -490,7 +490,11 @@ public static class WindowRegistry
             _windows.Add(window);
         else
             _windows.Remove(window);
-        if (wasAny && _windows.Count == 0 && window.Engine?.FindNativeSingleton<QuickshellGlobal>() is { } qs)
+        if (!wasAny || _windows.Count != 0 || window.Engine is not { } engine)
+            return;
+        if (engine.GetService<QuickshellSettings>() is { } settings)
+            settings.Emit("lastWindowClosed");
+        else if (engine.FindNativeSingleton<QuickshellGlobal>() is { } qs)
             qs.Emit("lastWindowClosed");
     }
 
