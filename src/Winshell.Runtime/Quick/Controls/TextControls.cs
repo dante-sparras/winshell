@@ -160,16 +160,21 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
 
     [Qml] public int FocusReason { get; set; }
 
-    void IHoverTarget.HoverEnter(double x, double y, int modifiers) => SetHovered(true);
+    void IHoverTarget.HoverEnter(double x, double y, int modifiers) => SetHovered(true, InClearButton(x, y));
 
-    void IHoverTarget.HoverMove(double x, double y, int modifiers) => SetHovered(true);
+    void IHoverTarget.HoverMove(double x, double y, int modifiers) => SetHovered(true, InClearButton(x, y));
 
-    void IHoverTarget.HoverLeave() => SetHovered(false);
+    void IHoverTarget.HoverLeave() => SetHovered(false, false);
 
-    private void SetHovered(bool value)
+    private void SetHovered(bool value, bool overClearButton)
     {
         if (!_hoverEnabled)
             value = false;
+        if (_clearHovered != (value && overClearButton))
+        {
+            _clearHovered = value && overClearButton;
+            Update();
+        }
         if (SetField(ref _hovered, value, nameof(Hovered)))
             Update();
     }
@@ -186,22 +191,96 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
         EnsureMinimumSize();
     }
 
-    /// <summary>The text box: a filled rounded rectangle with a strong line along the bottom, accent when focused.</summary>
+    private bool Focused => ActiveFocus && !ReadOnly;
+
+    /// <summary>
+    /// The text box: a filled rounded rectangle with a strong line along the bottom, accent and 2 pixels when
+    /// focused. A contrast theme draws a whole border instead, 2 pixels when focused.
+    /// </summary>
     protected virtual void PaintBackground(SKCanvas canvas, SKRect r)
     {
         var t = Theme.Current;
-        var focused = ActiveFocus && !ReadOnly;
-        var fill = !Enabled ? t.ControlFillColorDisabled : focused ? t.ControlFillColorInputActive : _hovered ? t.ControlFillColorSecondary : t.ControlFillColorDefault;
+        bool enabled = Enabled, focused = Focused;
+        var fill = FluentResources.TextControlBackground(t).For(enabled, focused, _hovered);
+        if (t.IsHighContrast)
+        {
+            Fluent.FillRound(canvas, r, Fluent.ControlCornerRadius, fill);
+            Fluent.StrokeRound(canvas, r, Fluent.ControlCornerRadius, FluentResources.TextControlBorderBrush(t).For(enabled, focused, _hovered), focused ? 2 : 1);
+            return;
+        }
         Fluent.ElevatedRect(canvas, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
-        if (!Enabled)
+        if (!enabled)
             return;
         canvas.Save();
         using (var clip = Fluent.Round(r, Fluent.ControlCornerRadius))
             canvas.ClipRoundRect(clip, SKClipOperation.Intersect, true);
         var lineHeight = focused ? 2f : 1f;
-        using var paint = new SKPaint { Color = (focused ? t.AccentFillColorDefault : t.ControlStrongStrokeColorDefault).ToSk(), IsAntialias = false };
+        using var paint = new SKPaint { Color = FluentResources.TextControlBottomLine(t, focused).ToSk(), IsAntialias = false };
         canvas.DrawRect(SKRect.Create(r.Left, r.Bottom - lineHeight, r.Width, lineHeight), paint);
         canvas.Restore();
+    }
+
+    protected override QColor PaintColor => HasExplicitColor ? base.PaintColor : FluentResources.TextControlForeground(Theme.Current).For(Enabled, Focused, _hovered);
+
+    // The clear button WinUI shows at the right of a focused text box that has text.
+
+    private const double ClearButtonWidth = 30;
+    private bool _clearHovered, _clearPressed, _clearPainted;
+
+    /// <summary>Whether the clear button shows: focused, editable, single line, not a password, and with text.</summary>
+    protected virtual bool ShowsClearButton => Focused && Enabled && EchoMode == 0 && Text_.Length > 0 && Width >= 3 * ClearButtonWidth;
+
+    protected override double ReservedRight => ShowsClearButton ? ClearButtonWidth : 0;
+
+    /// <summary>The button's face: its 30 pixel column less WinUI's 0,4,4,4 margin.</summary>
+    private SKRect ClearButtonRect => SKRect.Create((float)(Width - ClearButtonWidth), 4, (float)ClearButtonWidth - 4, (float)Math.Max(0, Height - 8));
+
+    /// <summary>Whether a point is on the button as last drawn: a press that focuses the box does not also clear it.</summary>
+    private bool InClearButton(double x, double y) => _clearPainted && ShowsClearButton && ClearButtonRect.Contains((float)x, (float)y);
+
+    private void PaintClearButton(SKCanvas canvas)
+    {
+        _clearPainted = ShowsClearButton;
+        if (!_clearPainted)
+            return;
+        var t = Theme.Current;
+        var r = ClearButtonRect;
+        Fluent.FillRound(canvas, r, Fluent.ControlCornerRadius, FluentResources.TextControlButtonBackground(t).For(true, _clearPressed, _clearHovered));
+        var glyph = FluentResources.TextControlButtonForeground(t).For(true, _clearPressed, _clearHovered);
+        if (!Fluent.DrawGlyph(canvas, Fluent.Cancel, r.MidX, r.MidY, 12, glyph))
+        {
+            using var paint = new SKPaint { Color = glyph.ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1 };
+            canvas.DrawLine(r.MidX - 4, r.MidY - 4, r.MidX + 4, r.MidY + 4, paint);
+            canvas.DrawLine(r.MidX - 4, r.MidY + 4, r.MidX + 4, r.MidY - 4, paint);
+        }
+    }
+
+    public override bool PointerPress(double x, double y, int button, int buttons, int modifiers)
+    {
+        if (!InClearButton(x, y))
+            return base.PointerPress(x, y, button, buttons, modifiers);
+        _clearPressed = true;
+        Update();
+        return true;
+    }
+
+    public override void PointerMove(double x, double y, int buttons, int modifiers)
+    {
+        if (!_clearPressed)
+            base.PointerMove(x, y, buttons, modifiers);
+    }
+
+    public override void PointerRelease(double x, double y, int button, int buttons, int modifiers)
+    {
+        if (!_clearPressed)
+        {
+            base.PointerRelease(x, y, button, buttons, modifiers);
+            return;
+        }
+        _clearPressed = false;
+        if (InClearButton(x, y))
+            SetText("", fromUser: true);
+        Update();
     }
 
     protected override void OnActiveFocusChanged(bool focused)
@@ -269,6 +348,7 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
             canvas.Restore();
         }
         base.Paint(canvas, context);
+        PaintClearButton(canvas);
     }
 
     protected override void OnDestroy()

@@ -926,18 +926,26 @@ public class ItemDelegate : AbstractButton
     /// <summary>Whether to show the accent pill of a selected row.</summary>
     protected virtual bool ShowsSelection => _highlighted || Checked;
 
-    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
+    /// <summary>The height of the selection pill: 16, or 10 while pressed, easing as WinUI's does.</summary>
+    private readonly NumberTransition _pill = new(Fluent.ControlFastAnimationDuration);
+
+    /// <summary>A row of WinUI's list: 40 pixels with its 2 pixel insets, filled on hover, with an accent pill when selected.</summary>
+    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, context) =>
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var fill = !Enabled ? QColor.Transparent : IsDown ? t.SubtleFillColorTertiary : Hovered || ShowsSelection ? t.SubtleFillColorSecondary : QColor.Transparent;
-        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, fill);
-        if (ShowsSelection && Enabled)
+        bool enabled = Enabled, down = IsDown, hovered = Hovered, selected = ShowsSelection;
+        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, FluentResources.ListViewItemBackground(t, selected).For(enabled, down, hovered));
+        if (!selected)
         {
-            var h = IsDown ? 10f : 16f;
-            Fluent.FillRound(c, SKRect.Create(r.Left, r.MidY - h / 2, 3, h), 1.5f, t.AccentFillColorDefault);
+            _pill.Jump(16);
+            return;
         }
-    }, 100, 40));
+        var h = (float)_pill.Step(down ? 10 : 16, context);
+        Fluent.FillRound(c, SKRect.Create(r.Left, r.MidY - h / 2, 3, h), 1.5f, FluentResources.ListViewItemSelectionIndicator(t).For(enabled, down, hovered));
+    }, 100, 36));
+
+    public override QColor ContentColor => FluentResources.ListViewItemForeground(Theme.Current, ShowsSelection).For(Enabled, IsDown, Hovered);
 }
 
 /// <summary>QtQuick.Controls' <c>TabButton</c>: a tab with an accent bar under the current one.</summary>

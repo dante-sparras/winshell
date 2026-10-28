@@ -69,7 +69,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         set => SetText(value ?? "", fromUser: false);
     }
 
-    private void SetText(string value, bool fromUser)
+    protected void SetText(string value, bool fromUser)
     {
         if (value.Length > _maximumLength)
             value = value[.._maximumLength];
@@ -126,6 +126,15 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                 Update();
         }
     }
+
+    /// <summary>Whether QML set <c>color</c>, so a control's default colors leave it alone.</summary>
+    protected bool HasExplicitColor => _colorSet;
+
+    /// <summary>The color the text and caret are drawn in. A control can give its default text a state's color.</summary>
+    protected virtual QColor PaintColor => _color;
+
+    /// <summary>Room at the right that the text does not use, on top of <c>rightPadding</c>, such as for a button.</summary>
+    protected virtual double ReservedRight => 0;
 
     [Qml]
     public QColor SelectionColor { get { Track(); return _selectionColor; } set { if (SetField(ref _selectionColor, value)) Update(); } }
@@ -507,7 +516,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private void EnsureCursorVisible()
     {
-        var available = Width - _leftPadding - _rightPadding;
+        var available = Width - _leftPadding - _rightPadding - ReservedRight;
         if (available <= 0)
             return;
         var x = OffsetOf(_cursorPosition);
@@ -714,7 +723,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public bool AcceptsButton(int button) => Enabled && button == QtEnums.LeftButton;
 
-    public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
+    public virtual bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
         ForceActiveFocus();
         var pos = PositionAt(x, y);
@@ -723,7 +732,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         return true;
     }
 
-    public void PointerMove(double x, double y, int buttons, int modifiers)
+    public virtual void PointerMove(double x, double y, int buttons, int modifiers)
     {
         if (_dragAnchor < 0 || !_selectByMouse)
             return;
@@ -734,7 +743,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         NotifySelection();
     }
 
-    public void PointerRelease(double x, double y, int button, int buttons, int modifiers) => _dragAnchor = -1;
+    public virtual void PointerRelease(double x, double y, int button, int buttons, int modifiers) => _dragAnchor = -1;
 
     public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
     {
@@ -746,7 +755,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public override void Paint(SKCanvas canvas, PaintContext context)
     {
-        var available = Width - _leftPadding - _rightPadding;
+        var available = Width - _leftPadding - _rightPadding - ReservedRight;
         var lineHeight = LineHeight;
         var y = _topPadding;
         if ((_verticalAlignment & QtEnums.AlignVCenter) != 0)
@@ -773,11 +782,11 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             using var sel = new SKPaint { Color = _selectionColor.ToSk() };
             canvas.DrawRect(SKRect.Create((float)sx, 0, (float)(ex - sx), (float)lineHeight), sel);
         }
-        layout?.Draw(canvas, Math.Max(total, 1), QtEnums.AlignLeft, _color, 0, Antialiasing, paint: context);
+        layout?.Draw(canvas, Math.Max(total, 1), QtEnums.AlignLeft, PaintColor, 0, Antialiasing, paint: context);
         if (_cursorVisible && ActiveFocus && _blinkOn && !_readOnly)
         {
             var cx = (float)Math.Round(OffsetOf(_cursorPosition));
-            using var caret = new SKPaint { Color = _color.ToSk(), StrokeWidth = 1, IsAntialias = false };
+            using var caret = new SKPaint { Color = PaintColor.ToSk(), StrokeWidth = 1, IsAntialias = false };
             canvas.DrawLine(cx + 0.5f, 1, cx + 0.5f, (float)lineHeight - 1, caret);
         }
         canvas.Restore();

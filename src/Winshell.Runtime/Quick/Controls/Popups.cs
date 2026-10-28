@@ -1490,13 +1490,24 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
             Fluent.FillRound(c, r, Fluent.ControlCornerRadius, !Enabled ? QColor.Transparent : _pressed ? t.SubtleFillColorTertiary : Hovered ? t.SubtleFillColorSecondary : QColor.Transparent);
             return;
         }
-        if (!Enabled)
-            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, t.ControlFillColorDisabled, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
-        else if (_pressed)
-            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, t.ControlFillColorTertiary, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
+        bool enabled = Enabled, hovered = Hovered || down;
+        var fill = FluentResources.ComboBoxBackground(t).For(enabled, _pressed, hovered);
+        if (t.IsHighContrast)
+        {
+            Fluent.FillRound(c, r, Fluent.ControlCornerRadius, fill);
+            Fluent.StrokeRound(c, r, Fluent.ControlCornerRadius, FluentResources.ComboBoxBorderBrush(t).For(enabled, _pressed, hovered));
+        }
+        else if (!enabled || _pressed)
+        {
+            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
+        }
         else
-            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, Hovered || down ? t.ControlFillColorSecondary : t.ControlFillColorDefault, t.ControlStrokeColorDefault, t.ControlStrokeColorSecondary);
+        {
+            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrokeColorSecondary, edgeOnTop: t.IsDark);
+        }
     }, 120, Fluent.ControlHeight));
+
+    private QColor LabelColor => FluentResources.ComboBoxForeground(Theme.Current).For(Enabled, _pressed, Hovered);
 
     protected override Item? CreateDefaultContentItem()
     {
@@ -1521,7 +1532,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
                 var t = Theme.Current;
                 var r = i.Bounds;
                 var offset = _pressed ? 1.5f : 0;
-                Fluent.DrawChevron(c, Fluent.ChevronDown, r.MidX, r.MidY + offset, 12, Enabled ? t.TextFillColorSecondary : t.TextFillColorDisabled);
+                Fluent.DrawChevron(c, Fluent.ChevronDown, r.MidX, r.MidY + offset, 12, FluentResources.ComboBoxDropDownGlyphForeground(t).For(Enabled, _pressed, Hovered));
             }, 32, 32));
         }
         if (!_popupSet && _popup is null)
@@ -1534,7 +1545,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         base.CreateDefaults();
         if (HasDefaultContentItem && ContentItem is Text text)
         {
-            text.Color = Theme.Current.TextFillColorPrimary;
+            text.Color = LabelColor;
             text.Text_ = DisplayText;
         }
     }
@@ -1542,7 +1553,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     protected override void OnThemeChanged()
     {
         if (HasDefaultContentItem && ContentItem is Text text)
-            text.Color = Enabled ? Theme.Current.TextFillColorPrimary : Theme.Current.TextFillColorDisabled;
+            text.Color = LabelColor;
     }
 
     protected override void StateChanged()
