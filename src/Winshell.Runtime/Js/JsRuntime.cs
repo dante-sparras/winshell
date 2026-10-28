@@ -40,6 +40,9 @@ public sealed class JsRuntime
 
     public QmlEngine Qml => _qml;
 
+    /// <summary>How many pieces of script were compiled. Code compiles once per place it is written.</summary>
+    public int CompiledFunctionCount => _factories.Count;
+
     /// <summary>Converts a C# value to JavaScript.</summary>
     public JsValue ToJs(object? value)
     {
