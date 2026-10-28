@@ -144,3 +144,24 @@ These did nothing on Windows, or repeated what another type does.
 | `expire()`, `NotificationCloseReason`, `NotificationUrgency`, `closed(reason)` | Removed; use `dismiss()` and observe model removals or `destroyed` |
 
 `NotificationListener.requestAccess()` explicitly requests Windows permission. Importing or constructing the type never prompts. Read-only `accessStatus` and `error` distinguish cancellation, denial and unavailable access. Focus and Do Not Disturb are read-only states, with `Unknown` for unsupported Windows APIs. `ToastMessage` and `ToastAction` send native toasts with protocol activation under an installed Windows identity; this does not require listener access.
+
+## Network
+
+See [Windows networking](network.md) for the native models, permissions and explicit actions.
+
+| Former member | Windows API |
+| --- | --- |
+| `Network.nmSettings`, `connectWithSettings()`, `NetworkProfile.uuid` | Removed; `Networking.profiles` exposes real Windows connection profiles and their `adapterId`, connectivity and cost |
+| `NetworkDevice.nmManaged`, `autoconnect` | Removed; Windows manages adapters and per-network reconnection |
+| `NetworkBackendType`, `Networking.backend` | Removed; the backend is always Windows |
+| `ConnectivityCheckEnabled`, `canCheckConnectivity` | Removed; `connectivity` reports Windows NCSI without masking it |
+| `checkConnectivity()` | `refresh()` |
+| `NetworkConnectivity.Full`, `Limited`, `Portal` | `InternetAccess`, `LocalAccess`, `CaptivePortal` |
+| `ConnectionFailReason.NoSecrets`, `WifiAuthTimeout`, `WifiNetworkLost`, `WifiClientFailed` | Action `error`: `InvalidPassword`, `Timeout`, `NetworkUnavailable`, `UnsupportedAuthentication` |
+| `Network.known`, `stateChanging`, `onConnectionFailed` | `saved`, `busy`, `onOperationFailed(message)` and `error` |
+| `WifiNetwork.connectWithPsk()` | `connectWithPassword()` |
+| `WifiDevice.scannerEnabled`, `mode`, `WifiDeviceMode` | Removed; call `scan()` for one scan and observe `scanning` |
+| Writable `Networking.wifiEnabled` | Read-only `wifiEnabled` and `wifiState`; use Windows Settings to control radios |
+| `NetworkDevice.disconnect()`, `WiredDevice.network` | Use the `networks` model; Wi-Fi network objects provide `disconnect()`; wired connections are managed by Windows |
+
+Wi-Fi permission is requested only through `Networking.requestAccess()`. All state is read-only; connection changes require method calls. `airplaneMode` is a best-effort persisted Windows state with an explicit Unknown value, independent of individual radios.

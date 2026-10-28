@@ -106,8 +106,8 @@ internal static unsafe partial class NetworkNative
         var handle = Handle;
         if (handle == 0)
             return;
-        // WLAN_NOTIFICATION_SOURCE_ACM | WLAN_NOTIFICATION_SOURCE_MSM.
-        _ = WlanRegisterNotification(handle, 0x08 | 0x10, 1, &OnNotification, 0, 0, out _);
+        // ACM avoids the location consent required by MSM notifications.
+        _ = WlanRegisterNotification(handle, 0x08, 1, &OnNotification, 0, 0, out _);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]

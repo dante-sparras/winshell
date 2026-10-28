@@ -3,536 +3,270 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Network;
 
-public enum NetworkConnectivity
-{
-    Unknown = 0,
-    None = 1,
-    Portal = 2,
-    Limited = 3,
-    Full = 4,
-}
+public enum NetworkConnectivity { Unknown, None, CaptivePortal, LocalAccess, InternetAccess }
+public enum NetworkCost { Unknown, Unrestricted, Fixed, Variable }
+public enum NetworkAccessStatus { Unspecified, Allowed, DeniedByUser, DeniedBySystem }
+public enum WifiRadioState { Unknown, On, Off, Disabled }
+public enum AirplaneModeState { Unknown, Off, On }
+public enum ConnectionState { Unknown, Connecting, Connected, Disconnecting, Disconnected }
+public enum ConnectionFailReason { Unknown, InvalidPassword, Timeout, NetworkUnavailable, UnsupportedAuthentication }
+public enum DeviceType { None, Wifi, Wired }
+public enum WifiSecurityType { Wpa3SuiteB192, Sae, Wpa2Eap, Wpa2Psk, WpaEap, WpaPsk, StaticWep, Owe, Open, Unknown }
 
-/// <summary>The backend a network device uses. On Windows it is always <c>Windows</c>.</summary>
-public enum NetworkBackendType
-{
-    None = 0,
-    NetworkManager = 1,
-    Windows = 2,
-}
-
-public enum ConnectionState
-{
-    Unknown = 0,
-    Connecting = 1,
-    Connected = 2,
-    Disconnecting = 3,
-    Disconnected = 4,
-}
-
-public enum ConnectionFailReason
-{
-    Unknown = 0,
-    NoSecrets = 1,
-    WifiClientDisconnected = 2,
-    WifiClientFailed = 3,
-    WifiAuthTimeout = 4,
-    WifiNetworkLost = 5,
-}
-
-public enum DeviceType
-{
-    None = 0,
-    Wifi = 1,
-    Wired = 2,
-}
-
-public enum WifiSecurityType
-{
-    Wpa3SuiteB192 = 0,
-    Sae = 1,
-    Wpa2Eap = 2,
-    Wpa2Psk = 3,
-    WpaEap = 4,
-    WpaPsk = 5,
-    StaticWep = 6,
-    DynamicWep = 7,
-    Leap = 8,
-    Owe = 9,
-    Open = 10,
-    Unknown = 11,
-}
-
-public enum WifiDeviceMode
-{
-    AdHoc = 0,
-    Station = 1,
-    AccessPoint = 2,
-    Mesh = 3,
-    Unknown = 4,
-}
-
-internal static class NetLog
-{
-    public const string Category = "network";
-}
-
-/// <summary>The <c>NetworkProfile</c>. Windows has no NetworkManager profiles, so there are none of these.</summary>
+/// <summary>A Windows connection profile reported by NetworkInformation, not a saved WLAN credential.</summary>
 public sealed class NetworkProfile : QObject
 {
-    [Qml] public string Id => "";
-
-    [Qml] public string Uuid => "";
+    private NetworkProfileInfo _info;
+    internal NetworkProfile(NetworkProfileInfo info) => _info = info;
+    [Qml] public string Id => _info.Id;
+    [Qml] public string Name { get { Track(); return _info.Name; } }
+    [Qml] public string AdapterId => _info.AdapterId.ToString();
+    [Qml] public NetworkConnectivity Connectivity { get { Track(); return _info.Connectivity; } }
+    [Qml] public NetworkCost Cost { get { Track(); return _info.Cost; } }
+    [Qml] public bool Metered { get { Track(); return _info.Cost is NetworkCost.Fixed or NetworkCost.Variable || _info.Roaming || _info.OverDataLimit; } }
+    [Qml] public bool Roaming { get { Track(); return _info.Roaming; } }
+    [Qml] public bool OverDataLimit { get { Track(); return _info.OverDataLimit; } }
+    [Qml] public bool SignalAvailable { get { Track(); return _info.SignalStrength.HasValue; } }
+    [Qml] public double SignalStrength { get { Track(); return _info.SignalStrength ?? 0; } }
+    internal void Update(NetworkProfileInfo info)
+    {
+        if (_info == info) return;
+        _info = info;
+        foreach (var name in new[] { "name", "connectivity", "cost", "metered", "roaming", "overDataLimit", "signalAvailable", "signalStrength" })
+            NotifyChanged(name);
+    }
 }
 
-/// <summary>The <c>Network</c>: a network a device can connect to.</summary>
-[QmlSignal("connectionFailed", "reason")]
+[QmlSignal("operationFailed", "message")]
 public class QmlNetwork : QObject
 {
     private NetworkInfo _info;
-    private ConnectionState? _pending;
-
-    internal QmlNetwork(NetworkDevice device, NetworkInfo info)
-    {
-        Device = device;
-        _info = info;
-    }
-
-    [Qml] public string Name { get { Track(); return _info.Name; } }
-
-    [Qml] public NetworkDevice Device { get; }
-
-    /// <summary>NetworkManager settings profiles; Windows has none.</summary>
-    [Qml] public IReadOnlyList<NetworkProfile> NmSettings => [];
-
-    [Qml] public bool Connected { get { Track(); return State == ConnectionState.Connected; } }
-
-    [Qml] public bool Known { get { Track(); return _info.Known; } }
-
-    [Qml] public ConnectionState State { get { Track(); return _pending ?? _info.State; } }
-
-    [Qml] public bool StateChanging { get { Track(); return State is ConnectionState.Connecting or ConnectionState.Disconnecting; } }
-
+    private bool _busy;
+    private string _error = "";
+    internal QmlNetwork(NetworkDevice device, NetworkInfo info) { Device = device; _info = info; }
     internal NetworkInfo Info => _info;
-
-    internal virtual void Update(NetworkInfo info)
+    [Qml] public string Name { get { Track(); return _info.Name; } }
+    [Qml] public NetworkDevice Device { get; }
+    [Qml] public bool Connected { get { Track(); return _info.State == ConnectionState.Connected; } }
+    [Qml] public bool Saved { get { Track(); return _info.Known; } }
+    [Qml] public ConnectionState State { get { Track(); return _info.State; } }
+    [Qml] public bool Busy { get { Track(); return _busy; } }
+    [Qml] public string Error { get { Track(); return _error; } }
+    internal void Update(NetworkInfo info)
     {
-        var oldState = State;
-        var old = _info;
+        if (_info == info) return;
         _info = info;
-        if (old.Name != info.Name)
-            NotifyChanged("name");
-        if (old.Known != info.Known)
-            NotifyChanged("known");
-        StateUpdated(oldState);
+        foreach (var name in new[] { "name", "connected", "saved", "state", "signalStrength", "security" }) NotifyChanged(name);
     }
-
-    private void StateUpdated(ConnectionState oldState)
+    [Qml("connect")] public void ConnectNetwork() => _ = ConnectAsync(null);
+    internal Task ConnectAsync(string? password) => RunAsync(async () =>
     {
-        var state = State;
-        if (state == oldState)
-            return;
-        NotifyChanged("state");
-        if ((state == ConnectionState.Connected) != (oldState == ConnectionState.Connected))
-            NotifyChanged("connected");
-        if ((state is ConnectionState.Connecting or ConnectionState.Disconnecting) != (oldState is ConnectionState.Connecting or ConnectionState.Disconnecting))
-            NotifyChanged("stateChanging");
-    }
-
-    internal void SetPending(ConnectionState? state)
+        if (Device.Type != DeviceType.Wifi) throw new NotSupportedException("Windows manages wired connections automatically.");
+        var failure = await Device.Backend.ConnectAsync(Device.NativeId, Name, password).ConfigureAwait(false);
+        if (failure is { } reason) throw new InvalidOperationException(reason.ToString());
+    });
+    [Qml] public void Disconnect() => _ = RunAsync(() =>
     {
-        var old = State;
-        _pending = state;
-        StateUpdated(old);
-    }
-
-    [Qml("connect")]
-    public void ConnectNetwork()
+        if (Device.Type != DeviceType.Wifi || !Device.Backend.Disconnect(Device.NativeId))
+            throw new NotSupportedException("Windows cannot disconnect this adapter through WiFiAdapter.");
+        return Task.CompletedTask;
+    });
+    [Qml] public void Forget() => _ = RunAsync(() =>
     {
-        if (Connected)
+        if (Device.Type != DeviceType.Wifi) throw new NotSupportedException("Only saved Wi-Fi profiles can be forgotten.");
+        var error = Device.Backend.Forget(Device.NativeId, Name);
+        if (error != 0) throw new System.ComponentModel.Win32Exception((int)error);
+        return Task.CompletedTask;
+    });
+    internal async Task RunAsync(Func<Task> action)
+    {
+        if (_busy || IsDestroyed) return;
+        SetField(ref _busy, true, nameof(Busy));
+        SetField(ref _error, "", nameof(Error));
+        string error = "";
+        try { await action().ConfigureAwait(false); }
+        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e)) { error = e.Message; }
+        Device.Loop.Post(() =>
         {
-            ServiceSupport.Warn(this, NetLog.Category, $"{this} is already connected.");
-            return;
-        }
-        Device.ConnectNetwork(this, null);
+            if (IsDestroyed) return;
+            SetField(ref _busy, false, nameof(Busy));
+            SetField(ref _error, error, nameof(Error));
+            if (error.Length > 0) Emit("operationFailed", error);
+        });
     }
-
-    [Qml]
-    public void ConnectWithSettings(NetworkProfile? settings) =>
-        ServiceSupport.Warn(this, NetLog.Category, "connectWithSettings is only valid for the NetworkManager backend");
-
-    [Qml]
-    public void Disconnect()
-    {
-        if (!Connected)
-        {
-            ServiceSupport.Warn(this, NetLog.Category, $"{this} is not currently connected");
-            return;
-        }
-        Device.Disconnect();
-    }
-
-    [Qml]
-    public void Forget() => Device.ForgetNetwork(this);
-
-    public override string ToString() => $"{TypeName}({_info.Name})";
 }
 
-/// <summary>The <c>WifiNetwork</c>.</summary>
 public sealed class WifiNetwork : QmlNetwork
 {
-    internal WifiNetwork(NetworkDevice device, NetworkInfo info)
-        : base(device, info)
-    {
-    }
-
+    internal WifiNetwork(NetworkDevice device, NetworkInfo info) : base(device, info) { }
     [Qml] public double SignalStrength { get { Track(); return Info.SignalStrength; } }
-
     [Qml] public WifiSecurityType Security { get { Track(); return Info.Security; } }
-
-    internal override void Update(NetworkInfo info)
-    {
-        var old = Info;
-        base.Update(info);
-        if (old.SignalStrength != info.SignalStrength)
-            NotifyChanged("signalStrength");
-        if (old.Security != info.Security)
-            NotifyChanged("security");
-    }
-
-    [Qml]
-    public void ConnectWithPsk(string psk)
-    {
-        if (Connected)
-        {
-            ServiceSupport.Warn(this, NetLog.Category, $"{this} is already connected.");
-            return;
-        }
-        if (Security is not (WifiSecurityType.WpaPsk or WifiSecurityType.Wpa2Psk or WifiSecurityType.Sae))
-        {
-            ServiceSupport.Warn(this, NetLog.Category, $"{this} has the wrong security type for a PSK.");
-            return;
-        }
-        Device.ConnectNetwork(this, psk);
-    }
+    [Qml] public void ConnectWithPassword(string password) => _ = ConnectAsync(password);
 }
 
-/// <summary>The <c>NetworkDevice</c>: a network adapter.</summary>
 public abstract class NetworkDevice : QObject
 {
     private readonly Dictionary<string, QmlNetwork> _networks = new(StringComparer.Ordinal);
     private NetworkDeviceInfo _info;
-
-    internal NetworkDevice(NetworkDeviceInfo info, IEventLoop loop)
+    internal NetworkDevice(NetworkDeviceInfo info, IEventLoop loop, INetworkBackend backend)
     {
-        _info = info;
-        Loop = loop;
+        _info = info; Loop = loop; Backend = backend;
         Networks.SetOwner(this);
     }
-
     internal IEventLoop Loop { get; }
-
-    internal Guid Id => _info.Id;
-
+    internal INetworkBackend Backend { get; }
+    internal Guid NativeId => _info.Id;
     internal NetworkDeviceInfo Info => _info;
-
+    [Qml] public string Id => _info.Id.ToString();
     [Qml] public DeviceType Type => _info.Type;
-
     [Qml] public string Name { get { Track(); return _info.Name; } }
-
     [Qml] public ObjectModel Networks { get; } = new();
-
     [Qml] public string Address { get { Track(); return _info.Address; } }
-
     [Qml] public bool Connected { get { Track(); return _info.State == ConnectionState.Connected; } }
-
     [Qml] public ConnectionState State { get { Track(); return _info.State; } }
-
-    /// <summary>NetworkManager's managed flag. Windows manages every adapter.</summary>
-    [Qml]
-    public bool NmManaged
+    internal void Update(NetworkDeviceInfo info)
     {
-        get => true;
-        set => ServiceSupport.Warn(this, NetLog.Category, "nmManaged is only valid for the NetworkManager backend");
-    }
-
-    /// <summary>Windows connects to saved networks on its own; whether it may is per network, not per device.</summary>
-    [Qml]
-    public bool Autoconnect
-    {
-        get => true;
-        set => ServiceSupport.Warn(this, NetLog.Category, "Windows cannot stop a device from connecting on its own");
-    }
-
-    [Qml]
-    public virtual void Disconnect()
-    {
-        if (_info.State == ConnectionState.Disconnected)
+        var old = _info; _info = info;
+        if (old.Name != info.Name) NotifyChanged("name");
+        if (old.Address != info.Address) NotifyChanged("address");
+        if (old.State != info.State) { NotifyChanged("state"); NotifyChanged("connected"); }
+        foreach (var gone in _networks.Keys.Except(info.Networks.Select(n => n.Name)).ToArray())
         {
-            ServiceSupport.Warn(this, NetLog.Category, $"Device {this} is already disconnected");
-            return;
+            _networks[gone].Destroy(); _networks.Remove(gone);
         }
-        if (_info.State == ConnectionState.Disconnecting)
-        {
-            ServiceSupport.Warn(this, NetLog.Category, $"Device {this} is already disconnecting");
-            return;
-        }
-        if (!NetworkBackend.Instance.Disconnect(_info.Id))
-            ServiceSupport.Warn(this, NetLog.Category, $"Windows cannot disconnect {this}");
-    }
-
-    internal virtual void Update(NetworkDeviceInfo info)
-    {
-        var old = _info;
-        _info = info;
-        if (old.Name != info.Name)
-            NotifyChanged("name");
-        if (old.Address != info.Address)
-            NotifyChanged("address");
-        if (old.State != info.State)
-            NotifyChanged("state");
-        if ((old.State == ConnectionState.Connected) != (info.State == ConnectionState.Connected))
-            NotifyChanged("connected");
-
-        var next = new List<object?>();
         foreach (var network in info.Networks)
         {
-            if (_networks.TryGetValue(network.Name, out var existing))
+            if (!_networks.TryGetValue(network.Name, out var item))
             {
-                existing.Update(network);
+                item = Type == DeviceType.Wifi ? new WifiNetwork(this, network) : new QmlNetwork(this, network);
+                item.Engine = Engine; item.SetOwner(this); _networks.Add(network.Name, item);
             }
-            else
-            {
-                existing = _networks[network.Name] = Type == DeviceType.Wifi ? new WifiNetwork(this, network) : new QmlNetwork(this, network);
-                existing.SetOwner(this);
-            }
-            next.Add(existing);
+            item.Update(network);
         }
-        foreach (var gone in _networks.Where(kv => !next.Contains(kv.Value)).ToList())
-        {
-            _networks.Remove(gone.Key);
-            gone.Value.Destroy();
-        }
-        Networks.Set(next);
-        NetworksUpdated();
+        Networks.Engine = Engine;
+        Networks.Set(info.Networks.Select(n => _networks[n.Name]).ToArray());
+        NotifyChanged("linkSpeed"); NotifyChanged("hasLink");
     }
-
-    protected virtual void NetworksUpdated()
-    {
-    }
-
-    internal void ConnectNetwork(QmlNetwork network, string? psk)
-    {
-        if (Type != DeviceType.Wifi || !NetworkBackend.Instance.CanScan(_info.Id))
-        {
-            ServiceSupport.Warn(this, NetLog.Category, $"Windows cannot connect {this} to {network.Name}");
-            return;
-        }
-        network.SetPending(ConnectionState.Connecting);
-        var ssid = network.Name;
-        ServiceSupport.Run(NetLog.Category, async () =>
-        {
-            ConnectionFailReason? failure;
-            try
-            {
-                failure = await NetworkBackend.Instance.ConnectAsync(_info.Id, ssid, psk).ConfigureAwait(false);
-            }
-            catch (Exception)
-            {
-                Loop.Post(() => network.SetPending(null));
-                throw;
-            }
-            Loop.Post(() =>
-            {
-                network.SetPending(null);
-                if (failure is { } reason)
-                    network.Emit("connectionFailed", reason);
-            });
-        });
-    }
-
-    internal void ForgetNetwork(QmlNetwork network)
-    {
-        if (Type != DeviceType.Wifi)
-        {
-            ServiceSupport.Warn(this, NetLog.Category, $"Windows cannot forget the wired network of {this}");
-            return;
-        }
-        var error = NetworkBackend.Instance.Forget(_info.Id, network.Name);
-        if (error != 0)
-            ServiceSupport.Warn(this, NetLog.Category, $"Windows did not forget {network.Name} (error {error})");
-    }
-
-    public override string ToString() => $"{TypeName}({_info.Name})";
 }
 
-/// <summary>The <c>WifiDevice</c>.</summary>
+[QmlSignal("operationFailed", "message")]
 public sealed class WifiDevice : NetworkDevice
 {
-    private bool _scannerEnabled;
-
-    internal WifiDevice(NetworkDeviceInfo info, IEventLoop loop)
-        : base(info, loop)
+    private bool _scanning;
+    private string _error = "";
+    internal WifiDevice(NetworkDeviceInfo info, IEventLoop loop, INetworkBackend backend) : base(info, loop, backend) { }
+    [Qml] public bool Scanning { get { Track(); return _scanning; } }
+    [Qml] public string Error { get { Track(); return _error; } }
+    [Qml] public void Scan() => _ = ScanAsync();
+    internal async Task ScanAsync()
     {
-    }
-
-    [Qml]
-    public bool ScannerEnabled
-    {
-        get { Track(); return _scannerEnabled; }
-        set
+        if (_scanning || IsDestroyed) return;
+        SetField(ref _scanning, true, nameof(Scanning));
+        SetField(ref _error, "", nameof(Error));
+        string error = "";
+        try { await Backend.ScanAsync(NativeId).ConfigureAwait(false); }
+        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e)) { error = e.Message; }
+        Loop.Post(() =>
         {
-            if (value == _scannerEnabled)
-                return;
-            if (value && !NetworkBackend.Instance.CanScan(Id))
-            {
-                ServiceSupport.Warn(this, NetLog.Category, "Windows gave no access to scan for Wi-Fi networks; turn on location for desktop apps");
-                return;
-            }
-            _scannerEnabled = value;
-            NetworkBackend.Instance.SetScanning(Id, value);
-            NotifyChanged("scannerEnabled");
-        }
-    }
-
-    /// <summary>Windows Wi-Fi adapters connect to access points as stations.</summary>
-    [Qml] public WifiDeviceMode Mode => WifiDeviceMode.Station;
-
-    protected override void OnDestroy()
-    {
-        if (_scannerEnabled)
-            NetworkBackend.Instance.SetScanning(Id, false);
+            if (IsDestroyed) return;
+            SetField(ref _scanning, false, nameof(Scanning));
+            SetField(ref _error, error, nameof(Error));
+            if (error.Length > 0) Emit("operationFailed", error);
+        });
     }
 }
 
-/// <summary>The <c>WiredDevice</c>.</summary>
 public sealed class WiredDevice : NetworkDevice
 {
-    private QmlNetwork? _network;
-
-    internal WiredDevice(NetworkDeviceInfo info, IEventLoop loop)
-        : base(info, loop)
-    {
-    }
-
-    [Qml] public QmlNetwork? Network { get { Track(); return _network; } }
-
+    internal WiredDevice(NetworkDeviceInfo info, IEventLoop loop, INetworkBackend backend) : base(info, loop, backend) { }
     [Qml] public int LinkSpeed { get { Track(); return (int)Math.Min(int.MaxValue, Info.LinkSpeed); } }
-
     [Qml] public bool HasLink { get { Track(); return Info.HasLink; } }
-
-    internal override void Update(NetworkDeviceInfo info)
-    {
-        var old = Info;
-        base.Update(info);
-        if (old.LinkSpeed != info.LinkSpeed)
-            NotifyChanged("linkSpeed");
-        if (old.HasLink != info.HasLink)
-            NotifyChanged("hasLink");
-    }
-
-    protected override void NetworksUpdated() =>
-        SetField(ref _network, Networks.Rows.OfType<QmlNetwork>().FirstOrDefault(), nameof(Network));
-
-    [Qml]
-    public override void Disconnect() =>
-        ServiceSupport.Warn(this, NetLog.Category, $"Windows cannot disconnect the wired device {this} without disabling the adapter");
 }
 
-/// <summary>The <c>Networking</c> singleton.</summary>
+[QmlSignal("operationFailed", "message")]
 public sealed class NetworkingService : QObject
 {
     private readonly IEventLoop _loop;
+    private readonly INetworkBackend _backend;
     private readonly IDisposable _subscription;
     private readonly Dictionary<Guid, NetworkDevice> _devices = [];
+    private readonly Dictionary<string, NetworkProfile> _profiles = new(StringComparer.Ordinal);
     private NetworkSnapshot _snapshot = NetworkSnapshot.Initial;
-    private bool _connectivityCheckEnabled = true;
-
-    internal NetworkingService(QmlEngine engine)
+    private string _error = "";
+    private bool _requesting;
+    internal NetworkingService(QmlEngine engine) : this(NetworkBackend.Instance, engine.Loop) { Engine = engine; }
+    internal NetworkingService(INetworkBackend backend, IEventLoop loop)
     {
-        _loop = engine.Loop;
-        Devices.SetOwner(this);
-        Apply(NetworkBackend.Instance.Current);
-        _subscription = NetworkBackend.Instance.Subscribe(s => _loop.Post(() => Apply(s)));
+        _loop = loop; _backend = backend;
+        Devices.SetOwner(this); Profiles.SetOwner(this);
+        Apply(backend.Current);
+        _subscription = backend.Subscribe(s => _loop.Post(() => Apply(s)));
     }
-
     [Qml] public ObjectModel Devices { get; } = new();
-
-    [Qml] public NetworkBackendType Backend => NetworkBackendType.Windows;
-
-    [Qml]
-    public bool WifiEnabled
-    {
-        get { Track(); return _snapshot.WifiEnabled; }
-        set
-        {
-            if (value == _snapshot.WifiEnabled)
-                return;
-            ServiceSupport.Run(NetLog.Category, async () =>
-            {
-                if (!await NetworkBackend.Instance.SetWifiEnabledAsync(value).ConfigureAwait(false))
-                    _loop.Post(() => ServiceSupport.Warn(this, NetLog.Category, "Windows did not let the shell turn Wi-Fi " + (value ? "on" : "off")));
-            });
-        }
-    }
-
+    [Qml] public ObjectModel Profiles { get; } = new();
+    [Qml] public bool Ready { get { Track(); return _snapshot.Ready; } }
+    [Qml] public bool WifiEnabled { get { Track(); return _snapshot.WifiEnabled; } }
+    [Qml] public WifiRadioState WifiState { get { Track(); return _snapshot.WifiState; } }
     [Qml] public bool WifiHardwareEnabled { get { Track(); return _snapshot.WifiHardwareEnabled; } }
-
-    /// <summary>Windows checks connectivity itself (NCSI).</summary>
-    [Qml] public bool CanCheckConnectivity => true;
-
-    /// <summary>When off, connectivity reads Unknown, as with checks turned off in NetworkManager.</summary>
-    [Qml]
-    public bool ConnectivityCheckEnabled
+    [Qml] public NetworkAccessStatus AccessStatus { get { Track(); return _snapshot.Access; } }
+    [Qml] public AirplaneModeState AirplaneMode { get { Track(); return _snapshot.AirplaneMode; } }
+    [Qml] public NetworkConnectivity Connectivity { get { Track(); return _snapshot.Connectivity; } }
+    [Qml] public string Error { get { Track(); return _error; } }
+    [Qml] public bool RequestingAccess { get { Track(); return _requesting; } }
+    [Qml] public void Refresh() => _backend.Refresh();
+    [Qml] public void RequestAccess() => _ = RequestAccessAsync();
+    internal async Task RequestAccessAsync()
     {
-        get { Track(); return _connectivityCheckEnabled; }
-        set
+        if (_requesting || IsDestroyed) return;
+        SetField(ref _requesting, true, nameof(RequestingAccess));
+        string error = "";
+        try { await _backend.RequestAccessAsync().ConfigureAwait(false); }
+        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e)) { error = e.Message; }
+        _loop.Post(() =>
         {
-            if (SetField(ref _connectivityCheckEnabled, value))
-                NotifyChanged("connectivity");
-        }
+            if (IsDestroyed) return;
+            SetField(ref _requesting, false, nameof(RequestingAccess));
+            Apply(_backend.Current);
+            SetField(ref _error, error, nameof(Error));
+            if (error.Length > 0) Emit("operationFailed", error);
+        });
     }
-
-    [Qml]
-    public NetworkConnectivity Connectivity
+    internal void Apply(NetworkSnapshot snapshot)
     {
-        get { Track(); return _connectivityCheckEnabled && _snapshot.Ready ? _snapshot.Connectivity : NetworkConnectivity.Unknown; }
-    }
-
-    [Qml]
-    public void CheckConnectivity() => NetworkBackend.Instance.Refresh();
-
-    private void Apply(NetworkSnapshot snapshot)
-    {
-        if (IsDestroyed)
-            return;
-        var old = _snapshot;
+        if (IsDestroyed) return;
         _snapshot = snapshot;
-        if (old.WifiEnabled != snapshot.WifiEnabled)
-            NotifyChanged("wifiEnabled");
-        if (old.WifiHardwareEnabled != snapshot.WifiHardwareEnabled)
-            NotifyChanged("wifiHardwareEnabled");
-        if (old.Connectivity != snapshot.Connectivity || old.Ready != snapshot.Ready)
-            NotifyChanged("connectivity");
-
-        var next = new List<object?>();
+        SetField(ref _error, snapshot.Error, nameof(Error));
+        foreach (var property in new[] { "ready", "wifiEnabled", "wifiHardwareEnabled", "wifiState", "connectivity", "accessStatus", "airplaneMode" }) NotifyChanged(property);
+        Devices.Engine = Profiles.Engine = Engine;
+        foreach (var gone in _devices.Keys.Except(snapshot.Devices.Select(d => d.Id)).ToArray())
+        {
+            _devices[gone].Destroy(); _devices.Remove(gone);
+        }
         foreach (var info in snapshot.Devices)
         {
             if (!_devices.TryGetValue(info.Id, out var device))
             {
-                device = _devices[info.Id] = info.Type == DeviceType.Wifi ? new WifiDevice(info, _loop) : new WiredDevice(info, _loop);
-                device.SetOwner(this);
+                device = info.Type == DeviceType.Wifi ? new WifiDevice(info, _loop, _backend) : new WiredDevice(info, _loop, _backend);
+                device.Engine = Engine; device.SetOwner(this); _devices.Add(info.Id, device);
             }
             device.Update(info);
-            next.Add(device);
         }
-        foreach (var gone in _devices.Where(kv => !next.Contains(kv.Value)).ToList())
+        Devices.Set(snapshot.Devices.Select(d => _devices[d.Id]).ToArray());
+        var profiles = snapshot.Profiles ?? [];
+        foreach (var gone in _profiles.Keys.Except(profiles.Select(p => p.Id)).ToArray())
         {
-            _devices.Remove(gone.Key);
-            gone.Value.Destroy();
+            _profiles[gone].Destroy(); _profiles.Remove(gone);
         }
-        Devices.Set(next);
+        foreach (var info in profiles)
+        {
+            if (!_profiles.TryGetValue(info.Id, out var profile))
+            {
+                profile = new NetworkProfile(info) { Engine = Engine }; profile.SetOwner(this); _profiles.Add(info.Id, profile);
+            }
+            profile.Update(info);
+        }
+        Profiles.Set(profiles.Select(p => _profiles[p.Id]).ToArray());
     }
-
     protected override void OnDestroy() => _subscription.Dispose();
 }
 
@@ -542,54 +276,20 @@ internal static class NetworkingModule
     {
         registry.Module("Winshell.Network")
             .Singleton(e => new NetworkingService(e), "Networking")
-            .Uncreatable<NetworkDevice>("NetworkDevice", "Devices can only be acquired through Network")
+            .Uncreatable<NetworkDevice>("NetworkDevice")
             .Uncreatable<WifiDevice>("WifiDevice")
             .Uncreatable<WiredDevice>("WiredDevice")
-            .Uncreatable<QmlNetwork>("Network", "Network can only be aqcuired through networking devices")
-            .Uncreatable<WifiNetwork>("WifiNetwork", "WifiNetwork can only be acquired through WifiDevice")
+            .Uncreatable<QmlNetwork>("Network")
+            .Uncreatable<WifiNetwork>("WifiNetwork")
             .Uncreatable<NetworkProfile>("NetworkProfile")
-            .Enum<NetworkConnectivity>(c => c switch
-            {
-                NetworkConnectivity.None => "Not connected to a network",
-                NetworkConnectivity.Portal => "Connection intercepted by a captive portal",
-                NetworkConnectivity.Limited => "Partial internet connectivity",
-                NetworkConnectivity.Full => "Full internet connectivity",
-                _ => "Unknown",
-            })
-            .Enum<NetworkBackendType>(t => Enum.IsDefined(t) ? t.ToString() : "Unknown")
-            .Enum<ConnectionState>(s => Enum.IsDefined(s) ? s.ToString() : "Unknown")
-            .Enum<ConnectionFailReason>(r => r switch
-            {
-                ConnectionFailReason.NoSecrets => "Secrets were required but not provided",
-                ConnectionFailReason.WifiClientDisconnected => "Wi-Fi supplicant disconnected",
-                ConnectionFailReason.WifiClientFailed => "Wi-Fi supplicant failed",
-                ConnectionFailReason.WifiAuthTimeout => "Wi-Fi connection took too long to authenticate",
-                ConnectionFailReason.WifiNetworkLost => "Wi-Fi network could not be found",
-                _ => "Unknown",
-            })
-            .Enum<DeviceType>(t => Enum.IsDefined(t) ? t.ToString() : "Unknown")
-            .Enum<WifiSecurityType>(t => t switch
-            {
-                WifiSecurityType.Wpa3SuiteB192 => "WPA3 Suite B 192-bit",
-                WifiSecurityType.Sae => "WPA3",
-                WifiSecurityType.Wpa2Eap => "WPA2 Enterprise",
-                WifiSecurityType.Wpa2Psk => "WPA2",
-                WifiSecurityType.WpaEap => "WPA Enterprise",
-                WifiSecurityType.WpaPsk => "WPA",
-                WifiSecurityType.StaticWep => "WEP",
-                WifiSecurityType.DynamicWep => "Dynamic WEP",
-                WifiSecurityType.Leap => "LEAP",
-                WifiSecurityType.Owe => "OWE",
-                WifiSecurityType.Open => "Open",
-                _ => "Unknown",
-            })
-            .Enum<WifiDeviceMode>(m => m switch
-            {
-                WifiDeviceMode.AdHoc => "Ad-Hoc",
-                WifiDeviceMode.Station => "Station",
-                WifiDeviceMode.AccessPoint => "Access Point",
-                WifiDeviceMode.Mesh => "Mesh",
-                _ => "Unknown",
-            });
+            .Enum<NetworkConnectivity>(s => s.ToString())
+            .Enum<NetworkCost>(s => s.ToString())
+            .Enum<NetworkAccessStatus>(s => s.ToString())
+            .Enum<AirplaneModeState>(s => s.ToString())
+            .Enum<WifiRadioState>(s => s.ToString())
+            .Enum<ConnectionState>(s => s.ToString())
+            .Enum<ConnectionFailReason>(s => s.ToString())
+            .Enum<DeviceType>(s => s.ToString())
+            .Enum<WifiSecurityType>(s => s.ToString());
     }
 }
