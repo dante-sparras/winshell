@@ -6,18 +6,19 @@ using Winshell.Runtime;
 namespace Winshell.Platform.Windows.Services;
 
 /// <summary>
-/// The window and app modules: <c>Apps</c> and <c>FocusGrab</c> in <c>Winshell</c>, <c>Winshell.Windows</c> on the
-/// taskbar's windows, and <c>Winshell.Winland</c> on Winland.
+/// The window modules: <c>FocusGrab</c> in <c>Winshell</c>, <c>Winshell.Apps</c> on the Start menu,
+/// <c>Winshell.Windows</c> on the taskbar's windows, and <c>Winshell.Winland</c> on Winland.
 /// </summary>
 internal static class WindowManagerModules
 {
     public static void Register(ModuleRegistry registry)
     {
         registry.Module("Winshell")
-            .Singleton(e => new AppsService(e), "Apps")
-            .Uncreatable<AppEntry>("AppEntry")
-            .Uncreatable<AppAction>("AppAction")
             .Type<FocusGrab>("FocusGrab");
+
+        registry.Module("Winshell.Apps")
+            .Singleton(e => new AppsService(e), "Apps")
+            .Uncreatable<AppEntry>("AppEntry", "AppEntry comes from Apps");
 
         registry.Module("Winshell.Windows")
             .Singleton(e => new WindowListService(e), "WindowList")

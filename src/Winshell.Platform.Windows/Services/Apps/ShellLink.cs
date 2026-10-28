@@ -13,6 +13,30 @@ internal static partial class ShellLink
 {
     private static readonly Guid ClsidShellLink = new("00021401-0000-0000-C000-000000000046");
 
+    public static void Write(string path, string target, string arguments, string workingDirectory, string description)
+    {
+        object? link = null;
+        try
+        {
+            link = Activator.CreateInstance(Type.GetTypeFromCLSID(ClsidShellLink)!);
+            if (link is not IShellLinkW shell || link is not IPersistFile file)
+                throw new InvalidOperationException("The shell link object is not available.");
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+            shell.SetPath(target);
+            shell.SetArguments(arguments);
+            shell.SetWorkingDirectory(workingDirectory);
+            shell.SetDescription(description);
+            file.Save(Path.GetFullPath(path), true);
+        }
+        finally
+        {
+            if (link is not null && Marshal.IsComObject(link))
+                Marshal.ReleaseComObject(link);
+        }
+    }
+
     public static ShellLinkInfo? Read(string path)
     {
         object? link = null;

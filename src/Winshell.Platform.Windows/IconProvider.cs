@@ -85,7 +85,8 @@ public sealed class IconProvider : IImageProvider, IIconLookup
     public bool HasIcon(string name)
     {
         var key = Normalize(name);
-        return Glyphs.ContainsKey(key) || File.Exists(Expand(name)) || IsApplication(name) || DesktopEntriesLookup?.Invoke(name) is not null;
+        var path = Expand(name);
+        return Glyphs.ContainsKey(key) || path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) || File.Exists(path) || IsApplication(name) || AppIconLookup?.Invoke(name) is not null;
     }
 
     private static string Normalize(string name)
@@ -112,6 +113,8 @@ public sealed class IconProvider : IImageProvider, IIconLookup
         var query = id.IndexOf('?');
         var name = query >= 0 ? id[..query] : id;
         var path = Expand(name);
+        if (path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            return ShellIcon(path, size);
         if (path.Length > 2 && (File.Exists(path) || Directory.Exists(path)))
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
@@ -124,14 +127,14 @@ public sealed class IconProvider : IImageProvider, IIconLookup
             return GlyphImage(glyph, size);
         if (ProcessLauncher.Which(name) is { } program)
             return ShellIcon(program, size);
-        // A name like "org.mozilla.firefox" or "firefox": try the start menu's apps.
-        if (DesktopEntriesLookup?.Invoke(name) is { } app)
+        // A name like "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App" or "notepad": the Start menu's apps.
+        if (AppIconLookup?.Invoke(name) is { } app)
             return ShellIcon(app, size);
         return null;
     }
 
-    /// <summary>Set by the desktop entries service: the file for an app id, so icons follow the start menu.</summary>
-    public static Func<string, string?>? DesktopEntriesLookup { get; set; }
+    /// <summary>Set by the app index: the file or shell path for an app id, so icons follow the Start menu.</summary>
+    public static Func<string, string?>? AppIconLookup { get; set; }
 
     private static SKImage GlyphImage(char glyph, int size)
     {
@@ -193,8 +196,8 @@ public sealed class IconProvider : IImageProvider, IIconLookup
         try
         {
             SHCreateItemFromParsingName(path, 0, typeof(IShellItemImageFactory).GUID, out var factory);
-            // SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK
-            if (factory.GetImage(new SIZE { Cx = size, Cy = size }, 0x4 | 0x1, out var hbitmap) != 0 || hbitmap == 0)
+            // SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK | SIIGBF_SCALEUP. Size is in pixels, so a 1.5x display asking for 32 logical pixels passes 48.
+            if (factory.GetImage(new SIZE { Cx = size, Cy = size }, 0x4 | 0x1 | 0x100, out var hbitmap) != 0 || hbitmap == 0)
                 return null;
             try
             {
@@ -214,7 +217,11 @@ public sealed class IconProvider : IImageProvider, IIconLookup
                         Buffer.MemoryCopy(from, dst + y * bitmap.RowBytes, bitmap.RowBytes, Math.Min(bitmap.RowBytes, bmp.bmWidthBytes));
                     }
                 }
-                return SKImage.FromBitmap(bitmap);
+                using var raw = SKImage.FromBitmap(bitmap);
+                using var surface = SKSurface.Create(new SKImageInfo(size, size, SKColorType.Rgba8888, SKAlphaType.Premul));
+                surface.Canvas.Clear(SKColors.Transparent);
+                surface.Canvas.DrawImage(raw, SKRect.Create(0, 0, size, size), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), null);
+                return surface.Snapshot();
             }
             finally
             {

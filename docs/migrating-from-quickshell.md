@@ -34,7 +34,7 @@ Types not listed keep their names in the new module.
 | `QuickshellSettings` | `ShellSettings` | `Winshell` |
 | `QsWindow` | `ShellWindow` | `Winshell` |
 | `QsMenuHandle`, `QsMenuEntry`, `QsMenuButtonType`, `QsMenuOpener`, `QsMenuAnchor` | `MenuHandle`, `MenuEntry`, `MenuButtonType`, `MenuOpener`, `MenuAnchor` | `Winshell` |
-| `DesktopEntries`, `DesktopEntry`, `DesktopAction` | `Apps`, `AppEntry`, `AppAction` | `Winshell` |
+| `DesktopEntries`, `DesktopEntry` | `Apps`, `AppEntry` | `Winshell.Apps` |
 | `WlSessionLock`, `WlSessionLockSurface` | `SessionLock`, `SessionLockSurface` | `Winshell` |
 | `PamContext`, `PamResult`, `PamError` | `SignInContext`, `SignInResult`, `SignInError` | `Winshell` |
 | `HyprlandFocusGrab` | `FocusGrab` | `Winshell` |
@@ -148,6 +148,33 @@ Types not listed keep their names in the new module.
 
 `AppWindow` also has `executable`, the program's path, and `icon`, a path the icon provider can draw. `appId` is unchanged: the window's AppUserModelID, or the program's file name in lower case.
 
+### Apps
+
+`import Winshell.Apps`. `Apps` lists Start menu shortcuts for all users and the current user, and packaged apps from PackageManager. A shortcut in the user's Programs folder replaces the common shortcut with the same path. The Startup folder is not indexed. An app whose windows use an AppUserModelID is listed once, as the packaged app, when PackageManager has that id.
+
+`icon` is the shortcut, or `shell:AppsFolder\<AppUserModelID>` for a packaged app. An `Image` with that source and a `sourceSize` asks the shell for that many pixels times the screen scale.
+
+`search(query)` ranks the visible apps. An exact name beats a prefix, which beats a word, which beats initials (`vsc` for Visual Studio Code), which beats a substring, which beats a tight fuzzy match (`notpad` for Notepad), which beats the description, the target, or a folder. Recent and frequent use, from Windows, lifts an app inside the same kind of match and does not jump a better name match. A blank query returns nothing. `recent` is the visible apps with a last-used time, newest first. `frequent` is the visible apps with a use count, highest first. `launch()` counts as a use immediately. Windows' own counts come from FeatureUsage (the higher of launch and switch) and UserAssist (the count and the last run).
+
+`find` looks up an id, then an app id, then a display name, including hidden apps. `byId` is the id only. `appId` matches `AppWindow.appId`.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `DesktopEntries.applications` | `Apps.apps` |
+| `heuristicLookup` | `find` |
+| `execute()` | `launch()` |
+| `comment` | `description` |
+| `execString` | `commandLine` |
+| `command` | Removed. `target` is the program and `arguments` is the argument string |
+| `workingDirectory` | `startIn` |
+| `startupClass` | `appId` |
+| `categories` | `folders` |
+| `noDisplay` | `hidden` |
+| `genericName`, `keywords`, `runInTerminal` | Removed. Windows shortcuts do not have them |
+| `actions`, `DesktopAction` | Removed. `launch()` opens the app |
+
+`packaged`, `runCount`, and `lastUsed` are new. `lastUsed` is Unix milliseconds, or 0 when Windows has no record.
+
 ## Virtual desktops
 
 `VirtualDesktops` is not a Quickshell type. It lists the desktops Task View shows. `supported` is false when Windows is outside builds 26100 through 26399, or when that method table cannot be read, and then `switchTo`, `create` and `remove` do nothing. `AppWindow.desktopId` and `moveToDesktop` use the supported window API and still work when the list does not. `desktop` is the matching object from `desktops` when the list is loaded. Winland's workspaces are unchanged.
@@ -204,6 +231,7 @@ These did nothing on Windows, or repeated what another type does.
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
 | `ShortcutInhibitor` | Nothing |
 | `Quickshell.Services.Greetd`, `Quickshell.Services.Polkit`, `Quickshell.I3`, `Quickshell.DBusMenu`, `Quickshell.WindowManager` | Nothing |
+| `DesktopAction` | Removed. `AppEntry.launch()` opens the app |
 
 ## Capture
 
