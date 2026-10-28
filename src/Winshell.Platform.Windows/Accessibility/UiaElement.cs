@@ -9,22 +9,44 @@ namespace Winshell.Platform.Windows.Accessibility;
 /// every call runs on the window's thread, where the items live, through <see cref="WindowAutomation.Run"/>.
 /// </summary>
 [ComVisible(true)]
-internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IRawElementProviderSimple, IRawElementProviderFragment,
+internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragment,
     IInvokeProvider, IToggleProvider, IRangeValueProvider, IValueProvider, ISelectionProvider, ISelectionItemProvider,
     IExpandCollapseProvider, IScrollProvider, ITextProvider
 {
-    public AccessibleNode Node => node;
+    private WindowAutomation? _automation;
+    private AccessibleNode? _node;
 
-    internal WindowAutomation Automation => automation;
+    public UiaElement(WindowAutomation automation, AccessibleNode node)
+    {
+        _automation = automation;
+        _node = node;
+    }
+
+    public AccessibleNode Node => _node ?? throw new InvalidOperationException("The element is disconnected");
+
+    internal WindowAutomation Automation => _automation ?? throw new InvalidOperationException("The element is disconnected");
+
+    /// <summary>Whether the element still stands for a node in the tree.</summary>
+    internal bool IsAvailable => _node is { IsAlive: true };
+
+    /// <summary>
+    /// Lets go of the window and its node once the element is disconnected. UI Automation can keep a provider it was
+    /// given after that, and it must not keep the shell's items, or a whole generation, alive with it.
+    /// </summary>
+    internal void Detach()
+    {
+        _automation = null;
+        _node = null;
+    }
 
     /// <summary>Runs a call on the window's thread, unless the node has left the tree.</summary>
-    protected int Call(Action action) => automation.Run(() =>
+    protected int Call(Action action) => _automation is { } automation ? automation.Run(() =>
     {
-        if (!node.IsAlive)
+        if (!IsAvailable)
             return Uia.ElementNotAvailable;
         action();
         return Uia.S_OK;
-    });
+    }) : Uia.ElementNotAvailable;
 
     protected int Get<T>(Func<T> read, out T value)
     {
@@ -41,11 +63,11 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
         if (call != Uia.S_OK || hr != Uia.S_OK)
             return call != Uia.S_OK ? call : hr;
         // Actions that can open popups or run QML handlers run after the call returns, as UI Automation asks.
-        automation.Post(node, action);
+        Automation.Post(Node, action);
         return Uia.S_OK;
     }
 
-    private int Enabled() => node.IsEnabled ? Uia.S_OK : Uia.ElementNotEnabled;
+    private int Enabled() => Node.IsEnabled ? Uia.S_OK : Uia.ElementNotEnabled;
 
     // IRawElementProviderSimple
 
@@ -59,15 +81,15 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
 
     private bool Supports(int pattern) => pattern switch
     {
-        Uia.InvokePattern => node.CanInvoke,
-        Uia.TogglePattern => node.Toggle is not null,
-        Uia.RangeValuePattern => node.Range is not null,
-        Uia.ValuePattern => node.Value is not null,
-        Uia.SelectionItemPattern => node.IsSelected is not null,
-        Uia.SelectionPattern => node.IsSelectionContainer,
-        Uia.ExpandCollapsePattern => node.IsExpanded is not null,
-        Uia.ScrollPattern => node.Scroll is not null,
-        Uia.TextPattern => node.TextInput is not null,
+        Uia.InvokePattern => Node.CanInvoke,
+        Uia.TogglePattern => Node.Toggle is not null,
+        Uia.RangeValuePattern => Node.Range is not null,
+        Uia.ValuePattern => Node.Value is not null,
+        Uia.SelectionItemPattern => Node.IsSelected is not null,
+        Uia.SelectionPattern => Node.IsSelectionContainer,
+        Uia.ExpandCollapsePattern => Node.IsExpanded is not null,
+        Uia.ScrollPattern => Node.Scroll is not null,
+        Uia.TextPattern => Node.TextInput is not null,
         _ => false,
     };
 
@@ -76,20 +98,20 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
     private object? Property(int id) => id switch
     {
         // The window's HWND says whether it is enabled and has the keyboard.
-        Uia.IsEnabledProperty or Uia.IsKeyboardFocusableProperty or Uia.HasKeyboardFocusProperty when node.IsRoot => null,
-        Uia.ControlTypeProperty => ControlType(node.Role),
-        Uia.LocalizedControlTypeProperty when node.Role == Role.Switch => "toggle switch",
-        Uia.NameProperty => node.Name is { Length: > 0 } name ? name : node.IsRoot ? null : "",
-        Uia.HelpTextProperty => node.Description is { Length: > 0 } help ? help : null,
-        Uia.AutomationIdProperty when node.Item.ObjectName is { Length: > 0 } objectName => objectName,
-        Uia.ClassNameProperty when !node.IsRoot => node.Item.GetType().Name,
+        Uia.IsEnabledProperty or Uia.IsKeyboardFocusableProperty or Uia.HasKeyboardFocusProperty when Node.IsRoot => null,
+        Uia.ControlTypeProperty => ControlType(Node.Role),
+        Uia.LocalizedControlTypeProperty when Node.Role == Role.Switch => "toggle switch",
+        Uia.NameProperty => Node.Name is { Length: > 0 } name ? name : Node.IsRoot ? null : "",
+        Uia.HelpTextProperty => Node.Description is { Length: > 0 } help ? help : null,
+        Uia.AutomationIdProperty when Node.Item.ObjectName is { Length: > 0 } objectName => objectName,
+        Uia.ClassNameProperty when !Node.IsRoot => Node.Item.GetType().Name,
         Uia.FrameworkIdProperty => "Winshell",
-        Uia.IsEnabledProperty => node.IsEnabled,
-        Uia.IsKeyboardFocusableProperty => node.IsKeyboardFocusable,
-        Uia.HasKeyboardFocusProperty => automation.HasFocus && node.HasKeyboardFocus,
-        Uia.IsPasswordProperty => node.IsPassword,
-        Uia.IsOffscreenProperty when !node.IsRoot => node.IsOffscreen,
-        Uia.IsControlElementProperty or Uia.IsContentElementProperty when !node.IsRoot => true,
+        Uia.IsEnabledProperty => Node.IsEnabled,
+        Uia.IsKeyboardFocusableProperty => Node.IsKeyboardFocusable,
+        Uia.HasKeyboardFocusProperty => Automation.HasFocus && Node.HasKeyboardFocus,
+        Uia.IsPasswordProperty => Node.IsPassword,
+        Uia.IsOffscreenProperty when !Node.IsRoot => Node.IsOffscreen,
+        Uia.IsControlElementProperty or Uia.IsContentElementProperty when !Node.IsRoot => true,
         _ => null,
     };
 
@@ -132,7 +154,7 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
     int IRawElementProviderSimple.get_HostRawElementProvider(out IRawElementProviderSimple? host)
     {
         host = null;
-        if (node.IsRoot && automation.Handle != 0)
+        if (_node is { IsRoot: true } && _automation is { Handle: not 0 } automation)
             return Uia.UiaHostProviderFromHwnd(automation.Handle, out host);
         return Uia.S_OK;
     }
@@ -143,35 +165,35 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
     {
         var target = direction switch
         {
-            0 => node.Parent,
+            0 => Node.Parent,
             1 => Sibling(1),
             2 => Sibling(-1),
-            3 => node.Children.FirstOrDefault(),
-            4 => node.Children.LastOrDefault(),
+            3 => Node.Children.FirstOrDefault(),
+            4 => Node.Children.LastOrDefault(),
             _ => null,
         };
-        return target is null ? null : (IRawElementProviderFragment)automation.For(target);
+        return target is null ? null : (IRawElementProviderFragment)Automation.For(target);
     }, out element);
 
     private AccessibleNode? Sibling(int delta)
     {
-        if (node.Parent is not { } parent)
+        if (Node.Parent is not { } parent)
             return null;
-        var at = parent.ChildIndex(node) + delta;
+        var at = parent.ChildIndex(Node) + delta;
         return at >= 0 && at < parent.Children.Count ? parent.Children[at] : null;
     }
 
     int IRawElementProviderFragment.GetRuntimeId(out int[]? runtimeId)
     {
         // The root's id comes from its window.
-        runtimeId = node.IsRoot ? null : RuntimeId;
-        return node.IsAlive ? Uia.S_OK : Uia.ElementNotAvailable;
+        runtimeId = Node.IsRoot ? null : RuntimeId;
+        return Node.IsAlive ? Uia.S_OK : Uia.ElementNotAvailable;
     }
 
-    public int[] RuntimeId => [Uia.AppendRuntimeId, node.Id];
+    public int[] RuntimeId => [Uia.AppendRuntimeId, Node.Id];
 
     int IRawElementProviderFragment.get_BoundingRectangle(out UiaRect rect) =>
-        Get(() => node.IsRoot ? default : automation.ToScreen(node.Bounds), out rect);
+        Get(() => Node.IsRoot ? default : Automation.ToScreen(Node.Bounds), out rect);
 
     int IRawElementProviderFragment.GetEmbeddedFragmentRoots(out object[]? roots)
     {
@@ -180,11 +202,11 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
     }
 
     // UI Automation focuses the window before it calls this, so only the item's focus moves here.
-    int IRawElementProviderFragment.SetFocus() => Call(node.Focus);
+    int IRawElementProviderFragment.SetFocus() => Call(Node.Focus);
 
     int IRawElementProviderFragment.get_FragmentRoot(out IRawElementProviderFragmentRoot? root)
     {
-        root = automation.Root;
+        root = Automation.Root;
         return Uia.S_OK;
     }
 
@@ -192,15 +214,15 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
 
     int IInvokeProvider.Invoke() => Act(Enabled, () =>
     {
-        node.Invoke();
-        automation.Raise(node, Uia.InvokedEvent);
+        Node.Invoke();
+        Automation.Raise(Node, Uia.InvokedEvent);
     });
 
     // Toggle
 
-    int IToggleProvider.Toggle() => Act(Enabled, node.DoToggle);
+    int IToggleProvider.Toggle() => Act(Enabled, Node.DoToggle);
 
-    int IToggleProvider.get_ToggleState(out int state) => Get(() => (int)(node.Toggle ?? ToggleState.Off), out state);
+    int IToggleProvider.get_ToggleState(out int state) => Get(() => (int)(Node.Toggle ?? ToggleState.Off), out state);
 
     // RangeValue
 
@@ -209,27 +231,27 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
         var hr = 0;
         var call = Call(() =>
         {
-            if (node.Range is not { } range || range.IsReadOnly || !node.IsEnabled)
+            if (Node.Range is not { } range || range.IsReadOnly || !Node.IsEnabled)
                 hr = Uia.ElementNotEnabled;
             else if (value < range.Minimum || value > range.Maximum || double.IsNaN(value))
                 hr = Uia.E_INVALIDARG;
             else
-                node.SetRangeValue(value);
+                Node.SetRangeValue(value);
         });
         return call != Uia.S_OK ? call : hr;
     }
 
-    int IRangeValueProvider.get_Value(out double value) => Get(() => node.Range?.Value ?? 0, out value);
+    int IRangeValueProvider.get_Value(out double value) => Get(() => Node.Range?.Value ?? 0, out value);
 
-    int IRangeValueProvider.get_IsReadOnly(out int readOnly) => Get(() => node.Range is not { IsReadOnly: false } || !node.IsEnabled ? 1 : 0, out readOnly);
+    int IRangeValueProvider.get_IsReadOnly(out int readOnly) => Get(() => Node.Range is not { IsReadOnly: false } || !Node.IsEnabled ? 1 : 0, out readOnly);
 
-    int IRangeValueProvider.get_Maximum(out double maximum) => Get(() => node.Range?.Maximum ?? 0, out maximum);
+    int IRangeValueProvider.get_Maximum(out double maximum) => Get(() => Node.Range?.Maximum ?? 0, out maximum);
 
-    int IRangeValueProvider.get_Minimum(out double minimum) => Get(() => node.Range?.Minimum ?? 0, out minimum);
+    int IRangeValueProvider.get_Minimum(out double minimum) => Get(() => Node.Range?.Minimum ?? 0, out minimum);
 
-    int IRangeValueProvider.get_LargeChange(out double change) => Get(() => node.Range?.LargeChange ?? 0, out change);
+    int IRangeValueProvider.get_LargeChange(out double change) => Get(() => Node.Range?.LargeChange ?? 0, out change);
 
-    int IRangeValueProvider.get_SmallChange(out double change) => Get(() => node.Range?.SmallChange ?? 0, out change);
+    int IRangeValueProvider.get_SmallChange(out double change) => Get(() => Node.Range?.SmallChange ?? 0, out change);
 
     // Value
 
@@ -238,21 +260,21 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
         var hr = 0;
         var call = Call(() =>
         {
-            if (node.IsValueReadOnly || !node.IsEnabled)
+            if (Node.IsValueReadOnly || !Node.IsEnabled)
                 hr = Uia.ElementNotEnabled;
             else
-                node.SetValue(value ?? "");
+                Node.SetValue(value ?? "");
         });
         return call != Uia.S_OK ? call : hr;
     }
 
-    int IValueProvider.get_Value(out string value) => Get(() => node.Value ?? "", out value);
+    int IValueProvider.get_Value(out string value) => Get(() => Node.Value ?? "", out value);
 
-    int IValueProvider.get_IsReadOnly(out int readOnly) => Get(() => node.IsValueReadOnly ? 1 : 0, out readOnly);
+    int IValueProvider.get_IsReadOnly(out int readOnly) => Get(() => Node.IsValueReadOnly ? 1 : 0, out readOnly);
 
     // Selection
 
-    int ISelectionProvider.GetSelection(out object[]? selection) => Get(() => node.Selection.Select(n => (object)automation.For(n)).ToArray(), out selection);
+    int ISelectionProvider.GetSelection(out object[]? selection) => Get(() => Node.Selection.Select(n => (object)Automation.For(n)).ToArray(), out selection);
 
     int ISelectionProvider.get_CanSelectMultiple(out int value)
     {
@@ -260,36 +282,36 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
         return Uia.S_OK;
     }
 
-    int ISelectionProvider.get_IsSelectionRequired(out int value) => Get(() => node.IsSelectionRequired ? 1 : 0, out value);
+    int ISelectionProvider.get_IsSelectionRequired(out int value) => Get(() => Node.IsSelectionRequired ? 1 : 0, out value);
 
     // SelectionItem
 
-    int ISelectionItemProvider.Select() => Act(Enabled, node.Select);
+    int ISelectionItemProvider.Select() => Act(Enabled, Node.Select);
 
     int ISelectionItemProvider.AddToSelection() => Act(() =>
         Enabled() is var enabled and not Uia.S_OK ? enabled
-        : node.IsSelected == true || node.SelectionContainer?.Selection.Any() != true ? Uia.S_OK
-        : Uia.InvalidOperation, node.Select);
+        : Node.IsSelected == true || Node.SelectionContainer?.Selection.Any() != true ? Uia.S_OK
+        : Uia.InvalidOperation, Node.Select);
 
     int ISelectionItemProvider.RemoveFromSelection()
     {
         var hr = 0;
-        var call = Call(() => hr = node.IsSelected == true ? Uia.InvalidOperation : Uia.S_OK);
+        var call = Call(() => hr = Node.IsSelected == true ? Uia.InvalidOperation : Uia.S_OK);
         return call != Uia.S_OK ? call : hr;
     }
 
-    int ISelectionItemProvider.get_IsSelected(out int value) => Get(() => node.IsSelected == true ? 1 : 0, out value);
+    int ISelectionItemProvider.get_IsSelected(out int value) => Get(() => Node.IsSelected == true ? 1 : 0, out value);
 
     int ISelectionItemProvider.get_SelectionContainer(out IRawElementProviderSimple? container) =>
-        Get(() => node.SelectionContainer is { } c ? (IRawElementProviderSimple)automation.For(c) : null, out container);
+        Get(() => Node.SelectionContainer is { } c ? (IRawElementProviderSimple)Automation.For(c) : null, out container);
 
     // ExpandCollapse
 
-    int IExpandCollapseProvider.Expand() => Act(Enabled, () => node.SetExpanded(true));
+    int IExpandCollapseProvider.Expand() => Act(Enabled, () => Node.SetExpanded(true));
 
-    int IExpandCollapseProvider.Collapse() => Act(Enabled, () => node.SetExpanded(false));
+    int IExpandCollapseProvider.Collapse() => Act(Enabled, () => Node.SetExpanded(false));
 
-    int IExpandCollapseProvider.get_ExpandCollapseState(out int state) => Get(() => node.IsExpanded == true ? 1 : 0, out state);
+    int IExpandCollapseProvider.get_ExpandCollapseState(out int state) => Get(() => Node.IsExpanded == true ? 1 : 0, out state);
 
     // Scroll
 
@@ -297,34 +319,34 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
     {
         // LargeDecrement, SmallDecrement, NoAmount, LargeIncrement, SmallIncrement.
         static int Steps(int amount) => amount switch { 0 or 1 => -1, 3 or 4 => 1, _ => 0 };
-        node.ScrollBy(Steps(horizontalAmount), 0, horizontalAmount is 0 or 3);
-        node.ScrollBy(0, Steps(verticalAmount), verticalAmount is 0 or 3);
+        Node.ScrollBy(Steps(horizontalAmount), 0, horizontalAmount is 0 or 3);
+        Node.ScrollBy(0, Steps(verticalAmount), verticalAmount is 0 or 3);
     });
 
     int IScrollProvider.SetScrollPercent(double horizontalPercent, double verticalPercent) =>
-        Call(() => node.SetScrollPercent(horizontalPercent, verticalPercent));
+        Call(() => Node.SetScrollPercent(horizontalPercent, verticalPercent));
 
-    int IScrollProvider.get_HorizontalScrollPercent(out double value) => Get(() => node.Scroll?.HorizontalPercent ?? -1, out value);
+    int IScrollProvider.get_HorizontalScrollPercent(out double value) => Get(() => Node.Scroll?.HorizontalPercent ?? -1, out value);
 
-    int IScrollProvider.get_VerticalScrollPercent(out double value) => Get(() => node.Scroll?.VerticalPercent ?? -1, out value);
+    int IScrollProvider.get_VerticalScrollPercent(out double value) => Get(() => Node.Scroll?.VerticalPercent ?? -1, out value);
 
-    int IScrollProvider.get_HorizontalViewSize(out double value) => Get(() => node.Scroll?.HorizontalViewSize ?? 100, out value);
+    int IScrollProvider.get_HorizontalViewSize(out double value) => Get(() => Node.Scroll?.HorizontalViewSize ?? 100, out value);
 
-    int IScrollProvider.get_VerticalViewSize(out double value) => Get(() => node.Scroll?.VerticalViewSize ?? 100, out value);
+    int IScrollProvider.get_VerticalViewSize(out double value) => Get(() => Node.Scroll?.VerticalViewSize ?? 100, out value);
 
-    int IScrollProvider.get_HorizontallyScrollable(out int value) => Get(() => node.Scroll?.HorizontallyScrollable == true ? 1 : 0, out value);
+    int IScrollProvider.get_HorizontallyScrollable(out int value) => Get(() => Node.Scroll?.HorizontallyScrollable == true ? 1 : 0, out value);
 
-    int IScrollProvider.get_VerticallyScrollable(out int value) => Get(() => node.Scroll?.VerticallyScrollable == true ? 1 : 0, out value);
+    int IScrollProvider.get_VerticallyScrollable(out int value) => Get(() => Node.Scroll?.VerticallyScrollable == true ? 1 : 0, out value);
 
     // Text
 
     int ITextProvider.GetSelection(out object[]? ranges) => Get(() =>
     {
-        var input = node.TextInput!;
+        var input = Node.TextInput!;
         return new object[] { new UiaTextRange(this, input.SelectionStart == input.SelectionEnd ? input.CursorPosition : input.SelectionStart, input.SelectionEnd == input.SelectionStart ? input.CursorPosition : input.SelectionEnd) };
     }, out ranges);
 
-    int ITextProvider.GetVisibleRanges(out object[]? ranges) => Get(() => new object[] { new UiaTextRange(this, 0, node.TextInput!.DisplayText.Length) }, out ranges);
+    int ITextProvider.GetVisibleRanges(out object[]? ranges) => Get(() => new object[] { new UiaTextRange(this, 0, Node.TextInput!.DisplayText.Length) }, out ranges);
 
     int ITextProvider.RangeFromChild(IRawElementProviderSimple child, out ITextRangeProvider? range)
     {
@@ -334,12 +356,12 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
 
     int ITextProvider.RangeFromPoint(UiaPoint point, out ITextRangeProvider? range) => Get(() =>
     {
-        var local = automation.ToItem(node.Item, point.X, point.Y);
-        var at = node.TextInput!.PositionAt(local.X, local.Y);
+        var local = Automation.ToItem(Node.Item, point.X, point.Y);
+        var at = Node.TextInput!.PositionAt(local.X, local.Y);
         return (ITextRangeProvider)new UiaTextRange(this, at, at);
     }, out range);
 
-    int ITextProvider.get_DocumentRange(out ITextRangeProvider? range) => Get(() => (ITextRangeProvider)new UiaTextRange(this, 0, node.TextInput!.DisplayText.Length), out range);
+    int ITextProvider.get_DocumentRange(out ITextRangeProvider? range) => Get(() => (ITextRangeProvider)new UiaTextRange(this, 0, Node.TextInput!.DisplayText.Length), out range);
 
     int ITextProvider.get_SupportedTextSelection(out int value)
     {
@@ -350,7 +372,7 @@ internal class UiaElement(WindowAutomation automation, AccessibleNode node) : IR
 
 /// <summary>The window itself: the root of its UI Automation fragments, hosted by its HWND.</summary>
 [ComVisible(true)]
-internal sealed class UiaRoot(WindowAutomation automation, AccessibleNode node) : UiaElement(automation, node), IRawElementProviderFragmentRoot
+internal sealed class UiaRoot(WindowAutomation Automation, AccessibleNode Node) : UiaElement(Automation, Node), IRawElementProviderFragmentRoot
 {
     int IRawElementProviderFragmentRoot.ElementProviderFromPoint(double x, double y, out IRawElementProviderFragment? element) =>
         Get(() => (IRawElementProviderFragment)Automation.ElementAt(x, y), out element);

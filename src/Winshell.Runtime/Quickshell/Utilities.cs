@@ -296,7 +296,7 @@ public sealed class BoundComponent : Item
         foreach (var name in FunctionNames)
         {
             if (Names.SignalOfHandler(name) is { } signal && target.GetSignal(signal) is { } slot)
-                _links.Add(slot.ConnectScript(GetFunction(name)!, thisValue));
+                _links.Add(slot.ConnectScript(GetFunction(name)!, thisValue, engine.Js));
         }
         if (target is Item child)
         {

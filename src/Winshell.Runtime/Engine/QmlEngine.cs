@@ -20,6 +20,7 @@ public sealed class QmlEngine : IDisposable
     private readonly List<QObject> _roots = [];
     private readonly Stack<CreationBatch> _batches = new();
     private readonly Dictionary<Type, object> _services = [];
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SignalSlot, object?> _connectedSlots = [];
 
     public QmlEngine(ModuleRegistry modules, IEventLoop loop, Log? log = null, string? shellDir = null)
     {
@@ -215,6 +216,9 @@ public sealed class QmlEngine : IDisposable
         return module;
     }
 
+    /// <summary>Remembers a signal this engine's scripts connected to, to disconnect them when it is disposed.</summary>
+    internal void ConnectedTo(SignalSlot slot) => _connectedSlots.TryAdd(slot, null);
+
     // Creation
 
     /// <summary>Creates the root object of a file, such as <c>shell.qml</c>.</summary>
@@ -273,6 +277,10 @@ public sealed class QmlEngine : IDisposable
         _roots.Clear();
         _fileSingletons.Clear();
         _nativeSingletons.Clear();
+        // Objects that outlive this generation must not keep its functions, nor call them.
+        foreach (var (slot, _) in _connectedSlots)
+            slot.DisconnectRuntime(Js);
+        _connectedSlots.Clear();
     }
 }
 

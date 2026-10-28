@@ -44,6 +44,9 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     public event Action? ScreensChanged;
 
+    /// <summary>The native windows that exist now.</summary>
+    internal IReadOnlyList<Win32Window> Windows => _windows;
+
     public string PrimaryScreenId => _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
 
     public IWindowBackend CreateWindow(WindowKind kind, IWindowClient client)

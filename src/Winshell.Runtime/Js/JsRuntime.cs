@@ -92,7 +92,8 @@ public sealed class JsRuntime
 
     public JsValue Wrap(QObject o)
     {
-        if (o.Wrapper is { } existing)
+        // An object can outlive the engine that first wrapped it, such as a screen; each engine has its own wrapper.
+        if (o.Wrapper is QObjectWrapper existing && existing.Runtime == this)
             return existing;
         var wrapper = new QObjectWrapper(this, o);
         o.Wrapper = wrapper;

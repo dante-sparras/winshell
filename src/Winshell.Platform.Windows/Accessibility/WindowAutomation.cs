@@ -271,7 +271,10 @@ internal sealed class WindowAutomation : IDisposable
         if (Handle != 0)
             Uia.UiaReturnRawElementProvider(Handle, 0, 0, null);
         foreach (var element in _elements.Values)
+        {
             Uia.UiaDisconnectProvider(element);
+            element.Detach();
+        }
         _elements.Clear();
         _tree = null;
     }

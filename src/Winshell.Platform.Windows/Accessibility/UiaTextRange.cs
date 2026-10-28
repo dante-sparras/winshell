@@ -18,9 +18,9 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
 
     private string Text => Input.DisplayText;
 
-    private int Run(Action action) => owner.Node.IsAlive ? owner.Automation.Run(() =>
+    private int Run(Action action) => owner.IsAvailable ? owner.Automation.Run(() =>
     {
-        if (!owner.Node.IsAlive)
+        if (!owner.IsAvailable)
             return Uia.ElementNotAvailable;
         // The text may have changed since the range was made.
         _start = Math.Clamp(_start, 0, Text.Length);
