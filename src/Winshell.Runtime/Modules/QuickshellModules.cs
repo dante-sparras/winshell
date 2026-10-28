@@ -40,6 +40,10 @@ public static partial class StandardModules
                 new("None", 0), new("SlideX", 1), new("SlideY", 2), new("Slide", 3), new("FlipX", 4), new("FlipY", 8), new("Flip", 12),
                 new("ResizeX", 16), new("ResizeY", 32), new("Resize", 48), new("All", 63)], qs.Name));
 
+        registry.Module("Quickshell.Wayland")
+            .Type<WlSessionLock>("WlSessionLock")
+            .Type<WlSessionLockSurface>("WlSessionLockSurface");
+
         var io = registry.Module("Quickshell.Io");
         io.Type<ProcessObject>("Process")
             .Type<StdioCollector>("StdioCollector")

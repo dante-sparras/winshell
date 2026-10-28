@@ -18,6 +18,10 @@ public sealed class FakePlatform : IShellPlatform
 
     public List<FakeWindow> Windows { get; } = [];
 
+    public bool SessionLocked { get; private set; }
+
+    public void SetSessionLocked(bool locked) => SessionLocked = locked;
+
     public void ChangeScreens() => ScreensChanged?.Invoke();
 
     public IWindowBackend CreateWindow(WindowKind kind, IWindowClient client)
@@ -216,6 +220,41 @@ public class QuickshellTests
         shell.Files.Loop.Process();
         Assert.Equal(before, shell.Platform.Windows);
         Assert.All(before, w => Assert.False(w.Disposed));
+    }
+
+    [Fact]
+    public void A_session_lock_covers_every_screen_until_unlocked()
+    {
+        using var shell = new Shell(("shell.qml", """
+            import Quickshell
+            import Quickshell.Wayland
+            import QtQuick
+            Scope {
+              property alias lock: lock
+              WlSessionLock {
+                id: lock
+                WlSessionLockSurface { color: "black" }
+              }
+            }
+            """));
+        shell.Start();
+        var lockObject = (QObject)shell.Host.Root!.ReadProperty("lock")!;
+        Assert.Empty(shell.Platform.Windows);
+
+        lockObject.WriteProperty("locked", true);
+        shell.Files.Loop.Process();
+        Assert.True(shell.Platform.SessionLocked);
+        var surfaces = shell.Platform.Windows;
+        Assert.Equal(2, surfaces.Count);
+        Assert.All(surfaces, w => Assert.Equal(Edges.Top | Edges.Left | Edges.Right | Edges.Bottom, w.Panel!.Anchors));
+        Assert.Equal(["1", "2"], surfaces.Select(w => w.Panel!.Screen!.Id).Order());
+        Assert.True((bool)lockObject.ReadProperty("secure")!);
+
+        lockObject.WriteProperty("locked", false);
+        shell.Files.Loop.Process();
+        Assert.False(shell.Platform.SessionLocked);
+        Assert.Empty(shell.Platform.Windows);
+        Assert.False((bool)lockObject.ReadProperty("secure")!);
     }
 
     [Fact]

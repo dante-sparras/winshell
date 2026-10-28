@@ -109,6 +109,24 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         });
     }
 
+    // Session lock
+
+    public void SetSessionLocked(bool locked) => SessionLockGuard.Set(this, locked);
+
+    internal bool IsLockWindow(nint hwnd) => _windows.Any(w => w.Handle == hwnd && w.IsLockSurface);
+
+    internal void RaiseLockWindows()
+    {
+        var focused = false;
+        foreach (var w in _windows.ToArray())
+        {
+            if (!w.IsLockSurface || !w.IsVisible)
+                continue;
+            w.RaiseTopmost(takeFocus: !focused);
+            focused = true;
+        }
+    }
+
     // Popups that close on a click outside them
 
     internal void UpdatePopupGrab(Win32Window window, bool grabbing)

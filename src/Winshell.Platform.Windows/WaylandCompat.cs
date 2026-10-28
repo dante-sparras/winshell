@@ -189,5 +189,6 @@ public static class ServiceModules
         Services.Audio.Pipewire.Register(registry);
         Services.Media.Mpris.Register(registry);
         Services.WindowManagerModules.Register(registry);
+        Services.Pam.PamModule.Register(registry);
     }
 }
