@@ -10,6 +10,8 @@ internal sealed record WindowInfo(
     nint Hwnd,
     string Title,
     string AppId,
+    string Executable,
+    string Icon,
     nint Owner,
     bool Maximized,
     bool Minimized,
@@ -56,7 +58,7 @@ internal static unsafe class WindowTracker
         foreach (var (min, max) in ranges)
         {
             if (SetWinEventHook(min, max, 0, &OnWinEvent, 0, 0, WINEVENT_OUTOFCONTEXT) == 0)
-                log.Warn("toplevels", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
+                log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
         _enumerated = [];
         EnumWindows(&Collect, 0);
@@ -77,23 +79,14 @@ internal static unsafe class WindowTracker
     [UnmanagedCallersOnly]
     private static void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        if (eventType == EVENT_SYSTEM_FOREGROUND)
-        {
-            _foregroundDirty = true;
-            if (hwnd != 0)
-                Dirty.Add(hwnd);
-        }
-        else
-        {
-            if (hwnd == 0 || idObject != OBJID_WINDOW || idChild != CHILDID_SELF)
-                return;
-            // Only top-level windows; a destroyed one can no longer say what it was.
-            if (eventType == EVENT_OBJECT_DESTROY ? !Tracked.ContainsKey(hwnd) : GetAncestor(hwnd, GA_ROOT) != hwnd)
-                return;
+        var isRoot = hwnd != 0 && eventType != EVENT_OBJECT_DESTROY && GetAncestor(hwnd, GA_ROOT) == hwnd;
+        var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);
+        if (!marksWindow && !WindowRules.MarksForeground(eventType))
+            return;
+        if (marksWindow)
             Dirty.Add(hwnd);
-            if (eventType is EVENT_SYSTEM_MINIMIZESTART or EVENT_SYSTEM_MINIMIZEEND or EVENT_OBJECT_DESTROY or EVENT_OBJECT_HIDE)
-                _foregroundDirty = true;
-        }
+        if (WindowRules.MarksForeground(eventType))
+            _foregroundDirty = true;
         if (!_flushPosted && _loop is not null)
         {
             _flushPosted = true;
@@ -155,16 +148,19 @@ internal static unsafe class WindowTracker
     /// </summary>
     private static bool IsTaskbarWindow(nint hwnd)
     {
-        if (!IsWindow(hwnd) || !IsWindowVisible(hwnd) || hwnd == GetShellWindow())
-            return false;
         var style = (long)GetWindowLongPtr(hwnd, GWL_STYLE);
         var ex = (long)GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-        if ((style & WS_CHILD) != 0)
-            return false;
-        var appWindow = (ex & WS_EX_APPWINDOW) != 0;
-        if (!appWindow && (GetWindow(hwnd, GW_OWNER) != 0 || (ex & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) != 0))
-            return false;
-        return GetWindowTextLength(hwnd) > 0 && !IsCloaked(hwnd);
+        return WindowRules.ShowsOnTaskbar(new TaskbarWindowFacts(
+            IsWindow(hwnd),
+            IsWindowVisible(hwnd),
+            hwnd == GetShellWindow(),
+            (style & WS_CHILD) != 0,
+            (ex & WS_EX_APPWINDOW) != 0,
+            GetWindow(hwnd, GW_OWNER) != 0,
+            (ex & WS_EX_TOOLWINDOW) != 0,
+            (ex & WS_EX_NOACTIVATE) != 0,
+            GetWindowTextLength(hwnd) > 0,
+            IsCloaked(hwnd)));
     }
 
     private static WindowInfo Describe(nint hwnd, WindowInfo? old)
@@ -182,20 +178,69 @@ internal static unsafe class WindowTracker
             var screen = mi.rcMonitor;
             fullscreen = (style & WS_CAPTION) != WS_CAPTION && rect.Left <= screen.Left && rect.Top <= screen.Top && rect.Right >= screen.Right && rect.Bottom >= screen.Bottom;
         }
-        // The app id is read once: reading it asks the shell and the process.
-        var appId = old is { AppId.Length: > 0 } ? old.AppId : AppIdOf(hwnd);
+        // The app id and icon are read once: reading them asks the shell and the process.
+        string executable, appId, icon;
+        if (old is { } kept && (kept.AppId.Length > 0 || kept.Executable.Length > 0))
+        {
+            executable = kept.Executable;
+            appId = kept.AppId.Length > 0 ? kept.AppId : WindowRules.AppId("", executable);
+            icon = kept.Icon.Length > 0 ? kept.Icon : WindowRules.IconPath("", executable);
+        }
+        else
+        {
+            executable = ExePath(hwnd);
+            var aumid = WindowAppId(hwnd);
+            appId = WindowRules.AppId(aumid, executable);
+            icon = WindowRules.IconPath(aumid, executable);
+        }
         var owner = GetWindow(hwnd, GW_OWNER);
-        return new WindowInfo(hwnd, WindowText(hwnd), appId, owner, maximized, minimized, fullscreen, device);
+        return new WindowInfo(hwnd, WindowText(hwnd), appId, executable, icon, owner, maximized, minimized, fullscreen, device);
     }
 
-    /// <summary>The window's AppUserModelID, or else its program's file name in lower case without the extension.</summary>
-    public static string AppIdOf(nint hwnd)
+    /// <summary>
+    /// Moves a window onto the monitor with this device name. Its logical size and its offset in the work area stay,
+    /// and a maximized window is maximized again on the monitor it lands on. The shell is per-monitor aware, so the
+    /// rectangle and the placement use the same pixels.
+    /// </summary>
+    public static void MoveToMonitor(nint hwnd, string deviceName)
     {
-        var aumid = WindowAppId(hwnd);
-        if (aumid.Length > 0)
-            return aumid;
-        var exe = ExePath(hwnd);
-        return exe.Length > 0 ? Path.GetFileNameWithoutExtension(exe).ToLowerInvariant() : "";
+        if (deviceName.Length == 0 || !IsWindow(hwnd))
+            return;
+        var target = Screens.Find(deviceName);
+        if (target is null)
+            return;
+        var sourceHandle = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var source = sourceHandle == 0 ? null : Screens.Describe(sourceHandle);
+        if (source is null || source.Info.Id == target.Info.Id)
+            return;
+        if (!GetWindowRect(hwnd, out var current))
+            return;
+        var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
+        var hasPlacement = GetWindowPlacement(hwnd, ref placement);
+        var minimized = IsIconic(hwnd);
+        var maximized = !minimized && IsZoomed(hwnd);
+        var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current, hasPlacement ? placement.Normal : current);
+        if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
+            return;
+        var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
+        if (!hasPlacement)
+        {
+            Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, SWP_NOZORDER | SWP_NOACTIVATE);
+            return;
+        }
+        // A restored window can disagree with its placement by a constant. Carry that into the placement.
+        var biasX = !minimized && !maximized ? current.Left - placement.Normal.Left : 0;
+        var biasY = !minimized && !maximized ? current.Top - placement.Normal.Top : 0;
+        placement.Normal = new RECT(next.Left - biasX, next.Top - biasY, next.Right - biasX, next.Bottom - biasY);
+        placement.ShowCmd = (uint)(minimized ? SW_SHOWMINIMIZED : maximized ? SW_MAXIMIZE : SW_SHOWNORMAL);
+        placement.Flags |= WPF_ASYNCWINDOWPLACEMENT;
+        SetWindowPlacement(hwnd, placement);
+    }
+
+    private static MonitorFrame Frame(Monitor monitor)
+    {
+        var area = monitor.Work.Width > 0 && monitor.Work.Height > 0 ? monitor.Work : monitor.Bounds;
+        return new MonitorFrame(area.Left, area.Top, area.Right, area.Bottom, monitor.Scale);
     }
 
     // Requests
