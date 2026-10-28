@@ -103,6 +103,36 @@ Types not listed keep their names in the new module.
 | `Active` | `Active` |
 | `Error`, `Unlinked`, `Init`, `Negotiating`, `Allocating` | Removed. A session is playing or it is not. |
 
+### Media
+
+`Media.sessions` is the list of system media sessions. Per-app volume stays on the audio session, because Windows media controls have no volume of their own.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `Mpris.players` | `Media.sessions` |
+| `MprisPlayer.identity` | `MediaSession.appName` |
+| `MprisPlayer.desktopEntry` | `MediaSession.appId`, the AppUserModelID |
+| `MprisPlayer.dbusName` | Removed. Windows has no bus name for a session. |
+| `MprisPlayer.canRaise`, `raise()` | `canSwitchTo`, `switchTo()` |
+| `MprisPlayer.canQuit`, `quit()` | Removed. Windows cannot ask the app to quit. |
+| `MprisPlayer.canControl` | Removed. |
+| `MprisPlayer.volume`, `volumeSupported` | Removed. Change the app's audio session instead. |
+| `MprisPlayer.fullscreen`, `canSetFullscreen` | Removed. |
+| `MprisPlayer.openUri()`, `supportedUriSchemes`, `supportedMimeTypes` | Removed. |
+| `MprisPlayer.trackArtists` | `trackArtist` |
+| `metadata["mpris:trackid"]` | Removed. |
+| `metadata["xesam:title"]` | `metadata["title"]` |
+| `metadata["xesam:artist"]` | `metadata["artist"]`, one string |
+| `metadata["xesam:album"]` | `metadata["album"]` |
+| `metadata["xesam:albumArtist"]` | `metadata["albumArtist"]` |
+| `metadata["mpris:artUrl"]` | `metadata["artUrl"]` |
+| `metadata["mpris:length"]` | `metadata["duration"]`, seconds |
+| `metadata["xesam:trackNumber"]` | `metadata["trackNumber"]` |
+| `metadata["xesam:genre"]` | `metadata["genres"]` |
+| `MediaLoopState.Playlist` | `MediaLoopState.List` |
+
+`canStop` is new. Windows reports it, and `stop()` uses it.
+
 ### Windows
 
 `Winshell.Windows` names windows the way Windows does.

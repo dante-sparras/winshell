@@ -4,41 +4,42 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Media;
 
-/// <summary>The <c>Media</c> singleton: a player for each media session Windows knows.</summary>
+/// <summary>The <c>Media</c> singleton: one <c>MediaSession</c> for each session the system media controls know.</summary>
 public sealed class MediaService : QObject
 {
     private readonly SmtcSessions _sessions;
-    private readonly Dictionary<SmtcSession, MediaSession> _players = [];
+    private readonly Dictionary<SmtcSession, MediaSession> _sessionsByNative = [];
 
     public MediaService(QmlEngine engine)
     {
         Engine = engine;
         _sessions = SmtcSessions.Get(engine.Loop, engine.Log);
-        Players = new ObjectModel { Engine = engine };
-        Players.SetOwner(this);
+        Sessions = new ObjectModel { Engine = engine };
+        Sessions.SetOwner(this);
         foreach (var session in _sessions.Sessions)
             OnSessionAdded(session);
         _sessions.SessionAdded += OnSessionAdded;
         _sessions.SessionRemoved += OnSessionRemoved;
     }
 
+    /// <summary>The media sessions Windows shows in the media controls.</summary>
     [Qml]
-    public ObjectModel Players { get; }
+    public ObjectModel Sessions { get; }
 
     private void OnSessionAdded(SmtcSession session)
     {
-        var player = new MediaSession(session) { Engine = Engine };
-        player.SetOwner(this);
-        _players[session] = player;
-        Players.Add(player);
+        var wrapper = new MediaSession(session) { Engine = Engine };
+        wrapper.SetOwner(this);
+        _sessionsByNative[session] = wrapper;
+        Sessions.Add(wrapper);
     }
 
     private void OnSessionRemoved(SmtcSession session)
     {
-        if (!_players.Remove(session, out var player))
+        if (!_sessionsByNative.Remove(session, out var wrapper))
             return;
-        Players.Remove(player);
-        player.Destroy();
+        Sessions.Remove(wrapper);
+        wrapper.Destroy();
     }
 
     protected override void OnDestroy()
@@ -53,14 +54,11 @@ public sealed class MediaService : QObject
         module.Singleton(e => new MediaService(e), "Media")
             .Uncreatable<MediaSession>("MediaSession", "MediaSessions can only be acquired from Media")
             .Add(StandardModules.EnumType("MediaPlaybackState", [new("Stopped", 0), new("Playing", 1), new("Paused", 2)], module.Name))
-            .Add(StandardModules.EnumType("MediaLoopState", [new("None", 0), new("Track", 1), new("Playlist", 2)], module.Name));
+            .Add(StandardModules.EnumType("MediaLoopState", [new("None", 0), new("Track", 1), new("List", 2)], module.Name));
     }
 }
 
-/// <summary>
-/// The <c>MediaSession</c>, backed by a Windows media session. Windows sessions have no volume, fullscreen,
-/// quit or open-uri controls, so those report as unsupported.
-/// </summary>
+/// <summary>The <c>MediaSession</c>, one app's entry in the Windows media controls.</summary>
 [QmlSignal("trackChanged")]
 [QmlSignal("postTrackChanged")]
 public sealed class MediaSession : QObject
@@ -84,11 +82,11 @@ public sealed class MediaSession : QObject
         });
     }
 
-    [Qml] public bool CanControl => true;
-
     [Qml] public bool CanPlay { get { Track(); return _session.CanPlay; } }
 
     [Qml] public bool CanPause { get { Track(); return _session.CanPause; } }
+
+    [Qml] public bool CanStop { get { Track(); return _session.CanStop; } }
 
     [Qml]
     public bool CanTogglePlaying
@@ -102,22 +100,14 @@ public sealed class MediaSession : QObject
 
     [Qml] public bool CanGoPrevious { get { Track(); return _session.CanGoPrevious; } }
 
-    /// <summary>Windows cannot ask an app to quit.</summary>
-    [Qml] public bool CanQuit => false;
+    /// <summary>True when Windows can bring the app's window forward.</summary>
+    [Qml] public bool CanSwitchTo => _session.AppId.Contains('!') || MainWindow() != 0;
 
-    /// <summary>True for Store apps, which Windows can bring forward, and programs with a window.</summary>
-    [Qml] public bool CanRaise => _session.AppId.Contains('!') || MainWindow() != 0;
+    /// <summary>The name Windows shows for the app.</summary>
+    [Qml] public string AppName => _session.AppName;
 
-    /// <summary>Windows media sessions have no fullscreen control.</summary>
-    [Qml] public bool CanSetFullscreen => false;
-
-    [Qml] public string Identity => _session.Identity;
-
-    /// <summary>The app's id: the lowercased program name, such as <c>spotify</c>, or a Store app's AppUserModelID.</summary>
-    [Qml] public string DesktopEntry => _session.DesktopEntry;
-
-    /// <summary>There is no DBus on Windows; this is a name made from the app in the same form.</summary>
-    [Qml] public string DbusName => _session.DbusName;
+    /// <summary>The app's AppUserModelID, such as <c>Spotify.exe</c> or a Store app's id.</summary>
+    [Qml] public string AppId => _session.AppId;
 
     [Qml]
     public double Position
@@ -156,16 +146,7 @@ public sealed class MediaSession : QObject
 
     [Qml] public bool LengthSupported { get { Track(); return _session.LengthSupported; } }
 
-    /// <summary>Windows media sessions have no volume of their own.</summary>
-    [Qml]
-    public double Volume
-    {
-        get => 1;
-        set => Warn("Cannot set volume of {0} because volume is not supported.");
-    }
-
-    [Qml] public bool VolumeSupported => false;
-
+    /// <summary>The track as Windows reports it: title, artist, album, art, and duration in seconds.</summary>
     [Qml]
     public IReadOnlyDictionary<string, object?> Metadata
     {
@@ -174,20 +155,19 @@ public sealed class MediaSession : QObject
             Track();
             var metadata = new Dictionary<string, object?>
             {
-                ["mpris:trackid"] = $"/org/winshell/track/{_session.UniqueId}",
-                ["xesam:title"] = _session.Title,
-                ["xesam:artist"] = _session.Artist.Length > 0 ? new List<object?> { _session.Artist } : new List<object?>(),
-                ["xesam:album"] = _session.Album,
-                ["xesam:albumArtist"] = _session.AlbumArtist.Length > 0 ? new List<object?> { _session.AlbumArtist } : new List<object?>(),
+                ["title"] = _session.Title,
+                ["artist"] = _session.Artist,
+                ["album"] = _session.Album,
+                ["albumArtist"] = _session.AlbumArtist,
             };
             if (_session.ArtUrl.Length > 0)
-                metadata["mpris:artUrl"] = _session.ArtUrl;
+                metadata["artUrl"] = _session.ArtUrl;
             if (_session.LengthSupported)
-                metadata["mpris:length"] = (long)(_session.Length * 1_000_000);
+                metadata["duration"] = _session.Length;
             if (_session.TrackNumber > 0)
-                metadata["xesam:trackNumber"] = _session.TrackNumber;
+                metadata["trackNumber"] = _session.TrackNumber;
             if (_session.Genres.Count > 0)
-                metadata["xesam:genre"] = _session.Genres.Cast<object?>().ToList();
+                metadata["genres"] = _session.Genres.Cast<object?>().ToList();
             return metadata;
         }
     }
@@ -197,8 +177,6 @@ public sealed class MediaSession : QObject
     [Qml] public string TrackTitle { get { Track(); return _session.Title; } }
 
     [Qml] public string TrackArtist { get { Track(); return _session.Artist; } }
-
-    [Qml] public string TrackArtists { get { Track(); return _session.Artist; } }
 
     [Qml] public string TrackAlbum { get { Track(); return _session.Album; } }
 
@@ -218,6 +196,11 @@ public sealed class MediaSession : QObject
             switch (value)
             {
                 case MediaPlaybackStates.Stopped:
+                    if (!_session.CanStop)
+                    {
+                        Warn("Cannot set playbackState of {0} to Stopped because canStop is false.");
+                        return;
+                    }
                     _session.Stop();
                     break;
                 case MediaPlaybackStates.Playing:
@@ -314,17 +297,6 @@ public sealed class MediaSession : QObject
     [Qml] public bool ShuffleSupported { get { Track(); return _session.ShuffleSupported; } }
 
     [Qml]
-    public bool Fullscreen
-    {
-        get => false;
-        set => Warn("Cannot set fullscreen for {0} because canSetFullscreen is false.");
-    }
-
-    [Qml] public IReadOnlyList<string> SupportedUriSchemes => [];
-
-    [Qml] public IReadOnlyList<string> SupportedMimeTypes => [];
-
-    [Qml]
     public void Play() => PlaybackState = MediaPlaybackStates.Playing;
 
     [Qml]
@@ -376,8 +348,9 @@ public sealed class MediaSession : QObject
         _session.SetPosition(_session.PositionNow() + offset);
     }
 
+    /// <summary>Brings the app's window forward.</summary>
     [Qml]
-    public void Raise()
+    public void SwitchTo()
     {
         if (MainWindow() is var window and not 0)
         {
@@ -392,16 +365,9 @@ public sealed class MediaSession : QObject
         }
         else
         {
-            Warn("Cannot call raise() on {0} because canRaise is false.");
+            Warn("Cannot call switchTo() on {0} because canSwitchTo is false.");
         }
     }
-
-    [Qml]
-    public void Quit() => Warn("Cannot call quit() on {0} because canQuit is false.");
-
-    /// <summary>Windows media sessions cannot open uris; like many MPRIS players, this ignores the call.</summary>
-    [Qml]
-    public void OpenUri(string uri) => _ = uri;
 
     /// <summary>The main window of the program behind the session, when its id is a program name.</summary>
     private nint MainWindow()
@@ -421,7 +387,7 @@ public sealed class MediaSession : QObject
     }
 
     private void Warn(string message) =>
-        (Engine?.Log ?? Log.Default).Warn("media", string.Format(System.Globalization.CultureInfo.InvariantCulture, message, Identity));
+        (Engine?.Log ?? Log.Default).Warn("media", string.Format(System.Globalization.CultureInfo.InvariantCulture, message, AppName));
 
     private void OnChanged(IReadOnlyList<string> names, bool trackChanged)
     {

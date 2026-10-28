@@ -12,7 +12,9 @@ namespace Winshell.Platform.Windows.Tests;
 /// <summary>
 /// Reloads a shell with real windows many times and checks that each reload gives back what the generation before it
 /// held: its windows, their composition surfaces and text, their UI Automation providers, and the generation itself.
+/// The counts are for the whole process, so check.ps1 runs this test alone.
 /// </summary>
+[Trait("Category", "Leak")]
 public class ReloadLeakTests(ITestOutputHelper output)
 {
     // Even, so the baseline and the end have the same windows: the panel alone.

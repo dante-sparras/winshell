@@ -94,7 +94,7 @@ internal sealed class SmtcSessions
     }
 }
 
-/// <summary>What one media session says about itself, kept up to date, with the MPRIS meaning of each value.</summary>
+/// <summary>What one media session says about itself, kept up to date from the system media controls.</summary>
 internal sealed class SmtcSession
 {
     private readonly SmtcSessions _owner;
@@ -110,10 +110,7 @@ internal sealed class SmtcSession
         Session = session;
         Id = id;
         AppId = SafeAppId(session);
-        (Identity, DesktopEntry) = DescribeApp(AppId);
-        var sameApp = owner.Sessions.Count(s => s.DesktopEntry == DesktopEntry);
-        var busName = new string(DesktopEntry.Select(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' ? c : '_').ToArray());
-        DbusName = "org.mpris.MediaPlayer2." + busName + (sameApp > 0 ? $".instance{id}" : "");
+        AppName = DescribeApp(AppId);
     }
 
     public GlobalSystemMediaTransportControlsSession Session { get; }
@@ -123,11 +120,8 @@ internal sealed class SmtcSession
     /// <summary>The app's AppUserModelID, such as <c>Spotify.exe</c> or a Store app's id.</summary>
     public string AppId { get; }
 
-    public string Identity { get; }
-
-    public string DesktopEntry { get; }
-
-    public string DbusName { get; }
+    /// <summary>The name Windows shows for the app.</summary>
+    public string AppName { get; }
 
     public string Title { get; private set; } = "";
 
@@ -259,11 +253,11 @@ internal sealed class SmtcSession
             try
             {
                 if (!await operation)
-                    _owner.Post(() => _owner.Log.Warn("media", $"{Identity} did not accept {what}"));
+                    _owner.Post(() => _owner.Log.Warn("media", $"{AppName} did not accept {what}"));
             }
             catch (COMException e)
             {
-                _owner.Post(() => _owner.Log.Warn("media", $"Cannot {what} on {Identity}: {e.Message}"));
+                _owner.Post(() => _owner.Log.Warn("media", $"Cannot {what} on {AppName}: {e.Message}"));
             }
         }
     }
@@ -311,8 +305,6 @@ internal sealed class SmtcSession
         Genres = properties.Genres?.ToArray() ?? [];
         TrackNumber = properties.TrackNumber;
         changed.Add("metadata");
-        if (changed.Contains("trackArtist"))
-            changed.Add("trackArtists");
         Changed?.Invoke(changed, trackChanged);
         if (trackChanged)
             Seeked?.Invoke();
@@ -404,7 +396,7 @@ internal sealed class SmtcSession
         var controls = info.Controls;
         Set(controls.IsPlayEnabled, CanPlay, v => CanPlay = v, "canPlay", changed);
         Set(controls.IsPauseEnabled, CanPause, v => CanPause = v, "canPause", changed);
-        CanStop = controls.IsStopEnabled;
+        Set(controls.IsStopEnabled, CanStop, v => CanStop = v, "canStop", changed);
         Set(controls.IsNextEnabled, CanGoNext, v => CanGoNext = v, "canGoNext", changed);
         Set(controls.IsPreviousEnabled, CanGoPrevious, v => CanGoPrevious = v, "canGoPrevious", changed);
         Set(controls.IsPlaybackPositionEnabled, CanSeek, v => CanSeek = v, "canSeek", changed);
@@ -479,18 +471,17 @@ internal sealed class SmtcSession
         }
     }
 
-    /// <summary>A display name for the app, and an id like a desktop entry name: <c>spotify</c> for <c>Spotify.exe</c>.</summary>
-    private static (string Identity, string DesktopEntry) DescribeApp(string appId)
+    /// <summary>The name the Start menu shows for an AppUserModelID, or the program name when it has none.</summary>
+    private static string DescribeApp(string appId)
     {
         var isProgram = appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-        var entry = isProgram ? appId[..^4].ToLowerInvariant() : appId;
         var name = StartMenuName(appId);
         if (string.IsNullOrWhiteSpace(name) && isProgram)
             name = ProgramDescription(appId[..^4]);
-        return (string.IsNullOrWhiteSpace(name) ? (isProgram ? appId[..^4] : appId) : name, entry);
+        return string.IsNullOrWhiteSpace(name) ? (isProgram ? appId[..^4] : appId) : name;
     }
 
-    /// <summary>The name the start menu shows for an AppUserModelID, for Store apps and installed programs alike.</summary>
+    /// <summary>The name the Start menu shows for an AppUserModelID.</summary>
     private static string? StartMenuName(string appId)
     {
         if (appId.Length == 0)
@@ -560,7 +551,7 @@ internal static class MediaPlaybackStates
 /// </summary>
 internal static class ArtCache
 {
-    private static readonly string Root = Path.Combine(Path.GetTempPath(), "winshell", "mpris-art");
+    private static readonly string Root = Path.Combine(Path.GetTempPath(), "winshell", "media-art");
     private static readonly string Folder = Path.Combine(Root, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
     private static readonly Dictionary<string, int> Uses = [];
     private static readonly Lock Gate = new();
