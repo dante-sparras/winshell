@@ -182,6 +182,7 @@ public static class WindowsModules
         if (_installed)
             return;
         _installed = true;
+        ServiceModules.Registrations.Add(Services.WindowManagerModules.Register);
         StandardModules.Registering += registry =>
         {
             var windows = registry.Module("Quickshell.Windows");

@@ -85,7 +85,7 @@ public sealed class IconProvider : IImageProvider, IIconLookup
     public bool HasIcon(string name)
     {
         var key = Normalize(name);
-        return Glyphs.ContainsKey(key) || File.Exists(Expand(name)) || IsApplication(name);
+        return Glyphs.ContainsKey(key) || File.Exists(Expand(name)) || IsApplication(name) || DesktopEntriesLookup?.Invoke(name) is not null;
     }
 
     private static string Normalize(string name)
