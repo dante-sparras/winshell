@@ -48,3 +48,7 @@ release-please keeps a release PR open that collects the changes merged into `ma
 ## Network permissions
 
 Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires Windows Wi-Fi/location access and an explicit `Networking.requestAccess()` call; packaged deployments also need `wiFiControl`. No network or radio changes are made by the automated tests: actions use a fake backend, and native smoke tests only read state. See [Windows networking](network.md).
+
+## Bluetooth permissions
+
+Reading Bluetooth state uses Windows adapter and device-enumeration properties, without requesting control of radios or opening remote device handles. Packaged deployments need the `bluetooth` capability. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are exposed to QML. Automated native validation only reads, while discovery and device actions use a fake backend. See [Windows Bluetooth](bluetooth.md).

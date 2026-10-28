@@ -195,3 +195,21 @@ See [Windows networking](network.md) for the native models, permissions and expl
 | `NetworkDevice.disconnect()`, `WiredDevice.network` | Use the `networks` model; Wi-Fi network objects provide `disconnect()`; wired connections are managed by Windows |
 
 Wi-Fi permission is requested only through `Networking.requestAccess()`. All state is read-only; connection changes require method calls. `airplaneMode` is a best-effort persisted Windows state with an explicit Unknown value, independent of individual radios.
+
+## Bluetooth
+
+See [Windows Bluetooth](bluetooth.md) for state, discovery, battery and action limits.
+
+| Former member | Windows API |
+| --- | --- |
+| `BluetoothAdapter.adapterId` (`hci0`), adapter/device `dbusPath` | Windows device `id`; no D-Bus or HCI aliases |
+| Writable adapter `enabled`, `discoverable`, `discoverableTimeout`, `pairable`, `pairableTimeout` | Removed setters/unsupported flags; read `state`/`enabled` and control radios in Windows Settings |
+| `BluetoothAdapterState.Enabled`, `Disabled`, `Blocked`, `Enabling`, `Disabling` | `On`, `Off`, `Disabled`, `Unknown`; pending device work is reported separately by `operation` |
+| `BluetoothAdapter.discovering`, `devices` | Singleton `Bluetooth.discovering`, `startDiscovery()`, `stopDiscovery()`, `devices`, `pairedDevices`, `nearbyDevices` |
+| `BluetoothDevice.deviceName`, writable `name` | Read-only `name` |
+| `bonded`, writable `trusted`, `blocked`, `wakeAllowed` | Removed BlueZ/device-manager flags; use `paired` and Windows Settings |
+| `icon` (BlueZ icon names) | Removed; configurations can use their own Fluent icons |
+| Writable `connected`, pending `state` values | Read-only Windows-reported `connected`/`state`; explicit `connect()`/`disconnect()` calls and separate `operation`/`busy` |
+| `cancelPair()`, `forget()` | `cancelPairing()`, `unpair()` |
+
+All device actions report `error` and `onOperationFailed(message)`. Bluetooth reads open no remote device handles. Pairing uses Windows' UI without auto-confirming PINs; connect/disconnect supports paired audio drivers, with an explicit failure for unsupported devices. Battery remains a 0–1 fraction when Windows exposes it.
