@@ -311,6 +311,7 @@ internal static partial class Win32
     public const uint ABN_FULLSCREENAPP = 2;
     public const uint ABS_AUTOHIDE = 1;
 
+    public const int WH_KEYBOARD_LL = 13;
     public const int WH_MOUSE_LL = 14;
 
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
@@ -347,6 +348,7 @@ internal static partial class Win32
     public const uint SC_SIZE = 0xF000;
     public const uint WM_SYSCOMMAND = 0x0112;
     public const uint WM_CLIPBOARDUPDATE = 0x031D;
+    public const uint WM_HOTKEY = 0x0312;
 
     public const int RGN_OR = 2;
 
@@ -472,6 +474,17 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     public static partial short GetKeyState(int key);
+
+    [LibraryImport("user32.dll")]
+    public static partial short GetAsyncKeyState(int key);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint virtualKey);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnregisterHotKey(nint hwnd, int id);
 
     [LibraryImport("user32.dll")]
     public static partial nint LoadCursorW(nint instance, nint name);

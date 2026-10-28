@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Winshell.Platform.Windows.Native;
+using Winshell.Platform.Windows.Services.Input;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
@@ -23,6 +24,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     {
         Loop = loop;
         Log = log;
+        Hotkeys = new WindowsHotkeyRegistrar(loop);
         _current = this;
         Win32.SetProcessDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         _screens = Platform.Windows.Screens.Enumerate().Select(m => m.Info).ToList();
@@ -39,6 +41,9 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     public WinEventLoop Loop { get; }
 
     public Log Log { get; }
+
+    /// <summary>Global hotkeys for this process. Disposing the platform unregisters them and removes the keyboard hook.</summary>
+    internal WindowsHotkeyRegistrar Hotkeys { get; }
 
     public IReadOnlyList<ScreenInfo> Screens => _screens;
 
@@ -371,6 +376,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     public void Dispose()
     {
+        Hotkeys.Dispose();
         Unhook();
         if (_clipboardWindow != 0)
         {

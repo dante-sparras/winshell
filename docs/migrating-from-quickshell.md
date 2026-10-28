@@ -54,6 +54,7 @@ Types not listed keep their names in the new module.
 | `ToplevelManager`, `Toplevel` | `WindowList`, `AppWindow` | `Winshell.Windows` |
 | `Hyprland`, `HyprlandEvent`, `HyprlandMonitor`, `HyprlandWorkspace` | `Winland`, `WinlandEvent`, `WinlandMonitor`, `WinlandWorkspace` | `Winshell.Winland` |
 | `HyprlandToplevel` | `WinlandWindow` | `Winshell.Winland` |
+| `GlobalShortcut` | `Hotkey` | `Winshell.Input` |
 
 ## Properties
 
@@ -216,6 +217,18 @@ Types not listed keep their names in the new module.
 
 `Brightness`, `BrightnessMonitor`, `BrightnessConnection`, and `EffectivePowerMode` are new.
 
+## Hotkeys
+
+`Winshell.Input` `Hotkey` registers a Windows hotkey. A normal chord, including `Win+E`, uses `RegisterHotKey`. The Windows key by itself, and the keys after the first chord of a sequence, use a low-level keyboard hook only while one of those hotkeys is enabled or a sequence is in progress. See [Windows hotkeys](hotkeys.md).
+
+| Quickshell | Winshell |
+| --- | --- |
+| `appid`, `name`, `description`, `triggerDescription` | Removed. |
+| `pressed`, `released` | `pressed`, `released` |
+| | `sequence`, `enabled`, `active`, `taken`, `error` |
+
+`sequence` uses `Win`, `Ctrl`, `Alt` and `Shift`.
+
 ## Removed
 
 These did nothing on Windows, or repeated what another type does.
@@ -226,7 +239,6 @@ These did nothing on Windows, or repeated what another type does.
 | `WlrLayershell.keyboardFocus` | `PanelWindow.focusable` |
 | `WlrLayershell.namespace` | Nothing |
 | `BackgroundEffect.blurRegion` | `WindowEffects.backdrop: WindowEffects.Acrylic` |
-| `GlobalShortcut` | An `IpcHandler`, and a key bound in Winland or another hotkey tool to run `winshell ipc call` |
 | `HyprlandWindow` | Nothing |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
 | `ShortcutInhibitor` | Nothing |
@@ -255,7 +267,7 @@ Stopping clears the preview and all retained pixels. Export with `saveToFile()` 
 - The environment variables are `WINSHELL_APP_ID`, `WINSHELL_DISABLE_FILE_WATCHER` and `WINSHELL_NO_RELOAD_POPUP`, not `QS_APP_ID`, `QS_DISABLE_FILE_WATCHER` and `QS_NO_RELOAD_POPUP`.
 - `Shell.appId` is `winshell` unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets it.
 - `Shell.hasVersion` and `//@ if hasVersion(...)` still answer for version 0.3.
-- Log categories are short: `audio`, `media`, `power`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.
+- Log categories are short: `audio`, `media`, `power`, `hotkey`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.
 
 ## Notifications
 
