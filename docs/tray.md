@@ -51,3 +51,4 @@ Automated tests run hosts under private window classes and never broadcast to th
 1. Run a shell that lists `SystemTray.items`. Restart Explorer from Task Manager, and confirm the log shows "Explorer made a new taskbar" and that every icon is still listed.
 2. Run two instances, then `winshell kill` the first. Within a second, the second lists the icons.
 3. Turn an icon on in Settings > Other system tray icons, and confirm its `overflow` turns false.
+4. When an app shows a balloon (for example, a download finishing in a tray app), confirm `onBalloon` fires with its title and text, and that Explorer still shows the toast.
