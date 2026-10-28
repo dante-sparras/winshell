@@ -357,8 +357,9 @@ public class Item : QObject
         get { Track(); return _state; }
         set
         {
+            var previous = _state;
             if (SetField(ref _state, value ?? ""))
-                States.Apply(this, _state);
+                States.Apply(this, previous, _state);
         }
     }
 
@@ -699,7 +700,7 @@ public class Item : QObject
         base.ComponentComplete();
         _anchors?.Activate();
         if (_state.Length > 0)
-            States.Apply(this, _state);
+            States.Apply(this, "", _state);
     }
 
     protected override void OnDestroy()

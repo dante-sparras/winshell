@@ -236,6 +236,12 @@ public class QObject
         }
         if (Meta.Properties.TryGetValue(name, out var meta))
         {
+            // A list property takes the items of the list, or the one object, assigned to it.
+            if (!meta.CanWrite && meta.Get(this) is IQmlList list)
+            {
+                ValueConverter.AssignList(list, value, Engine);
+                return;
+            }
             if (!meta.CanWrite)
                 throw new QmlException($"Cannot assign to read-only property \"{name}\"");
             meta.Set(this, value);
@@ -334,6 +340,24 @@ public class QObject
     {
         IsComplete = true;
         ComponentComplete();
+    }
+
+    /// <summary>
+    /// QML's <c>destroy()</c>: destroys the object once control returns to the event loop, or after
+    /// <paramref name="delay"/> milliseconds.
+    /// </summary>
+    [Qml("destroy")]
+    public void DestroyLater(double delay = 0)
+    {
+        if (Engine is not { } engine)
+        {
+            Destroy();
+            return;
+        }
+        if (delay > 0)
+            engine.Loop.Schedule(TimeSpan.FromMilliseconds(delay), Destroy);
+        else
+            engine.Loop.Post(Destroy);
     }
 
     /// <summary>Destroys this object and the objects it owns.</summary>

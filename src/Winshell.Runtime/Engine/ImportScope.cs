@@ -147,8 +147,11 @@ public sealed class ImportScope
         _ => null,
     };
 
-    /// <summary>Resolves an uppercase name used in a script: a type, singleton, namespace or script import.</summary>
-    public bool TryResolveName(string name, QObject? scopeObject, out JsValue value)
+    /// <summary>
+    /// Resolves an uppercase name used in a script: a type, singleton, namespace or script import. A script import
+    /// that is not a library is the copy of the component instance <paramref name="context"/> belongs to.
+    /// </summary>
+    public bool TryResolveName(string name, QObject? scopeObject, ComponentContext? context, out JsValue value)
     {
         var js = _engine.Js;
         foreach (var entry in _entries)
@@ -156,7 +159,7 @@ public sealed class ImportScope
             if (entry.Qualifier != name)
                 continue;
             value = entry is ScriptEntry script
-                ? _engine.LoadScript(script.Path)
+                ? _engine.LoadScript(script.Path, context)
                 : new NamespaceObject(js, this, name, scopeObject);
             return true;
         }
@@ -244,23 +247,28 @@ public sealed class TypeObject : ObjectInstance
     public override string ToString() => Entry.Name;
 }
 
-/// <summary>A QML file type in a script, for the enums it declares.</summary>
+/// <summary>A QML file type in a script, for the enums it declares: <c>Type.Value</c> or <c>Type.Enum.Value</c>.</summary>
 public sealed class FileTypeObject : ObjectInstance
 {
-    private readonly Dictionary<string, int> _enums = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, JsValue> _members = new(StringComparer.Ordinal);
 
     internal FileTypeObject(JsRuntime runtime, QmlDocument document)
         : base(runtime.Engine)
     {
         foreach (var e in document.Root.Members.OfType<QmlEnumDeclaration>())
         {
+            var scoped = new JsObject(runtime.Engine);
             foreach (var (k, v) in e.Values)
-                _enums[k] = v;
+            {
+                _members[k] = v;
+                scoped.Set(k, v);
+            }
+            _members[e.Name] = scoped;
         }
     }
 
     public override JsValue Get(JsValue property, JsValue receiver) =>
-        property.IsString() && _enums.TryGetValue(property.AsString(), out var v) ? v : base.Get(property, receiver);
+        property.IsString() && _members.TryGetValue(property.AsString(), out var v) ? v : base.Get(property, receiver);
 }
 
 /// <summary>An import qualifier in a script: <c>QS.Quickshell</c>.</summary>

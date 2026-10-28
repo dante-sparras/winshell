@@ -183,7 +183,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         }
         catch (Exception e) when (e is Qml.QmlSyntaxException or QmlCompileException or QmlException or IOException or Jint.Runtime.JavaScriptException)
         {
-            var message = e.Message;
+            var message = Log.Describe(e, _rootFile);
             Log.Error("scene", (initial ? "Failed to load configuration: " : "Failed to reload configuration: ") + message);
             engine.Dispose();
             WatchFilesOf(oldEngine ?? engine);

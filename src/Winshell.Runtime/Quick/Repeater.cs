@@ -9,10 +9,11 @@ public sealed class DelegateSet
 {
     private readonly QObject _owner;
     private readonly Func<ModelEntry, int, QObject?> _create;
-    private readonly Action<QObject> _destroy;
+    private readonly Action<QObject, int> _destroy;
     private readonly List<(ModelEntry Entry, QObject? Instance)> _instances = [];
 
-    public DelegateSet(QObject owner, Func<ModelEntry, int, QObject?> create, Action<QObject> destroy)
+    /// <param name="destroy">Destroys an instance that was at the given index.</param>
+    public DelegateSet(QObject owner, Func<ModelEntry, int, QObject?> create, Action<QObject, int> destroy)
     {
         _owner = owner;
         _create = create;
@@ -51,22 +52,8 @@ public sealed class DelegateSet
             {
                 used[match] = true;
                 var instance = old[match].Instance;
-                if (instance?.CreationContext is { } ctx)
-                {
-                    foreach (var (k, v) in ModelReader.ContextFor(row, i))
-                    {
-                        if (k == "index")
-                            ctx.SetContextProperty(k, v);
-                    }
-                }
-                if (instance is not null && instance.HasProperty("index") && !instance.IsDestroyed)
-                {
-                    using (DependencyTracker.Suspend())
-                    {
-                        if (!Equals(instance.ReadProperty("index"), i))
-                            instance.WriteProperty("index", i);
-                    }
-                }
+                if (instance is { IsDestroyed: false })
+                    Update(instance, row, i);
                 _instances.Add((row, instance));
                 if (match != i)
                     changed = true;
@@ -81,7 +68,7 @@ public sealed class DelegateSet
         {
             if (!used[j] && old[j].Instance is { } gone)
             {
-                _destroy(gone);
+                _destroy(gone, j);
                 changed = true;
             }
         }
@@ -97,12 +84,41 @@ public sealed class DelegateSet
         return changed;
     }
 
+    /// <summary>
+    /// Gives a kept instance its row's current index and roles: a row's roles can change in place, as
+    /// <c>ListModel.setProperty</c> does.
+    /// </summary>
+    private static void Update(QObject instance, ModelEntry row, int index)
+    {
+        var context = ModelReader.ContextFor(row, index);
+        if (instance.CreationContext is { } ctx)
+        {
+            var rolesChanged = false;
+            foreach (var (k, v) in context)
+            {
+                if (k != "model" && ctx.SetContextProperty(k, v) && k != "index")
+                    rolesChanged = true;
+            }
+            // model.role reads the row as a whole; a changed role is a changed model.
+            ctx.SetContextProperty("model", rolesChanged && row.Roles is not null ? new Dictionary<string, object?>(row.Roles) : context["model"]);
+        }
+        using (DependencyTracker.Suspend())
+        {
+            foreach (var (k, v) in context)
+            {
+                var required = instance.GetDynamicProperty(k) is { IsRequired: true };
+                if ((required || (k == "index" && instance.HasProperty(k))) && !ValueConverter.AreEqual(instance.ReadProperty(k), v))
+                    instance.WriteProperty(k, v);
+            }
+        }
+    }
+
     public void Clear()
     {
-        foreach (var (_, instance) in _instances)
+        for (var i = _instances.Count - 1; i >= 0; i--)
         {
-            if (instance is not null)
-                _destroy(instance);
+            if (_instances[i].Instance is { } instance)
+                _destroy(instance, i);
         }
         _instances.Clear();
     }
@@ -241,16 +257,20 @@ public sealed class Repeater : Item
         return obj;
     }
 
-    private void Remove(QObject obj)
+    private void Remove(QObject obj, int index)
     {
-        Emit("itemRemoved", -1, obj);
+        if (!_destroying)
+            Emit("itemRemoved", index, obj);
         obj.Destroy();
     }
+
+    private bool _destroying;
 
     protected override void OnDestroy()
     {
         if (_observed is not null)
             _observed.ModelChanged -= Regenerate;
+        _destroying = true;
         _set.Clear();
         base.OnDestroy();
     }
@@ -359,21 +379,21 @@ public sealed class Loader : Item
             NotifyChanged("item");
             return;
         }
-        QmlComponent? component = _sourceComponent;
-        if (component is null && _source.Length > 0 && Engine is { } engine)
-        {
-            var path = ImageLoader.LocalPath(_source, CreationContext?.Imports?.Directory ?? engine.ShellDir);
-            if (path is not null && File.Exists(path))
-                component = new QmlComponent(engine, engine.LoadDocument(path));
-        }
-        if (component is null)
-        {
-            SetStatus(_source.Length > 0 ? 3 : 0);
-            NotifyChanged("item");
-            return;
-        }
         try
         {
+            QmlComponent? component = _sourceComponent;
+            if (component is null && _source.Length > 0 && Engine is { } engine)
+            {
+                var path = ImageLoader.LocalPath(_source, CreationContext?.Imports?.Directory ?? engine.ShellDir)
+                    ?? throw new QmlException("Only local files can be loaded");
+                component = new QmlComponent(engine, engine.LoadDocument(path));
+            }
+            if (component is null)
+            {
+                SetStatus(0);
+                NotifyChanged("item");
+                return;
+            }
             IReadOnlyDictionary<string, object?>? props = null;
             if (_pendingProperties is Jint.Native.JsValue js && js.IsObject())
                 props = js.AsObject().GetOwnPropertyKeys().Where(k => k.IsString()).ToDictionary(k => k.AsString(), k => (object?)js.AsObject().Get(k));
@@ -385,9 +405,10 @@ public sealed class Loader : Item
                     item.SetParentItem(this);
             });
         }
-        catch (Exception e) when (e is QmlException or QmlCompileException)
+        catch (Exception e) when (e is QmlException or QmlCompileException or Winshell.Qml.QmlSyntaxException or IOException or Jint.Runtime.JavaScriptException)
         {
-            Engine?.Log.Warn("scene", e.Message);
+            var message = e is FileNotFoundException or DirectoryNotFoundException ? $"{_source}: No such file or directory" : Log.Describe(e, _source);
+            Engine?.Log.Warn("scene", message);
             SetStatus(3);
             NotifyChanged("item");
             return;
