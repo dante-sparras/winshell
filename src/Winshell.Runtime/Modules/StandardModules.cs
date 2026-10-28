@@ -14,6 +14,7 @@ public static partial class StandardModules
         RegisterQtQml(registry.Module("QtQml"));
         RegisterQtQml(registry.Module("QtQml.Models"));
         RegisterQuick(registry);
+        RegisterQuickshell(registry);
         Registering?.Invoke(registry);
         return registry;
     }

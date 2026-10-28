@@ -181,6 +181,18 @@ public class QObject
         _functions[name] = function;
     }
 
+    private Dictionary<string, Winshell.Qml.QmlFunctionDeclaration>? _functionDeclarations;
+
+    /// <summary>The declaration of a function written in QML, with its parameter and return types.</summary>
+    public Winshell.Qml.QmlFunctionDeclaration? FunctionDeclaration(string name) =>
+        _functionDeclarations is not null && _functionDeclarations.TryGetValue(name, out var d) ? d : null;
+
+    internal void AddFunctionDeclaration(Winshell.Qml.QmlFunctionDeclaration declaration)
+    {
+        _functionDeclarations ??= [];
+        _functionDeclarations[declaration.Name] = declaration;
+    }
+
     public IEnumerable<string> FunctionNames => (IEnumerable<string>?)_functions?.Keys ?? [];
 
     public JsValue? GetFunction(string name) =>

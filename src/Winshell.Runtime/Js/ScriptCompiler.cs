@@ -53,6 +53,15 @@ public static class ScriptCompiler
         }
         catch (ParseErrorException)
         {
+            // "{ "a": "b" }" is not a block but an object, as QML reads it.
+            try
+            {
+                new Parser().ParseExpression("({" + code + "})", "binding", false);
+                return "return ({" + code + "\n});";
+            }
+            catch (ParseErrorException)
+            {
+            }
             // Let the engine report the error when the binding runs.
             return code;
         }

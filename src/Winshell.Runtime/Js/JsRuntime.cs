@@ -128,11 +128,13 @@ public sealed class JsRuntime
         var factory = _factories.GetOrAdd(key, _ =>
         {
             var sb = new StringBuilder();
-            sb.Append("(function(__qmlScope) { return function(");
+            // The function is made inside the with block, so its own parameters and locals come before the QML
+            // names, as in QML, and the QML names before the globals.
+            sb.Append("(function(__qmlScope) { with (__qmlScope) { return function(");
             sb.Append(string.Join(", ", parameters));
-            sb.Append(") { with (__qmlScope) {");
+            sb.Append(") {");
             sb.Append(body);
-            sb.Append("\n} }; })");
+            sb.Append("\n}; } })");
             return Engine.Evaluate(sb.ToString(), sourceName);
         });
         return Engine.Call(factory, JsValue.Undefined, [scope]);

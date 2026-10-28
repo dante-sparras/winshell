@@ -329,11 +329,12 @@ public sealed class QmlParser
         SkipTrivia();
         var parameters = ParseParameters(allowOldStyle: false);
         SkipTrivia();
+        string? returnType = null;
         if (Peek() == ':')
         {
             // A return type annotation, which plain JavaScript does not accept.
             _pos++;
-            ReadTypeName();
+            returnType = ReadTypeName();
             SkipTrivia();
         }
         Expect('{');
@@ -342,7 +343,7 @@ public sealed class QmlParser
         ScanBalanced('}');
         var body = _text[start.._pos];
         _pos++;
-        return new QmlFunctionDeclaration(name, parameters, body, bodyLoc, loc);
+        return new QmlFunctionDeclaration(name, parameters, body, bodyLoc, loc, returnType);
     }
 
     private List<QmlParameter> ParseParameters(bool allowOldStyle)

@@ -76,7 +76,8 @@ public sealed record QmlFunctionDeclaration(
     IReadOnlyList<QmlParameter> Parameters,
     string Body,
     SourceLocation BodyLocation,
-    SourceLocation Location) : QmlMember(Location);
+    SourceLocation Location,
+    string? ReturnType = null) : QmlMember(Location);
 
 /// <summary>An object placed in the parent's default property.</summary>
 public sealed record QmlChildObject(QmlObjectNode Object, SourceLocation Location) : QmlMember(Location);

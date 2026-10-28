@@ -48,6 +48,20 @@ public sealed class QmlEngine : IDisposable
 
     public bool IsCreating => _batches.Count > 0;
 
+    /// <summary>Whether the shell finished its reload: objects made from now on have nothing old to match.</summary>
+    public bool ReloadFinished { get; private set; }
+
+    public event Action? ReloadFinishedEvent;
+
+    /// <summary>Ends the reload stage, telling every Reloadable that has not reloaded yet.</summary>
+    public void FinishReload()
+    {
+        if (ReloadFinished)
+            return;
+        ReloadFinished = true;
+        ReloadFinishedEvent?.Invoke();
+    }
+
     public bool IsDisposed { get; private set; }
 
     // Services shared by the objects of this engine, such as the platform.
@@ -66,7 +80,7 @@ public sealed class QmlEngine : IDisposable
         path = Path.GetFullPath(path);
         if (_documents.TryGetValue(path, out var doc))
             return doc;
-        var text = File.ReadAllText(path);
+        var text = Preprocessor.Run(File.ReadAllText(path));
         doc = QmlParser.Parse(text, path);
         _documents[path] = doc;
         return doc;
@@ -76,7 +90,7 @@ public sealed class QmlEngine : IDisposable
     public QmlDocument LoadDocumentFromText(string text, string path)
     {
         path = Path.GetFullPath(path);
-        var doc = QmlParser.Parse(text, path);
+        var doc = QmlParser.Parse(Preprocessor.Run(text), path);
         _documents[path] = doc;
         return doc;
     }
@@ -245,8 +259,6 @@ public sealed class QmlEngine : IDisposable
         _roots.Clear();
         _fileSingletons.Clear();
         _nativeSingletons.Clear();
-        foreach (var service in _services.Values.OfType<IDisposable>())
-            service.Dispose();
     }
 }
 

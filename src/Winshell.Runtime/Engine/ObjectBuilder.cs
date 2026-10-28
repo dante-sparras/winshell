@@ -102,6 +102,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                         var scope = new ScopeObject(_js, obj, context);
                         var function = _js.Compile(f.Body, parameters, scope, $"{f.Location}");
                         obj.AddFunction(f.Name, function);
+                        obj.AddFunctionDeclaration(f);
                         break;
                     }
             }
