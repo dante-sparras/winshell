@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Winshell.Runtime.Shell;
 
 namespace Winshell;
 
@@ -19,10 +20,10 @@ internal sealed record InstanceInfo(
 [JsonSourceGenerationOptions(WriteIndented = true)]
 internal sealed partial class InstanceJson : JsonSerializerContext;
 
-/// <summary>The running instances, each a folder under %LOCALAPPDATA%\winshell\run.</summary>
+/// <summary>The running instances, each a folder under %LOCALAPPDATA%\winshell\run. The log is log.txt in that folder.</summary>
 internal static class Instances
 {
-    public static string RunDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "winshell", "run");
+    public static string RunDir => ShellLocations.RunRoot;
 
     public static string NewId() => Convert.ToHexStringLower(Guid.NewGuid().ToByteArray())[..12];
 
