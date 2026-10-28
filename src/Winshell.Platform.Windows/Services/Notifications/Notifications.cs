@@ -1,563 +1,330 @@
-using Windows.UI.Notifications;
-using Windows.UI.Notifications.Management;
-using Winshell.Platform.Windows.Services;
+using NotificationModeValue = Winshell.Platform.Windows.Services.Notifications.NotificationMode;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Notifications;
 
-public enum NotificationUrgency
-{
-    Low = 0,
-    Normal = 1,
-    Critical = 2,
-}
+public enum NotificationAccessStatus { Unspecified, Allowed, Denied, Unavailable, Requesting }
+public enum NotificationState { Unknown, Off, On }
+public enum NotificationMode { Unknown = -1, Unrestricted, PriorityOnly, AlarmsOnly }
 
-public enum NotificationCloseReason
-{
-    Expired = 1,
-    Dismissed = 2,
-    CloseRequested = 3,
-}
+internal sealed record IncomingToast(uint Id, string AppId, string AppName, string Title, string Body,
+    DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt = null);
+internal sealed record NotificationSnapshot(NotificationAccessStatus AccessStatus, IReadOnlyList<IncomingToast> Notifications,
+    NotificationState Focus, NotificationMode Mode, string Error = "");
 
-/// <summary>One Windows toast, reduced to the fields <c>Notification</c> exposes.</summary>
-internal sealed record IncomingToast(
-    uint NativeId,
-    string AppName,
-    string Summary,
-    string Body,
-    string Image,
-    string DesktopEntry,
-    double ExpireTimeout);
-
-/// <summary>
-/// The <c>NotificationListener</c>. Windows has no desktop-notification bus, so this reads the toasts
-/// Action Center already has. An unpackaged shell is usually refused; the types still load and the refusal is logged.
-/// The capability flags are kept for configs and do not change which toasts Windows delivers.
-/// </summary>
-[QmlSignal("notification", "notification")]
+/// <summary>A view of Windows Notification Center. Loading it never prompts for access.</summary>
+[QmlSignal("notificationAdded", "notification")]
+[QmlSignal("operationFailed", "message")]
 public sealed class NotificationListener : QObject
 {
-    private bool _keepOnReload = true;
-    private bool _persistenceSupported;
-    private bool _bodySupported = true;
-    private bool _bodyMarkupSupported;
-    private bool _bodyHyperlinksSupported;
-    private bool _bodyImagesSupported;
-    private bool _actionsSupported;
-    private bool _actionIconsSupported;
-    private bool _imageSupported;
-    private bool _inlineReplySupported;
-    private string[] _extraHints = [];
-    private HashSet<uint> _prior = [];
-    private bool _accepting;
+    private readonly INotificationBackend _backend;
+    private readonly bool _monitor;
+    private readonly CancellationTokenSource _stop = new();
+    private readonly Dictionary<uint, ShellNotification> _items = [];
+    private readonly Dictionary<string, NotificationGroup> _groups = [];
+    private NotificationAccessStatus _accessStatus;
+    private NotificationState _focusState;
+    private NotificationMode _notificationMode = NotificationModeValue.Unknown;
+    private string _error = "";
+    private bool _requesting;
+    private bool _started;
+    private long _revision;
 
-    private const string Category = "notifications";
-
-    public NotificationListener()
-        : this(listen: true)
+    public NotificationListener() : this(new WindowsNotificationBackend(), monitor: true) { }
+    internal NotificationListener(INotificationBackend backend, bool monitor = false)
     {
+        _backend = backend;
+        _monitor = monitor;
+        Notifications = new ObjectModel();
+        Notifications.SetOwner(this);
+        Groups = new ObjectModel();
+        Groups.SetOwner(this);
     }
 
-    internal NotificationListener(bool listen)
+    [Qml] public ObjectModel Notifications { get; }
+    [Qml] public ObjectModel Groups { get; }
+    [Qml] public int AccessStatus { get { Track(); return (int)_accessStatus; } }
+    [Qml] public int FocusState { get { Track(); return (int)_focusState; } }
+    [Qml] public int NotificationMode { get { Track(); return (int)_notificationMode; } }
+    [Qml] public int DoNotDisturbState
     {
-        TrackedNotifications = new ObjectModel();
-        TrackedNotifications.SetOwner(this);
-        if (listen)
-            ToastHub.Join(this);
-    }
-
-    [Qml] public ObjectModel TrackedNotifications { get; }
-
-    [Qml]
-    public bool KeepOnReload
-    {
-        get { Track(); return _keepOnReload; }
-        set
+        get
         {
-            if (value == _keepOnReload)
-                return;
-            if (_accepting)
+            Track();
+            return (int)(_notificationMode switch
             {
-                (Engine?.Log ?? Log.Default).Error(Category, "Cannot set NotificationListener.keepOnReload after the server has been started.");
-                return;
-            }
-            SetField(ref _keepOnReload, value);
+                NotificationModeValue.Unrestricted => NotificationState.Off,
+                NotificationModeValue.PriorityOnly or
+                    NotificationModeValue.AlarmsOnly => NotificationState.On,
+                _ => NotificationState.Unknown,
+            });
         }
     }
-
-    [Qml] public bool PersistenceSupported { get { Track(); return _persistenceSupported; } set => SetField(ref _persistenceSupported, value); }
-
-    [Qml] public bool BodySupported { get { Track(); return _bodySupported; } set => SetField(ref _bodySupported, value); }
-
-    [Qml] public bool BodyMarkupSupported { get { Track(); return _bodyMarkupSupported; } set => SetField(ref _bodyMarkupSupported, value); }
-
-    [Qml] public bool BodyHyperlinksSupported { get { Track(); return _bodyHyperlinksSupported; } set => SetField(ref _bodyHyperlinksSupported, value); }
-
-    [Qml] public bool BodyImagesSupported { get { Track(); return _bodyImagesSupported; } set => SetField(ref _bodyImagesSupported, value); }
-
-    [Qml] public bool ActionsSupported { get { Track(); return _actionsSupported; } set => SetField(ref _actionsSupported, value); }
-
-    [Qml] public bool ActionIconsSupported { get { Track(); return _actionIconsSupported; } set => SetField(ref _actionIconsSupported, value); }
-
-    [Qml] public bool ImageSupported { get { Track(); return _imageSupported; } set => SetField(ref _imageSupported, value); }
-
-    [Qml] public bool InlineReplySupported { get { Track(); return _inlineReplySupported; } set => SetField(ref _inlineReplySupported, value); }
-
-    [Qml] public string[] ExtraHints { get { Track(); return _extraHints; } set => SetField(ref _extraHints, value ?? []); }
-
-    internal void Deliver(IncomingToast toast, int id, bool lastGeneration)
-    {
-        if (IsDestroyed)
-            return;
-        var notification = new ShellNotification(this, toast, id, lastGeneration) { Engine = Engine };
-        notification.Actions.Engine = Engine;
-        notification.SetOwner(this);
-        Emit("notification", notification);
-        if (!notification.Tracked)
-            notification.Destroy();
-    }
-
-    /// <summary>
-    /// Offers one cached toast. A toast that was already there when this server was created is the previous
-    /// generation, and it is dropped when <see cref="KeepOnReload"/> is false.
-    /// </summary>
-    internal void Offer(IncomingToast toast, int id, bool prior)
-    {
-        if (prior && !_keepOnReload)
-            return;
-        Deliver(toast, id, lastGeneration: prior);
-    }
-
-    internal void Begin(IEnumerable<uint> prior) => _prior = [.. prior];
-
-    internal bool Accepting => _accepting;
-
-    internal void MarkAccepting() => _accepting = true;
-
-    internal bool WasPrior(uint nativeId) => _prior.Contains(nativeId);
+    [Qml] public string Error { get { Track(); return _error; } }
 
     public override void ComponentComplete()
     {
-        TrackedNotifications.Engine = Engine;
-        ToastHub.Accept(this);
-    }
-
-    internal void RemoteClosed(int id)
-    {
-        if (Find(id) is { } notification)
-            notification.Close(NotificationCloseReason.CloseRequested, tellWindows: false);
-    }
-
-    internal void Track(ShellNotification notification)
-    {
-        if (!TrackedNotifications.Rows.Contains(notification))
-            TrackedNotifications.Add(notification);
-    }
-
-    internal void Untrack(ShellNotification notification) => TrackedNotifications.Remove(notification);
-
-    internal ShellNotification? Find(int id)
-    {
-        foreach (var row in TrackedNotifications.Rows)
+        Notifications.Engine = Groups.Engine = Engine;
+        if (_monitor && !_started)
         {
-            if (row is ShellNotification notification && notification.Id == id)
-                return notification;
-        }
-        return null;
-    }
-
-    internal void Post(Action action)
-    {
-        if (Engine?.Loop is { } loop)
-            loop.Post(action);
-        else
-            action();
-    }
-
-    protected override void OnDestroy() => ToastHub.Leave(this);
-}
-
-/// <summary>The <c>NotificationAction</c>. This listener does not receive toast buttons, so none are created.</summary>
-public sealed class NotificationAction : QObject
-{
-    internal NotificationAction(string identifier, string text)
-    {
-        Identifier = identifier;
-        Text = text;
-    }
-
-    [Qml] public string Identifier { get; }
-
-    [Qml] public string Text { get; }
-
-    [Qml]
-    public void Invoke()
-    {
-    }
-}
-
-/// <summary>The <c>Notification</c> for one Windows toast.</summary>
-[QmlSignal("closed", "reason")]
-public sealed class ShellNotification : QObject, IRetainable
-{
-    private readonly NotificationListener _server;
-    private readonly uint _nativeId;
-    private bool _tracked;
-    private bool _closed;
-
-    RetainableHook? IRetainable.RetainHook { get; set; }
-
-    void IRetainable.FinishRetain() => Destroy();
-
-    internal ShellNotification(NotificationListener server, IncomingToast toast, int id, bool lastGeneration)
-    {
-        _server = server;
-        _nativeId = toast.NativeId;
-        Id = id;
-        AppName = toast.AppName;
-        Summary = toast.Summary;
-        Body = toast.Body;
-        Image = toast.Image;
-        DesktopEntry = toast.DesktopEntry;
-        ExpireTimeout = toast.ExpireTimeout;
-        LastGeneration = lastGeneration;
-        Hints = new Dictionary<string, object?>
-        {
-            ["urgency"] = (int)NotificationUrgency.Normal,
-            ["desktop-entry"] = toast.DesktopEntry,
-        };
-        Actions = new ObjectModel();
-        Actions.SetOwner(this);
-    }
-
-    [Qml] public int Id { get; }
-
-    [Qml] public string AppName { get; }
-
-    [Qml] public string Summary { get; }
-
-    [Qml] public string Body { get; }
-
-    /// <summary>Windows does not give another app's icon to an unpackaged listener.</summary>
-    [Qml] public string AppIcon => "";
-
-    [Qml] public string Image { get; }
-
-    [Qml] public string DesktopEntry { get; }
-
-    [Qml] public double ExpireTimeout { get; }
-
-    [Qml] public bool LastGeneration { get; }
-
-    [Qml] public int Urgency => (int)NotificationUrgency.Normal;
-
-    [Qml] public bool Transient => false;
-
-    [Qml] public bool Resident => false;
-
-    [Qml] public bool HasActionIcons => false;
-
-    [Qml] public bool HasInlineReply => false;
-
-    [Qml] public string InlineReplyPlaceholder => "";
-
-    [Qml] public ObjectModel Actions { get; }
-
-    [Qml] public Dictionary<string, object?> Hints { get; }
-
-    [Qml]
-    public bool Tracked
-    {
-        get { Track(); return _tracked; }
-        set
-        {
-            if (value == _tracked)
-                return;
-            if (!value)
-            {
-                Dismiss();
-                return;
-            }
-            _tracked = true;
-            _server.Track(this);
-            NotifyChanged("tracked");
+            _started = true;
+            var cancellation = _stop.Token;
+            _ = Task.Run(() => MonitorAsync(cancellation));
         }
     }
 
-    [Qml]
-    public void Dismiss() => Close(NotificationCloseReason.Dismissed, tellWindows: true);
+    /// <summary>Call from a foreground QML button. The native request starts on the caller's UI thread.</summary>
+    [Qml] public void RequestAccess() => _ = RequestAccessAsync();
 
-    [Qml]
-    public void Expire() => Close(NotificationCloseReason.Expired, tellWindows: true);
-
-    [Qml]
-    public void SendInlineReply(string replyText)
+    internal async Task RequestAccessAsync()
     {
-        _ = replyText;
-    }
-
-    internal void Close(NotificationCloseReason reason, bool tellWindows)
-    {
-        if (_closed)
+        if (_requesting || IsDestroyed)
             return;
-        _closed = true;
-        if (_tracked)
+        _requesting = true;
+        Interlocked.Increment(ref _revision);
+        SetField(ref _accessStatus, NotificationAccessStatus.Requesting, nameof(AccessStatus));
+        SetField(ref _error, "", nameof(Error));
+        try
         {
-            _tracked = false;
-            _server.Untrack(this);
-            NotifyChanged("tracked");
-        }
-        if (tellWindows)
-            ToastHub.Remove(_nativeId);
-        Emit("closed", (int)reason);
-        RetainableHook.Release(this);
-    }
-}
-
-/// <summary>The one listener for every <see cref="NotificationListener"/> in the process.</summary>
-internal static class ToastHub
-{
-    private const string Category = "notifications";
-    private static readonly object Gate = new();
-    private static readonly List<NotificationListener> Servers = [];
-    private static readonly Dictionary<uint, (IncomingToast Toast, int Id)> Current = [];
-    private static UserNotificationListener? _listener;
-    private static bool _started;
-    private static int _nextId;
-    private static int _pollFaults;
-
-    public static void Join(NotificationListener server)
-    {
-        lock (Gate)
-        {
-            Servers.Add(server);
-            // Remember what Action Center already held. Those toasts are the previous generation.
-            server.Begin(Current.Keys);
-            if (!_started)
+            // Windows requires the UI thread for the permission prompt; do not use Task.Run here.
+            var status = await _backend.RequestAccessAsync().ConfigureAwait(false);
+            Post(() =>
             {
-                _started = true;
-                ServiceSupport.Run(Category, StartAsync);
+                _requesting = false;
+                Interlocked.Increment(ref _revision);
+                SetAccess(status);
+            });
+        }
+        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+        {
+            Post(() =>
+            {
+                _requesting = false;
+                Interlocked.Increment(ref _revision);
+                SetAccess(NotificationAccessStatus.Unavailable);
+                Fail(e.Message);
+            });
+        }
+    }
+
+    private async Task MonitorAsync(CancellationToken cancellation)
+    {
+        try
+        {
+            while (!cancellation.IsCancellationRequested)
+            {
+                await RefreshAsync().ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellation).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
     }
 
-    /// <summary>The server's bindings have run, so it can take the toasts gathered so far.</summary>
-    public static void Accept(NotificationListener server)
+    internal async Task RefreshAsync()
     {
-        List<(IncomingToast Toast, int Id)> replay;
-        lock (Gate)
+        var revision = Interlocked.Read(ref _revision);
+        try
         {
-            server.MarkAccepting();
-            replay = [.. Current.Values];
+            var snapshot = await _backend.ReadAsync().ConfigureAwait(false);
+            Post(() =>
+            {
+                // A read started before dismissal or a permission request must not undo that operation.
+                if (revision == Interlocked.Read(ref _revision) && !_requesting)
+                    Apply(snapshot);
+            });
         }
-        foreach (var (toast, id) in replay)
-            server.Offer(toast, id, server.WasPrior(toast.NativeId));
-    }
-
-    public static void Leave(NotificationListener server)
-    {
-        lock (Gate)
-            Servers.Remove(server);
-    }
-
-    public static void Remove(uint nativeId)
-    {
-        UserNotificationListener? listener;
-        lock (Gate)
+        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
         {
-            Current.Remove(nativeId);
-            listener = _listener;
+            Post(() =>
+            {
+                if (revision != Interlocked.Read(ref _revision) || _requesting)
+                    return;
+                SetAccess(NotificationAccessStatus.Unavailable);
+                Fail(e.Message);
+            });
         }
-        if (listener is null)
+    }
+
+    internal void Apply(NotificationSnapshot snapshot)
+    {
+        if (IsDestroyed)
             return;
-        try
-        {
-            listener.RemoveNotification(nativeId);
-        }
-        catch (Exception e) when (IsListenerFailure(e))
-        {
-            Log.Default.Warn(Category, Describe(e));
-        }
-    }
+        SetAccess(snapshot.AccessStatus);
+        SetField(ref _focusState, snapshot.Focus, nameof(FocusState));
+        if (SetField(ref _notificationMode, snapshot.Mode, nameof(NotificationMode)))
+            NotifyChanged("doNotDisturbState");
+        if (snapshot.Error.Length > 0)
+            SetField(ref _error, snapshot.Error, nameof(Error));
+        if (snapshot.AccessStatus != NotificationAccessStatus.Allowed)
+            return;
 
-    private static async Task StartAsync()
-    {
-        try
+        var incoming = snapshot.Notifications.DistinctBy(t => t.Id).ToDictionary(t => t.Id);
+        var removed = _items.Values.Where(n => !incoming.ContainsKey(n.NativeId)).ToArray();
+        foreach (var item in removed)
+            _items.Remove(item.NativeId);
+        List<ShellNotification> added = [];
+        foreach (var toast in incoming.Values)
         {
-            var listener = UserNotificationListener.Current;
-            var access = await listener.RequestAccessAsync();
-            if (access != UserNotificationListenerAccessStatus.Allowed)
+            if (_items.TryGetValue(toast.Id, out var item))
+                item.Update(toast);
+            else
             {
-                Log.Default.Warn(Category, "Windows did not let the shell read notifications. An unpackaged app is refused the userNotificationListener capability, so NotificationListener stays empty.");
-                return;
+                item = new ShellNotification(this, toast) { Engine = Engine };
+                item.SetOwner(this);
+                _items.Add(toast.Id, item);
+                added.Add(item);
             }
-            lock (Gate)
-                _listener = listener;
-            // An unpackaged app can read toasts, but subscribing to changes returns 0x80070490 with an empty message.
-            var pushed = TrySubscribe(listener);
-            await SnapshotAsync(listener);
-            if (pushed)
-                return;
-            Log.Default.Info(Category, "Windows will not push notification changes to this app, so NotificationListener polls Action Center.");
-            await PollAsync(listener);
         }
-        catch (Exception e) when (IsListenerFailure(e))
+        RebuildModels();
+        foreach (var item in removed)
+            item.Destroy();
+        foreach (var item in added)
+            Emit("notificationAdded", item);
+    }
+
+    private void SetAccess(NotificationAccessStatus status)
+    {
+        SetField(ref _accessStatus, status, nameof(AccessStatus));
+        SetField(ref _error, status switch
         {
-            Log.Default.Warn(Category, Describe(e));
+            NotificationAccessStatus.Denied => "Notification access was denied. Allow access in Windows Settings to use the listener.",
+            NotificationAccessStatus.Unavailable => "Notification access is unavailable. A package identity with the userNotificationListener capability may be required.",
+            _ => "",
+        }, nameof(Error));
+        if (status != NotificationAccessStatus.Allowed && status != NotificationAccessStatus.Requesting)
+        {
+            var removed = _items.Values.ToArray();
+            _items.Clear();
+            RebuildModels();
+            foreach (var item in removed)
+                item.Destroy();
         }
     }
 
-    private static bool TrySubscribe(UserNotificationListener listener)
+    private void RebuildModels()
     {
+        var ordered = _items.Values.OrderByDescending(n => n.CreatedAtValue).ThenByDescending(n => n.NativeId).ToArray();
+        Notifications.Set(ordered);
+        var grouped = ordered.GroupBy(n => n.AppId.Length > 0 ? n.AppId : $"notification:{n.NativeId}").ToArray();
+        var live = grouped.Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
+        var removed = _groups.Where(g => !live.Contains(g.Key)).ToArray();
+        foreach (var pair in removed)
+            _groups.Remove(pair.Key);
+        List<NotificationGroup> groups = [];
+        foreach (var group in grouped)
+        {
+            if (!_groups.TryGetValue(group.Key, out var model))
+            {
+                model = new NotificationGroup { Engine = Engine };
+                model.SetOwner(this);
+                model.Notifications.Engine = Engine;
+                _groups.Add(group.Key, model);
+            }
+            model.Update(group.ToArray());
+            groups.Add(model);
+        }
+        Groups.Set(groups);
+        foreach (var pair in removed)
+            pair.Value.Destroy();
+    }
+
+    internal bool Dismiss(ShellNotification notification)
+    {
+        if (IsDestroyed || notification.IsDestroyed || !_items.ContainsKey(notification.NativeId))
+            return false;
         try
         {
-            listener.NotificationChanged += (_, args) => OnChanged(listener, args);
+            _backend.Dismiss(notification.NativeId);
+            Interlocked.Increment(ref _revision);
+            _items.Remove(notification.NativeId);
+            RebuildModels();
+            notification.Destroy();
+            SetField(ref _error, "", nameof(Error));
             return true;
         }
-        catch (System.Runtime.InteropServices.COMException e) when (e.HResult == unchecked((int)0x80070490))
+        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
         {
+            Fail(e.Message);
             return false;
         }
     }
 
-    private static async Task PollAsync(UserNotificationListener listener)
+    internal void Fail(string message)
     {
-        while (true)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-            try
-            {
-                await SnapshotAsync(listener).ConfigureAwait(false);
-            }
-            catch (Exception e) when (IsListenerFailure(e))
-            {
-                if (Interlocked.Increment(ref _pollFaults) == 1)
-                    Log.Default.Warn(Category, Describe(e));
-            }
-        }
+        SetField(ref _error, string.IsNullOrWhiteSpace(message) ? "The Windows notification operation failed." : message, nameof(Error));
+        Emit("operationFailed", _error);
     }
 
-    private static async Task SnapshotAsync(UserNotificationListener listener)
+    private void Post(Action action)
     {
-        var existing = await listener.GetNotificationsAsync(NotificationKinds.Toast);
-        var live = new HashSet<uint>();
-        foreach (var toast in existing)
-        {
-            live.Add(toast.Id);
-            Publish(Read(toast));
-        }
-        List<int> closed = [];
-        lock (Gate)
-        {
-            foreach (var nativeId in Current.Keys.ToArray())
-            {
-                if (live.Contains(nativeId))
-                    continue;
-                closed.Add(Current[nativeId].Id);
-                Current.Remove(nativeId);
-            }
-        }
-        foreach (var id in closed)
-            Each(server => server.RemoteClosed(id));
+        void ApplyIfAlive() { if (!IsDestroyed) action(); }
+        if (Engine?.Loop is { } loop)
+            loop.Post(ApplyIfAlive);
+        else
+            ApplyIfAlive();
     }
 
-    private static void OnChanged(UserNotificationListener listener, UserNotificationChangedEventArgs args)
+    protected override void OnDestroy()
     {
-        try
-        {
-            switch (args.ChangeKind)
-            {
-                case UserNotificationChangedKind.Added:
-                    Publish(Read(listener.GetNotification(args.UserNotificationId)));
-                    break;
-                case UserNotificationChangedKind.Removed:
-                    int? id;
-                    lock (Gate)
-                    {
-                        id = Current.TryGetValue(args.UserNotificationId, out var known) ? known.Id : null;
-                        Current.Remove(args.UserNotificationId);
-                    }
-                    if (id is { } closed)
-                        Each(server => server.RemoteClosed(closed));
-                    break;
-            }
-        }
-        catch (Exception e) when (IsListenerFailure(e))
-        {
-            Log.Default.Warn(Category, Describe(e));
-        }
+        _stop.Cancel();
+        _stop.Dispose();
+    }
+}
+
+/// <summary>Windows listener content, with timestamps in Unix milliseconds for JavaScript Date.</summary>
+public sealed class ShellNotification : QObject
+{
+    private readonly NotificationListener _listener;
+    private IncomingToast _toast;
+    internal ShellNotification(NotificationListener listener, IncomingToast toast) { _listener = listener; _toast = toast; }
+    internal uint NativeId => _toast.Id;
+    internal DateTimeOffset CreatedAtValue => _toast.CreatedAt;
+    [Qml] public double Id => NativeId;
+    [Qml] public string AppId { get { Track(); return _toast.AppId; } }
+    [Qml] public string AppName { get { Track(); return _toast.AppName; } }
+    [Qml] public string Title { get { Track(); return _toast.Title; } }
+    [Qml] public string Body { get { Track(); return _toast.Body; } }
+    [Qml] public double CreatedAt { get { Track(); return _toast.CreatedAt.ToUnixTimeMilliseconds(); } }
+    [Qml] public double ExpiresAt { get { Track(); return _toast.ExpiresAt?.ToUnixTimeMilliseconds() ?? 0; } }
+    [Qml] public bool CanInvoke => false;
+    [Qml] public bool Dismiss() => _listener.Dismiss(this);
+
+    /// <summary>UserNotificationListener exposes no activation arguments or actions for other apps.</summary>
+    [Qml] public bool Invoke()
+    {
+        if (!IsDestroyed)
+            _listener.Fail("Windows UserNotificationListener does not support invoking another app's notification. Use Windows Notification Center to activate it.");
+        return false;
     }
 
-    private static void Publish(IncomingToast? toast)
+    internal void Update(IncomingToast toast)
     {
-        if (toast is null)
-            return;
-        int id;
-        List<NotificationListener> servers;
-        lock (Gate)
-        {
-            if (Current.ContainsKey(toast.NativeId))
-                return;
-            id = ++_nextId;
-            Current[toast.NativeId] = (toast, id);
-            servers = [.. Servers.Where(server => server.Accepting)];
-        }
-        foreach (var server in servers)
-            server.Post(() => server.Offer(toast, id, prior: false));
+        var old = _toast;
+        _toast = toast;
+        if (old.AppId != toast.AppId) NotifyChanged("appId");
+        if (old.AppName != toast.AppName) NotifyChanged("appName");
+        if (old.Title != toast.Title) NotifyChanged("title");
+        if (old.Body != toast.Body) NotifyChanged("body");
+        if (old.CreatedAt != toast.CreatedAt) NotifyChanged("createdAt");
+        if (old.ExpiresAt != toast.ExpiresAt) NotifyChanged("expiresAt");
     }
+}
 
-    private static void Each(Action<NotificationListener> action)
+public sealed class NotificationGroup : QObject
+{
+    private string _appId = "";
+    private string _appName = "";
+    internal NotificationGroup() { Notifications = new ObjectModel(); Notifications.SetOwner(this); }
+    [Qml] public string AppId { get { Track(); return _appId; } }
+    [Qml] public string AppName { get { Track(); return _appName; } }
+    [Qml] public ObjectModel Notifications { get; }
+    internal void Update(ShellNotification[] items)
     {
-        List<NotificationListener> servers;
-        lock (Gate)
-            servers = [.. Servers];
-        foreach (var server in servers)
-            server.Post(() => action(server));
+        SetField(ref _appId, items[0].AppId, nameof(AppId));
+        SetField(ref _appName, items[0].AppName, nameof(AppName));
+        Notifications.Set(items);
     }
-
-    private static IncomingToast? Read(UserNotification notification)
-    {
-        try
-        {
-            var summary = "";
-            var body = "";
-            var image = "";
-            var binding = notification.Notification.Visual.GetBinding(KnownNotificationBindings.ToastGeneric)
-                ?? notification.Notification.Visual.Bindings.FirstOrDefault();
-            if (binding is not null)
-            {
-                var texts = binding.GetTextElements().ToList();
-                summary = texts.ElementAtOrDefault(0)?.Text ?? "";
-                body = string.Join('\n', texts.Skip(1).Select(t => t.Text)).Trim();
-            }
-            var app = "";
-            var entry = "";
-            try
-            {
-                app = notification.AppInfo.DisplayInfo.DisplayName;
-                entry = notification.AppInfo.AppUserModelId;
-            }
-            catch (System.Runtime.InteropServices.COMException)
-            {
-            }
-            var timeout = 0.0;
-            if (notification.Notification.ExpirationTime is { } expires)
-                timeout = Math.Max(0, (expires - notification.CreationTime).TotalSeconds);
-            return new IncomingToast(notification.Id, app, summary, body, image, entry, timeout);
-        }
-        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
-        {
-            Log.Default.Warn(Category, Describe(e));
-            return null;
-        }
-    }
-
-    private static bool IsListenerFailure(Exception e) =>
-        e is UnauthorizedAccessException or System.Runtime.InteropServices.COMException or InvalidOperationException or ArgumentException;
-
-    private static string Describe(Exception e) =>
-        string.IsNullOrWhiteSpace(e.Message) ? $"{e.GetType().Name} (0x{e.HResult:X8})" : e.Message;
 }
 
 internal static class NotificationModule
@@ -566,9 +333,12 @@ internal static class NotificationModule
     {
         registry.Module("Winshell.Notifications")
             .Type<NotificationListener>("NotificationListener")
+            .Type<ToastMessage>("ToastMessage")
+            .Type<ToastAction>("ToastAction")
             .Uncreatable<ShellNotification>("Notification")
-            .Uncreatable<NotificationAction>("NotificationAction")
-            .Enum(static (NotificationUrgency u) => u.ToString())
-            .Enum(static (NotificationCloseReason r) => r.ToString());
+            .Uncreatable<NotificationGroup>("NotificationGroup")
+            .Enum(static (NotificationAccessStatus v) => v.ToString())
+            .Enum(static (NotificationState v) => v.ToString())
+            .Enum(static (NotificationMode v) => v.ToString());
     }
 }
