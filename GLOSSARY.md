@@ -50,6 +50,14 @@ _Avoid_: popup window, flyout, dialog
 One monitor on the desktop.
 _Avoid_: display, output
 
+**Work area**:
+The part of a screen that windows maximize into: the screen without the taskbar and the edges panels reserve.
+_Avoid_: available geometry, usable area
+
+**Scale**:
+How many physical pixels a screen draws for one logical pixel, from its DPI. 144 DPI is a scale of 1.5.
+_Avoid_: zoom, DPI factor
+
 **Backdrop**:
 What shows through the transparent parts of a window: nothing, or a Windows 11 material.
 _Avoid_: blur, wallpaper, effect

@@ -5,6 +5,13 @@ using Winshell.Runtime.Quickshell;
 
 namespace Winshell.Platform.Windows;
 
+/// <summary>A connected monitor: what QML sees of it, and its physical rectangles and scale.</summary>
+internal sealed record Monitor(nint Handle, ScreenInfo Info, RECT Bounds, RECT Work, double Scale)
+{
+    /// <summary>The area a panel or popup on this monitor lays out in: the work area, or the whole monitor without one.</summary>
+    public RECT Area => Work.Width > 0 ? Work : Bounds;
+}
+
 /// <summary>Reads the connected monitors: their names, models, DPI and areas.</summary>
 internal static unsafe class Screens
 {
@@ -18,72 +25,57 @@ internal static unsafe class Screens
         return 1;
     }
 
-    public static List<(nint Handle, ScreenInfo Info)> Enumerate()
+    public static List<Monitor> Enumerate()
     {
         _found = [];
         Win32.EnumDisplayMonitors(0, 0, &Collect, 0);
-        var result = new List<(nint, ScreenInfo)>();
-        foreach (var monitor in _found)
+        var result = new List<Monitor>();
+        foreach (var handle in _found)
         {
-            if (Describe(monitor) is { } info)
-                result.Add((monitor, info));
+            if (Describe(handle) is { } monitor)
+                result.Add(monitor);
         }
         _found = null;
         // Quickshell lists screens in the order the system reports them; put the primary first as Windows does.
-        return result.OrderByDescending(r => r.Item2.IsPrimary).ThenBy(r => r.Item2.Geometry.X).ThenBy(r => r.Item2.Geometry.Y).ToList();
+        return result.OrderByDescending(m => m.Info.IsPrimary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top).ToList();
     }
 
-    public static ScreenInfo? Describe(nint monitor)
+    /// <summary>The connected monitor with a device name, or null once it is gone.</summary>
+    public static Monitor? Find(string deviceName) => Enumerate().FirstOrDefault(m => m.Info.Id == deviceName);
+
+    public static Monitor? Describe(nint handle)
     {
         var mi = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
-        if (!Win32.GetMonitorInfo(monitor, ref mi))
+        if (!Win32.GetMonitorInfo(handle, ref mi))
             return null;
         var device = new string(mi.szDevice).TrimEnd('\0');
-        Win32.GetDpiForMonitor(monitor, 0, out var dpiX, out _);
-        var scale = dpiX == 0 ? 1.0 : dpiX / 96.0;
+        Win32.GetDpiForMonitor(handle, 0, out var dpi, out _);
+        var scale = DesktopSpace.Scale(dpi);
         var (model, id) = MonitorName(device);
-        // Logical coordinates: the virtual desktop scaled by each monitor's own factor, as Qt does on Windows.
-        var geometry = new QRect(mi.rcMonitor.Left / scale, mi.rcMonitor.Top / scale, mi.rcMonitor.Width / scale, mi.rcMonitor.Height / scale);
-        var work = new QRect(mi.rcWork.Left / scale, mi.rcWork.Top / scale, mi.rcWork.Width / scale, mi.rcWork.Height / scale);
         var name = device.Replace(@"\\.\", "", StringComparison.Ordinal);
-        return new ScreenInfo(
+        var info = new ScreenInfo(
             device,
             name,
             model,
             Manufacturer(id),
             Serial(id),
-            geometry,
-            work,
+            DesktopSpace.ToLogical(mi.rcMonitor, mi.rcMonitor, scale),
+            DesktopSpace.ToLogical(mi.rcWork, mi.rcMonitor, scale),
             scale,
             0,
             0,
             RefreshRate(device),
             (mi.dwFlags & Win32.MONITORINFOF_PRIMARY) != 0);
+        return new Monitor(handle, info, mi.rcMonitor, mi.rcWork, scale);
     }
 
-    public static RECT PhysicalBounds(string deviceName, out RECT work)
+    /// <summary>The device name and physical bounds of the monitor a window is on, without reading the rest.</summary>
+    public static (string Device, RECT Bounds) Of(nint hwnd)
     {
-        foreach (var (handle, info) in Enumerate())
-        {
-            if (info.Id != deviceName)
-                continue;
-            var mi = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
-            Win32.GetMonitorInfo(handle, ref mi);
-            work = mi.rcWork;
-            return mi.rcMonitor;
-        }
-        work = default;
-        return default;
-    }
-
-    public static nint HandleOf(string deviceName)
-    {
-        foreach (var (handle, info) in Enumerate())
-        {
-            if (info.Id == deviceName)
-                return handle;
-        }
-        return 0;
+        var mi = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
+        if (!Win32.GetMonitorInfo(Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST), ref mi))
+            return ("", default);
+        return (new string(mi.szDevice).TrimEnd('\0'), mi.rcMonitor);
     }
 
     private static (string Model, string Id) MonitorName(string device)

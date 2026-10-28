@@ -48,6 +48,8 @@ public sealed class FakeWindow(WindowKind kind, IWindowClient client, FakePlatfo
 
     public QPoint Origin { get; private set; }
 
+    public (int X, int Y) MapToScreen(double x, double y) => ((int)Math.Round(Origin.X + x), (int)Math.Round(Origin.Y + y));
+
     public int Frames { get; set; }
 
     public void Rebind(IWindowClient client) => Client = client;
@@ -399,6 +401,87 @@ public class QuickshellTests
         var popup = shell.Platform.Windows.Single(w => w.Kind == WindowKind.Popup);
         Assert.True(popup.IsVisible);
         Assert.Equal(new QRect(100, 30, 200, 100), popup.Popup!.Rect);
+    }
+
+    [Fact]
+    public void A_screen_reports_its_work_area_and_follows_changes()
+    {
+        using var shell = new Shell(("shell.qml", """
+            import Quickshell
+            import QtQuick
+            ShellRoot {
+              property var screen: Quickshell.screens[1]
+              property real workY: screen.workArea.y
+              property real workHeight: screen.workArea.height
+              property real ratio: screen.devicePixelRatio
+              property int rate: screen.refreshRate
+            }
+            """));
+        shell.Start();
+        var root = shell.Host.Root!;
+        Assert.Equal(1440.0, Convert.ToDouble(root.ReadProperty("workHeight")));
+
+        // The taskbar moves to the top of the second screen, its scale goes to 200%, and it runs at 60 Hz.
+        shell.Platform.ScreenList[1] = shell.Platform.ScreenList[1] with
+        {
+            Geometry = new QRect(1920, 0, 1920, 1080),
+            WorkArea = new QRect(1920, 24, 1920, 1056),
+            DevicePixelRatio = 2,
+            RefreshRate = 60,
+        };
+        shell.Platform.ChangeScreens();
+        shell.Files.Loop.Process();
+        Assert.Equal(24.0, Convert.ToDouble(root.ReadProperty("workY")));
+        Assert.Equal(1056.0, Convert.ToDouble(root.ReadProperty("workHeight")));
+        Assert.Equal(2.0, Convert.ToDouble(root.ReadProperty("ratio")));
+        Assert.Equal(60, Convert.ToInt32(root.ReadProperty("rate")));
+    }
+
+    [Fact]
+    public void A_window_reports_the_screen_it_was_moved_to()
+    {
+        using var shell = new Shell(("shell.qml", """
+            import Quickshell
+            import QtQuick
+            ShellRoot {
+              property string where: window.screen.name
+              FloatingWindow { id: window; visible: true }
+            }
+            """));
+        shell.Start();
+        var root = shell.Host.Root!;
+        Assert.Equal("DISPLAY1", root.ReadProperty("where"));
+
+        shell.Platform.Windows.Single().Client.OnScreenChanged("2");
+        shell.Files.Loop.Process();
+        Assert.Equal("DISPLAY2", root.ReadProperty("where"));
+    }
+
+    [Fact]
+    public void A_popup_is_placed_on_the_screen_its_parent_was_moved_to()
+    {
+        using var shell = new Shell(("shell.qml", """
+            import Quickshell
+            import QtQuick
+            FloatingWindow {
+              id: window
+              visible: true
+              Rectangle { id: button; width: 40; height: 30 }
+              PopupWindow {
+                anchor.item: button
+                anchor.edges: Edges.Bottom | Edges.Left
+                implicitWidth: 200
+                implicitHeight: 100
+                visible: window.screen.name === "DISPLAY2"
+              }
+            }
+            """));
+        shell.Start();
+        shell.Platform.Windows.Single(w => w.Kind == WindowKind.Floating).Client.OnScreenChanged("2");
+        shell.Files.Loop.Process();
+        var popup = shell.Platform.Windows.Single(w => w.Kind == WindowKind.Popup);
+        Assert.True(popup.IsVisible);
+        Assert.Equal("2", popup.Popup!.Screen!.Id);
     }
 
     [Fact]

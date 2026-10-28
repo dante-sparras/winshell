@@ -185,6 +185,7 @@ internal static partial class Win32
     public const uint WM_QUIT = 0x0012;
     public const uint WM_ERASEBKGND = 0x0014;
     public const uint WM_SETTINGCHANGE = 0x001A;
+    public const nint SPI_SETWORKAREA = 0x002F;
     public const uint WM_ACTIVATEAPP = 0x001C;
     public const uint WM_SETCURSOR = 0x0020;
     public const uint WM_MOUSEACTIVATE = 0x0021;

@@ -256,4 +256,23 @@ public class QuickTests
         root.WriteProperty("on", false);
         Assert.Null(loader.Item_);
     }
+
+    [Fact]
+    public void A_canvas_paints_again_at_a_new_pixel_ratio()
+    {
+        var (root, scene, shell) = Show("""
+            import QtQuick
+            Canvas { width: 50; height: 50; property int paints: 0; onPaint: paints++ }
+            """);
+        using var _ = shell;
+        Render(scene, 50, 50).Dispose();
+        shell.Loop.Process();
+        var before = Convert.ToInt32(root.ReadProperty("paints"));
+
+        // The window moved to a 200% monitor: the canvas surface is made again at twice the pixels, and painted again.
+        scene.DevicePixelRatio = 2;
+        shell.Loop.Process();
+        Render(scene, 100, 100).Dispose();
+        Assert.True(Convert.ToInt32(root.ReadProperty("paints")) > before);
+    }
 }
