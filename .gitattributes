@@ -1,0 +1,9 @@
+# Normalize line endings to LF everywhere; core.autocrlf on Windows would otherwise check out CRLF.
+* text=auto eol=lf
+# Batch files need CRLF for cmd.exe to parse them reliably.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+# Installed agent skills are third-party: hide them from language stats and collapse them in PR diffs.
+.agents/skills/** linguist-vendored linguist-generated
+.claude/skills/** linguist-vendored linguist-generated
+CHANGELOG.md linguist-generated

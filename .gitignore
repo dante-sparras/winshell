@@ -1,2 +1,29 @@
 # Reference checkout. Not part of this repo. pwsh scripts/dev.ps1 brings it back after a clone.
 docs/agents/quickshell/
+
+# Baseline
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Personal agent settings
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+AGENTS.override.md
