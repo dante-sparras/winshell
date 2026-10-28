@@ -33,11 +33,21 @@ Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that
 | `tooltip` | The tooltip text, which may run over several lines |
 | `overflow` | Windows shows the icon in the hidden icons flyout, not in the taskbar |
 | `menu` | A `MenuHandle` for `MenuAnchor`; the app draws the menu itself |
+| `click()` | A left click at the cursor. Most apps show their window |
+| `doubleClick()` | A double click at the cursor. Many older apps show their window only for this |
+| `middleClick()` | A middle click at the cursor |
+| `display(window, x, y)` | A right click, which asks the app to open its menu at that point in the window, or at the cursor when `window` is null |
 | `balloon(title, message, icon)` | The app asked for a balloon notification. `icon` is a `BalloonIcon`: `None`, `Info`, `Warning`, `Error`, or `App` for the app's own icon |
 
 `overflow` follows Settings > Personalization > Taskbar > Other system tray icons, and changes as soon as the user flips a switch there. Windows keeps that choice per icon in `HKCU\Control Panel\NotifyIconSettings`. An icon Windows has not stored a choice for yet is in the overflow, as Windows 11 does with a new icon.
 
 An icon the app hid with `NIS_HIDDEN` is not in `items`, because Explorer does not show it either. A balloon still reaches Explorer, which shows it as a toast. The signal lets a shell show it as well.
+
+## Clicks
+
+A click reaches the app the way Explorer sends it. The app gets the mouse messages its window would get. From interface version 3 on, it also gets `NIN_SELECT` after each left release and `WM_CONTEXTMENU` after a right one. Version 4 apps get the screen point in the message. Older apps read the cursor, so `display()` moves the cursor to the point and puts it back 400 ms later.
+
+The shell lets the app take the foreground (`AllowSetForegroundWindow`) and activates nothing itself. When the app shows nothing, the window you were typing in keeps the keyboard. A click that does not come from input to the shell, such as an IPC call, is not allowed to pass the foreground on. In that case the shell briefly joins the foreground thread and brings the app's window forward, so that the app's menu still closes when you click away.
 
 ## Limits
 
@@ -51,4 +61,5 @@ Automated tests run hosts under private window classes and never broadcast to th
 1. Run a shell that lists `SystemTray.items`. Restart Explorer from Task Manager, and confirm the log shows "Explorer made a new taskbar" and that every icon is still listed.
 2. Run two instances, then `winshell kill` the first. Within a second, the second lists the icons.
 3. Turn an icon on in Settings > Other system tray icons, and confirm its `overflow` turns false.
-4. When an app shows a balloon (for example, a download finishing in a tray app), confirm `onBalloon` fires with its title and text, and that Explorer still shows the toast.
+4. Click a tray icon in a bar whose panel does not take focus while typing in another window. An app that shows nothing (a toggle) leaves the keyboard in that window. An app with a menu opens it at the bar, and the menu closes when you click elsewhere.
+5. When an app shows a balloon (for example, a download finishing in a tray app), confirm `onBalloon` fires with its title and text, and that Explorer still shows the toast.

@@ -142,15 +142,21 @@ public sealed class SystemTrayItem : QObject
 
     [Qml] public MenuHandle Menu { get; }
 
+    /// <summary>A left click at the cursor, which most apps answer by showing their window.</summary>
     [Qml]
-    public void Activate() => _host.Click(_icon, 0, null);
+    public void Click() => _host.Click(_icon, TrayClick.Left, null);
+
+    /// <summary>A double click at the cursor, which many older apps need before they show their window.</summary>
+    [Qml]
+    public void DoubleClick() => _host.Click(_icon, TrayClick.Double, null);
 
     [Qml]
-    public void SecondaryActivate() => _host.Click(_icon, 2, null);
+    public void MiddleClick() => _host.Click(_icon, TrayClick.Middle, null);
 
+    /// <summary>A right click, which asks the app to open its menu at the point in the window, or at the cursor.</summary>
     [Qml]
     public void Display(ShellWindow? parentWindow, double relativeX, double relativeY) =>
-        _host.Click(_icon, 1, MenuHandle.ScreenPoint(parentWindow, relativeX, relativeY));
+        _host.Click(_icon, TrayClick.Menu, MenuHandle.ScreenPoint(parentWindow, relativeX, relativeY));
 
     internal void Refresh()
     {

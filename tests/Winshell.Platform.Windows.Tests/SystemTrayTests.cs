@@ -37,6 +37,7 @@ public sealed class SystemTrayTests : IDisposable
               property string appName: first ? first.appName : ""
               property string executable: first ? first.executable : ""
               property string itemId: first ? first.id : ""
+              property var clicks: first ? [typeof first.click, typeof first.doubleClick, typeof first.middleClick, typeof first.display, typeof first.activate, typeof first.secondaryActivate] : []
               property string balloonTitle
               property string balloonMessage
               property int balloonIcon: -1
@@ -74,6 +75,9 @@ public sealed class SystemTrayTests : IDisposable
         Assert.Equal(_program, _root.ReadProperty("executable"));
         Assert.Equal(Path.GetFileNameWithoutExtension(_program), _root.ReadProperty("itemId"));
         Assert.False(string.IsNullOrEmpty((string?)_root.ReadProperty("appName")));
+
+        // Without a callback message the app asked for no clicks, so these send nothing.
+        Assert.Equal(["function", "function", "function", "function", "undefined", "undefined"], ((System.Collections.IEnumerable)_root.ReadProperty("clicks")!).Cast<object>().Select(o => o.ToString()));
 
         Call(TrayProtocol.Modify, TrayProtocol.NIF_TIP, tip: "Syncing");
         Assert.Equal("Syncing", _root.ReadProperty("tooltip"));

@@ -227,8 +227,10 @@ Types not listed keep their names in the new module.
 | `SystemTrayItem.category`, `Category` | Removed. Windows has no categories |
 | `SystemTrayItem.hasMenu`, `onlyMenu` | Removed. Every icon's app may show a menu; `display()` asks it to |
 | `SystemTrayItem.scroll()` | Removed. Windows does not send scrolls to tray icons |
+| `SystemTrayItem.activate()` | `click()`, a left click |
+| `SystemTrayItem.secondaryActivate()` | `middleClick()` |
 
-`executable`, `overflow`, the `balloon(title, message, icon)` signal and the `BalloonIcon` enum are new.
+`executable`, `overflow`, `doubleClick()`, the `balloon(title, message, icon)` signal and the `BalloonIcon` enum are new.
 
 ## Hotkeys
 
