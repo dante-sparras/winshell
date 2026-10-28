@@ -36,6 +36,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private readonly object _lock = new();
     private readonly SemaphoreSlim _readGate = new(1, 1);
     private readonly Dictionary<string, BluetoothEndpointInfo> _nearby = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DeviceInformation> _pairingEndpoints = new(StringComparer.Ordinal);
     private readonly List<DeviceWatcher> _watchers = [];
     private readonly Dictionary<Guid, (double? Level, DateTimeOffset Read)> _batteries = [];
     private string? _adapterId;
@@ -190,6 +191,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             {
                 if (_disposed || !_watchers.Contains(watcher)) return;
                 entries[info.Id] = info;
+                _pairingEndpoints[info.Id] = info;
                 _nearby[info.Id] = ReadEndpoint(info);
             }
         };
@@ -208,6 +210,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             {
                 if (!_watchers.Contains(watcher)) return;
                 entries.Remove(update.Id);
+                _pairingEndpoints.Remove(update.Id);
                 _nearby.Remove(update.Id);
             }
         };
@@ -216,7 +219,11 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             lock (_lock)
             {
                 if (!_watchers.Remove(watcher)) return;
-                foreach (var id in entries.Keys) _nearby.Remove(id);
+                foreach (var id in entries.Keys)
+                {
+                    _nearby.Remove(id);
+                    _pairingEndpoints.Remove(id);
+                }
                 if (watcher.Status == DeviceWatcherStatus.Aborted)
                     _discoveryError = "Windows aborted Bluetooth discovery. Check Bluetooth access and try again.";
             }
@@ -233,6 +240,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             watchers = _watchers.ToArray();
             _watchers.Clear();
             _nearby.Clear();
+            _pairingEndpoints.Clear();
         }
         foreach (var watcher in watchers)
         {
@@ -250,12 +258,14 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     public async Task<string?> PairAsync(string id, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        var info = await DeviceInformation.CreateFromIdAsync(id, null, DeviceInformationKind.AssociationEndpoint);
-        cancellation.ThrowIfCancellationRequested();
+        DeviceInformation? info;
+        lock (_lock) _pairingEndpoints.TryGetValue(id, out info);
         if (info is null) return "The device is no longer available.";
         if (info.Pairing.IsPaired) return null;
         if (!info.Pairing.CanPair) return "Windows reports that this device cannot be paired.";
-        // Basic pairing lets Windows perform the consent/PIN ceremony; never auto-accept PIN matches.
+        // Start on the caller's UI thread, using the endpoint already supplied by discovery. An
+        // asynchronous lookup here would move the consent call off that thread. Basic pairing lets
+        // Windows perform the consent/PIN ceremony; never auto-accept PIN matches.
         var result = await info.Pairing.PairAsync().AsTask(cancellation).ConfigureAwait(false);
         return PairingError(result.Status);
     }

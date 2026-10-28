@@ -161,7 +161,9 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         Assert.Equal("", item.Error);
         backend.Snapshot = Snapshot(Device(paired: false));
         service.Apply(backend.Snapshot);
+        var callerThread = Environment.CurrentManagedThreadId;
         await item.PairAsync(); loop.Process();
+        Assert.Equal(callerThread, backend.PairThread);
         Assert.False(item.Paired);
         Assert.Equal("WindowsEndpoint", Assert.Single(backend.Paired));
         backend.Snapshot = Snapshot(Device() with { PairedIds = ["classic", "le"] });
@@ -387,6 +389,7 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         public List<string> Calls { get; } = [];
         public List<(Guid, bool)> Connections { get; } = [];
         public List<string> Paired { get; } = [];
+        public int PairThread { get; private set; }
         public List<string> Unpaired { get; } = [];
         public int Starts { get; private set; }
         public int Stops { get; private set; }
@@ -403,6 +406,7 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         public void StopDiscovery() { Calls.Add("stop"); Stops++; Snapshot = Snapshot with { Discovering = false }; }
         public async Task<string?> PairAsync(string id, CancellationToken cancellation)
         {
+            PairThread = Environment.CurrentManagedThreadId;
             Calls.Add("pair"); Paired.Add(id);
             if (WaitForPairCancellation) await Task.Delay(Timeout.Infinite, cancellation);
             if (Failure is { } e) throw e;
