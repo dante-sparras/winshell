@@ -27,6 +27,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         Win32.SetProcessDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         _screens = Platform.Windows.Screens.Enumerate().Select(s => s.Info).ToList();
         ReadTheme();
+        ListenForClipboard();
         SystemEvents.DisplaySettingsChanged += (_, _) => Loop.Post(RefreshScreens);
         SystemEvents.UserPreferenceChanged += (_, e) =>
         {
@@ -211,6 +212,57 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     // Clipboard
 
+    public event Action? Changed;
+
+    private nint _clipboardWindow;
+    private string? _clipboardText;
+    private const string ClipboardClass = "WinshellClipboard";
+
+    /// <summary>A message-only window, so another program copying text updates <c>Quickshell.clipboardText</c>.</summary>
+    private void ListenForClipboard()
+    {
+        fixed (char* name = ClipboardClass)
+        {
+            var wc = new WNDCLASSEXW
+            {
+                cbSize = (uint)sizeof(WNDCLASSEXW),
+                lpfnWndProc = &ClipboardProc,
+                hInstance = Win32.GetModuleHandleW(null),
+                lpszClassName = name,
+            };
+            if (Win32.RegisterClassExW(wc) == 0 && Marshal.GetLastWin32Error() != 1410)
+            {
+                Log.Warn("quickshell", "Could not listen for clipboard changes");
+                return;
+            }
+        }
+        _clipboardWindow = Win32.CreateWindowExW(0, ClipboardClass, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
+        if (_clipboardWindow == 0 || !Win32.AddClipboardFormatListener(_clipboardWindow))
+        {
+            Log.Warn("quickshell", "Could not listen for clipboard changes");
+            if (_clipboardWindow != 0)
+                Win32.DestroyWindow(_clipboardWindow);
+            _clipboardWindow = 0;
+        }
+    }
+
+    [UnmanagedCallersOnly]
+    private static nint ClipboardProc(nint hwnd, uint msg, nint wParam, nint lParam)
+    {
+        if (msg == Win32.WM_CLIPBOARDUPDATE && _current is { } platform && hwnd == platform._clipboardWindow)
+            platform.Loop.Post(platform.OnClipboardChanged);
+        return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+
+    private void OnClipboardChanged()
+    {
+        var text = GetText();
+        if (text == _clipboardText)
+            return;
+        _clipboardText = text;
+        Changed?.Invoke();
+    }
+
     public string? GetText()
     {
         if (!Win32.OpenClipboard(0))
@@ -251,6 +303,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
             ((char*)ptr)[text.Length] = '\0';
             Win32.GlobalUnlock(mem);
             Win32.SetClipboardData(Win32.CF_UNICODETEXT, mem);
+            _clipboardText = text;
         }
         finally
         {
@@ -277,6 +330,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     public void Dispose()
     {
         Unhook();
+        if (_clipboardWindow != 0)
+        {
+            Win32.RemoveClipboardFormatListener(_clipboardWindow);
+            Win32.DestroyWindow(_clipboardWindow);
+            _clipboardWindow = 0;
+        }
         foreach (var w in _windows.ToArray())
             w.Dispose();
     }

@@ -727,4 +727,7 @@ public interface IClipboard
     string? GetText();
 
     void SetText(string text);
+
+    /// <summary>The clipboard text changed outside this call, for <c>Quickshell.clipboardText</c>.</summary>
+    event Action? Changed;
 }

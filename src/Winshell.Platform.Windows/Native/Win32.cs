@@ -322,6 +322,7 @@ internal static partial class Win32
     public const uint SC_MOVE = 0xF010;
     public const uint SC_SIZE = 0xF000;
     public const uint WM_SYSCOMMAND = 0x0112;
+    public const uint WM_CLIPBOARDUPDATE = 0x031D;
 
     public const int RGN_OR = 2;
 
@@ -337,6 +338,14 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     public static partial nint DefWindowProcW(nint hwnd, uint msg, nint wParam, nint lParam);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AddClipboardFormatListener(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool RemoveClipboardFormatListener(nint hwnd);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

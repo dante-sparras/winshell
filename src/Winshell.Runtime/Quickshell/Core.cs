@@ -200,6 +200,7 @@ public sealed class QuickshellGlobal : QObject
 
     private readonly QuickshellSettings _settings;
     private readonly IDisposable _lastWindow;
+    private readonly Quick.IClipboard? _clipboard;
 
     public QuickshellGlobal(QmlEngine engine)
     {
@@ -209,11 +210,25 @@ public sealed class QuickshellGlobal : QObject
             engine.AddService(_settings);
         _settings.Mirrored += name => NotifyChanged(name);
         _lastWindow = _settings.Connect("lastWindowClosed", _ => Emit("lastWindowClosed"));
+        _clipboard = engine.GetService<Quick.IClipboard>();
+        if (_clipboard is not null)
+            _clipboard.Changed += OnClipboardChanged;
         _screens = engine.GetService<ScreenRegistry>() ?? new ScreenRegistry(null);
         _screens.AddObserver("screens", new Forward(this));
     }
 
-    protected override void OnDestroy() => _lastWindow.Dispose();
+    private void OnClipboardChanged()
+    {
+        if (!IsDestroyed)
+            NotifyChanged("clipboardText");
+    }
+
+    protected override void OnDestroy()
+    {
+        _lastWindow.Dispose();
+        if (_clipboard is not null)
+            _clipboard.Changed -= OnClipboardChanged;
+    }
 
     private IShellHost? Host => Engine?.GetService<IShellHost>();
 
@@ -290,7 +305,11 @@ public sealed class QuickshellGlobal : QObject
     [Qml]
     public string ClipboardText
     {
-        get => Engine?.GetService<Quick.IClipboard>()?.GetText() ?? "";
+        get
+        {
+            Track();
+            return Engine?.GetService<Quick.IClipboard>()?.GetText() ?? "";
+        }
         set
         {
             Engine?.GetService<Quick.IClipboard>()?.SetText(value ?? "");
