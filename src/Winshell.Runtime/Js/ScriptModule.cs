@@ -11,6 +11,10 @@ namespace Winshell.Runtime;
 /// </summary>
 public static class ScriptModule
 {
+    /// <summary>Whether a script says <c>.pragma library</c>, so one copy is shared by every importer.</summary>
+    public static bool IsLibrary(string code) =>
+        code.Split('\n').Any(l => l.Trim() is var t && t.StartsWith(".pragma", StringComparison.Ordinal) && t.Contains("library", StringComparison.Ordinal));
+
     public static JsValue Load(QmlEngine engine, string code, string path)
     {
         var imports = new List<(string Name, string File)>();
@@ -68,7 +72,8 @@ public static class ScriptModule
 
         var sb = new StringBuilder("(function(");
         sb.Append(string.Join(", ", imports.Select(i => i.Name)));
-        sb.Append(") {\n").Append(body).Append("\nreturn {");
+        // The body starts on the factory's first line, so a script error names the file's own line.
+        sb.Append(") { ").Append(body).Append("\nreturn {");
         sb.Append(string.Join(", ", names.Distinct().Select(n => $"get {n}() {{ return {n}; }}, set {n}(v) {{ {n} = v; }}")));
         sb.Append("};\n})");
         var factory = engine.Js.Engine.Evaluate(sb.ToString(), path);

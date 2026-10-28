@@ -25,17 +25,22 @@ public sealed class ComponentContext
 
     public IReadOnlyDictionary<string, QObject> Ids => _ids;
 
+    /// <summary>The copies of the scripts this component instance imports that are not libraries, by path.</summary>
+    internal Dictionary<string, Jint.Native.JsValue>? Scripts { get; set; }
+
     public void SetId(string id, QObject obj) => _ids[id] = obj;
 
     public bool TryGetId(string id, out QObject obj) => _ids.TryGetValue(id, out obj!);
 
-    public void SetContextProperty(string name, object? value)
+    /// <summary>Sets a name the instance can see. Returns whether its value changed.</summary>
+    public bool SetContextProperty(string name, object? value)
     {
         _properties ??= new(StringComparer.Ordinal);
         if (_properties.TryGetValue(name, out var old) && ValueConverter.AreEqual(old, value))
-            return;
+            return false;
         _properties[name] = value;
         _notifier.NotifyChanged(name);
+        return true;
     }
 
     public bool TryGetContextProperty(string name, out object? value)

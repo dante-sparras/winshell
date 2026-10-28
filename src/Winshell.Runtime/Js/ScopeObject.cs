@@ -54,7 +54,7 @@ public sealed class ScopeObject : ObjectInstance
             }
         }
         var imports = _context.Imports;
-        if (imports is not null && char.IsUpper(name[0]) && imports.TryResolveName(name, _scopeObject, out value))
+        if (imports is not null && char.IsUpper(name[0]) && imports.TryResolveName(name, _scopeObject, _context, out value))
             return true;
         value = Undefined;
         return false;

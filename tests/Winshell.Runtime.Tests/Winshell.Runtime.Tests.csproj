@@ -11,4 +11,7 @@
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\Winshell.Runtime\Winshell.Runtime.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Conformance\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

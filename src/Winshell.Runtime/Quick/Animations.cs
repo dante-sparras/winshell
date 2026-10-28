@@ -478,11 +478,36 @@ public class PropertyAnimation : AnimationBase
 
     internal (QObject Target, string Property)? OverrideTrack { get; set; }
 
+    /// <summary>The changes of a state this animation runs for a Transition, each to the value the state sets.</summary>
+    internal List<(QObject Target, string Property, object? To)> TransitionTracks { get; } = [];
+
+    /// <summary>Whether this animation animates a property: its target and properties name it, or name nothing.</summary>
+    internal bool Animates(QObject target, string property)
+    {
+        if (_target is not null && _target != target)
+            return false;
+        if (Targets is not null && !ValueConverter.ToList(Targets).Contains(target))
+            return false;
+        var names = _properties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (_property.Length == 0 && names.Length == 0)
+            return true;
+        return _property == property || names.Contains(property);
+    }
+
     internal override void Prepare()
     {
         _tracks.Clear();
         using var _ = DependencyTracker.Suspend();
         var targets = new List<QObject>();
+        if (TransitionTracks.Count > 0)
+        {
+            foreach (var (target, property, to) in TransitionTracks)
+            {
+                if (target.HasProperty(property))
+                    _tracks.Add((target, property, OverrideFrom ?? _from ?? target.ReadProperty(property), to));
+            }
+            return;
+        }
         if (OverrideTrack is { } single)
         {
             Add(single.Target, single.Property);
@@ -727,7 +752,7 @@ public abstract class AnimationGroup : AnimationBase
     {
         foreach (var a in Animations.Snapshot)
         {
-            if (a is PropertyAnimation pa && (pa.Target is null || pa.Target == target) && (pa.Property.Length == 0 || pa.Property == property || pa.Properties.Contains(property, StringComparison.Ordinal)))
+            if (a is PropertyAnimation pa && pa.Animates(target, property))
             {
                 pa.OverrideTrack = (target, property);
                 pa.OverrideTo = to;

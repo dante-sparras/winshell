@@ -114,17 +114,26 @@ public sealed class JsRuntime
             binding.Evaluate();
             return;
         }
-        target.AssignFromScript(name, value);
+        try
+        {
+            target.AssignFromScript(name, value);
+        }
+        catch (QmlException e)
+        {
+            // A script sees a failed assignment as QML reports it, a TypeError where it was written.
+            throw new JavaScriptException(Engine.Intrinsics.TypeError, e.Message);
+        }
     }
 
     /// <summary>
     /// Compiles code into a function that runs with QML name lookup: ids, the scope object's members, the
     /// component root's members, then imports and globals. The function is made once per piece of source and
-    /// bound to a scope each time.
+    /// bound to a scope each time. <paramref name="sourceName"/> is where the code starts, <c>file[line:column]</c>,
+    /// so an error in it can name its line.
     /// </summary>
     public JsValue Compile(string body, IReadOnlyList<string> parameters, ObjectInstance scope, string sourceName)
     {
-        var key = string.Join(",", parameters) + "\u0001" + body;
+        var key = sourceName + "\u0001" + string.Join(",", parameters) + "\u0001" + body;
         var factory = _factories.GetOrAdd(key, _ =>
         {
             var sb = new StringBuilder();

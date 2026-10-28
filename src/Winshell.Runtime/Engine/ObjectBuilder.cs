@@ -100,7 +100,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                     {
                         var parameters = f.Parameters.Select(x => x.Name).ToList();
                         var scope = new ScopeObject(_js, obj, context);
-                        var function = _js.Compile(f.Body, parameters, scope, $"{f.Location}");
+                        var function = _js.Compile(f.Body, parameters, scope, f.BodyLocation.ToString());
                         obj.AddFunction(f.Name, function);
                         obj.AddFunctionDeclaration(f);
                         break;
@@ -179,6 +179,12 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
         var target = baseTarget ?? scopeObject;
         var dot = path.LastIndexOf('.');
         var name = path;
+        // PropertyChanges { label.width: 50 } changes the object with that id.
+        if (dot > 0 && target is Quick.PropertyChanges changes && context.FindId(path[..dot]) is { } changed)
+        {
+            AssignValue(scopeObject, changes.HolderFor(changed), path[(dot + 1)..], value, context, doc, location);
+            return;
+        }
         if (dot > 0)
         {
             target = ResolveSegment(scopeObject, target, path[..dot], context, location);
@@ -191,7 +197,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             if (slot is null && target is QtQml.Connections connections && value is QmlScriptValue handler)
             {
                 var handlerScope = new ScopeObject(_js, scopeObject, context);
-                var handlerFunction = _js.Compile(ScriptCompiler.HandlerBody(handler.Code, handler.IsBlock), [], handlerScope, location.ToString());
+                var handlerFunction = _js.Compile(ScriptCompiler.HandlerBody(handler.Code, handler.IsBlock), [], handlerScope, handler.Location.ToString());
                 connections.AddHandler(signalName, handlerFunction);
                 return;
             }
@@ -210,7 +216,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             throw new QmlCompileException("A signal handler must be a script", location);
         var body = ScriptCompiler.HandlerBody(script.Code, script.IsBlock);
         var scope = new ScopeObject(_js, scopeObject, context);
-        var function = _js.Compile(body, slot.Definition.Parameters, scope, location.ToString());
+        var function = _js.Compile(body, slot.Definition.Parameters, scope, script.Location.ToString());
         slot.ConnectScript(function, _js.Wrap(scopeObject));
     }
 
@@ -250,7 +256,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                 }
                 var body = ScriptCompiler.BindingBody(script.Code, script.IsBlock);
                 var scope = new ScopeObject(_js, scopeObject, context);
-                var function = _js.Compile(body, [], scope, location.ToString());
+                var function = _js.Compile(body, [], scope, script.Location.ToString());
                 var thisValue = _js.Wrap(scopeObject);
                 var binding = new Binding(target, name, () => _js.Engine.Call(function, thisValue, []), location.ToString());
                 target.SetBinding(name, binding);

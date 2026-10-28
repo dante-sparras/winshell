@@ -15,6 +15,7 @@ public sealed class QmlEngine : IDisposable
     private readonly Dictionary<string, QObject> _fileSingletons = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<TypeEntry, QObject> _nativeSingletons = [];
     private readonly Dictionary<string, JsValue> _scripts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _scriptSources = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _creatingSingletons = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<QObject> _roots = [];
     private readonly Stack<CreationBatch> _batches = new();
@@ -190,14 +191,27 @@ public sealed class QmlEngine : IDisposable
 
     // Scripts
 
-    /// <summary>Loads a JavaScript file imported with <c>import "file.js" as Name</c>.</summary>
-    public JsValue LoadScript(string path)
+    /// <summary>
+    /// Loads a JavaScript file imported with <c>import "file.js" as Name</c>. A <c>.pragma library</c> script is
+    /// shared by the whole shell; any other script is copied for each component instance that imports it, the one
+    /// <paramref name="context"/> belongs to.
+    /// </summary>
+    public JsValue LoadScript(string path, ComponentContext? context = null)
     {
         if (_scripts.TryGetValue(path, out var module))
             return module;
-        var code = File.ReadAllText(path);
+        var instance = context;
+        while (instance?.Parent is { } parent && parent.Imports == instance.Imports)
+            instance = parent;
+        if (instance?.Scripts is { } own && own.TryGetValue(path, out module))
+            return module;
+        if (!_scriptSources.TryGetValue(path, out var code))
+            _scriptSources[path] = code = File.ReadAllText(path);
         module = ScriptModule.Load(this, code, path);
-        _scripts[path] = module;
+        if (instance is null || ScriptModule.IsLibrary(code))
+            _scripts[path] = module;
+        else
+            (instance.Scripts ??= new(StringComparer.OrdinalIgnoreCase))[path] = module;
         return module;
     }
 
