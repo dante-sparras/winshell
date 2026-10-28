@@ -218,6 +218,34 @@ public static class FluentResources
             : Contrast(t, s => s.ButtonText, s => s.HighlightText, s => s.HighlightText, s => s.GrayText))
         : new(t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorDisabled);
 
+    // Menus, flyouts and tool tips
+
+    public static StateColors MenuFlyoutItemBackground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => QColor.Transparent, s => s.Highlight, s => s.Highlight, s => QColor.Transparent)
+        : new(QColor.Transparent, t.SubtleFillColorSecondary, t.SubtleFillColorTertiary, QColor.Transparent);
+
+    /// <summary>A menu item's text, which does not dim when pressed.</summary>
+    public static StateColors MenuFlyoutItemForeground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.HighlightText, s => s.HighlightText, s => s.GrayText)
+        : new(t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorPrimary, t.TextFillColorDisabled);
+
+    public static QColor MenuFlyoutSeparatorBackground(Theme t) => t.IsHighContrast ? t.SystemColorWindowTextColor : t.DividerStrokeColorDefault;
+
+    /// <summary>The fill of a flyout or menu: WinUI's in-app acrylic, here its fallback color.</summary>
+    public static QColor FlyoutPresenterBackground(Theme t) => t.IsHighContrast ? t.SystemColorWindowColor : t.AcrylicBackgroundFillColorDefault;
+
+    public static QColor FlyoutPresenterBorderBrush(Theme t) => t.IsHighContrast ? t.SystemColorWindowTextColor : t.SurfaceStrokeColorFlyout;
+
+    /// <summary>The border's width: a contrast theme draws flyouts with 2 pixels, as WinUI's <c>FlyoutBorderThemeThickness</c>.</summary>
+    public static float FlyoutBorderThickness(Theme t) => t.IsHighContrast ? 2 : 1;
+
+    /// <summary><c>ToolTipBackgroundBrush</c>, the brush WinUI's tool tip style uses: in-app acrylic, here its fallback color.</summary>
+    public static QColor ToolTipBackground(Theme t) => t.IsHighContrast ? t.SystemColorWindowColor : t.AcrylicBackgroundFillColorDefault;
+
+    public static QColor ToolTipForeground(Theme t) => t.IsHighContrast ? t.SystemColorButtonTextColor : t.TextFillColorPrimary;
+
+    public static QColor ToolTipBorderBrush(Theme t) => t.IsHighContrast ? t.SystemColorWindowTextColor : t.SurfaceStrokeColorFlyout;
+
     public static StateColors ListViewItemSelectionIndicator(Theme t) => t.IsHighContrast
         ? Contrast(t, s => s.HighlightText, s => s.HighlightText, s => s.HighlightText, s => s.GrayText)
         : new(t.AccentFillColorDefault, t.AccentFillColorDefault, t.AccentFillColorDefault, t.AccentFillColorDisabled);
