@@ -47,6 +47,9 @@ public readonly record struct QColor(double R, double G, double B, double A, boo
 
     public QColor WithAlpha(double a) => this with { A = a };
 
+    /// <summary>The color with its alpha scaled by an opacity, as an item's opacity scales what it draws.</summary>
+    public QColor Faded(double opacity) => this with { A = A * opacity };
+
     public (double H, double S, double V) ToHsv()
     {
         var max = Math.Max(R, Math.Max(G, B));

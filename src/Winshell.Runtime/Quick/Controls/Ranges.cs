@@ -201,8 +201,8 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
         var oy = (float)(TopPadding - i.Y);
         var aw = (float)AvailableWidth;
         var ah = (float)AvailableHeight;
-        var trackColor = Enabled ? t.ControlStrongFillColorDefault : t.ControlStrongFillColorDisabled;
-        var valueColor = Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled;
+        var trackColor = FluentResources.SliderTrackFill(t).For(Enabled, _pressed, Hovered);
+        var valueColor = FluentResources.SliderTrackValueFill(t).For(Enabled, _pressed, Hovered);
         if (!vertical)
         {
             var track = SKRect.Create(ox, oy + ah / 2 - 2, aw, 4);
@@ -222,18 +222,24 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
     protected override void CreateDefaults()
     {
         if (!_handleSet && _handle is null)
-            SetHandle(Part(new PaintedItem((c, i, _) => PaintThumb(c, i.Bounds), 20, 20)), true);
+            SetHandle(Part(new PaintedItem((c, i, context) => PaintThumb(c, i.Bounds, context), 20, 20)), true);
         base.CreateDefaults();
     }
 
-    private void PaintThumb(SKCanvas c, SKRect r)
+    /// <summary>
+    /// The inner dot's scale of its 12 pixels: 0.86 at rest, 1.167 hovered or disabled, 0.71 pressed, as WinUI's
+    /// slider thumb eases between them.
+    /// </summary>
+    private readonly NumberTransition _thumbScale = new(Fluent.ControlFastAnimationDuration);
+
+    private void PaintThumb(SKCanvas c, SKRect r, PaintContext context)
     {
         var t = Theme.Current;
         float cx = r.MidX, cy = r.MidY;
-        Fluent.FillCircle(c, cx, cy, 10, t.ControlSolidFillColorDefault);
-        Fluent.StrokeCircle(c, cx, cy, 10, t.IsDark ? QColor.Parse("#23ffffff") : QColor.Parse("#29000000"));
-        var inner = !Enabled ? 6f : _pressed ? 5f : Hovered ? 7f : 6f;
-        Fluent.FillCircle(c, cx, cy, inner, Enabled ? (_pressed ? t.AccentFillColorTertiary : Hovered ? t.AccentFillColorSecondary : t.AccentFillColorDefault) : t.AccentFillColorDisabled);
+        Fluent.FillCircle(c, cx, cy, 10, FluentResources.SliderOuterThumbBackground(t));
+        Fluent.StrokeCircleElevation(c, cx, cy, 10, t);
+        var scale = _thumbScale.Step(!Enabled ? 1.167 : _pressed ? 0.71 : Hovered ? 1.167 : 0.86, context);
+        Fluent.FillCircle(c, cx, cy, (float)(6 * scale), FluentResources.SliderThumbBackground(t).For(Enabled, _pressed, Hovered));
     }
 
     protected override void LayoutParts()
@@ -731,16 +737,18 @@ public sealed class ProgressBar : Control
         if (_indeterminate)
             return;
         var r = i.Bounds;
-        using var paint = new SKPaint { Color = (Enabled ? t.ControlStrongStrokeColorDefault : t.ControlStrongStrokeColorDisabled).ToSk(), IsAntialias = true };
-        c.DrawRect(SKRect.Create(r.Left, MathF.Round(r.MidY) - 0.5f, r.Width, 1), paint);
+        using var paint = new SKPaint { Color = FluentResources.ProgressBarBackground(t).ToSk(), IsAntialias = true };
+        // The track is the middle pixel row of the bar's three, as in WinUI.
+        c.DrawRect(SKRect.Create(r.Left, MathF.Floor(r.MidY - 1.5f) + 1, r.Width, 1), paint);
     }, 200, 4));
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, context) =>
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var color = Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled;
-        var bar = SKRect.Create(r.Left, r.MidY - 1.5f, r.Width, 3);
+        // WinUI's progress bar looks the same when disabled.
+        var color = FluentResources.ProgressBarForeground(t);
+        var bar = SKRect.Create(r.Left, MathF.Floor(r.MidY - 1.5f), r.Width, 3);
         if (_indeterminate)
         {
             // A short bar runs across, then a long one, as WinUI's indeterminate progress bar does.
@@ -791,7 +799,7 @@ public sealed class BusyIndicator : Control
         var start = (float)(seconds * 360 % 360 + (phase < 0.5 ? 0 : 260 * Ease((phase - 0.5) * 2)));
         using var paint = new SKPaint
         {
-            Color = (Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled).ToSk(),
+            Color = FluentResources.ProgressBarForeground(t).ToSk(),
             IsAntialias = true,
             Style = SKPaintStyle.Stroke,
             StrokeWidth = stroke,
