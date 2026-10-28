@@ -377,6 +377,14 @@ public class Item : QObject
     [Qml]
     public LayerProperties Layer => _layer ??= new LayerProperties(this) { Engine = Engine };
 
+    /// <summary>The pointer handlers declared in this item: HoverHandler, TapHandler, WheelHandler.</summary>
+    public List<PointerHandler> PointerHandlers { get; } = [];
+
+    [Qml]
+    public Palette Palette => _palette ??= new Palette { Engine = Engine };
+
+    private Palette? _palette;
+
     private LayerProperties? _layer;
 
     // Focus

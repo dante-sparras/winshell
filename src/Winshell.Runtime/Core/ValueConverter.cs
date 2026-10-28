@@ -17,6 +17,8 @@ public static class ValueConverter
         "bool" => false,
         "string" or "url" => "",
         "color" => QColor.Invalid,
+        // QML's default date is an invalid Date, which scripts can still call methods on.
+        "date" => DateTime.MinValue,
         "var" or "variant" => null,
         _ when qmlType.StartsWith("list<", StringComparison.Ordinal) || qmlType == "list" => new QmlList<object>(),
         _ => null,

@@ -290,6 +290,15 @@ public sealed class Scene : IItemHost
                 item.ForceActiveFocus();
                 focusTaken = true;
             }
+            foreach (var handler in item.PointerHandlers)
+            {
+                if (handler is IPointerTarget h && handler.Enabled && h.AcceptsButton(button) && h.PointerPress(lx, ly, button, _buttons, modifiers))
+                {
+                    _grabber = h;
+                    _grabberItem = item;
+                    return;
+                }
+            }
             if (item is not IPointerTarget target || !target.AcceptsButton(button))
                 continue;
             if (doubleClick)
@@ -352,6 +361,11 @@ public sealed class Scene : IItemHost
     {
         foreach (var (item, lx, ly) in HitList(x, y))
         {
+            foreach (var handler in item.PointerHandlers)
+            {
+                if (handler is IWheelTarget h && handler.Enabled && h.Wheel(lx, ly, angleX, angleY, pixelX, pixelY, _buttons, modifiers, false))
+                    return;
+            }
             if (item is IWheelTarget target && item.Enabled && target.Wheel(lx, ly, angleX, angleY, pixelX, pixelY, _buttons, modifiers, false))
                 return;
         }
@@ -432,6 +446,15 @@ public sealed class Scene : IItemHost
             {
                 accepted = true;
                 break;
+            }
+        }
+        foreach (var handler in item.PointerHandlers)
+        {
+            if (handler is HoverHandler { AcceptsHover: true } hover && hover.HitTest(item, lx, ly))
+            {
+                result.Add((hover, lx, ly));
+                if (hover.Blocking)
+                    accepted = true;
             }
         }
         if (item is IHoverTarget { AcceptsHover: true } target && item.HitTest(lx, ly))
