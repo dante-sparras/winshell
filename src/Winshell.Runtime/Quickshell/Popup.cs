@@ -41,16 +41,16 @@ public sealed class PopupAnchor : QObject
     private int _gravity = (int)(Quickshell.Edges.Bottom | Quickshell.Edges.Right);
     private int _adjustment = 63;
 
-    public PopupAnchor(PopupWindow popup)
+    private readonly Action _changed;
+
+    public PopupAnchor(Action changed)
     {
-        Popup = popup;
+        _changed = changed;
         Rect = new AnchorRect(this);
         Margins = new AnchorMargins(this);
     }
 
-    public PopupWindow Popup { get; }
-
-    internal void Changed() => Popup.AnchorChanged();
+    internal void Changed() => _changed();
 
     [Qml]
     public QsWindow? Window
@@ -120,7 +120,7 @@ public sealed class PopupWindow : QsWindow, IItemContainerChild
 
     public PopupWindow()
     {
-        Anchor = new PopupAnchor(this);
+        Anchor = new PopupAnchor(AnchorChanged);
         base.Visible = false;
     }
 

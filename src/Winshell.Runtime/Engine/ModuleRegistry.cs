@@ -79,6 +79,7 @@ public sealed class QmlModule(string name)
             Attached = attached,
             AttachedType = attachedType,
             Enums = enums,
+            EnumToString = typeof(T).IsEnum ? v => Enum.GetName(typeof(T), v) ?? "" : null,
         });
     }
 

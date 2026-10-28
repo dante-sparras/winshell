@@ -190,5 +190,6 @@ public static class ServiceModules
         Services.Media.Mpris.Register(registry);
         Services.WindowManagerModules.Register(registry);
         Services.Pam.PamModule.Register(registry);
+        Services.Tray.SystemTrayModule.Register(registry);
     }
 }
