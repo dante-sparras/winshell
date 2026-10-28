@@ -309,9 +309,9 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        Fluent.Shadow(c, r, Fluent.OverlayCornerRadius, 32, 8, 0.14);
-        Fluent.FillRound(c, r, Fluent.OverlayCornerRadius, t.FlyoutBackground);
-        Fluent.StrokeRound(c, r, Fluent.OverlayCornerRadius, t.SurfaceStroke);
+        Fluent.Shadow(c, r, Fluent.OverlayCornerRadius, t.FlyoutShadow);
+        Fluent.FillRound(c, r, Fluent.OverlayCornerRadius, t.AcrylicBackgroundFillColorDefault);
+        Fluent.StrokeRound(c, r, Fluent.OverlayCornerRadius, t.SurfaceStrokeColorDefault);
     });
 
     /// <summary>The content item the popup starts with, or null for a plain item.</summary>
@@ -439,7 +439,7 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
 
     [Qml] public bool Hovered { get { Track(); return _item.Hovered; } }
 
-    [Qml] public FontGroup Font => _item.Font;
+    [Qml] public FontGroup Font { get => _item.Font; set => _item.Font = value; }
 
     [Qml] public Palette Palette => _item.Palette;
 
@@ -679,9 +679,9 @@ public sealed class ToolTip : Popup
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        Fluent.Shadow(c, r, Fluent.CornerRadius, 16, 4, 0.12);
-        Fluent.FillRound(c, r, Fluent.CornerRadius, t.FlyoutBackground);
-        Fluent.StrokeRound(c, r, Fluent.CornerRadius, t.SurfaceStroke);
+        Fluent.Shadow(c, r, Fluent.ControlCornerRadius, t.TooltipShadow);
+        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, t.AcrylicBackgroundFillColorDefault);
+        Fluent.StrokeRound(c, r, Fluent.ControlCornerRadius, t.SurfaceStrokeColorDefault);
     });
 
     internal override Item? CreateContentItem()
@@ -1121,8 +1121,8 @@ public sealed class MenuItem : AbstractButton
     {
         var t = Theme.Current;
         var r = i.Bounds;
-        var fill = !Enabled ? QColor.Transparent : IsDown ? t.SubtleFillTertiary : Hovered || _highlighted ? t.SubtleFillSecondary : QColor.Transparent;
-        Fluent.FillRound(c, r, Fluent.CornerRadius, fill);
+        var fill = !Enabled ? QColor.Transparent : IsDown ? t.SubtleFillColorTertiary : Hovered || _highlighted ? t.SubtleFillColorSecondary : QColor.Transparent;
+        Fluent.FillRound(c, r, Fluent.ControlCornerRadius, fill);
         if (Checkable && Checked)
             Fluent.DrawCheck(c, r.Left + (float)(LeftPadding - LeftInset) + 8, r.MidY, 12, ContentColor);
     }, 120, 36));
@@ -1138,7 +1138,7 @@ public sealed class MenuSeparator : Control
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
     {
-        using var paint = new SKPaint { Color = Theme.Current.DividerStroke.ToSk() };
+        using var paint = new SKPaint { Color = Theme.Current.DividerStrokeColorDefault.ToSk() };
         c.DrawRect(SKRect.Create(0, MathF.Round(i.Bounds.MidY), i.Bounds.Width, 1), paint);
     }, 120, 1));
 }
@@ -1487,15 +1487,15 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         var down = Down;
         if (_flat)
         {
-            Fluent.FillRound(c, r, Fluent.CornerRadius, !Enabled ? QColor.Transparent : _pressed ? t.SubtleFillTertiary : Hovered ? t.SubtleFillSecondary : QColor.Transparent);
+            Fluent.FillRound(c, r, Fluent.ControlCornerRadius, !Enabled ? QColor.Transparent : _pressed ? t.SubtleFillColorTertiary : Hovered ? t.SubtleFillColorSecondary : QColor.Transparent);
             return;
         }
         if (!Enabled)
-            Fluent.ElevatedRect(c, r, Fluent.CornerRadius, t.ControlFillDisabled, t.ControlStroke, t.ControlStroke);
+            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, t.ControlFillColorDisabled, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
         else if (_pressed)
-            Fluent.ElevatedRect(c, r, Fluent.CornerRadius, t.ControlFillTertiary, t.ControlStroke, t.ControlStroke);
+            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, t.ControlFillColorTertiary, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
         else
-            Fluent.ElevatedRect(c, r, Fluent.CornerRadius, Hovered || down ? t.ControlFillSecondary : t.ControlFill, t.ControlStroke, t.ControlStrokeSecondary);
+            Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, Hovered || down ? t.ControlFillColorSecondary : t.ControlFillColorDefault, t.ControlStrokeColorDefault, t.ControlStrokeColorSecondary);
     }, 120, Fluent.ControlHeight));
 
     protected override Item? CreateDefaultContentItem()
@@ -1521,7 +1521,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
                 var t = Theme.Current;
                 var r = i.Bounds;
                 var offset = _pressed ? 1.5f : 0;
-                Fluent.DrawChevron(c, Fluent.ChevronDown, r.MidX, r.MidY + offset, 12, Enabled ? t.TextSecondary : t.TextDisabled);
+                Fluent.DrawChevron(c, Fluent.ChevronDown, r.MidX, r.MidY + offset, 12, Enabled ? t.TextFillColorSecondary : t.TextFillColorDisabled);
             }, 32, 32));
         }
         if (!_popupSet && _popup is null)
@@ -1534,7 +1534,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         base.CreateDefaults();
         if (HasDefaultContentItem && ContentItem is Text text)
         {
-            text.Color = Theme.Current.TextColor;
+            text.Color = Theme.Current.TextFillColorPrimary;
             text.Text_ = DisplayText;
         }
     }
@@ -1542,7 +1542,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     protected override void OnThemeChanged()
     {
         if (HasDefaultContentItem && ContentItem is Text text)
-            text.Color = Enabled ? Theme.Current.TextColor : Theme.Current.TextDisabled;
+            text.Color = Enabled ? Theme.Current.TextFillColorPrimary : Theme.Current.TextFillColorDisabled;
     }
 
     protected override void StateChanged()

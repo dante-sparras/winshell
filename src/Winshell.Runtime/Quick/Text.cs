@@ -8,7 +8,7 @@ namespace Winshell.Runtime.Quick;
 public class Text : Item
 {
     private string _text = "";
-    private QColor _color = Theme.Current.TextColor;
+    private QColor _color = Theme.Current.TextFillColorPrimary;
     private bool _colorSet;
     private int _horizontalAlignment = QtEnums.AlignLeft;
     private int _verticalAlignment = QtEnums.AlignTop;
@@ -32,7 +32,7 @@ public class Text : Item
 
     public Text()
     {
-        Font = new FontGroup(this);
+        _fontGroup = new FontGroup(this);
         Font.Changed += Relayout;
         Theme.Changed += OnThemeChanged;
     }
@@ -120,7 +120,7 @@ public class Text : Item
     {
         if (!_colorSet && !IsDestroyed)
         {
-            _color = Theme.Current.TextColor;
+            _color = Theme.Current.TextFillColorPrimary;
             NotifyChanged("color");
             Update();
         }
@@ -155,8 +155,11 @@ public class Text : Item
         }
     }
 
+    private readonly FontGroup _fontGroup;
+
+    /// <summary>The font. Assigning a whole font, such as <c>font: WindowsTheme.typography.body</c>, copies it.</summary>
     [Qml]
-    public FontGroup Font { get; }
+    public FontGroup Font { get => _fontGroup; set => _fontGroup.CopyFrom(value); }
 
     [Qml]
     public int HorizontalAlignment
@@ -274,7 +277,7 @@ public class Text : Item
     [Qml]
     public QColor LinkColor
     {
-        get { Track(); return _linkColor ?? Theme.Current.AccentText; }
+        get { Track(); return _linkColor ?? Theme.Current.AccentTextFillColorPrimary; }
         set
         {
             _linkColor = value;
@@ -439,7 +442,7 @@ public class Text : Item
             _ => TextLayout.MightBeRichText(_text),
         };
         if (rich)
-            return TextLayout.ParseRichText(_text, spec, _linkColor ?? Theme.Current.AccentText);
+            return TextLayout.ParseRichText(_text, spec, _linkColor ?? Theme.Current.AccentTextFillColorPrimary);
         return [new TextSpan(_text, spec)];
     }
 

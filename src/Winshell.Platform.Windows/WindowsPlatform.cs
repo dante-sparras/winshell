@@ -31,7 +31,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         SystemEvents.DisplaySettingsChanged += (_, _) => Loop.Post(RefreshScreens);
         SystemEvents.UserPreferenceChanged += (_, e) =>
         {
-            if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle)
+            if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Accessibility)
                 Loop.Post(ReadTheme);
         };
     }
@@ -198,7 +198,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         catch (System.Security.SecurityException)
         {
         }
-        var theme = Theme.Default(dark);
+        var theme = Theme.Default(dark) with { System = ReadSystemColors(), IsHighContrast = HighContrastOn() };
         try
         {
             var settings = new global::Windows.UI.ViewManagement.UISettings();
@@ -209,19 +209,44 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
             }
             theme = theme with
             {
-                Accent = Get(global::Windows.UI.ViewManagement.UIColorType.Accent),
-                AccentLight1 = Get(global::Windows.UI.ViewManagement.UIColorType.AccentLight1),
-                AccentLight2 = Get(global::Windows.UI.ViewManagement.UIColorType.AccentLight2),
-                AccentLight3 = Get(global::Windows.UI.ViewManagement.UIColorType.AccentLight3),
-                AccentDark1 = Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark1),
-                AccentDark2 = Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark2),
-                AccentDark3 = Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark3),
+                Accents = new AccentColors(
+                    Get(global::Windows.UI.ViewManagement.UIColorType.Accent),
+                    Get(global::Windows.UI.ViewManagement.UIColorType.AccentLight1),
+                    Get(global::Windows.UI.ViewManagement.UIColorType.AccentLight2),
+                    Get(global::Windows.UI.ViewManagement.UIColorType.AccentLight3),
+                    Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark1),
+                    Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark2),
+                    Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark3)),
             };
         }
         catch (COMException)
         {
         }
         Theme.Current = theme;
+    }
+
+    private static bool HighContrastOn()
+    {
+        var hc = new HIGHCONTRASTW { cbSize = (uint)sizeof(HIGHCONTRASTW) };
+        return Win32.SystemParametersInfoW(Win32.SPI_GETHIGHCONTRAST, hc.cbSize, &hc, 0) && (hc.dwFlags & Win32.HCF_HIGHCONTRASTON) != 0;
+    }
+
+    private static SystemColors ReadSystemColors()
+    {
+        static QColor Get(int index)
+        {
+            var c = Win32.GetSysColor(index);
+            return QColor.FromRgb((byte)c, (byte)(c >> 8), (byte)(c >> 16));
+        }
+        return new SystemColors(
+            Get(Win32.COLOR_WINDOW),
+            Get(Win32.COLOR_WINDOWTEXT),
+            Get(Win32.COLOR_HIGHLIGHT),
+            Get(Win32.COLOR_HIGHLIGHTTEXT),
+            Get(Win32.COLOR_HOTLIGHT),
+            Get(Win32.COLOR_GRAYTEXT),
+            Get(Win32.COLOR_BTNFACE),
+            Get(Win32.COLOR_BTNTEXT));
     }
 
     // Clipboard

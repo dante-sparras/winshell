@@ -1,10 +1,47 @@
 namespace Winshell.Runtime.Quick;
 
+/// <summary>The accent color the user picked in Windows, with the lighter and darker shades Windows derives from it.</summary>
+public sealed record AccentColors(QColor Accent, QColor Light1, QColor Light2, QColor Light3, QColor Dark1, QColor Dark2, QColor Dark3)
+{
+    /// <summary>The Windows default blue.</summary>
+    public static readonly AccentColors Default = new(
+        QColor.FromArgb(0xFF0078D4),
+        QColor.FromArgb(0xFF0093F9),
+        QColor.FromArgb(0xFF60CCFF),
+        QColor.FromArgb(0xFF98ECFF),
+        QColor.FromArgb(0xFF005FB8),
+        QColor.FromArgb(0xFF004480),
+        QColor.FromArgb(0xFF002642));
+}
+
 /// <summary>
-/// The Windows 11 theme: light or dark, and the accent color, with the Fluent design tokens built from them.
-/// The platform updates it when the user changes their Windows settings.
+/// The eight system colors. A contrast theme is these colors and nothing else: while one is on, WinUI maps every
+/// Fluent token to one of them.
 /// </summary>
-public sealed record Theme(bool IsDark, QColor Accent, QColor AccentLight1, QColor AccentLight2, QColor AccentLight3, QColor AccentDark1, QColor AccentDark2, QColor AccentDark3)
+public sealed record SystemColors(QColor Window, QColor WindowText, QColor Highlight, QColor HighlightText, QColor Hotlight, QColor GrayText, QColor ButtonFace, QColor ButtonText)
+{
+    /// <summary>The colors Windows reports when no contrast theme is on.</summary>
+    public static readonly SystemColors Default = new(
+        QColor.FromArgb(0xFFFFFFFF),
+        QColor.FromArgb(0xFF000000),
+        QColor.FromArgb(0xFF0078D7),
+        QColor.FromArgb(0xFFFFFFFF),
+        QColor.FromArgb(0xFF0066CC),
+        QColor.FromArgb(0xFF6D6D6D),
+        QColor.FromArgb(0xFFF0F0F0),
+        QColor.FromArgb(0xFF000000));
+}
+
+/// <summary>A drop shadow: how far it is blurred, how far it falls below the item, and its color.</summary>
+public readonly record struct Elevation(float Blur, float OffsetY, QColor Color);
+
+/// <summary>
+/// The Windows 11 theme: light or dark, whether a contrast theme is on, the accent and the system colors, with the
+/// Fluent design tokens made from them. A token has the name of its WinUI 3 theme resource and the values of the
+/// Windows App SDK 1.8 <c>generic.xaml</c>. The platform updates the theme when the user changes their Windows
+/// settings.
+/// </summary>
+public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false)
 {
     private static Theme _current = Default(false);
 
@@ -22,111 +59,243 @@ public sealed record Theme(bool IsDark, QColor Accent, QColor AccentLight1, QCol
         }
     }
 
-    public static Theme Default(bool dark) => new(
-        dark,
-        QColor.Parse("#0078d4"),
-        QColor.Parse("#0093f9"),
-        QColor.Parse("#60ccff"),
-        QColor.Parse("#98ecff"),
-        QColor.Parse("#005fb8"),
-        QColor.Parse("#004480"),
-        QColor.Parse("#002642"));
+    public static Theme Default(bool dark) => new(dark, AccentColors.Default, SystemColors.Default);
 
-    private static QColor C(string s) => QColor.Parse(s);
+    /// <summary>A token's dark or light value, or its system color in a contrast theme.</summary>
+    private QColor Pick(uint dark, uint light, QColor highContrast) =>
+        IsHighContrast ? highContrast : QColor.FromArgb(IsDark ? dark : light);
 
-    // Text
-    public QColor TextColor => IsDark ? C("#ffffff") : C("#e4000000");
+    private QColor PickAccent(QColor dark, QColor light, QColor highContrast, double opacity = 1) =>
+        IsHighContrast ? highContrast : (IsDark ? dark : light).WithAlpha(opacity);
 
-    public QColor TextSecondary => IsDark ? C("#c5ffffff") : C("#9e000000");
+    // The accent and the system colors
 
-    public QColor TextTertiary => IsDark ? C("#87ffffff") : C("#72000000");
+    public QColor SystemAccentColor => Accents.Accent;
 
-    public QColor TextDisabled => IsDark ? C("#5dffffff") : C("#5c000000");
+    public QColor SystemAccentColorLight1 => Accents.Light1;
 
-    public QColor TextOnAccent => IsDark ? C("#000000") : C("#ffffff");
+    public QColor SystemAccentColorLight2 => Accents.Light2;
 
-    public QColor TextOnAccentSecondary => IsDark ? C("#80000000") : C("#b3ffffff");
+    public QColor SystemAccentColorLight3 => Accents.Light3;
 
-    public QColor TextOnAccentDisabled => IsDark ? C("#87ffffff") : C("#ffffff");
+    public QColor SystemAccentColorDark1 => Accents.Dark1;
 
-    /// <summary>Accent-colored text, such as a link.</summary>
-    public QColor AccentText => IsDark ? AccentLight2 : AccentDark2;
+    public QColor SystemAccentColorDark2 => Accents.Dark2;
 
-    // Fills
-    public QColor ControlFill => IsDark ? C("#0fffffff") : C("#b3ffffff");
+    public QColor SystemAccentColorDark3 => Accents.Dark3;
 
-    public QColor ControlFillSecondary => IsDark ? C("#15ffffff") : C("#80f9f9f9");
+    public QColor SystemColorWindowColor => System.Window;
 
-    public QColor ControlFillTertiary => IsDark ? C("#08ffffff") : C("#4df9f9f9");
+    public QColor SystemColorWindowTextColor => System.WindowText;
 
-    public QColor ControlFillDisabled => IsDark ? C("#0bffffff") : C("#4df9f9f9");
+    public QColor SystemColorHighlightColor => System.Highlight;
 
-    public QColor ControlFillInputActive => IsDark ? C("#b31e1e1e") : C("#ffffff");
+    public QColor SystemColorHighlightTextColor => System.HighlightText;
 
-    public QColor ControlStrongFill => IsDark ? C("#8bffffff") : C("#72000000");
+    public QColor SystemColorHotlightColor => System.Hotlight;
 
-    public QColor ControlStrongFillDisabled => IsDark ? C("#3fffffff") : C("#51000000");
+    public QColor SystemColorGrayTextColor => System.GrayText;
 
-    public QColor ControlAltFillSecondary => IsDark ? C("#19000000") : C("#06000000");
+    public QColor SystemColorButtonFaceColor => System.ButtonFace;
 
-    public QColor ControlAltFillTertiary => IsDark ? C("#0bffffff") : C("#0f000000");
+    public QColor SystemColorButtonTextColor => System.ButtonText;
 
-    public QColor SubtleFillSecondary => IsDark ? C("#0fffffff") : C("#09000000");
+    // Colors made from the accent
 
-    public QColor SubtleFillTertiary => IsDark ? C("#0affffff") : C("#06000000");
+    public QColor AccentTextFillColorPrimary => PickAccent(Accents.Light3, Accents.Dark2, System.WindowText);
 
-    public QColor AccentFill => IsDark ? AccentLight2 : AccentDark1;
+    public QColor AccentTextFillColorSecondary => PickAccent(Accents.Light3, Accents.Dark3, System.WindowText);
 
-    public QColor AccentFillSecondary => AccentFill.WithAlpha(0.9);
+    public QColor AccentTextFillColorTertiary => PickAccent(Accents.Light2, Accents.Dark1, System.WindowText);
 
-    public QColor AccentFillTertiary => AccentFill.WithAlpha(0.8);
+    public QColor AccentFillColorSelectedTextBackground => PickAccent(Accents.Accent, Accents.Accent, System.Window);
 
-    public QColor AccentFillDisabled => IsDark ? C("#28ffffff") : C("#37000000");
+    public QColor AccentFillColorDefault => PickAccent(Accents.Light2, Accents.Dark1, System.Window);
 
-    public QColor ControlSolidFill => IsDark ? C("#454545") : C("#ffffff");
+    public QColor AccentFillColorSecondary => PickAccent(Accents.Light2, Accents.Dark1, System.Window, 0.9);
 
-    // Strokes
-    public QColor ControlStroke => IsDark ? C("#12ffffff") : C("#0f000000");
+    public QColor AccentFillColorTertiary => PickAccent(Accents.Light2, Accents.Dark1, System.Window, 0.8);
 
-    public QColor ControlStrokeSecondary => IsDark ? C("#18ffffff") : C("#29000000");
+    public QColor SystemFillColorAttention => PickAccent(Accents.Light2, Accents.Accent, System.WindowText);
 
-    public QColor ControlStrongStroke => IsDark ? C("#8bffffff") : C("#72000000");
+    // The fixed colors
 
-    public QColor ControlStrongStrokeDisabled => IsDark ? C("#28ffffff") : C("#37000000");
+    public QColor TextFillColorPrimary => Pick(0xFFFFFFFF, 0xE4000000, System.WindowText);
 
-    public QColor AccentStrokeSecondary => IsDark ? C("#23000000") : C("#66000000");
+    public QColor TextFillColorSecondary => Pick(0xC5FFFFFF, 0x9E000000, System.WindowText);
 
-    public QColor CardStroke => IsDark ? C("#19000000") : C("#0f000000");
+    public QColor TextFillColorTertiary => Pick(0x87FFFFFF, 0x72000000, System.WindowText);
 
-    public QColor SurfaceStroke => IsDark ? C("#66757575") : C("#66757575");
+    public QColor TextFillColorDisabled => Pick(0x5DFFFFFF, 0x5C000000, System.GrayText);
 
-    public QColor DividerStroke => IsDark ? C("#15ffffff") : C("#14000000");
+    public QColor TextFillColorInverse => Pick(0xE4000000, 0xFFFFFFFF, System.WindowText);
 
-    public QColor FocusStrokeOuter => IsDark ? C("#ffffff") : C("#e4000000");
+    public QColor AccentTextFillColorDisabled => Pick(0x5DFFFFFF, 0x5C000000, System.GrayText);
 
-    public QColor FocusStrokeInner => IsDark ? C("#b3000000") : C("#b3ffffff");
+    public QColor TextOnAccentFillColorSelectedText => Pick(0xFFFFFFFF, 0xFFFFFFFF, System.WindowText);
 
-    // Backgrounds
-    public QColor CardBackground => IsDark ? C("#0dffffff") : C("#b3ffffff");
+    public QColor TextOnAccentFillColorPrimary => Pick(0xFF000000, 0xFFFFFFFF, System.WindowText);
 
-    public QColor CardBackgroundSecondary => IsDark ? C("#08ffffff") : C("#80f6f6f6");
+    public QColor TextOnAccentFillColorSecondary => Pick(0x80000000, 0xB3FFFFFF, System.WindowText);
 
-    public QColor LayerFill => IsDark ? C("#4c3a3a3a") : C("#80ffffff");
+    public QColor TextOnAccentFillColorDisabled => Pick(0x87FFFFFF, 0xFFFFFFFF, System.GrayText);
 
-    public QColor SolidBackground => IsDark ? C("#202020") : C("#f3f3f3");
+    public QColor ControlFillColorDefault => Pick(0x0FFFFFFF, 0xB3FFFFFF, System.ButtonFace);
 
-    public QColor SolidBackgroundSecondary => IsDark ? C("#1c1c1c") : C("#eeeeee");
+    public QColor ControlFillColorSecondary => Pick(0x15FFFFFF, 0x80F9F9F9, System.ButtonFace);
 
-    public QColor SolidBackgroundTertiary => IsDark ? C("#282828") : C("#f9f9f9");
+    public QColor ControlFillColorTertiary => Pick(0x08FFFFFF, 0x4DF9F9F9, System.ButtonFace);
 
-    public QColor FlyoutBackground => IsDark ? C("#2c2c2c") : C("#fcfcfc");
+    public QColor ControlFillColorDisabled => Pick(0x0BFFFFFF, 0x4DF9F9F9, System.ButtonFace);
 
-    /// <summary>The tint of an Acrylic surface where the system draws none.</summary>
-    public QColor AcrylicFallback => IsDark ? C("#2c2c2c") : C("#f9f9f9");
+    public QColor ControlFillColorTransparent => Pick(0x00FFFFFF, 0x00FFFFFF, QColor.Transparent);
 
-    public QColor SystemCritical => IsDark ? C("#ff99a4") : C("#c42b1c");
+    public QColor ControlFillColorInputActive => Pick(0xB31E1E1E, 0xFFFFFFFF, System.ButtonFace);
 
-    public QColor SystemSuccess => IsDark ? C("#6ccb5f") : C("#0f7b0f");
+    public QColor ControlStrongFillColorDefault => Pick(0x8BFFFFFF, 0x72000000, System.ButtonFace);
 
-    public QColor SystemCaution => IsDark ? C("#fce100") : C("#9d5d00");
+    public QColor ControlStrongFillColorDisabled => Pick(0x3FFFFFFF, 0x51000000, System.ButtonFace);
+
+    public QColor ControlSolidFillColorDefault => Pick(0xFF454545, 0xFFFFFFFF, System.ButtonFace);
+
+    public QColor SubtleFillColorTransparent => Pick(0x00FFFFFF, 0x00FFFFFF, QColor.Transparent);
+
+    public QColor SubtleFillColorSecondary => Pick(0x0FFFFFFF, 0x09000000, System.ButtonFace);
+
+    public QColor SubtleFillColorTertiary => Pick(0x0AFFFFFF, 0x06000000, System.ButtonFace);
+
+    public QColor SubtleFillColorDisabled => Pick(0x00FFFFFF, 0x00FFFFFF, System.ButtonFace);
+
+    public QColor ControlAltFillColorTransparent => Pick(0x00FFFFFF, 0x00FFFFFF, QColor.Transparent);
+
+    public QColor ControlAltFillColorSecondary => Pick(0x19000000, 0x06000000, System.ButtonFace);
+
+    public QColor ControlAltFillColorTertiary => Pick(0x0BFFFFFF, 0x0F000000, System.ButtonFace);
+
+    public QColor ControlAltFillColorQuarternary => Pick(0x12FFFFFF, 0x18000000, System.ButtonFace);
+
+    public QColor ControlAltFillColorDisabled => Pick(0x00FFFFFF, 0x00FFFFFF, System.ButtonFace);
+
+    public QColor ControlOnImageFillColorDefault => Pick(0xB31C1C1C, 0xC9FFFFFF, System.ButtonFace);
+
+    public QColor ControlOnImageFillColorSecondary => Pick(0xFF1A1A1A, 0xFFF3F3F3, System.ButtonFace);
+
+    public QColor ControlOnImageFillColorTertiary => Pick(0xFF131313, 0xFFEBEBEB, System.ButtonFace);
+
+    public QColor ControlOnImageFillColorDisabled => Pick(0xFF1E1E1E, 0x00FFFFFF, System.ButtonFace);
+
+    public QColor AccentFillColorDisabled => Pick(0x28FFFFFF, 0x37000000, System.Window);
+
+    public QColor ControlStrokeColorDefault => Pick(0x12FFFFFF, 0x0F000000, System.ButtonText);
+
+    public QColor ControlStrokeColorSecondary => Pick(0x18FFFFFF, 0x29000000, System.ButtonText);
+
+    public QColor ControlStrokeColorOnAccentDefault => Pick(0x14FFFFFF, 0x14FFFFFF, System.ButtonText);
+
+    public QColor ControlStrokeColorOnAccentSecondary => Pick(0x23000000, 0x66000000, System.ButtonText);
+
+    public QColor ControlStrokeColorOnAccentTertiary => Pick(0x37000000, 0x37000000, System.ButtonText);
+
+    public QColor ControlStrokeColorOnAccentDisabled => Pick(0x33000000, 0x0F000000, System.GrayText);
+
+    public QColor ControlStrokeColorForStrongFillWhenOnImage => Pick(0x6B000000, 0x59FFFFFF, System.ButtonText);
+
+    public QColor CardStrokeColorDefault => Pick(0x19000000, 0x0F000000, System.WindowText);
+
+    public QColor CardStrokeColorDefaultSolid => Pick(0xFF1C1C1C, 0xFFEBEBEB, System.WindowText);
+
+    public QColor ControlStrongStrokeColorDefault => Pick(0x8BFFFFFF, 0x72000000, System.ButtonText);
+
+    public QColor ControlStrongStrokeColorDisabled => Pick(0x28FFFFFF, 0x37000000, System.ButtonText);
+
+    public QColor SurfaceStrokeColorDefault => Pick(0x66757575, 0x66757575, System.WindowText);
+
+    public QColor SurfaceStrokeColorFlyout => Pick(0x33000000, 0x0F000000, System.WindowText);
+
+    public QColor SurfaceStrokeColorInverse => Pick(0x0F000000, 0x15FFFFFF, System.WindowText);
+
+    public QColor DividerStrokeColorDefault => Pick(0x15FFFFFF, 0x0F000000, System.WindowText);
+
+    public QColor FocusStrokeColorOuter => Pick(0xFFFFFFFF, 0xE4000000, System.WindowText);
+
+    public QColor FocusStrokeColorInner => Pick(0xB3000000, 0xB3FFFFFF, System.Window);
+
+    public QColor CardBackgroundFillColorDefault => Pick(0x0DFFFFFF, 0xB3FFFFFF, System.Window);
+
+    public QColor CardBackgroundFillColorSecondary => Pick(0x08FFFFFF, 0x80F6F6F6, System.Window);
+
+    public QColor SmokeFillColorDefault => Pick(0x4D000000, 0x4D000000, System.Window);
+
+    public QColor LayerFillColorDefault => Pick(0x4C3A3A3A, 0x80FFFFFF, System.Window);
+
+    public QColor LayerFillColorAlt => Pick(0x0DFFFFFF, 0xFFFFFFFF, System.Window);
+
+    public QColor LayerOnAcrylicFillColorDefault => Pick(0x09FFFFFF, 0x40FFFFFF, System.Window);
+
+    public QColor LayerOnAccentAcrylicFillColorDefault => Pick(0x09FFFFFF, 0x40FFFFFF, System.Window);
+
+    public QColor LayerOnMicaBaseAltFillColorDefault => Pick(0x733A3A3A, 0xB3FFFFFF, System.Window);
+
+    public QColor LayerOnMicaBaseAltFillColorSecondary => Pick(0x0FFFFFFF, 0x0A000000, System.Window);
+
+    public QColor LayerOnMicaBaseAltFillColorTertiary => Pick(0xFF2C2C2C, 0xFFF9F9F9, System.Window);
+
+    public QColor LayerOnMicaBaseAltFillColorTransparent => Pick(0x00FFFFFF, 0x00000000, System.Window);
+
+    public QColor SolidBackgroundFillColorBase => Pick(0xFF202020, 0xFFF3F3F3, System.Window);
+
+    public QColor SolidBackgroundFillColorSecondary => Pick(0xFF1C1C1C, 0xFFEEEEEE, System.Window);
+
+    public QColor SolidBackgroundFillColorTertiary => Pick(0xFF282828, 0xFFF9F9F9, System.Window);
+
+    public QColor SolidBackgroundFillColorQuarternary => Pick(0xFF2C2C2C, 0xFFFFFFFF, System.Window);
+
+    public QColor SolidBackgroundFillColorTransparent => Pick(0x00202020, 0x00F3F3F3, System.Window.WithAlpha(0));
+
+    public QColor SolidBackgroundFillColorBaseAlt => Pick(0xFF0A0A0A, 0xFFDADADA, System.Window);
+
+    public QColor SystemFillColorSuccess => Pick(0xFF6CCB5F, 0xFF0F7B0F, System.WindowText);
+
+    public QColor SystemFillColorCaution => Pick(0xFFFCE100, 0xFF9D5D00, System.WindowText);
+
+    public QColor SystemFillColorCritical => Pick(0xFFFF99A4, 0xFFC42B1C, System.WindowText);
+
+    public QColor SystemFillColorNeutral => Pick(0x8BFFFFFF, 0x72000000, System.WindowText);
+
+    public QColor SystemFillColorSolidNeutral => Pick(0xFF9D9D9D, 0xFF8A8A8A, System.WindowText);
+
+    public QColor SystemFillColorAttentionBackground => Pick(0x08FFFFFF, 0x80F6F6F6, System.Window);
+
+    public QColor SystemFillColorSuccessBackground => Pick(0xFF393D1B, 0xFFDFF6DD, System.Window);
+
+    public QColor SystemFillColorCautionBackground => Pick(0xFF433519, 0xFFFFF4CE, System.Window);
+
+    public QColor SystemFillColorCriticalBackground => Pick(0xFF442726, 0xFFFDE7E9, System.Window);
+
+    public QColor SystemFillColorNeutralBackground => Pick(0x08FFFFFF, 0x06000000, System.Window);
+
+    public QColor SystemFillColorSolidAttentionBackground => Pick(0xFF2E2E2E, 0xFFF7F7F7, System.Window);
+
+    public QColor SystemFillColorSolidNeutralBackground => Pick(0xFF2E2E2E, 0xFFF3F3F3, System.Window);
+
+    // Acrylic. The scene cannot blur what is behind an item, so these are the colors WinUI shows without the blur.
+    // A popup window gets the real material from the DWM.
+
+    public QColor AcrylicBackgroundFillColorDefault => Pick(0xFF2C2C2C, 0xFFF9F9F9, System.Window);
+
+    public QColor AcrylicBackgroundFillColorBase => Pick(0xFF1C1C1C, 0xFFEEEEEE, System.Window);
+
+    // Elevation, from the shadows of the Windows 11 design kit. WinUI draws them with ThemeShadow, which has no
+    // theme resource. A contrast theme draws no shadows.
+
+    public Elevation CardShadow => Shadow(4, 2, 0.04, 0.13);
+
+    public Elevation TooltipShadow => Shadow(8, 4, 0.14, 0.26);
+
+    public Elevation FlyoutShadow => Shadow(16, 8, 0.14, 0.26);
+
+    public Elevation DialogShadow => Shadow(64, 32, 0.19, 0.37);
+
+    private Elevation Shadow(float blur, float offsetY, double light, double dark) =>
+        new(blur, offsetY, IsHighContrast ? QColor.Transparent : QColor.Black.WithAlpha(IsDark ? dark : light));
 }

@@ -70,6 +70,14 @@ _Avoid_: widget, element, control
 An item with the behavior of a standard control, drawn in the Windows 11 style.
 _Avoid_: widget
 
+**Theme**:
+Light or dark, whether a contrast theme is on, the accent color and the system colors, as Windows reports them.
+_Avoid_: skin, style, palette
+
+**Token**:
+A named color, corner radius, font or timing of the Windows 11 look, made from the theme. It has the name of its WinUI 3 theme resource.
+_Avoid_: brush, resource, variable
+
 ## The language
 
 **Module**:

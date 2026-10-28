@@ -141,28 +141,28 @@ public sealed class Palette : QObject
     /// <summary>A palette color from the Fluent tokens of the current theme.</summary>
     internal static QColor Pick(Theme t, bool disabled, string name)
     {
-        var text = disabled ? t.TextDisabled : t.TextColor;
+        var text = disabled ? t.TextFillColorDisabled : t.TextFillColorPrimary;
         var dark = t.IsDark;
         return name switch
         {
-            "window" => t.SolidBackground,
+            "window" => t.SolidBackgroundFillColorBase,
             "windowText" or "text" or "buttonText" => text,
-            "base" => dark ? QColor.Parse("#2b2b2b") : QColor.White,
-            "alternateBase" => t.SolidBackgroundSecondary,
-            "button" => t.ControlSolidFill,
+            "base" => t.IsHighContrast ? t.SystemColorWindowColor : dark ? QColor.Parse("#2b2b2b") : QColor.White,
+            "alternateBase" => t.SolidBackgroundFillColorSecondary,
+            "button" => t.ControlSolidFillColorDefault,
             "brightText" => QColor.White,
-            "highlight" or "accent" => disabled ? t.AccentFillDisabled : t.AccentFill,
-            "highlightedText" => t.TextOnAccent,
+            "highlight" or "accent" => disabled ? t.AccentFillColorDisabled : t.AccentFillColorDefault,
+            "highlightedText" => t.TextOnAccentFillColorPrimary,
             "light" => dark ? QColor.Parse("#5a5a5a") : QColor.White,
             "midlight" => dark ? QColor.Parse("#4a4a4a") : QColor.Parse("#e5e5e5"),
             "mid" => dark ? QColor.Parse("#3a3a3a") : QColor.Parse("#c8c8c8"),
             "dark" => dark ? QColor.Parse("#1c1c1c") : QColor.Parse("#a0a0a0"),
             "shadow" => QColor.Black,
-            "link" => t.AccentText,
-            "linkVisited" => t.AccentText.Darker(1.2),
-            "toolTipBase" => t.FlyoutBackground,
-            "toolTipText" => t.TextColor,
-            "placeholderText" => t.TextSecondary,
+            "link" => t.AccentTextFillColorPrimary,
+            "linkVisited" => t.AccentTextFillColorPrimary.Darker(1.2),
+            "toolTipBase" => t.AcrylicBackgroundFillColorDefault,
+            "toolTipText" => t.TextFillColorPrimary,
+            "placeholderText" => t.TextFillColorSecondary,
             _ => text,
         };
     }

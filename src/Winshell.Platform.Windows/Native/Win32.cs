@@ -101,6 +101,14 @@ internal struct TRACKMOUSEEVENT
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct HIGHCONTRASTW
+{
+    public uint cbSize;
+    public uint dwFlags;
+    public nint lpszDefaultScheme;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct MARGINS
 {
     public int Left;
@@ -221,6 +229,20 @@ internal static partial class Win32
     public const uint WM_MOUSELEAVE = 0x02A3;
     public const uint WM_NCLBUTTONDOWN = 0x00A1;
     public const uint WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
+    public const uint WM_SYSCOLORCHANGE = 0x0015;
+    public const uint WM_THEMECHANGED = 0x031A;
+
+    public const uint SPI_GETHIGHCONTRAST = 0x0042;
+    public const uint HCF_HIGHCONTRASTON = 0x0001;
+
+    public const int COLOR_WINDOW = 5;
+    public const int COLOR_WINDOWTEXT = 8;
+    public const int COLOR_HIGHLIGHT = 13;
+    public const int COLOR_HIGHLIGHTTEXT = 14;
+    public const int COLOR_BTNFACE = 15;
+    public const int COLOR_GRAYTEXT = 17;
+    public const int COLOR_BTNTEXT = 18;
+    public const int COLOR_HOTLIGHT = 26;
     public const uint WM_APP = 0x8000;
 
     public const int HTTRANSPARENT = -1;
@@ -330,6 +352,13 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial ushort RegisterClassExW(in WNDCLASSEXW wc);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool SystemParametersInfoW(uint action, uint param, void* value, uint winIni);
+
+    [LibraryImport("user32.dll")]
+    public static partial uint GetSysColor(int index);
 
     [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint CreateWindowExW(uint exStyle, string className, string windowName, uint style, int x, int y, int width, int height, nint parent, nint menu, nint instance, nint param);
