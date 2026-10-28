@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Winshell.Platform.Windows/Winshell.Platform.Windows.csproj" />
+    <Project Path="src/Winshell.Qml/Winshell.Qml.csproj" />
+    <Project Path="src/Winshell.Runtime/Winshell.Runtime.csproj" />
+    <Project Path="src/Winshell/Winshell.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Winshell.Platform.Windows.Tests/Winshell.Platform.Windows.Tests.csproj" />
+    <Project Path="tests/Winshell.Qml.Tests/Winshell.Qml.Tests.csproj" />
+    <Project Path="tests/Winshell.Runtime.Tests/Winshell.Runtime.Tests.csproj" />
+  </Folder>
+</Solution>
