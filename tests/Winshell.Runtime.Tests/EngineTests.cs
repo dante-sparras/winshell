@@ -222,4 +222,32 @@ public class EngineTests
         Assert.Equal("#ff0000", root.ReadProperty("cs"));
         Assert.Equal(QColor.Parse("#4682b4"), root.ReadProperty("named"));
     }
+
+    [Fact]
+    public void Enum_types_name_their_values_with_toString()
+    {
+        var registry = StandardModules.Create();
+        registry.Module("Test.Enums").Add(new TypeEntry
+        {
+            Name = "Fruit",
+            Module = "Test.Enums",
+            ClrType = typeof(object),
+            Creatable = false,
+            Enums = new Dictionary<string, int> { ["Apple"] = 0, ["Pear"] = 1 },
+            EnumToString = v => v == 1 ? "A pear" : "An apple",
+        });
+        using var shell = new TestShell(("shell.qml", """
+            import QtQml
+            import Test.Enums
+            QtObject {
+              property int pear: Fruit.Pear
+              property string name: Fruit.toString(Fruit.Pear)
+            }
+            """));
+        using var engine = new QmlEngine(registry, shell.Loop, shell.Log, shell.Directory);
+        var root = engine.CreateRoot(Path.Combine(shell.Directory, "shell.qml"));
+        shell.Loop.Process();
+        Assert.Equal(1, root.ReadProperty("pear"));
+        Assert.Equal("A pear", root.ReadProperty("name"));
+    }
 }
