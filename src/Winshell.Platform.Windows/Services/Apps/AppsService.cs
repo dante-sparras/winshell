@@ -6,7 +6,7 @@ namespace Winshell.Platform.Windows.Services.Apps;
 /// <summary>
 /// The <c>Apps</c> singleton, from the Start menu: its shortcuts and its packaged apps. An entry's
 /// <c>startupClass</c> is the AppUserModelID or program name a window of the app has as its <c>AppWindow.appId</c>, so
-/// <c>heuristicLookup(toplevel.appId)</c> finds the app of a window.
+/// <c>heuristicLookup(window.appId)</c> finds the app of a window.
 /// </summary>
 public sealed class AppsService : QObject
 {

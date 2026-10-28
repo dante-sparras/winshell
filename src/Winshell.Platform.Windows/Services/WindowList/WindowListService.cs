@@ -11,7 +11,7 @@ public sealed class WindowListService : QObject
 {
     private readonly QmlEngine _engine;
     private readonly Dictionary<nint, AppWindow> _byHwnd = [];
-    private AppWindow? _activeToplevel;
+    private AppWindow? _activeWindow;
 
     public WindowListService(QmlEngine engine)
     {
@@ -21,9 +21,9 @@ public sealed class WindowListService : QObject
         Sync();
     }
 
-    [Qml] public ObjectModel Toplevels { get; } = new();
+    [Qml] public ObjectModel Windows { get; } = new();
 
-    [Qml] public AppWindow? ActiveToplevel { get { Track(); return _activeToplevel; } }
+    [Qml] public AppWindow? ActiveWindow { get { Track(); return _activeWindow; } }
 
     internal ScreenRegistry? Screens => _engine.GetService<ScreenRegistry>();
 
@@ -31,7 +31,7 @@ public sealed class WindowListService : QObject
     internal AppWindow? Find(nint hwnd)
     {
         // Reading the model's values makes a binding depend on them.
-        _ = Toplevels.Values;
+        _ = Windows.Values;
         return _byHwnd.GetValueOrDefault(hwnd);
     }
 
@@ -40,44 +40,44 @@ public sealed class WindowListService : QObject
         if (IsDestroyed)
             return;
         var windows = WindowTracker.Windows;
-        foreach (var (hwnd, toplevel) in _byHwnd.ToArray())
+        foreach (var (hwnd, window) in _byHwnd.ToArray())
         {
             if (windows.ContainsKey(hwnd))
                 continue;
             _byHwnd.Remove(hwnd);
-            Toplevels.Remove(toplevel);
-            if (_activeToplevel == toplevel)
-                SetField(ref _activeToplevel, null, nameof(ActiveToplevel));
-            toplevel.Emit("closed");
-            toplevel.Destroy();
+            Windows.Remove(window);
+            if (_activeWindow == window)
+                SetField(ref _activeWindow, null, nameof(ActiveWindow));
+            window.Emit("closed");
+            window.Destroy();
         }
         var added = new List<AppWindow>();
         foreach (var (hwnd, info) in windows)
         {
-            if (!_byHwnd.TryGetValue(hwnd, out var toplevel))
+            if (!_byHwnd.TryGetValue(hwnd, out var window))
             {
-                toplevel = new AppWindow(this, hwnd);
-                _byHwnd[hwnd] = toplevel;
-                added.Add(toplevel);
+                window = new AppWindow(this, hwnd) { Engine = _engine };
+                _byHwnd[hwnd] = window;
+                added.Add(window);
             }
-            toplevel.Update(info);
+            window.Update(info);
         }
         // Owners are known once every window is.
         foreach (var (hwnd, info) in windows)
             _byHwnd[hwnd].SetParent(info.Owner == 0 ? null : _byHwnd.GetValueOrDefault(info.Owner));
-        foreach (var toplevel in added)
-            Toplevels.Add(toplevel);
+        foreach (var window in added)
+            Windows.Add(window);
         var active = _byHwnd.GetValueOrDefault(WindowTracker.Active);
-        SetField(ref _activeToplevel, active, nameof(ActiveToplevel));
-        foreach (var toplevel in _byHwnd.Values)
-            toplevel.SetActivated(toplevel == active);
+        SetField(ref _activeWindow, active, nameof(ActiveWindow));
+        foreach (var window in _byHwnd.Values)
+            window.SetActivated(window == active);
     }
 
     protected override void OnDestroy()
     {
         WindowTracker.Changed -= Sync;
-        foreach (var toplevel in _byHwnd.Values)
-            toplevel.Destroy();
+        foreach (var window in _byHwnd.Values)
+            window.Destroy();
         _byHwnd.Clear();
     }
 }
@@ -104,6 +104,12 @@ public sealed class AppWindow : QObject
 
     /// <summary>The AppUserModelID the window carries, or its program's name in lower case.</summary>
     [Qml] public string AppId { get { Track(); return _info?.AppId ?? ""; } }
+
+    /// <summary>The full path of the program that owns the window, or empty when it cannot be read.</summary>
+    [Qml] public string Executable { get { Track(); return _info?.Executable ?? ""; } }
+
+    /// <summary>A path the icon provider draws: a packaged app's Start icon, or the program's own icon.</summary>
+    [Qml] public string Icon { get { Track(); return _info?.Icon ?? ""; } }
 
     [Qml] public bool Activated { get { Track(); return _activated; } }
 
@@ -138,30 +144,15 @@ public sealed class AppWindow : QObject
         set => WindowTracker.SetMinimized(Hwnd, value);
     }
 
-    /// <summary>Whether the window covers its screen without a frame. Windows has no way to ask a window to go fullscreen, so setting it does nothing.</summary>
-    [Qml]
-    public bool Fullscreen
-    {
-        get { Track(); return _info?.Fullscreen ?? false; }
-        set => _ = value;
-    }
+    /// <summary>Whether the window covers its screen without a frame. Windows has no request that puts another program's window into fullscreen.</summary>
+    [Qml] public bool Fullscreen { get { Track(); return _info?.Fullscreen ?? false; } }
 
     [Qml] public void Activate() => WindowTracker.Activate(Hwnd);
 
     [Qml] public void Close() => WindowTracker.Close(Hwnd);
 
-    /// <summary>Windows has no way to ask a window to go fullscreen; ignored, as a compositor may.</summary>
-    [Qml]
-    public void FullscreenOn(ShellScreen? screen) => _ = screen;
-
-    /// <summary>A hint for minimize animations. Windows takes it from the taskbar button; ignored.</summary>
-    [Qml]
-    public void SetRectangle(QObject? window, object? rect) => _ = (window, rect);
-
-    [Qml]
-    public void UnsetRectangle()
-    {
-    }
+    /// <summary>Moves the window onto a monitor. Its logical size stays, and a maximized window is maximized again there.</summary>
+    [Qml] public void MoveTo(ShellScreen? screen) => WindowTracker.MoveToMonitor(Hwnd, screen?.Id ?? "");
 
     internal void Update(WindowInfo info)
     {
@@ -171,6 +162,8 @@ public sealed class AppWindow : QObject
             return;
         if (old.Title != info.Title) NotifyChanged("title");
         if (old.AppId != info.AppId) NotifyChanged("appId");
+        if (old.Executable != info.Executable) NotifyChanged("executable");
+        if (old.Icon != info.Icon) NotifyChanged("icon");
         if (old.Maximized != info.Maximized) NotifyChanged("maximized");
         if (old.Minimized != info.Minimized) NotifyChanged("minimized");
         if (old.Fullscreen != info.Fullscreen) NotifyChanged("fullscreen");

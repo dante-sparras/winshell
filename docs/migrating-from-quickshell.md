@@ -103,6 +103,20 @@ Types not listed keep their names in the new module.
 | `Active` | `Active` |
 | `Error`, `Unlinked`, `Init`, `Negotiating`, `Allocating` | Removed. A session is playing or it is not. |
 
+### Windows
+
+`Winshell.Windows` names windows the way Windows does.
+
+| Quickshell | Winshell |
+| --- | --- |
+| `ToplevelManager.toplevels` | `WindowList.windows` |
+| `ToplevelManager.activeToplevel` | `WindowList.activeWindow` |
+| `Toplevel.fullscreenOn(screen)` | `AppWindow.moveTo(screen)`, which moves the window onto that monitor |
+| `Toplevel.setRectangle`, `Toplevel.unsetRectangle` | Removed. Windows does not take a rectangle for the minimize animation |
+| `Toplevel.fullscreen` writable | `AppWindow.fullscreen` is read-only. Windows has no request that puts another program's window into fullscreen |
+
+`AppWindow` also has `executable`, the program's path, and `icon`, a path the icon provider can draw. `appId` is unchanged: the window's AppUserModelID, or the program's file name in lower case.
+
 ## Removed
 
 These did nothing on Windows, or repeated what another type does.

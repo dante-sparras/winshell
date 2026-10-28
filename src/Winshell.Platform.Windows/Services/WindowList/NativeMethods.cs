@@ -104,6 +104,20 @@ internal static unsafe partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ShowWindowAsync(nint hwnd, int command);
 
+    public const uint SWP_NOZORDER = 0x0004;
+    public const uint SWP_NOACTIVATE = 0x0010;
+    public const uint WPF_ASYNCWINDOWPLACEMENT = 0x0004;
+    public const int SW_SHOWNORMAL = 1;
+    public const int SW_SHOWMINIMIZED = 2;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowPlacement(nint hwnd, ref WINDOWPLACEMENT placement);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowPlacement(nint hwnd, in WINDOWPLACEMENT placement);
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetForegroundWindow(nint hwnd);
@@ -223,6 +237,18 @@ internal static unsafe partial class NativeMethods
             return "";
         }
     }
+}
+
+/// <summary>The restored position of a window, in the same pixels <c>GetWindowRect</c> uses for a per-monitor aware process.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct WINDOWPLACEMENT
+{
+    public uint Length;
+    public uint Flags;
+    public uint ShowCmd;
+    public Native.POINT MinPosition;
+    public Native.POINT MaxPosition;
+    public Native.RECT Normal;
 }
 
 [StructLayout(LayoutKind.Sequential)]
