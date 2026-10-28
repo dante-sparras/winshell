@@ -41,6 +41,10 @@ public static class Fluent
     public const string ChevronUp = "";
     public const string ChevronRight = "";
     public const string ChevronLeft = "";
+    public const string CaretLeftSolid = "\uEDD9";
+    public const string CaretRightSolid = "\uEDDA";
+    public const string CaretUpSolid = "\uEDDB";
+    public const string CaretDownSolid = "\uEDDC";
 
     public static Theme T => Theme.Current;
 
@@ -238,6 +242,26 @@ public static class Fluent
             return;
         using var paint = new SKPaint { Color = color.ToSk(), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = width };
         canvas.DrawCircle(cx, cy, radius - width / 2, paint);
+    }
+
+    /// <summary>
+    /// The one pixel border of a raised circle, such as a slider thumb: WinUI's <c>CircleElevationBorderBrush</c>,
+    /// a shade darker over the bottom third. A contrast theme draws it in the button text color.
+    /// </summary>
+    public static void StrokeCircleElevation(SKCanvas canvas, float cx, float cy, float radius, Theme t)
+    {
+        if (t.IsHighContrast)
+        {
+            StrokeCircle(canvas, cx, cy, radius, t.SystemColorButtonTextColor);
+            return;
+        }
+        using var shader = SKShader.CreateLinearGradient(
+            new SKPoint(cx, cy - radius), new SKPoint(cx, cy + radius),
+            [t.ControlStrokeColorDefault.ToSk(), t.ControlStrokeColorDefault.ToSk(), t.ControlStrokeColorSecondary.ToSk(), t.ControlStrokeColorSecondary.ToSk()],
+            [0, 0.5f, 0.7f, 1],
+            SKShaderTileMode.Clamp);
+        using var paint = new SKPaint { Shader = shader, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1 };
+        canvas.DrawCircle(cx, cy, radius - 0.5f, paint);
     }
 
     /// <summary>The soft shadow under a flyout, menu or tooltip.</summary>

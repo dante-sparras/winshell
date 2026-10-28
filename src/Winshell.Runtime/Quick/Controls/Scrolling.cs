@@ -3,8 +3,8 @@ using SkiaSharp;
 namespace Winshell.Runtime.Quick.Controls;
 
 /// <summary>
-/// QtQuick.Controls' <c>ScrollBar</c>, drawn as a Windows 11 scroll bar: a thin line that widens into a bar
-/// with a track while the pointer is over it.
+/// QtQuick.Controls' <c>ScrollBar</c>, drawn as WinUI's: a thin line that widens into a bar with a track and
+/// arrows once the pointer has rested on it for 400 ms, and narrows again 2 s after the pointer leaves.
 /// </summary>
 public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 {
@@ -31,9 +31,26 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
         SnapOnRelease = 2,
     }
 
+    /// <summary>The length of WinUI's arrow buttons at each end, which the thumb does not cover.</summary>
+    private const double ArrowZone = 16;
+
+    private readonly NumberTransition _expansion = new(100);
+    private bool _wantsExpanded;
+    private TimeSpan _wantsSince = TimeSpan.MinValue;
+    private IDisposable? _wake;
+    private double _expanded;
+
     public ScrollBar()
     {
-        SetDefaultPadding(3, 3, 3, 3);
+        SetPaddingForOrientation();
+    }
+
+    private void SetPaddingForOrientation()
+    {
+        if (_orientation == 2)
+            SetDefaultPadding(3, ArrowZone, 3, ArrowZone);
+        else
+            SetDefaultPadding(ArrowZone, 3, ArrowZone, 3);
     }
 
     [Qml] public double Size { get { Track(); return _size; } set { if (SetField(ref _size, Math.Clamp(value, 0, 1))) GeometryUpdated(); } }
@@ -60,6 +77,7 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
             {
                 NotifyChanged("horizontal");
                 NotifyChanged("vertical");
+                SetPaddingForOrientation();
                 UpdateImplicitSize();
                 LayoutChildren();
             }
@@ -105,7 +123,39 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 
     bool IKeepsPointerGrab.KeepsGrab => _pressed;
 
-    private bool Expanded => Hovered || _pressed;
+    /// <summary>
+    /// How far the bar has widened, 0 to 1. It widens 400 ms after the pointer comes to rest on it, or at once when
+    /// pressed, and narrows 2 s after the pointer leaves, each over 100 ms.
+    /// </summary>
+    private double Expansion(PaintContext context)
+    {
+        var wants = Hovered || _pressed;
+        if (context.Time <= TimeSpan.Zero)
+            return wants ? 1 : 0;
+        if (_wantsSince == TimeSpan.MinValue)
+        {
+            // The first paint shows the bar as it is, without waiting.
+            _wantsExpanded = wants;
+            _wantsSince = context.Time - TimeSpan.FromSeconds(10);
+            _expansion.Jump(wants ? 1 : 0);
+        }
+        if (wants != _wantsExpanded)
+        {
+            _wantsExpanded = wants;
+            _wantsSince = context.Time;
+            _wake?.Dispose();
+            _wake = null;
+        }
+        var delay = _pressed ? TimeSpan.Zero : TimeSpan.FromMilliseconds(wants ? 400 : 2000);
+        var waited = context.Time - _wantsSince;
+        if (waited < delay)
+        {
+            // Wake once when the delay ends, instead of painting every frame until then.
+            _wake ??= Engine?.Loop.Schedule(delay - waited, () => { _wake = null; Update(); });
+            return _expansion.Step(wants ? 0 : 1, context);
+        }
+        return _expansion.Step(wants ? 1 : 0, context);
+    }
 
     private void GeometryUpdated()
     {
@@ -136,15 +186,52 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
     [Qml]
     public void Decrease() => Position = Math.Max(0, _position - (_stepSize > 0 ? _stepSize : 0.1));
 
-    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
+    protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, context) =>
     {
-        if (!Expanded || !IsNeeded)
+        _expanded = Expansion(context);
+        if (_expanded <= 0 || !IsNeeded)
             return;
         var t = Theme.Current;
         var r = i.Bounds;
-        Fluent.FillRound(c, r, 6, t.AcrylicBackgroundFillColorDefault.WithAlpha(0.92));
-        Fluent.StrokeRound(c, r, 6, t.ControlStrokeColorDefault);
+        Fluent.FillRound(c, r, 6, FluentResources.ScrollBarTrackFill(t).Faded(_expanded));
+        if (t.IsHighContrast)
+            Fluent.StrokeRound(c, r, 6, t.SystemColorButtonTextColor.Faded(_expanded));
+        // Segoe Fluent Icons' solid carets at 8 pixels, centered in each end's arrow zone.
+        var arrow = FluentResources.ScrollBarButtonArrowForeground(t).For(Enabled, false, false).Faded(_expanded);
+        var zone = (float)ArrowZone;
+        if (_orientation == 2)
+        {
+            DrawArrow(c, Fluent.CaretUpSolid, r.MidX, r.Top + zone / 2, arrow);
+            DrawArrow(c, Fluent.CaretDownSolid, r.MidX, r.Bottom - zone / 2, arrow);
+        }
+        else
+        {
+            DrawArrow(c, Fluent.CaretLeftSolid, r.Left + zone / 2, r.MidY, arrow);
+            DrawArrow(c, Fluent.CaretRightSolid, r.Right - zone / 2, r.MidY, arrow);
+        }
     }, 12, 12));
+
+    private static void DrawArrow(SKCanvas c, string glyph, float cx, float cy, QColor color)
+    {
+        if (Fluent.DrawGlyph(c, glyph, cx, cy, 8, color))
+            return;
+        // Without the icon font, a small triangle pointing the same way.
+        var (dx, dy) = glyph switch
+        {
+            Fluent.CaretUpSolid => (0f, -1f),
+            Fluent.CaretDownSolid => (0f, 1f),
+            Fluent.CaretLeftSolid => (-1f, 0f),
+            _ => (1f, 0f),
+        };
+        using var builder = new SKPathBuilder();
+        builder.MoveTo(cx + dx * 3, cy + dy * 3);
+        builder.LineTo(cx - dx * 2 + dy * 3, cy - dy * 2 + dx * 3);
+        builder.LineTo(cx - dx * 2 - dy * 3, cy - dy * 2 - dx * 3);
+        builder.Close();
+        using var path = builder.Detach();
+        using var paint = new SKPaint { Color = color.ToSk(), IsAntialias = true };
+        c.DrawPath(path, paint);
+    }
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
     {
@@ -152,11 +239,14 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
             return;
         var t = Theme.Current;
         var r = i.Bounds;
-        var thickness = Expanded ? 6f : 2f;
-        var color = _pressed ? t.ControlStrongFillColorDefault.WithAlpha(Math.Min(1, t.ControlStrongFillColorDefault.A * 1.2)) : t.ControlStrongFillColorDefault;
+        // A 2 pixel line near the far edge widens into a centered 6 pixel thumb.
+        var e = (float)_expanded;
+        var thickness = 2 + 4 * e;
+        var offset = 2 * (1 - e);
+        var color = FluentResources.ScrollBarThumbFill(t).For(Enabled, _pressed, Hovered);
         var rect = _orientation == 2
-            ? SKRect.Create(r.MidX - thickness / 2 + (Expanded ? 0 : 2), r.Top, thickness, r.Height)
-            : SKRect.Create(r.Left, r.MidY - thickness / 2 + (Expanded ? 0 : 2), r.Width, thickness);
+            ? SKRect.Create(r.MidX - thickness / 2 + offset, r.Top, thickness, r.Height)
+            : SKRect.Create(r.Left, r.MidY - thickness / 2 + offset, r.Width, thickness);
         Fluent.FillRound(c, rect, thickness / 2, color);
     }, 6, 6));
 
@@ -218,6 +308,15 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
     {
         var length = _orientation == 2 ? AvailableHeight : AvailableWidth;
         var at = _orientation == 2 ? y - TopPadding : x - LeftPadding;
+        // The arrows at the ends step, as WinUI's small decrease and increase buttons do.
+        if (at < 0 || at > length)
+        {
+            if (at < 0)
+                Decrease();
+            else
+                Increase();
+            return true;
+        }
         var start = VisualPosition * length;
         var size = VisualSize * length;
         // A press on the handle drags it from where it was taken; elsewhere the handle centers on the press.

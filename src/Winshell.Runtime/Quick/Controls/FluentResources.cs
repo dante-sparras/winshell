@@ -120,4 +120,40 @@ public static class FluentResources
     public static StateColors ToggleSwitchKnobFillOn(Theme t) => t.IsHighContrast
         ? Contrast(t, s => s.HighlightText, s => s.ButtonText, s => s.ButtonText, s => s.GrayText)
         : new(t.TextOnAccentFillColorPrimary, t.TextOnAccentFillColorPrimary, t.TextOnAccentFillColorPrimary, t.TextOnAccentFillColorDisabled);
+
+    // Slider
+
+    public static StateColors SliderTrackFill(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.ButtonText, s => s.ButtonText, s => s.GrayText)
+        : new(t.ControlStrongFillColorDefault, t.ControlStrongFillColorDefault, t.ControlStrongFillColorDefault, t.ControlStrongFillColorDisabled);
+
+    public static StateColors SliderTrackValueFill(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.Highlight, s => s.Highlight, s => s.Highlight, s => s.GrayText)
+        : new(t.AccentFillColorDefault, t.AccentFillColorSecondary, t.AccentFillColorTertiary, t.AccentFillColorDisabled);
+
+    public static StateColors SliderThumbBackground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.Highlight, s => s.Hotlight, s => s.GrayText)
+        : new(t.AccentFillColorDefault, t.AccentFillColorSecondary, t.AccentFillColorTertiary, t.AccentFillColorDisabled);
+
+    public static QColor SliderOuterThumbBackground(Theme t) => t.IsHighContrast ? t.SystemColorButtonTextColor : t.ControlSolidFillColorDefault;
+
+    // Progress
+
+    public static QColor ProgressBarForeground(Theme t) => t.IsHighContrast ? t.SystemColorHighlightColor : t.AccentFillColorDefault;
+
+    /// <summary>The one pixel track. A contrast theme draws it as WinUI's border, in the window text color.</summary>
+    public static QColor ProgressBarBackground(Theme t) => t.IsHighContrast ? t.SystemColorWindowTextColor : t.ControlStrongStrokeColorDefault;
+
+    // Scroll bar
+
+    public static StateColors ScrollBarThumbFill(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.Highlight, s => s.Highlight, s => s.GrayText)
+        : new(t.ControlStrongFillColorDefault, t.ControlStrongFillColorDefault, t.ControlStrongFillColorDefault, t.ControlStrongFillColorDisabled);
+
+    public static StateColors ScrollBarButtonArrowForeground(Theme t) => t.IsHighContrast
+        ? Contrast(t, s => s.ButtonText, s => s.Highlight, s => s.Highlight, s => s.GrayText)
+        : new(t.ControlStrongFillColorDefault, t.TextFillColorSecondary, t.TextFillColorSecondary, t.ControlStrongFillColorDisabled);
+
+    /// <summary>The track of an expanded scroll bar: WinUI's in-app acrylic, here its fallback color.</summary>
+    public static QColor ScrollBarTrackFill(Theme t) => t.IsHighContrast ? t.SystemColorWindowColor : t.AcrylicBackgroundFillColorDefault;
 }
