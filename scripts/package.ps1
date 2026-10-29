@@ -57,7 +57,7 @@ if ($Pack) {
 
     # winget manifests, ready for wingetcreate submit: https://github.com/microsoft/winget-pkgs
     $id = 'DanteSparras.Winshell'
-    $schema = '1.10.0'
+    $schema = '1.28.0'
     $wingetDir = Join-Path $Out "winget/$Version"
     if (Test-Path $wingetDir) { Remove-Item -LiteralPath $wingetDir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $wingetDir | Out-Null
@@ -91,8 +91,8 @@ InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
   - RelativeFilePath: winshell.exe
-    PortableCommandAlias: winshell
-# winshell.exe loads the DLLs next to it, so winget puts its folder on PATH instead of linking the exe.
+# winshell.exe loads the DLLs next to it, so winget puts its folder on PATH instead of linking the exe. The command is
+# then the exe's own name, winshell.
 ArchiveBinariesDependOnPath: true
 InstallModes:
   - silent
