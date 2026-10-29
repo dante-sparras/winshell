@@ -94,6 +94,10 @@ internal sealed class SmtcSessions
         _pending = null;
 
         global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation;
+        // AsTask captures the test synchronization context. The test thread is blocked in its wait, so that
+        // completion never runs and the list stays empty. Ask with no context, then read the result here.
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(null);
         try
         {
             operation = GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
@@ -103,6 +107,15 @@ internal sealed class SmtcSessions
             Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
             return;
         }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        var started = Environment.TickCount;
+        while (operation.Status == global::Windows.Foundation.AsyncStatus.Started
+            && unchecked(Environment.TickCount - started) < 50)
+            Thread.Yield();
 
         if (operation.Status == global::Windows.Foundation.AsyncStatus.Completed)
         {
@@ -117,7 +130,6 @@ internal sealed class SmtcSessions
         _pending = operation;
         _pendingSince = Environment.TickCount;
         _pendingThread = Environment.CurrentManagedThreadId;
-        operation.Completed = (_, _) => RequestSync();
     }
 
     private void Apply(global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
