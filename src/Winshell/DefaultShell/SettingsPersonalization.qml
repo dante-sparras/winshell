@@ -56,6 +56,12 @@ Column {
     Accessible.role: Accessible.List
     Accessible.name: "Windows colors"
 
+    // Eight across when the page is wide. A 680-wide window cannot fit that row past the pane, so the count falls.
+    readonly property int columns: {
+      const room = Math.max(44, width - 68)
+      return Math.max(1, Math.min(8, Math.floor((room + 4) / 44)))
+    }
+
     function focusSwatch(index) {
       const accent = Settings.accents[Math.max(0, Math.min(Settings.accents.length - 1, index))]
       const swatch = grid.children.find(c => c.objectName === "swatch:" + accent[0])
@@ -67,7 +73,7 @@ Column {
       id: grid
       x: 52
       y: 16
-      columns: 8
+      columns: swatches.columns
       spacing: 4
 
       Repeater {
@@ -83,8 +89,20 @@ Column {
           height: 40
           radius: Theme.controlCornerRadius
           color: modelData[0]
-          border.width: chosen || swatch.activeFocus ? 2 : 0
+          border.width: chosen ? 2 : 0
           border.color: Theme.textFillColorPrimary
+
+          Rectangle {
+            objectName: "focusRing"
+            anchors.fill: parent
+            anchors.margins: -3
+            visible: swatch.activeFocus
+            radius: swatch.radius + 3
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.focusStrokeColorOuter
+            Accessible.ignored: true
+          }
           activeFocusOnTab: chosen || (index === 0 && !Settings.accents.some(a => a[0] === String(Preferences.accentColor).toUpperCase()))
           Accessible.role: Accessible.RadioButton
           Accessible.name: modelData[1]

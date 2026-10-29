@@ -336,6 +336,46 @@ public class SettingsTests
         }
     }
 
+    [Fact]
+    public void A_narrow_window_wraps_accent_swatches_and_focus_is_a_ring()
+    {
+        var saved = Theme.Current;
+        try
+        {
+            Theme.Current = Theme.Default(false);
+            using var shell = Open(width: 680);
+            Pick(shell, "accentColor", 1);
+            var swatches = shell.Find("accentSwatches");
+            var columns = Convert.ToInt32(swatches.ReadProperty("columns"));
+            Assert.InRange(columns, 1, 7);
+
+            var last = shell.Find("swatch:#7E735F");
+            var edge = last.MapToScene(last.Width, 0);
+            var limit = swatches.MapToScene(swatches.Width, 0);
+            Assert.True(edge.X <= limit.X + 0.5);
+
+            var chosen = shell.Find("swatch:#0078D4");
+            var ring = Assert.Single(chosen.ChildItems, item => item.ObjectName == "focusRing");
+            Assert.False(ring.Visible);
+            Assert.Equal(2, ((BorderGroup)chosen.ReadProperty("border")!).Width);
+            chosen.ForceActiveFocus();
+            Assert.True(ring.Visible);
+            Assert.Equal(Theme.Current.FocusStrokeColorOuter, ((BorderGroup)ring.ReadProperty("border")!).Color);
+
+            shell.Click(shell.Find("nav:start"));
+            shell.Click(Card(shell, "startPins"));
+            var crumb = shell.Find("crumb:start");
+            crumb.ForceActiveFocus();
+            var crumbRing = Assert.Single(crumb.ChildItems, item => item.ObjectName == "focusRing");
+            Assert.True(crumbRing.Visible);
+            Assert.Equal(Theme.Current.FocusStrokeColorOuter, ((BorderGroup)crumbRing.ReadProperty("border")!).Color);
+        }
+        finally
+        {
+            Theme.Current = saved;
+        }
+    }
+
     [Theory]
     [InlineData("personalization", "windowsColors", "ms-settings:colors")]
     [InlineData("taskbar", "trayIcons", "ms-settings:taskbar")]
