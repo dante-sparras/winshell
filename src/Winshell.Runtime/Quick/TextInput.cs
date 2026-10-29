@@ -27,6 +27,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private double _scrollX;
     private IDisposable? _blink;
     private bool _blinkOn = true;
+    private long _blinkElapsed;
     private readonly List<(string Text, int Cursor)> _undo = [];
     private double _padding, _leftPadding, _rightPadding, _topPadding, _bottomPadding;
     private int _dragAnchor = -1;
@@ -583,11 +584,22 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private void RestartBlink()
     {
         _blinkOn = true;
+        _blinkElapsed = 0;
         _blink?.Dispose();
-        if (Engine is null || !ActiveFocus)
-            return;
-        // Windows blinks the caret every 530 ms.
-        _blink = Engine.Loop.Schedule(TimeSpan.FromMilliseconds(530), Blink);
+        _blink = null;
+        ScheduleBlink();
+    }
+
+    /// <summary>
+    /// Whether the caret still blinks. It blinks at the Windows rate until the caret timeout passes without input,
+    /// then stays shown, as a Windows edit box does.
+    /// </summary>
+    private bool Blinking => Theme.Current.CaretBlinkTime != Theme.CaretNoBlink && _blinkElapsed < Theme.Current.CaretTimeout;
+
+    private void ScheduleBlink()
+    {
+        if (Blinking && !IsDestroyed && ActiveFocus && Engine is not null)
+            _blink = Engine.Loop.Schedule(TimeSpan.FromMilliseconds(Theme.Current.CaretBlinkTime), Blink);
     }
 
     private void Blink()
@@ -597,13 +609,13 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             return;
         try
         {
-            _blinkOn = !_blinkOn;
+            _blinkElapsed += Theme.Current.CaretBlinkTime;
+            _blinkOn = !_blinkOn || !Blinking;
             Update();
         }
         finally
         {
-            if (!IsDestroyed && ActiveFocus && Engine is not null)
-                _blink = Engine.Loop.Schedule(TimeSpan.FromMilliseconds(530), Blink);
+            ScheduleBlink();
         }
     }
 
@@ -835,8 +847,9 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         if (_cursorVisible && ActiveFocus && _blinkOn && !_readOnly)
         {
             var cx = (float)Math.Round(OffsetOf(_cursorPosition));
-            using var caret = new SKPaint { Color = PaintColor.ToSk(), StrokeWidth = 1, IsAntialias = false };
-            canvas.DrawLine(cx + 0.5f, 1, cx + 0.5f, (float)lineHeight - 1, caret);
+            var width = (float)Math.Max(1, Theme.Current.CaretWidth);
+            using var caret = new SKPaint { Color = PaintColor.ToSk(), IsAntialias = false };
+            canvas.DrawRect(SKRect.Create(cx, 1, width, (float)lineHeight - 2), caret);
         }
         canvas.Restore();
     }

@@ -208,6 +208,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         {
         }
         var theme = Theme.Default(dark) with { System = ReadSystemColors(), IsHighContrast = HighContrastOn(), WheelScrollLines = WheelScrollLines() };
+        theme = theme with
+        {
+            CaretBlinkTime = Win32.GetCaretBlinkTime() is > 0 and var blink ? blink : 530,
+            CaretTimeout = SystemParameter(Win32.SPI_GETCARETTIMEOUT, 5000),
+            CaretWidth = SystemParameter(Win32.SPI_GETCARETWIDTH, 1),
+        };
         var animations = true;
         try
         {
@@ -248,6 +254,13 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     {
         uint lines;
         return Win32.SystemParametersInfoW(Win32.SPI_GETWHEELSCROLLLINES, 0, &lines, 0) ? lines : 3;
+    }
+
+    /// <summary>A <c>DWORD</c> system parameter, or <paramref name="fallback"/> when Windows has none.</summary>
+    private static uint SystemParameter(uint action, uint fallback)
+    {
+        uint value;
+        return Win32.SystemParametersInfoW(action, 0, &value, 0) ? value : fallback;
     }
 
     private static SystemColors ReadSystemColors()

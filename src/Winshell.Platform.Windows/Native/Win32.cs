@@ -234,6 +234,8 @@ internal static partial class Win32
 
     public const uint SPI_GETHIGHCONTRAST = 0x0042;
     public const uint SPI_GETWHEELSCROLLLINES = 0x0068;
+    public const uint SPI_GETCARETWIDTH = 0x2006;
+    public const uint SPI_GETCARETTIMEOUT = 0x2022;
     public const uint HCF_HIGHCONTRASTON = 0x0001;
 
     public const int COLOR_WINDOW = 5;
@@ -677,6 +679,9 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     public static partial uint GetDoubleClickTime();
+
+    [LibraryImport("user32.dll")]
+    public static partial uint GetCaretBlinkTime();
 
     public static int LowWord(nint value) => (short)((long)value & 0xFFFF);
 
