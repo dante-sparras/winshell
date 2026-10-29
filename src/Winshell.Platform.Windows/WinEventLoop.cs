@@ -9,21 +9,22 @@ namespace Winshell.Platform.Windows;
 /// </summary>
 public sealed class WinEventLoop : EventQueue, IDisposable
 {
-    private readonly nint _wake;
+    private readonly object _wakeLock = new();
+    private nint _wake;
     private bool _quit;
     private int _exitCode;
 
     public WinEventLoop()
     {
         _wake = Win32.CreateEventW(0, false, false, 0);
-        Woken += () => Win32.SetEvent(_wake);
+        Woken += Wake;
     }
 
     public void Quit(int code)
     {
         _exitCode = code;
         _quit = true;
-        Win32.SetEvent(_wake);
+        Wake();
     }
 
     public int Run()
@@ -58,5 +59,24 @@ public sealed class WinEventLoop : EventQueue, IDisposable
         return _exitCode;
     }
 
-    public void Dispose() => Win32.CloseHandle(_wake);
+    // A worker can post while the loop is disposed, so the lock keeps SetEvent off a closed, possibly reused handle.
+    private void Wake()
+    {
+        lock (_wakeLock)
+        {
+            if (_wake != 0)
+                Win32.SetEvent(_wake);
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_wakeLock)
+        {
+            if (_wake == 0)
+                return;
+            Win32.CloseHandle(_wake);
+            _wake = 0;
+        }
+    }
 }
