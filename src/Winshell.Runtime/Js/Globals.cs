@@ -80,7 +80,7 @@ internal static class Globals
                 items.Add(Describe(runtime, array[i], depth + 1));
             return "[" + string.Join(",", items) + "]";
         }
-        if (value.IsObject() && !value.IsCallable() && value.ToObject() is not (QColor or QPoint or QSize or QRect) && !value.IsDate() && !value.IsRegExp())
+        if (value.IsObject() && !value.IsCallable() && value is not ObjectWrapper { Target: QColor or QPoint or QSize or QRect } && !value.IsDate() && !value.IsRegExp())
         {
             if (value.AsObject().Get("toString") is var ts && ts.IsCallable() && ts != runtime.Engine.Intrinsics.Object.PrototypeObject.Get("toString"))
                 return TypeConverter.ToString(runtime.Engine.Call(ts, value, []));
