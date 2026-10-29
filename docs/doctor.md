@@ -39,7 +39,7 @@ Nothing. It shows no prompts, writes no registry values or settings, and starts 
 
 ```json
 {
-  "version": "0.6.0",
+  "version": "x.y.z",
   "checks": [
     { "id": "windows", "title": "Windows", "status": "pass", "message": "Windows 11 25H2, build 26200.1", "fix": null }
   ],
@@ -47,7 +47,7 @@ Nothing. It shows no prompts, writes no registry values or settings, and starts 
 }
 ```
 
-`id` is one of `windows`, `dotnet`, `config`, `folders`, `appBars`, `dpi`, `signIn`, `notifications`, `instances` and `crashes`. `status` is `pass`, `warn` or `fail`. `fix` is null when the check passed.
+`version` is whatever `winshell doctor --json` prints for that build. The sample uses `x.y.z` in its place. `id` is one of `windows`, `dotnet`, `config`, `folders`, `appBars`, `dpi`, `signIn`, `notifications`, `instances` and `crashes`. `status` is `pass`, `warn` or `fail`. `fix` is null when the check passed.
 
 ## Not checked by the automated tests
 
