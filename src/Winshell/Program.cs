@@ -11,10 +11,19 @@ using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
 
-return await Cli.Run(args);
-
 namespace Winshell
 {
+    internal static class Program
+    {
+        /// <summary>
+        /// The shell's event loop runs on this thread, so it is a single-threaded apartment: shell objects and
+        /// ShellExecute run on it directly, not in a hidden apartment through a proxy. A console app has no
+        /// synchronization context, so the commands that await continue on the thread pool while this thread waits.
+        /// </summary>
+        [STAThread]
+        private static int Main(string[] args) => Cli.Run(args).GetAwaiter().GetResult();
+    }
+
     /// <summary>The command line.</summary>
     internal static class Cli
     {
