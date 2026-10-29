@@ -67,7 +67,7 @@ The notification center is empty until you allow access: click **Allow notificat
 
 ## Tray icons are missing
 
-- Only one instance in the Windows session hosts the tray icons. A second instance logs that it is waiting, and takes over within a second when the first one exits.
+- Only one instance in the Windows session hosts the tray icons. A second instance logs that it is waiting, and takes over within half a second when the first one exits.
 - The volume, network and battery icons are Explorer's own, not tray icons. Winshell shows its own from `Winshell.Audio`, `Winshell.Network` and `Winshell.Power`.
 - An icon Windows Settings hides is in the overflow behind the chevron. Choose which icons show in Windows Settings > Personalization > Taskbar > Other system tray icons.
 
