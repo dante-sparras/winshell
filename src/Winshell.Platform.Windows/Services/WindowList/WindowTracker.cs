@@ -26,6 +26,9 @@ internal static unsafe class WindowTracker
 {
     private static readonly Dictionary<nint, WindowInfo> Tracked = [];
     private static readonly HashSet<nint> Dirty = [];
+    private static readonly HashSet<nint> Flashed = [];
+    private static readonly HashSet<nint> Wanting = [];
+    private static uint _shellHookMessage;
     private static IEventLoop? _loop;
     private static bool _flushPosted;
     private static bool _foregroundDirty;
@@ -40,6 +43,9 @@ internal static unsafe class WindowTracker
 
     /// <summary>The tracked window that has the foreground, or owns the window that has it. Zero when none.</summary>
     public static nint Active { get; private set; }
+
+    /// <summary>Whether the window flashed to ask for attention and has not been activated since.</summary>
+    public static bool WantsAttention(nint hwnd) => Wanting.Contains(hwnd);
 
     /// <summary>Sets the hooks and reads the open windows, once. Must run on the UI thread, which pumps messages.</summary>
     public static void EnsureStarted(IEventLoop loop, Log log)
@@ -60,6 +66,7 @@ internal static unsafe class WindowTracker
             if (SetWinEventHook(min, max, 0, &OnWinEvent, 0, 0, WINEVENT_OUTOFCONTEXT) == 0)
                 log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
+        StartShellHook(log);
         _enumerated = [];
         EnumWindows(&Collect, 0);
         foreach (var hwnd in _enumerated)
@@ -67,6 +74,47 @@ internal static unsafe class WindowTracker
         _enumerated = null;
         _foregroundDirty = true;
         Flush();
+    }
+
+    /// <summary>
+    /// Asks for the shell hook messages Explorer's taskbar gets. Only <c>HSHELL_FLASH</c> is read: WinEvents say
+    /// nothing when a window flashes.
+    /// </summary>
+    private static void StartShellHook(Log log)
+    {
+        const string className = "WinshellShellHook";
+        _shellHookMessage = Win32.RegisterWindowMessageW("SHELLHOOK");
+        fixed (char* name = className)
+        {
+            var wc = new WNDCLASSEXW
+            {
+                cbSize = (uint)sizeof(WNDCLASSEXW),
+                lpfnWndProc = &ShellHookProc,
+                hInstance = Win32.GetModuleHandleW(null),
+                lpszClassName = name,
+            };
+            Win32.RegisterClassExW(wc);
+        }
+        var hwnd = Win32.CreateWindowExW(0, className, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
+        if (hwnd == 0 || _shellHookMessage == 0 || !RegisterShellHookWindow(hwnd))
+            log.Warn("windows", "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
+    }
+
+    [UnmanagedCallersOnly]
+    private static nint ShellHookProc(nint hwnd, uint message, nint wParam, nint lParam)
+    {
+        if (message != _shellHookMessage || _shellHookMessage == 0)
+            return Win32.DefWindowProcW(hwnd, message, wParam, lParam);
+        if (WindowRules.IsFlash(wParam) && lParam != 0)
+        {
+            Flashed.Add(lParam);
+            if (!_flushPosted && _loop is not null)
+            {
+                _flushPosted = true;
+                _loop.Post(Flush);
+            }
+        }
+        return 0;
     }
 
     [UnmanagedCallersOnly]
@@ -126,6 +174,15 @@ internal static unsafe class WindowTracker
             Active = 0;
             changed = true;
         }
+        // A dialog that flashes asks for the window that owns it. The window in front already has the user.
+        foreach (var hwnd in Flashed)
+        {
+            var wanting = ActiveOf(hwnd);
+            if (wanting != 0 && wanting != Active)
+                changed |= Wanting.Add(wanting);
+        }
+        Flashed.Clear();
+        changed |= WindowRules.SettleAttention(Wanting, Active, Tracked.ContainsKey);
         if (changed)
             Changed?.Invoke();
     }

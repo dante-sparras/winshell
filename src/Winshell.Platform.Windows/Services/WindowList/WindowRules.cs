@@ -109,4 +109,14 @@ internal static class WindowRules
             or NativeMethods.EVENT_SYSTEM_MINIMIZEEND
             or NativeMethods.EVENT_OBJECT_DESTROY
             or NativeMethods.EVENT_OBJECT_HIDE;
+
+    /// <summary>Whether a shell hook message is <c>HSHELL_FLASH</c>: a window flashed to ask for attention.</summary>
+    public static bool IsFlash(nint code) => code == (NativeMethods.HSHELL_REDRAW | NativeMethods.HSHELL_HIGHBIT);
+
+    /// <summary>
+    /// Keeps the windows that want attention current, as the taskbar does: a window wants it from when it flashes
+    /// until it is activated or leaves the list. Returns whether the set changed.
+    /// </summary>
+    public static bool SettleAttention(HashSet<nint> wanting, nint active, Func<nint, bool> listed) =>
+        wanting.RemoveWhere(hwnd => hwnd == active || !listed(hwnd)) > 0;
 }
