@@ -77,7 +77,7 @@ One monitor's brightness. Monitors are in `Brightness.monitors`; QML cannot crea
 | `maximum` | int, read-only | The highest brightness the monitor takes. |
 | `brightness` | int | The brightness, from `minimum` to `maximum`. Setting it changes the monitor's brightness, clamped to that range. |
 
-When the monitor refuses a new brightness, a warning goes to the log and `brightness` keeps the value it read.
+Setting `brightness` returns at once and reads back the new value. The monitor is written in the background, one write at a time; a value set while a write runs replaces the one waiting, so a slider drag skips the values in between. The next read after the writes end replaces the value that was set. When the monitor refuses a new brightness, a warning goes to the log and that read shows the brightness the monitor kept.
 
 ## IdleMonitor
 

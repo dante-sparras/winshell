@@ -39,8 +39,10 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
 
     private BrightnessBackend()
         : base(BrightnessSnapshot.Initial)
-    {
-    }
+        => Writer = new BrightnessWriter(Set);
+
+    /// <summary>Writes brightness off the UI thread, since one write can take hundreds of milliseconds.</summary>
+    public BrightnessWriter Writer { get; }
 
     protected override string Category => "power";
 
@@ -98,7 +100,7 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
     }
 
     /// <summary>Sets one monitor. Returns a Windows error, or 0. Callers must not use this from tests.</summary>
-    public uint Set(string deviceName, int brightness)
+    private uint Set(string deviceName, int brightness)
     {
         var monitor = Current.Monitors.FirstOrDefault(m => m.DeviceName == deviceName);
         if (monitor is null)
@@ -258,10 +260,83 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
     private static unsafe partial bool DestroyPhysicalMonitors(uint count, PHYSICAL_MONITOR* monitors);
 }
 
-/// <summary>One monitor's brightness. The setter writes the panel; tests only read.</summary>
+/// <summary>
+/// Writes each monitor's brightness on a background thread, one write at a time. A value asked for while a
+/// write runs replaces the one waiting, so a slider drag writes the newest value and drops the steps between.
+/// </summary>
+internal sealed class BrightnessWriter(Func<string, int, uint> write)
+{
+    private readonly object _lock = new();
+    private readonly Dictionary<string, (int Brightness, Action<uint> Failed)> _pending = [];
+    private readonly HashSet<string> _running = [];
+
+    /// <summary>Whether a write for the monitor is running or waiting.</summary>
+    public bool IsWriting(string deviceName)
+    {
+        lock (_lock)
+            return _running.Contains(deviceName);
+    }
+
+    /// <summary>Writes <paramref name="brightness"/> soon, and calls <paramref name="failed"/> with the error if Windows refuses it.</summary>
+    public void Request(string deviceName, int brightness, Action<uint> failed)
+    {
+        lock (_lock)
+        {
+            _pending[deviceName] = (brightness, failed);
+            if (!_running.Add(deviceName))
+                return;
+        }
+        ServiceSupport.Run("power", () =>
+        {
+            Drain(deviceName);
+            return Task.CompletedTask;
+        });
+    }
+
+    private void Drain(string deviceName)
+    {
+        int? last = null;
+        try
+        {
+            while (true)
+            {
+                (int Brightness, Action<uint> Failed) next;
+                lock (_lock)
+                {
+                    if (!_pending.Remove(deviceName, out next))
+                    {
+                        _running.Remove(deviceName);
+                        return;
+                    }
+                }
+                if (next.Brightness == last)
+                    continue;
+                last = next.Brightness;
+                var error = write(deviceName, next.Brightness);
+                if (error != 0)
+                    next.Failed(error);
+            }
+        }
+        catch
+        {
+            lock (_lock)
+                _running.Remove(deviceName);
+            throw;
+        }
+    }
+}
+
+/// <summary>
+/// One monitor's brightness. The setter shows the new value at once and writes the panel in the background;
+/// the next read after the writes end replaces it. Tests set it only with a fake writer.
+/// </summary>
 public sealed class BrightnessMonitor : QObject
 {
+    private readonly BrightnessWriter _writer;
     private BrightnessInfo _info = new("", "", BrightnessConnection.External, 0, 100, 0);
+    private int? _requested;
+
+    internal BrightnessMonitor(BrightnessWriter writer) => _writer = writer;
 
     [Qml] public string DeviceName { get { Track(); return _info.DeviceName; } }
 
@@ -276,27 +351,34 @@ public sealed class BrightnessMonitor : QObject
     [Qml]
     public int Brightness
     {
-        get { Track(); return _info.Current; }
+        get { Track(); return _requested ?? _info.Current; }
         set
         {
-            if (value == _info.Current)
+            value = Math.Clamp(value, _info.Minimum, _info.Maximum);
+            if (value == (_requested ?? _info.Current))
                 return;
-            var error = BrightnessBackend.Instance.Set(_info.DeviceName, value);
-            if (error != 0)
-                ServiceSupport.Warn(this, "power", $"Windows did not set the brightness of {_info.Name} (error {error}).");
+            _requested = value;
+            NotifyChanged("brightness");
+            var log = Engine?.Log ?? Log.Default;
+            var name = _info.Name;
+            _writer.Request(_info.DeviceName, value, error =>
+                log.Warn("power", $"Windows did not set the brightness of {name} (error {error})."));
         }
     }
 
     internal void Update(BrightnessInfo info)
     {
         var old = _info;
+        var oldBrightness = _requested ?? old.Current;
         _info = info;
+        if (!_writer.IsWriting(info.DeviceName))
+            _requested = null;
         Changed(old.DeviceName != info.DeviceName, "deviceName");
         Changed(old.Name != info.Name, "name");
         Changed(old.Connection != info.Connection, "connection");
         Changed(old.Minimum != info.Minimum, "minimum");
         Changed(old.Maximum != info.Maximum, "maximum");
-        Changed(old.Current != info.Current, "brightness");
+        Changed(oldBrightness != (_requested ?? info.Current), "brightness");
     }
 
     private void Changed(bool changed, string property)
@@ -335,7 +417,7 @@ public sealed class BrightnessService : QObject
             var monitor = _monitorObjects.FirstOrDefault(m => m.DeviceName == info.DeviceName && !next.Contains(m));
             if (monitor is null)
             {
-                monitor = new BrightnessMonitor();
+                monitor = new BrightnessMonitor(BrightnessBackend.Instance.Writer);
                 monitor.SetOwner(this);
             }
             monitor.Update(info);
