@@ -201,6 +201,12 @@ internal static class Globals
 
         foreach (var (name, value) in QtEnums.All)
             qt.Set(name, value);
+        // Qt.ColorScheme is an enum, not a number. Qt.ColorScheme.Dark is how a config names the scheme.
+        var colorScheme = new JsObject(engine);
+        colorScheme.Set("Unknown", 0);
+        colorScheme.Set("Light", 1);
+        colorScheme.Set("Dark", 2);
+        qt.Set("ColorScheme", colorScheme);
         return qt;
     }
 

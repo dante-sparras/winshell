@@ -71,7 +71,7 @@ public static class QtEnums
                 new("MiterJoin", 0), new("BevelJoin", 0x40), new("RoundJoin", 0x80),
                 new("ImhNone", 0), new("ImhHiddenText", 1), new("ImhSensitiveData", 2), new("ImhNoPredictiveText", 0x40),
                 new("ImhDigitsOnly", 0x10000), new("ImhFormattedNumbersOnly", 0x20000), new("ImhEmailCharactersOnly", 0x200000),
-                new("UpArrow", 0), new("DownArrow", 1), new("LeftArrow", 2), new("RightArrow", 3),
+                new("NoArrow", 0), new("UpArrow", 1), new("DownArrow", 2), new("LeftArrow", 3), new("RightArrow", 4),
                 new("TopEdge", 1), new("LeftEdge", 2), new("RightEdge", 4), new("BottomEdge", 8),
                 new("TopLeftCorner", 0), new("TopRightCorner", 1), new("BottomLeftCorner", 2), new("BottomRightCorner", 3),
                 new("PortraitOrientation", 1), new("LandscapeOrientation", 2), new("PrimaryOrientation", 0),
@@ -85,7 +85,6 @@ public static class QtEnums
                 new("MouseEventNotSynthesized", 0), new("MouseEventSynthesizedBySystem", 1),
                 new("RepeatTile", 1), new("StretchTile", 0), new("RoundTile", 2),
                 new("ExactHit", 0), new("FuzzyHit", 1),
-                new("ColorScheme", 0),
             };
             string[] cursors =
             [
