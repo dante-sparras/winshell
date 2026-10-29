@@ -3,6 +3,12 @@ namespace Winshell.Runtime.Quick;
 /// <summary>The <c>mouse</c> argument of MouseArea's signals.</summary>
 public sealed class MouseEvent : QObject
 {
+    /// <summary>How many events this thread has made, so a test can see a move that makes none.</summary>
+    [ThreadStatic]
+    internal static int Created;
+
+    public MouseEvent() => Created++;
+
     [Qml] public double X { get; init; }
 
     [Qml] public double Y { get; init; }
@@ -340,7 +346,7 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
                 SetContainsMouse(contains);
             Drag.Move(x, y);
         }
-        Emit("positionChanged", new MouseEvent { X = x, Y = y, Buttons = buttons, Modifiers = modifiers, Engine = Engine });
+        EmitPositionChanged(x, y, buttons, modifiers);
     }
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
@@ -391,7 +397,7 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
     {
         SetPosition(x, y);
         SetContainsMouse(true);
-        Emit("positionChanged", new MouseEvent { X = x, Y = y, Modifiers = modifiers, Engine = Engine });
+        EmitPositionChanged(x, y, 0, modifiers);
     }
 
     public void HoverMove(double x, double y, int modifiers)
@@ -399,7 +405,14 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
         if (_pressed)
             return;
         SetPosition(x, y);
-        Emit("positionChanged", new MouseEvent { X = x, Y = y, Modifiers = modifiers, Engine = Engine });
+        EmitPositionChanged(x, y, 0, modifiers);
+    }
+
+    /// <summary>Emits positionChanged, making its event only when something handles it, since moves are frequent.</summary>
+    private void EmitPositionChanged(double x, double y, int buttons, int modifiers)
+    {
+        if (!IsDestroyed && GetSignal("positionChanged") is { Count: > 0 } slot)
+            slot.Emit([new MouseEvent { X = x, Y = y, Buttons = buttons, Modifiers = modifiers, Engine = Engine }]);
     }
 
     public void HoverLeave()
