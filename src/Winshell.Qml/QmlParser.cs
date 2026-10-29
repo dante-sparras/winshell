@@ -836,6 +836,15 @@ public sealed class QmlParser
                 if (AtEnd)
                     throw Error("Unterminated string");
                 var e = Peek();
+                // A backslash before a line break continues the string. CRLF is one break: consuming only
+                // the CR would leave the LF, and that LF is an unterminated string.
+                if (e is '\n' or '\r')
+                {
+                    Advance();
+                    if (e == '\r' && Peek() == '\n')
+                        Advance();
+                    continue;
+                }
                 Advance();
                 sb.Append(e switch
                 {

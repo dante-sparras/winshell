@@ -187,4 +187,18 @@ public class QmlParserTests
         Assert.Equal(3, y.Location.Line);
         Assert.Equal(3, doc.Root.Members[1].Location.Line);
     }
+
+    [Fact]
+    public void A_crlf_backslash_continues_a_string()
+    {
+        var doc = QmlParser.Parse("Item {\r\n  a: \"foo\\\r\nbar\"\r\n  b: 3\r\n}");
+        var a = Assert.IsType<QmlAssignment>(doc.Root.Members[0]);
+        Assert.Contains("foo", Assert.IsType<QmlScriptValue>(a.Value).Code);
+        Assert.Contains("bar", Assert.IsType<QmlScriptValue>(a.Value).Code);
+        Assert.Equal("b", Assert.IsType<QmlAssignment>(doc.Root.Members[1]).Name);
+
+        var imported = QmlParser.Parse("import \"widgets\\\r\nextra.js\" as Extra\nItem {}");
+        Assert.Equal("widgetsextra.js", imported.Imports[0].Uri);
+        Assert.Equal("Extra", imported.Imports[0].Qualifier);
+    }
 }
