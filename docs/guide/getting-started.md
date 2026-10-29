@@ -97,7 +97,7 @@ A configuration is a folder with a `shell.qml` in it. Winshell looks for one in 
 | `winshell --config <name>` | `%APPDATA%\winshell\<name>\shell.qml` |
 | `winshell` | `%APPDATA%\winshell\shell.qml`; else `%APPDATA%\winshell\default\shell.qml`; else the one subfolder of `%APPDATA%\winshell` with a `shell.qml`. With several, Winshell asks you to pick one with `--config`. With none, it runs the default shell. |
 
-`WINSHELL_CONFIG_DIR` replaces `%APPDATA%\winshell` in this table. Winshell Settings keeps its choices in `preferences.toml` in that folder too.
+`WINSHELL_CONFIG_DIR` replaces `%APPDATA%\winshell` in this table. Winshell Settings keeps its choices in `preferences.toml` next to the `shell.qml` it runs from, or in that folder itself for the default shell.
 
 The first time Winshell uses `%APPDATA%\winshell`, it copies an old `%USERPROFILE%\.config\winshell` there, if you have one, and leaves the old folder in place.
 

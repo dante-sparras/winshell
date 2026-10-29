@@ -4,15 +4,26 @@ import Winshell.Io
 import Winshell.Theme
 import QtQuick
 
-// The choices made in Winshell Settings, kept in preferences.toml in the config folder (%APPDATA%\winshell, or
-// WINSHELL_CONFIG_DIR). Every surface reads them here and follows a change at once, including one made to the file
-// by hand. A key the file does not have keeps its default when Winshell starts. Surfaces read the values below that
-// fall back to the default when the file has one Winshell cannot use.
+// The choices made in Winshell Settings, kept in preferences.toml. A config in the config folder (%APPDATA%\winshell,
+// or WINSHELL_CONFIG_DIR) keeps the file beside its shell.qml, so two configs running at once each have their own
+// hotkeys. The default shell, which lives outside that folder, keeps it in the config folder itself. Every surface
+// reads them here and follows a change at once, including one made to the file by hand. A key the file does not have
+// keeps its default when Winshell starts. Surfaces read the values below that fall back to the default when the file
+// has one Winshell cannot use.
 Singleton {
   id: root
 
   // Without a config folder, as in tests, the choices last for this run only.
-  property string path: Shell.configRoot ? Shell.configRoot + "/preferences.toml" : ""
+  property string path: folder ? folder + "/preferences.toml" : ""
+  // The folder that holds the file, which Winshell Settings opens.
+  readonly property string folder: {
+    if (!Shell.configRoot)
+      return ""
+    const key = dir => dir.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+    const shell = key(Shell.shellDir)
+    const config = key(Shell.configRoot)
+    return shell === config || shell.startsWith(config + "/") ? Shell.shellDir : Shell.configRoot
+  }
 
   // "system", "light" or "dark".
   property alias colorScheme: adapter.colorScheme
