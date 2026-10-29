@@ -127,7 +127,7 @@ public static class Doctor
         var files = scan.Files == 1 ? "1 QML file" : $"{scan.Files} QML files";
         if (loadError is not null)
             return new("config", "Config", CheckStatus.Fail, $"{file}: {files} read, but the running instance could not load it: {loadError}", "Correct that line and save. Winshell keeps the last version that loaded until then.");
-        return new("config", "Config", CheckStatus.Pass, $"{file}: {files}, each reads");
+        return new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors");
     }
 
     // Folders

@@ -56,7 +56,7 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(CheckStatus.Fail, failed.Status);
         Assert.EndsWith("could not load it: shell.qml[7:5]: Cannot assign to non-existent property \"colour\"", failed.Message, StringComparison.Ordinal);
 
-        Assert.Equal(new DoctorCheck("config", "Config", CheckStatus.Pass, @"C:\c\shell.qml: 3 QML files, each reads"), Config(@"C:\c\shell.qml", null, new ConfigScan(3, []), null));
+        Assert.Equal(new DoctorCheck("config", "Config", CheckStatus.Pass, @"C:\c\shell.qml: 3 QML files read without errors"), Config(@"C:\c\shell.qml", null, new ConfigScan(3, []), null));
     }
 
     [Fact]

@@ -23,6 +23,8 @@ Start with [Getting started](docs/guide/getting-started.md). The [docs](docs/ind
 
 Coming from Quickshell? See [Migrating from Quickshell](docs/migrating-from-quickshell.md).
 
+Something not working? Run `winshell doctor`. It checks this PC's setup and says how to fix what's wrong. See [winshell doctor](docs/doctor.md).
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or PR.
