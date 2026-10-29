@@ -687,18 +687,21 @@ internal static class ArtCache
     }
 
     /// <summary>Deletes art left behind by earlier runs, and their folders once empty.</summary>
-    public static void CleanOld()
+    public static void CleanOld() => CleanOld(Root);
+
+    internal static void CleanOld(string root)
     {
         try
         {
-            if (!Directory.Exists(Root))
+            if (!Directory.Exists(root) || (File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
                 return;
-            foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
+            var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+            foreach (var file in Directory.EnumerateFiles(root, "*", options))
             {
                 if (File.GetLastWriteTimeUtc(file) < DateTime.UtcNow.AddDays(-1))
                     File.Delete(file);
             }
-            foreach (var dir in Directory.EnumerateDirectories(Root))
+            foreach (var dir in Directory.EnumerateDirectories(root, "*", new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))
             {
                 if (!string.Equals(dir, Folder, StringComparison.OrdinalIgnoreCase) && !Directory.EnumerateFileSystemEntries(dir).Any())
                     Directory.Delete(dir);
