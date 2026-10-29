@@ -10,9 +10,19 @@ public static class ScriptCompiler
     private static readonly ConcurrentDictionary<string, string> BlockCache = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, bool> FunctionLiteralCache = new(StringComparer.Ordinal);
 
+    /// <summary>How many distinct snippets the caches keep. Past this they drop, so edited bindings cannot grow forever.</summary>
+    internal const int CacheLimit = 1024;
+
+    internal static int BlockCacheCount => BlockCache.Count;
+
     /// <summary>The body of a binding: an expression returns its value; a block returns its last expression.</summary>
-    public static string BindingBody(string code, bool isBlock) =>
-        isBlock ? BlockCache.GetOrAdd(code, ReturnTail) : "return (" + code + "\n);";
+    public static string BindingBody(string code, bool isBlock)
+    {
+        if (!isBlock)
+            return "return (" + code + "\n);";
+        Trim(BlockCache);
+        return BlockCache.GetOrAdd(code, ReturnTail);
+    }
 
     /// <summary>
     /// The body of a signal handler. A handler written as a function (<c>onClicked: mouse => ...</c>) is called
@@ -27,18 +37,28 @@ public static class ScriptCompiler
         return code + "\n;";
     }
 
-    public static bool IsFunctionLiteral(string code) => FunctionLiteralCache.GetOrAdd(code, static c =>
+    public static bool IsFunctionLiteral(string code)
     {
-        try
+        Trim(FunctionLiteralCache);
+        return FunctionLiteralCache.GetOrAdd(code, static c =>
         {
-            var expr = new Parser().ParseExpression(c, "handler", false);
-            return expr is ArrowFunctionExpression or FunctionExpression;
-        }
-        catch (ParseErrorException)
-        {
-            return false;
-        }
-    });
+            try
+            {
+                var expr = new Parser().ParseExpression(c, "handler", false);
+                return expr is ArrowFunctionExpression or FunctionExpression;
+            }
+            catch (ParseErrorException)
+            {
+                return false;
+            }
+        });
+    }
+
+    private static void Trim<T>(ConcurrentDictionary<string, T> cache)
+    {
+        if (cache.Count >= CacheLimit)
+            cache.Clear();
+    }
 
     /// <summary>Puts <c>return</c> before the statements whose value a block binding produces.</summary>
     private static string ReturnTail(string code)
