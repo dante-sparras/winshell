@@ -1,5 +1,6 @@
 using Jint;
 using Jint.Native;
+using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.QtQml;
 
@@ -201,7 +202,10 @@ public sealed class Connections : QObject
     }
 }
 
-/// <summary>QML's <c>Binding</c> element: sets a property of another object while <c>when</c> is true.</summary>
+/// <summary>
+/// QML's <c>Binding</c> element: overrides a property of another object while <c>when</c> is true.
+/// It parks the target's own binding and puts it back, or the old value, as <c>restoreMode</c> says.
+/// </summary>
 public sealed class BindingElement : QObject
 {
     private QObject? _target;
@@ -209,8 +213,19 @@ public sealed class BindingElement : QObject
     private object? _value;
     private bool _when = true;
     private bool _delayed;
-    private bool _applied;
-    private object? _saved;
+    private int _restoreMode = (int)RestorationMode.RestoreBindingOrValue;
+    private QObject? _appliedTarget;
+    private string _appliedProperty = "";
+    private PropertyOverride.Slot? _slot;
+
+    [QmlEnum]
+    public enum RestorationMode
+    {
+        RestoreNone = 0,
+        RestoreBinding = 1,
+        RestoreValue = 2,
+        RestoreBindingOrValue = 3,
+    }
 
     [Qml]
     public QObject? Target
@@ -265,35 +280,56 @@ public sealed class BindingElement : QObject
     }
 
     [Qml]
-    public int RestoreMode { get; set; } = 3;
+    public int RestoreMode
+    {
+        get { Track(); return _restoreMode; }
+        set => SetField(ref _restoreMode, value);
+    }
 
     public override void ComponentComplete() => Apply();
 
+    protected override void OnDestroy() => Lift();
+
     private void Apply()
     {
-        if (!IsComplete || _target is null || _property.Length == 0)
+        if (!IsComplete)
             return;
-        try
+        var wanted = _when && _target is { IsDestroyed: false } && _property.Length > 0;
+        if (_slot is not null && (!wanted || _appliedTarget != _target || _appliedProperty != _property))
+            Lift();
+        if (!wanted)
+            return;
+        if (_slot is null)
         {
-            if (_when)
+            try
             {
-                if (!_applied)
-                {
-                    using (DependencyTracker.Suspend())
-                        _saved = _target.ReadProperty(_property);
-                    _applied = true;
-                }
-                _target.WriteProperty(_property, _value);
+                _slot = PropertyOverride.Capture(_target!, _property);
             }
-            else if (_applied)
+            catch (QmlException e)
             {
-                _applied = false;
-                _target.WriteProperty(_property, _saved);
+                Engine?.Log.Warn("scene", $"Binding: {e.Message}");
+                return;
             }
+            _appliedTarget = _target;
+            _appliedProperty = _property;
         }
-        catch (QmlException e)
-        {
-            Engine?.Log.Warn("scene", $"Binding: {e.Message}");
-        }
+        PropertyOverride.Write(_target!, _property, _value);
+    }
+
+    /// <summary>Gives the property back to the target, as <c>restoreMode</c> says.</summary>
+    private void Lift()
+    {
+        if (_slot is not { } slot || _appliedTarget is not { } target)
+            return;
+        _slot = null;
+        _appliedTarget = null;
+        var mode = (RestorationMode)_restoreMode;
+        var restore = slot.HadBinding
+            ? mode.HasFlag(RestorationMode.RestoreBinding)
+            : mode.HasFlag(RestorationMode.RestoreValue);
+        if (restore && !target.IsDestroying)
+            PropertyOverride.Restore(target, _appliedProperty, slot);
+        else
+            slot.Binding?.Dispose();
     }
 }

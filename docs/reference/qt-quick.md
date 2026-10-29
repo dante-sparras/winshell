@@ -156,7 +156,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `PropertyAnimation.alwaysRunToEnd` | Ignored, on every animation. |
 | `SpringAnimation.spring` | Not a spring: the value eases out to its target over a fixed time that `spring` and `damping` set. There is no overshoot, and `mass`, `velocity`, `epsilon` and `modulus` are ignored. |
 | `RowLayout.uniformCellSizes` | Ignored, as on `ColumnLayout` and `GridLayout`. |
-| `Binding.delayed` | Ignored, as is `restoreMode`. |
+| `Binding.delayed` | Ignored. |
 | `Text.font` | `font.styleName`, `font.kerning`, `font.wordSpacing`, `font.hintingPreference`, `font.preferShaping`, `font.features` and `font.variableAxes` are ignored, and `Font.SmallCaps` leaves the text as it is, here and on every item and control with a `font`. |
 | `Loader.asynchronous` | Ignored. The component is still created on this thread before the property assignment returns. |
 | `BusyIndicator.running` | Defaults to false, so an indicator turns only once a document sets it. Qt's defaults to true. |
