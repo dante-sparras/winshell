@@ -382,12 +382,9 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             return (obj, parts.Length > 1 ? parts[^1] : null);
         }
         property.MakeAlias(Resolve);
-        batch.AfterBindings.Add(() =>
-        {
-            var (obj, prop) = Resolve();
-            if (prop is not null)
-                obj.AddObserver(prop, new AliasForwarder(owner, property.Name));
-        });
+        // The forwarder has to leave with the alias. A long-lived target would otherwise keep one observer per instance.
+        var watch = new AliasWatch(owner, property.Name, parts, context);
+        batch.AfterBindings.Add(watch.Attach);
         if (declaration.Value is not null)
             property.MarkAssigned();
     }
@@ -442,9 +439,64 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
     [GeneratedRegex(@"^-?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$")]
     private static partial Regex NumberLiteral();
 
-    private sealed class AliasForwarder(QObject owner, string name) : IPropertyObserver
+    /// <summary>
+    /// Forwards changes along an alias path, and drops those watches when the alias owner is destroyed or an
+    /// intermediate object is replaced.
+    /// </summary>
+    private sealed class AliasWatch(QObject owner, string name, string[] parts, ComponentContext context) : IPropertyObserver
     {
-        public void OnPropertyChanged(QObject sender, string property) => owner.NotifyChanged(name);
+        private readonly List<(QObject Object, string Property)> _watched = [];
+        private bool _hooked;
+
+        public void Attach()
+        {
+            Detach();
+            if (owner.IsDestroyed || owner.IsDestroying || parts.Length < 2)
+                return;
+            var current = context.FindId(parts[0]);
+            if (current is null)
+                return;
+            for (var i = 1; i < parts.Length; i++)
+            {
+                var property = parts[i];
+                current.AddObserver(property, this);
+                _watched.Add((current, property));
+                if (i == parts.Length - 1)
+                    break;
+                using (DependencyTracker.Suspend())
+                    current = current.ReadProperty(property) as QObject;
+                if (current is null)
+                    break;
+            }
+            if (!_hooked)
+            {
+                _hooked = true;
+                owner.GetSignal("destroyed")?.Connect(_ => Detach());
+            }
+        }
+
+        public void OnPropertyChanged(QObject sender, string property)
+        {
+            if (owner.IsDestroyed || owner.IsDestroying)
+            {
+                Detach();
+                return;
+            }
+            var final = _watched.Count > 0
+                && ReferenceEquals(_watched[^1].Object, sender)
+                && _watched[^1].Property == property
+                && property == parts[^1];
+            if (!final)
+                Attach();
+            owner.NotifyChanged(name);
+        }
+
+        private void Detach()
+        {
+            foreach (var (obj, property) in _watched)
+                obj.RemoveObserver(property, this);
+            _watched.Clear();
+        }
     }
 }
 
