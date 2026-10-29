@@ -345,6 +345,19 @@ public sealed class ShellNoticeTests : IDisposable
     }
 
     [Fact]
+    public void A_downloaded_config_shows_how_to_unblock_it()
+    {
+        var root = @"C:\config\shell.qml";
+
+        var notice = ShellNotices.ForConfigError($"{root}: {ZoneIdentifier.Blocked(root)}", root, running: false);
+
+        Assert.Equal("shell.qml", notice.Detail);
+        Assert.Equal(root, notice.Target);
+        Assert.Equal(ZoneIdentifier.Blocked(root), notice.Body);
+        Assert.Contains("Unblock-File", notice.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_frame_that_could_not_be_drawn_shows_a_notice_and_leaves_the_window_up()
     {
         var (_, notices) = Start(Good, crashes: true);

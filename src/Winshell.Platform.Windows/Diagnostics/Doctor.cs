@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Diagnostics;
 
@@ -59,11 +60,13 @@ public static class Doctor
             : null;
         var instanceLog = instance is null ? default : DoctorProbe.ReadInstanceLog(instance.LogPath);
         var configFolder = Path.GetDirectoryName(context.ConfigFile) is { Length: > 0 } own ? own : context.ConfigRoot;
+        // A downloaded config does not run, so its files are not read either.
+        var downloaded = context.ConfigFile is { } root && ZoneIdentifier.IsDownloaded(root);
         DoctorCheck[] checks =
         [
             Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
-            Guard("config", "Config", () => Config(context.ConfigFile, context.ConfigProblem, DoctorProbe.ParseConfig(context.ConfigFile), instanceLog.LoadError, instanceLog.Unreadable)),
+            Guard("config", "Config", () => Config(context.ConfigFile, context.ConfigProblem, downloaded ? new ConfigScan(0, []) : DoctorProbe.ParseConfig(context.ConfigFile), instanceLog.LoadError, instanceLog.Unreadable, downloaded)),
             Guard("folders", "Folders", () => Folders(
                 [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
                 context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
@@ -146,12 +149,15 @@ public static class Doctor
         public bool Stopped { get; init; }
     }
 
-    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError, string? logUnreadable = null)
+    /// <param name="downloaded">Whether the config's <c>shell.qml</c> was downloaded and is not unblocked, so Winshell does not run it.</param>
+    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError, string? logUnreadable = null, bool downloaded = false)
     {
         if (problem is not null)
             return new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
         if (file is null)
             return new("config", "Config", CheckStatus.Pass, "No config of your own: Winshell runs its default shell. Copy that shell to your config folder to change it.");
+        if (downloaded)
+            return new("config", "Config", CheckStatus.Fail, $"{file} was downloaded from the internet, so Winshell does not run it. It would run as you.", "If you trust it, unblock it: right-click it > Properties > Unblock, or run Unblock-File. Then save it, or start Winshell again.");
         if (scan.Errors.Count > 0)
         {
             var more = scan.Errors.Count > 1 ? $" ({scan.Errors.Count - 1} more)" : "";
