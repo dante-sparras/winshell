@@ -60,7 +60,8 @@ jobs:
           echo "$LYCHEE_SHA256  $archive" | sha256sum --check --strict
           tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/lychee-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
-      # A rate-limited link (429) is retried after a wait, and fails if it stays limited.
+      # A rate-limited link (429) is retried after a wait, and fails if it stays limited. about.signpath.io, the link
+      # SignPath Foundation asks the code signing policy to carry, redirects with a header lychee can't parse.
       - name: Check links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -71,6 +72,7 @@ jobs:
           --retry-wait-time 10
           --max-concurrency 4
           --exclude-path 'docs/agents'
+          --exclude '^https://about\.signpath\.io/?$'
           'docs/**/*.md'
           README.md
 
