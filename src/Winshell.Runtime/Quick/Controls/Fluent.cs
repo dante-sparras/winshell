@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using SkiaSharp;
 
 namespace Winshell.Runtime.Quick.Controls;
@@ -274,12 +275,18 @@ public static class Fluent
         {
             Color = elevation.Color.ToSk(),
             IsAntialias = true,
-            MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, elevation.Blur / 2),
+            MaskFilter = ShadowBlur(elevation.Blur / 2),
         };
         rect.Offset(0, elevation.OffsetY);
         using var rr = Round(rect, radius);
         canvas.DrawRoundRect(rr, paint);
     }
+
+    private static readonly ConcurrentDictionary<float, SKMaskFilter> ShadowBlurs = new();
+
+    /// <summary>The blur of a shadow, one per sigma for the life of the process. The theme uses only a few.</summary>
+    internal static SKMaskFilter ShadowBlur(float sigma) =>
+        ShadowBlurs.GetOrAdd(sigma, static s => SKMaskFilter.CreateBlur(SKBlurStyle.Normal, s));
 
     /// <summary>Draws the two-ring keyboard focus visual around a control.</summary>
     public static void FocusRing(SKCanvas canvas, SKRect rect, float radius)

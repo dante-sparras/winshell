@@ -84,6 +84,8 @@ public sealed class Label : Text, IPaintOverChildren
 public class TextField : TextInput, IPaintOverChildren, IHoverTarget
 {
     private string _placeholderText = "";
+    private readonly LineLayoutCache _placeholderMeasure = new();
+    private readonly LineLayoutCache _placeholderLayout = new();
     private QColor? _placeholderColor;
     private Item? _background;
     private bool _backgroundSet, _defaultBackground;
@@ -328,9 +330,11 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     {
         if (_placeholderText.Length == 0)
             return 0;
-        using var layout = TextLayout.Build([new TextSpan(_placeholderText, Font.Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
-        return Math.Ceiling(layout.Width);
+        return Math.Ceiling(_placeholderMeasure.Get(_placeholderText, Font.Spec, double.NaN, TextLayout.Elide.None).Width);
     }
+
+    /// <summary>How many placeholder layouts the field has built, to measure and to draw.</summary>
+    internal int PlaceholderBuilds => _placeholderMeasure.Builds + _placeholderLayout.Builds;
 
     public override void Paint(SKCanvas canvas, PaintContext context)
     {
@@ -340,7 +344,7 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     {
         if (Text_.Length == 0 && _placeholderText.Length > 0)
         {
-            using var layout = TextLayout.Build([new TextSpan(_placeholderText, Font.Spec)], Math.Max(0, Width - LeftPadding - RightPadding), TextLayout.Wrap.NoWrap, TextLayout.Elide.Right, 1, 1, true);
+            var layout = _placeholderLayout.Get(_placeholderText, Font.Spec, Math.Max(0, Width - LeftPadding - RightPadding), TextLayout.Elide.Right);
             var y = (VerticalAlignment & QtEnums.AlignVCenter) != 0 ? (Height - layout.Height) / 2 : TopPadding;
             canvas.Save();
             canvas.Translate((float)LeftPadding, 0);
@@ -354,6 +358,8 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
     protected override void OnDestroy()
     {
         Theme.Changed -= OnThemeChanged;
+        _placeholderMeasure.Dispose();
+        _placeholderLayout.Dispose();
         base.OnDestroy();
     }
 }

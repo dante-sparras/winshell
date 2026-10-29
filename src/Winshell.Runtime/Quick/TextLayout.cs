@@ -310,3 +310,36 @@ public sealed partial class TextLayout : IDisposable
         return m.Groups[2].Success ? m.Groups[2].Value : m.Groups[3].Success ? m.Groups[3].Value : m.Groups[4].Value;
     }
 }
+
+/// <summary>
+/// One line of plain text kept between paints. It is built again only when its text, font, width or elide mode
+/// changes, and the old layout is disposed then.
+/// </summary>
+internal sealed class LineLayoutCache : IDisposable
+{
+    private TextLayout? _layout;
+    private (string Text, FontSpec Font, double Width, TextLayout.Elide Elide) _key;
+
+    /// <summary>How many layouts this cache has built.</summary>
+    internal int Builds { get; private set; }
+
+    /// <summary>The layout for these inputs. A NaN width doesn't wrap or elide. Callers don't dispose it.</summary>
+    public TextLayout Get(string text, FontSpec font, double width, TextLayout.Elide elide)
+    {
+        var key = (text, font, width, elide);
+        // Equals, not ==, so a NaN width matches itself.
+        if (_layout is not null && _key.Equals(key))
+            return _layout;
+        _layout?.Dispose();
+        _layout = TextLayout.Build([new TextSpan(text, font)], width, TextLayout.Wrap.NoWrap, elide, elide == TextLayout.Elide.None ? 0 : 1, 1, true);
+        _key = key;
+        Builds++;
+        return _layout;
+    }
+
+    public void Dispose()
+    {
+        _layout?.Dispose();
+        _layout = null;
+    }
+}

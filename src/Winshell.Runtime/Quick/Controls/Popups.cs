@@ -1278,6 +1278,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     private int _highlightedIndex = -1;
     private bool _rowsDirty = true;
     private readonly List<PropertyWatch> _rowWatches = [];
+    private (FontSpec Font, string[] Texts, double Width) _widest = (FontSpec.Default, [], 0);
 
     public ComboBox()
     {
@@ -1626,14 +1627,25 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         using var _ = DependencyTracker.Suspend();
         // Wide enough for the longest entry, as Qt's default content width policy is for the current one.
         var font = Font.Spec;
-        var widest = 0.0;
-        for (var i = 0; i < Math.Min(_rows.Count, 50); i++)
+        var texts = new string[Math.Min(_rows.Count, 50)];
+        for (var i = 0; i < texts.Length; i++)
+            texts[i] = TextAt(i);
+        if (_widest.Font != font || !_widest.Texts.AsSpan().SequenceEqual(texts))
         {
-            using var row = TextLayout.Build([new TextSpan(TextAt(i), font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
-            widest = Math.Max(widest, row.Width);
+            var widest = 0.0;
+            foreach (var text in texts)
+            {
+                using var row = TextLayout.Build([new TextSpan(text, font)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+                widest = Math.Max(widest, row.Width);
+            }
+            _widest = (font, texts, widest);
+            RowMeasures++;
         }
-        return (Math.Max(w, Math.Ceiling(widest) + LeftPadding + RightPadding), h);
+        return (Math.Max(w, Math.Ceiling(_widest.Width) + LeftPadding + RightPadding), h);
     }
+
+    /// <summary>How many times the combo box has measured its entries for its implicit width.</summary>
+    internal int RowMeasures { get; private set; }
 
     // The popup list
 
