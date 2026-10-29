@@ -63,13 +63,16 @@ public class ObjectModel : QObject, IObservableModel
             RemoveAt(_values.Count - 1);
     }
 
-    /// <summary>Replaces the contents, keeping objects that stay so delegates for them stay too.</summary>
+    /// <summary>Replaces the contents, keeping objects that stay so delegates for them stay too. A repeated object is stored once, at its first place.</summary>
     public void Set(IReadOnlyList<object?> values)
     {
         var present = new HashSet<object?>(values.Count, EqualityComparer<object?>.Default);
+        var next = new List<object?>(values.Count);
         foreach (var value in values)
-            present.Add(value);
-        var index = IndexOfAll();
+        {
+            if (present.Add(value))
+                next.Add(value);
+        }
         _silence++;
         try
         {
@@ -78,26 +81,27 @@ public class ObjectModel : QObject, IObservableModel
                 if (!present.Contains(_values[i]))
                     RemoveAt(i);
             }
-            if (_pendingChange)
-                index = IndexOfAll();
-            for (var i = 0; i < values.Count; i++)
+            // The rows before i already match. An insert at i moves every row after it one place, so the index
+            // stays right with an offset; only a move rebuilds it.
+            var index = IndexOfAll();
+            var inserted = 0;
+            for (var i = 0; i < next.Count; i++)
             {
-                var current = Locate(index, values[i]);
+                var value = next[i];
+                var current = value is null ? _values.IndexOf(null) : index.TryGetValue(value, out var at) ? at + inserted : -1;
                 if (current == i)
                     continue;
-                if (current >= 0)
+                if (current < 0)
                 {
-                    _values.RemoveAt(current);
-                    // A repeated reference used to ask for an index past the list. Unique rows still land at i,
-                    // because the row being moved is at or after i.
-                    _values.Insert(Math.Clamp(i, 0, _values.Count), values[i]);
-                    Changed();
+                    Insert(i, value);
+                    inserted++;
+                    continue;
                 }
-                else
-                {
-                    Insert(i, values[i]);
-                }
+                _values.RemoveAt(current);
+                _values.Insert(i, value);
+                Changed();
                 index = IndexOfAll();
+                inserted = 0;
             }
         }
         finally
@@ -112,28 +116,16 @@ public class ObjectModel : QObject, IObservableModel
         }
     }
 
-    private Dictionary<object, List<int>> IndexOfAll()
+    /// <summary>Where each object first appears.</summary>
+    private Dictionary<object, int> IndexOfAll()
     {
-        var index = new Dictionary<object, List<int>>(EqualityComparer<object>.Default);
-        for (var i = 0; i < _values.Count; i++)
+        var index = new Dictionary<object, int>(_values.Count, EqualityComparer<object>.Default);
+        for (var i = _values.Count - 1; i >= 0; i--)
         {
-            if (_values[i] is not { } key)
-                continue;
-            if (!index.TryGetValue(key, out var at))
-            {
-                at = [];
-                index.Add(key, at);
-            }
-            at.Add(i);
+            if (_values[i] is { } key)
+                index[key] = i;
         }
         return index;
-    }
-
-    private int Locate(Dictionary<object, List<int>> index, object? value)
-    {
-        if (value is null)
-            return _values.IndexOf(null);
-        return index.TryGetValue(value, out var at) && at.Count > 0 ? at[0] : -1;
     }
 
     private void Changed()
