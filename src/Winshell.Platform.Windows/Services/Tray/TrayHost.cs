@@ -327,6 +327,15 @@ internal sealed unsafe partial class TrayHost : IDisposable
             NativeCallback.Guard(host._log, "tray", host.OnTaskbarCreated);
             return 0;
         }
+        // Apps that post a menu command to the taskbar, such as minimizing every window, find this window first.
+        // These carry no pointers. Private WM_USER messages have no shared layout and cannot be forwarded safely.
+        if (msg == WM_SYSCOMMAND || msg == WM_COMMAND && lParam == 0)
+        {
+            var explorer = host.ExplorerTray();
+            if (explorer != 0)
+                Win32.PostMessageW(explorer, msg, wParam, lParam);
+            return 0;
+        }
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
@@ -338,8 +347,11 @@ internal sealed unsafe partial class TrayHost : IDisposable
         var explorer = ExplorerTray();
         if (explorer == 0)
             return 1;
-        SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, SMTO_ABORTIFHUNG, 2000, out var result);
-        return data->dwData == TrayProtocol.NotifyIconData ? 1 : result;
+        // An icon is answered here, and apps animate theirs several times a second, so a busy Explorer holds the shell
+        // up only briefly for one. An app bar needs Explorer's answer.
+        var icon = data->dwData == TrayProtocol.NotifyIconData;
+        SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, SMTO_ABORTIFHUNG, icon ? 200u : 2000u, out var result);
+        return icon ? 1 : result;
     }
 
     internal void OnNotifyIcon(NotifyIconCall call)
@@ -697,6 +709,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private const uint LOAD_LIBRARY_AS_DATAFILE = 0x2, LOAD_LIBRARY_AS_IMAGE_RESOURCE = 0x20;
     private const uint IMAGE_ICON = 1;
     private const uint MSGFLT_ALLOW = 1;
+    private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct COPYDATASTRUCT

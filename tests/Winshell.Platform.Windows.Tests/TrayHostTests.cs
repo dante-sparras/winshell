@@ -206,6 +206,101 @@ public sealed class TrayHostTests : IDisposable
     [DllImport("user32.dll")]
     private static extern nint DefWindowProcW(nint hwnd, uint msg, nint wParam, nint lParam);
 
+    [Fact]
+    public void Commands_posted_to_the_host_reach_explorers_taskbar()
+    {
+        var explorer = new ExplorerThread(ExplorerNames, _log);
+        try
+        {
+            var host = Start(HostNames, out _);
+            // Explorer here is a test window, but the commands are still ones no real taskbar acts on.
+            (uint, nint, nint)[] commands = [(WM_COMMAND, 0x1234, 0), (WM_SYSCOMMAND, 0xF120, 0)];
+            foreach (var (message, wParam, lParam) in commands)
+                Win32.PostMessageW(host.Window, message, wParam, lParam);
+            while (Win32.PeekMessageW(out var msg, host.Window, 0, 0, Win32.PM_REMOVE))
+                Win32.DispatchMessageW(msg);
+
+            foreach (var command in commands)
+            {
+                Assert.True(explorer.Posted.TryTake(out var posted, TimeSpan.FromSeconds(5)));
+                Assert.Equal(command, posted);
+            }
+        }
+        finally
+        {
+            explorer.Exit();
+        }
+    }
+
+    [Fact]
+    public void A_busy_explorer_holds_up_an_icon_only_briefly()
+    {
+        using var busy = new ManualResetEventSlim();
+        var explorer = new ExplorerThread(ExplorerNames, _log, busy);
+        try
+        {
+            var host = Start(HostNames, out _);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_TIP, tip: "Backup")));
+            watch.Stop();
+
+            Assert.Equal("Backup", Assert.Single(host.Icons).Tip);
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"The icon waited {watch.ElapsedMilliseconds} ms for Explorer");
+        }
+        finally
+        {
+            busy.Set();
+            explorer.Exit();
+        }
+    }
+
+    private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
+
+    private TrayNames ExplorerNames => new(ExplorerClass, $"WinshellTestNone-{_id}", $@"Local\winshell-test-explorer-{Guid.NewGuid():N}");
+
+    /// <summary>
+    /// Explorer's taskbar on its own thread, as in its own process, which records the messages posted to its window.
+    /// </summary>
+    private sealed class ExplorerThread
+    {
+        private const uint Quit = 0x8001;
+        private readonly Thread _thread;
+        private readonly ManualResetEventSlim _started = new();
+
+        /// <param name="busy">When given, the thread answers nothing until it is set.</param>
+        public ExplorerThread(TrayNames names, Log log, ManualResetEventSlim? busy = null)
+        {
+            _thread = new Thread(() =>
+            {
+                var host = new TrayHost(new ManualEventLoop(), log, names, () => { });
+                host.Start();
+                Window = host.Window;
+                _started.Set();
+                busy?.Wait();
+                while (Win32.GetMessageW(out var msg, 0, 0, 0) > 0 && !(msg.hwnd == Window && msg.message == Quit))
+                {
+                    if (msg.hwnd == Window)
+                        Posted.Add((msg.message, msg.wParam, msg.lParam));
+                    Win32.DispatchMessageW(msg);
+                }
+                host.Dispose();
+            }) { IsBackground = true };
+            _thread.Start();
+            _started.Wait();
+            Assert.NotEqual(0, Window);
+        }
+
+        public nint Window { get; private set; }
+
+        public System.Collections.Concurrent.BlockingCollection<(uint, nint, nint)> Posted { get; } = new();
+
+        public void Exit()
+        {
+            Win32.PostMessageW(Window, Quit, 0, 0);
+            _thread.Join();
+        }
+    }
+
     /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>
     private static bool Above(nint upper, nint lower)
     {
