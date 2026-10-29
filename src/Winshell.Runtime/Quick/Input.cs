@@ -454,7 +454,7 @@ public sealed class DragGroup(MouseArea area) : QObject
     private int _axis = 3;
     private double _minimumX = double.MinValue, _maximumX = double.MaxValue, _minimumY = double.MinValue, _maximumY = double.MaxValue;
     private bool _active;
-    private double _threshold = 10;
+    private double _threshold = Theme.Current.DragThreshold;
     private bool _filterChildren;
     private double _startX, _startY, _targetX, _targetY;
     private bool _moved;

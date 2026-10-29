@@ -339,6 +339,10 @@ internal static partial class Win32
     public const int SM_CYICON = 12;
     public const int SM_CXSMICON = 49;
     public const int SM_CYSMICON = 50;
+    public const int SM_CXDOUBLECLK = 36;
+    public const int SM_CYDOUBLECLK = 37;
+    public const int SM_CXDRAG = 68;
+    public const int SM_CYDRAG = 69;
 
     public const int IDC_ARROW = 32512;
     public const int IDC_IBEAM = 32513;
@@ -676,6 +680,9 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     public static partial int GetSystemMetrics(int index);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetSystemMetricsForDpi(int index, uint dpi);
 
     [LibraryImport("user32.dll")]
     public static partial uint GetDoubleClickTime();

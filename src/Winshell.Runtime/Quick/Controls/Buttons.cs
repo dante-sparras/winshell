@@ -889,7 +889,7 @@ public sealed class Switch : IndicatorButton
         base.PointerMove(x, y, buttons, modifiers);
         if (!IsPressed && !_dragging)
             return;
-        if (!_dragging && Math.Abs(x - _dragStartX) < 4)
+        if (!_dragging && Math.Abs(x - _dragStartX) < Theme.Current.DragThreshold)
             return;
         _dragging = true;
         var start = Checked ? 1 : 0;

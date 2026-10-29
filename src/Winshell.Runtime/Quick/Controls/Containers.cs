@@ -883,8 +883,11 @@ public sealed class SwipeView : Container, IPointerTarget
 
     public bool AcceptsButton(int button) => _interactive && Enabled && button == QtEnums.LeftButton;
 
-    public bool WantsToSteal(double sceneDx, double sceneDy) =>
-        _interactive && (_orientation == 2 ? Math.Abs(sceneDy) > 10 && Math.Abs(sceneDy) > Math.Abs(sceneDx) : Math.Abs(sceneDx) > 10 && Math.Abs(sceneDx) > Math.Abs(sceneDy));
+    public bool WantsToSteal(double sceneDx, double sceneDy)
+    {
+        var threshold = Theme.Current.DragThreshold;
+        return _interactive && (_orientation == 2 ? Math.Abs(sceneDy) > threshold && Math.Abs(sceneDy) > Math.Abs(sceneDx) : Math.Abs(sceneDx) > threshold && Math.Abs(sceneDx) > Math.Abs(sceneDy));
+    }
 
     public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
@@ -898,7 +901,7 @@ public sealed class SwipeView : Container, IPointerTarget
     public void PointerMove(double x, double y, int buttons, int modifiers)
     {
         var d = _orientation == 2 ? y - _pressY : x - _pressX;
-        if (!_dragging && Math.Abs(d) < 4)
+        if (!_dragging && Math.Abs(d) < Theme.Current.DragThreshold)
             return;
         _dragging = true;
         var atStart = CurrentIndex <= 0 && d > 0;
