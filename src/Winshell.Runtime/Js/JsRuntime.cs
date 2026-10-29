@@ -100,11 +100,35 @@ public sealed class JsRuntime
         return wrapper;
     }
 
+    [ThreadStatic]
+    private static Stack<QObject?>? _scopeStack;
+
+    /// <summary>The QML object whose script is running, so a <c>connect</c> can die with that object.</summary>
+    internal QObject? CurrentScope => _scopeStack is { Count: > 0 } ? _scopeStack.Peek() : null;
+
+    /// <summary>Pushes <paramref name="scope"/> until the returned value is disposed.</summary>
+    internal IDisposable EnterScope(QObject? scope)
+    {
+        (_scopeStack ??= new Stack<QObject?>()).Push(scope);
+        return new ScopeFrame();
+    }
+
+    private sealed class ScopeFrame : IDisposable
+    {
+        public void Dispose()
+        {
+            if (_scopeStack is { Count: > 0 })
+                _scopeStack.Pop();
+        }
+    }
+
     public JsValue CallFunction(JsValue function, JsValue? thisValue, object?[] args)
     {
         var jsArgs = new JsValue[args.Length];
         for (var i = 0; i < args.Length; i++)
             jsArgs[i] = ToJs(args[i]);
+        var scope = thisValue is QObjectWrapper wrapper ? wrapper.Target : CurrentScope;
+        using var _ = EnterScope(scope);
         return Engine.Call(function, thisValue ?? JsValue.Undefined, jsArgs);
     }
 

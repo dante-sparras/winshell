@@ -74,7 +74,8 @@ public sealed class Binding : IPropertyObserver, IDisposable
             {
                 try
                 {
-                    value = _evaluate();
+                    using (Target.Engine?.Js.EnterScope(Target))
+                        value = _evaluate();
                     ok = true;
                 }
                 catch (Exception e)

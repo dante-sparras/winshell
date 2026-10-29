@@ -13,17 +13,21 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
 
     public int Count => _handlers.Count;
 
-    public IDisposable Connect(Action<object?[]> handler) => Add(new Handler(handler, null, null, null));
+    public IDisposable Connect(Action<object?[]> handler) => Add(new Handler(handler, null, null, null, null, null));
 
     /// <summary>
     /// Connects a JavaScript function of <paramref name="runtime"/>, which runs it. <paramref name="thisValue"/> is
-    /// its <c>this</c>. The connection ends when the runtime's engine is disposed, as the signal's object may live on.
+    /// its <c>this</c>. The connection ends when the runtime's engine is disposed, or when the function's scope
+    /// object is destroyed, as the signal's object may live on.
     /// </summary>
     public IDisposable ConnectScript(JsValue function, JsValue? thisValue, JsRuntime runtime) =>
-        Add(new Handler(null, function, thisValue, runtime));
+        Add(new Handler(null, function, thisValue, runtime, ReceiverOf(thisValue) ?? runtime.CurrentScope, null));
 
     /// <summary>Connects a C# handler made by script code of <paramref name="runtime"/>, such as a signal connected to a signal.</summary>
-    public IDisposable ConnectFor(JsRuntime runtime, Action<object?[]> handler) => Add(new Handler(handler, null, null, runtime));
+    public IDisposable ConnectFor(JsRuntime runtime, Action<object?[]> handler, JsValue? signalKey = null) =>
+        Add(new Handler(handler, null, null, runtime, runtime.CurrentScope, signalKey));
+
+    private static QObject? ReceiverOf(JsValue? thisValue) => thisValue is QObjectWrapper wrapper ? wrapper.Target : null;
 
     private Disconnect Add(Handler handler)
     {
@@ -45,11 +49,21 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
 
     public bool DisconnectScript(JsValue function)
     {
-        var index = _handlers.FindIndex(h => h.Script is not null && ReferenceEquals(h.Script, function));
-        if (index < 0)
-            return false;
-        _handlers.RemoveAt(index);
-        return true;
+        var found = false;
+        foreach (var h in _handlers)
+        {
+            if (h.Removed)
+                continue;
+            var script = h.Script is not null && ReferenceEquals(h.Script, function);
+            var signal = h.SignalKey is not null && ReferenceEquals(h.SignalKey, function);
+            if (!script && !signal)
+                continue;
+            h.Removed = true;
+            found = true;
+        }
+        if (found)
+            _handlers.RemoveAll(h => h.Removed);
+        return found;
     }
 
     public void Emit(object?[] args)
@@ -62,6 +76,11 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
                 return;
             if (h.Removed)
                 continue;
+            if (h.Receiver is { IsDestroyed: true })
+            {
+                h.Removed = true;
+                continue;
+            }
             try
             {
                 if (h.Native is not null)
@@ -78,6 +97,7 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
                 (Owner.Engine?.Log ?? Log.Default).ScriptError(e, $"{Owner.TypeName}.{Definition.Name}");
             }
         }
+        _handlers.RemoveAll(h => h.Removed);
     }
 
     public void Clear()
@@ -87,7 +107,7 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
         _handlers.Clear();
     }
 
-    private sealed class Handler(Action<object?[]>? native, JsValue? script, JsValue? thisValue, JsRuntime? runtime)
+    private sealed class Handler(Action<object?[]>? native, JsValue? script, JsValue? thisValue, JsRuntime? runtime, QObject? receiver, JsValue? signalKey)
     {
         public JsRuntime? Runtime { get; } = runtime;
 
@@ -96,6 +116,12 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
         public JsValue? Script { get; } = script;
 
         public JsValue? This { get; } = thisValue;
+
+        /// <summary>The QML object whose scope created the handler. A destroyed receiver no longer runs.</summary>
+        public QObject? Receiver { get; } = receiver;
+
+        /// <summary>The other signal, when this handler is a signal connected to a signal.</summary>
+        public JsValue? SignalKey { get; } = signalKey;
 
         public bool Removed { get; set; }
     }
