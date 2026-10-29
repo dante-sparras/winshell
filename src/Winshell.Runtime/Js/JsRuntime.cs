@@ -138,7 +138,7 @@ public sealed class JsRuntime
     /// <summary>A script assignment to a property: a <c>Qt.binding()</c> function makes a binding, anything else removes it.</summary>
     public void AssignProperty(QObject target, string name, JsValue value)
     {
-        if (value.ToObject() is BindingFunction bindingFunction)
+        if (value is ObjectWrapper { Target: BindingFunction bindingFunction })
         {
             var binding = new Binding(target, name, () => Engine.Call(bindingFunction.Function, Wrap(target), []), $"Qt.binding for {target.TypeName}.{name}");
             target.SetBinding(name, binding);
