@@ -51,7 +51,7 @@ An app hands over one bitmap, usually sized for the primary monitor. Give the `I
 
 ## Clicks
 
-A click reaches the app the way Explorer sends it. The app gets the mouse messages its window would get. From interface version 3 on, it also gets `NIN_SELECT` after each left release and `WM_CONTEXTMENU` after a right one. Version 4 apps get the screen point in the message. Older apps read the cursor, so `display()` moves the cursor to the point and puts it back 400 ms later.
+A click reaches the app the way Explorer sends it. The app gets the mouse messages its window would get. From interface version 3 on, it also gets `NIN_SELECT` after each left release and `WM_CONTEXTMENU` after a right one. Version 4 apps get the screen point in the message. Older apps read the cursor, so `display()` moves it to the point when it is more than three pixels away. After 400 ms it restores the previous position only if the user has left the pointer at that point.
 
 The shell lets the app take the foreground (`AllowSetForegroundWindow`) and activates nothing itself. When the app shows nothing, the window you were typing in keeps the keyboard. A click that does not come from input to the shell, such as an IPC call, is not allowed to pass the foreground on. In that case the shell briefly joins the foreground thread and brings the app's window forward, so that the app's menu still closes when you click away.
 
