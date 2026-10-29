@@ -24,6 +24,7 @@ pwsh scripts/dev.ps1
 | `pwsh scripts/dev.ps1` | Clones Quickshell v0.3.2 into `docs/agents/quickshell/` and fetches its manual into `site/` there. |
 | `pwsh scripts/dev.ps1 -Refresh` | Downloads the Quickshell manual again. |
 | `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the check CI runs. |
+| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`: a self-contained `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/`. `-Publish` only builds the folders in `artifacts/publish/`, `-Pack` only packs them. `-Version` overrides the release from `.release-please-manifest.json`, `-Runtime` picks the architectures, `-Out` the folder. |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
 Before opening a PR, run the checks CI runs: `pwsh scripts/check.ps1`.
@@ -56,6 +57,10 @@ The first launch that uses the default config folder copies `%USERPROFILE%\.conf
 ## Releasing
 
 release-please keeps a release PR open that collects the changes merged into `main`, with the next version and its changelog. Merging that PR tags the release and publishes it. The released version is `.release-please-manifest.json`. A build stamps that into the assembly unless `-p:Version=` overrides it, so `winshell --version`, `Shell.hasVersion`, and `//@ if hasVersion(...)` report that release. The printed version can also carry a `+` build id. A build that cannot read the manifest is `0.0.0-dev`.
+
+The release workflow then runs the Package workflow (`.github/workflows/package.yml`) on the tagged commit, which runs `scripts/package.ps1` and uploads its files to the GitHub release: both portable zips, `SHA256SUMS.txt` and `winget-manifests.zip`. The same workflow builds those files, without uploading them, on every push to `main` and on PRs that change packaging, and keeps them as the run's `packages` artifact.
+
+With a `WINGET_TOKEN` secret, the release workflow also submits the manifests to [winget-pkgs](https://github.com/microsoft/winget-pkgs) with a pinned `wingetcreate`. The token is a classic personal access token with the `public_repo` scope, from the account whose fork of winget-pkgs opens the PR. Without it, submit them by hand: unzip `winget-manifests.zip` and run `wingetcreate submit --token <token> <folder>`. winget's moderators review every PR, and the first one for `DanteSparras.Winshell` before any other.
 
 - **Pick the version yourself:** when merging a PR, add `Release-As: x.y.z` to the end of the squash commit message.
 - **The release PR's checks don't start:** without the `RELEASE_PLEASE_TOKEN` secret, close and reopen the release PR right before merging it.

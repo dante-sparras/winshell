@@ -18,6 +18,9 @@ jobs:
   release-please:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     permissions:
       contents: write # tags and GitHub releases
       issues: write # labels on the release PR
@@ -26,8 +29,21 @@ jobs:
       # PRs opened with GITHUB_TOKEN do not trigger CI, so required checks never run on the release
       # PR. RELEASE_PLEASE_TOKEN (a fine-grained PAT) fixes that; without it, close and reopen the
       # release PR to trigger its checks.
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # A new release gets its portable zips, SHA256SUMS.txt and winget manifests. See docs/development.md#releasing.
+  package:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    permissions:
+      contents: write # uploads to the release
+    uses: ./.github/workflows/package.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
