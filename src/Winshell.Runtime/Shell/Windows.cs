@@ -347,10 +347,10 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         {
             // Not Combine: the mask applies on top of the whole window.
             using var full = new SKRegion(SKRectI.Create(0, 0, (int)Math.Ceiling(_width), (int)Math.Ceiling(_height)));
-            var op = _mask.Intersection switch
+            var op = (Intersection)_mask.Intersection switch
             {
-                1 => SKRegionOperation.Difference,
-                2 => SKRegionOperation.Intersect,
+                Intersection.Subtract => SKRegionOperation.Difference,
+                Intersection.Intersect => SKRegionOperation.Intersect,
                 _ => SKRegionOperation.XOR,
             };
             full.Op(region, op);

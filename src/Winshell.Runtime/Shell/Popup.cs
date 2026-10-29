@@ -39,7 +39,7 @@ public sealed class PopupAnchor : QObject
     private Item? _item;
     private int _edges = (int)(Shell.Edges.Top | Shell.Edges.Left);
     private int _gravity = (int)(Shell.Edges.Bottom | Shell.Edges.Right);
-    private int _adjustment = 63;
+    private int _adjustment = (int)PopupAdjustment.All;
 
     private readonly Action _changed;
 
@@ -262,29 +262,29 @@ public sealed class PopupWindow : ShellWindow, IItemContainerChild
         var h = height;
         if (bounds is { } b)
         {
-            if ((adjustment & 4) != 0 && (x < b.X || x + w > b.Right))
+            if ((adjustment & (int)PopupAdjustment.FlipX) != 0 && (x < b.X || x + w > b.Right))
             {
                 var fx = PlaceX(FlipH(edges), FlipH(gravity));
                 if (fx >= b.X && fx + w <= b.Right)
                     x = fx;
             }
-            if ((adjustment & 8) != 0 && (y < b.Y || y + h > b.Bottom))
+            if ((adjustment & (int)PopupAdjustment.FlipY) != 0 && (y < b.Y || y + h > b.Bottom))
             {
                 var fy = PlaceY(FlipV(edges), FlipV(gravity));
                 if (fy >= b.Y && fy + h <= b.Bottom)
                     y = fy;
             }
-            if ((adjustment & 1) != 0)
+            if ((adjustment & (int)PopupAdjustment.SlideX) != 0)
                 x = Math.Max(b.X, Math.Min(x, b.Right - w));
-            if ((adjustment & 2) != 0)
+            if ((adjustment & (int)PopupAdjustment.SlideY) != 0)
                 y = Math.Max(b.Y, Math.Min(y, b.Bottom - h));
-            if ((adjustment & 16) != 0 && (x < b.X || x + w > b.Right))
+            if ((adjustment & (int)PopupAdjustment.ResizeX) != 0 && (x < b.X || x + w > b.Right))
             {
                 var l = Math.Max(x, b.X);
                 w = Math.Max(1, Math.Min(x + w, b.Right) - l);
                 x = l;
             }
-            if ((adjustment & 32) != 0 && (y < b.Y || y + h > b.Bottom))
+            if ((adjustment & (int)PopupAdjustment.ResizeY) != 0 && (y < b.Y || y + h > b.Bottom))
             {
                 var t = Math.Max(y, b.Y);
                 h = Math.Max(1, Math.Min(y + h, b.Bottom) - t);
@@ -336,4 +336,21 @@ public sealed class ShellWindowAttached(QObject owner) : QObject
     [Qml]
     public object? MapFromItem(Item item, object? xOrPoint, double y = double.NaN, double width = double.NaN, double height = double.NaN) =>
         Window?.MapFromItem(item, xOrPoint, y, width, height);
+}
+
+/// <summary>The <c>PopupAdjustment</c> values, for <c>PopupAnchor.adjustment</c>. Combine them with <c>|</c>.</summary>
+[Flags]
+public enum PopupAdjustment
+{
+    None = 0,
+    SlideX = 1,
+    SlideY = 2,
+    Slide = SlideX | SlideY,
+    FlipX = 4,
+    FlipY = 8,
+    Flip = FlipX | FlipY,
+    ResizeX = 16,
+    ResizeY = 32,
+    Resize = ResizeX | ResizeY,
+    All = Slide | Flip | Resize,
 }
