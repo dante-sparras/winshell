@@ -20,6 +20,16 @@ public sealed class StartupTests : IDisposable
     {
         Directory.Delete(_directory, recursive: true);
         Registry.CurrentUser.DeleteSubKeyTree(_testKey, throwOnMissingSubKey: false);
+        // The parents too, once nothing else is in them.
+        foreach (var parent in new[] { @"Software\Winshell\Tests", @"Software\Winshell" })
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(parent);
+            if (key is { SubKeyCount: 0, ValueCount: 0 })
+            {
+                key.Close();
+                Registry.CurrentUser.DeleteSubKey(parent, throwOnMissingSubKey: false);
+            }
+        }
     }
 
     private const string Qml = """
