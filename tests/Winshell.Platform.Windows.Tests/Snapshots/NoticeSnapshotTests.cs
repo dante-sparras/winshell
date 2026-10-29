@@ -50,6 +50,8 @@ public sealed class NoticeSnapshotTests
             using var host = new ShellHost(root, loop, platform, log, Modules) { WatchFiles = false };
             using var notices = new ShellNotices(host, loop, platform, log, _ => { }, Modules);
             Assert.True(host.Start());
+            // What the load decided runs first, as it does in winshell.exe.
+            loop.Process();
 
             notices.Show(kind == "config-error"
                 ? ShellNotices.ForConfigError(@"C:\Users\you\AppData\Roaming\winshell\bars\Taskbar.qml[42:7]: Cannot assign to non-existent property ""colour""",

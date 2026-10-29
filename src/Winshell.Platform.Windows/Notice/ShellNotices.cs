@@ -22,8 +22,10 @@ public sealed record Notice(NoticeKind Kind, string Title, string Detail, string
 /// <summary>
 /// Winshell's own notices: a configuration error, and a window that failed. Each is a window drawn like a Windows 11
 /// notification by <c>ShellNotice.qml</c>, in an engine of its own, so it shows whatever the configuration is doing,
-/// including nothing. One notice shows at a time; a new one replaces it. Nothing is sent anywhere: the button opens a
-/// file on this PC. <c>WINSHELL_NO_RELOAD_POPUP=1</c> and <c>Shell.inhibitReloadPopup()</c> hide configuration errors.
+/// including nothing. One notice shows at a time: a new one replaces it, except that a window that failed does not
+/// replace a configuration error, which stays until it is fixed or dismissed. Nothing is sent anywhere: the button
+/// opens a file on this PC, and never runs one. <c>WINSHELL_NO_RELOAD_POPUP=1</c> and <c>Shell.inhibitReloadPopup()</c>
+/// hide configuration errors.
 /// </summary>
 public sealed partial class ShellNotices : IDisposable
 {
@@ -62,27 +64,34 @@ public sealed partial class ShellNotices : IDisposable
     /// <summary>The notice's window while one shows.</summary>
     public ShellWindow? Window { get; private set; }
 
+    // Everything a reload decides is posted, so two reloads in one turn of the loop show what the last one found.
     private void OnReloaded(string? error)
     {
-        if (error is null)
-        {
-            if (Current?.Kind == NoticeKind.ConfigError)
-                Hide();
-            return;
-        }
-        if (_host.ShowReloadPopup)
+        if (error is not null && _host.ShowReloadPopup)
         {
             var notice = ForConfigError(error, _host.RootFile, running: _host.Root is not null);
             _loop.Post(() => Show(notice));
+            return;
         }
+        // Fixed, or a failure the shell hid: an older error no longer says what is wrong.
+        _loop.Post(() =>
+        {
+            if (Current?.Kind == NoticeKind.ConfigError)
+                Hide();
+        });
     }
 
-    // A report can be written on any thread; a process that is ending has no time to show one.
+    // A report can be written on any thread; a process that is ending has no time to show one. A configuration
+    // error is what the user can fix, so a window that failed leaves it showing; its report is on disk and in the log.
     private void OnReport(CrashReport report)
     {
         if (report.Fatal || report.Recovery.Length == 0)
             return;
-        _loop.Post(() => Show(ForCrash(report)));
+        _loop.Post(() =>
+        {
+            if (Current?.Kind != NoticeKind.ConfigError)
+                Show(ForCrash(report));
+        });
     }
 
     // "C:\config\Bar.qml[7:5]: Cannot assign …", as Log.Describe writes an error, or "C:\config\shell.qml: …".
@@ -164,8 +173,21 @@ public sealed partial class ShellNotices : IDisposable
     {
         if (Current is not { } notice)
             return;
-        _open(notice.Target);
+        _open(notice.Kind == NoticeKind.ConfigError ? ConfigFileOrRoot(notice.Target, _host.RootFile) : notice.Target);
         _loop.Post(Hide);
+    }
+
+    /// <summary>
+    /// The file a configuration error names, when it is a QML or script file that is there; otherwise the
+    /// configuration's <c>shell.qml</c>. The name comes from the error's text, so it is checked before it is opened.
+    /// </summary>
+    internal static string ConfigFileOrRoot(string target, string rootFile)
+    {
+        var extension = Path.GetExtension(target);
+        var configFile = extension.Equals(".qml", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".js", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".mjs", StringComparison.OrdinalIgnoreCase);
+        return configFile && Path.IsPathFullyQualified(target) && File.Exists(target) ? target : rootFile;
     }
 
     /// <summary>Closes the notice showing, if any.</summary>
@@ -183,21 +205,38 @@ public sealed partial class ShellNotices : IDisposable
     }
 
     /// <summary>
-    /// Opens a file in the app Windows opens it with. A file no app is set to open, as a <c>.qml</c> file can be, is
-    /// shown selected in File Explorer instead.
+    /// Opens a file to read it, off the loop so a slow app does not hold up the shell. A crash report and a
+    /// <c>.qml</c> file open with what Windows opens them with; any other file opens with its edit verb, since opening
+    /// a <c>.js</c> file runs it in Windows Script Host. A file no app opens that way is shown selected in File Explorer.
     /// </summary>
-    public static void Open(string path, Log log)
+    public static void Open(string path, Log log) => _ = Task.Run(() => OpenNow(path, log));
+
+    /// <summary>The verb a file is opened with: null for the default, which only a report or a <c>.qml</c> file gets.</summary>
+    internal static string? VerbFor(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) || extension.Equals(".qml", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : "edit";
+    }
+
+    private static void OpenNow(string path, Log log)
     {
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+            var open = new ProcessStartInfo(path) { UseShellExecute = true };
+            if (VerbFor(path) is { } verb)
+                open.Verb = verb;
+            Process.Start(open)?.Dispose();
         }
         catch (Win32Exception)
         {
             try
             {
-                // Explorer reads its own command line: the path is quoted after the comma, not the whole argument.
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false })?.Dispose();
+                // Explorer by its full path, not the search path. It reads its own command line: the path is quoted
+                // after the comma, not the whole argument.
+                var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                Process.Start(new ProcessStartInfo(explorer, $"/select,\"{path}\"") { UseShellExecute = false })?.Dispose();
             }
             catch (Exception e) when (e is Win32Exception or InvalidOperationException)
             {

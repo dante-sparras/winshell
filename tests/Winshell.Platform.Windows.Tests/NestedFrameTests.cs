@@ -18,6 +18,8 @@ public class NestedFrameTests
         public static int Depth;
         public static int MaxDepth;
         public static ShellWindow? Resize;
+        public static IEventLoop? Loop;
+        public static List<double>? SeenAfterTheFrame;
         public static List<double> PaintedHeights { get; } = [];
 
         public override void Paint(SKCanvas canvas, PaintContext context)
@@ -28,7 +30,11 @@ public class NestedFrameTests
             {
                 PaintedHeights.Add(Height);
                 if (Interlocked.Exchange(ref Resize, null) is { } window)
+                {
                     window.ImplicitHeight = 80;
+                    // The first thing the loop runs after this frame sees what the frame drew.
+                    Loop?.Post(() => SeenAfterTheFrame = [.. PaintedHeights]);
+                }
                 base.Paint(canvas, context);
             }
             finally
@@ -63,6 +69,7 @@ public class NestedFrameTests
         Resizer.Depth = 0;
         Resizer.MaxDepth = 0;
         Resizer.PaintedHeights.Clear();
+        Resizer.SeenAfterTheFrame = null;
         try
         {
             using var loop = new WinEventLoop { Log = log };
@@ -76,6 +83,7 @@ public class NestedFrameTests
             { WatchFiles = false };
             Assert.True(host.Start());
             var window = (ShellWindow)Assert.Single(platform.Windows).Client;
+            Resizer.Loop = loop;
 
             loop.Schedule(TimeSpan.FromMilliseconds(100), () =>
             {
@@ -88,6 +96,8 @@ public class NestedFrameTests
             Assert.Null(Resizer.Resize);
             Assert.Equal(1, Resizer.MaxDepth);
             Assert.Equal(80, Resizer.PaintedHeights[^1]);
+            // The new size is drawn in the same frame, so the window never shows its old size at its new one.
+            Assert.Equal(80, Resizer.SeenAfterTheFrame![^1]);
         }
         finally
         {

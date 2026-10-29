@@ -629,7 +629,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             return;
         // Drawing lays items out, and a window sized to its content then resizes; Windows answers with WM_SIZE
         // inside this frame. A frame started there would replace the buffer this one is drawing into, so the window
-        // draws again once this frame is done.
+        // draws again once this frame is done: right away once, so the old size never shows, and on the next frame
+        // if that resizes it again.
         if (_rendering)
         {
             _renderAgain = true;
@@ -639,6 +640,11 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         try
         {
             RenderFrame(_surface);
+            if (_renderAgain && _surface is { } surface && Handle != 0 && !_failed)
+            {
+                _renderAgain = false;
+                RenderFrame(surface);
+            }
         }
         finally
         {

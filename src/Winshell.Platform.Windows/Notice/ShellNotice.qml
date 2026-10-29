@@ -6,8 +6,9 @@ import QtQuick.Controls
 
 // Winshell's own notice, drawn like a Windows 11 notification: bottom right of the main screen, above the taskbar,
 // Acrylic, with the app name, a title, the text and two buttons. It is not part of a configuration, so it shows
-// even when the configuration did not load. It does not take the keyboard when it appears; a click gives it the
-// keyboard, and then Tab moves between its buttons and Escape dismisses it. Pointing at it holds a timed notice open.
+// even when the configuration did not load. It does not take the keyboard when it appears; a click anywhere on it
+// gives it the keyboard, and then Tab moves between its buttons and Escape dismisses it. Pointing at it, or having
+// the keyboard, holds a timed notice open.
 PanelWindow {
   id: root
 
@@ -44,7 +45,7 @@ PanelWindow {
     id: hideTimer
     objectName: "hideTimer"
     interval: root.timeout
-    running: root.timeout > 0 && !hover.containsMouse
+    running: root.timeout > 0 && !hover.containsMouse && root.activeFocusItem === null
     onTriggered: root.dismissRequested()
   }
 
@@ -61,11 +62,14 @@ PanelWindow {
 
     Keys.onEscapePressed: root.dismissRequested()
 
+    // Under the buttons: a click on the text or the background gives the notice the keyboard, so Escape works.
     MouseArea {
       id: hover
+      objectName: "hover"
       anchors.fill: parent
       hoverEnabled: true
-      acceptedButtons: Qt.NoButton
+      acceptedButtons: Qt.LeftButton
+      onPressed: card.forceActiveFocus()
     }
 
     ColumnLayout {

@@ -235,6 +235,13 @@ internal static class Uia
     [DllImport("UIAutomationCore.dll")]
     public static extern int UiaRaiseAutomationPropertyChangedEvent(IRawElementProviderSimple provider, int propertyId, [MarshalAs(UnmanagedType.Struct)] object? oldValue, [MarshalAs(UnmanagedType.Struct)] object? newValue);
 
+    // Notifications, which a screen reader speaks without moving focus
+    public const int NotificationKindOther = 4;
+    public const int NotificationProcessingImportantMostRecent = 1;
+
+    [DllImport("UIAutomationCore.dll")]
+    public static extern int UiaRaiseNotificationEvent(IRawElementProviderSimple provider, int notificationKind, int notificationProcessing, [MarshalAs(UnmanagedType.BStr)] string displayString, [MarshalAs(UnmanagedType.BStr)] string activityId);
+
     [DllImport("UIAutomationCore.dll")]
     public static extern int UiaRaiseStructureChangedEvent(IRawElementProviderSimple provider, int changeType, int[] runtimeId, int runtimeIdLength);
 
