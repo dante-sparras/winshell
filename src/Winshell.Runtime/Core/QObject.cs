@@ -468,7 +468,15 @@ public class QObject
         IsDestroyed = true;
         _owner?._owned?.Remove(this);
         _owner = null;
-        _observers?.Clear();
+        if (_observers is not null)
+        {
+            // A surviving binding must not retain this object after its watches are gone.
+            foreach (var (property, observers) in _observers)
+                foreach (var observer in observers)
+                    if (observer is Binding binding)
+                        binding.ForgetDependency(this, property);
+            _observers.Clear();
+        }
     }
 
     /// <summary>Releases what the object holds: timers, processes, windows.</summary>
