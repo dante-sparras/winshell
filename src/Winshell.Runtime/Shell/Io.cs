@@ -763,9 +763,13 @@ public sealed class FileView : QObject
     private string? _watchedPath;
     private int _generation;
     private bool _bom;
-    // One queue, so a later save cannot finish before an earlier one. Each save also uses its own temp file.
+    // One save at a time, on a thread of its own, so a later save cannot finish before an earlier one and a burst
+    // does not take a thread pool thread per save. Saves still waiting are kept as the latest text.
     private readonly object _writeGate = new();
     private Task _writes = Task.CompletedTask;
+    private QueuedSave? _queued;
+    private bool _draining;
+    private int _reserved;
     // Link kind of the last destination this view saved. Counting links opens the file, and a burst of saves
     // would hold that open across the next replace. A hand save forgets it: the file may now be a different link.
     private string? _linkKindPath;
@@ -1176,145 +1180,193 @@ public sealed class FileView : QObject
     {
         if (_path.Length == 0)
             return;
-        var path = _path;
-        var atomic = _atomicWrites;
-        var bom = _bom;
-        var loop = Engine?.Loop;
+        var save = new QueuedSave(_path, text, _atomicWrites, _bom, Engine?.Loop);
         _text = text;
         NotifyChanged("text");
-        void DoWrite()
-        {
-            string? error = null;
-            var handSaveWon = false;
-            var destination = path;
-            try
-            {
-                destination = DestinationForSave(path, out var hardLink);
-                var directory = System.IO.Path.GetDirectoryName(destination);
-                if (directory is not null)
-                    Directory.CreateDirectory(directory);
-                // Captured before the temporary file exists. A hand save during that write changes the destination
-                // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
-                // recovers from it and the text above already includes it.
-                var diskAtStart = Read(destination).Text;
-                // A hard link shares its bytes with another name. Replacing the name would break that link.
-                if (atomic && !hardLink)
-                {
-                    var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
-                    WriteText(temp, text, bom);
-                    try
-                    {
-                        // A slow scan of the temporary file is when a hand save usually lands.
-                        _beforeReplace?.Invoke(destination);
-                        if (HandSaveWins(Read(destination).Text, diskAtStart, text))
-                        {
-                            handSaveWon = true;
-                        }
-                        else
-                        {
-                            MoveReplacing(temp, destination);
-                        }
-                    }
-                    finally
-                    {
-                        try
-                        {
-                            // A successful replace has already moved the temp away. A hand save or a failed
-                            // replace leaves it, and the next save must not see it.
-                            if (File.Exists(temp))
-                                File.Delete(temp);
-                        }
-                        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                        {
-                        }
-                    }
-                }
-                else if (HandSaveWins(Read(destination).Text, diskAtStart, text))
-                {
-                    handSaveWon = true;
-                }
-                else
-                {
-                    WriteText(destination, text, bom);
-                }
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                error = e.Message;
-            }
-            void Report()
-            {
-                if (IsDestroyed)
-                    return;
-                if (error is null)
-                {
-                    // ReadDirectoryChangesW watches the directory, so a rename-replace does not detach it.
-                    // Arm only when the directory has just appeared, then read once: a hand save that landed
-                    // while this write ran is already on disk and will not produce a later event.
-                    Watch();
-                    AcceptHandSave(destination);
-                    if (!handSaveWon)
-                        Emit("saved");
-                }
-                else
-                {
-                    if (_printErrors)
-                        Engine?.Log.Warn("io", $"FileView: failed to write {path}: {error}");
-                    Emit("saveFailed", 1);
-                }
-            }
-            if (loop is null)
-                Report();
-            else
-                loop.Post(Report);
-        }
-        // A blocking write runs on this thread, so a test probe set here still runs. It only decides that the
-        // caller waits. Async writes take the same queue and cannot pass one another.
-        var wait = _blockWrites || loop is null;
+        // A blocking save runs on this thread, so a test probe set here still runs. Async saves share one thread
+        // that is not taken from the pool: a burst of Task.Run calls, each blocked on the save before it, left the
+        // first save waiting for a worker that the busy pool was slow to add.
+        var wait = _blockWrites || save.Loop is null;
         if (wait)
         {
             Task prior;
             TaskCompletionSource ready;
             lock (_writeGate)
             {
+                _reserved++;
                 prior = _writes;
                 ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _writes = ready.Task;
             }
             try
             {
-                try
-                {
-                    prior.GetAwaiter().GetResult();
-                }
-                catch (Exception e) when (e is not OutOfMemoryException)
-                {
-                }
-                DoWrite();
+                WaitForSave(prior);
+                WriteQueued(save);
             }
             finally
             {
-                ready.TrySetResult();
+                lock (_writeGate)
+                {
+                    _reserved--;
+                    ready.TrySetResult();
+                    StartDrain();
+                }
             }
         }
         else
         {
             lock (_writeGate)
             {
-                var previous = _writes;
-                _writes = Task.Run(() =>
+                _queued = save;
+                StartDrain();
+            }
+        }
+    }
+
+    /// <summary>Starts the drain if a save is waiting and no blocking save has reserved the next turn. The caller holds <see cref="_writeGate"/>.</summary>
+    private void StartDrain()
+    {
+        if (_draining || _reserved > 0 || _queued is null)
+            return;
+        _draining = true;
+        var prior = _writes;
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _writes = done.Task;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                WaitForSave(prior);
+                while (true)
+                {
+                    QueuedSave next;
+                    lock (_writeGate)
+                    {
+                        if (_reserved > 0 || _queued is null)
+                            return;
+                        next = _queued;
+                        _queued = null;
+                    }
+                    WriteQueued(next);
+                }
+            }
+            finally
+            {
+                lock (_writeGate)
+                {
+                    _draining = false;
+                    done.TrySetResult();
+                    StartDrain();
+                }
+            }
+        })
+        { IsBackground = true };
+        thread.Start();
+    }
+
+    private static void WaitForSave(Task prior)
+    {
+        try
+        {
+            prior.GetAwaiter().GetResult();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+        }
+    }
+
+    private void WriteQueued(QueuedSave save)
+    {
+        var path = save.Path;
+        var text = save.Text;
+        string? error = null;
+        var handSaveWon = false;
+        var destination = path;
+        try
+        {
+            destination = DestinationForSave(path, out var hardLink);
+            var directory = System.IO.Path.GetDirectoryName(destination);
+            if (directory is not null)
+                Directory.CreateDirectory(directory);
+            // Captured before the temporary file exists. A hand save during that write changes the destination
+            // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
+            // recovers from it and the text above already includes it.
+            var diskAtStart = Read(destination).Text;
+            // A hard link shares its bytes with another name. Replacing the name would break that link.
+            if (save.Atomic && !hardLink)
+            {
+                var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
+                WriteText(temp, text, save.Bom);
+                try
+                {
+                    // A slow scan of the temporary file is when a hand save usually lands.
+                    _beforeReplace?.Invoke(destination);
+                    if (HandSaveWins(Read(destination).Text, diskAtStart, text))
+                        handSaveWon = true;
+                    else
+                        MoveReplacing(temp, destination);
+                }
+                finally
                 {
                     try
                     {
-                        previous.GetAwaiter().GetResult();
+                        // A successful replace has already moved the temp away. A hand save or a failed
+                        // replace leaves it, and the next save must not see it.
+                        if (File.Exists(temp))
+                            File.Delete(temp);
                     }
-                    catch (Exception e) when (e is not OutOfMemoryException)
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                     {
                     }
-                    DoWrite();
-                });
+                }
+            }
+            else if (HandSaveWins(Read(destination).Text, diskAtStart, text))
+            {
+                handSaveWon = true;
+            }
+            else
+            {
+                WriteText(destination, text, save.Bom);
             }
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+        }
+        void Report()
+        {
+            if (IsDestroyed)
+                return;
+            if (error is null)
+            {
+                // ReadDirectoryChangesW watches the directory, so a rename-replace does not detach it.
+                // Arm only when the directory has just appeared, then read once: a hand save that landed
+                // while this write ran is already on disk and will not produce a later event.
+                Watch();
+                AcceptHandSave(destination);
+                if (!handSaveWon)
+                    Emit("saved");
+            }
+            else
+            {
+                if (_printErrors)
+                    Engine?.Log.Warn("io", $"FileView: failed to write {path}: {error}");
+                Emit("saveFailed", 1);
+            }
+        }
+        if (save.Loop is null)
+            Report();
+        else
+            save.Loop.Post(Report);
+    }
+
+    private sealed class QueuedSave(string path, string text, bool atomic, bool bom, IEventLoop? loop)
+    {
+        public string Path { get; } = path;
+        public string Text { get; } = text;
+        public bool Atomic { get; } = atomic;
+        public bool Bom { get; } = bom;
+        public IEventLoop? Loop { get; } = loop;
     }
 
     private void AcceptHandSave(string path)
