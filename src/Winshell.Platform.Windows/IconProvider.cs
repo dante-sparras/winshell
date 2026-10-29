@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using SkiaSharp;
 using Winshell.Runtime.Quick;
@@ -12,14 +11,26 @@ namespace Winshell.Platform.Windows;
 /// </summary>
 public sealed class IconProvider : IImageProvider, IIconLookup
 {
+    /// <summary>How many drawn icons stay cached. A long session asks for a few sizes of many apps, then the least recently used ones go.</summary>
+    private const int CacheCapacity = 256;
+
     public static readonly IconProvider Instance = new();
 
-    private readonly ConcurrentDictionary<(string, int), SKImage?> _cache = new();
+    private readonly IconCache _cache;
 
     private IconProvider()
+        : this(CacheCapacity)
     {
         Theme.Changed += () => _cache.Clear();
     }
+
+    internal IconProvider(int capacity) => _cache = new IconCache(capacity);
+
+    internal static IconProvider CreateForTests(int capacity) => new(capacity);
+
+    internal int CachedCount => _cache.Count;
+
+    internal void DropCache() => _cache.Clear();
 
     /// <summary>Freedesktop icon names, and the Segoe Fluent Icons glyph that means the same.</summary>
     private static readonly Dictionary<string, char> Glyphs = new(StringComparer.OrdinalIgnoreCase)
@@ -104,7 +115,13 @@ public sealed class IconProvider : IImageProvider, IIconLookup
         var size = Math.Max(16, Math.Max(requestedWidth, requestedHeight));
         if (requestedWidth <= 0 && requestedHeight <= 0)
             size = 64;
-        return _cache.GetOrAdd((id, size), key => LoadUncached(key.Item1, key.Item2));
+        var key = (id, size);
+        if (_cache.TryGet(key, out var cached))
+            return cached;
+        var loaded = LoadUncached(id, size);
+        if (loaded is null)
+            return null;
+        return _cache.Add(key, loaded);
     }
 
     private static SKImage? LoadUncached(string id, int size)
@@ -240,5 +257,79 @@ public sealed class IconProvider : IImageProvider, IIconLookup
         {
             return null;
         }
+    }
+}
+
+/// <summary>A small least-recently-used cache of icons. Clearing it disposes the native bitmaps.</summary>
+internal sealed class IconCache
+{
+    private readonly int _capacity;
+    private readonly object _gate = new();
+    private readonly Dictionary<(string Id, int Size), LinkedListNode<Entry>> _nodes = new();
+    private readonly LinkedList<Entry> _order = new();
+
+    internal IconCache(int capacity) => _capacity = Math.Max(1, capacity);
+
+    internal int Count
+    {
+        get { lock (_gate) return _nodes.Count; }
+    }
+
+    internal bool TryGet((string Id, int Size) key, out SKImage? image)
+    {
+        lock (_gate)
+        {
+            if (!_nodes.TryGetValue(key, out var node))
+            {
+                image = null;
+                return false;
+            }
+            _order.Remove(node);
+            _order.AddFirst(node);
+            image = node.Value.Image;
+            return true;
+        }
+    }
+
+    internal SKImage Add((string Id, int Size) key, SKImage image)
+    {
+        lock (_gate)
+        {
+            if (_nodes.TryGetValue(key, out var existing))
+            {
+                _order.Remove(existing);
+                _order.AddFirst(existing);
+                if (!ReferenceEquals(existing.Value.Image, image))
+                    image.Dispose();
+                return existing.Value.Image;
+            }
+            var node = new LinkedListNode<Entry>(new Entry(key, image));
+            _order.AddFirst(node);
+            _nodes.Add(key, node);
+            while (_nodes.Count > _capacity && _order.Last is { } last)
+            {
+                _order.RemoveLast();
+                _nodes.Remove(last.Value.Key);
+                last.Value.Image.Dispose();
+            }
+            return image;
+        }
+    }
+
+    internal void Clear()
+    {
+        lock (_gate)
+        {
+            foreach (var entry in _order)
+                entry.Image.Dispose();
+            _order.Clear();
+            _nodes.Clear();
+        }
+    }
+
+    private sealed class Entry((string Id, int Size) key, SKImage image)
+    {
+        public (string Id, int Size) Key { get; } = key;
+        public SKImage Image { get; } = image;
     }
 }
