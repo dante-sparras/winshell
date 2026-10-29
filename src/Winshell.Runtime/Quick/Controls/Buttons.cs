@@ -502,6 +502,27 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
         return true;
     }
 
+    protected override void OnActiveFocusChanged(bool focused)
+    {
+        base.OnActiveFocusChanged(focused);
+        // Space keeps the button down until key release. Focus leaving must cancel that, or it stays down.
+        if (focused || !_keyPressed)
+            return;
+        _keyPressed = false;
+        NotifyChanged("down");
+        StateChanged();
+        Emit("canceled");
+    }
+
+    /// <summary>Ends a press without a click or a cancel. A drag that already chose its value uses this.</summary>
+    protected void ReleasePress()
+    {
+        _holdTimer?.Dispose();
+        _repeatTimer?.Dispose();
+        _keyPressed = false;
+        SetPressed(false);
+    }
+
     protected override void OnDestroy()
     {
         _holdTimer?.Dispose();
@@ -882,7 +903,7 @@ public sealed class Switch : IndicatorButton
         {
             _dragging = false;
             var on = _position >= 0.5;
-            base.PointerCancel();
+            ReleasePress();
             Emit("released");
             if (on != Checked)
             {
@@ -894,6 +915,17 @@ public sealed class Switch : IndicatorButton
             return;
         }
         base.PointerRelease(x, y, button, buttons, modifiers);
+    }
+
+    public override void PointerCancel()
+    {
+        var wasDragging = _dragging;
+        _dragging = false;
+        base.PointerCancel();
+        if (!wasDragging)
+            return;
+        NotifyChanged("position");
+        NotifyChanged("visualPosition");
     }
 
     protected override void OnCheckedChanged()
