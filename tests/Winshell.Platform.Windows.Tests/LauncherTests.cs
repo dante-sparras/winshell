@@ -222,6 +222,31 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void Default_pins_match_an_aumid_before_an_english_display_name()
+    {
+        var pins = TempFile();
+        try
+        {
+            using var seeded = Open(dir => $$"""
+                LauncherView {
+                  pinsPath: "{{pins}}"
+                  apps: [
+                    { id: "de-calc", name: "Rechner", appId: "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", hidden: false, icon: "", target: "", packaged: true },
+                    { id: "en-calc", name: "Calculator", appId: "other", hidden: false, icon: "", target: "", packaged: false },
+                    { id: "de-edge", name: "Microsoft Edge", appId: "MSEdge", hidden: false, icon: "", target: "", packaged: false }
+                  ]
+                }
+                """);
+            Assert.Equal(["de-edge", "de-calc"], Strings(seeded.Eval("pinIds")));
+        }
+        finally
+        {
+            if (File.Exists(pins))
+                File.Delete(pins);
+        }
+    }
+
+    [Fact]
     public void An_empty_pins_file_stays_empty_and_unknown_ids_are_kept()
     {
         var empty = TempFile();

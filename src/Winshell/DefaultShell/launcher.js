@@ -21,20 +21,20 @@ var pinnedIcon = 32
 var rowIcon = 32
 var allIcon = 24
 
-// One pin per row. The first matching name wins. Aliases cover the names Windows gives those apps.
+// One pin per row. An AppUserModelID matches before a display name, so a non-English Windows still pins
+// these apps. Names stay as a fallback when the index has no id for them.
 var preferred = [
-  ["Edge", "Microsoft Edge"],
-  ["File Explorer"],
-  ["Settings"],
-  ["Notepad"],
-  ["Calculator"],
-  ["Paint"],
-  ["Snipping Tool"],
-  ["Terminal"],
-  ["Windows Terminal"],
-  ["Photos", "Microsoft Photos"],
-  ["Microsoft Store"],
-  ["Clock"]
+  { ids: ["MSEdge", "Microsoft.MicrosoftEdge.Stable_8wekyb3d8bbwe!App"], names: ["Edge", "Microsoft Edge"] },
+  { ids: ["Microsoft.Windows.Explorer"], names: ["File Explorer", "Windows Explorer", "Explorer"] },
+  { ids: ["windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel"], names: ["Settings"] },
+  { ids: ["Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"], names: ["Notepad"] },
+  { ids: ["Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"], names: ["Calculator"] },
+  { ids: ["Microsoft.Paint_8wekyb3d8bbwe!App"], names: ["Paint"] },
+  { ids: ["Microsoft.ScreenSketch_8wekyb3d8bbwe!App"], names: ["Snipping Tool"] },
+  { ids: ["Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"], names: ["Terminal", "Windows Terminal"] },
+  { ids: ["Microsoft.Windows.Photos_8wekyb3d8bbwe!App"], names: ["Photos", "Microsoft Photos"] },
+  { ids: ["Microsoft.WindowsStore_8wekyb3d8bbwe!App"], names: ["Microsoft Store"] },
+  { ids: ["Microsoft.WindowsAlarms_8wekyb3d8bbwe!App"], names: ["Clock", "Alarms & Clock"] }
 ]
 
 function asArray(value) {
@@ -123,16 +123,36 @@ function nameHit(app, names) {
   return false
 }
 
+function idHit(app, ids) {
+  var id = app && app.id ? String(app.id) : ""
+  var appId = app && app.appId ? String(app.appId) : ""
+  for (var i = 0; i < ids.length; i++) {
+    if (sameId(id, ids[i]) || sameId(appId, ids[i]))
+      return true
+  }
+  return false
+}
+
+function matchPreferred(list, slot) {
+  var i
+  for (i = 0; i < list.length; i++) {
+    if (idHit(list[i], slot.ids))
+      return list[i]
+  }
+  for (i = 0; i < list.length; i++) {
+    if (nameHit(list[i], slot.names))
+      return list[i]
+  }
+  return null
+}
+
 function defaultPins(apps) {
   var list = visibleApps(apps)
   var ids = []
   for (var p = 0; p < preferred.length && ids.length < 12; p++) {
-    for (var i = 0; i < list.length; i++) {
-      if (nameHit(list[i], preferred[p]) && !isPinned(ids, list[i].id)) {
-        ids.push(list[i].id)
-        break
-      }
-    }
+    var match = matchPreferred(list, preferred[p])
+    if (match && !isPinned(ids, match.id))
+      ids.push(match.id)
   }
   if (ids.length === 0) {
     for (var j = 0; j < list.length && ids.length < 8; j++)
