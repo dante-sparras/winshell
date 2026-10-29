@@ -54,6 +54,15 @@ internal static class WindowRules
     }
 
     /// <summary>
+    /// How far a window's restored rectangle is offset from screen coordinates. Windows reports it in workspace
+    /// coordinates, which start at the primary monitor's work area, unless the window is a tool window.
+    /// </summary>
+    public static (int X, int Y) WorkspaceOffset(RECT primaryMonitor, RECT primaryWork, bool toolWindow) =>
+        toolWindow || primaryWork.Width <= 0 || primaryWork.Height <= 0 ? (0, 0) : (primaryWork.Left - primaryMonitor.Left, primaryWork.Top - primaryMonitor.Top);
+
+    public static RECT Shift(RECT rect, int x, int y) => new(rect.Left + x, rect.Top + y, rect.Right + x, rect.Bottom + y);
+
+    /// <summary>
     /// Where a window goes on another monitor: the same logical offset and size, in the target's physical pixels.
     /// A window that would hang off the target is slid back, and one that is larger is shrunk to fit. The size is
     /// rounded on its own, so it does not depend on where the window sits.
