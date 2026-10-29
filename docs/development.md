@@ -137,7 +137,7 @@ The docs site is built from `docs/` by [DocFX](https://dotnet.github.io/docfx/),
 - **The reference** in `docs/reference/` has a page per `Winshell` module, `winshell-<module>.md`, with a `## Type` section for each type and a table whose first column names each member: `` `name` `` for a property, `` `name(args)` `` for a method or signal. `DocsTests` fails when a type, a member or an enum value is missing, or when a table names a member the type doesn't have. A type with a registered base type lists only what it adds. `reference/qt-quick.md` names every Qt Quick type, and each row of its "Where Winshell differs from Qt" table is a real `Type.member`; remove a row when that member starts working. Add a new type or member to its page in the PR that adds it.
 - **Links to other sites** are checked by the `links` job of the Docs workflow, on each PR and every Monday. That job isn't part of `check.ps1`.
 
-The Docs workflow builds the site on every PR and on `main`, and attaches it to the run as the `github-pages` artifact. On `main` it publishes it to GitHub Pages once Pages is turned on (Settings > Pages > Source: GitHub Actions) and the repository variable `DOCS_PAGES` is `true`. Until then the `deploy` job is skipped.
+The Docs workflow builds the site on every PR and on `main`. It does not publish that site. GitHub Pages is off.
 
 ## Network permissions
 
