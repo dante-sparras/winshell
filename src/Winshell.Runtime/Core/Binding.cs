@@ -57,7 +57,7 @@ public sealed class Binding : IPropertyObserver, IDisposable
 
     public void Evaluate()
     {
-        if (_disposed || Target.IsDestroyed)
+        if (_disposed || Target.IsDestroyed || Target.IsDestroying)
             return;
         if (_evaluating)
         {

@@ -46,6 +46,9 @@ public class QObject
 
     public bool IsDestroyed { get; private set; }
 
+    /// <summary>True from the start of <see cref="Destroy"/> until the object is fully torn down.</summary>
+    public bool IsDestroying => _destroying;
+
     /// <summary>The context the object was created in, which its own bindings and functions use.</summary>
     public ComponentContext? CreationContext { get; internal set; }
 
@@ -85,7 +88,7 @@ public class QObject
     /// <summary>Tells the observers of a property that it changed, and emits <c>nameChanged</c>.</summary>
     public void NotifyChanged(string qmlName)
     {
-        if (IsDestroyed)
+        if (IsDestroyed || _destroying)
             return;
         if (_observers is not null && _observers.TryGetValue(qmlName, out var list) && list.Count > 0)
         {
@@ -366,6 +369,13 @@ public class QObject
         if (IsDestroyed || _destroying)
             return;
         _destroying = true;
+        // Drop bindings before children notify, so a half-torn-down tree is not read again.
+        if (_bindings is not null)
+        {
+            foreach (var binding in _bindings.Values)
+                binding.Dispose();
+            _bindings.Clear();
+        }
         if (_attached is not null)
         {
             foreach (var attached in _attached.Values)
@@ -384,12 +394,6 @@ public class QObject
         {
             foreach (var attached in _attached.Values)
                 attached.Destroy();
-        }
-        if (_bindings is not null)
-        {
-            foreach (var binding in _bindings.Values)
-                binding.Dispose();
-            _bindings.Clear();
         }
         if (_signals is not null)
         {
