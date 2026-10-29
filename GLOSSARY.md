@@ -101,8 +101,12 @@ A desktop Task View lists and can switch to. An app window is on one of them.
 _Avoid_: workspace
 
 **App**:
-A program the Start menu lists: a shortcut or a packaged app.
+A program Start lists: a shortcut or a packaged app.
 _Avoid_: desktop entry, application
+
+**Start**:
+The launcher opened from the Windows key or the taskbar Start button.
+_Avoid_: start menu, app drawer
 
 **Playback device**:
 A Windows audio endpoint that plays sound, such as speakers or headphones.

@@ -22,7 +22,14 @@ public static class AnimationClock
         _running ??= [];
         if (!_running.Contains(animation))
             _running.Add(animation);
-        _loop = loop;
+        // A test disposes its loop before the next frame. The leftover timer belongs to that loop, so a new
+        // loop would never tick.
+        if (!ReferenceEquals(_loop, loop))
+        {
+            _timer?.Dispose();
+            _timer = null;
+            _loop = loop;
+        }
         _timer ??= loop.Schedule(FrameInterval, Tick);
     }
 
