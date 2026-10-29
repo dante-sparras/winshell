@@ -15,6 +15,10 @@ public sealed class QmlComponent : QObject
     private readonly QmlDocument? _document;
     private readonly string? _errorString;
 
+    /// <summary>
+    /// An empty component, for the <c>new()</c> constraint of type registration. QML builds <c>Component {}</c>
+    /// through the internal constructors, so this one has no engine and creates nothing.
+    /// </summary>
     public QmlComponent()
     {
         _engine = null!;
@@ -85,7 +89,7 @@ public sealed class QmlComponent : QObject
         }
         catch (Exception e) when (e is QmlCompileException or QmlException)
         {
-            _engine.Log.Warn("scene", e.Message);
+            (Engine?.Log ?? Log.Default).Warn("scene", e.Message);
             return null;
         }
     }
