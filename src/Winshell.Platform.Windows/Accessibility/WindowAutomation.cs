@@ -314,6 +314,10 @@ internal sealed class WindowAutomation : IDisposable
         };
         if (property != 0)
             Uia.UiaRaiseAutomationPropertyChangedEvent(element, property, old, now);
+        // The card stays in the tree while a volume or brightness readout changes. Speak each new name.
+        // The first show is announced when the node is added; this covers the names after that.
+        if (change.Property == AccessibleProperty.Name && change.Node.Role == Role.Notification && change.New is string { Length: > 0 } spoken)
+            Announce(element, spoken);
         if (change.Property == AccessibleProperty.IsSelected && change.New is true)
             Uia.UiaRaiseAutomationEvent(element, Uia.ElementSelectedEvent);
         if (change.Node.TextInput is not null && change.Property == AccessibleProperty.Value)
