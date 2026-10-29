@@ -671,9 +671,9 @@ internal sealed class DirectWriteLayout : IDisposable
         keep = Math.Clamp(keep, 0, text.Length);
         return mode switch
         {
-            TextLayout.Elide.Left => ellipsis + text[(text.Length - keep)..],
-            TextLayout.Elide.Middle => text[..((keep + 1) / 2)] + ellipsis + text[(text.Length - keep / 2)..],
-            _ => text[..keep].TrimEnd() + ellipsis,
+            TextLayout.Elide.Left => ellipsis + text[TextClusters.Ceil(text, text.Length - keep)..],
+            TextLayout.Elide.Middle => text[..TextClusters.Snap(text, (keep + 1) / 2)] + ellipsis + text[TextClusters.Ceil(text, text.Length - keep / 2)..],
+            _ => text[..TextClusters.Snap(text, keep)].TrimEnd() + ellipsis,
         };
     }
 
