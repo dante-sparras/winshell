@@ -958,10 +958,7 @@ public sealed class QmlParser
         SkipTrivia();
         var ok = string.CompareOrdinal(_text, _pos, keyword, 0, keyword.Length) == 0
             && (_pos + keyword.Length >= _text.Length || !(char.IsLetterOrDigit(_text[_pos + keyword.Length]) || _text[_pos + keyword.Length] == '_'));
-        if (!ok)
-            Restore(save);
-        else
-            Restore(save);
+        Restore(save);
         return ok;
     }
 
