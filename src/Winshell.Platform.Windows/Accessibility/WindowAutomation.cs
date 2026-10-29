@@ -45,6 +45,12 @@ internal sealed class WindowAutomation : IDisposable
     internal Action<UiaElement, string> Announce { get; set; } = (element, text) =>
         Uia.UiaRaiseNotificationEvent(element, Uia.NotificationKindOther, Uia.NotificationProcessingImportantMostRecent, text, "Winshell.Notification");
 
+    /// <summary>Tells clients a provider is gone. Tests replace it. Called even when nobody is listening.</summary>
+    internal Action<IRawElementProviderSimple> Disconnect { get; set; } = provider => Uia.UiaDisconnectProvider(provider);
+
+    /// <summary>Raises one automation event. Tests replace it.</summary>
+    internal Action<IRawElementProviderSimple, int> RaiseEvent { get; set; } = (provider, eventId) => Uia.UiaRaiseAutomationEvent(provider, eventId);
+
     /// <summary>The provider a client gets for an item, or null when the item is not exposed.</summary>
     internal UiaElement? ElementFor(Item item) => Tree.Find(item) is { } node ? For(node) : null;
 
@@ -258,8 +264,16 @@ internal sealed class WindowAutomation : IDisposable
             if (change.Kind == AccessibleChangeKind.Removed)
             {
                 _announced.Remove(change.Node);
-                if (_elements.Remove(change.Node, out var gone) && listening)
-                    Uia.UiaDisconnectProvider(gone);
+                // Drop the element even when nobody is listening. A client that already holds it, including one
+                // that never subscribed, must not keep the item or a whole generation alive. A menu tells Narrator
+                // it closed before the provider is disconnected.
+                if (_elements.Remove(change.Node, out var gone))
+                {
+                    if (change.Node.Role == Role.PopupMenu)
+                        RaiseEvent(gone, Uia.MenuClosedEvent);
+                    Disconnect(gone);
+                    gone.Detach();
+                }
                 continue;
             }
             if (listening)
