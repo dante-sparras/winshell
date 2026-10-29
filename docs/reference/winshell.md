@@ -303,6 +303,21 @@ The `Startup` singleton: whether Winshell runs when the current user signs in. T
 | `registeredElsewhere` | bool, read-only | True when the entry is there but starts Winshell another way: a `winshell.exe` in another folder, as after an update unzipped somewhere new, or other arguments. `runAtSignIn` is false until it is set. |
 | `refresh()` | method | Reads the entry again, after the user may have changed it in Windows. |
 
+## Updates
+
+The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip from GitHub Releases or the winget package, checks that repository's releases, downloads a newer one and installs it the next time it starts. A build from source and a packaged Winshell, such as the Microsoft Store's, never update themselves. Winshell Settings shows it on the About page; see [Winshell updates](../updates.md).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `available` | bool, read-only | Whether this Winshell updates itself. |
+| `packaged` | bool, read-only | Whether Winshell runs from an MSIX package, which its installer updates. |
+| `automatic` | bool | Check by itself, 30 seconds after it is turned on and once a day after that, and download what it finds. Off until the shell turns it on. |
+| `status` | [UpdateStatus](#updatestatus), read-only | Where the update is. An update downloaded before this run started is `Ready` from the start. |
+| `version` | string, read-only | The release found: the latest one when up to date, or the one downloading or ready. Empty before a check. |
+| `error` | string, read-only | Why the last check, download or install failed, while `status` is `Failed`; or, while it is `Ready`, why `restart()` did not restart. |
+| `check()` | method | Checks now, whether or not `automatic` is on, and downloads a newer release. Warns in the log when this Winshell does not update itself. |
+| `restart()` | method | Starts Winshell over to install a `Ready` update. While another Winshell runs it does not restart and sets `error`. Warns in the log when no update is ready. |
+
 ## SystemClock
 
 The time of day, updated at the start of each second, minute or hour, as `SystemClock { precision: SystemClock.Minutes }`. A clock that shows minutes wakes the shell once a minute.
@@ -579,6 +594,19 @@ The kind of button a [MenuEntry](#menuentry) has, from `buttonType`.
 | `None` | No button. |
 | `CheckBox` | A check box. |
 | `RadioButton` | A radio button. |
+
+## UpdateStatus
+
+Where an update is, for [Updates](#updates)`.status`.
+
+| Value | Description |
+| --- | --- |
+| `Idle` | Not checked yet in this run. |
+| `Checking` | Asking GitHub for the latest release. |
+| `UpToDate` | No release is newer than this Winshell. |
+| `Downloading` | Downloading and checking the newer release. |
+| `Ready` | Downloaded, its hash checked and unzipped. It installs when Winshell next starts. |
+| `Failed` | The last check, download or install failed; `error` says why. |
 
 ## Examples
 
