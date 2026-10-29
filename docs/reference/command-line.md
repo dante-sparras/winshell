@@ -92,7 +92,7 @@ A configuration can set variables for its own process with `//@ pragma Env NAME=
 | What | Where |
 | --- | --- |
 | Configurations | `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR` |
-| The default shell | `%LOCALAPPDATA%\winshell\default-shell`, written again each time Winshell runs it |
+| The default shell | `%LOCALAPPDATA%\winshell\default-shell`, written when Winshell runs it and no other instance is running that shell. A `.qml` or `.js` file this build does not ship is removed. |
 | Per-shell data, state and cache | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>`, and the same under `state` and `cache`. They are `Shell.dataDir`, `Shell.stateDir` and `Shell.cacheDir`. |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that exits cleanly keeps that folder, with `exitedAt` set in `instance.json`, so `winshell log` can still print it. A later start deletes a stopped folder once it is a day old, including a folder that has no `instance.json`. |
 | Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one text file per crash. Nothing is sent anywhere. See [troubleshooting](../guide/troubleshooting.md#winshell-crashed-or-a-surface-closed). |

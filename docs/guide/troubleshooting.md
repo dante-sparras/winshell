@@ -39,7 +39,7 @@ Check names against the [reference](../reference/index.md). A Quickshell name, s
 
 - Winshell watches the folders the configuration loaded files from, not their subfolders, and only `.qml`, `.js` and `qmldir` files. A file in a folder nothing has imported yet is seen once something imports it and you save again.
 - `settings.watchFiles: false` on the `ShellRoot`, or the `WINSHELL_DISABLE_FILE_WATCHER` environment variable, turns reloading off.
-- You are editing `%LOCALAPPDATA%\winshell\default-shell`. Winshell writes that folder again each time it runs the default shell; [copy it](getting-started.md#make-the-default-shell-your-own) and edit the copy.
+- You are editing `%LOCALAPPDATA%\winshell\default-shell`. Winshell writes that folder again when it runs the default shell and no other instance is running it; [copy it](getting-started.md#make-the-default-shell-your-own) and edit the copy.
 
 ## There are two taskbars
 
