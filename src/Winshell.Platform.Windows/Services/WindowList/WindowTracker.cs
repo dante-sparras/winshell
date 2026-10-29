@@ -300,7 +300,7 @@ internal static unsafe class WindowTracker
         var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
         if (!hasPlacement)
         {
-            Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, SWP_NOZORDER | SWP_NOACTIVATE);
+            Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
             return;
         }
         // A restored window can disagree with its placement by a constant. Carry that into the placement.
@@ -337,7 +337,7 @@ internal static unsafe class WindowTracker
         {
             try
             {
-                BringWindowToTop(hwnd);
+                Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
                 SetForegroundWindow(hwnd);
             }
             finally
