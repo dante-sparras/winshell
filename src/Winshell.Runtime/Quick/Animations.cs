@@ -317,6 +317,20 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
     {
         if (_running && Group is null && _ticking)
             return;
+        // Windows "Animation effects" off: jump to the end. A forever loop stops there instead of finishing.
+        if (!Theme.Current.AnimationsEnabled)
+        {
+            _loopsDone = 0;
+            Prepare();
+            SetField(ref _running, true, nameof(Running));
+            Emit("started");
+            Apply(1);
+            if (_loops == Infinite)
+                Stop();
+            else
+                Finish();
+            return;
+        }
         _loopsDone = 0;
         Prepare();
         _start = Engine?.Loop.Now ?? TimeSpan.Zero;

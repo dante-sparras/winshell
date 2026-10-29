@@ -304,7 +304,7 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     /// <summary>Scrolls by an amount, smoothly the way a Windows list scrolls by the wheel.</summary>
     public void ScrollBy(double dx, double dy, bool animate)
     {
-        if (!animate || Engine is null)
+        if (!animate || Engine is null || !Theme.Current.AnimationsEnabled)
         {
             SetContentX(Math.Clamp(_contentX + dx, MinX, MaxX));
             SetContentY(Math.Clamp(_contentY + dy, MinY, MaxY));

@@ -752,6 +752,11 @@ public sealed class ProgressBar : Control
         if (_indeterminate)
         {
             // A short bar runs across, then a long one, as WinUI's indeterminate progress bar does.
+            if (!Theme.Current.AnimationsEnabled)
+            {
+                Fluent.FillRound(c, SKRect.Create(r.Left, bar.Top, r.Width * 0.4f, 3), 1.5f, color);
+                return;
+            }
             var cycle = context.Time.TotalSeconds % 2.0 / 2.0;
             var segment = cycle < 0.5 ? 0.4 : 0.6;
             var phase = cycle < 0.5 ? cycle * 2 : (cycle - 0.5) * 2;
@@ -792,6 +797,19 @@ public sealed class BusyIndicator : Control
         var stroke = Math.Max(1.5f, size / 8);
         var oval = SKRect.Create(r.MidX - size / 2 + stroke / 2, r.MidY - size / 2 + stroke / 2, size - stroke, size - stroke);
         // The arc turns while it grows and shrinks, as WinUI's ProgressRing does.
+        if (!Theme.Current.AnimationsEnabled)
+        {
+            using var still = new SKPaint
+            {
+                Color = FluentResources.ProgressBarForeground(t).ToSk(),
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = stroke,
+                StrokeCap = SKStrokeCap.Round,
+            };
+            c.DrawArc(oval, -90, 270, false, still);
+            return;
+        }
         var seconds = context.Time.TotalSeconds;
         var phase = seconds % 2.0 / 2.0;
         var grow = phase < 0.5 ? Ease(phase * 2) : 1 - Ease((phase - 0.5) * 2);
