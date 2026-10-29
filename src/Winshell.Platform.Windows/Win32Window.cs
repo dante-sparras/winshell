@@ -470,6 +470,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         {
             RemoveAppBar();
             Win32.ShowWindow(Handle, Win32.SW_HIDE);
+            // A frame still drawing holds the buffers; it releases them when it is done.
+            if (!_rendering)
+                _surface?.Release();
         }
         if (_kind == WindowKind.Popup)
             _platform.UpdatePopupGrab(this, visible && _popup?.GrabFocus == true);
@@ -656,9 +659,10 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     // Frames
 
+    /// <summary>Asks for a frame. A hidden window draws nothing and holds no buffers; it draws as it shows.</summary>
     public void RequestFrame()
     {
-        if (_frameScheduled || Handle == 0)
+        if (_frameScheduled || Handle == 0 || !_visible)
             return;
         _frameScheduled = true;
         var loop = _platform.Loop;
@@ -677,7 +681,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     private void RenderNow()
     {
-        if (_surface is null || Handle == 0 || _failed || _disposePending)
+        if (_surface is null || Handle == 0 || _failed || _disposePending || !_visible)
             return;
         // Drawing lays items out, and a window sized to its content then resizes; Windows answers with WM_SIZE
         // inside this frame. A frame started there would replace the buffer this one is drawing into, so the window
@@ -692,7 +696,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         try
         {
             RenderFrame(_surface);
-            if (_renderAgain && _surface is { } surface && Handle != 0 && !_failed && !_disposePending)
+            if (_renderAgain && _surface is { } surface && Handle != 0 && !_failed && !_disposePending && _visible)
             {
                 _renderAgain = false;
                 RenderFrame(surface);
@@ -703,6 +707,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             _rendering = false;
             if (_disposePending)
                 Dispose();
+            else if (!_visible)
+                _surface?.Release();
         }
         if (_renderAgain)
         {

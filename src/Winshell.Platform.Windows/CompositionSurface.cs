@@ -76,6 +76,7 @@ internal sealed class CompositionSurface : IDisposable
     {
         width = Math.Max(1, width);
         height = Math.Max(1, height);
+        var created = _swapChain is null;
         if (_swapChain is null)
         {
             var desc = new SwapChainDescription1
@@ -91,8 +92,6 @@ internal sealed class CompositionSurface : IDisposable
                 Scaling = Scaling.Stretch,
             };
             _swapChain = _gpu.Factory.CreateSwapChainForComposition(_gpu.Device, desc);
-            _visual.SetContent(_swapChain);
-            _gpu.Composition.Commit();
             _width = width;
             _height = height;
         }
@@ -118,6 +117,25 @@ internal sealed class CompositionSurface : IDisposable
         using var buffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
         _gpu.Context.UpdateSubresource(buffer, 0, null, _bitmap.GetPixels(), (uint)_bitmap.RowBytes, 0);
         _swapChain.Present(0, PresentFlags.None);
+        if (created)
+        {
+            // The visual takes a new swap chain once it holds a frame, so a window shown next never shows it empty.
+            _visual.SetContent(_swapChain);
+            _gpu.Composition.Commit();
+        }
+    }
+
+    /// <summary>Lets go of the swap chain and the bitmap, as for a hidden window. The next frame makes them again.</summary>
+    public void Release()
+    {
+        if (_swapChain is null)
+            return;
+        _visual.SetContent(null);
+        _gpu.Composition.Commit();
+        _swapChain.Dispose();
+        _swapChain = null;
+        _bitmap?.Dispose();
+        _bitmap = null;
     }
 
     public void Dispose()
