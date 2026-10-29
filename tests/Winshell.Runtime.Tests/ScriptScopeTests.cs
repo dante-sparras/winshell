@@ -2,7 +2,8 @@ namespace Winshell.Runtime.Tests;
 
 /// <summary>
 /// A JavaScript file without <c>.pragma library</c> belongs to the component that imported it.
-/// A <c>.import</c> that is not a JavaScript file fails the load.
+/// Its own declarations come before the component's names. A <c>.import</c> of a QML module is skipped with
+/// a warning, and a quoted one that is not a JavaScript file fails the load.
 /// </summary>
 public class ScriptScopeTests
 {
@@ -134,15 +135,77 @@ public class ScriptScopeTests
     }
 
     [Fact]
-    public void A_module_import_fails_the_load()
+    public void A_module_import_is_skipped_with_a_warning()
     {
         using var shell = new TestShell(
-            ("shell.qml", "import QtQml\nimport \"bad.js\" as Bad\nQtObject { property int v: Bad.n }"),
-            ("bad.js", ".import QtQuick 2.0 as Q\nvar n = 1\n"));
+            ("shell.qml", "import QtQml\nimport \"util.js\" as Util\nQtObject { property int v: Util.n }"),
+            ("util.js", ".import QtQuick 2.0 as Q\nvar n = 1\n"));
+        var root = shell.Load();
+
+        Assert.Equal(1, root.ReadProperty("v"));
+        Assert.Contains(shell.Messages, m => m.Contains(".import QtQuick 2.0 as Q is ignored", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_quoted_import_that_is_not_javascript_fails_the_load()
+    {
+        using var shell = new TestShell(
+            ("shell.qml", "import QtQml\nQtObject { }"),
+            ("bad.js", ".import \"Bar.qml\" as Bar\nvar n = 1\n"));
 
         var error = Assert.Throws<QmlException>(() => shell.Engine.LoadScript(Path.Combine(shell.Directory, "bad.js")));
 
         Assert.Contains("not a javascript file", error.Message, StringComparison.Ordinal);
-        Assert.Contains("QtQuick", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_script_declaration_wins_over_a_component_property()
+    {
+        using var shell = new TestShell(
+            ("shell.qml", """
+                import QtQml
+                import "util.js" as Util
+                QtObject {
+                  id: root
+                  property string state: "component"
+                  property var data: []
+                  property int count: Util.add(3)
+                  property string scriptState: Util.state
+                  property string own: Util.readState()
+                }
+                """),
+            ("util.js", """
+                var state = "script"
+                var data = []
+                function add(v) { data.push(v); return data.length }
+                function readState() { return state }
+                """));
+        var root = shell.Load();
+
+        Assert.Equal(1, root.ReadProperty("count"));
+        Assert.Equal("script", root.ReadProperty("scriptState"));
+        Assert.Equal("script", root.ReadProperty("own"));
+        Assert.Equal("component", root.ReadProperty("state"));
+        Assert.Empty(shell.Messages);
+    }
+
+    [Fact]
+    public void An_import_alias_wins_over_a_component_property()
+    {
+        using var shell = new TestShell(
+            ("shell.qml", """
+                import QtQml
+                import "util.js" as Util
+                QtObject {
+                  property int inner: 9
+                  property int v: Util.value()
+                }
+                """),
+            ("util.js", ".import \"other.js\" as inner\nfunction value() { return inner.n }\n"),
+            ("other.js", "var n = 4\n"));
+        var root = shell.Load();
+
+        Assert.Equal(4, root.ReadProperty("v"));
+        Assert.Empty(shell.Messages);
     }
 }

@@ -30,7 +30,7 @@ public static class ScriptModule
     public static JsValue Load(QmlEngine engine, string code, string path, ComponentContext? context = null)
     {
         var lines = code.Replace("\r\n", "\n").Split('\n');
-        var imports = ReadImports(path, lines);
+        var imports = ReadImports(engine, path, lines);
         var body = string.Join("\n", lines);
         // A script without .pragma library runs in the component that imported it, so it can see that component's ids.
         var scope = context is null ? null : new ScopeObject(engine.Js, context.ContextObject, context);
@@ -64,36 +64,29 @@ public static class ScriptModule
             throw new QmlException($"{path}: {e.Message}");
         }
 
-        var sb = new StringBuilder("(function(");
-        if (scope is not null)
-            sb.Append("__qmlScope");
-        if (scope is not null && imports.Count > 0)
-            sb.Append(", ");
-        sb.Append(string.Join(", ", imports.Select(i => i.Alias)));
         // The body starts on the factory's first line, so a script error names the file's own line.
-        // The function is made inside the with block, so names it does not declare resolve on the component.
-        sb.Append(") { ");
+        // The factory is made inside the with block, so the script's own declarations and imports come first
+        // and only the names it does not declare resolve on the component.
+        var sb = new StringBuilder("(");
         if (scope is not null)
-            sb.Append("with (__qmlScope) { ");
+            sb.Append("function(__qmlScope) { with (__qmlScope) { return ");
+        sb.Append("function(").Append(string.Join(", ", imports.Select(i => i.Alias))).Append(") { ");
         sb.Append(body).Append("\nreturn {");
         sb.Append(string.Join(", ", names.Distinct().Select(n => $"get {n}() {{ return {n}; }}, set {n}(v) {{ {n} = v; }}")));
-        sb.Append("};\n");
+        sb.Append("};\n}");
         if (scope is not null)
-            sb.Append('}');
-        sb.Append("})");
+            sb.Append("; } }");
+        sb.Append(')');
         var factory = engine.Js.Engine.Evaluate(sb.ToString(), path);
-        var args = new JsValue[imports.Count + (scope is null ? 0 : 1)];
-        var index = 0;
         if (scope is not null)
-            args[index++] = scope;
-        foreach (var import in imports)
-            args[index++] = engine.LoadScript(import.File, context);
+            factory = engine.Js.Engine.Call(factory, JsValue.Undefined, [scope]);
+        var args = imports.Select(i => engine.LoadScript(i.File, context)).ToArray();
         return engine.Js.Engine.Call(factory, JsValue.Undefined, args);
     }
 
     private readonly record struct ScriptImport(string Alias, string File);
 
-    private static List<ScriptImport> ReadImports(string path, string[] lines)
+    private static List<ScriptImport> ReadImports(QmlEngine engine, string path, string[] lines)
     {
         var imports = new List<ScriptImport>();
         for (var i = 0; i < lines.Length; i++)
@@ -106,13 +99,20 @@ public static class ScriptModule
             }
             if (!line.StartsWith(".import", StringComparison.Ordinal))
                 continue;
+            lines[i] = "";
             if (!TryParseImport(line, out var specifier, out var alias))
                 throw new QmlException($"{path}: {line} is not a javascript import");
+            // .import QtQuick 2.0 as Q is common boilerplate. A script has no use for a QML module, so it is skipped.
+            var quoted = line.AsSpan(7).TrimStart() is [ '"' or '\'', ..];
+            if (!quoted)
+            {
+                engine.Log.Warn("scene", $"{path}: {line} is ignored; a script can only import a javascript file");
+                continue;
+            }
             if (!specifier.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
                 throw new QmlException($"{path}: .import \"{specifier}\" is not a javascript file");
             var directory = Path.GetDirectoryName(path)!;
             imports.Add(new ScriptImport(alias, Path.GetFullPath(Path.Combine(directory, specifier))));
-            lines[i] = "";
         }
         return imports;
     }
