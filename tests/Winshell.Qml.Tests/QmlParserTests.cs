@@ -149,6 +149,29 @@ public class QmlParserTests
         Assert.Equal(["property", "signal", "default", "required"], doc.Root.Members.Cast<QmlAssignment>().Select(a => a.Name));
     }
 
+    [Theory]
+    [InlineData("Item { enum E { A = B } }")]
+    [InlineData("Item { enum E { A = 0xFFFFFFFF } }")]
+    [InlineData("Item { enum E { A = } }")]
+    [InlineData("Item { a: /unterminated")]
+    [InlineData("Item {\n  a: /foo\\\n}")]
+    [InlineData("Item { a: \"open\\")]
+    public void A_bad_literal_is_a_syntax_error(string source)
+    {
+        var ex = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse(source, "shell.qml"));
+        Assert.False(string.IsNullOrWhiteSpace(ex.Reason));
+        Assert.Contains("shell.qml", ex.Message);
+    }
+
+    [Fact]
+    public void A_regular_expression_stays_in_the_expression()
+    {
+        var doc = QmlParser.Parse("Item {\n  a: /foo/i\n  b: 1\n}");
+        var a = Assert.IsType<QmlAssignment>(doc.Root.Members[0]);
+        Assert.Equal("/foo/i", Assert.IsType<QmlScriptValue>(a.Value).Code.Trim());
+        Assert.Equal("b", Assert.IsType<QmlAssignment>(doc.Root.Members[1]).Name);
+    }
+
     [Fact]
     public void Reports_where_a_syntax_error_is()
     {

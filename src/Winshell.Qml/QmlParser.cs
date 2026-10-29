@@ -29,7 +29,23 @@ public sealed class QmlParser
         _file = file;
     }
 
-    public static QmlDocument Parse(string text, string file = "<memory>") => new QmlParser(text, file).ParseDocument();
+    public static QmlDocument Parse(string text, string file = "<memory>")
+    {
+        var parser = new QmlParser(text, file);
+        try
+        {
+            return parser.ParseDocument();
+        }
+        catch (QmlSyntaxException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            // Callers only catch QmlSyntaxException. A leftover .NET exception would take down doctor or a Loader.
+            throw parser.Error(e.Message);
+        }
+    }
 
     private QmlDocument ParseDocument()
     {
@@ -423,10 +439,7 @@ public sealed class QmlParser
                 var start = _pos;
                 while (char.IsAsciiHexDigit(Peek()) || Peek() is 'x' or 'X')
                     _pos++;
-                var literal = _text[start.._pos];
-                var number = literal.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-                    ? int.Parse(literal.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
-                    : int.Parse(literal, CultureInfo.InvariantCulture);
+                var number = ReadEnumInteger(_text[start.._pos]);
                 next = negative ? -number : number;
                 SkipTrivia();
             }
@@ -435,6 +448,24 @@ public sealed class QmlParser
                 _pos++;
         }
         return new QmlEnumDeclaration(name, values, loc);
+    }
+
+    private int ReadEnumInteger(string literal)
+    {
+        var hex = literal.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+        var body = hex ? literal.AsSpan(2) : literal.AsSpan();
+        if (body.Length == 0)
+            throw Error("Expected an integer");
+        // int.TryParse("FFFFFFFF", hex) returns -1. A signed enum value has to fit, as int.Parse used to require.
+        if (hex)
+        {
+            if (!uint.TryParse(body, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var bits) || bits > int.MaxValue)
+                throw Error("Expected an integer");
+            return (int)bits;
+        }
+        if (!int.TryParse(body, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+            throw Error("Expected an integer");
+        return number;
     }
 
     // Value := Object | '[' Object (',' Object)* ']' | Block | Expression
@@ -772,6 +803,8 @@ public sealed class QmlParser
             Advance();
             if (c == '\\')
             {
+                if (AtEnd || Peek() == '\n')
+                    throw Error("Unterminated regular expression");
                 Advance();
                 continue;
             }
@@ -780,10 +813,13 @@ public sealed class QmlParser
             else if (c == ']')
                 inClass = false;
             else if (c == '/' && !inClass)
-                break;
+            {
+                while (!AtEnd && char.IsLetter(Peek()))
+                    _pos++;
+                return;
+            }
         }
-        while (!AtEnd && char.IsLetter(Peek()))
-            _pos++;
+        throw Error("Unterminated regular expression");
     }
 
     private string ReadStringLiteral()
@@ -797,6 +833,8 @@ public sealed class QmlParser
             if (c == '\\')
             {
                 Advance();
+                if (AtEnd)
+                    throw Error("Unterminated string");
                 var e = Peek();
                 Advance();
                 sb.Append(e switch
