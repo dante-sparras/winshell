@@ -263,6 +263,18 @@ Item {
             Keys.onReturnPressed: if (!crumb.last) root.show(crumb.modelData.key)
             Keys.onSpacePressed: if (!crumb.last) root.show(crumb.modelData.key)
 
+            Rectangle {
+              objectName: "focusRing"
+              anchors.fill: parent
+              anchors.margins: -3
+              visible: parent.activeFocus
+              radius: Theme.controlCornerRadius
+              color: "transparent"
+              border.width: 2
+              border.color: Theme.focusStrokeColorOuter
+              Accessible.ignored: true
+            }
+
             MouseArea {
               id: crumbMouse
               anchors.fill: parent
