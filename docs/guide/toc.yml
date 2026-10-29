@@ -1,7 +1,5 @@
 - name: Getting started
   href: getting-started.md
-- name: 1.0 release notes
-  href: ../release-notes/1.0.md
 - name: Configuration guide
   href: configuration.md
 - name: Troubleshooting
@@ -42,5 +40,3 @@
   items:
   - name: Development
     href: ../development.md
-  - name: 1.0 readiness
-    href: ../1.0-readiness.md
