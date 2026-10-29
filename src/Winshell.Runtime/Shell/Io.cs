@@ -759,7 +759,9 @@ public sealed class FileView : QObject
     private bool _loaded;
     private string? _text;
     private FileViewAdapter? _adapter;
-    private FileSystemWatcher? _watcher;
+    private Microsoft.Win32.SafeHandles.SafeFileHandle? _watchHandle;
+    private Thread? _watchThread;
+    private volatile int _watchGeneration;
     private string? _watchedPath;
     private int _generation;
     private bool _bom;
@@ -1129,6 +1131,23 @@ public sealed class FileView : QObject
         public uint FileIndexHigh;
         public uint FileIndexLow;
     }
+
+    private const uint FileListDirectory = 1;
+    private const uint FileFlagBackupSemantics = 0x02000000;
+    // FILE_NOTIFY_CHANGE_FILE_NAME | DIR_NAME | SIZE | LAST_WRITE | CREATION.
+    private const uint WatchNotifyFilter = 0x00000001 | 0x00000002 | 0x00000008 | 0x00000010 | 0x00000040;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(
+        string fileName, uint access, FileShare share, IntPtr security, FileMode mode, uint flags, IntPtr template);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool ReadDirectoryChangesW(
+        Microsoft.Win32.SafeHandles.SafeFileHandle directory, byte[] buffer, int bufferLength, bool watchSubtree,
+        uint filter, out int bytesReturned, IntPtr overlapped, IntPtr completion);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CancelIoEx(Microsoft.Win32.SafeHandles.SafeFileHandle directory, IntPtr overlapped);
 #pragma warning restore CA1416
 
     private void Apply(int generation, (string? Text, bool Bom, FileViewError Error, string Message) result)
@@ -1344,42 +1363,103 @@ public sealed class FileView : QObject
             StopWatching();
             return;
         }
-        // Replacing the file does not detach a directory watch. Disposing it here drops a hand save that
+        // Replacing the file does not detach a directory watch. Restarting it here drops a hand save that
         // already happened, and the new watch never sees that event.
-        if (_watcher is not null && _watchedPath == full)
+        if (_watchThread is { IsAlive: true } && _watchedPath == full)
             return;
         StopWatching();
+        var generation = _watchGeneration;
+#pragma warning disable CA1416
+        var handle = CreateFileW(dir, FileListDirectory, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open, FileFlagBackupSemantics, IntPtr.Zero);
+#pragma warning restore CA1416
+        if (handle.IsInvalid || generation != _watchGeneration)
+        {
+            handle.Dispose();
+            return;
+        }
         var loop = Engine.Loop;
         var watched = full;
-        var watcher = new FileSystemWatcher(dir, System.IO.Path.GetFileName(full))
-        {
-            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
-            InternalBufferSize = 65536,
-        };
-        // Read on the loop, after the event. Reading here would hold the file during our own replace.
-        void Changed(object? _, FileSystemEventArgs e) => loop.Post(() => AcceptHandSave(watched));
-        watcher.Changed += Changed;
-        watcher.Created += Changed;
-        watcher.Renamed += (s, e) => Changed(s, e);
-        watcher.Error += (_, _) => loop.Post(() =>
-        {
-            if (IsDestroyed || !ReferenceEquals(_watcher, watcher))
-                return;
-            // The watch dropped an event. Arm it again and apply whatever the file says now.
-            StopWatching();
-            Watch();
-            AcceptHandSave(watched);
-        });
-        watcher.EnableRaisingEvents = true;
+        var fileName = System.IO.Path.GetFileName(full);
+        _watchHandle = handle;
         _watchedPath = full;
-        _watcher = watcher;
+        var thread = new Thread(() => WatchLoop(handle, generation, fileName, loop, watched))
+        {
+            IsBackground = true,
+            Name = "FileView watch",
+        };
+        _watchThread = thread;
+        thread.Start();
+    }
+
+    /// <summary>
+    /// Blocks in the kernel until the directory changes. FileSystemWatcher delivers that on a thread pool worker,
+    /// and a busy pool holds the hand-save notification until the test has already given up.
+    /// </summary>
+    private void WatchLoop(Microsoft.Win32.SafeHandles.SafeFileHandle handle, int generation, string fileName, IEventLoop loop, string watched)
+    {
+        var buffer = new byte[16 * 1024];
+        while (generation == _watchGeneration)
+        {
+#pragma warning disable CA1416
+            var ok = ReadDirectoryChangesW(handle, buffer, buffer.Length, false, WatchNotifyFilter, out var returned, IntPtr.Zero, IntPtr.Zero);
+#pragma warning restore CA1416
+            if (!ok)
+            {
+                // 1022 ERROR_NOTIFY_ENUM_DIR: the buffer overflowed and this change will not be reported again.
+                var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+                if (generation != _watchGeneration)
+                    return;
+                if (error == 1022)
+                {
+                    loop.Post(() => AcceptHandSave(watched));
+                    continue;
+                }
+                return;
+            }
+            if (generation != _watchGeneration)
+                return;
+            // Read on the loop, after the event. Reading here would hold the file during our own replace.
+            if (returned == 0 || MentionsFile(buffer, returned, fileName))
+                loop.Post(() => AcceptHandSave(watched));
+        }
+    }
+
+    private static bool MentionsFile(byte[] buffer, int count, string fileName)
+    {
+        var offset = 0;
+        while (offset >= 0 && offset + 12 <= count)
+        {
+            var next = BitConverter.ToInt32(buffer, offset);
+            var nameBytes = BitConverter.ToInt32(buffer, offset + 8);
+            if ((uint)nameBytes > (uint)(count - offset - 12))
+                return true;
+            var name = Encoding.Unicode.GetString(buffer, offset + 12, nameBytes);
+            if (name.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (next <= 0)
+                return false;
+            offset += next;
+        }
+        return false;
     }
 
     private void StopWatching()
     {
-        _watcher?.Dispose();
-        _watcher = null;
+        _watchGeneration++;
+        var handle = _watchHandle;
+        _watchHandle = null;
         _watchedPath = null;
+        if (handle is not null)
+        {
+#pragma warning disable CA1416
+            CancelIoEx(handle, IntPtr.Zero);
+#pragma warning restore CA1416
+            handle.Dispose();
+        }
+        var thread = _watchThread;
+        _watchThread = null;
+        if (thread is not null && thread.IsAlive && thread != Thread.CurrentThread)
+            thread.Join(TimeSpan.FromSeconds(2));
     }
 
     protected override void OnDestroy()
