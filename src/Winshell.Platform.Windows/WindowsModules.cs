@@ -60,7 +60,8 @@ public sealed class WindowEffectsAttached(QObject owner) : QObject
 /// The <c>Theme</c> singleton: the Windows 11 theme as WinUI 3 has it, so a shell can look like the rest of
 /// Windows. Every color token of <see cref="Theme"/> is a property with its WinUI name, first letter lowered, such
 /// as <c>textFillColorPrimary</c> or <c>accentFillColorDefault</c>. With the type ramp, the corner radii, the
-/// motion timings and the shadows, they follow the user's Windows settings as they change.
+/// motion timings and the shadows, they follow the user's Windows settings as they change. <c>colorScheme</c> and
+/// <c>accentColor</c> are the shell's own choice on top of them.
 /// </summary>
 public sealed class WindowsTheme : QObject
 {
@@ -69,7 +70,7 @@ public sealed class WindowsTheme : QObject
         .Select(p => (Names.ToQml(p.Name), (Func<Theme, QColor>)p.GetMethod!.CreateDelegate(typeof(Func<Theme, QColor>))))
         .ToArray();
 
-    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
+    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "colorScheme", "accentColor", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
 
     public WindowsTheme()
     {
@@ -88,6 +89,53 @@ public sealed class WindowsTheme : QObject
     }
 
     [Qml] public bool Dark { get { Track(); return Theme.Current.IsDark; } }
+
+    /// <summary>
+    /// <c>"system"</c> follows Windows' app mode; <c>"light"</c> and <c>"dark"</c> are the shell's own. Windows'
+    /// window frames follow it too. A contrast theme still wins.
+    /// </summary>
+    [Qml]
+    public string ColorScheme
+    {
+        get
+        {
+            Track();
+            return _choice.Dark switch { true => "dark", false => "light", null => "system" };
+        }
+        set
+        {
+            bool? dark = value switch
+            {
+                "dark" => true,
+                "light" => false,
+                "system" => null,
+                _ => _choice.Dark,
+            };
+            if (value is not ("dark" or "light" or "system"))
+                Engine?.Log.Warn("theme", $"Theme.colorScheme is \"system\", \"light\" or \"dark\", not \"{value}\"");
+            Choose(_choice with { Dark = dark });
+        }
+    }
+
+    /// <summary>
+    /// The shell's own accent, from which the accent tokens and their shades are made. Transparent follows the accent
+    /// picked in Windows.
+    /// </summary>
+    [Qml]
+    public QColor AccentColor
+    {
+        get { Track(); return _choice.Accent ?? QColor.Transparent; }
+        set => Choose(_choice with { Accent = value.IsValid && value.A > 0 ? value : null });
+    }
+
+    // This generation's choice. A reload's new generation starts from Windows, not from what the old one chose.
+    private ThemeChoice _choice = ThemeChoice.None;
+
+    private void Choose(ThemeChoice choice)
+    {
+        _choice = choice;
+        Theme.Choose(this, choice);
+    }
 
     /// <summary>Whether a contrast theme is on. Every color token is then one of the system colors.</summary>
     [Qml] public bool HighContrast { get { Track(); return Theme.Current.IsHighContrast; } }
@@ -130,7 +178,11 @@ public sealed class WindowsTheme : QObject
 
     [Qml] public WindowsShadow DialogShadow { get { Track(); return new(Theme.Current.DialogShadow); } }
 
-    protected override void OnDestroy() => Theme.Changed -= OnChanged;
+    protected override void OnDestroy()
+    {
+        Theme.Changed -= OnChanged;
+        Theme.Release(this);
+    }
 }
 
 /// <summary>

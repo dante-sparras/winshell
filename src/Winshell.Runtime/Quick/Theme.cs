@@ -12,6 +12,32 @@ public sealed record AccentColors(QColor Accent, QColor Light1, QColor Light2, Q
         QColor.FromArgb(0xFF005FB8),
         QColor.FromArgb(0xFF004480),
         QColor.FromArgb(0xFF002642));
+
+    // How far each shade moves the lightness toward white or black, from the Windows default blue and its shades.
+    private static readonly double[] Lighter = [0.123, 0.466, 0.654];
+    private static readonly double[] Darker = [0.132, 0.397, 0.69];
+
+    /// <summary>
+    /// The shades of an accent the user picked in Winshell rather than in Windows. Windows does not say how it makes
+    /// them, so each keeps the hue and saturation and moves the lightness as far as the default blue's shades do.
+    /// </summary>
+    public static AccentColors From(QColor accent)
+    {
+        accent = accent with { A = 1 };
+        var (h, s, l) = accent.ToHsl();
+        QColor Light(int i) => QColor.FromHsl(h, s, l + (1 - l) * Lighter[i]);
+        QColor Dark(int i) => QColor.FromHsl(h, s, l * (1 - Darker[i]));
+        return new(accent, Light(0), Light(1), Light(2), Dark(0), Dark(1), Dark(2));
+    }
+}
+
+/// <summary>
+/// The shell's own choice of light or dark and of the accent, applied on top of what Windows reports. Null follows
+/// Windows.
+/// </summary>
+public sealed record ThemeChoice(bool? Dark = null, QColor? Accent = null)
+{
+    public static readonly ThemeChoice None = new();
 }
 
 /// <summary>
@@ -39,24 +65,72 @@ public readonly record struct Elevation(float Blur, float OffsetY, QColor Color)
 /// The Windows 11 theme: light or dark, whether a contrast theme is on, the accent and the system colors, with the
 /// Fluent design tokens made from them. A token has the name of its WinUI 3 theme resource and the values of the
 /// Windows App SDK 1.8 <c>generic.xaml</c>. Animation effects follow Windows, and a contrast theme does not turn
-/// them off. The platform updates the theme when the user changes their Windows settings.
+/// them off. The platform updates the theme when the user changes their Windows settings, and a shell can choose
+/// light or dark and its own accent on top (<see cref="Choose"/>).
 /// </summary>
 public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false, bool AnimationsEnabled = true)
 {
-    private static Theme _current = Default(false);
+    private static Theme _reported = Default(false);
+    private static Theme _current = _reported;
+    private static ThemeChoice _choice = ThemeChoice.None;
+    private static object? _chooser;
 
+    /// <summary>Raised when <see cref="Current"/> or <see cref="Choice"/> changes.</summary>
     public static event Action? Changed;
 
+    /// <summary>
+    /// The theme to draw with: what Windows reports, with the shell's <see cref="Choice"/> on top. Setting it
+    /// replaces what Windows reports, and the choice still applies.
+    /// </summary>
     public static Theme Current
     {
         get => _current;
         set
         {
-            if (_current == value)
-                return;
-            _current = value;
-            Changed?.Invoke();
+            _reported = value;
+            Update(false);
         }
+    }
+
+    /// <summary>What Windows reports, without the shell's choice.</summary>
+    public static Theme Reported => _reported;
+
+    public static ThemeChoice Choice => _choice;
+
+    /// <summary>
+    /// Makes this the shell's choice. Only the owner of the last choice can take it back, so the generation a reload
+    /// replaces cannot undo the choice of the one that replaced it.
+    /// </summary>
+    public static void Choose(object owner, ThemeChoice choice)
+    {
+        _chooser = owner;
+        var changed = _choice != choice;
+        _choice = choice;
+        Update(changed);
+    }
+
+    /// <summary>Follows Windows again, when <paramref name="owner"/> made the choice in effect.</summary>
+    public static void Release(object owner)
+    {
+        if (!ReferenceEquals(_chooser, owner))
+            return;
+        _chooser = null;
+        var changed = _choice != ThemeChoice.None;
+        _choice = ThemeChoice.None;
+        Update(changed);
+    }
+
+    private static void Update(bool choiceChanged)
+    {
+        var next = _reported with
+        {
+            IsDark = _choice.Dark ?? _reported.IsDark,
+            Accents = _choice.Accent is { } accent ? AccentColors.From(accent) : _reported.Accents,
+        };
+        if (_current == next && !choiceChanged)
+            return;
+        _current = next;
+        Changed?.Invoke();
     }
 
     public static Theme Default(bool dark) => new(dark, AccentColors.Default, SystemColors.Default);

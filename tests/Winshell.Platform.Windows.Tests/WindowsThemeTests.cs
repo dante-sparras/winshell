@@ -123,4 +123,81 @@ public class WindowsThemeTests
         Assert.Equal(Theme.Current.TextFillColorPrimary, root.ReadProperty("text"));
         Directory.Delete(directory, true);
     }
+
+    [Fact]
+    public void A_shell_chooses_light_or_dark_and_its_accent_and_follows_Windows_again_when_it_goes_away()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "shell.qml"), """
+            import QtQuick
+            import Winshell.Theme
+            Item {
+              property bool dark: Theme.dark
+              property string scheme: Theme.colorScheme
+              property color chosen: Theme.accentColor
+              property color accent: Theme.accentFillColorDefault
+              property color text: Theme.textFillColorPrimary
+              property string wantScheme
+              property color wantAccent: "transparent"
+              onWantAccentChanged: Theme.accentColor = wantAccent
+              onWantSchemeChanged: Theme.colorScheme = wantScheme
+            }
+            """);
+        var saved = Theme.Current;
+        var messages = new List<string>();
+        QmlEngine Engine() => new(Registry(), new ManualEventLoop(), new Log { Sink = (_, _, m) => messages.Add(m) }, directory);
+        var first = Engine();
+        var second = Engine();
+        try
+        {
+            Theme.Current = Theme.Default(false);
+            var root = first.CreateRoot(Path.Combine(directory, "shell.qml"));
+            Assert.Equal("system", root.ReadProperty("scheme"));
+            Assert.Equal(0.0, ((QColor)root.ReadProperty("chosen")!).A);
+
+            Choose(root, "dark", QColor.Parse("#e81123"));
+            Assert.True((bool)root.ReadProperty("dark")!);
+            Assert.Equal("dark", root.ReadProperty("scheme"));
+            Assert.Equal(QColor.Parse("#e81123"), root.ReadProperty("chosen"));
+            Assert.Equal(QColor.Parse("#ffffff"), root.ReadProperty("text"));
+            Assert.Equal(AccentColors.From(QColor.Parse("#e81123")).Light2, root.ReadProperty("accent"));
+
+            // Transparent follows Windows' accent again; an unknown scheme keeps the last one and says why.
+            Choose(root, "sepia", QColor.Transparent);
+            Assert.Equal("dark", root.ReadProperty("scheme"));
+            Assert.Equal(AccentColors.Default.Light2, root.ReadProperty("accent"));
+            Assert.Contains(messages, m => m.Contains("\"sepia\"", StringComparison.Ordinal));
+
+            // A reload: the new generation's choice survives the old one going away.
+            var next = second.CreateRoot(Path.Combine(directory, "shell.qml"));
+            Choose(next, "light", QColor.Parse("#107c10"));
+            first.Dispose();
+            Assert.False(Theme.Current.IsDark);
+            Assert.Equal(QColor.Parse("#107c10"), Theme.Current.Accents.Accent);
+
+            second.Dispose();
+            Assert.Equal(Theme.Default(false), Theme.Current);
+        }
+        finally
+        {
+            first.Dispose();
+            second.Dispose();
+            Theme.Current = saved;
+            Directory.Delete(directory, true);
+        }
+
+        static void Choose(QObject root, string scheme, QColor accent)
+        {
+            root.WriteProperty("wantAccent", accent);
+            root.WriteProperty("wantScheme", scheme);
+        }
+
+        static ModuleRegistry Registry()
+        {
+            var registry = StandardModules.Create();
+            WindowsModules.Register(registry);
+            return registry;
+        }
+    }
 }
