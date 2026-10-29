@@ -64,7 +64,7 @@ Column {
     width: parent.width
     items: root.pinned
     removeLabel: "Remove"
-    removeGlyph: ""
+    removeGlyph: "\uE738"
     emptyText: "Quick settings shows no tiles"
     onMoveRequested: (key, offset) => root.reorder(key, offset)
     onRemoveRequested: key => root.write(root.keys.filter(k => k !== key))

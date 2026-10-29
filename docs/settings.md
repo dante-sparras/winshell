@@ -15,19 +15,19 @@ Closing the window hides it. The next open brings it back on the page it was on.
 | Page | What it changes |
 | --- | --- |
 | Personalization | Light or dark, the accent color (same as Windows, or one of the Windows accent colors), and the material behind the taskbar and flyouts (Acrylic or Mica). A contrast theme still wins. |
-| Taskbar | Alignment, auto-hide, a taskbar on every display or the main one only, and where apps show with several displays. See [the taskbar](taskbar.md). |
+| Taskbar | Alignment, auto-hide, a taskbar on every display or the main one only, and where apps show with several displays. With one taskbar, every app shows on it. See [the taskbar](taskbar.md). |
 | Start | Recommended apps on or off. **Pinned apps** opens a page under it to move or unpin pins. |
 | Quick settings | The tiles in order: move, remove and add back. |
-| Notifications | Do not disturb as Windows reports it, and per app whether Winshell's notification center shows its notifications. Windows still decides banners and sounds. |
-| Hotkeys | Open Start (`Win` until changed) and Open Winshell Settings (none until set). Empty turns one off. A chord Windows or another app holds says so and is not taken. |
-| Startup | Run Winshell when you sign in, for your account only, off until you turn it on. If Windows' Startup apps page turned it off, only that page turns it back on. |
-| About | The version, the config folder and this instance's log, each with a button to open it. |
+| Notifications | Do not disturb as Windows reports it, and per app whether Winshell's notification center shows its notifications. **Clear all** in the notification center leaves an app that is turned off alone. Windows still decides banners and sounds. |
+| Hotkeys | Open Start (`Win` until changed) and Open Winshell Settings (none until set). Empty turns one off. A hotkey starts with Win, Ctrl or Alt, or is `Win` alone, so it never takes a key other apps type with; the two hotkeys cannot be the same. A chord Windows or another app holds says so and is not taken. |
+| Startup | Run Winshell when you sign in, for your account only, off until you turn it on. If Windows' Startup apps page turned it off, the switch shows off and only that page turns it back on. An entry that starts a `winshell.exe` in another folder, or with other options, also shows off; turning it on points it at this one. |
+| About | The version, the config folder and this instance's log, each with a button to open it. Opening a config folder that does not exist yet makes it, with a `preferences.json` of defaults. |
 
 Search matches every word typed against each setting's title, description and a few keywords. Titles that start with what was typed come first. Enter or a click opens the setting's page with the keyboard on it.
 
 ## Where the choices live
 
-Everything the window chooses applies at once, without a reload, and is kept in `preferences.json` in the config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR`. A change made to that file by hand applies as it is saved. A key the file does not have keeps its default, and a value Winshell cannot read follows Windows.
+Everything the window chooses applies at once, without a reload, and is kept in `preferences.json` in the config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR`. A change made to that file by hand applies as it is saved, even when the first choice made the folder. A key the file does not have keeps its default when Winshell starts; removing a key by hand while it runs keeps the value in use. A mode, accent, material or taskbar apps value Winshell cannot read falls back to its default, which for mode and accent is following Windows. A hidden app without an `id` is skipped.
 
 | Key | Default | Values |
 | --- | --- | --- |

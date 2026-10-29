@@ -167,6 +167,9 @@ public class SettingsTests
         Type(shell, "hide");
 
         Assert.Equal("Search results", shell.Find("crumb:").ReadProperty("text"));
+        // No page reads as selected while the results show.
+        var pane = Assert.Single(Nodes(shell), n => n.Role == AccessibleAttached.RoleValue.List && n.Name == "Settings");
+        Assert.DoesNotContain(pane.Children, n => n.IsSelected == true);
         string[] Results() => DefaultShellHarness.FindAll(shell.Find("results"))
             .Where(i => i.ObjectName.StartsWith("result:", StringComparison.Ordinal) && i.Visible)
             .OrderBy(r => r.MapToScene(0, 0).Y).Select(r => r.ObjectName).ToArray();
@@ -498,6 +501,32 @@ public class SettingsTests
     }
 
     [Fact]
+    public void Clear_all_leaves_the_notifications_of_an_app_turned_off_alone()
+    {
+        var qml = Notifications
+            .Replace("""property var notifications: [] }""", """property var notifications: []; property int dismissed: 0; function dismiss() { dismissed++ } }""")
+            .Replace("values: [chat, mail, nameless]", "values: onlyChat ? [chat] : [chat, mail]")
+            .Replace("property bool ready: false", "property bool ready: false; property bool onlyChat: false; property int chatCleared: chat.dismissed; property int mailCleared: mail.dismissed");
+        using var shell = Open(qml, width: 1360,
+            files: new() { ["preferences.json"] = """{ "hiddenNotificationApps": [{ "id": "Contoso.Chat", "name": "Chat" }] }""" });
+        var center = shell.Find("center");
+        Button ClearAll() => DefaultShellHarness.FindAll(center).OfType<Button>().Single(b => b.Text == "Clear all");
+        Text CaughtUp() => DefaultShellHarness.FindAll(center).OfType<Text>().Single(t => t.Text_ == "You're all caught up");
+
+        Assert.True(ClearAll().Enabled);
+        Assert.False(CaughtUp().Visible);
+        shell.Click(ClearAll());
+        Assert.Equal(0, shell.Root.ReadProperty("chatCleared"));
+        Assert.Equal(1, shell.Root.ReadProperty("mailCleared"));
+
+        // Only the hidden app has notifications left: the center is empty and has nothing to clear.
+        shell.Root.WriteProperty("onlyChat", true);
+        shell.Settle();
+        Assert.False(ClearAll().Enabled);
+        Assert.True(CaughtUp().Visible);
+    }
+
+    [Fact]
     public void An_app_turned_off_earlier_stays_listed_by_name_without_notifications()
     {
         using var shell = Open(Notifications.Replace("values: [chat, mail, nameless]", "values: []"), width: 1360,
@@ -538,6 +567,43 @@ public class SettingsTests
         Assert.Equal("Windows or another app is using Ctrl+Alt+S", Card(shell, "hotkeySettings").ReadProperty("description"));
     }
 
+    [Theory]
+    [InlineData("S", "Start it with Win, Ctrl or Alt, so S still types in other apps")]
+    [InlineData("Shift+S", "Start it with Win, Ctrl or Alt, so Shift+S still types in other apps")]
+    [InlineData("Space, Ctrl+K", "Start it with Win, Ctrl or Alt, so Space, Ctrl+K still types in other apps")]
+    [InlineData("win", "Open Start already uses Win")]
+    public void A_hotkey_that_would_take_a_key_from_every_app_or_repeats_the_other_is_not_saved(string typed, string reason)
+    {
+        using var shell = Open("""
+            import Winshell
+            import QtQuick
+            SettingsView {
+              anchors.fill: parent
+              page: "hotkeys"
+              Component.onCompleted: Preferences.path = Shell.shellDir + "/preferences.json"
+            }
+            """);
+        var field = Control<TextField>(shell, "hotkeySettings");
+        field.ForceActiveFocus();
+        Type(shell, "Ctrl+Alt+S");
+        shell.Key(Return);
+        Assert.Equal("Ctrl+Alt+S", Saved(shell).GetProperty("settingsHotkey").GetString());
+
+        field.WriteProperty("text", "");
+        Type(shell, typed);
+        shell.Key(Return);
+        Assert.Equal("Ctrl+Alt+S", Saved(shell).GetProperty("settingsHotkey").GetString());
+        Assert.Equal("Ctrl+Alt+S", field.ReadProperty("text"));
+        Assert.Equal(reason, Card(shell, "hotkeySettings").ReadProperty("description"));
+
+        // The next sequence that can be taken is saved, and the reason goes.
+        field.WriteProperty("text", "");
+        Type(shell, "Win+Shift+S");
+        shell.Key(Return);
+        Assert.Equal("Win+Shift+S", Saved(shell).GetProperty("settingsHotkey").GetString());
+        Assert.NotEqual(reason, Card(shell, "hotkeySettings").ReadProperty("description"));
+    }
+
     [Fact]
     public void Startup_turns_the_sign_in_entry_on_and_says_when_Windows_turned_it_off()
     {
@@ -557,6 +623,28 @@ public class SettingsTests
         Show(shell, "about");
         Show(shell, "startup");
         Assert.Equal("Turned off in Startup apps in Windows, which can turn it back on", Card(shell, "runAtSignIn").ReadProperty("description"));
+        // Off, as Windows' page shows it, and only that page turns it back on.
+        toggle = Control<Switch>(shell, "runAtSignIn");
+        Assert.False(toggle.Checked);
+        Assert.False(toggle.Enabled);
+    }
+
+    [Fact]
+    public void An_entry_that_starts_another_winshell_reads_off_and_turning_it_on_points_it_here()
+    {
+        var windows = new FakeStartupRegistry { Registered = true, Elsewhere = true };
+        using var shell = Open(configure: e => e.AddService<IStartupRegistry>(windows));
+        Show(shell, "startup");
+
+        var toggle = Control<Switch>(shell, "runAtSignIn");
+        Assert.False(toggle.Checked);
+        Assert.True(toggle.Enabled);
+        Assert.Equal("Set to start Winshell from another folder or another way. Turn it on to start this one", Card(shell, "runAtSignIn").ReadProperty("description"));
+
+        shell.Click(toggle);
+        Assert.False(windows.Elsewhere);
+        Assert.True(toggle.Checked);
+        Assert.NotEqual("Set to start Winshell from another folder or another way. Turn it on to start this one", Card(shell, "runAtSignIn").ReadProperty("description"));
     }
 
     [Fact]
@@ -732,14 +820,18 @@ public class SettingsTests
 
         public bool Accepts { get; set; } = true;
 
+        public bool Elsewhere { get; set; }
+
         public bool IsRegistered() => Registered;
+
+        public bool PointsElsewhere() => Elsewhere;
 
         public bool TurnedOffInWindows() => TurnedOff;
 
         public bool Register()
         {
             if (Accepts)
-                Registered = true;
+                (Registered, Elsewhere) = (true, false);
             return Accepts;
         }
 

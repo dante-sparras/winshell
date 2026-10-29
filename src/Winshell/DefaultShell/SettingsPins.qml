@@ -84,7 +84,7 @@ Column {
     width: parent.width
     items: root.pinned.map(app => ({ key: app.id, title: app.name, icon: root.showIcons ? app.icon ?? "" : "" }))
     removeLabel: "Unpin"
-    removeGlyph: ""
+    removeGlyph: "\uE77A"
     emptyText: "Nothing pinned"
     onMoveRequested: (key, offset) => root.reorder(key, offset)
     onRemoveRequested: key => root.unpin(key)

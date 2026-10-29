@@ -64,6 +64,63 @@ public class SettingsShellTests
     }
 
     [Fact]
+    public void Hand_edits_apply_when_the_config_folder_did_not_exist_at_start()
+    {
+        // A new user has no %APPDATA%\winshell: the first choice makes it.
+        using var run = new RunningShell(null, configFolder: false);
+        run.Host.Ipc.Call("settings", "open", ["taskbarAutoHide"]);
+        run.Settle();
+        run.Click(run.Control<Switch>("taskbarAutoHide"));
+        Assert.True(run.Saved().GetProperty("taskbarAutoHide").GetBoolean());
+
+        Thread.Sleep(300);
+        File.WriteAllText(run.PreferencesPath, """{ "taskbarAutoHide": false, "taskbarCentered": false }""");
+        run.Until(() => run.Taskbars.All(t => !(bool)t.ReadProperty("centered")!));
+        Assert.All(run.Taskbars, t => Assert.False((bool)t.ReadProperty("autoHide")!));
+    }
+
+    [Fact]
+    public void Open_folder_makes_the_config_folder_it_opens()
+    {
+        using var run = new RunningShell(null, configFolder: false);
+        run.Host.Ipc.Call("settings", "open", ["configFolder"]);
+        run.Settle();
+        var open = RunningShell.Walk(run.Settings.ContentItem).OfType<Button>().Single(b => b.ObjectName == "openConfigFolder");
+        Assert.True(open.Enabled);
+        run.Click(open);
+        Assert.True(File.Exists(run.PreferencesPath));
+        // Only the defaults: nothing was chosen.
+        Assert.True(run.Saved().GetProperty("taskbarCentered").GetBoolean());
+    }
+
+    [Fact]
+    public void One_taskbar_shows_the_apps_of_every_screen()
+    {
+        // Apps on the taskbar where their window is, then a taskbar on the main screen only.
+        using var run = new RunningShell("""{ "taskbarAllScreens": false, "taskbarAppsOn": "where" }""");
+        Assert.Equal("all", Assert.Single(run.Taskbars).ReadProperty("appsOn"));
+        run.Host.Ipc.Call("settings", "open", ["taskbarAppsOn"]);
+        run.Settle();
+        Assert.False(run.Control<ComboBox>("taskbarAppsOn").Enabled);
+    }
+
+    [Theory]
+    [InlineData("""{ "taskbarAppsOn": "sideways", "hiddenNotificationApps": {} }""")]
+    [InlineData("""{ "taskbarAppsOn": 3, "hiddenNotificationApps": [null, 5, "Contoso.Chat", { "name": "No id" }, { "id": 7 }] }""")]
+    public void Values_the_shell_cannot_use_fall_back_to_their_defaults(string preferences)
+    {
+        using var run = new RunningShell(preferences);
+        Assert.All(run.Taskbars, t => Assert.Equal("all", t.ReadProperty("appsOn")));
+        run.Host.Ipc.Call("settings", "open", ["taskbarAppsOn"]);
+        run.Settle();
+        Assert.Equal(0, run.Control<ComboBox>("taskbarAppsOn").ReadProperty("currentIndex"));
+        run.Host.Ipc.Call("settings", "open", ["notifications"]);
+        run.Settle();
+        // The fake platform has no hotkeys; nothing else complains.
+        Assert.DoesNotContain(run.Messages, m => !m.StartsWith("hotkey:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_right_click_on_the_taskbar_opens_Taskbar_settings()
     {
         using var run = new RunningShell(null);
@@ -83,6 +140,12 @@ public class SettingsShellTests
         Assert.True((bool)taskbar.ReadProperty("busy")!);
         var item = RunningShell.Walk(menu.ContentItem).Single(i => i.ObjectName == "menu:taskbarSettings");
         Assert.True(item.ActiveFocus);
+        // Narrator reads the item inside a menu.
+        var tree = new AccessibleTree(menu.Scene);
+        tree.Refresh();
+        static IEnumerable<AccessibleNode> Nodes(AccessibleNode n) => n.Children.SelectMany(Nodes).Prepend(n);
+        var popup = Assert.Single(Nodes(tree.Root), n => n.Role == AccessibleAttached.RoleValue.PopupMenu);
+        Assert.Equal("Taskbar settings", Assert.Single(popup.Children, n => n.Role == AccessibleAttached.RoleValue.MenuItem).Name);
         menu.Scene.KeyPress(new KeyEvent { Key = 0x01000004 });
         run.Settle();
 
@@ -115,12 +178,13 @@ public class SettingsShellTests
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "winshell-settings-tests", Guid.NewGuid().ToString("N"));
         private readonly Theme _theme = Theme.Current;
 
-        public RunningShell(string? preferences)
+        public RunningShell(string? preferences, bool configFolder = true)
         {
             var shell = Path.Combine(_directory, "shell");
             var config = Path.Combine(_directory, "config");
             Directory.CreateDirectory(shell);
-            Directory.CreateDirectory(config);
+            if (configFolder)
+                Directory.CreateDirectory(config);
             Theme.Current = Theme.Default(false) with { AnimationsEnabled = false };
             foreach (var file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "DefaultShell")))
             {

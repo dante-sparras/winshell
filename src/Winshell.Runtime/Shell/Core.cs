@@ -194,8 +194,9 @@ public interface IShellHost
 
     string CacheDir { get; }
 
-    /// <summary>The folder configurations are loaded from: <c>%APPDATA%\winshell</c>, or what <c>WINSHELL_CONFIG_DIR</c> names.</summary>
-    string ConfigRoot => ShellLocations.ConfigRoot;
+    /// <summary>The folder configurations are loaded from: <c>%APPDATA%\winshell</c>, or what <c>WINSHELL_CONFIG_DIR</c> names.
+    /// Empty unless the host sets it, as <c>winshell.exe</c> does, so a test never reads or writes the user's folder.</summary>
+    string ConfigRoot => "";
 
     /// <summary>This instance's log file, or empty when nothing writes one.</summary>
     string LogPath => "";

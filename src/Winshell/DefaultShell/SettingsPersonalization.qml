@@ -105,7 +105,7 @@ Column {
           Text {
             anchors.centerIn: parent
             visible: swatch.chosen
-            text: ""
+            text: "\uE73E"
             font.family: Theme.iconFontFamily
             font.pixelSize: 16
             // White or black, whichever reads on the swatch.

@@ -11,7 +11,7 @@ Column {
 
   property var items: []
   property string removeLabel: "Remove"
-  property string removeGlyph: ""
+  property string removeGlyph: "\uE738"
   // Says what is not there, when there is nothing.
   property string emptyText: ""
 
@@ -114,7 +114,7 @@ Column {
         Button {
           id: up
           objectName: "up"
-          text: ""
+          text: "\uE70E"
           font.family: Theme.iconFontFamily
           flat: true
           implicitWidth: 36
@@ -129,7 +129,7 @@ Column {
         Button {
           id: down
           objectName: "down"
-          text: ""
+          text: "\uE70D"
           font.family: Theme.iconFontFamily
           flat: true
           implicitWidth: 36

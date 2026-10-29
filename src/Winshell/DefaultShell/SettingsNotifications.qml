@@ -17,9 +17,9 @@ Column {
       if (group.appId)
         seen.set(group.appId, group.appName || group.appId)
     }
-    for (const app of Preferences.hiddenNotificationApps ?? []) {
-      if (app && app.id && !seen.has(app.id))
-        seen.set(app.id, app.name || app.id)
+    for (const app of Preferences.hiddenApps) {
+      if (app.id && !seen.has(app.id))
+        seen.set(app.id, typeof app.name === "string" && app.name ? app.name : app.id)
     }
     return Array.from(seen, ([id, name]) => ({ id: id, name: name }))
   }
@@ -79,7 +79,7 @@ Column {
       key: "notificationApps"
       title: modelData.name
       description: ""
-      glyph: ""
+      glyph: "\uEA8F"
       focusTarget: appSwitch.control
 
       SettingsSwitch {

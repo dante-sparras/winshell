@@ -10,14 +10,14 @@ var windowWidth = 1000
 var windowHeight = 700
 
 var pages = [
-  { key: "personalization", title: "Personalization", glyph: "" },
-  { key: "taskbar", title: "Taskbar", glyph: "" },
-  { key: "start", title: "Start", glyph: "" },
-  { key: "quickSettings", title: "Quick settings", glyph: "" },
-  { key: "notifications", title: "Notifications", glyph: "" },
-  { key: "hotkeys", title: "Hotkeys", glyph: "" },
-  { key: "startup", title: "Startup", glyph: "" },
-  { key: "about", title: "About", glyph: "" }
+  { key: "personalization", title: "Personalization", glyph: "\uE771" },
+  { key: "taskbar", title: "Taskbar", glyph: "\uE7C4" },
+  { key: "start", title: "Start", glyph: "\uE80F" },
+  { key: "quickSettings", title: "Quick settings", glyph: "\uE9E9" },
+  { key: "notifications", title: "Notifications", glyph: "\uEA8F" },
+  { key: "hotkeys", title: "Hotkeys", glyph: "\uE765" },
+  { key: "startup", title: "Startup", glyph: "\uE7E8" },
+  { key: "about", title: "About", glyph: "\uE946" }
 ]
 
 // Pages under a page, which the header shows as a breadcrumb.
@@ -26,45 +26,45 @@ var subpages = [
 ]
 
 var settings = [
-  { key: "colorScheme", page: "personalization", glyph: "", title: "Choose your mode", description: "Light or dark for the taskbar, Start, flyouts and this window", keywords: "dark light theme color colour" },
-  { key: "accentColor", page: "personalization", glyph: "", title: "Accent color", description: "The color of buttons, switches and highlights", keywords: "accent colour highlight theme" },
-  { key: "material", page: "personalization", glyph: "", title: "Material", description: "What shows through the taskbar and flyouts", keywords: "mica acrylic transparency backdrop blur" },
+  { key: "colorScheme", page: "personalization", glyph: "\uE706", title: "Choose your mode", description: "Light or dark for the taskbar, Start, flyouts and this window", keywords: "dark light theme color colour" },
+  { key: "accentColor", page: "personalization", glyph: "\uE790", title: "Accent color", description: "The color of buttons, switches and highlights", keywords: "accent colour highlight theme" },
+  { key: "material", page: "personalization", glyph: "\uE81E", title: "Material", description: "What shows through the taskbar and flyouts", keywords: "mica acrylic transparency backdrop blur" },
   { key: "windowsColors", page: "personalization", glyph: "\uE771", title: "Colors in Windows", description: "Mode, accent color and transparency effects for Windows itself", keywords: "transparency windows", uri: "ms-settings:colors" },
 
-  { key: "taskbarAlignment", page: "taskbar", glyph: "", title: "Taskbar alignment", description: "Where Start and the apps sit", keywords: "center centre left middle" },
-  { key: "taskbarAutoHide", page: "taskbar", glyph: "", title: "Automatically hide the taskbar", description: "It comes back when the pointer reaches the bottom of the screen", keywords: "auto-hide autohide" },
-  { key: "taskbarAllScreens", page: "taskbar", glyph: "", title: "Show my taskbar on all displays", description: "Off shows it on the main display only", keywords: "monitor screen multiple displays" },
-  { key: "taskbarAppsOn", page: "taskbar", glyph: "", title: "When using multiple displays, show my taskbar apps on", description: "", keywords: "monitor screen multiple displays apps" },
+  { key: "taskbarAlignment", page: "taskbar", glyph: "\uE8E3", title: "Taskbar alignment", description: "Where Start and the apps sit", keywords: "center centre left middle" },
+  { key: "taskbarAutoHide", page: "taskbar", glyph: "\uE890", title: "Automatically hide the taskbar", description: "It comes back when the pointer reaches the bottom of the screen", keywords: "auto-hide autohide" },
+  { key: "taskbarAllScreens", page: "taskbar", glyph: "\uE7F4", title: "Show my taskbar on all displays", description: "Off shows it on the main display only", keywords: "monitor screen multiple displays" },
+  { key: "taskbarAppsOn", page: "taskbar", glyph: "\uE7F4", title: "When using multiple displays, show my taskbar apps on", description: "", keywords: "monitor screen multiple displays apps" },
   { key: "trayIcons", page: "taskbar", glyph: "\uE712", title: "Other system tray icons", description: "Windows chooses which icons show on the taskbar and which are hidden", keywords: "notification area tray hidden icons overflow", uri: "ms-settings:taskbar" },
 
-  { key: "startRecommended", page: "start", glyph: "", title: "Show recommended apps", description: "Apps you used lately, under your pins", keywords: "recent recently used" },
-  { key: "startPins", page: "start", glyph: "", title: "Pinned apps", description: "Change their order, or unpin them", keywords: "pins pin unpin order", subpage: "pins" },
+  { key: "startRecommended", page: "start", glyph: "\uE81C", title: "Show recommended apps", description: "Apps you used lately, under your pins", keywords: "recent recently used" },
+  { key: "startPins", page: "start", glyph: "\uE718", title: "Pinned apps", description: "Change their order, or unpin them", keywords: "pins pin unpin order", subpage: "pins" },
 
-  { key: "quickSettingsTiles", page: "quickSettings", glyph: "", title: "Tiles", description: "Which tiles quick settings shows, in order. A tile this PC has no hardware for stays hidden.", keywords: "wifi bluetooth airplane energy saver night light accessibility tiles order" },
+  { key: "quickSettingsTiles", page: "quickSettings", glyph: "\uE9E9", title: "Tiles", description: "Which tiles quick settings shows, in order. A tile this PC has no hardware for stays hidden.", keywords: "wifi bluetooth airplane energy saver night light accessibility tiles order" },
 
-  { key: "doNotDisturb", page: "notifications", glyph: "", title: "Do not disturb", description: "Windows turns it on and off", keywords: "dnd focus quiet hours silence", uri: "ms-settings:notifications" },
-  { key: "notificationApps", page: "notifications", glyph: "", title: "Notifications from apps", description: "Turn an app off to leave its notifications out of the notification center. Windows still decides whether it shows banners.", keywords: "per app apps senders notification center" },
+  { key: "doNotDisturb", page: "notifications", glyph: "\uE708", title: "Do not disturb", description: "Windows turns it on and off", keywords: "dnd focus quiet hours silence", uri: "ms-settings:notifications" },
+  { key: "notificationApps", page: "notifications", glyph: "\uEA8F", title: "Notifications from apps", description: "Turn an app off to leave its notifications out of the notification center. Windows still decides whether it shows banners.", keywords: "per app apps senders notification center" },
 
-  { key: "hotkeyStart", page: "hotkeys", glyph: "", title: "Open Start", description: "", keywords: "keyboard shortcut windows key win" },
-  { key: "hotkeySettings", page: "hotkeys", glyph: "", title: "Open Winshell Settings", description: "", keywords: "keyboard shortcut" },
+  { key: "hotkeyStart", page: "hotkeys", glyph: "\uE80F", title: "Open Start", description: "", keywords: "keyboard shortcut windows key win" },
+  { key: "hotkeySettings", page: "hotkeys", glyph: "\uE713", title: "Open Winshell Settings", description: "", keywords: "keyboard shortcut" },
 
-  { key: "runAtSignIn", page: "startup", glyph: "", title: "Run Winshell when I sign in", description: "For your account only", keywords: "startup start automatically login logon boot" },
+  { key: "runAtSignIn", page: "startup", glyph: "\uE7E8", title: "Run Winshell when I sign in", description: "For your account only", keywords: "startup start automatically login logon boot" },
   { key: "startupApps", page: "startup", glyph: "\uE7E8", title: "Startup apps in Windows", description: "Windows can turn off an app that runs at sign-in", keywords: "startup apps", uri: "ms-settings:startupapps" },
 
-  { key: "version", page: "about", glyph: "", title: "Version", description: "", keywords: "about release" },
-  { key: "configFolder", page: "about", glyph: "", title: "Config folder", description: "", keywords: "configuration folder appdata files preferences" },
-  { key: "log", page: "about", glyph: "", title: "Log", description: "What this instance of Winshell reported", keywords: "logs log file errors debug" }
+  { key: "version", page: "about", glyph: "\uE946", title: "Version", description: "", keywords: "about release" },
+  { key: "configFolder", page: "about", glyph: "\uE8B7", title: "Config folder", description: "", keywords: "configuration folder appdata files preferences" },
+  { key: "log", page: "about", glyph: "\uE9F9", title: "Log", description: "What this instance of Winshell reported", keywords: "logs log file errors debug" }
 ]
 
 // The quick settings tiles, as QuickSettingsContent names them, in its default order.
 var tiles = [
-  { key: "wifi", title: "Wi-Fi", glyph: "" },
-  { key: "bluetooth", title: "Bluetooth", glyph: "" },
-  { key: "airplaneMode", title: "Airplane mode", glyph: "" },
-  { key: "energySaver", title: "Energy saver", glyph: "" },
-  { key: "powerMode", title: "Power mode", glyph: "" },
-  { key: "nightLight", title: "Night light", glyph: "" },
-  { key: "accessibility", title: "Accessibility", glyph: "" }
+  { key: "wifi", title: "Wi-Fi", glyph: "\uE701" },
+  { key: "bluetooth", title: "Bluetooth", glyph: "\uE702" },
+  { key: "airplaneMode", title: "Airplane mode", glyph: "\uE709" },
+  { key: "energySaver", title: "Energy saver", glyph: "\uE863" },
+  { key: "powerMode", title: "Power mode", glyph: "\uEC4A" },
+  { key: "nightLight", title: "Night light", glyph: "\uF08C" },
+  { key: "accessibility", title: "Accessibility", glyph: "\uE776" }
 ]
 
 // The Windows accent colors, as Settings > Personalization > Colors lays them out, with the names Narrator reads.

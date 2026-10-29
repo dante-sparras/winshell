@@ -64,7 +64,7 @@ Column {
       implicitWidth: 340
       enabled: appsOn.enabled
       options: [["all", "All taskbars"], ["main", "Main taskbar and taskbar where window is open"], ["where", "Taskbar where window is open"]]
-      value: Preferences.taskbarAppsOn
+      value: Preferences.appsOn
       onPicked: v => Preferences.taskbarAppsOn = v
     }
   }

@@ -7,12 +7,14 @@ import QtQuick.Layouts
 ColumnLayout {
   id: root
   property var listener: null
+  // An app turned off in Winshell Settings is left out, and Clear all leaves its notifications alone.
+  readonly property var visibleGroups: listener === null ? [] : listener.groups.values.filter(g => Preferences.showsNotificationsFrom(g.appId))
   spacing: 8
 
   RowLayout {
     Layout.fillWidth: true
     Text { Layout.fillWidth: true; text: "Notifications"; font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.textFillColorPrimary }
-    Button { text: "Clear all"; flat: true; enabled: root.listener !== null && root.listener.notifications.values.length > 0; onClicked: root.listener.clearAll() }
+    Button { text: "Clear all"; flat: true; enabled: root.visibleGroups.length > 0; onClicked: root.visibleGroups.forEach(g => g.dismiss()) }
   }
 
   Text {
@@ -43,7 +45,7 @@ ColumnLayout {
   }
   Text {
     Layout.fillWidth: true
-    visible: root.listener !== null && root.listener.accessStatus === NotificationAccessStatus.Allowed && root.listener.notifications.values.length === 0
+    visible: root.listener !== null && root.listener.accessStatus === NotificationAccessStatus.Allowed && root.visibleGroups.length === 0
     text: "You're all caught up"
     color: Theme.textFillColorSecondary
   }
@@ -58,8 +60,7 @@ ColumnLayout {
       width: scroll.availableWidth
       spacing: 12
       Repeater {
-        // An app turned off in Winshell Settings is left out.
-        model: root.listener === null ? [] : root.listener.groups.values.filter(g => Preferences.showsNotificationsFrom(g.appId))
+        model: root.visibleGroups
         Column {
           id: group
           required property var modelData

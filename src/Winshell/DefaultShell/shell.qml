@@ -59,7 +59,8 @@ ShellRoot {
       notificationListener: notifications
       centered: Preferences.taskbarCentered
       autoHide: Preferences.taskbarAutoHide
-      appsOn: Preferences.taskbarAppsOn
+      // With one taskbar, every app is on it.
+      appsOn: Preferences.taskbarAllScreens ? Preferences.appsOn : "all"
       onSettingsRequested: settings.open("taskbar")
 
       readonly property bool launcherOpen: launcher.visible

@@ -64,6 +64,19 @@ public class ShellLocationTests
             host.Dispose();
         }
 
+        // A host that does not set them has neither, so a test never reads or watches the user's folder.
+        var plain = new ShellHost(Path.Combine(files.Directory, "shell.qml"), files.Loop, null, files.Log);
+        try
+        {
+            Assert.True(plain.Start());
+            Assert.Equal("", plain.Root!.ReadProperty("configRoot"));
+            Assert.Equal("", plain.Root.ReadProperty("logPath"));
+        }
+        finally
+        {
+            plain.Dispose();
+        }
+
         // Without a host there is no config folder and no log.
         var bare = TestShell.Run("""
             import Winshell

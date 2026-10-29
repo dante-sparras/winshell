@@ -6,7 +6,8 @@ import QtQuick
 
 // The choices made in Winshell Settings, kept in preferences.json in the config folder (%APPDATA%\winshell, or
 // WINSHELL_CONFIG_DIR). Every surface reads them here and follows a change at once, including one made to the file
-// by hand. A key the file does not have keeps its default.
+// by hand. A key the file does not have keeps its default when Winshell starts. Surfaces read the values below that
+// fall back to the default when the file has one Winshell cannot use.
 Singleton {
   id: root
 
@@ -38,13 +39,24 @@ Singleton {
 
   readonly property int material: backdrop === "mica" ? WindowEffects.Mica : WindowEffects.Acrylic
   readonly property bool validAccent: /^#[0-9a-fA-F]{6}$/.test(accentColor)
+  readonly property string appsOn: ["all", "main", "where"].includes(taskbarAppsOn) ? taskbarAppsOn : "all"
+  // The hidden apps that have an id.
+  readonly property var hiddenApps: Array.isArray(hiddenNotificationApps)
+    ? hiddenNotificationApps.filter(app => app !== null && typeof app === "object" && typeof app.id === "string")
+    : []
 
   function showsNotificationsFrom(appId) {
-    return !(hiddenNotificationApps ?? []).some(app => app.id === appId)
+    return !hiddenApps.some(app => app.id === appId)
+  }
+
+  // Writes the file if there is none yet, which makes the config folder, so the About page can open it.
+  function save() {
+    if (path && !file.loaded)
+      file.writeAdapter()
   }
 
   function setNotificationsFrom(appId, appName, shown) {
-    const rest = (hiddenNotificationApps ?? []).filter(app => app.id !== appId)
+    const rest = hiddenApps.filter(app => app.id !== appId)
     hiddenNotificationApps = shown ? rest : rest.concat([{ id: appId, name: appName }])
   }
 
@@ -61,6 +73,7 @@ Singleton {
   }
 
   FileView {
+    id: file
     path: root.path
     blockLoading: true
     blockWrites: true

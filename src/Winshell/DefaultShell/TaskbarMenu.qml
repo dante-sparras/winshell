@@ -31,45 +31,52 @@ PopupWindow {
     settingsRequested()
   }
 
-  MouseArea {
-    id: item
-    objectName: "menu:taskbarSettings"
-    x: 4
-    y: 4
-    width: parent.width - 8
-    height: 36
-    focus: true
-    hoverEnabled: true
-    onClicked: root.trigger()
-    Accessible.role: Accessible.MenuItem
-    Accessible.name: "Taskbar settings"
-    Accessible.onPressAction: root.trigger()
-    Keys.onEscapePressed: root.visible = false
-    Keys.onReturnPressed: root.trigger()
-    Keys.onSpacePressed: root.trigger()
+  // Narrator reads the item inside a menu, as it reads Windows' own.
+  Item {
+    anchors.fill: parent
+    Accessible.role: Accessible.PopupMenu
+    Accessible.name: "Taskbar"
 
-    Rectangle {
-      anchors.fill: parent
-      radius: Theme.controlCornerRadius
-      color: item.pressed ? Theme.subtleFillColorTertiary : item.containsMouse || item.activeFocus ? Theme.subtleFillColorSecondary : "transparent"
-    }
+    MouseArea {
+      id: item
+      objectName: "menu:taskbarSettings"
+      x: 4
+      y: 4
+      width: parent.width - 8
+      height: 36
+      focus: true
+      hoverEnabled: true
+      onClicked: root.trigger()
+      Accessible.role: Accessible.MenuItem
+      Accessible.name: "Taskbar settings"
+      Accessible.onPressAction: root.trigger()
+      Keys.onEscapePressed: root.visible = false
+      Keys.onReturnPressed: root.trigger()
+      Keys.onSpacePressed: root.trigger()
 
-    Text {
-      x: 12
-      anchors.verticalCenter: parent.verticalCenter
-      text: ""
-      font.family: Theme.iconFontFamily
-      font.pixelSize: 16
-      color: Theme.textFillColorPrimary
-      Accessible.ignored: true
-    }
+      Rectangle {
+        anchors.fill: parent
+        radius: Theme.controlCornerRadius
+        color: item.pressed ? Theme.subtleFillColorTertiary : item.containsMouse || item.activeFocus ? Theme.subtleFillColorSecondary : "transparent"
+      }
 
-    Text {
-      x: 40
-      anchors.verticalCenter: parent.verticalCenter
-      text: "Taskbar settings"
-      font: Theme.typography.body
-      color: Theme.textFillColorPrimary
+      Text {
+        x: 12
+        anchors.verticalCenter: parent.verticalCenter
+        text: "\uE713"
+        font.family: Theme.iconFontFamily
+        font.pixelSize: 16
+        color: Theme.textFillColorPrimary
+        Accessible.ignored: true
+      }
+
+      Text {
+        x: 40
+        anchors.verticalCenter: parent.verticalCenter
+        text: "Taskbar settings"
+        font: Theme.typography.body
+        color: Theme.textFillColorPrimary
+      }
     }
   }
 }

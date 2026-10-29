@@ -110,7 +110,7 @@ Item {
         anchors.right: parent.right
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
-        text: ""
+        text: "\uE721"
         font.family: Theme.iconFontFamily
         font.pixelSize: 14
         color: Theme.textFillColorSecondary
@@ -128,10 +128,11 @@ Item {
       spacing: 4
       clip: true
       model: Settings.pages
-      currentIndex: Math.max(0, Settings.pages.findIndex(p => p.key === root.page))
+      // No page is selected while search results show, for Narrator as on screen.
+      currentIndex: root.searching ? -1 : Math.max(0, Settings.pages.findIndex(p => p.key === root.page))
       Accessible.role: Accessible.List
       Accessible.name: "Settings"
-      onCurrentIndexChanged: if (Settings.pages[currentIndex].key !== root.page) root.show(Settings.pages[currentIndex].key)
+      onCurrentIndexChanged: if (currentIndex >= 0 && Settings.pages[currentIndex].key !== root.page) root.show(Settings.pages[currentIndex].key)
 
       delegate: Rectangle {
         id: entry
@@ -240,7 +241,7 @@ Item {
           Text {
             visible: crumb.index > 0
             anchors.verticalCenter: parent.verticalCenter
-            text: ""
+            text: "\uE76C"
             font.family: Theme.iconFontFamily
             font.pixelSize: 16
             color: Theme.textFillColorSecondary

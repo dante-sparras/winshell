@@ -11,7 +11,8 @@ namespace Winshell.Platform.Windows.Services.Session;
 public sealed class StartupService : QObject
 {
     private readonly IStartupRegistry? _registry;
-    private bool _registered;
+    private bool _runs;
+    private bool _elsewhere;
     private bool _turnedOff;
 
     internal StartupService(QmlEngine engine)
@@ -23,11 +24,14 @@ public sealed class StartupService : QObject
     /// <summary>Whether this shell can register itself: false when it does not run as <c>winshell.exe</c>.</summary>
     [Qml] public bool Available { get { Track(); return _registry is not null; } }
 
-    /// <summary>Whether Winshell is registered to run at sign-in. Setting it adds or removes the entry.</summary>
+    /// <summary>
+    /// Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry, and setting it
+    /// when the entry starts another <c>winshell.exe</c> points the entry here.
+    /// </summary>
     [Qml]
     public bool RunAtSignIn
     {
-        get { Track(); return _registered; }
+        get { Track(); return _runs; }
         set
         {
             if (_registry is null)
@@ -35,7 +39,7 @@ public sealed class StartupService : QObject
                 ServiceSupport.Warn(this, "startup", "Startup.runAtSignIn needs a shell started by winshell.exe.");
                 return;
             }
-            if (value == _registered)
+            if (value == _runs)
                 return;
             if (!(value ? _registry.Register() : _registry.Unregister()))
                 ServiceSupport.Warn(this, "startup", value ? "Windows did not let Winshell register to run at sign-in." : "Windows did not let Winshell stop running at sign-in.");
@@ -48,6 +52,12 @@ public sealed class StartupService : QObject
     /// </summary>
     [Qml] public bool TurnedOffInWindows { get { Track(); return _turnedOff; } }
 
+    /// <summary>
+    /// True when the entry is there but starts Winshell another way: a <c>winshell.exe</c> in another folder, as after
+    /// an update unzipped somewhere new, or other arguments. <see cref="RunAtSignIn"/> is false until it is set.
+    /// </summary>
+    [Qml] public bool RegisteredElsewhere { get { Track(); return _elsewhere; } }
+
     /// <summary>Reads the entry again, after the user may have changed it in Windows.</summary>
     [Qml]
     public void Refresh() => Read();
@@ -55,8 +65,10 @@ public sealed class StartupService : QObject
     private void Read()
     {
         var registered = _registry?.IsRegistered() ?? false;
+        var elsewhere = registered && (_registry?.PointsElsewhere() ?? false);
         var turnedOff = registered && (_registry?.TurnedOffInWindows() ?? false);
-        if (SetField(ref _registered, registered, "runAtSignIn")) { }
+        if (SetField(ref _runs, registered && !elsewhere, "runAtSignIn")) { }
+        if (SetField(ref _elsewhere, elsewhere, "registeredElsewhere")) { }
         if (SetField(ref _turnedOff, turnedOff, "turnedOffInWindows")) { }
     }
 }
@@ -65,6 +77,9 @@ public sealed class StartupService : QObject
 internal interface IStartupRegistry
 {
     bool IsRegistered();
+
+    /// <summary>Whether the entry starts something other than this command.</summary>
+    bool PointsElsewhere() => false;
 
     bool TurnedOffInWindows();
 
@@ -89,6 +104,12 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
     {
         using var key = Registry.CurrentUser.OpenSubKey(runKey);
         return key?.GetValue(ValueName) is string;
+    });
+
+    public bool PointsElsewhere() => Try(() =>
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(runKey);
+        return key?.GetValue(ValueName) is string value && !string.Equals(value, command, StringComparison.OrdinalIgnoreCase);
     });
 
     // The page writes 12 bytes: an odd first byte is off, with the time it was turned off after it.

@@ -37,7 +37,11 @@ Column {
       text: "Open folder"
       enabled: Shell.configRoot !== ""
       Accessible.name: "Open the config folder"
-      onClicked: Qt.openUrlExternally(Shell.configRoot)
+      onClicked: {
+        // A new user has no config folder until the first choice; opening it makes it.
+        Preferences.save()
+        Qt.openUrlExternally(Shell.configRoot)
+      }
       onActiveFocusChanged: if (activeFocus) folder.reveal()
     }
   }

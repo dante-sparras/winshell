@@ -151,7 +151,7 @@ Rectangle {
     x: card.width - 16 - width
     anchors.verticalCenter: parent.verticalCenter
     visible: card.clickable
-    text: card.opensLink ? "" : ""
+    text: card.opensLink ? "\uE8A7" : "\uE76C"
     font.family: Theme.iconFontFamily
     font.pixelSize: 12
     color: Theme.textFillColorPrimary
