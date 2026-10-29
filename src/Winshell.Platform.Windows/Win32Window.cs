@@ -32,8 +32,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private FloatingPlacement? _floating;
     private bool _floatingPlaced;
     private bool _appBarRegistered;
-    private RECT _appBarRequest;
-    private RECT _appBarRect;
+    private readonly AppBarReservation _appBar = new();
+    private bool _placePosted;
     private uint _appBarEdge;
     private bool _fullscreenAppActive;
     private bool _frameScheduled;
@@ -235,17 +235,13 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 abd.rc.Left = abd.rc.Right - thickness;
                 break;
         }
-        // Explorer announces a new work area after each ABM_SETPOS, which places every panel again; asking for the
-        // same rectangle again would never end.
-        if (abd.rc.Equals(_appBarRequest))
+        var moved = _appBar.Reserve(abd.rc, desired =>
         {
-            abd.rc = _appBarRect;
-        }
-        else
-        {
-            _appBarRequest = abd.rc;
+            abd.rc = desired;
             Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
-        }
+            return abd.rc;
+        });
+        abd.rc = _appBar.Granted;
         // The panel lays out within the monitor, starting at the edge the app bar got.
         var rect = monitor;
         switch (_appBarEdge)
@@ -272,11 +268,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 break;
         }
         // Explorer moves the work area a moment later; place the panels again then.
-        if (!abd.rc.Equals(_appBarRect))
-        {
-            _appBarRect = abd.rc;
+        if (moved)
             _platform.WorkAreaMayHaveChanged();
-        }
         return rect;
     }
 
@@ -288,8 +281,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         using (Services.Tray.TrayHost.ExplorerFirst())
             Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
         _appBarRegistered = false;
-        _appBarRequest = default;
-        _appBarRect = default;
+        _appBar.Clear();
         _platform.WorkAreaMayHaveChanged();
     }
 
@@ -826,7 +818,19 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             switch ((uint)wParam)
             {
                 case Win32.ABN_POSCHANGED:
-                    _platform.Loop.Post(PlacePanel);
+                    // A burst of these places the panel once. Explorer does not send one notice per own request,
+                    // so each may be another bar. A short grant is asked for once more, and that same rectangle
+                    // sends no notice.
+                    _appBar.NoteExternalChange();
+                    if (!_placePosted)
+                    {
+                        _placePosted = true;
+                        _platform.Loop.Post(() =>
+                        {
+                            _placePosted = false;
+                            PlacePanel();
+                        });
+                    }
                     break;
                 case Win32.ABN_FULLSCREENAPP:
                     // Step back while another app is fullscreen on this monitor, as the taskbar does.
