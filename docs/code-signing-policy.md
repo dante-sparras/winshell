@@ -10,12 +10,12 @@ The .NET runtime and the libraries Winshell uses (SkiaSharp, HarfBuzzSharp, Jint
 
 ## How a release is signed
 
-1. A release is tagged when the maintainer merges release-please's release PR. Every change reaches `main` through a pull request that passes CI ([CONTRIBUTING.md](../CONTRIBUTING.md)). A pull request from someone who is not a committer is reviewed by a committer before it is merged.
+1. A release is tagged when the maintainer merges release-please's release PR. Every change reaches `main` through a pull request that passes CI ([CONTRIBUTING.md](https://github.com/dante-sparras/winshell/blob/main/CONTRIBUTING.md)). A pull request from someone who is not a committer is reviewed by a committer before it is merged.
 2. GitHub Actions builds the tagged commit on a GitHub-hosted runner (`.github/workflows/package.yml`) and sends the binaries to SignPath. SignPath checks that the build ran in this repository's workflow.
 3. An approver approves the signing request in SignPath by hand, for every release. Nothing is signed automatically.
 4. The signed binaries are zipped, their hashes checked, and uploaded to the release.
 
-[packaging/signpath/artifact-configuration.xml](../packaging/signpath/artifact-configuration.xml) is the list of files SignPath signs, and the product name and version it requires of each.
+[packaging/signpath/artifact-configuration.xml](https://github.com/dante-sparras/winshell/blob/main/packaging/signpath/artifact-configuration.xml) is the list of files SignPath signs, and the product name and version it requires of each.
 
 ## Team
 

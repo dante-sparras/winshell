@@ -3,18 +3,30 @@
 `Winshell.Bluetooth` exposes the `Bluetooth` singleton. Reading it enumerates the default Windows Bluetooth adapter and paired classic/LE association endpoints. It never requests radio-control access, pairs, connects, opens a remote device/GATT handle, or changes a radio. State refreshes every three seconds; `refresh()` requests an earlier read. Each shell generation owns its backend and stops its discovery watchers when destroyed.
 
 ```qml
+import QtQuick
+import QtQuick.Controls
 import Winshell.Bluetooth
 
-// Read Bluetooth.defaultAdapter, Bluetooth.devices.values,
-// Bluetooth.pairedDevices.values and Bluetooth.nearbyDevices.values.
-// Call these from explicit user actions:
-// Bluetooth.startDiscovery()
-// Bluetooth.stopDiscovery()
-// device.pair()             // Windows performs the consent/PIN ceremony
-// device.cancelPairing()
-// device.unpair()
-// device.connect()          // supported paired Bluetooth audio devices only
-// device.disconnect()       // supported paired Bluetooth audio devices only
+// Paired devices, and nearby ones while discovering. Each call runs only when the user clicks.
+Column {
+    Button {
+        text: Bluetooth.discovering ? "Stop looking" : "Look for devices"
+        enabled: Bluetooth.defaultAdapter?.enabled ?? false
+        onClicked: Bluetooth.discovering ? Bluetooth.stopDiscovery() : Bluetooth.startDiscovery()
+    }
+    Repeater {
+        model: Bluetooth.devices
+        Button {
+            required property var modelData
+            text: modelData.name + (modelData.connected ? " (connected)" : "")
+            enabled: !modelData.busy
+            // Windows shows its own consent or PIN UI for pair(). unpair() and cancelPairing() also exist.
+            // connect() and disconnect() work for paired audio devices only.
+            onClicked: !modelData.paired ? modelData.pair()
+                : modelData.connected ? modelData.disconnect() : modelData.connect()
+        }
+    }
+}
 ```
 
 `ready` distinguishes the first/unavailable read from a completed enumeration. A completed read can have no adapter. `error` describes a failed read or discovery request; `operationFailed(message)` reports discovery failures. Failure to enumerate clears the models; a later successful read recovers. `defaultAdapter` and `adapters` represent the default adapter returned by Windows, rather than promising simultaneous support for multiple radios.

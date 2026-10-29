@@ -24,10 +24,11 @@ pwsh scripts/dev.ps1
 | --- | --- |
 | `pwsh scripts/dev.ps1` | Clones Quickshell v0.3.2 into `docs/agents/quickshell/` and fetches its manual into `site/` there. |
 | `pwsh scripts/dev.ps1 -Refresh` | Downloads the Quickshell manual again. |
-| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the check CI runs. |
+| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, and the docs site with `--warningsAsErrors`. Then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the check CI runs. |
 | `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, and the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
 | `dotnet run scripts/render-logo.cs` | Renders `packaging/logo.svg` into the package's and the Store listing's PNGs. Commit them after changing the logo. |
 | `pwsh scripts/update-snapshots.ps1` | Renders the default shell's surfaces and replaces each [snapshot](#visual-snapshots) baseline its render no longer matches. `-Surface taskbar` replaces one surface's baselines only. |
+| `dotnet tool restore`, then `dotnet docfx docs/docfx.json --serve` | Builds the docs site into `docs/_site/` and serves it at `http://localhost:8080`. See [Docs](#docs). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
 Before opening a PR, run the checks CI runs: `pwsh scripts/check.ps1`.
@@ -75,7 +76,7 @@ A release's own binaries are signed through [SignPath Foundation](https://signpa
 - the secret `SIGNPATH_API_TOKEN`, from a SignPath CI user that may submit to the project.
 - `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` when they are not `winshell` and `release-signing`.
 - the signing policy's allowed refs to include `refs/heads/main` and `refs/tags/v*`, since a repair runs from the tag.
-- the project's artifact configuration, [packaging/signpath/artifact-configuration.xml](../packaging/signpath/artifact-configuration.xml), pasted into SignPath, and GitHub set up as its trusted build system.
+- the project's artifact configuration, [packaging/signpath/artifact-configuration.xml](https://github.com/dante-sparras/winshell/blob/main/packaging/signpath/artifact-configuration.xml), pasted into SignPath, and GitHub set up as its trusted build system.
 
 PRs and pushes to `main` are never signed. Every binary already carries the product name `Winshell` and the release's version, which `-Verify` checks with or without signing.
 
@@ -100,6 +101,17 @@ Other release tasks:
 
 - **Pick the version yourself:** when merging a PR, add `Release-As: x.y.z` to the end of the squash commit message.
 - **The release PR's checks don't start:** without the `RELEASE_PLEASE_TOKEN` secret, close and reopen the release PR right before merging it.
+
+## Docs
+
+The docs site is built from `docs/` by [DocFX](https://dotnet.github.io/docfx/), a .NET tool pinned in `dotnet-tools.json`. `docs/agents/` is left out. Each section has a `toc.yml` that lists its pages: `docs/toc.yml` is the top bar, and `guide/toc.yml` and `adr/toc.yml` are the sidebars. A page in another folder can be listed with a relative path, such as `../taskbar.md`.
+
+- **A new page** goes into a `toc.yml`. `DocsTests` fails for a page no table of contents lists.
+- **Links between pages** are relative `.md` links. DocFX fails the check on a link to a page or a heading that isn't there. Link to files outside `docs/`, such as `CONTRIBUTING.md`, with their GitHub URL.
+- **QML examples** in a `qml` code block are checked by `DocsTests`: each one parses, and every module, type, property and signal handler it uses exists. An example without imports is a fragment and can use any module's types. The default shell's files count as types, as they do in a copy of that folder.
+- **Links to other sites** are checked by the `links` job of the Docs workflow, on each PR and every Monday. That job isn't part of `check.ps1`.
+
+The Docs workflow builds the site on every PR and on `main`, and attaches it to the run as the `github-pages` artifact. On `main` it publishes it to GitHub Pages once Pages is turned on (Settings > Pages > Source: GitHub Actions) and the repository variable `DOCS_PAGES` is `true`. Until then the `deploy` job is skipped.
 
 ## Network permissions
 

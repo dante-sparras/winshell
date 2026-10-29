@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/v2.81.0/schemas/docfx.schema.json",
+  "build": {
+    "content": [
+      { "files": ["**/*.md", "**/toc.yml"], "exclude": ["agents/**", "_site/**"] }
+    ],
+    "output": "_site",
+    "template": ["default", "modern"],
+    "globalMetadata": {
+      "_appName": "Winshell",
+      "_appTitle": "Winshell",
+      "_enableSearch": true,
+      "_disableContribution": true
+    }
+  }
+}

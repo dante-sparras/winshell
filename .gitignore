@@ -1,6 +1,9 @@
 # Reference checkout. Not part of this repo. pwsh scripts/dev.ps1 brings it back after a clone.
 docs/agents/quickshell/
 
+# The docs site DocFX builds from docs/.
+docs/_site/
+
 # Baseline
 # OS
 .DS_Store

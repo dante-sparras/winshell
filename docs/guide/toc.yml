@@ -1,0 +1,32 @@
+- name: Migrating from Quickshell
+  href: ../migrating-from-quickshell.md
+- name: The default shell
+  items:
+  - name: Taskbar
+    href: ../taskbar.md
+  - name: Winshell Settings
+    href: ../settings.md
+  - name: Updates
+    href: ../updates.md
+- name: Windows services
+  items:
+  - name: Notifications
+    href: ../notifications.md
+  - name: Networking
+    href: ../network.md
+  - name: Bluetooth
+    href: ../bluetooth.md
+  - name: Capture
+    href: ../capture.md
+  - name: Hotkeys
+    href: ../hotkeys.md
+  - name: Notification area
+    href: ../tray.md
+- name: Privacy
+  href: ../privacy.md
+- name: Code signing policy
+  href: ../code-signing-policy.md
+- name: Contributing
+  items:
+  - name: Development
+    href: ../development.md
