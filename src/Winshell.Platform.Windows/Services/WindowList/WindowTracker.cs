@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Winshell.Platform.Windows.Native;
+using Winshell.Platform.Windows.Services.Input;
 using Winshell.Runtime;
 using static Winshell.Platform.Windows.Services.WindowList.NativeMethods;
 
@@ -322,7 +323,7 @@ internal static unsafe class WindowTracker
 
     /// <summary>
     /// Brings a window to the front and focuses it. Windows lets a program take the foreground only in some cases, so
-    /// when asking fails, Winshell attaches to the foreground thread's input, and as a last resort taps Alt.
+    /// when asking fails, Winshell attaches to the foreground thread's input, and as a last resort taps an unassigned key.
     /// </summary>
     public static void Activate(nint hwnd)
     {
@@ -348,8 +349,7 @@ internal static unsafe class WindowTracker
         if (GetForegroundWindow() != hwnd)
         {
             // A key press makes this process the one that had the last input, which may take the foreground.
-            keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY, 0);
-            keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+            KeyMask.Tap();
             SetForegroundWindow(hwnd);
         }
     }

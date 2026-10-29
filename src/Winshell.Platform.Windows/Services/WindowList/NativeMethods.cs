@@ -48,9 +48,6 @@ internal static unsafe partial class NativeMethods
     public const uint WM_SYSCOMMAND = 0x0112;
     public const nint SC_CLOSE = 0xF060;
     public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-    public const byte VK_MENU = 0x12;
-    public const uint KEYEVENTF_EXTENDEDKEY = 0x1;
-    public const uint KEYEVENTF_KEYUP = 0x2;
 
     [LibraryImport("user32.dll")]
     public static partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
@@ -146,9 +143,6 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool doAttach);
-
-    [LibraryImport("user32.dll")]
-    public static partial void keybd_event(byte key, byte scan, uint flags, nuint extra);
 
     [LibraryImport("kernel32.dll")]
     public static partial uint GetCurrentThreadId();
