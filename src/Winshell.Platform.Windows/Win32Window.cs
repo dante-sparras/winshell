@@ -631,6 +631,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     internal WindowAutomation Automation => _automation;
 
+    /// <summary>True while a frame is drawing. A UI Automation call that arrives then must not walk the tree.</summary>
+    internal bool IsRendering => _rendering;
+
     internal IWindowClient Client => _client;
 
     // Frames

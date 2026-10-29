@@ -210,13 +210,26 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
 
     // UI Automation focuses the window before it calls this, so only the item's focus moves here.
     // The item takes focus, and the window takes the keyboard if Windows lets it; if it does not, the client hears so.
+    // An outermost call does that before it returns, so the client hears the result. A call that arrived inside a
+    // frame or inside another call is posted: focusing there would run QML from the middle of layout.
     int IRawElementProviderFragment.SetFocus()
     {
         var taken = true;
         var hr = Call(() =>
         {
-            Node.Focus();
-            taken = Node.HasKeyboardFocus && Automation.TryTakeKeyboard();
+            if (!Automation.DeferMutations)
+            {
+                Node.Focus();
+                taken = Node.HasKeyboardFocus && Automation.TryTakeKeyboard();
+                return;
+            }
+            var node = Node;
+            Automation.Post(node, () =>
+            {
+                node.Focus();
+                if (node.HasKeyboardFocus)
+                    Automation.TryTakeKeyboard();
+            });
         });
         return hr != Uia.S_OK ? hr : taken ? Uia.S_OK : Uia.InvalidOperation;
     }
@@ -240,20 +253,14 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
 
     // RangeValue
 
-    int IRangeValueProvider.SetValue(double value)
+    int IRangeValueProvider.SetValue(double value) => Act(() =>
     {
-        var hr = 0;
-        var call = Call(() =>
-        {
-            if (Node.Range is not { } range || range.IsReadOnly || !Node.IsEnabled)
-                hr = Uia.ElementNotEnabled;
-            else if (value < range.Minimum || value > range.Maximum || double.IsNaN(value))
-                hr = Uia.E_INVALIDARG;
-            else
-                Node.SetRangeValue(value);
-        });
-        return call != Uia.S_OK ? call : hr;
-    }
+        if (Node.Range is not { } range || range.IsReadOnly || !Node.IsEnabled)
+            return Uia.ElementNotEnabled;
+        if (value < range.Minimum || value > range.Maximum || double.IsNaN(value))
+            return Uia.E_INVALIDARG;
+        return Uia.S_OK;
+    }, () => Node.SetRangeValue(value));
 
     int IRangeValueProvider.get_Value(out double value) => Get(() => Node.Range?.Value ?? 0, out value);
 
@@ -269,18 +276,9 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
 
     // Value
 
-    int IValueProvider.SetValue(string value)
-    {
-        var hr = 0;
-        var call = Call(() =>
-        {
-            if (Node.IsValueReadOnly || !Node.IsEnabled)
-                hr = Uia.ElementNotEnabled;
-            else
-                Node.SetValue(value ?? "");
-        });
-        return call != Uia.S_OK ? call : hr;
-    }
+    int IValueProvider.SetValue(string value) => Act(
+        () => Node.IsValueReadOnly || !Node.IsEnabled ? Uia.ElementNotEnabled : Uia.S_OK,
+        () => Node.SetValue(value ?? ""));
 
     int IValueProvider.get_Value(out string value) => Get(() => Node.Value ?? "", out value);
 
@@ -329,7 +327,7 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
 
     // Scroll
 
-    int IScrollProvider.Scroll(int horizontalAmount, int verticalAmount) => Call(() =>
+    int IScrollProvider.Scroll(int horizontalAmount, int verticalAmount) => Act(() => Uia.S_OK, () =>
     {
         // LargeDecrement, SmallDecrement, NoAmount, LargeIncrement, SmallIncrement.
         static int Steps(int amount) => amount switch { 0 or 1 => -1, 3 or 4 => 1, _ => 0 };
@@ -338,7 +336,7 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
     });
 
     int IScrollProvider.SetScrollPercent(double horizontalPercent, double verticalPercent) =>
-        Call(() => Node.SetScrollPercent(horizontalPercent, verticalPercent));
+        Act(() => Uia.S_OK, () => Node.SetScrollPercent(horizontalPercent, verticalPercent));
 
     int IScrollProvider.get_HorizontalScrollPercent(out double value) => Get(() => Node.Scroll?.HorizontalPercent ?? -1, out value);
 
