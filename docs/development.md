@@ -74,6 +74,7 @@ A release's own binaries are signed through [SignPath Foundation](https://signpa
 - the repository variable `SIGNPATH_ORGANIZATION_ID`, which turns signing on. Without it, releases are not signed.
 - the secret `SIGNPATH_API_TOKEN`, from a SignPath CI user that may submit to the project.
 - `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` when they are not `winshell` and `release-signing`.
+- the signing policy's allowed refs to include `refs/heads/main` and `refs/tags/v*`, since a repair runs from the tag.
 - the project's artifact configuration, [packaging/signpath/artifact-configuration.xml](../packaging/signpath/artifact-configuration.xml), pasted into SignPath, and GitHub set up as its trusted build system.
 
 PRs and pushes to `main` are never signed. Every binary already carries the product name `Winshell` and the release's version, which `-Verify` checks with or without signing.
@@ -81,7 +82,7 @@ PRs and pushes to `main` are never signed. Every binary already carries the prod
 When a release has no files:
 
 - **Packaging or the upload failed:** open the Release Please run and choose **Re-run failed jobs**. It keeps the release it created and runs only what failed.
-- **Packaging never ran**, because the whole Release Please run was re-run after the release existed, or Release Please failed after it published the release: run the Package workflow by hand (**Actions > Package > Run workflow**) with the release's tag, such as `v1.2.3`. It builds that tag, stops unless the tag is the version in `.release-please-manifest.json` there and the release exists, and uploads what the release does not have yet. It works for any release whose tagged commit has `scripts/package.ps1`.
+- **Packaging never ran**, because the whole Release Please run was re-run after the release existed, or Release Please failed after it published the release: run the Package workflow by hand (**Actions > Package > Run workflow**). Under **Use workflow from**, choose **Tags** and the release's tag, and give the same tag, such as `v1.2.3`. A signed release must be built from the commit the run is for, so the run stops if it was started from `main`. It builds that tag, stops unless the tag is the version in `.release-please-manifest.json` there and the release exists, and uploads what the release does not have yet. It works for any release whose tagged commit has `scripts/package.ps1`.
 
 ### Microsoft Store
 

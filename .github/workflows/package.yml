@@ -190,6 +190,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
+          # Set once releases are signed, which is when the notes link the Code signing policy.
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
         run: |
           # Fails unless the release exists.
           $release = gh api "repos/$env:GH_REPO/releases/tags/$env:TAG" | ConvertFrom-Json
@@ -208,7 +210,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           # SignPath Foundation asks every download page to name the Code signing policy.
-          if ($release.body -notmatch 'Code signing policy') {
+          if ($env:SIGNPATH_ORGANIZATION_ID -and $release.body -notmatch 'Code signing policy') {
             $notes = "$($release.body)`n`n[Code signing policy](https://github.com/$env:GH_REPO/blob/main/docs/code-signing-policy.md)"
             gh release edit $env:TAG --notes $notes
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
