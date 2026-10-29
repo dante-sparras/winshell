@@ -57,6 +57,7 @@ A running shell reads these. None is needed to build or test.
 | Variable | What it does |
 | --- | --- |
 | `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. This run does not copy an old `~/.config/winshell`. |
+| `WINSHELL_LOCAL_DIR` | Folder used instead of `%LOCALAPPDATA%\winshell` for cache, state, data, the default shell, instance logs, crash reports and downloaded updates. A child process inherits it. |
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
 | `WINSHELL_NO_RELOAD_POPUP` | `1` hides Winshell's notice for a configuration that failed to load. A shell can hide it for one failed reload with `Shell.inhibitReloadPopup()` in `Shell.onReloadFailed`. The notice for a window that failed still shows. |
