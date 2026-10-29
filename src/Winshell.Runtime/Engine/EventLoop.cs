@@ -37,7 +37,10 @@ public class EventQueue : IEventLoop
 
     public Log Log { get; set; } = Log.Default;
 
-    /// <summary>Raised with what posted work, a timer or a frame threw, after it is logged. The loop goes on.</summary>
+    /// <summary>
+    /// Raised with what posted work, a timer or a frame threw, after it is logged. The loop goes on.
+    /// An xUnit assertion is not caught: it fails the caller, so a test does not hang until the job times out.
+    /// </summary>
     public event Action<Exception>? Failed;
 
     public void Post(Action action)
@@ -168,11 +171,23 @@ public class EventQueue : IEventLoop
         {
             action();
         }
-        catch (Exception e)
+        catch (Exception e) when (!IsAssertion(e))
         {
             Log.Error("loop", e.ToString());
             Failed?.Invoke(e);
         }
+    }
+
+    /// <summary>xUnit failures must leave the loop. Every other exception is a callback the shell logs and continues past.</summary>
+    private static bool IsAssertion(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var name = current.GetType().FullName;
+            if (name is not null && name.StartsWith("Xunit.Sdk.", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 
     private sealed class TimerEntry(Action action) : IDisposable
