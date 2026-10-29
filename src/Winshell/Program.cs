@@ -129,7 +129,7 @@ namespace Winshell
                         o.Id = Next();
                         break;
                     case "--pid":
-                        o.Pid = int.Parse(Next(), CultureInfo.InvariantCulture);
+                        o.Pid = WholeNumber(args[i], Next());
                         break;
                     case "-d" or "--daemonize":
                         o.Daemonize = true;
@@ -150,7 +150,7 @@ namespace Winshell
                         o.Follow = true;
                         break;
                     case "-t" or "--tail":
-                        o.Tail = int.Parse(Next(), CultureInfo.InvariantCulture);
+                        o.Tail = WholeNumber(args[i], Next());
                         break;
                     case "--no-color":
                         o.NoColor = true;
@@ -166,6 +166,17 @@ namespace Winshell
                 }
             }
             return o;
+        }
+
+        /// <summary>
+        /// A process id or a tail count. <c>int.Parse</c> throws <see cref="FormatException"/> or
+        /// <see cref="OverflowException"/>, and <see cref="Run"/> only turns <see cref="ArgumentException"/> into exit code 2.
+        /// </summary>
+        private static int WholeNumber(string option, string text)
+        {
+            if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                throw new ArgumentException($"{option} needs a whole number");
+            return value;
         }
 
         /// <summary>

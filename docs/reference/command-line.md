@@ -69,9 +69,9 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | --- | --- |
 | 0 | Done. For a shell, it was stopped. |
 | 1 | No such configuration or instance, an IPC call failed, the instance couldn't be reached, or a `winshell doctor` check failed. |
-| 2 | An unknown command, an option that needs a value without one, or an `ipc` command missing its arguments. |
+| 2 | An unknown command, an option that needs a value without one, a `--pid` or `--tail` that is not a whole number, or an `ipc` command missing its arguments. |
 
-`--pid` and `--tail` take a whole number. Anything else ends `winshell` with an unhandled error, not exit code 2 ([#150](https://github.com/dante-sparras/winshell/issues/150)).
+`--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
 
 ## Environment variables
 
