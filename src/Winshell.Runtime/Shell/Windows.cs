@@ -505,7 +505,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
             engine.Log.Error("window", $"{where} failed and opens again in {wait.TotalSeconds:0} s: {error.GetType().Name}: {error.Message}");
         else
             engine.Log.Error("window", $"{where} failed {SurfaceRestarts.MaxFailures} times in {SurfaceRestarts.Period.TotalMinutes:0} minutes and stays closed until the configuration reloads: {error.GetType().Name}: {error.Message}");
-        engine.Log.Debug("window", error.ToString());
+        engine.Log.Error("window", error.ToString());
         if (report is not null)
             engine.Log.Info("window", $"Wrote a crash report to \"{report.Path}\"");
         if (delay is not null)

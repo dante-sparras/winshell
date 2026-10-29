@@ -173,6 +173,7 @@ public sealed class ShellHost : IShellHost, IDisposable
             return false;
         // Each load starts with the popup allowed; the old generation's reloadFailed handler can inhibit it.
         _inhibitPopup = false;
+        Log.ClearFirstScriptError();
         var oldEngine = _engine;
         var oldRoot = _root;
         var engine = new QmlEngine(_modules(), _loop, Log, ShellDir);
@@ -200,7 +201,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         {
             var message = Log.Describe(e, _rootFile);
             Log.Error("scene", (initial ? "Failed to load configuration: " : "Failed to reload configuration: ") + message);
-            Log.Debug("scene", e.ToString());
+            Log.Error("scene", e.ToString());
             DisposeFailed(engine);
             WatchFilesOf(oldEngine ?? engine);
             if (oldEngine?.FindNativeSingleton<ShellGlobal>() is { } oldShell)
@@ -238,12 +239,13 @@ public sealed class ShellHost : IShellHost, IDisposable
             Reloaded?.Invoke(message);
             return false;
         }
+        var scriptError = engine.Log.FirstScriptError;
         oldEngine?.Dispose();
         WatchFilesOf(engine);
         if (!initial)
             Log.Info("", "Configuration Loaded");
         engine.FindNativeSingleton<ShellGlobal>()?.Emit("reloadCompleted");
-        Reloaded?.Invoke(null);
+        Reloaded?.Invoke(scriptError);
         return true;
     }
 

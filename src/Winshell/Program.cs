@@ -505,7 +505,7 @@ namespace Winshell
                     try
                     {
                         if (!logClosed)
-                            logFile.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {line}");
+                            logFile.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {line}");
                     }
                     catch (Exception e) when (e is IOException or ObjectDisposedException)
                     {
@@ -596,6 +596,7 @@ namespace Winshell
                 // Winshell Settings' About page runs the same checks as winshell doctor, for this shell's config.
                 engine.AddService<IDoctor>(new CliDoctor(() => DoctorContextFor(root, null)));
             });
+            log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
             log.Info("", $"Launching config: \"{root}\"");
             log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
             log.Info("", $"Saving logs to \"{logPath}\"");
