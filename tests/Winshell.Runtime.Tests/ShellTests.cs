@@ -128,9 +128,14 @@ public class ShellTests
     private sealed class Shell : IDisposable
     {
         public Shell(params (string Name, string Text)[] files)
+            : this(null, files)
+        {
+        }
+
+        public Shell(Action<QmlEngine>? configure, params (string Name, string Text)[] files)
         {
             Files = new TestShell(files);
-            Host = new ShellHost(Path.Combine(Files.Directory, "shell.qml"), Files.Loop, Platform, Files.Log);
+            Host = new ShellHost(Path.Combine(Files.Directory, "shell.qml"), Files.Loop, Platform, Files.Log, configure: configure);
         }
 
         public TestShell Files { get; }
@@ -290,6 +295,27 @@ public class ShellTests
                 """));
         shell.Start();
         Assert.Equal(DateTime.Now.Year.ToString(System.Globalization.CultureInfo.InvariantCulture), shell.Host.Root!.ReadProperty("shown"));
+    }
+
+    [Fact]
+    public void SystemClock_reads_the_engines_time_provider()
+    {
+        var now = new DateTimeOffset(new DateTime(2026, 10, 29, 9, 41, 7, DateTimeKind.Local));
+        using var shell = new Shell(e => e.AddService<TimeProvider>(new FixedTime(now)), ("shell.qml", """
+            import Winshell
+            import QtQuick
+            Scope {
+              property string shown: Qt.formatDateTime(clock.date, "yyyy-MM-dd HH:mm:ss")
+              SystemClock { id: clock; precision: SystemClock.Minutes }
+            }
+            """));
+        shell.Start();
+        Assert.Equal("2026-10-29 09:41:00", shell.Host.Root!.ReadProperty("shown"));
+    }
+
+    private sealed class FixedTime(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     [Fact]

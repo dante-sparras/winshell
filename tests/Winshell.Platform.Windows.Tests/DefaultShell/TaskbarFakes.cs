@@ -79,9 +79,9 @@ public sealed class FakeApps : QObject
         return string.IsNullOrWhiteSpace(query) ? [] : _entries.Where(e => e.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
-    public FakeAppEntry Add(string id, string name, string appId)
+    public FakeAppEntry Add(string id, string name, string appId, string? icon = null)
     {
-        var entry = new FakeAppEntry(id, name, appId);
+        var entry = new FakeAppEntry(id, name, appId, icon);
         _entries.Add(entry);
         Apps.Add(entry);
         NotifyChanged("apps");
@@ -99,14 +99,14 @@ public sealed class FakeApps : QObject
     }
 }
 
-public sealed class FakeAppEntry(string id, string name, string appId) : QObject
+public sealed class FakeAppEntry(string id, string name, string appId, string? icon = null) : QObject
 {
     public int Launches { get; private set; }
 
     [Qml] public string Id => id;
     [Qml] public string Name => name;
     [Qml] public string AppId => appId;
-    [Qml] public string Icon => id;
+    [Qml] public string Icon => icon ?? id;
 
     [Qml] public void Launch() => Launches++;
 }

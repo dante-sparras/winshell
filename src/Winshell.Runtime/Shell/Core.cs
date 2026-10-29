@@ -538,7 +538,7 @@ public static class ProcessLauncher
     }
 }
 
-/// <summary>The <c>SystemClock</c>.</summary>
+/// <summary>The <c>SystemClock</c>. It reads the time from the engine's <see cref="TimeProvider"/> service when it has one.</summary>
 public sealed class SystemClock : QObject
 {
     private bool _enabled = true;
@@ -597,11 +597,13 @@ public sealed class SystemClock : QObject
         _ => new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind),
     };
 
+    private DateTime Now() => (Engine?.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow().LocalDateTime;
+
     private void Tick()
     {
         if (IsDestroyed)
             return;
-        var now = Truncate(DateTime.Now);
+        var now = Truncate(Now());
         if (now != _date)
         {
             var old = _date;
@@ -620,7 +622,7 @@ public sealed class SystemClock : QObject
         _timer = null;
         if (!_enabled || Engine is null || IsDestroyed)
             return;
-        var now = DateTime.Now;
+        var now = Now();
         var next = _precision switch
         {
             1 => Truncate(now).AddHours(1),
