@@ -24,7 +24,7 @@ A few of its values come from `//@ pragma` comments at the top of the root file,
 | `version` | string, read-only | The Winshell release, as `winshell --version` prints it. |
 | `processId` | int, read-only | The Windows process id of this instance. |
 | `instanceId` | string, read-only | This instance's id, as `winshell list` shows it and `--id` takes it. |
-| `shellId` | string, read-only | The shell id: `//@ pragma ShellId`, or a hash of the root file's path. |
+| `shellId` | string, read-only | The shell id: `//@ pragma ShellId`; else `root` for `shell.qml` in the config folder, or the folder's name, in lower case, for a config in a folder of its own there; else a hash of the root file's path. |
 | `appId` | string, read-only | The application id: `winshell`, unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets another. |
 | `launchTime` | date, read-only | When this instance started. |
 | `workingDirectory` | string | The process's current folder. `execDetached()` starts programs there unless told otherwise. Setting it changes the folder. |

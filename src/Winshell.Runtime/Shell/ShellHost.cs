@@ -80,13 +80,10 @@ public sealed class ShellHost : IShellHost, IDisposable
         var pragmas = ShellPragmas.Read(_rootFile);
         Pragmas = pragmas;
         _declared = pragmas;
-        ShellId = pragmas.ShellId ?? Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(_rootFile.ToLowerInvariant())));
         AppId = string.IsNullOrEmpty(pragmas.AppId) ? (string.IsNullOrEmpty(appFromEnv) ? "winshell" : appFromEnv) : pragmas.AppId;
         LaunchTime = DateTime.Now;
         InstanceId = Base36(Environment.ProcessId) + Base36(new DateTimeOffset(LaunchTime).ToUnixTimeSeconds());
-        DataDir = Expand(pragmas.DataDir, ShellLocations.DataRoot) ?? Path.Combine(ShellLocations.DataRoot, "by-shell", ShellId);
-        StateDir = Expand(pragmas.StateDir, ShellLocations.StateRoot) ?? Path.Combine(ShellLocations.StateRoot, "by-shell", ShellId);
-        CacheDir = Expand(pragmas.CacheDir, ShellLocations.CacheRoot) ?? Path.Combine(ShellLocations.CacheRoot, "by-shell", ShellId);
+        Identify();
         foreach (var (k, v) in pragmas.Env)
             Environment.SetEnvironmentVariable(k, v);
     }
@@ -132,11 +129,40 @@ public sealed class ShellHost : IShellHost, IDisposable
         && left.Env.Count == right.Env.Count
         && left.Env.All(pair => right.Env.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
+    /// <summary>The shell id and the folders named after it. They follow <see cref="ConfigRoot"/>, which is set after this.</summary>
+    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(ShellId), nameof(DataDir), nameof(StateDir), nameof(CacheDir))]
+    private void Identify()
+    {
+        ShellId = Pragmas.ShellId ?? DefaultShellId(_rootFile, ConfigRoot);
+        DataDir = Expand(Pragmas.DataDir, ShellLocations.DataRoot) ?? Path.Combine(ShellLocations.DataRoot, "by-shell", ShellId);
+        StateDir = Expand(Pragmas.StateDir, ShellLocations.StateRoot) ?? Path.Combine(ShellLocations.StateRoot, "by-shell", ShellId);
+        CacheDir = Expand(Pragmas.CacheDir, ShellLocations.CacheRoot) ?? Path.Combine(ShellLocations.CacheRoot, "by-shell", ShellId);
+    }
+
+    /// <summary>
+    /// A config in the config folder is named after its folder: <c>root</c> for the folder itself, or the <c>-c</c>
+    /// name. Moving the config folder, or switching between <c>-p</c> and <c>-c</c>, keeps its data and state. Any
+    /// other shell has only its path, hashed.
+    /// </summary>
+    internal static string DefaultShellId(string rootFile, string configRoot)
+    {
+        var dir = Path.GetDirectoryName(rootFile)!;
+        if (configRoot.Length > 0)
+        {
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configRoot));
+            if (string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))
+                return "root";
+            if (string.Equals(Path.GetDirectoryName(dir), root, StringComparison.OrdinalIgnoreCase))
+                return Path.GetFileName(dir).ToLowerInvariant();
+        }
+        return Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(rootFile.ToLowerInvariant())));
+    }
+
     public Log Log { get; }
 
     public ShellPragmas Pragmas { get; }
 
-    public string ShellId { get; }
+    public string ShellId { get; private set; }
 
     public string InstanceId { get; }
 
@@ -151,13 +177,21 @@ public sealed class ShellHost : IShellHost, IDisposable
     /// <summary>The configuration's root file, its <c>shell.qml</c>.</summary>
     public string RootFile => _rootFile;
 
-    public string DataDir { get; }
+    public string DataDir { get; private set; }
 
-    public string StateDir { get; }
+    public string StateDir { get; private set; }
 
-    public string CacheDir { get; }
+    public string CacheDir { get; private set; }
 
-    public string ConfigRoot { get; init; } = "";
+    public string ConfigRoot
+    {
+        get;
+        init
+        {
+            field = value;
+            Identify();
+        }
+    } = "";
 
     public string LogPath { get; init; } = "";
 
