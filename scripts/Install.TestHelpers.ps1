@@ -200,13 +200,24 @@ function Start-WinshellFakeRelease([string] $Directory) {
     [void]$ps.AddScript({
             param($Dir, $Ready, $Gate, $Log)
             try {
-                $tcp = New-Object System.Net.Sockets.TcpListener ([Net.IPAddress]::Loopback, 0)
-                $tcp.Start()
-                $port = ([Net.IPEndPoint]$tcp.LocalEndpoint).Port
-                $tcp.Stop()
-                $listener = New-Object System.Net.HttpListener
-                $listener.Prefixes.Add("http://127.0.0.1:${port}/")
-                $listener.Start()
+                $listener = $null
+                for ($attempt = 1; $attempt -le 5; $attempt++) {
+                    $tcp = New-Object System.Net.Sockets.TcpListener ([Net.IPAddress]::Loopback, 0)
+                    $tcp.Start()
+                    $port = ([Net.IPEndPoint]$tcp.LocalEndpoint).Port
+                    $tcp.Stop()
+                    $candidate = New-Object System.Net.HttpListener
+                    $candidate.Prefixes.Add("http://127.0.0.1:${port}/")
+                    try {
+                        $candidate.Start()
+                        $listener = $candidate
+                        break
+                    } catch {
+                        $candidate.Close()
+                        if ($attempt -eq 5) { throw }
+                        Start-Sleep -Milliseconds (25 * $attempt)
+                    }
+                }
                 $Ready.Listener = $listener
                 $Ready.Base = "http://127.0.0.1:${port}/releases"
                 $Ready.Log = $Log
