@@ -24,9 +24,9 @@ internal sealed class SmtcSessions
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
     private Timer? _refresh;
     private int _syncPosted;
-    private int _generation;
-    private int _requesting;
-    private int _requestThread = -1;
+    private global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>? _pending;
+    private int _pendingSince;
+    private int _pendingThread = -1;
     private int _nextId = 1;
 
     private SmtcSessions(IEventLoop loop, Log log)
@@ -34,7 +34,9 @@ internal sealed class SmtcSessions
         _loop = loop;
         Log = log;
         _names = new AppNames(loop, log, SmtcSession.DescribeApp, Sync);
-        _ = Start();
+        // Old art is older than a day, so cleaning it does not have to finish before the first read.
+        _ = Task.Run(ArtCache.CleanOld);
+        Post(Begin);
     }
 
     /// <summary>The session list, made on first use. Call on the UI thread.</summary>
@@ -49,20 +51,6 @@ internal sealed class SmtcSessions
     public event Action<SmtcSession>? SessionRemoved;
 
     internal void Post(Action action) => _loop.Post(action);
-
-    private async Task Start()
-    {
-        try
-        {
-            // Art is stored only once there are sessions, so the cleanup has to finish before the first read.
-            await Task.Run(ArtCache.CleanOld).ConfigureAwait(false);
-            Post(Begin);
-        }
-        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException)
-        {
-            Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
-        }
-    }
 
     private void Begin()
     {
@@ -85,20 +73,26 @@ internal sealed class SmtcSessions
     }
 
     /// <summary>
-    /// Asks Windows for a manager on this thread. An older manager, requested before the pumping thread
-    /// existed, does not grow its list when <c>SessionsChanged</c> is skipped.
+    /// Asks Windows for a manager on this thread and reads it here. The completion callback is not delivered
+    /// on a thread that is not pumping messages, so the status is polled instead, and a request that stays
+    /// open is replaced.
     /// </summary>
     private void Sync()
     {
-        var thread = Environment.CurrentManagedThreadId;
-        // A slow request has to finish. Starting another on this same thread drops the result, and under load
-        // none of them land. A different thread is the one that can see the window, so it does replace it.
-        if (Volatile.Read(ref _requesting) == 1 && Volatile.Read(ref _requestThread) == thread)
-            return;
+        if (_pending is { } pending && _pendingThread == Environment.CurrentManagedThreadId)
+        {
+            if (pending.Status == global::Windows.Foundation.AsyncStatus.Completed)
+            {
+                _pending = null;
+                Apply(pending);
+                return;
+            }
+            if (pending.Status == global::Windows.Foundation.AsyncStatus.Started
+                && unchecked(Environment.TickCount - _pendingSince) < 1000)
+                return;
+        }
+        _pending = null;
 
-        var generation = Interlocked.Increment(ref _generation);
-        Volatile.Write(ref _requestThread, thread);
-        Interlocked.Exchange(ref _requesting, 1);
         global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation;
         try
         {
@@ -106,38 +100,28 @@ internal sealed class SmtcSessions
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
-            if (generation == Volatile.Read(ref _generation))
-                Interlocked.Exchange(ref _requesting, 0);
             Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
             return;
         }
 
-        operation.Completed = (completed, status) => Post(() => Finish(completed, status, generation));
-    }
-
-    private void Finish(
-        global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation,
-        global::Windows.Foundation.AsyncStatus status,
-        int generation)
-    {
-        if (generation != Volatile.Read(ref _generation))
-            return;
-        Interlocked.Exchange(ref _requesting, 0);
-        if (status != global::Windows.Foundation.AsyncStatus.Completed)
+        if (operation.Status == global::Windows.Foundation.AsyncStatus.Completed)
         {
-            if (status == global::Windows.Foundation.AsyncStatus.Error)
-            {
-                try
-                {
-                    Log.Warn("media", $"Windows media sessions are not available: {operation.ErrorCode.Message}");
-                }
-                catch (InvalidOperationException)
-                {
-                }
-            }
+            Apply(operation);
             return;
         }
+        if (operation.Status == global::Windows.Foundation.AsyncStatus.Error)
+        {
+            LogUnavailable(operation);
+            return;
+        }
+        _pending = operation;
+        _pendingSince = Environment.TickCount;
+        _pendingThread = Environment.CurrentManagedThreadId;
+        operation.Completed = (_, _) => RequestSync();
+    }
 
+    private void Apply(global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
+    {
         try
         {
             var manager = operation.GetResults();
@@ -147,6 +131,17 @@ internal sealed class SmtcSessions
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
         {
             Log.Warn("media", $"Cannot list media sessions: {e.Message}");
+        }
+    }
+
+    private void LogUnavailable(global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
+    {
+        try
+        {
+            Log.Warn("media", $"Windows media sessions are not available: {operation.ErrorCode.Message}");
+        }
+        catch (InvalidOperationException)
+        {
         }
     }
 
