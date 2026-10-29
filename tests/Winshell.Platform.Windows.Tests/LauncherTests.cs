@@ -437,6 +437,22 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void A_click_selects_and_launches_an_app_and_a_right_click_opens_its_menu()
+    {
+        using var view = Open(dir => ViewQml(Apps(2), Recent(), PinIds(2))
+            .Replace("LauncherView {", "LauncherView { property var launchedName: \"\"; onLaunched: app => launchedName = app.name;"));
+        Click(view, Named(view.Root, "appRow")[1], QtEnums.LeftButton);
+        Assert.Equal(3, Selected(view));
+        Assert.Equal("Recent Two", view.Eval("launchedName"));
+
+        Click(view, Named(view.Root, "pinTile")[1], QtEnums.RightButton);
+        Assert.Equal(1, Selected(view));
+        Assert.True((bool)view.Eval("appMenu.opened")!);
+        Assert.Equal("Pin 1", view.Eval("menuApp.name"));
+        Assert.Equal("Recent Two", view.Eval("launchedName"));
+    }
+
+    [Fact]
     public void Start_icons_decode_at_their_row_size_and_hover_uses_the_secondary_fill()
     {
         using var view = Open(dir => ViewQml(Apps(2), Recent(), PinIds(2)));
@@ -589,6 +605,15 @@ public sealed class LauncherTests
     {
         view.Scene.KeyPress(new KeyEvent { Key = key, Modifiers = modifiers });
         view.Scene.KeyRelease(new KeyEvent { Key = key, Modifiers = modifiers });
+        view.Loop.Process();
+        PolishQueue.Flush();
+    }
+
+    private static void Click(Shell view, Item item, int button)
+    {
+        var point = item.MapToScene(item.Width / 2, item.Height / 2);
+        view.Scene.PointerPress(point.X, point.Y, button);
+        view.Scene.PointerRelease(point.X, point.Y, button);
         view.Loop.Process();
         PolishQueue.Flush();
     }
