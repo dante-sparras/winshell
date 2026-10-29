@@ -54,5 +54,6 @@ internal static class SessionModule
 {
     public static void Register(ModuleRegistry registry) =>
         registry.Module("Winshell")
-            .Singleton(e => new SessionService(e), "Session");
+            .Singleton(e => new SessionService(e), "Session")
+            .Singleton(e => new StartupService(e), "Startup");
 }

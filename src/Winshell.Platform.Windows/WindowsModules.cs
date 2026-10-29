@@ -255,6 +255,13 @@ public static class WindowsModules
         engine.AddService<Services.Input.IHotkeyRegistrar>(platform.Hotkeys);
         engine.AddService<Services.Session.IWorkstationLock>(Services.Session.WindowsWorkstationLock.Instance);
     }
+
+    /// <summary>
+    /// Lets <c>Startup</c> register this <c>winshell.exe</c>, with the arguments it was started with, to run when the
+    /// current user signs in. Without it, <c>Startup.available</c> is false.
+    /// </summary>
+    public static void AddStartup(QmlEngine engine, string exe, IEnumerable<string> args) =>
+        engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.WindowsStartupRegistry(Services.Session.WindowsStartupRegistry.CommandFor(exe, args)));
 }
 
 /// <summary>Where the service modules for Windows register.</summary>
