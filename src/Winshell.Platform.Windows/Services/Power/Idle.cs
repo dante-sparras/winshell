@@ -1,14 +1,16 @@
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
-using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Power;
 
 /// <summary><c>KeepAwake</c>: keeps the screen on and the PC awake while enabled.</summary>
 public sealed class KeepAwake : QObject
 {
+    private const int PowerRequestDisplayRequired = 0;
+    private const int PowerRequestSystemRequired = 1;
+
     private bool _enabled;
-    private ShellWindow? _window;
+    private nint _request;
     private static int _active;
 
     [Qml]
@@ -20,27 +22,62 @@ public sealed class KeepAwake : QObject
             if (!SetField(ref _enabled, value))
                 return;
             _active += value ? 1 : -1;
-            Apply();
+            if (value)
+                Acquire();
+            else
+                Release();
         }
     }
 
-    [Qml]
-    public ShellWindow? Window { get { Track(); return _window; } set => SetField(ref _window, value); }
+    internal static bool AnyActive => _active > 0;
 
-    private static void Apply()
+    /// <summary>Whether this instance holds a power request with Windows.</summary>
+    internal bool HoldsRequest => _request != 0;
+
+    // Each enabled instance holds its own request, and Windows keeps the PC awake while any is held.
+    private unsafe void Acquire()
     {
-        // ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED while any KeepAwake is on.
-        Win32.SetThreadExecutionState(_active > 0 ? 0x80000003 : 0x80000000);
+        const string reason = "Winshell keeps the screen on";
+        nint request;
+        fixed (char* text = reason)
+        {
+            var context = new REASON_CONTEXT { Version = 0, Flags = 1, SimpleReasonString = (nint)text };
+            request = Win32.PowerCreateRequest(ref context);
+        }
+        if (request == -1 || request == 0)
+        {
+            Fail("create");
+            return;
+        }
+        if (!Win32.PowerSetRequest(request, PowerRequestDisplayRequired) || !Win32.PowerSetRequest(request, PowerRequestSystemRequired))
+        {
+            Fail("set");
+            Win32.CloseHandle(request);
+            return;
+        }
+        _request = request;
     }
 
-    internal static bool AnyActive => _active > 0;
+    private void Release()
+    {
+        if (_request == 0)
+            return;
+        Win32.PowerClearRequest(_request, PowerRequestDisplayRequired);
+        Win32.PowerClearRequest(_request, PowerRequestSystemRequired);
+        Win32.CloseHandle(_request);
+        _request = 0;
+    }
+
+    private void Fail(string step) =>
+        (Engine?.Log ?? Log.Default).Warn("power", $"Cannot {step} the power request: Windows error {System.Runtime.InteropServices.Marshal.GetLastPInvokeError()}");
 
     protected override void OnDestroy()
     {
         if (_enabled)
         {
+            _enabled = false;
             _active--;
-            Apply();
+            Release();
         }
     }
 }

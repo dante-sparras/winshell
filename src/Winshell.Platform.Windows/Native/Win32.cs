@@ -144,6 +144,17 @@ internal struct LASTINPUTINFO
     public uint dwTime;
 }
 
+/// <summary>REASON_CONTEXT. Only the simple string is used; the two fields after it pad the union to the size of its Detailed member.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct REASON_CONTEXT
+{
+    public uint Version;
+    public uint Flags;
+    public nint SimpleReasonString;
+    public nint Padding1;
+    public nint Padding2;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal struct SYSTEM_POWER_STATUS
 {
@@ -611,8 +622,16 @@ internal static partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS status);
 
-    [LibraryImport("kernel32.dll")]
-    public static partial uint SetThreadExecutionState(uint flags);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    public static partial nint PowerCreateRequest(ref REASON_CONTEXT context);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PowerSetRequest(nint request, int type);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PowerClearRequest(nint request, int type);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
