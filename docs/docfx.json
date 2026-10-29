@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/v2.81.0/schemas/docfx.schema.json",
   "build": {
     "content": [
       { "files": ["**/*.md", "**/toc.yml"], "exclude": ["agents/**", "_site/**"] }

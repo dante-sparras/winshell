@@ -164,19 +164,25 @@ public sealed class DocsTests
     {
         private readonly HashSet<string> _inline = [.. Inline(document.Root)];
 
-        /// <summary>Unchecked imports, such as <c>import "widgets"</c>, can bring in types this test cannot see.</summary>
+        /// <summary>
+        /// A folder of the configuration, <c>import "widgets"</c> or <c>import config.widgets</c>, can bring in types
+        /// this test cannot see. Members of the types it can see are still checked.
+        /// </summary>
         private readonly bool _open = document.Imports.Any(i => i.Kind == ImportKind.Directory
-            || (i.Kind == ImportKind.Module && !Modules.TryGetModule(i.Uri, out _)));
+            || (i.Kind == ImportKind.Module && IsConfigFolder(i.Uri)));
 
         public void Check(QmlObjectNode node)
         {
-            foreach (var import in document.Imports.Where(i => i.Kind == ImportKind.Module && i.Uri.StartsWith("Winshell", StringComparison.Ordinal)))
+            foreach (var import in document.Imports.Where(i => i.Kind == ImportKind.Module && !IsConfigFolder(i.Uri)))
             {
                 if (!Modules.TryGetModule(import.Uri, out _))
                     problems.Add($"{where}: imports {import.Uri}, which is not a module");
             }
             Visit(node);
         }
+
+        /// <summary><c>config</c> and <c>config.*</c> are folders of the configuration, as the runtime resolves them.</summary>
+        private static bool IsConfigFolder(string uri) => uri == "config" || uri.StartsWith("config.", StringComparison.Ordinal);
 
         public Members? Resolve(string typeName)
         {

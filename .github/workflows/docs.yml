@@ -47,16 +47,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
-        with:
-          args: >-
-            --no-progress
-            --max-retries 4
-            --accept '200..=299,429'
-            --exclude-path 'docs/agents'
-            'docs/**/*.md'
-            README.md
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # The lychee release archive, checked against its SHA-256 before it runs, so a replaced release asset can't
+      # see the token. Dependabot doesn't update this: bump the version and the digest together.
+      - name: Install lychee
+        env:
+          LYCHEE_VERSION: lychee-v0.24.2
+          LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+        run: |
+          archive="$RUNNER_TEMP/lychee.tar.gz"
+          curl --fail --silent --show-error --location --output "$archive" \
+            "https://github.com/lycheeverse/lychee/releases/download/$LYCHEE_VERSION/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$LYCHEE_SHA256  $archive" | sha256sum --check --strict
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/lychee-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      # A rate-limited link (429) is retried after a wait, and fails if it stays limited.
+      - name: Check links
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          lychee
+          --no-progress
+          --max-retries 4
+          --retry-wait-time 10
+          --max-concurrency 4
+          --exclude-path 'docs/agents'
+          'docs/**/*.md'
+          README.md
 
   deploy:
     # Publishes the site to GitHub Pages from main. It is skipped until the maintainer turns Pages on with
