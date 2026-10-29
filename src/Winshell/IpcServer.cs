@@ -44,7 +44,8 @@ internal sealed class IpcServer : IDisposable
     {
         while (!_cancel.IsCancellationRequested)
         {
-            NamedPipeServerStream server;
+            // A cancelled wait, and a failed wait that this loop retries, used to drop the pipe without closing it.
+            NamedPipeServerStream? server = null;
             try
             {
                 server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -52,14 +53,19 @@ internal sealed class IpcServer : IDisposable
             }
             catch (OperationCanceledException)
             {
+                server?.Dispose();
                 return;
             }
             catch (IOException)
             {
+                server?.Dispose();
                 await Task.Delay(100).ConfigureAwait(false);
                 continue;
             }
-            _ = Task.Run(() => Serve(server));
+            if (server is null)
+                continue;
+            var connected = server;
+            _ = Task.Run(() => Serve(connected));
         }
     }
 
@@ -213,7 +219,7 @@ internal sealed class IpcServer : IDisposable
     /// <summary>Sends one request to an instance and returns its responses, one per line.</summary>
     public static async IAsyncEnumerable<IpcResponse> Request(string pipe, IpcRequest request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancel = default)
     {
-        await using var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await using var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await client.ConnectAsync(3000, cancel).ConfigureAwait(false);
         using var reader = new StreamReader(client, Encoding.UTF8);
         await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
