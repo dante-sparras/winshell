@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using SkiaSharp;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
+using WinEvents = Winshell.Platform.Windows.Services.WindowList.NativeMethods;
 
 namespace Winshell.Platform.Windows.Services.Tray;
 
@@ -66,8 +68,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
     internal const uint MediumIntegrity = 0x2000;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
     private static readonly uint ShellIntegrity = IntegrityLevel((uint)Environment.ProcessId);
-    private static readonly Dictionary<nint, TrayHost> Hosts = [];
-    private static readonly HashSet<string> Registered = [];
+    private static readonly ConcurrentDictionary<nint, TrayHost> Hosts = new();
+    private static readonly ConcurrentDictionary<string, byte> Registered = new();
+    private static readonly ConcurrentDictionary<nint, TrayHost> EventHosts = new();
 
     private readonly IEventLoop _loop;
     private readonly Log _log;
@@ -87,6 +90,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private IDisposable? _timer;
     private IDisposable? _answer;
     private readonly TrayCursor _cursor;
+    private readonly List<nint> _eventHooks = [];
 
     /// <param name="broadcast">Asks every app to add its icons again; <see cref="BroadcastTaskbarCreated"/> in a shell.</param>
     public TrayHost(IEventLoop loop, Log log, TrayNames names, Action broadcast)
@@ -128,7 +132,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
             return;
         }
         _waiting = false;
-        if (Registered.Add(_names.Window))
+        if (Registered.TryAdd(_names.Window, 0))
         {
             fixed (char* name = _names.Window)
             {
@@ -161,6 +165,17 @@ internal sealed unsafe partial class TrayHost : IDisposable
         _answered = ExplorerTray();
         UseSettings(TrayIconSettings.Read());
         _settingsWatch = TrayIconSettings.Watch(_loop, () => UseSettings(TrayIconSettings.Read()));
+        foreach (var eventType in new uint[] { 0x0003 /* FOREGROUND */, 0x8004 /* REORDER */ })
+        {
+            var hook = WinEvents.SetWinEventHook(eventType, eventType, 0, &OnOrderChanged, 0, 0, WinEvents.WINEVENT_OUTOFCONTEXT);
+            if (hook != 0)
+            {
+                _eventHooks.Add(hook);
+                EventHosts[hook] = this;
+            }
+            else
+                _log.Warn("tray", "Could not watch taskbar order; the tray will check every thirty seconds.");
+        }
         KeepInFront();
         // Every app adds its icons again, now to this window.
         _broadcast();
@@ -177,9 +192,15 @@ internal sealed unsafe partial class TrayHost : IDisposable
         _cursor.Dispose();
         _settingsWatch?.Dispose();
         _timer = _answer = _settingsWatch = null;
+        foreach (var hook in _eventHooks)
+        {
+            EventHosts.TryRemove(hook, out _);
+            UnhookWinEvent(hook);
+        }
+        _eventHooks.Clear();
         if (_hwnd != 0)
         {
-            Hosts.Remove(_hwnd);
+            Hosts.TryRemove(_hwnd, out _);
             Win32.DestroyWindow(_hwnd);
             _hwnd = 0;
             _owner.ReleaseMutex();
@@ -235,8 +256,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
     public static void BroadcastTaskbarCreated() => Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
 
     /// <summary>
-    /// Keeps this window ahead of Explorer's taskbar, which puts itself in front when used, so apps keep finding it,
-    /// and drops the icons of apps that ended without removing them.
+    /// Drops icons of apps that ended without removing them, and checks the taskbar order as a fallback for a
+    /// missing WinEvent. Order changes normally re-raise the host at once, without a timer.
     /// </summary>
     private void KeepInFront()
     {
@@ -252,9 +273,43 @@ internal sealed unsafe partial class TrayHost : IDisposable
         finally
         {
             if (_hwnd != 0)
-                _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), KeepInFront);
+                _timer = _loop.Schedule(TimeSpan.FromSeconds(30), KeepInFront);
         }
     }
+
+    [UnmanagedCallersOnly]
+    private static void OnOrderChanged(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        // Out-of-context events run on the thread that installed the hook, which owns this host.
+        try
+        {
+            if (idChild != 0 || !EventHosts.TryGetValue(hook, out var host) || host._hwnd == 0)
+                return;
+            var explorer = host.ExplorerTray();
+            // Top-level z-order changes name the desktop's client object, not a child window's OBJID_WINDOW.
+            var desktopOrder = eventType == 0x8004 && idObject == -4 /* OBJID_CLIENT */ && hwnd == GetDesktopWindow();
+            if (explorer == 0 || !desktopOrder && (hwnd != explorer || idObject != 0))
+                return;
+            // A raise causes another reorder event. Only raise when Explorer is actually above this host.
+            for (var above = WinEvents.GetWindow(explorer, 3 /* GW_HWNDPREV */); above != 0; above = WinEvents.GetWindow(above, 3))
+            {
+                if (above == host._hwnd)
+                    return;
+            }
+            host.Raise();
+        }
+        catch (Exception)
+        {
+            // Never let managed code escape the native callback. The thirty-second check remains a fallback.
+        }
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool UnhookWinEvent(nint hook);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint GetDesktopWindow();
 
     private void Raise()
     {

@@ -4,7 +4,7 @@ Monitors, workspaces and windows from Winland, a separate window manager for Win
 
 `import Winshell.Winland`
 
-Winshell connects to the pipe named by the `WINLAND_PIPE` environment variable, or else `\\.\pipe\winland-<session id>`, then `\\.\pipe\winland` for older Winland builds. It only talks to a Winland in its own Windows session. While Winland is not running the lists are empty; Winshell looks for it every three seconds and fills them when it starts, and empties them again when it exits.
+Winshell connects to the pipe named by the `WINLAND_PIPE` environment variable, or else `\\.\pipe\winland-<session id>`, then `\\.\pipe\winland` for older Winland builds. It only talks to a Winland in its own Windows session. While Winland is not running the lists are empty. Winshell looks for it after three seconds, then twice as long each time, up to every thirty seconds. It fills the lists when Winland starts and empties them again when it exits.
 
 ## Winland
 

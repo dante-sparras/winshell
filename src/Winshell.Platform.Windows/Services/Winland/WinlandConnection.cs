@@ -8,12 +8,14 @@ namespace Winshell.Platform.Windows.Services.Winland;
 
 /// <summary>
 /// The one connection to Winland for the whole process: its event stream, and a fresh pipe connection per request.
-/// While Winland is not running it looks for the pipe every few seconds. Its events are raised on a background
-/// thread, in order; each engine's <see cref="WinlandService"/> posts them to its own loop.
+/// While Winland is not running it looks for the pipe after 3 s, then twice as long each time, up to every 30 s. Its
+/// events are raised on a background thread, in order; each engine's <see cref="WinlandService"/> posts them to its
+/// own loop.
 /// </summary>
 internal static partial class WinlandConnection
 {
-    private static readonly TimeSpan Poll = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan FirstPoll = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan LastPoll = TimeSpan.FromSeconds(30);
     private static readonly int SessionId = Process.GetCurrentProcess().SessionId;
     private static readonly IReadOnlyList<string> Candidates = WinlandProtocol.PipeNames(Environment.GetEnvironmentVariable("WINLAND_PIPE"), SessionId);
     private static readonly object LogsLock = new();
@@ -61,6 +63,7 @@ internal static partial class WinlandConnection
 
     private static async Task FollowEvents()
     {
+        var poll = FirstPoll;
         while (true)
         {
             var lost = false;
@@ -98,10 +101,15 @@ internal static partial class WinlandConnection
                 lost = true;
                 break;
             }
-            // Winland drops a subscriber that falls behind, so a lost stream is tried again at once.
-            await Task.Delay(lost ? TimeSpan.FromMilliseconds(250) : Poll).ConfigureAwait(false);
+            // Winland drops a subscriber that falls behind, so a lost stream is tried again at once, then from 3 s.
+            var wait = lost ? TimeSpan.FromMilliseconds(250) : poll;
+            poll = lost ? FirstPoll : NextPoll(poll);
+            await Task.Delay(wait).ConfigureAwait(false);
         }
     }
+
+    /// <summary>The wait after <paramref name="poll"/> finds no Winland: twice as long, at most 30 s.</summary>
+    internal static TimeSpan NextPoll(TimeSpan poll) => poll * 2 < LastPoll ? poll * 2 : LastPoll;
 
     /// <summary>Sends one request and reads its reply. Null when Winland is not running or does not answer.</summary>
     public static async Task<string?> RequestAsync(string command)

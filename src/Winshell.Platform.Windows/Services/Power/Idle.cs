@@ -85,13 +85,19 @@ public sealed class IdleMonitor : QObject
     {
         if (IsDestroyed || Engine is null)
             return;
+        // A change to Enabled or Timeout schedules again, so a monitor that cannot be idle does not poll.
+        if (!_enabled || _timeout <= 0)
+        {
+            SetField(ref _isIdle, false, nameof(IsIdle));
+            return;
+        }
         var next = TimeSpan.FromSeconds(1);
         try
         {
-            var idle = _enabled && _timeout > 0 && IdleSeconds() >= _timeout && !(_respectKeepAwake && KeepAwake.AnyActive);
+            var seconds = IdleSeconds();
+            var idle = seconds >= _timeout && !(_respectKeepAwake && KeepAwake.AnyActive);
             SetField(ref _isIdle, idle, nameof(IsIdle));
-            // Poll faster while idle, so the end of idleness shows quickly.
-            next = idle ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromSeconds(Math.Clamp(_timeout - IdleSeconds(), 0.25, 5));
+            next = NextCheck(idle, _timeout - seconds);
         }
 #pragma warning disable CA1031 // A failed idle read must not stop the poll.
         catch (Exception e)
@@ -105,6 +111,13 @@ public sealed class IdleMonitor : QObject
                 _timer = Engine.Loop.Schedule(next, Check);
         }
     }
+
+    /// <summary>
+    /// When to look again. Before the timeout, at the moment it can pass, at most 5 s ahead. Once idle, or held
+    /// awake past it, once a second.
+    /// </summary>
+    internal static TimeSpan NextCheck(bool idle, double remaining) =>
+        !idle && remaining > 0 ? TimeSpan.FromSeconds(Math.Clamp(remaining, 0.25, 5)) : TimeSpan.FromSeconds(1);
 
     protected override void OnDestroy() => _timer?.Dispose();
 }

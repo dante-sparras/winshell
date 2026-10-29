@@ -6,7 +6,7 @@ Reads Windows Notification Center, reports Focus and Do Not Disturb, and sends n
 
 ## NotificationListener
 
-A view of Windows Notification Center. Create one with `NotificationListener { }`; each listener has its own view and reads the full Windows snapshot every two seconds. Loading it checks access without prompting.
+A view of Windows Notification Center. Create one with `NotificationListener { }`; each listener has its own view and reads the full Windows snapshot every ten seconds, and at once when Windows reports a toast change to a packaged shell. Loading it checks access without prompting.
 
 | Member | Type | Description |
 | --- | --- | --- |
