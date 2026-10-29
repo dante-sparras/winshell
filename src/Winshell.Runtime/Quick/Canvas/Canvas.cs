@@ -68,22 +68,42 @@ public sealed class Canvas : Item
 
     [Qml] public QSize TileSize { get => CanvasSize; set { } }
 
-    /// <summary>The surface the context draws on, in device pixels, made again when the size changes.</summary>
+    private const int MaxSurfaceSide = 16384;
+    private const double MaxSurfacePixels = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// The surface size in pixels and the pixels per canvas unit: the device pixel ratio, lowered so the surface
+    /// stays within 16384 pixels a side and 64 megapixels.
+    /// </summary>
+    private (int W, int H, double Dpr) SurfaceKey()
+    {
+        var size = CanvasSize;
+        if (!(size.Width > 0 && size.Height > 0 && double.IsFinite(size.Width) && double.IsFinite(size.Height)))
+            return default;
+        var dpr = Host?.DevicePixelRatio ?? 1;
+        var scale = Math.Min(Math.Min(dpr, MaxSurfaceSide / size.Width), Math.Min(MaxSurfaceSide / size.Height, Math.Sqrt(MaxSurfacePixels / (size.Width * size.Height))));
+        var w = (int)Math.Clamp(Math.Ceiling(size.Width * scale), 1, MaxSurfaceSide);
+        var h = (int)Math.Clamp(Math.Ceiling(size.Height * scale), 1, MaxSurfaceSide);
+        return (w, h, scale);
+    }
+
+    /// <summary>The surface the context draws on, in pixels, made again when the size changes.</summary>
     internal SKSurface? Surface
     {
         get
         {
-            var dpr = Host?.DevicePixelRatio ?? 1;
-            var size = CanvasSize;
-            var w = (int)Math.Ceiling(size.Width * dpr);
-            var h = (int)Math.Ceiling(size.Height * dpr);
-            if (w <= 0 || h <= 0)
+            var key = SurfaceKey();
+            if (key.W <= 0)
                 return null;
-            if (_surface is null || _surfaceKey != (w, h, dpr))
+            if (_surfaceKey != key)
             {
                 _surface?.Dispose();
-                _surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul));
-                _surfaceKey = (w, h, dpr);
+                _surface = SKSurface.Create(new SKImageInfo(key.W, key.H, SKColorType.Rgba8888, SKAlphaType.Premul));
+                _surfaceKey = key;
+                if (key.Dpr < (Host?.DevicePixelRatio ?? 1))
+                    Engine?.Log.Warn("scene", $"Canvas: {CanvasSize.Width}x{CanvasSize.Height} is over the surface cap; drawn at {key.W}x{key.H} pixels");
+                if (_surface is null)
+                    Engine?.Log.Warn("scene", $"Canvas: could not make a {key.W}x{key.H} surface");
                 _surface?.Canvas.Clear(SKColors.Transparent);
                 _context?.OnSurfaceChanged();
             }
@@ -91,6 +111,7 @@ public sealed class Canvas : Item
         }
     }
 
+    /// <summary>Surface pixels per canvas unit.</summary>
     internal double PixelRatio => _surfaceKey.Dpr <= 0 ? 1 : _surfaceKey.Dpr;
 
     [Qml]
@@ -196,19 +217,21 @@ public sealed class Canvas : Item
     [Qml]
     public bool IsImageError(string url) => _images.TryGetValue(url, out var i) && i is null;
 
+    /// <summary>Writes what has been drawn as a PNG. A relative path is next to the QML file, as an image source is.</summary>
     [Qml]
     public bool Save(string filename)
     {
-        if (_surface is null)
+        var path = ImageLoader.LocalPath(filename ?? "", CreationContext?.Imports?.Directory ?? Engine?.ShellDir);
+        if (_surface is null || path is null)
             return false;
         using var image = _surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         try
         {
-            File.WriteAllBytes(filename, data.ToArray());
+            File.WriteAllBytes(path, data.ToArray());
             return true;
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return false;
         }
@@ -238,7 +261,7 @@ public sealed class Canvas : Item
     protected override void OnGeometryChanged()
     {
         base.OnGeometryChanged();
-        if (IsComplete && (_surface is null || _surfaceKey.W != (int)Math.Ceiling(CanvasSize.Width * PixelRatio) || _surfaceKey.H != (int)Math.Ceiling(CanvasSize.Height * PixelRatio)))
+        if (IsComplete && SurfaceKey() != _surfaceKey)
             RequestPaint();
     }
 
@@ -1117,15 +1140,18 @@ public sealed class Context2D : QObject
 
     // Images
 
-    private SKImage? ImageOf(object? image, out bool owned)
+    /// <summary>The image to draw and its pixels per canvas unit: a canvas's surface is in device pixels.</summary>
+    private SKImage? ImageOf(object? image, out bool owned, out float scale)
     {
         owned = false;
+        scale = 1;
         switch (ValueConverter.Unwrap(image))
         {
             case string url:
                 return _canvas.ImageFor(url);
             case Canvas other:
                 owned = true;
+                scale = (float)other.PixelRatio;
                 return other.Snapshot();
             case Image item:
                 return item.CurrentImage;
@@ -1139,26 +1165,25 @@ public sealed class Context2D : QObject
     public void DrawImage(object? image, params object?[] args)
     {
         var target = Target;
-        var img = ImageOf(image, out var owned);
+        var img = ImageOf(image, out var owned, out var scale);
         if (target is null || img is null)
             return;
         try
         {
             var n = args.Select(a => (float)ValueConverter.ToDouble(a, "real")).ToArray();
-            SKRect src, dst;
+            var src = SKRect.Create(0, 0, img.Width, img.Height);
+            SKRect dst;
             switch (n.Length)
             {
                 case >= 8:
-                    src = SKRect.Create(n[0], n[1], n[2], n[3]);
+                    src = SKRect.Create(n[0] * scale, n[1] * scale, n[2] * scale, n[3] * scale);
                     dst = SKRect.Create(n[4], n[5], n[6], n[7]);
                     break;
                 case >= 4:
-                    src = SKRect.Create(0, 0, img.Width, img.Height);
                     dst = SKRect.Create(n[0], n[1], n[2], n[3]);
                     break;
                 case >= 2:
-                    src = SKRect.Create(0, 0, img.Width, img.Height);
-                    dst = SKRect.Create(n[0], n[1], img.Width, img.Height);
+                    dst = SKRect.Create(n[0], n[1], img.Width / scale, img.Height / scale);
                     break;
                 default:
                     return;
