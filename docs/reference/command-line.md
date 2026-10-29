@@ -45,7 +45,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | `-i`, `--id <id>` | The instance with this id, or the one whose id starts with it |
 | `--pid <pid>` | The instance with this process id |
 | `-p`, `--path`, `-c`, `--config` | The instance running that configuration |
-| None | The first instance `winshell list` shows |
+| None | The only running instance. With several, the command exits with 2 and lists them. |
 
 ## Commands
 

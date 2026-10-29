@@ -397,7 +397,8 @@ namespace Winshell
                         winshell kill [--force] [-i <id> | --pid <pid> | -c <name> | -p <path>]
                           Asks one running instance to exit, then waits until that process has exited.
                           --force ends the process when it does not exit.
-                          With no selector, the newest running instance is used.
+                          With one running instance and no selector, that instance is used.
+                          With several, this exits and lists them.
                         """);
                     return;
                 case "log":
@@ -405,6 +406,8 @@ namespace Winshell
                         winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
                           Prints an instance's log. -t, --tail <n> prints the last n lines.
                           -f, --follow keeps printing new lines. winshell log <file> prints that file.
+                          With one running instance and no selector, that instance is used.
+                          With several, this exits and lists them.
                           With nothing running and no selector, the log of a stopped instance is printed.
                         """);
                     return;
@@ -1009,30 +1012,56 @@ namespace Winshell
             public IReadOnlyList<DoctorCheck> Run() => Platform.Windows.Diagnostics.Doctor.Run(context());
         }
 
-        private static (InstanceInfo? Info, string? Error) Select(Options o, bool includeDead = false)
+        private static InstanceChoice Select(Options o, bool includeDead = false)
         {
-            var instances = Instances.List(includeDead);
+            var instances = Instances.List(includeDead).Select(i => i.Info).ToList();
             if (o.Pid is { } pid)
-                return (instances.FirstOrDefault(i => i.Info.Pid == pid).Info, $"No instance with process id {pid}");
+            {
+                var match = instances.FirstOrDefault(i => i.Pid == pid);
+                return match is null ? InstanceChoice.Miss($"No instance with process id {pid}") : InstanceChoice.Found(match);
+            }
             if (o.Id is { } id)
             {
-                var matches = instances.Where(i => i.Info.Id.StartsWith(id, StringComparison.OrdinalIgnoreCase)).ToList();
+                var matches = instances.Where(i => i.Id.StartsWith(id, StringComparison.OrdinalIgnoreCase)).ToList();
                 return matches.Count switch
                 {
-                    1 => (matches[0].Info, null),
-                    0 => (null, $"No instance with id {id}"),
-                    _ => (null, $"Several instances start with {id}"),
+                    1 => InstanceChoice.Found(matches[0]),
+                    0 => InstanceChoice.Miss($"No instance with id {id}"),
+                    _ => InstanceChoice.Miss($"Several instances start with {id}"),
                 };
             }
             if (o.Path is not null || o.Config is not null)
             {
                 var root = ResolveConfig(o, out var error);
                 if (root is null)
-                    return (null, error);
-                var match = instances.FirstOrDefault(i => string.Equals(i.Info.ConfigPath, root, StringComparison.OrdinalIgnoreCase)).Info;
-                return (match, $"No running instance of {root}");
+                    return InstanceChoice.Miss(error);
+                var match = instances.FirstOrDefault(i => string.Equals(i.ConfigPath, root, StringComparison.OrdinalIgnoreCase));
+                return match is null ? InstanceChoice.Miss($"No running instance of {root}") : InstanceChoice.Found(match);
             }
-            return (instances.FirstOrDefault().Info, "No running instances");
+            return ChooseUnselected(instances);
+        }
+
+        /// <summary>
+        /// The instance a command with no selector acts on. One instance is that one. Several is a command-line
+        /// error: kill, log and ipc must not guess.
+        /// </summary>
+        internal static InstanceChoice ChooseUnselected(IReadOnlyList<InstanceInfo> instances)
+        {
+            if (instances.Count > 1)
+            {
+                var listed = string.Join(", ", instances.Select(i => $"{i.Id} ({i.ConfigPath})"));
+                return InstanceChoice.Wrong($"Several instances are running; pick one with -i: {listed}");
+            }
+            return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss("No running instances");
+        }
+
+        internal readonly record struct InstanceChoice(InstanceInfo? Info, string? Error, int Code)
+        {
+            public static InstanceChoice Found(InstanceInfo info) => new(info, null, 0);
+
+            public static InstanceChoice Miss(string? error) => new(null, error, 1);
+
+            public static InstanceChoice Wrong(string error) => new(null, error, 2);
         }
 
         private static int List(Options o)
@@ -1062,11 +1091,11 @@ namespace Winshell
 
         private static async Task<int> Kill(Options o)
         {
-            var (info, error) = Select(o);
-            if (info is null)
+            var choice = Select(o);
+            if (choice.Info is not { } info)
             {
-                Console.Error.WriteLine(error);
-                return 1;
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
             }
             // Null once the instance has accepted the kill. No answer is a failure too.
             string? failure = $"Instance {info.Id} closed the control pipe without answering.";
@@ -1151,17 +1180,24 @@ namespace Winshell
             string? path = o.Positional.FirstOrDefault();
             if (path is null)
             {
-                var (info, error) = Select(o);
-                if (info is null)
+                var choice = Select(o);
+                if (choice.Info is not { } info)
                 {
+                    // Several running instances is a command-line error, not a reason to show a stopped log.
+                    if (choice.Code == 2)
+                    {
+                        Console.Error.WriteLine(choice.Error);
+                        return 2;
+                    }
                     // A selector can name an instance that stopped, but never gets a different one instead.
                     var selected = o.Pid is not null || o.Id is not null || o.Path is not null || o.Config is not null;
-                    info = selected ? Select(o, includeDead: true).Info : Instances.List(true).FirstOrDefault().Info;
-                    if (info is null)
+                    var stopped = selected ? Select(o, includeDead: true).Info : Instances.List(true).FirstOrDefault().Info;
+                    if (stopped is null)
                     {
-                        Console.Error.WriteLine(error);
-                        return 1;
+                        Console.Error.WriteLine(choice.Error);
+                        return choice.Code;
                     }
+                    info = stopped;
                     Console.Error.WriteLine($"Showing the log of stopped instance {info.Id}.");
                 }
                 path = info.Log;
@@ -1200,11 +1236,11 @@ namespace Winshell
                 Console.Error.WriteLine("winshell ipc needs a command: show, call, prop get, wait or listen.");
                 return 2;
             }
-            var (info, error) = Select(o);
-            if (info is null)
+            var choice = Select(o);
+            if (choice.Info is not { } info)
             {
-                Console.Error.WriteLine(error);
-                return 1;
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
             }
             IpcRequest request = args[0] switch
             {
