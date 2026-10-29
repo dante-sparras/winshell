@@ -164,18 +164,54 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The gallery nupkgs, checked against their SHA-256 before they are imported, so a replaced package can't run.
+      # Dependabot doesn't update these: bump the version and the digest together.
       - name: Install Pester and PSScriptAnalyzer
         shell: pwsh
+        env:
+          PESTER_VERSION: 5.6.1
+          PESTER_SHA256: 37b3749f69accead67c366d81508977f62afc7cbb9c4db88c3a255a1f0b20da5
+          PSSCRIPTANALYZER_VERSION: 1.22.0
+          PSSCRIPTANALYZER_SHA256: 71bfb9eb58e19d4b662f4494a7d572a724b60e0588848dcff34195a0e08ae1be
         run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
           $dest = Join-Path $env:RUNNER_TEMP 'psmodules'
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          $policy = (Get-PSRepository PSGallery).InstallationPolicy
-          if ($policy -ne 'Trusted') { Set-PSRepository PSGallery -InstallationPolicy Trusted }
-          try {
-            Save-Module Pester -RequiredVersion 5.6.1 -Path $dest -Repository PSGallery
-            Save-Module PSScriptAnalyzer -RequiredVersion 1.22.0 -Path $dest -Repository PSGallery
-          } finally {
-            if ($policy -ne 'Trusted') { Set-PSRepository PSGallery -InstallationPolicy $policy }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $modules = @(
+            @{ Name = 'Pester'; Version = $env:PESTER_VERSION; Sha256 = $env:PESTER_SHA256 }
+            @{ Name = 'PSScriptAnalyzer'; Version = $env:PSSCRIPTANALYZER_VERSION; Sha256 = $env:PSSCRIPTANALYZER_SHA256 }
+          )
+          foreach ($module in $modules) {
+            $nupkg = Join-Path $env:RUNNER_TEMP "$($module.Name).$($module.Version).nupkg"
+            Invoke-WebRequest -Uri "https://www.powershellgallery.com/api/v2/package/$($module.Name)/$($module.Version)" -OutFile $nupkg
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $nupkg).Hash
+            if (-not $hash.Equals($module.Sha256, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "$($module.Name) $($module.Version) SHA-256 is $hash, expected $($module.Sha256)."
+            }
+            $root = Join-Path $dest (Join-Path $module.Name $module.Version)
+            New-Item -ItemType Directory -Force -Path $root | Out-Null
+            $rootFull = [IO.Path]::GetFullPath($root)
+            if (-not $rootFull.EndsWith('\')) { $rootFull += '\' }
+            $zip = [IO.Compression.ZipFile]::OpenRead($nupkg)
+            try {
+              foreach ($entry in $zip.Entries) {
+                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
+                $name = $entry.FullName.Replace('\', '/')
+                if ($name -eq '[Content_Types].xml' -or $name.StartsWith('_rels/') -or $name.StartsWith('package/') -or $name.EndsWith('.nuspec')) { continue }
+                if ($name.Contains('..')) { throw "The nupkg path escapes the module folder: $name" }
+                $target = [IO.Path]::GetFullPath((Join-Path $root ($name.Replace('/', [IO.Path]::DirectorySeparatorChar))))
+                if (-not $target.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
+                  throw "The nupkg path escapes the module folder: $name"
+                }
+                $parent = Split-Path -Parent $target
+                if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+              }
+            } finally {
+              $zip.Dispose()
+            }
           }
       - name: PSScriptAnalyzer
         shell: pwsh
