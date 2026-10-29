@@ -181,8 +181,7 @@ internal static class Globals
         {
             var text = Str(a, 0, "");
             var parent = a.Length > 1 ? ValueConverter.FromJs(a[1]) as QObject : null;
-            var path = Path.Combine(qml.ShellDir ?? Environment.CurrentDirectory, $"__inline_{Guid.NewGuid():N}.qml");
-            var doc = qml.LoadDocumentFromText(text, path);
+            var doc = qml.LoadInline(text, qml.ShellDir ?? Environment.CurrentDirectory);
             var obj = new QmlComponent(qml, doc).Create(parent, null, null);
             return runtime.Wrap(obj);
         });
