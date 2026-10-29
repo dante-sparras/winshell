@@ -770,13 +770,46 @@ public sealed class PropertyAction : AnimationBase
 
     public override double DurationMs => 0;
 
+    /// <summary>The state changes this action applies when a Transition reaches it.</summary>
+    internal List<(QObject Target, string Property, object? To)> TransitionTracks { get; } = [];
+
+    /// <summary>Whether this action sets a property: its target and property name it, or name nothing.</summary>
+    internal bool Animates(QObject target, string property)
+    {
+        if (Target is not null && !ReferenceEquals(Target, target))
+            return false;
+        if (Property.Length == 0)
+            return true;
+        return Property == property;
+    }
+
     internal override void Apply(double progress)
     {
-        if (progress < 1 || Target is null || Property.Length == 0 || Value is null)
+        if (progress < 1)
+            return;
+        if (TransitionTracks.Count > 0)
+        {
+            foreach (var (target, property, to) in TransitionTracks)
+                Write(target, property, UsesValue(target, property) ? Value : to);
+            return;
+        }
+        if (Target is null || Property.Length == 0 || Value is null)
+            return;
+        Write(Target, Property, Value);
+    }
+
+    private bool UsesValue(QObject target, string property) =>
+        Value is not null
+        && (Property.Length == 0 || Property == property)
+        && (Target is null || ReferenceEquals(Target, target));
+
+    private void Write(QObject target, string property, object? value)
+    {
+        if (target.IsDestroyed || property.Length == 0 || !target.HasProperty(property))
             return;
         try
         {
-            Target.WritePropertyDirect(Property, Value);
+            target.WritePropertyDirect(property, value);
         }
 #pragma warning disable CA1031 // A bad write is a script error, not a dead clock.
         catch (Exception e)
