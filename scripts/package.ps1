@@ -5,7 +5,8 @@
 #   pwsh scripts/package.ps1 -Pack            only packs what artifacts/publish/ already has
 #   pwsh scripts/package.ps1 -Verify          only checks what artifacts/ already has
 #
-# Publishing is a self-contained build of src/Winshell for each runtime, so no .NET install is needed.
+# Publishing is a self-contained build of src/Winshell for each runtime, so no .NET install is needed. It names
+# -Repository as where the build is released, so it updates itself from that repository's GitHub Releases.
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
 # and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
 # from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
@@ -114,7 +115,7 @@ if ($Publish) {
         $dir = Assert-Inside (Join-Path $publishRoot $rid) $publishRoot
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         dotnet publish (Join-Path $root 'src/Winshell/Winshell.csproj') --nologo -c Release -r $rid --self-contained `
-            "-p:Version=$Version" -o $dir
+            "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
         # SkiaSharp and HarfBuzz ship their native symbols, over 100 MB. Winshell's own symbols stay, for stack traces in logs.
         Get-ChildItem -LiteralPath $dir -Filter 'lib*.pdb' | Remove-Item -Force

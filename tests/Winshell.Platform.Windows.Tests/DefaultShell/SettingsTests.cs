@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SkiaSharp;
 using Winshell.Platform.Windows.Services.Session;
+using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Quick.Controls;
@@ -678,6 +679,87 @@ public class SettingsTests
         // The harness has no config folder or log, so there is nothing to open.
         Assert.False(shell.Find("openConfigFolder").Enabled);
         Assert.False(shell.Find("openLog").Enabled);
+    }
+
+    [Fact]
+    public void A_build_that_does_not_update_itself_says_so_on_About()
+    {
+        using var shell = Open();
+        Show(shell, "about");
+        Assert.Equal("This build of Winshell does not update itself", Card(shell, "winshellUpdates").ReadProperty("description"));
+        // No button to check with: Find only finds visible items.
+        Assert.Throws<InvalidOperationException>(() => shell.Find("updateNow"));
+        var automatic = Control<Switch>(shell, "autoUpdate");
+        Assert.False(automatic.Enabled);
+        Assert.False(automatic.Checked);
+    }
+
+    [Fact]
+    public void About_shows_a_ready_update_and_Restart_now_installs_it()
+    {
+        using var updates = new StagedUpdate("0.6.0");
+        using var shell = Open(configure: e => WindowsModules.AddUpdates(e, updates.Updater));
+        Show(shell, "about");
+
+        Assert.Equal("Winshell 0.6.0 is ready. Restart Winshell to finish updating", Card(shell, "winshellUpdates").ReadProperty("description"));
+        var button = shell.Find("updateNow");
+        Assert.Equal("Restart now", button.ReadProperty("text"));
+        shell.Click(button);
+        Assert.Equal(1, updates.Restarts);
+    }
+
+    [Fact]
+    public void Restart_now_says_so_when_another_Winshell_runs_and_does_not_restart()
+    {
+        using var updates = new StagedUpdate("0.6.0") { Refusal = "Another Winshell is running. Close it, then restart this one." };
+        using var shell = Open(configure: e => WindowsModules.AddUpdates(e, updates.Updater));
+        Show(shell, "about");
+        var button = shell.Find("updateNow");
+
+        shell.Click(button);
+        Assert.Equal(0, updates.Restarts);
+        Assert.Equal("Another Winshell is running. Close it, then restart this one.", Card(shell, "winshellUpdates").ReadProperty("description"));
+        // Still ready: once the other one is closed, the same button restarts.
+        Assert.Equal("Restart now", button.ReadProperty("text"));
+        updates.Refusal = null;
+        shell.Click(button);
+        Assert.Equal(1, updates.Restarts);
+    }
+
+    [Fact]
+    public void Checking_for_updates_says_why_it_failed()
+    {
+        using var updates = new StagedUpdate(null);
+        using var shell = Open(configure: e => WindowsModules.AddUpdates(e, updates.Updater));
+        Show(shell, "about");
+        Assert.Equal("Get the newest Winshell from GitHub", Card(shell, "winshellUpdates").ReadProperty("description"));
+        var button = shell.Find("updateNow");
+        Assert.Equal("Check for updates", button.ReadProperty("text"));
+
+        shell.Click(button);
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (updates.Updater.State.Status != UpdateStatus.Failed && DateTime.UtcNow < until)
+            Thread.Sleep(20);
+        shell.Settle();
+        Assert.Equal("Winshell could not check for updates: No such host is known.", Card(shell, "winshellUpdates").ReadProperty("description"));
+        Assert.True(button.Enabled);
+    }
+
+    [Fact]
+    public void Automatic_updates_are_on_until_turned_off_and_the_choice_is_kept()
+    {
+        using var updates = new StagedUpdate(null);
+        using var shell = Open(configure: e => WindowsModules.AddUpdates(e, updates.Updater));
+        Show(shell, "about");
+        var automatic = Control<Switch>(shell, "autoUpdate");
+        Assert.True(automatic.Enabled);
+        Assert.True(automatic.Checked);
+        Assert.True(updates.Updater.Automatic);
+
+        shell.Click(automatic);
+        Assert.False(automatic.Checked);
+        Assert.False(updates.Updater.Automatic);
+        Assert.False(Saved(shell).GetProperty("autoUpdate").GetBoolean());
     }
 
     [Fact]

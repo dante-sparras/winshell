@@ -3,7 +3,7 @@ import Winshell.Theme
 import QtQuick
 import QtQuick.Controls
 
-// About: the version, the config folder and this instance's log, each a click away.
+// About: the version and Winshell's updates, the config folder and this instance's log, each a click away.
 Column {
   id: root
 
@@ -22,6 +22,50 @@ Column {
       Accessible.name: "Copy the version"
       onClicked: Shell.clipboardText = "Winshell " + Shell.version
       onActiveFocusChanged: if (activeFocus) version.reveal()
+    }
+  }
+
+  // Windows Update's words, for Winshell's own updates. A packaged or source build says who updates it instead.
+  SettingsCard {
+    id: updates
+    key: "winshellUpdates"
+    readonly property bool busy: Updates.status === UpdateStatus.Checking || Updates.status === UpdateStatus.Downloading
+    description: !Updates.available ? (Updates.packaged
+        ? "Updates come from where you installed Winshell, such as the Microsoft Store"
+        : "This build of Winshell does not update itself")
+      : Updates.status === UpdateStatus.Checking ? "Checking for updates…"
+      : Updates.status === UpdateStatus.UpToDate ? "You're up to date"
+      : Updates.status === UpdateStatus.Downloading ? "Downloading Winshell " + Updates.version + "…"
+      : Updates.status === UpdateStatus.Ready ? (Updates.error !== "" ? Updates.error
+        : "Winshell " + Updates.version + " is ready. Restart Winshell to finish updating")
+      : Updates.status === UpdateStatus.Failed ? Updates.error
+      : "Get the newest Winshell from GitHub"
+    focusTarget: Updates.available ? updateButton : null
+
+    Button {
+      id: updateButton
+      objectName: "updateNow"
+      visible: Updates.available
+      enabled: !updates.busy
+      text: Updates.status === UpdateStatus.Ready ? "Restart now" : "Check for updates"
+      Accessible.name: Updates.status === UpdateStatus.Ready ? "Restart Winshell to update" : "Check for Winshell updates"
+      onClicked: Updates.status === UpdateStatus.Ready ? Updates.restart() : Updates.check()
+      onActiveFocusChanged: if (activeFocus) updates.reveal()
+    }
+  }
+
+  SettingsCard {
+    id: automatic
+    key: "autoUpdate"
+    focusTarget: automaticSwitch.control
+
+    SettingsSwitch {
+      id: automaticSwitch
+      card: automatic
+      name: automatic.title
+      enabled: Updates.available
+      checked: Updates.available && Preferences.autoUpdate
+      onToggled: on => Preferences.autoUpdate = on
     }
   }
 

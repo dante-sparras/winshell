@@ -9,6 +9,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
+  <!-- scripts/package.ps1 names the repository a release build comes from. A build with it updates itself from that
+       repository's GitHub Releases; a build from source has none and never does. -->
+  <ItemGroup Condition="'$(WinshellReleaseRepository)' != ''">
+    <AssemblyMetadata Include="WinshellReleaseRepository" Value="$(WinshellReleaseRepository)" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Winshell.Platform.Windows\Winshell.Platform.Windows.csproj" />
   </ItemGroup>

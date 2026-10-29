@@ -52,6 +52,8 @@ var settings = [
   { key: "startupApps", page: "startup", glyph: "\uE7E8", title: "Startup apps in Windows", description: "Windows can turn off an app that runs at sign-in", keywords: "startup apps", uri: "ms-settings:startupapps" },
 
   { key: "version", page: "about", glyph: "\uE946", title: "Version", description: "", keywords: "about release" },
+  { key: "winshellUpdates", page: "about", glyph: "\uE895", title: "Winshell updates", description: "", keywords: "update upgrade new version download restart check" },
+  { key: "autoUpdate", page: "about", glyph: "\uE896", title: "Get Winshell updates automatically", description: "Download a new version in the background. It installs when Winshell next starts.", keywords: "update upgrade automatic download" },
   { key: "configFolder", page: "about", glyph: "\uE8B7", title: "Config folder", description: "", keywords: "configuration folder appdata files preferences" },
   { key: "log", page: "about", glyph: "\uE9F9", title: "Log", description: "What this instance of Winshell reported", keywords: "logs log file errors debug" }
 ]

@@ -262,6 +262,9 @@ public static class WindowsModules
     /// </summary>
     public static void AddStartup(QmlEngine engine, string exe, IEnumerable<string> args) =>
         engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.WindowsStartupRegistry(Services.Session.WindowsStartupRegistry.CommandFor(exe, args)));
+
+    /// <summary>Lets <c>Updates</c> follow the process's updater. Without one, <c>Updates.available</c> is false.</summary>
+    public static void AddUpdates(QmlEngine engine, Services.Updates.Updater updater) => engine.AddService(updater);
 }
 
 /// <summary>Where the service modules for Windows register.</summary>
@@ -280,5 +283,6 @@ public static class ServiceModules
         Services.Notifications.NotificationModule.Register(registry);
         Services.Capture.CaptureModule.Register(registry);
         Services.Input.InputModule.Register(registry);
+        Services.Updates.UpdatesService.Register(registry);
     }
 }

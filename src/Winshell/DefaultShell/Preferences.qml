@@ -37,6 +37,9 @@ Singleton {
   property alias startHotkey: adapter.startHotkey
   property alias settingsHotkey: adapter.settingsHotkey
 
+  // Check for, download and install Winshell updates by itself. Only a portable Winshell updates itself.
+  property alias autoUpdate: adapter.autoUpdate
+
   readonly property int material: backdrop === "mica" ? WindowEffects.Mica : WindowEffects.Acrylic
   readonly property bool validAccent: /^#[0-9a-fA-F]{6}$/.test(accentColor)
   readonly property string appsOn: ["all", "main", "where"].includes(taskbarAppsOn) ? taskbarAppsOn : "all"
@@ -58,6 +61,12 @@ Singleton {
   function setNotificationsFrom(appId, appName, shown) {
     const rest = hiddenApps.filter(app => app.id !== appId)
     hiddenNotificationApps = shown ? rest : rest.concat([{ id: appId, name: appName }])
+  }
+
+  Binding {
+    target: Updates
+    property: "automatic"
+    value: root.autoUpdate
   }
 
   Binding {
@@ -96,6 +105,7 @@ Singleton {
       property var hiddenNotificationApps: []
       property string startHotkey: "Win"
       property string settingsHotkey: ""
+      property bool autoUpdate: true
     }
   }
 }

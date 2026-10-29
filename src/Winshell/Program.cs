@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Winshell;
 using Winshell.Platform.Windows;
+using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
@@ -24,6 +26,9 @@ namespace Winshell
 
             public int? Pid { get; set; }
 
+            /// <summary>A shell that restarted to update: this one waits for that process to end first.</summary>
+            public int? After { get; set; }
+
             public bool Daemonize { get; set; }
 
             public bool NoDuplicate { get; set; }
@@ -43,14 +48,23 @@ namespace Winshell
 
         private static readonly string Version = typeof(Cli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
+        /// <summary>
+        /// The GitHub repository a release build was published from, as <c>scripts/package.ps1</c> stamps it. A build
+        /// from source has none, so it never updates itself.
+        /// </summary>
+        private static readonly string? ReleaseRepository = typeof(Cli).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "WinshellReleaseRepository")?.Value;
+
         public static async Task<int> Run(string[] args)
         {
+            args = WithoutAfter(args, out var after);
             var command = args.Length > 0 && !args[0].StartsWith('-') ? args[0] : null;
             var rest = command is null ? args : args[1..];
             Options options;
             try
             {
                 options = Parse(rest);
+                options.After = after;
             }
             catch (ArgumentException e)
             {
@@ -144,6 +158,20 @@ namespace Winshell
                 }
             }
             return o;
+        }
+
+        /// <summary>
+        /// Takes <c>--after &lt;pid&gt;</c> out of the arguments. Only an update's restart passes it, and it is not one
+        /// of the arguments the shell was started with: a restart or a sign-in entry must not repeat it.
+        /// </summary>
+        internal static string[] WithoutAfter(string[] args, out int? after)
+        {
+            after = null;
+            var i = Array.IndexOf(args, "--after");
+            if (i < 0 || i + 1 >= args.Length || !int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var pid))
+                return args;
+            after = pid;
+            return [.. args[..i], .. args[(i + 2)..]];
         }
 
         private static void PrintHelp()
@@ -241,6 +269,22 @@ namespace Winshell
 
         private static int RunShell(Options o, string[] originalArgs)
         {
+            // Restarted to update: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
+            if (o.After is { } previous)
+                WaitForExit(previous);
+            // A downloaded update goes in place before any shell runs, and then the new winshell.exe runs the shell.
+            // System.Diagnostics.Process is loaded first, from the files this one started with.
+            RuntimeHelpers.PrepareMethod(typeof(Cli).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!.MethodHandle);
+            using (Process.GetCurrentProcess()) { }
+            var update = InstallUpdate(o.After);
+            if (update is { Error: null })
+            {
+                Console.Error.WriteLine($"Updated Winshell to {update.Version}.");
+                return RunUpdated(originalArgs);
+            }
+            if (update is { Error: { } updateError })
+                Console.Error.WriteLine($"Could not update Winshell to {update.Version}: {updateError}");
+
             var root = ResolveConfig(o, out var error);
             if (root is null)
             {
@@ -338,6 +382,32 @@ namespace Winshell
 
             using var loop = new WinEventLoop { Log = log };
             loop.Failed += e => Reported(crashes.WriteOnce("event loop", e));
+            using var updater = Updater.ForRelease(ReleaseRepository, Version, log);
+            if (updater is not null)
+            {
+                if (update is { Error: { } failure })
+                    updater.ReportApplyFailure(update.Version, failure);
+                // Starts this winshell.exe again, with the same arguments, which puts the update in place as it starts.
+                updater.Restart = () =>
+                {
+                    // That start would not install while another shell runs, so restarting would change nothing.
+                    if (Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId))
+                        return "Another Winshell is running. Close it, then restart this one.";
+                    loop.Post(Restart);
+                    return null;
+                };
+                void Restart()
+                {
+                    var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
+                    foreach (var a in originalArgs.Where(a => a is not ("-d" or "--daemonize")))
+                        psi.ArgumentList.Add(a);
+                    psi.ArgumentList.Add("--after");
+                    psi.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+                    log.Info("updates", "Restarting Winshell to update it.");
+                    using var next = Process.Start(psi);
+                    loop.Quit(0);
+                }
+            }
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);
             var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath, Crashes = crashes };
@@ -351,6 +421,8 @@ namespace Winshell
                 engine.AddService<IIconLookup>(IconProvider.Instance);
                 WindowsModules.AddServices(engine, platform);
                 WindowsModules.AddStartup(engine, Environment.ProcessPath!, originalArgs);
+                if (updater is not null)
+                    WindowsModules.AddUpdates(engine, updater);
             });
             log.Info("", $"Launching config: \"{root}\"");
             log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
@@ -410,6 +482,74 @@ namespace Winshell
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
+            }
+        }
+
+        /// <summary>
+        /// Puts a downloaded update in place, unless another shell runs: it would keep loading files from this folder
+        /// as it needs them and mix versions, so the update stays ready until a start finds none. A named mutex keeps
+        /// two starts at the same moment, before either is listed, from installing over each other: the second skips.
+        /// </summary>
+        private static InstalledUpdate? InstallUpdate(int? after)
+        {
+            using var installing = new Mutex(false, @"Local\winshell-update");
+            bool mine;
+            try
+            {
+                mine = installing.WaitOne(0);
+            }
+            catch (AbandonedMutexException)
+            {
+                mine = true;
+            }
+            if (!mine)
+                return null;
+            try
+            {
+                return Instances.List(false).Any(i => i.Info.Pid != after) ? null : Updater.InstallStaged(ReleaseRepository, Version);
+            }
+            finally
+            {
+                installing.ReleaseMutex();
+            }
+        }
+
+        private static void WaitForExit(int pid)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                process.WaitForExit(TimeSpan.FromSeconds(30));
+            }
+            catch (ArgumentException)
+            {
+                // It has already gone.
+            }
+        }
+
+        /// <summary>
+        /// Runs the updated winshell.exe with this one's arguments, in this console, and ends when it does. This process
+        /// stays as its parent, so a terminal or the sign-in entry's console host keeps waiting on the shell.
+        /// </summary>
+        private static int RunUpdated(string[] args)
+        {
+            var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+            foreach (var a in args)
+                psi.ArgumentList.Add(a);
+            Process shell;
+            try
+            {
+                shell = Process.Start(psi)!;
+            }
+            catch (System.ComponentModel.Win32Exception e)
+            {
+                Console.Error.WriteLine($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.");
+                return 1;
+            }
+            using (shell)
+            {
+                shell.WaitForExit();
+                return shell.ExitCode;
             }
         }
 

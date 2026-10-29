@@ -73,6 +73,7 @@ ShellRoot {
       // With one taskbar, every app is on it.
       appsOn: Preferences.taskbarAllScreens ? Preferences.appsOn : "all"
       onSettingsRequested: settings.open("taskbar")
+      onUpdatesRequested: settings.open("winshellUpdates")
 
       readonly property bool launcherOpen: launcher.visible
       function openLauncher() { launcher.open() }
