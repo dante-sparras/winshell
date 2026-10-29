@@ -11,8 +11,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private string _text = "";
     private QColor _color = Theme.Current.TextFillColorPrimary;
     private bool _colorSet;
-    private QColor _selectionColor = Theme.Current.AccentFillColorDefault;
-    private QColor _selectedTextColor = Theme.Current.TextOnAccentFillColorPrimary;
+    private QColor? _selectionColor;
+    private QColor? _selectedTextColor;
     private int _cursorPosition;
     private int _selectionStart;
     private int _selectionEnd;
@@ -58,8 +58,10 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             _color = Theme.Current.TextFillColorPrimary;
             NotifyChanged("color");
         }
-        _selectionColor = Theme.Current.AccentFillColorDefault;
-        _selectedTextColor = Theme.Current.TextOnAccentFillColorPrimary;
+        if (_selectionColor is null)
+            NotifyChanged("selectionColor");
+        if (_selectedTextColor is null)
+            NotifyChanged("selectedTextColor");
         Update();
     }
 
@@ -137,11 +139,21 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     /// <summary>Room at the right that the text does not use, on top of <c>rightPadding</c>, such as for a button.</summary>
     protected virtual double ReservedRight => 0;
 
+    /// <summary>The fill behind selected text. The theme's accent until QML sets it.</summary>
     [Qml]
-    public QColor SelectionColor { get { Track(); return _selectionColor; } set { if (SetField(ref _selectionColor, value)) Update(); } }
+    public QColor SelectionColor
+    {
+        get { Track(); return _selectionColor ?? Theme.Current.AccentFillColorDefault; }
+        set { _selectionColor = value; NotifyChanged("selectionColor"); Update(); }
+    }
 
+    /// <summary>The color selected text is drawn in. The theme's text on accent until QML sets it.</summary>
     [Qml]
-    public QColor SelectedTextColor { get { Track(); return _selectedTextColor; } set { if (SetField(ref _selectedTextColor, value)) Update(); } }
+    public QColor SelectedTextColor
+    {
+        get { Track(); return _selectedTextColor ?? Theme.Current.TextOnAccentFillColorPrimary; }
+        set { _selectedTextColor = value; NotifyChanged("selectedTextColor"); Update(); }
+    }
 
     private readonly FontGroup _fontGroup;
 
@@ -852,14 +864,28 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         canvas.Save();
         canvas.ClipRect(SKRect.Create((float)_leftPadding, 0, (float)Math.Max(0, available + 1), (float)Height));
         canvas.Translate((float)x, (float)y);
+        void DrawText(QColor color) => layout?.Draw(canvas, Math.Max(total, 1), QtEnums.AlignLeft, color, 0, Antialiasing, paint: context);
         if (SelectionEnd > SelectionStart && (ActiveFocus || PersistentSelection))
         {
             var sx = OffsetOf(SelectionStart);
             var ex = OffsetOf(SelectionEnd);
-            using var sel = new SKPaint { Color = _selectionColor.ToSk() };
-            canvas.DrawRect(SKRect.Create((float)sx, 0, (float)(ex - sx), (float)lineHeight), sel);
+            var selection = SKRect.Create((float)sx, 0, (float)(ex - sx), (float)lineHeight);
+            using var sel = new SKPaint { Color = (_selectionColor ?? Theme.Current.AccentFillColorDefault).ToSk() };
+            canvas.DrawRect(selection, sel);
+            // The text is drawn twice: in its color outside the selection, and in selectedTextColor inside it.
+            canvas.Save();
+            canvas.ClipRect(selection, SKClipOperation.Difference);
+            DrawText(PaintColor);
+            canvas.Restore();
+            canvas.Save();
+            canvas.ClipRect(selection);
+            DrawText(_selectedTextColor ?? Theme.Current.TextOnAccentFillColorPrimary);
+            canvas.Restore();
         }
-        layout?.Draw(canvas, Math.Max(total, 1), QtEnums.AlignLeft, PaintColor, 0, Antialiasing, paint: context);
+        else
+        {
+            DrawText(PaintColor);
+        }
         if (_cursorVisible && ActiveFocus && _blinkOn && !_readOnly)
         {
             var cx = (float)Math.Round(OffsetOf(_cursorPosition));
