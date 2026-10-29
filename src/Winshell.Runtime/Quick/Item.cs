@@ -250,6 +250,8 @@ public class Item : QObject
             _visible = value;
             NotifyVisibleTree();
             _parent?.OnChildVisibilityChanged(this);
+            if (!Visible)
+                ReleaseFocusIfUnusable();
         }
     }
 
@@ -288,8 +290,37 @@ public class Item : QObject
         get { Track(); return _enabled && (_parent?.Enabled ?? true); }
         set
         {
-            if (SetField(ref _enabled, value))
-                Update();
+            if (_enabled == value)
+                return;
+            _enabled = value;
+            NotifyEnabledTree();
+            if (!Enabled)
+                ReleaseFocusIfUnusable();
+            Update();
+        }
+    }
+
+    private void NotifyEnabledTree()
+    {
+        NotifyChanged("enabled");
+        foreach (var child in _children.Snapshot)
+        {
+            if (child._enabled)
+                child.NotifyEnabledTree();
+        }
+    }
+
+    /// <summary>Drops keyboard focus when this item, or a descendant that has it, can no longer take keys.</summary>
+    private void ReleaseFocusIfUnusable()
+    {
+        if (_host?.FocusItem is not { } focused)
+            return;
+        for (var item = focused; item is not null; item = item.ParentItem)
+        {
+            if (item != this)
+                continue;
+            _host.SetFocusItem(null);
+            return;
         }
     }
 
@@ -398,8 +429,12 @@ public class Item : QObject
         {
             if (!SetField(ref _focus, value))
                 return;
-            if (value && Host is { } host)
+            if (Host is not { } host)
+                return;
+            if (value)
                 host.SetFocusItem(this);
+            else if (host.FocusItem == this)
+                host.SetFocusItem(null);
         }
     }
 
