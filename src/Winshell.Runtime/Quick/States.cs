@@ -25,8 +25,8 @@ public sealed class State : QObject
         set
         {
             _whenSet = true;
-            if (SetField(ref _when, value))
-                (Owner as Item)?.Let(States.Reevaluate);
+            if (SetField(ref _when, value) && Owner is Item item)
+                States.Reevaluate(item);
         }
     }
 
@@ -179,8 +179,6 @@ public sealed class Transition : QObject
 public static class States
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Item, Dictionary<(QObject, string), object?>> Saved = new();
-
-    public static void Let(this Item item, Action<Item> action) => action(item);
 
     /// <summary>Picks the state whose <c>when</c> holds, for items that use when instead of setting state.</summary>
     public static void Reevaluate(Item item)
