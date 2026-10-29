@@ -137,11 +137,14 @@ PanelWindow {
         showPins: root.appsOn === "all" || root.isMainScreen
         onPinRequested: id => root.pins.pin(id)
         onUnpinRequested: id => root.pins.unpin(id)
+        // Up to the tray area, after the margins and Start and Search.
+        maxWidth: right.x - 12 - 12 - x
       }
     }
 
     Row {
       id: right
+      objectName: "taskbarRight"
       anchors.right: parent.right
       anchors.rightMargin: 12
       anchors.verticalCenter: parent.verticalCenter

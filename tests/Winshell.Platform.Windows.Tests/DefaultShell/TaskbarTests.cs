@@ -651,6 +651,60 @@ public class TaskbarTests
         Assert.False((bool)bar.ReadProperty("revealed")!);
     }
 
+    [Theory]
+    [InlineData(1280)]
+    [InlineData(800)]
+    public void Apps_that_do_not_fit_stop_before_the_tray_and_scroll_into_view(double width)
+    {
+        var desk = new Desk();
+        for (var i = 0; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"App {i}", $"app{i}", $@"C:\Apps\app{i}.exe"));
+        desk.Services.SystemTray.Items.Add(new FakeTrayItem("Sync", "Sync", false));
+        var (shell, bar) = Taskbar(desk, width);
+        using var _ = shell;
+
+        var strip = In(bar, "taskStrip");
+        var stripLeft = strip.MapToScene(0, 0).X;
+        var stripRight = stripLeft + strip.Width;
+        var trayLeft = In(bar, "taskbarRight").MapToScene(0, 0).X;
+        Assert.True(stripLeft >= 12);
+        Assert.True(stripRight <= trayLeft - 12, $"the apps end at {stripRight}, the tray starts at {trayLeft}");
+
+        var buttons = DefaultShellHarness.FindAll(bar.Scene.Root).Where(i => i.ObjectName.StartsWith("task:", StringComparison.Ordinal)).ToList();
+        // File Explorer (pinned and open), the terminal, the tool, and the 30 apps.
+        Assert.Equal(33, buttons.Count);
+        // Narrator reaches every app, shown or scrolled away.
+        var tree = new AccessibleTree(bar.Scene);
+        tree.Refresh();
+        Assert.All(buttons, b => Assert.NotNull(tree.Find(b)));
+
+        // The wheel scrolls through them; each is shown whole at some point.
+        var seen = new HashSet<string>();
+        for (var step = 0; step < 60; step++)
+        {
+            foreach (var b in buttons)
+            {
+                var left = b.MapToScene(0, 0).X;
+                if (left >= stripLeft - 0.5 && left + b.Width <= stripRight + 0.5)
+                    seen.Add(b.ObjectName);
+            }
+            bar.Scene.Wheel(stripLeft + 20, 24, 0, -120);
+            shell.Loop.Advance(TimeSpan.FromMilliseconds(300));
+        }
+        Assert.Equal(buttons.Select(b => b.ObjectName).ToHashSet(), seen);
+    }
+
+    [Fact]
+    public void A_few_apps_take_only_their_own_width_and_do_not_scroll()
+    {
+        var (shell, bar) = Taskbar(new Desk());
+        using var _ = shell;
+        var strip = In(bar, "taskStrip");
+        // File Explorer, the terminal and the tool.
+        Assert.Equal(3 * 44 - 4, strip.Width);
+        Assert.False((bool)strip.ReadProperty("interactive")!);
+    }
+
     [Fact]
     public void Only_the_primary_screens_taskbar_is_the_main_one()
     {

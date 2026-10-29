@@ -27,7 +27,10 @@ Item {
   signal pinRequested(string id)
   signal unpinRequested(string id)
 
-  implicitWidth: row.implicitWidth
+  // The most room the apps may take. When they need more, they scroll sideways with the mouse wheel or a drag.
+  property real maxWidth: Infinity
+
+  implicitWidth: Math.min(row.implicitWidth, Math.max(0, maxWidth))
   implicitHeight: 40
 
   Accessible.role: Accessible.ToolBar
@@ -69,39 +72,51 @@ Item {
       action.activate.activate()
   }
 
-  Row {
-    id: row
-    anchors.verticalCenter: parent.verticalCenter
-    spacing: 4
+  Flickable {
+    id: strip
+    objectName: "taskStrip"
+    anchors.fill: parent
+    contentWidth: row.implicitWidth
+    contentHeight: height
+    flickableDirection: Flickable.HorizontalFlick
+    boundsBehavior: Flickable.StopAtBounds
+    interactive: contentWidth > width
+    clip: true
 
-    // One button per app, kept by the app's key, so a window that comes or goes regroups the apps without
-    // replacing the buttons a preview or a menu is anchored to.
-    Repeater {
-      model: root.tasks.map(t => t.key)
+    Row {
+      id: row
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 4
 
-      TaskButton {
-        id: button
-        required property string modelData
-        objectName: "task:" + modelData
-        task: root.taskFor(modelData)
-        onInvoked: root.invoke(task)
-        onLaunchRequested: root.launch(task)
-        onMenuRequested: {
-          preview.hide()
-          menu.open(button, modelData)
-        }
-        onContainsMouseChanged: {
-          if (containsMouse && !menu.visible)
-            preview.hoverStarted(button, modelData)
-          else if (!containsMouse)
-            preview.hoverEnded()
-        }
-        // The app is gone: what was open from its button closes with it.
-        Component.onDestruction: {
-          if (preview.anchor.item === button)
+      // One button per app, kept by the app's key, so a window that comes or goes regroups the apps without
+      // replacing the buttons a preview or a menu is anchored to.
+      Repeater {
+        model: root.tasks.map(t => t.key)
+
+        TaskButton {
+          id: button
+          required property string modelData
+          objectName: "task:" + modelData
+          task: root.taskFor(modelData)
+          onInvoked: root.invoke(task)
+          onLaunchRequested: root.launch(task)
+          onMenuRequested: {
             preview.hide()
-          if (menu.anchor.item === button)
-            menu.visible = false
+            menu.open(button, modelData)
+          }
+          onContainsMouseChanged: {
+            if (containsMouse && !menu.visible)
+              preview.hoverStarted(button, modelData)
+            else if (!containsMouse)
+              preview.hoverEnded()
+          }
+          // The app is gone: what was open from its button closes with it.
+          Component.onDestruction: {
+            if (preview.anchor.item === button)
+              preview.hide()
+            if (menu.anchor.item === button)
+              menu.visible = false
+          }
         }
       }
     }
