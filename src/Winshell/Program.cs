@@ -67,8 +67,8 @@ namespace Winshell
                 PrintHelp(FirstCommand(args));
                 return 0;
             }
-            var command = args.Length > 0 && !args[0].StartsWith('-') ? args[0] : null;
-            var rest = command is null ? args : args[1..];
+            var command = FirstCommand(args);
+            var rest = command is null ? args : WithoutToken(args, command);
             Options options;
             try
             {
@@ -88,6 +88,20 @@ namespace Winshell
                         Console.WriteLine($"winshell {Version}");
                         return 0;
                     }
+                    // A console with no command prints help. winshellw, and a console that only passes the options
+                    // a shell start uses, still starts: that is the Start tile, the sign-in entry, and the tests.
+                    if (args.Length == 0 && !IsWindowlessHost())
+                    {
+                        PrintHelp(null);
+                        return 0;
+                    }
+                    if (!IsWindowlessHost() && !OnlyShellStartOptions(args))
+                    {
+                        Console.Error.WriteLine("No command. Use winshell run to start a shell.");
+                        return 2;
+                    }
+                    return RunShell(options, args);
+                case "run":
                     return RunShell(options, args);
                 case "list":
                     return List(options);
@@ -111,6 +125,64 @@ namespace Winshell
                     return 2;
             }
         }
+
+        /// <summary>The first word that is not an option. Options may come before it, so <c>-c work kill</c> is kill.</summary>
+        private static string? FirstCommand(string[] args)
+        {
+            for (var i = 0; i < args.Length; i++)
+            {
+                var token = args[i];
+                if (token is "-h" or "--help" or "/?" or "-V" or "--version")
+                    continue;
+                if (token.StartsWith('-'))
+                {
+                    if (TakesValue(token))
+                        i++;
+                    continue;
+                }
+                return token;
+            }
+            return null;
+        }
+
+        private static string[] WithoutToken(string[] args, string command)
+        {
+            var skipped = false;
+            var rest = new List<string>(args.Length);
+            foreach (var token in args)
+            {
+                if (!skipped && token == command)
+                {
+                    skipped = true;
+                    continue;
+                }
+                rest.Add(token);
+            }
+            return [.. rest];
+        }
+
+        private static bool TakesValue(string option) => option is
+            "-p" or "--path" or "-c" or "--config" or "-i" or "--id" or "--pid" or "-t" or "--tail"
+            or "--log-rules" or "-m" or "--manifest" or "--debug";
+
+        /// <summary>The Start tile and a sign-in entry pass these, and no command word.</summary>
+        private static bool OnlyShellStartOptions(string[] args)
+        {
+            for (var i = 0; i < args.Length; i++)
+            {
+                var token = args[i];
+                if (token is not ("-p" or "--path" or "-c" or "--config" or "-n" or "--no-duplicate"
+                    or "-d" or "--daemonize" or "-v" or "--verbose"))
+                    return false;
+                if (TakesValue(token))
+                    i++;
+            }
+            return true;
+        }
+
+        /// <summary><c>winshellw.exe</c> is the same program with no console. It still starts a shell when given no command.</summary>
+        private static bool IsWindowlessHost() =>
+            string.Equals(System.IO.Path.GetFileName(Environment.ProcessPath), "winshellw.exe", StringComparison.OrdinalIgnoreCase);
 
         private static Options Parse(string[] args)
         {
@@ -195,20 +267,6 @@ namespace Winshell
             return [.. args[..i], .. args[(i + 2)..]];
         }
 
-        /// <summary>The first word that is a command, skipping options and help.</summary>
-        private static string? FirstCommand(string[] args)
-        {
-            foreach (var arg in args)
-            {
-                if (arg is "-h" or "--help" or "/?" or "-V" or "--version")
-                    continue;
-                if (arg.StartsWith('-'))
-                    continue;
-                return arg;
-            }
-            return null;
-        }
-
         private static void PrintHelp(string? command)
         {
             switch (command)
@@ -263,7 +321,8 @@ namespace Winshell
             WriteHelp($"""
                 winshell {Version}: a desktop shell for Windows 11
 
-                Usage: winshell [options]                  run a shell
+                Usage: winshell run [options]              start a shell
+                       winshell                            print this help
                        winshell <command> --help           help for that command, which does not run
                        winshell list [-j]                  list running instances
                        winshell kill [instance options]    stop an instance
@@ -410,7 +469,11 @@ namespace Winshell
             {
                 var exe = Environment.ProcessPath!;
                 var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
-                foreach (var a in originalArgs.Where(a => a is not ("-d" or "--daemonize")))
+                var childArgs = originalArgs.Where(a => a is not ("-d" or "--daemonize")).ToList();
+                // The child has no console. A bare child would print help and exit, so name the run command.
+                if (FirstCommand([.. childArgs]) is null)
+                    childArgs.Insert(0, "run");
+                foreach (var a in childArgs)
                     psi.ArgumentList.Add(a);
                 using var child = Process.Start(psi);
                 return 0;

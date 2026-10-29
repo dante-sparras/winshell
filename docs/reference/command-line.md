@@ -1,9 +1,10 @@
 # Command line
 
-`winshell` runs a shell, talks to the instances that are running, and checks this PC's setup. `winshell --help` prints this summary. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command.
+`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
 
 ```text
-winshell [options]                  run a shell
+winshell run [options]              start a shell
+winshell                            print this help
 winshell list [-a] [-j]             list running instances
 winshell kill [instance options]    stop an instance
 winshell log [-f] [-t N]            print an instance's log
@@ -18,7 +19,7 @@ winshell doctor [config options] [-j] [--no-color]
 
 ## Run a shell
 
-`winshell` with no command loads a configuration and runs it until it is stopped. [Getting started](../guide/getting-started.md#where-your-configuration-lives) explains which configuration it picks.
+`winshell run` loads a configuration and runs it until it is stopped. Options may come before `run`. [Getting started](../guide/getting-started.md#where-your-configuration-lives) explains which configuration it picks. A command may also come after its options, so `winshell -c work kill` stops that config instead of starting it.
 
 | Option | What it does |
 | --- | --- |
