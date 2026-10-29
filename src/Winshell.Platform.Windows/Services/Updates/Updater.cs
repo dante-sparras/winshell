@@ -97,7 +97,7 @@ public sealed class Updater : IDisposable
         UpdateInstall.CleanUp(installDir, UpdatesDir, current);
         if (UpdateInstall.Staged(UpdatesDir, current) is not { } staged)
             return null;
-        return new InstalledUpdate(staged.Version.ToString(3), UpdateInstall.Apply(staged.Path, installDir));
+        return new InstalledUpdate(staged.Version.ToString(3), UpdateInstall.ApplyVerified(UpdatesDir, staged.Path, installDir));
     }
 
     /// <summary>Downloaded updates, each unzipped in a folder named for its version.</summary>
@@ -293,6 +293,8 @@ public sealed class Updater : IDisposable
             if (Directory.Exists(target))
                 Directory.Delete(target, recursive: true);
             Directory.Move(unzipped, target);
+            // Kept outside the updates folder, so a later start can hash this zip again before it copies anything.
+            UpdateTrust.Keep(_updatesDir, version, zip, actual);
         }
         finally
         {

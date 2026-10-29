@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
@@ -293,6 +294,131 @@ public sealed class UpdatesTests : IDisposable
         Assert.Equal(new UpdateState(UpdateStatus.Ready, "0.6.0", "Another Winshell is running. Close it, then restart this one."), updater.State);
         Assert.Contains(_warnings, w => w.Contains("Another Winshell is running", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task A_checked_download_keeps_its_zip_beside_the_updates_folder()
+    {
+        var zip = Zip(("winshell.exe", "new"));
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+
+        await updater.CheckAsync();
+
+        Assert.Equal(["0.6.0"], Directory.EnumerateFileSystemEntries(UpdatesDir).Select(Path.GetFileName));
+        var saved = UpdateTrust.ZipPath(UpdatesDir, "0.6.0");
+        Assert.Equal(Sha(zip)["sha256:".Length..], UpdateTrust.Hash(saved));
+        Assert.Equal(UpdateTrust.Hash(saved), File.ReadAllText(UpdateTrust.DigestPath(UpdatesDir, "0.6.0")).Trim());
+    }
+
+    [Fact]
+    public async Task A_swapped_staged_file_is_not_what_gets_installed()
+    {
+        var zip = Zip(("winshell.exe", "from-zip"));
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+        await updater.CheckAsync();
+        File.WriteAllText(Path.Combine(UpdatesDir, "0.6.0", "winshell.exe"), "swapped");
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false, processRid: Medium));
+
+        Assert.Equal("from-zip", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.False(Directory.Exists(Path.Combine(UpdatesDir, "0.6.0")));
+        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+    }
+
+    [Fact]
+    public async Task A_changed_zip_is_not_installed_and_the_staged_tree_is_deleted()
+    {
+        var zip = Zip(("winshell.exe", "from-zip"));
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+        await updater.CheckAsync();
+        File.WriteAllBytes(UpdateTrust.ZipPath(UpdatesDir, "0.6.0"), Zip(("winshell.exe", "changed")));
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false, processRid: Medium);
+
+        Assert.Contains("SHA-256", error, StringComparison.Ordinal);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.False(Directory.Exists(Path.Combine(UpdatesDir, "0.6.0")));
+        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+    }
+
+    [Fact]
+    public void A_staged_update_without_a_digest_is_not_copied()
+    {
+        var staged = Stage("0.6.0", ("winshell.exe", "new"));
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, processRid: Medium);
+
+        Assert.Contains("digest", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.False(Directory.Exists(staged));
+    }
+
+    [Fact]
+    public void Elevation_refuses_a_lower_or_unknown_label_and_allows_the_same_or_higher()
+    {
+        Assert.True(UpdateTrust.ElevationAllows(privileged: false, directoryRid: 0, processRid: Medium));
+        Assert.False(UpdateTrust.ElevationAllows(privileged: true, directoryRid: 0, processRid: Medium));
+        Assert.False(UpdateTrust.ElevationAllows(privileged: true, directoryRid: Medium, processRid: High));
+        Assert.True(UpdateTrust.ElevationAllows(privileged: true, directoryRid: High, processRid: High));
+        Assert.True(UpdateTrust.ElevationAllows(privileged: true, directoryRid: System, processRid: High));
+        Assert.False(UpdateTrust.ElevationAllows(privileged: true, directoryRid: Medium, processRid: 0));
+    }
+
+    [Fact]
+    public async Task An_elevated_apply_leaves_a_lower_integrity_update_in_place()
+    {
+        var zip = Zip(("winshell.exe", "from-zip"));
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+        await updater.CheckAsync();
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+        var staged = Path.Combine(UpdatesDir, "0.6.0");
+
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: true, processRid: AboveSystem);
+
+        Assert.Contains("lower integrity", error, StringComparison.Ordinal);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.True(Directory.Exists(staged));
+        Assert.True(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+    }
+
+    [Fact]
+    public void A_link_in_the_update_is_not_copied()
+    {
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+        var staged = Stage("0.6.0", ("winshell.exe", "new"));
+        var outside = Path.Combine(_root, "outside");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
+        var junction = Path.Combine(staged, "linked");
+        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+        info.ArgumentList.Add("/c");
+        info.ArgumentList.Add("mklink");
+        info.ArgumentList.Add("/J");
+        info.ArgumentList.Add(junction);
+        info.ArgumentList.Add(outside);
+        using var link = Process.Start(info)!;
+        link.WaitForExit();
+        Assert.Equal(0, link.ExitCode);
+        try
+        {
+            var error = UpdateInstall.Apply(staged, InstallDir);
+
+            Assert.NotNull(error);
+            Assert.False(File.Exists(Path.Combine(InstallDir, "linked", "secret.txt")));
+            Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        }
+        finally
+        {
+            Directory.Delete(junction);
+        }
+    }
+
+    private const int Medium = 0x2000;
+    private const int High = 0x3000;
+    private const int System = 0x4000;
+    private const int AboveSystem = 0x5000;
 
     private Updater Create(FakeGitHub github) =>
         new("dante-sparras/winshell", InstallDir, UpdatesDir, "0.5.0+test", "win-x64", _log, github);
