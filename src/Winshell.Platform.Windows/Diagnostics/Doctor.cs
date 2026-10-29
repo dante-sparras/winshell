@@ -213,20 +213,20 @@ public static class Doctor
                     continue;
                 var taskbars = onScreen.Where(w => w.ClassName is TaskbarClass or SecondaryTaskbarClass && Within(Depth(m, w, edge), reserved)).ToList();
                 // A Winshell panel also reserves its margins, which its window does not cover, and its zone can differ
-                // from its size. So a Winshell window that starts in the strip explains whatever else is there,
-                // unless another app's window there can be named.
+                // from its size. A window that starts in the strip explains those pixels, but another app's window
+                // in the same strip is still named, even when it overlaps the panel and nothing is left over.
                 var winshell = onScreen.Where(w => w.ClassName == WinshellClass && Starts(m, Depth(m, w, edge), edge, reserved)).ToList();
                 var taskbar = Covered(taskbars.Select(w => Depth(m, w, edge)), reserved);
                 var unexplained = reserved - Covered(taskbars.Concat(winshell).Select(w => Depth(m, w, edge)), reserved);
                 if (taskbar > 0 && winshell.Count > 0 && reserved > taskbar + 2)
                     both.Add($"the {edge} of {m.Name}");
-                if (unexplained <= 2)
+                if (unexplained <= 2 && winshell.Count == 0)
                     continue;
                 var others = onScreen.Where(w => w.ClassName is not (TaskbarClass or SecondaryTaskbarClass or WinshellClass) && w.Program.Length > 0)
                     .Select(w => (w.Program, Depth: Depth(m, w, edge)))
                     .Where(w => Within(w.Depth, reserved))
                     .Select(w => (w.Program, Thickness: w.Depth.End - w.Depth.Start))
-                    .Where(w => winshell.Count > 0 ? w.Thickness >= MinAppBar && w.Thickness <= unexplained + 4 : Math.Abs(w.Thickness - unexplained) <= 4)
+                    .Where(w => winshell.Count > 0 ? w.Thickness >= MinAppBar : Math.Abs(w.Thickness - unexplained) <= 4)
                     .Select(w => w.Program).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 if (winshell.Count > 0)
                 {

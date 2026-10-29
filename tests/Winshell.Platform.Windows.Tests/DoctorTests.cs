@@ -256,6 +256,24 @@ public sealed class DoctorTests : IDisposable
     }
 
     [Fact]
+    public void An_app_bar_overlapping_a_winshell_panel_is_named()
+    {
+        // The panel covers the reserved strip, and yasb sits in the same pixels.
+        var overlap = AppBars(
+            [Screen(top: 40)],
+            [Bar(WinshellClass, 0, 0, 1920, 40, "winshell.exe"), Bar("YasbBar", 0, 0, 1920, 40, "yasb.exe")]);
+        Assert.Equal(CheckStatus.Warn, overlap.Status);
+        Assert.Equal("yasb.exe reserves space at the top of DISPLAY1.", overlap.Message);
+
+        // yasb is thicker than the 8 pixels the panel leaves above a window at 8–48.
+        var thicker = AppBars(
+            [Screen(top: 48)],
+            [Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe"), Bar("YasbBar", 0, 0, 1920, 48, "yasb.exe")]);
+        Assert.Equal(CheckStatus.Warn, thicker.Status);
+        Assert.Equal("yasb.exe reserves space at the top of DISPLAY1.", thicker.Message);
+    }
+
+    [Fact]
     public void Panels_side_by_side_count_once_and_an_app_beside_them_is_named()
     {
         var check = AppBars(
