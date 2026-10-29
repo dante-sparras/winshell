@@ -26,5 +26,6 @@ Every type a configuration can use, by module. A module's page lists each type w
 
 - **Type** says what a member holds: `bool`, `int`, `real`, `string`, `color`, `date`, `var` for any JavaScript value, `list of X`, or `ObjectModel of X`. An `ObjectModel` can be a `Repeater` model as it is; in JavaScript, its `values` is the array.
 - **read-only** members change on their own, as Windows reports changes. Bind to them.
+- A **group**, such as a panel's `anchors`, is one object you can't replace, but you can set each of its fields: `anchors.top: true`.
 - Sizes and positions are in logical pixels unless a member says otherwise. A screen's [scale](winshell.md#shellscreen) turns them into physical pixels.
 - A singleton is used by its name, such as `Audio.defaultPlaybackDevice`. A creatable type is declared, such as `Hotkey { }`. Other objects come from a singleton or a model.

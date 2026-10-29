@@ -103,7 +103,11 @@ public sealed class DocsTests
                 foreach (var value in values.Where(v => !section.Text.Contains($"`{v}`", StringComparison.Ordinal)))
                     problems.Add($"{page}: {type.Name} does not name the value {value}");
                 if (!typeof(QObject).IsAssignableFrom(type.ClrType))
+                {
+                    foreach (var member in section.Members.Where(m => !type.Enums.ContainsKey(m)))
+                        problems.Add($"{page}: {type.Name} has no value {member}");
                     continue;
+                }
                 var allowed = MemberNames(type.ClrType).Concat(type.AttachedType is { } a ? MemberNames(a) : [])
                     .Concat(shared.TryGetValue(type.Name, out var b) ? MemberNames(b) : []).Concat(type.Enums.Keys).ToHashSet();
                 foreach (var member in section.Members.Where(m => !allowed.Contains(m)))
@@ -122,13 +126,47 @@ public sealed class DocsTests
             foreach (var (name, section) in sections.Where(s => !module.Types.ContainsKey(s.Key) && s.Value.Members.Count > 0))
                 problems.Add($"{page}: \"## {name}\" is not a type of {module.Name}");
         }
-        var quick = File.ReadAllText(Path.Combine(Repo, "docs", "reference", "qt-quick.md"));
-        foreach (var type in Modules.All.Where(m => m.Name.StartsWith("Qt", StringComparison.Ordinal)).SelectMany(m => m.Types.Keys).Distinct())
-        {
-            if (!quick.Contains($"`{type}`", StringComparison.Ordinal))
-                problems.Add($"docs\\reference\\qt-quick.md does not name {type}");
-        }
+        CheckQtQuick(problems);
         Assert.True(problems.Count == 0, "The reference is out of date:\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// <c>qt-quick.md</c> names every Qt Quick type, its tables name only real ones, and each row of its differences
+    /// table is a real <c>Type.member</c>.
+    /// </summary>
+    private static void CheckQtQuick(List<string> problems)
+    {
+        const string page = @"docs\reference\qt-quick.md";
+        var qt = new Dictionary<string, TypeEntry>(StringComparer.Ordinal);
+        foreach (var entry in Modules.All.Where(m => m.Name.StartsWith("Qt", StringComparison.Ordinal)).SelectMany(m => m.Types.Values))
+            qt.TryAdd(entry.Name, entry);
+        var lines = File.ReadAllLines(Path.Combine(Repo, "docs", "reference", "qt-quick.md"));
+        var text = string.Join('\n', lines);
+        foreach (var type in qt.Keys.Where(t => !text.Contains($"`{t}`", StringComparison.Ordinal)))
+            problems.Add($"{page} does not name {type}");
+        var sections = Sections(lines);
+        foreach (var (name, section) in sections)
+        {
+            var differences = name == "Where Winshell differs from Qt";
+            foreach (var row in section.Text.Split('\n').Where(l => l.StartsWith('|') && !l.StartsWith("| ---", StringComparison.Ordinal)))
+            {
+                var cells = row.Split('|');
+                if (differences && cells[1].Trim() is ['`', .. var cell, '`'])
+                {
+                    var parts = cell.TrimEnd(')').TrimEnd('(').Split('.');
+                    if (parts.Length != 2 || !qt.TryGetValue(parts[0], out var entry))
+                        problems.Add($"{page}: {cell} is not a Qt Quick type's member");
+                    else if (!MemberNames(entry.ClrType).Concat(entry.AttachedType is { } a ? MemberNames(a) : []).Contains(parts[1]))
+                        problems.Add($"{page}: {parts[0]} has no member {parts[1]}");
+                    continue;
+                }
+                foreach (var token in cells.Skip(1).SelectMany(c => c.Split('`').Where((_, i) => i % 2 == 1)))
+                {
+                    if (token.Length > 0 && char.IsUpper(token[0]) && token.All(char.IsLetterOrDigit) && !qt.ContainsKey(token))
+                        problems.Add($"{page}: {token} is not a Qt Quick type");
+                }
+            }
+        }
     }
 
     private sealed record Section(string Text, HashSet<string> Members);

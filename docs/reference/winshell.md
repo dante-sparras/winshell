@@ -162,7 +162,7 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `backingWindowVisible` | bool, read-only | Whether the native window is on screen now. |
 | `color` | color | What the window clears to before drawing its items. Default white. Make it `"transparent"` or translucent to let a [WindowEffects](#windoweffects) backdrop show through. |
 | `mask` | [Region](#region) | The part of the window that takes clicks; clicks elsewhere go to the window below. Null, the default, is the whole window. An empty region lets every click through. Windows also clips drawing to a non-empty mask, so the parts outside it are not shown. |
-| `surfaceFormat` | `surfaceFormat` group with `opaque`, read-only | Whether the window is opaque, which by default follows `color`. The Windows backend does not use it. |
+| `surfaceFormat` | group: `opaque` (bool) | Set the field, as in `surfaceFormat.opaque: true`; the group itself can't be replaced. Whether the window is opaque, which by default follows `color`. The Windows backend does not use it. |
 | `screen` | [ShellScreen](#shellscreen) | The screen the window is on. Setting it puts a panel or a new floating window on that screen. Unset, it is the screen the window is shown on, or the primary screen. |
 | `devicePixelRatio` | real, read-only | The scale of the screen the window is on. |
 | `updatesEnabled` | bool | Whether the window draws its items. Default true. While false, it shows only `color`. |
@@ -181,8 +181,8 @@ A frameless window attached to edges of a screen, created as `PanelWindow { }`. 
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `anchors` | `anchors` group with `top`, `bottom`, `left`, `right`, read-only | The screen edges the panel is attached to, each a bool. Default none. |
-| `margins` | `margins` group with `top`, `bottom`, `left`, `right`, read-only | The distance from each anchored edge, in logical pixels. |
+| `anchors` | group: `top`, `bottom`, `left`, `right` (bool) | The screen edges the panel is attached to. Set each edge, as in `anchors.top: true`; the group itself can't be replaced. Default none. |
+| `margins` | group: `top`, `bottom`, `left`, `right` (real) | The distance from each anchored edge, in logical pixels. Set each edge, as in `margins.top: 8`; the group itself can't be replaced. |
 | `exclusiveZone` | real | The space reserved at the panel's edge, in logical pixels, in `Normal` mode. Setting it switches `exclusionMode` to `Normal`. |
 | `exclusionMode` | [ExclusionMode](#exclusionmode) | How the panel reserves its edge. Default `Auto`. |
 | `focusable` | bool | Whether the panel takes the keyboard when an item in it takes focus. A panel that becomes focusable while an item in it has focus takes the keyboard then. Default false. |
@@ -231,8 +231,8 @@ Where a popup window attaches to its parent window. Reach it as `PopupWindow.anc
 | --- | --- | --- |
 | `window` | [ShellWindow](#shellwindow) | The parent window. With `item` set, the item's window. Setting it clears `item`. |
 | `item` | Item | An item whose bounds are the anchor rectangle. Setting it clears `window`. |
-| `rect` | `rect` group with `x`, `y`, `width`, `height`, read-only | The anchor rectangle in the window, 1 by 1 at the corner by default. With `item` set, `x` and `y` move the item's bounds, and `width` and `height` are not used. |
-| `margins` | `margins` group with `left`, `top`, `right`, `bottom`, read-only | Grows the anchor rectangle outward on each side, in logical pixels, to leave a gap. |
+| `rect` | group: `x`, `y`, `width`, `height` (real) | The anchor rectangle in the window, 1 by 1 at the corner by default. Set each field, as in `anchor.rect.x: 12`; the group itself can't be replaced. With `item` set, `x` and `y` move the item's bounds, and `width` and `height` are not used. |
+| `margins` | group: `left`, `top`, `right`, `bottom` (real) | Grows the anchor rectangle outward on each side, in logical pixels, to leave a gap. Set each side, as in `anchor.margins.top: 8`; the group itself can't be replaced. |
 | `edges` | [Edges](#edges) | The point on the anchor rectangle: an edge or a corner. No edge on an axis means its middle. Default `Edges.Top \| Edges.Left`. |
 | `gravity` | [Edges](#edges) | The direction the popup window grows from that point. Default `Edges.Bottom \| Edges.Right`. |
 | `adjustment` | [PopupAdjustment](#popupadjustment) | What may change to keep the popup window on its screen. Default `PopupAdjustment.All`. |
@@ -371,7 +371,7 @@ An easing curve to evaluate in script, as `EasingCurve { curve.type: Easing.OutC
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `curve` | `curve` group with `type`, `amplitude`, `overshoot`, `period`, `bezierCurve`, read-only | The curve, set as an animation's `easing` is. |
+| `curve` | group: `type`, `amplitude`, `overshoot`, `period`, `bezierCurve` | The curve, set as an animation's `easing` is, field by field: `curve.type: Easing.OutCubic`. The group itself can't be replaced. |
 | `valueAt(x)` | method, returns real | The curve's value at progress `x`, which is kept between 0 and 1. |
 | `interpolate(x, a, b)` | method, returns var | The value between `a` and `b` at progress `x` along the curve. `a` and `b` are numbers, points or rects. |
 
