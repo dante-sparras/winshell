@@ -105,15 +105,18 @@ internal static unsafe class WindowTracker
     {
         if (message != _shellHookMessage || _shellHookMessage == 0)
             return Win32.DefWindowProcW(hwnd, message, wParam, lParam);
-        if (WindowRules.IsFlash(wParam) && lParam != 0)
+        NativeCallback.Guard(Log.Default, "windows", () =>
         {
-            Flashed.Add(lParam);
-            if (!_flushPosted && _loop is not null)
+            if (WindowRules.IsFlash(wParam) && lParam != 0)
             {
-                _flushPosted = true;
-                _loop.Post(Flush);
+                Flashed.Add(lParam);
+                if (!_flushPosted && _loop is not null)
+                {
+                    _flushPosted = true;
+                    _loop.Post(Flush);
+                }
             }
-        }
+        });
         return 0;
     }
 
@@ -125,7 +128,10 @@ internal static unsafe class WindowTracker
     }
 
     [UnmanagedCallersOnly]
-    private static void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    private static void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time) =>
+        NativeCallback.Guard(Log.Default, "windows", () => Mark(eventType, hwnd, idObject, idChild));
+
+    private static void Mark(uint eventType, nint hwnd, int idObject, int idChild)
     {
         var isRoot = hwnd != 0 && eventType != EVENT_OBJECT_DESTROY && GetAncestor(hwnd, GA_ROOT) == hwnd;
         var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);

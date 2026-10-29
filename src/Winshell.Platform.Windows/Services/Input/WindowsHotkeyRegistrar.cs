@@ -595,9 +595,12 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     {
         if (msg == Win32.WM_HOTKEY)
         {
-            var data = Win32.GetWindowLongPtr(hwnd, Win32.GWLP_USERDATA);
-            if (data != 0 && GCHandle.FromIntPtr(data).Target is WindowsHotkeyRegistrar registrar)
-                registrar._loop.Post(() => registrar.OnHotkey((int)wParam));
+            NativeCallback.Guard(Log.Default, "hotkey", () =>
+            {
+                var data = Win32.GetWindowLongPtr(hwnd, Win32.GWLP_USERDATA);
+                if (data != 0 && GCHandle.FromIntPtr(data).Target is WindowsHotkeyRegistrar registrar)
+                    registrar._loop.Post(() => registrar.OnHotkey((int)wParam));
+            });
         }
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
@@ -605,31 +608,13 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     [UnmanagedCallersOnly]
     private static nint KeyboardProc(int code, nint wParam, nint lParam)
     {
-        var swallow = false;
-        if (code >= 0 && IsOwnInjection(lParam))
-            return Win32.CallNextHookEx(0, code, wParam, lParam);
-        if (code >= 0)
+        var swallow = code >= 0 && !IsOwnInjection(lParam) && NativeCallback.Guard(Log.Default, "hotkey", () =>
         {
-            try
-            {
-                WindowsHotkeyRegistrar? owner;
-                lock (Gate)
-                    owner = HookOwner;
-                if (owner is not null)
-                    swallow = owner.OnHook(lParam);
-            }
-            catch (Exception e)
-            {
-                try
-                {
-                    Log.Default.Warn("hotkey", e.Message);
-                }
-                catch (Exception)
-                {
-                    // The hook must return. A failure in the log sink cannot strand it.
-                }
-            }
-        }
+            WindowsHotkeyRegistrar? owner;
+            lock (Gate)
+                owner = HookOwner;
+            return owner is not null && owner.OnHook(lParam);
+        }, false);
         if (swallow)
             return 1;
         return Win32.CallNextHookEx(0, code, wParam, lParam);

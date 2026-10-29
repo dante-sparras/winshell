@@ -181,11 +181,14 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
             {
                 var info = (MSLLHOOKSTRUCT*)lParam;
                 var pt = info->pt;
-                foreach (var w in platform._grabbing.ToArray())
+                NativeCallback.Guard(platform.Log, "shell", () =>
                 {
-                    if (!w.ContainsScreenPoint(pt))
-                        platform.Loop.Post(w.Dismiss);
-                }
+                    foreach (var w in platform._grabbing.ToArray())
+                    {
+                        if (!w.ContainsScreenPoint(pt))
+                            platform.Loop.Post(w.Dismiss);
+                    }
+                });
             }
         }
         return Win32.CallNextHookEx(0, code, wParam, lParam);
@@ -299,7 +302,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private static nint ClipboardProc(nint hwnd, uint msg, nint wParam, nint lParam)
     {
         if (msg == Win32.WM_CLIPBOARDUPDATE && _current is { } platform && hwnd == platform._clipboardWindow)
-            platform.Loop.Post(platform.OnClipboardChanged);
+            NativeCallback.Guard(platform.Log, "shell", () => platform.Loop.Post(platform.OnClipboardChanged));
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 

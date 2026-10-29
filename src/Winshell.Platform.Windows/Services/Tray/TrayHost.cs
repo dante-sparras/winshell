@@ -324,7 +324,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
         }
         if (msg == TaskbarCreated)
         {
-            host.OnTaskbarCreated();
+            NativeCallback.Guard(host._log, "tray", host.OnTaskbarCreated);
             return 0;
         }
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
