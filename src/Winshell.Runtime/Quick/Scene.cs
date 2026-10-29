@@ -250,10 +250,10 @@ public sealed class Scene : IItemHost
         return (x, y);
     }
 
-    /// <summary>The items under a point, topmost first, that are visible and not clipped away.</summary>
+    /// <summary>The items under a point, topmost first, that are visible, enabled, and not clipped away.</summary>
     private static void ItemsAt(Item item, double x, double y, List<(Item Item, double X, double Y)> result)
     {
-        if (!item.IsVisibleFlag || item.Opacity <= 0)
+        if (!item.IsVisibleFlag || item.Opacity <= 0 || !item.Enabled)
             return;
         var lx = x - item.X;
         var ly = y - item.Y;
@@ -291,7 +291,7 @@ public sealed class Scene : IItemHost
             // The root is the window itself; its own coordinates are the scene's.
             foreach (var child in Root.PaintOrder.Reverse())
                 ItemsAt(child, x, y, list);
-            if (Root.HitTest(x, y))
+            if (Root.Enabled && Root.HitTest(x, y))
                 list.Add((Root, x, y));
         }
         return list;
@@ -355,6 +355,8 @@ public sealed class Scene : IItemHost
         var focusTaken = false;
         foreach (var (item, lx, ly) in HitList(x, y))
         {
+            if (!item.Enabled)
+                continue;
             if (!focusTaken && item is IFocusOnPress { FocusOnPress: true } && item.Enabled)
             {
                 item.ForceActiveFocus();
