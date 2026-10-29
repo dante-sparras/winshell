@@ -46,7 +46,7 @@ jobs:
     name: package
     runs-on: windows-latest
     # A release waits for a person to approve its signing request in SignPath.
-    timeout-minutes: ${{ inputs.tag != '' && 120 || 30 }}
+    timeout-minutes: ${{ inputs.tag != '' && 150 || 30 }}
     env:
       # A release is signed once the SignPath Foundation project is set up: see docs/code-signing-policy.md.
       SIGN: ${{ inputs.tag != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
@@ -59,6 +59,14 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      - name: Check the commit to sign
+        # SignPath records the run's commit as the origin of what it signs, so the checkout must be that commit. This
+        # runs before the build, so a repair started from main stops at once: start it from the release's tag.
+        if: ${{ env.SIGN == 'true' }}
+        shell: pwsh
+        run: |
+          $checkedOut = git rev-parse HEAD
+          if ($checkedOut -ne $env:GITHUB_SHA) { throw "This run is for $env:GITHUB_SHA but checked out $checkedOut. Start it from the release's tag." }
       - name: Build
         shell: pwsh
         env:
@@ -72,14 +80,6 @@ jobs:
         run: |
           $version = (Get-Item "$env:RUNNER_TEMP/artifacts/publish/win-x64/winshell.dll").VersionInfo.ProductVersion
           "version=$version" >> $env:GITHUB_OUTPUT
-      - name: Check the commit to sign
-        # SignPath records the run's commit as the origin of what it signs, so the build must be that commit. Start a
-        # repair of a release from its tag (Use workflow from: Tags), not from main.
-        if: ${{ env.SIGN == 'true' }}
-        shell: pwsh
-        run: |
-          $built = git rev-parse HEAD
-          if ($built -ne $env:GITHUB_SHA) { throw "This run is for $env:GITHUB_SHA but built $built. Start it from the release's tag." }
       - name: Upload the binaries to sign
         id: unsigned
         if: ${{ env.SIGN == 'true' }}
