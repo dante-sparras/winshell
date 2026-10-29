@@ -175,6 +175,8 @@ public sealed class SocketObject : DataStream
     private Stream? _stream;
     private int _generation;
     private readonly StringBuilder _pending = new();
+    private readonly object _writeGate = new();
+    private Task _writes = Task.CompletedTask;
 
     [QmlEnum]
     public enum SocketError
@@ -282,7 +284,8 @@ public sealed class SocketObject : DataStream
         {
             var buffer = new byte[8192];
             var decoder = Encoding.UTF8.GetDecoder();
-            var chars = new char[8192];
+            // A 4-byte sequence that finishes on the first byte of a full read is two UTF-16 chars plus the rest.
+            var chars = new char[Encoding.UTF8.GetMaxCharCount(buffer.Length)];
             try
             {
                 while (true)
@@ -299,7 +302,7 @@ public sealed class SocketObject : DataStream
                     });
                 }
             }
-            catch (Exception e) when (e is IOException or ObjectDisposedException or SocketException)
+            catch (Exception e) when (e is IOException or ObjectDisposedException or SocketException or ArgumentException)
             {
             }
             loop.Post(() =>
@@ -331,16 +334,37 @@ public sealed class SocketObject : DataStream
         WriteNow(data);
     }
 
+    /// <summary>Queues the bytes. A peer that stops reading must not freeze the UI thread.</summary>
     private void WriteNow(string data)
     {
-        try
+        var bytes = Encoding.UTF8.GetBytes(data);
+        var stream = _stream;
+        var loop = Engine?.Loop;
+        var generation = _generation;
+        if (stream is null)
+            return;
+        lock (_writeGate)
         {
-            var bytes = Encoding.UTF8.GetBytes(data);
-            _stream!.Write(bytes);
-        }
-        catch (Exception e) when (e is IOException or ObjectDisposedException)
-        {
-            Emit("error", 1);
+            _writes = _writes.ContinueWith(
+                previous =>
+                {
+                    _ = previous.Exception;
+                    try
+                    {
+                        stream.Write(bytes);
+                    }
+                    catch (Exception e) when (e is IOException or ObjectDisposedException)
+                    {
+                        loop?.Post(() =>
+                        {
+                            if (generation == _generation && !IsDestroyed)
+                                Emit("error", 1);
+                        });
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
         }
     }
 
@@ -418,7 +442,7 @@ public sealed class SocketServer : QObject
             {
                 while (!token.IsCancellationRequested)
                 {
-                    pipe = new System.IO.Pipes.NamedPipeServerStream(path[9..], System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.NamedPipeServerStream.MaxAllowedServerInstances, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+                    pipe = new System.IO.Pipes.NamedPipeServerStream(path[9..], System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.NamedPipeServerStream.MaxAllowedServerInstances, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
                     await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
                     var connected = pipe;
                     pipe = null;
