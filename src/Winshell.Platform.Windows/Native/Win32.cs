@@ -288,6 +288,7 @@ internal static partial class Win32
 
     public const uint QS_ALLINPUT = 0x04FF;
     public const uint MWMO_INPUTAVAILABLE = 0x0004;
+    public const uint PM_NOREMOVE = 0x0000;
     public const uint PM_REMOVE = 0x0001;
     public const uint INFINITE = 0xFFFFFFFF;
 
@@ -424,6 +425,13 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool PeekMessageW(out MSG msg, nint hwnd, uint min, uint max, uint remove);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetMessageW(out MSG msg, nint hwnd, uint min, uint max);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PostThreadMessageW(uint thread, uint msg, nint wParam, nint lParam);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

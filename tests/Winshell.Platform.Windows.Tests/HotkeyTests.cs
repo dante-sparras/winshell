@@ -341,6 +341,43 @@ public sealed class HotkeyTests : IDisposable
     }
 
     [Fact]
+    public void The_keyboard_hook_runs_on_its_own_thread_until_it_is_removed()
+    {
+        var loop = new ManualEventLoop();
+        var registrar = new WindowsHotkeyRegistrar(loop);
+        Thread? thread;
+        try
+        {
+            Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
+            thread = WindowsHotkeyRegistrar.InstalledHookThread;
+            Assert.NotNull(thread);
+            Assert.NotEqual(Environment.CurrentManagedThreadId, thread.ManagedThreadId);
+            Assert.True(thread.IsAlive);
+        }
+        finally
+        {
+            registrar.Dispose();
+        }
+        Assert.False(thread.IsAlive);
+        Assert.Null(WindowsHotkeyRegistrar.InstalledHookThread);
+
+        registrar = new WindowsHotkeyRegistrar(loop);
+        try
+        {
+            Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
+            thread = WindowsHotkeyRegistrar.InstalledHookThread;
+            Assert.NotNull(thread);
+            WindowsHotkeyRegistrar.EmergencyUnhook();
+            Assert.False(thread.IsAlive);
+            Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
+        }
+        finally
+        {
+            registrar.Dispose();
+        }
+    }
+
+    [Fact]
     public void A_sequence_arms_without_a_hook_when_native_install_is_off()
     {
         var loop = new ManualEventLoop();

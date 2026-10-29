@@ -17,7 +17,8 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private const string ClassName = "WinshellHotkey";
 
     private static readonly object Gate = new();
-    private static nint Hook;
+    private static Thread? HookThread;
+    private static uint HookThreadId;
     private static WindowsHotkeyRegistrar? HookOwner;
 
     private readonly object _bookLock = new();
@@ -35,8 +36,6 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private bool _disposed;
 
     public WindowsHotkeyRegistrar(IEventLoop loop) => _loop = loop;
-
-    ~WindowsHotkeyRegistrar() => DetachHook();
 
     /// <summary>When false, a sequence can arm without installing a hook. Tests use this so a hook is never left behind.</summary>
     internal bool InstallNativeHook { get; set; } = true;
@@ -64,7 +63,12 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     internal static bool IsHookInstalled
     {
-        get { lock (Gate) return Hook != 0; }
+        get { lock (Gate) return HookThread is not null; }
+    }
+
+    internal static Thread? InstalledHookThread
+    {
+        get { lock (Gate) return HookThread; }
     }
 
     public HotkeyClaim Claim(IHotkeyListener listener, HotkeySequence? sequence)
@@ -152,21 +156,22 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         if (self.IsAllocated)
             self.Free();
         DetachHook();
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>Removes this process's hotkey hook, whoever installed it. Tests call this if a registrar is abandoned.</summary>
     internal static void EmergencyUnhook()
     {
-        nint hook;
+        Thread? thread;
+        uint threadId;
         lock (Gate)
         {
-            hook = Hook;
-            Hook = 0;
+            thread = HookThread;
+            threadId = HookThreadId;
+            HookThread = null;
+            HookThreadId = 0;
             HookOwner = null;
         }
-        if (hook != 0)
-            Win32.UnhookWindowsHookEx(hook);
+        StopHookThread(thread, threadId);
     }
 
     internal bool TryGetId(OsChord chord, out int id)
@@ -436,7 +441,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     private bool OwnsHook
     {
-        get { lock (Gate) return ReferenceEquals(HookOwner, this) && Hook != 0; }
+        get { lock (Gate) return ReferenceEquals(HookOwner, this) && HookThread is not null; }
     }
 
     private void SyncHook()
@@ -449,52 +454,79 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
             DetachHook();
     }
 
-    // SetWindowsHookEx can re-enter the procedure. Do not hold the book lock, or the static gate, across the call.
+    // The procedure can run before the hook is recorded here. Do not hold the book lock, or the static gate, while waiting for it.
     private bool AttachHook()
     {
         lock (Gate)
         {
-            if (HookOwner == this && Hook != 0)
+            if (HookOwner == this && HookThread is not null)
                 return true;
             if (HookOwner is not null && HookOwner != this)
                 return false;
             HookOwner = this;
         }
-        var hook = Win32.SetWindowsHookExW(Win32.WH_KEYBOARD_LL, &KeyboardProc, Win32.GetModuleHandleW(null), 0);
+        var started = new TaskCompletionSource<(nint Hook, uint ThreadId)>();
+        var thread = new Thread(() => PumpHook(started)) { IsBackground = true, Name = "Winshell keyboard hook" };
+        thread.Start();
+        var (hook, threadId) = started.Task.Result;
         lock (Gate)
         {
-            if (HookOwner != this)
+            if (HookOwner == this && hook != 0)
             {
-                if (hook != 0)
-                    Win32.UnhookWindowsHookEx(hook);
-                return false;
+                HookThread = thread;
+                HookThreadId = threadId;
+                return true;
             }
-            if (hook == 0)
-            {
+            if (HookOwner == this)
                 HookOwner = null;
-                return false;
-            }
-            Hook = hook;
-            return true;
         }
+        StopHookThread(thread, threadId);
+        return false;
     }
 
     private void DetachHook()
     {
-        nint hook;
+        Thread? thread;
+        uint threadId;
         lock (Gate)
         {
             if (HookOwner != this)
                 return;
-            hook = Hook;
-            Hook = 0;
+            thread = HookThread;
+            threadId = HookThreadId;
+            HookThread = null;
+            HookThreadId = 0;
             HookOwner = null;
         }
-        if (hook != 0)
-            Win32.UnhookWindowsHookEx(hook);
+        StopHookThread(thread, threadId);
     }
 
-    // The procedure runs on this thread. UnhookWindowsHookEx waits for it to return, so the unhook is posted.
+    /// <summary>
+    /// Windows removes a low-level hook that misses its timeout, without telling anyone. The hook gets a thread of its
+    /// own, so a busy loop thread cannot stall it. That thread installs the hook, waits in GetMessage, and unhooks on WM_QUIT.
+    /// </summary>
+    private static void PumpHook(TaskCompletionSource<(nint Hook, uint ThreadId)> started)
+    {
+        Win32.PeekMessageW(out _, 0, 0, 0, Win32.PM_NOREMOVE);
+        var hook = Win32.SetWindowsHookExW(Win32.WH_KEYBOARD_LL, &KeyboardProc, Win32.GetModuleHandleW(null), 0);
+        started.SetResult((hook, Win32.GetCurrentThreadId()));
+        if (hook == 0)
+            return;
+        while (Win32.GetMessageW(out _, 0, 0, 0) > 0)
+        {
+        }
+        Win32.UnhookWindowsHookEx(hook);
+    }
+
+    private static void StopHookThread(Thread? thread, uint threadId)
+    {
+        if (thread is null)
+            return;
+        Win32.PostThreadMessageW(threadId, Win32.WM_QUIT, 0, 0);
+        thread.Join();
+    }
+
+    // The procedure runs on the hook thread. Work for the loop is posted, and so is the unhook.
     private bool OnHook(nint lParam)
     {
         var info = (KbdLlHookStruct*)lParam;
