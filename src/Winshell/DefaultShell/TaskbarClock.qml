@@ -10,6 +10,11 @@ Item {
   // Whether the flyout is open, so an auto-hiding taskbar stays up.
   readonly property bool busy: calendar.visible
 
+  // Win+N, as a click on the clock.
+  function toggleCalendar() {
+    calendar.visible = !calendar.visible
+  }
+
   implicitWidth: clockButton.implicitWidth
   implicitHeight: 40
 
@@ -31,7 +36,7 @@ Item {
     flat: true
     Accessible.name: clockFormat.timeLabel + ", " + clockFormat.dateLabel
     Accessible.description: "Open notification center and calendar"
-    onClicked: calendar.visible = !calendar.visible
+    onClicked: root.toggleCalendar()
   }
 
   CalendarFlyout {

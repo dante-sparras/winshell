@@ -23,6 +23,10 @@ To change a surface, [copy the default shell](../guide/getting-started.md#make-t
 | `Win` | Opens or closes Start. Change it on Winshell Settings' Hotkeys page. |
 | None until set | Opens Winshell Settings. Set it on the Hotkeys page. |
 | `Win+T` | Puts the keyboard on the first app of the main taskbar. While Explorer runs, Windows keeps `Win+T` and the hotkey is `taken`. |
+| `Win+S` | Opens Search on the main taskbar. While Explorer runs, Windows keeps `Win+S` and the hotkey is `taken`. |
+| `Win+A` | Opens or closes quick settings on the main taskbar. While Explorer runs, Windows keeps `Win+A` and the hotkey is `taken`. |
+| `Win+N` | Opens or closes the notification center on the main taskbar. While Explorer runs, Windows keeps `Win+N` and the hotkey is `taken`. |
+| `Win+1` to `Win+9`, `Win+0` | Does what a click does on that app of the main taskbar. `Win+0` is the tenth. `Win+Shift` with the number opens a new window. While Explorer runs, Windows keeps these and the hotkey is `taken`. |
 
 A hotkey another app or Windows already holds isn't taken from it; Winshell Settings shows that it is taken. See [hotkeys](../hotkeys.md).
 

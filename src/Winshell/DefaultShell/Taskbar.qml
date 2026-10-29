@@ -56,6 +56,18 @@ PanelWindow {
     target.forceActiveFocus(Qt.ShortcutFocusReason)
   }
 
+  // Win+A and Win+N open what the tray icons and the clock open. A replaced trayArea or clockArea without that
+  // function ignores the chord.
+  function toggleQuickSettings() {
+    if (trayLoader.item && typeof trayLoader.item.toggleQuickSettings === "function")
+      trayLoader.item.toggleQuickSettings()
+  }
+
+  function toggleNotifications() {
+    if (clockLoader.item && typeof clockLoader.item.toggleCalendar === "function")
+      clockLoader.item.toggleCalendar()
+  }
+
   function leaveKeyboard() {
     const back = keyboardReturn
     keyboardActive = false
