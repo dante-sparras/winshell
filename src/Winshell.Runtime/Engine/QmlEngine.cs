@@ -59,7 +59,7 @@ public sealed class QmlEngine : IDisposable
     public List<string> ImportPaths { get; } = [];
 
     /// <summary>Every file this engine read, so a change to any of them can reload the shell.</summary>
-    public IReadOnlyCollection<string> LoadedFiles => _documents.Keys;
+    public IReadOnlyCollection<string> LoadedFiles => [.. _documents.Keys, .. _scriptSources.Keys];
 
     public bool IsCreating => _batches.Count > 0;
 
