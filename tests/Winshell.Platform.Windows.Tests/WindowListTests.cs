@@ -141,6 +141,15 @@ public class WindowListTests
     }
 
     [Fact]
+    public void Caret_cursor_and_child_objects_are_not_window_events()
+    {
+        Assert.True(WindowRules.IsWindowObject(NativeMethods.OBJID_WINDOW, NativeMethods.CHILDID_SELF));
+        Assert.False(WindowRules.IsWindowObject(-8 /* OBJID_CARET */, NativeMethods.CHILDID_SELF));
+        Assert.False(WindowRules.IsWindowObject(-9 /* OBJID_CURSOR */, NativeMethods.CHILDID_SELF));
+        Assert.False(WindowRules.IsWindowObject(NativeMethods.OBJID_WINDOW, 1));
+    }
+
+    [Fact]
     public void Only_HSHELL_FLASH_asks_for_attention()
     {
         Assert.True(WindowRules.IsFlash(0x8006));

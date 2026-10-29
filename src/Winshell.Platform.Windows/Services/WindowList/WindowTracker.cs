@@ -134,6 +134,10 @@ internal static unsafe class WindowTracker
 
     private static void Mark(uint eventType, nint hwnd, int idObject, int idChild)
     {
+        // Windows reports no move of a window on its own, so maximizing, restoring and moving to another monitor
+        // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
+        if (eventType == EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
+            return;
         var isRoot = hwnd != 0 && eventType != EVENT_OBJECT_DESTROY && GetAncestor(hwnd, GA_ROOT) == hwnd;
         var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);
         if (!marksWindow && !WindowRules.MarksForeground(eventType))

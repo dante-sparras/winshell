@@ -100,12 +100,19 @@ internal static class WindowRules
         return new RECT(x, y, x + w, y + h);
     }
 
+    /// <summary>
+    /// Whether a WinEvent is about a window itself and not a caret, a cursor, or an object inside one. The caret and
+    /// cursor send <c>EVENT_OBJECT_LOCATIONCHANGE</c> on every move.
+    /// </summary>
+    public static bool IsWindowObject(int idObject, int idChild) =>
+        idObject == NativeMethods.OBJID_WINDOW && idChild == NativeMethods.CHILDID_SELF;
+
     /// <summary>Whether a WinEvent names a top-level window the list should read again.</summary>
     public static bool MarksWindow(uint eventType, nint hwnd, int idObject, int idChild, bool tracked, bool isRoot)
     {
         if (eventType == NativeMethods.EVENT_SYSTEM_FOREGROUND)
             return hwnd != 0;
-        if (hwnd == 0 || idObject != NativeMethods.OBJID_WINDOW || idChild != NativeMethods.CHILDID_SELF)
+        if (hwnd == 0 || !IsWindowObject(idObject, idChild))
             return false;
         // A destroyed window can no longer say whether it was top-level, so only one the list already had counts.
         return eventType == NativeMethods.EVENT_OBJECT_DESTROY ? tracked : isRoot;
