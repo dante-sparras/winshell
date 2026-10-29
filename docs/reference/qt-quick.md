@@ -115,6 +115,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `DragHandler.xAxis` | Ignored, as is `yAxis`: no axis lock or limits. |
 | `State.extend` | Ignored. |
 | `PropertyAnimation.alwaysRunToEnd` | Ignored, on every animation. |
+| `SpringAnimation.spring` | Not a spring: the value eases out to its target over a fixed time that `spring` and `damping` set. There is no overshoot, and `mass`, `velocity`, `epsilon` and `modulus` are ignored. |
 | `RowLayout.uniformCellSizes` | Ignored, as on `ColumnLayout` and `GridLayout`. |
 | `Binding.delayed` | Ignored, as is `restoreMode`. |
 | `Text.font` | `font.styleName`, `font.kerning`, `font.features` and `font.variableAxes` are ignored, here and on every item and control with a `font`. |
