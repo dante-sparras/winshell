@@ -173,8 +173,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         get
         {
             Track("cursorPosition");
-            var x = OffsetOf(_cursorPosition) - _scrollX + _leftPadding;
-            return new QRect(x, _topPadding, 1, LineHeight);
+            return PositionToRectangle(_cursorPosition);
         }
     }
 
@@ -202,9 +201,9 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public int MaximumLength { get { Track(); return _maximumLength; } set => SetField(ref _maximumLength, Math.Max(0, value)); }
 
-    [Qml] public int HorizontalAlignment { get { Track(); return _horizontalAlignment; } set { if (SetField(ref _horizontalAlignment, value)) Update(); } }
+    [Qml] public int HorizontalAlignment { get { Track(); return _horizontalAlignment; } set { if (SetField(ref _horizontalAlignment, value)) { NotifyChanged("cursorRectangle"); Update(); } } }
 
-    [Qml] public int VerticalAlignment { get { Track(); return _verticalAlignment; } set { if (SetField(ref _verticalAlignment, value)) Update(); } }
+    [Qml] public int VerticalAlignment { get { Track(); return _verticalAlignment; } set { if (SetField(ref _verticalAlignment, value)) { NotifyChanged("cursorRectangle"); Update(); } } }
 
     [Qml] public bool CursorVisible { get { Track(); return _cursorVisible; } set { if (SetField(ref _cursorVisible, value)) Update(); } }
 
@@ -377,7 +376,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public int PositionAt(double x, double y = 0, int position = 0)
     {
-        x = x - _leftPadding + _scrollX;
+        x -= TextOrigin(LineHeight).X;
         var layout = VisualLayout();
         if (layout is null)
             return 0;
@@ -385,7 +384,12 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     }
 
     [Qml]
-    public QRect PositionToRectangle(int position) => new(OffsetOf(position) - _scrollX + _leftPadding, _topPadding, 1, LineHeight);
+    public QRect PositionToRectangle(int position)
+    {
+        var lineHeight = LineHeight;
+        var (x, y) = TextOrigin(lineHeight);
+        return new QRect(x + OffsetOf(position), y, 1, lineHeight);
+    }
 
     [Qml]
     public bool IsRightToLeft(int start, int end)
@@ -505,6 +509,27 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private double OffsetOf(int position) => VisualLayout()?.CaretX(ToVisual(position)) ?? 0;
 
+    /// <summary>Where the text's line starts in the item, after padding, scrolling and alignment. Drawing, clicks and the caret all use it.</summary>
+    private (double X, double Y) TextOrigin(double lineHeight)
+    {
+        var available = Width - _leftPadding - _rightPadding - ReservedRight;
+        var total = VisualLayout()?.Width ?? 0;
+        var x = _leftPadding - _scrollX;
+        if (total < available)
+        {
+            if ((_horizontalAlignment & QtEnums.AlignHCenter) != 0)
+                x += (available - total) / 2;
+            else if ((_horizontalAlignment & QtEnums.AlignRight) != 0)
+                x += available - total;
+        }
+        var y = _topPadding;
+        if ((_verticalAlignment & QtEnums.AlignVCenter) != 0)
+            y = (Height - lineHeight) / 2;
+        else if ((_verticalAlignment & QtEnums.AlignBottom) != 0)
+            y = Height - _bottomPadding - lineHeight;
+        return (x, y);
+    }
+
     public void SetComposition(string text)
     {
         text ??= "";
@@ -537,11 +562,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         NotifyChanged("cursorRectangle");
     }
 
-    public QRect ImeCaret()
-    {
-        var x = OffsetOf(_cursorPosition) - _scrollX + _leftPadding;
-        return new QRect(x, _topPadding, 1, LineHeight);
-    }
+    public QRect ImeCaret() => PositionToRectangle(_cursorPosition);
 
     private void UpdateImplicit()
     {
@@ -813,24 +834,12 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         var available = Width - _leftPadding - _rightPadding - ReservedRight;
         var lineHeight = LineHeight;
-        var y = _topPadding;
-        if ((_verticalAlignment & QtEnums.AlignVCenter) != 0)
-            y = (Height - lineHeight) / 2;
-        else if ((_verticalAlignment & QtEnums.AlignBottom) != 0)
-            y = Height - _bottomPadding - lineHeight;
+        var (x, y) = TextOrigin(lineHeight);
         var layout = VisualLayout();
         var total = layout?.Width ?? 0;
-        var alignOffset = 0.0;
-        if (total < available)
-        {
-            if ((_horizontalAlignment & QtEnums.AlignHCenter) != 0)
-                alignOffset = (available - total) / 2;
-            else if ((_horizontalAlignment & QtEnums.AlignRight) != 0)
-                alignOffset = available - total;
-        }
         canvas.Save();
         canvas.ClipRect(SKRect.Create((float)_leftPadding, 0, (float)Math.Max(0, available + 1), (float)Height));
-        canvas.Translate((float)(_leftPadding - _scrollX + alignOffset), (float)y);
+        canvas.Translate((float)x, (float)y);
         if (SelectionEnd > SelectionStart && (ActiveFocus || PersistentSelection))
         {
             var sx = OffsetOf(SelectionStart);
