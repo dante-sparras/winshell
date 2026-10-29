@@ -235,4 +235,13 @@ public class QmlParserTests
         Assert.Equal("widgetsextra.js", imported.Imports[0].Uri);
         Assert.Equal("Extra", imported.Imports[0].Qualifier);
     }
+
+    [Fact]
+    public void The_root_location_is_the_type_name()
+    {
+        var doc = QmlParser.Parse("\n  Item {}", "shell.qml");
+        Assert.Equal(2, doc.Root.Location.Line);
+        Assert.Equal(3, doc.Root.Location.Column);
+        Assert.Equal("shell.qml", doc.Root.Location.File);
+    }
 }
