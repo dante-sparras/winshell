@@ -202,6 +202,90 @@ public sealed class AudioTests : IDisposable
         }
     }
 
+    [Fact]
+    public void A_device_node_releases_its_com_objects_once()
+    {
+        var enumerator = CoreAudio.Create<IMMDeviceEnumerator>(CoreAudio.MMDeviceEnumeratorClsid);
+        if (enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Console, out var device) != 0)
+        {
+            _output.WriteLine("no playback device");
+            return;
+        }
+        device.GetId(out var id);
+        var node = new EndpointNode(AudioGraph.Get(_loop, new Log()), device, id, render: true);
+        var meter = node.Meter;
+        Assert.NotNull(meter);
+
+        node.Release();
+        node.Release();
+
+        Assert.Throws<InvalidComObjectException>(() => device.GetId(out _));
+        Assert.Throws<InvalidComObjectException>(() => meter.GetPeakValue(out _));
+        Assert.Null(node.Meter);
+        node.SetMuted(true);
+        Assert.Null(node.KeepRunning());
+    }
+
+    [Fact]
+    public async Task A_session_node_releases_its_com_objects_once()
+    {
+        var playback = _root.ReadProperty("playback") as AudioNode;
+        if (playback is null)
+        {
+            _output.WriteLine("no playback device");
+            return;
+        }
+        var client = StartSilence(playback.Name);
+        try
+        {
+            var audio = (AudioService)_root.ReadProperty("audio")!;
+            var node = (SessionNode)(await WaitForSession(audio))!.Node;
+            var graph = AudioGraph.Get(_loop, new Log());
+            var meter = node.Meter;
+            Assert.NotNull(meter);
+
+            graph.RemoveSession(node);
+            node.Release();
+
+            Assert.Throws<InvalidComObjectException>(() => meter.GetPeakValue(out _));
+            Assert.Null(node.Meter);
+            node.SetMuted(true);
+        }
+        finally
+        {
+            client.Stop();
+            Marshal.ReleaseComObject(client);
+        }
+    }
+
+    [Fact]
+    public async Task A_recording_meter_does_not_list_this_process_as_a_recording_session()
+    {
+        // The graph is one per process and posts to the loop it was made with, so this test makes its own.
+        var instance = typeof(AudioGraph).GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        instance.SetValue(null, null);
+        try
+        {
+            var graph = AudioGraph.Get(_loop, new Log());
+            if (graph.DefaultRecording is not { } recording)
+            {
+                _output.WriteLine("no recording device");
+                return;
+            }
+            using var keepRunning = recording.KeepRunning();
+            for (var i = 0; i < 10; i++)
+            {
+                _loop.Process();
+                Assert.DoesNotContain(recording.Sessions, s => s.Properties["processId"] == Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+                await Task.Delay(50);
+            }
+        }
+        finally
+        {
+            instance.SetValue(null, null);
+        }
+    }
+
     public void Dispose()
     {
         _engine.Dispose();

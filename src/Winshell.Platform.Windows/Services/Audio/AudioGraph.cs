@@ -20,7 +20,7 @@ internal sealed class AudioGraph
     private readonly List<AudioGraphNode> _nodes = [];
     private readonly List<AudioGraphLink> _links = [];
     private readonly Dictionary<string, EndpointNode> _endpoints = new(StringComparer.OrdinalIgnoreCase);
-    private bool _syncPending;
+    private int _syncPending;
     private int _nextId = 1;
 
     /// <summary>The event context Winshell's own volume changes carry.</summary>
@@ -104,12 +104,11 @@ internal sealed class AudioGraph
     /// <summary>Asks for the device list to be read again, once, on the UI thread.</summary>
     internal void RequestSync()
     {
-        if (_syncPending)
+        if (Interlocked.Exchange(ref _syncPending, 1) != 0)
             return;
-        _syncPending = true;
         Post(() =>
         {
-            _syncPending = false;
+            Interlocked.Exchange(ref _syncPending, 0);
             Sync();
             ReadDefaults();
         });
@@ -358,7 +357,7 @@ internal sealed class EndpointNode : AudioGraphNode
     private IAudioMeterInformation? _meter;
     private IAudioClient? _keepAlive;
     private int _keepAliveCount;
-    private bool _refreshPending;
+    private int _refreshPending;
 
     public EndpointNode(AudioGraph graph, IMMDevice device, string deviceId, bool render)
         : base(graph.NextId())
@@ -400,6 +399,8 @@ internal sealed class EndpointNode : AudioGraphNode
     {
         get
         {
+            if (Released)
+                return null;
             try
             {
                 return _meter ??= CoreAudio.Activate<IAudioMeterInformation>(_device, CoreAudio.AudioMeterInformationIid);
@@ -413,7 +414,7 @@ internal sealed class EndpointNode : AudioGraphNode
 
     public override void SetVolumes(IReadOnlyList<float> volumes)
     {
-        if (volumes.Count == 0)
+        if (volumes.Count == 0 || Released)
             return;
         var context = AudioGraph.Context;
         if (volumes.All(v => v == volumes[0]) || volumes.Count != Channels.Length)
@@ -430,6 +431,8 @@ internal sealed class EndpointNode : AudioGraphNode
 
     public override void SetMuted(bool muted)
     {
+        if (Released)
+            return;
         var context = AudioGraph.Context;
         _volume.SetMute(muted, ref context);
         ReadVolume();
@@ -437,11 +440,12 @@ internal sealed class EndpointNode : AudioGraphNode
 
     /// <summary>
     /// A recording device only meters while something records from it. This opens a shared recording
-    /// stream while peaks are wanted.
+    /// stream while peaks are wanted. Windows shows its microphone privacy indicator while the stream is
+    /// open; the stream's own session is not shown as a node.
     /// </summary>
     public override IDisposable? KeepRunning()
     {
-        if (IsPlayback)
+        if (IsPlayback || Released)
             return null;
         if (_keepAliveCount++ == 0)
         {
@@ -455,6 +459,12 @@ internal sealed class EndpointNode : AudioGraphNode
                     Marshal.FreeCoTaskMem(format);
                     if (ok)
                         _keepAlive = client;
+                    else
+                        CoreAudio.Release(client);
+                }
+                else
+                {
+                    CoreAudio.Release(client);
                 }
             }
             catch (COMException)
@@ -463,12 +473,25 @@ internal sealed class EndpointNode : AudioGraphNode
         }
         return new DisposeAction(() =>
         {
-            if (--_keepAliveCount == 0 && _keepAlive is { } client)
-            {
-                client.Stop();
-                _keepAlive = null;
-            }
+            if (--_keepAliveCount == 0)
+                StopKeepAlive();
         });
+    }
+
+    private void StopKeepAlive()
+    {
+        if (_keepAlive is not { } client)
+            return;
+        _keepAlive = null;
+        try
+        {
+            client.Stop();
+        }
+        catch (COMException)
+        {
+            // The device is gone already.
+        }
+        CoreAudio.Release(client);
     }
 
     private void ReadVolume()
@@ -482,12 +505,11 @@ internal sealed class EndpointNode : AudioGraphNode
 
     private void RequestRefresh()
     {
-        if (_refreshPending)
+        if (Interlocked.Exchange(ref _refreshPending, 1) != 0)
             return;
-        _refreshPending = true;
         _graph.Post(() =>
         {
-            _refreshPending = false;
+            Interlocked.Exchange(ref _refreshPending, 0);
             if (!Released)
                 ReadVolume();
         });
@@ -526,8 +548,11 @@ internal sealed class EndpointNode : AudioGraphNode
         if (Sessions.Any(s => s.InstanceId == instance))
             return;
         control.GetState(out var state);
-        // A recording device's System Sounds session records nothing.
-        if (state == AudioSessionState.Expired || (!IsPlayback && control.IsSystemSoundsSession() == 0))
+        control.GetProcessId(out var processId);
+        // A recording device's System Sounds session records nothing, and this process's own session there is
+        // the stream KeepRunning opens to make the meter work.
+        if (state == AudioSessionState.Expired
+            || (!IsPlayback && (control.IsSystemSoundsSession() == 0 || processId == Environment.ProcessId)))
             return;
         SessionNode session;
         try
@@ -546,18 +571,24 @@ internal sealed class EndpointNode : AudioGraphNode
 
     public void Release()
     {
+        if (Released)
+            return;
         Released = true;
         try
         {
             _volume.UnregisterControlChangeNotify(_volumeNotifications);
             if (_sessionNotifications is not null)
                 _sessionManager?.UnregisterSessionNotification(_sessionNotifications);
-            _keepAlive?.Stop();
         }
         catch (COMException)
         {
             // The device is gone already.
         }
+        StopKeepAlive();
+        CoreAudio.Release(_meter);
+        CoreAudio.Release(_sessionManager);
+        CoreAudio.Release(_volume);
+        CoreAudio.Release(_device);
     }
 
     private static string IconName(uint? formFactor, bool render) => formFactor switch
@@ -660,11 +691,11 @@ internal sealed class SessionNode : AudioGraphNode
 
     public AudioGraphLink? Link { get; set; }
 
-    public override IAudioMeterInformation? Meter => _control as IAudioMeterInformation;
+    public override IAudioMeterInformation? Meter => _released ? null : _control as IAudioMeterInformation;
 
     public override void SetVolumes(IReadOnlyList<float> volumes)
     {
-        if (volumes.Count == 0)
+        if (volumes.Count == 0 || _released)
             return;
         var context = AudioGraph.Context;
         _volume.SetMasterVolume(Math.Clamp(volumes.Average(), 0, 1), ref context);
@@ -673,6 +704,8 @@ internal sealed class SessionNode : AudioGraphNode
 
     public override void SetMuted(bool muted)
     {
+        if (_released)
+            return;
         var context = AudioGraph.Context;
         _volume.SetMute(muted, ref context);
         ReadVolume();
@@ -719,6 +752,8 @@ internal sealed class SessionNode : AudioGraphNode
         catch (COMException)
         {
         }
+        // The volume and the meter are this same object.
+        CoreAudio.Release(_control);
     }
 
     /// <summary>Drops the exit callback before the process is disposed, so a late exit is not delivered.</summary>
