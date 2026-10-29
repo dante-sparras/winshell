@@ -19,7 +19,10 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
 │   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
+│   ├── guide/                       # The docs site's guide section
 │   ├── development.md               # Setup, environment, and every command
+│   ├── docfx.json                   # Builds docs/ into the docs site
+│   ├── index.md                     # The docs site's home page
 │   └── migrating-from-quickshell.md # Quickshell names and their Winshell names
 ├── packaging/
 │   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs
@@ -27,7 +30,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
 ├── scripts/
-│   ├── check.ps1                    # Build with warnings as errors, then test
+│   ├── check.ps1                    # Build with warnings as errors, build the docs, then test
 │   ├── dev.ps1                      # Prepares a fresh clone
 │   ├── fetch-reference.cs           # Fetches the Quickshell manual as markdown
 │   ├── package.ps1                  # Builds the portable zips, winget manifests and Store package a release ships
@@ -44,6 +47,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell.Platform.Windows.Tests/
 │   └── Winshell.Tests/              # Runs winshell.exe instances side by side
 ├── winshell.slnx                    # The solution the check builds
+├── dotnet-tools.json                # DocFX, pinned
 ├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
 ├── CONTRIBUTING.md                  # Branches, commit and PR titles, PR rules
 └── GLOSSARY.md                      # The words this repo uses

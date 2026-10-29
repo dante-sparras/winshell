@@ -11,9 +11,9 @@ Winshell runs on Windows 11.
 
 Both are self-contained: no .NET install is needed. Both update themselves from GitHub Releases, unless you turn that off in Winshell Settings > About. See [Winshell updates](docs/updates.md). Releases will be signed through SignPath Foundation once its project for Winshell is approved; see the [Code signing policy](docs/code-signing-policy.md).
 
-## Getting started
+## Documentation
 
-See the [development runbook](docs/development.md) for prerequisites, first checkout, and commands.
+The [docs](docs/index.md) cover the default shell, the Windows services a configuration can use, and the decisions behind Winshell. To build Winshell from source, see the [development runbook](docs/development.md).
 
 Coming from Quickshell? See [Migrating from Quickshell](docs/migrating-from-quickshell.md).
 

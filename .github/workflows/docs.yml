@@ -1,0 +1,77 @@
+name: Docs
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  # Checks external links once a week, since a site can move a page without a change here.
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    # Builds docs/ into a site with DocFX. A broken link or anchor between pages fails the build.
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build the site
+        run: |
+          dotnet tool restore
+          dotnet docfx docs/docfx.json --warningsAsErrors
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/_site
+
+  links:
+    # Links to other sites. Kept out of the build, so a site that is down for a moment can't fail a PR's docs.
+    name: links
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-retries 4
+            --accept '200..=299,429'
+            --exclude-path 'docs/agents'
+            'docs/**/*.md'
+            README.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    # Publishes the site to GitHub Pages from main. It is skipped until the maintainer turns Pages on with
+    # "GitHub Actions" as the source and sets the repository variable DOCS_PAGES to true.
+    name: deploy
+    if: ${{ github.event_name == 'push' && vars.DOCS_PAGES == 'true' }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write # publishes the site
+      id-token: write # proves to Pages that this workflow made the artifact
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -3,15 +3,27 @@
 `Winshell.Network` exposes the `Networking` singleton. Loading it reads state and subscribes to Windows network notifications; it never requests permission, changes a connection, or controls radios.
 
 ```qml
+import QtQuick
+import QtQuick.Controls
 import Winshell.Network
 
-// Read models through Networking.devices.values and Networking.profiles.values.
-// Call these from explicit user actions:
-// Networking.requestAccess()
-// wifiDevice.scan()
-// wifiNetwork.connect()                    // saved credentials or open network
-// wifiNetwork.connectWithPassword(password)
-// wifiNetwork.disconnect()
+// The Wi-Fi networks of the first Wi-Fi adapter. Each call runs only when the user clicks.
+Column {
+    readonly property var wifi: Networking.devices.values.find(d => d.type === DeviceType.Wifi) ?? null
+
+    Button { text: "Allow Wi-Fi access"; onClicked: Networking.requestAccess() }
+    Button { text: "Scan"; enabled: wifi !== null && !wifi.scanning; onClicked: wifi.scan() }
+    Repeater {
+        model: wifi ? wifi.networks : []
+        Button {
+            required property var modelData
+            text: modelData.name + (modelData.connected ? " (connected)" : "")
+            enabled: !modelData.busy
+            // connectWithPassword(password) for a secured network that isn't saved; forget() removes a saved one.
+            onClicked: modelData.connected ? modelData.disconnect() : modelData.connect()
+        }
+    }
+}
 ```
 
 `devices` contains physical wired and Wi-Fi adapters, with Windows adapter `id`, `name`, MAC `address`, `state`, and `networks`. `WifiDevice.scan()` performs one scan, exposes `scanning` while pending, and updates the networks model. No periodic scan runs in the background. Network objects retain identity by adapter and SSID; removed networks and adapters are destroyed. Wi-Fi `signalStrength` is normalized to 0–1; `security` describes authentication. `saved` matches the SSID against saved WLAN profile names; a profile renamed separately from its SSID might not match. `forget()` removes that matching saved WLAN profile only when explicitly invoked. Wired `hasLink` and `linkSpeed` (Mbps) describe the physical link; Windows manages wired connections automatically.
