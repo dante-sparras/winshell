@@ -609,8 +609,11 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public void InsertText(string text)
     {
-        if (_readOnly || text.Length == 0 || text.Any(char.IsControl))
+        if (_readOnly || text.Length == 0)
             return;
+        // A tab or other control in a paste used to drop the whole string.
+        if (text.Any(char.IsControl))
+            text = new string(text.Select(c => char.IsControl(c) ? ' ' : c).ToArray());
         DeleteSelection(fromUser: true);
         var room = _maximumLength - _text.Length;
         if (room <= 0)
