@@ -25,7 +25,7 @@ Relevant inputs are downloaded release metadata/archives, hand-edited TOML, conf
 
 ## Other Windows-facing inputs
 
-The tray host accepts cross-integrity `WM_COPYDATA` to interoperate with Explorer and validates protocol data (`TrayProtocolTests`/`TrayHostTests`). Its private test classes do not prove compatibility with every real tray app or Windows update. Hotkeys are released at teardown; tests use an unused chord and do not inject keyboard input.
+The tray host accepts cross-integrity `WM_COPYDATA` to interoperate with Explorer and validates protocol data (`TrayProtocolTests`/`TrayHostTests`). Nothing identifies which app sent an icon, so the window and callback it names are not trusted: a callback below `WM_USER` is never sent, and an elevated shell clicks no app above medium integrity, so a click reaches no further than Explorer's. Like Explorer's, a click can still reach a window at the shell's level that a lower-integrity app named. The host's private test classes do not prove compatibility with every real tray app or Windows update. Hotkeys are released at teardown; tests use an unused chord and do not inject keyboard input.
 
 Media artwork is written to a process-specific temporary cache. The audit reproduced cleanup following a directory junction and deleting an old file outside that cache, using only test-owned temporary folders ([#172](https://github.com/dante-sparras/winshell/issues/172)). That file-safety fix has its own review gate; local storage trust does not justify recursive deletion through links.
 
