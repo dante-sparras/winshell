@@ -17,7 +17,7 @@ That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder 
 > [!NOTE]
 > 0.5.0, the current release, has no download. The release after it will carry a self-contained build, which needs no .NET install, on its [GitHub release page](https://github.com/dante-sparras/winshell/releases): `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. A winget package, `winget install DanteSparras.Winshell`, follows once winget has accepted it.
 
-To update, close Winshell, pull the newer source and publish it over the same folder. The default shell updates with it. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
+To update, close Winshell, pull the newer source and publish it over the same folder. A build from source never updates itself; the release zips and the winget package will, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
 
 To uninstall, turn off **Run Winshell when I sign in** in Winshell Settings if you turned it on, close Winshell, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
 

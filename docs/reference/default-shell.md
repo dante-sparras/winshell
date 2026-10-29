@@ -32,7 +32,7 @@ A Windows 11 taskbar along the bottom of each screen, or of the main screen only
 
 [The taskbar](../taskbar.md) explains its settings (`centered`, `autoHide`, `appsOn`), pinned apps, previews, the keyboard and Narrator, and the hooks other surfaces plug into: `startRequested`, `searchRequested`, `trayArea` and `clockArea`. Pins are in `taskbar.json` in the shell's data folder.
 
-Right-click an empty part of the taskbar for **Taskbar settings**. Search opens Windows search.
+Right-click an empty part of the taskbar for **Taskbar settings**. Search opens Windows search. While a Winshell update is ready to install, an icon in the notification area opens the updates card in Winshell Settings; see [Winshell updates](../updates.md).
 
 ## Start
 
@@ -63,7 +63,7 @@ When the volume, a monitor's brightness, the microphone mute or the media playin
 
 ## Winshell Settings
 
-A window laid out like Windows 11 Settings, for Winshell's own choices: light or dark, the accent color, the material, the taskbar, Start, quick settings, notifications, hotkeys, and running at sign-in. Open it from the taskbar's right-click menu, its hotkey, or `winshell ipc call settings open <page>`.
+A window laid out like Windows 11 Settings, for Winshell's own choices: light or dark, the accent color, the material, the taskbar, Start, quick settings, notifications, hotkeys, running at sign-in, and Winshell's own updates. Open it from the taskbar's right-click menu, its hotkey, or `winshell ipc call settings open <page>`.
 
 [Winshell Settings](../settings.md) lists its pages and the keys of `preferences.json`.
 
