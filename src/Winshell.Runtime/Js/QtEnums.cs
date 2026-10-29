@@ -21,6 +21,15 @@ public static class QtEnums
     public const int ForwardButton = 16;
     public const int AllButtons = 0x07ffffff;
 
+    public const int MouseFocusReason = 0;
+    public const int TabFocusReason = 1;
+    public const int BacktabFocusReason = 2;
+    public const int ActiveWindowFocusReason = 3;
+    public const int PopupFocusReason = 4;
+    public const int ShortcutFocusReason = 5;
+    public const int MenuBarFocusReason = 6;
+    public const int OtherFocusReason = 7;
+
     public const int NoModifier = 0;
     public const int ShiftModifier = 0x02000000;
     public const int ControlModifier = 0x04000000;
@@ -41,6 +50,9 @@ public static class QtEnums
                 new("NoButton", NoButton), new("LeftButton", LeftButton), new("RightButton", RightButton),
                 new("MiddleButton", MiddleButton), new("BackButton", BackButton), new("ForwardButton", ForwardButton),
                 new("AllButtons", AllButtons),
+                new("MouseFocusReason", MouseFocusReason), new("TabFocusReason", TabFocusReason), new("BacktabFocusReason", BacktabFocusReason),
+                new("ActiveWindowFocusReason", ActiveWindowFocusReason), new("PopupFocusReason", PopupFocusReason), new("ShortcutFocusReason", ShortcutFocusReason),
+                new("MenuBarFocusReason", MenuBarFocusReason), new("OtherFocusReason", OtherFocusReason),
                 new("NoModifier", NoModifier), new("ShiftModifier", ShiftModifier), new("ControlModifier", ControlModifier),
                 new("AltModifier", AltModifier), new("MetaModifier", MetaModifier), new("KeypadModifier", KeypadModifier),
                 new("Horizontal", 1), new("Vertical", 2),

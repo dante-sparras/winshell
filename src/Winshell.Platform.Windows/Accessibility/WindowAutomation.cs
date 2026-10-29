@@ -37,6 +37,9 @@ internal sealed class WindowAutomation : IDisposable
 
     public nint Handle => _window.Handle;
 
+    /// <summary>The window takes the keyboard for an item a client focused.</summary>
+    internal void TakeKeyboard() => _window.TakeKeyboardForAutomation();
+
     /// <summary>Whether the window has the keyboard, so focus inside it is focus on the desktop.</summary>
     public bool HasFocus => Handle != 0 && Win32.GetFocus() == Handle;
 

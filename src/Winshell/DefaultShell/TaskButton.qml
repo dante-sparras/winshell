@@ -16,14 +16,33 @@ MouseArea {
   readonly property bool attention: windows.some(w => w.attention)
 
   // A left click or Narrator's invoke, a middle or Shift click for a new window, and a right click for the menu.
+  // From the keyboard: Enter or Space, Shift+Enter, and the menu key or Shift+F10; Up shows the previews.
   signal invoked()
   signal launchRequested()
   signal menuRequested()
+  signal previewRequested()
 
   implicitWidth: 40
   implicitHeight: 40
   hoverEnabled: true
   acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+  activeFocusOnTab: true
+
+  Keys.onPressed: event => {
+    event.accepted = false
+    const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+    if (enter && (event.modifiers & Qt.ShiftModifier))
+      root.launchRequested()
+    else if (enter || event.key === Qt.Key_Space)
+      root.invoked()
+    else if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)))
+      root.menuRequested()
+    else if (event.key === Qt.Key_Up && root.running)
+      root.previewRequested()
+    else
+      return
+    event.accepted = true
+  }
 
   Accessible.role: Accessible.Button
   Accessible.name: task ? Tasks.accessibleName(task) : ""

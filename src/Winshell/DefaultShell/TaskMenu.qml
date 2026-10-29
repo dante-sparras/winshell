@@ -10,11 +10,12 @@ PopupWindow {
 
   property var task: null
   property string taskKey: ""
-  property int current: 0
 
   signal launchRequested()
   signal pinRequested()
   signal unpinRequested()
+  // Escape closed the menu, so the keyboard goes back to the button it opened from.
+  signal dismissed()
 
   readonly property var items: {
     if (!task)
@@ -38,12 +39,13 @@ PopupWindow {
   anchor.gravity: Edges.Top
   anchor.margins.top: 8
 
+  // The first item takes focus, so Narrator reads it and the arrow keys move from it.
   function open(button, key) {
     anchor.item = button
     taskKey = key
-    current = 0
     visible = true
-    keys.forceActiveFocus()
+    if (rows.count > 0)
+      rows.itemAt(0).forceActiveFocus(Qt.ShortcutFocusReason)
   }
 
   function trigger(id) {
@@ -66,21 +68,23 @@ PopupWindow {
   Item {
     id: keys
     anchors.fill: parent
-    focus: true
     Accessible.role: Accessible.PopupMenu
     Accessible.name: root.task ? Tasks.name(root.task) : ""
 
+    // Focus itself moves between the items, wrapping around, so Narrator announces each one.
     Keys.onPressed: event => {
-      if (event.key === Qt.Key_Escape)
+      event.accepted = false
+      const focused = root.activeFocusItem
+      if (event.key === Qt.Key_Escape) {
         root.visible = false
-      else if (event.key === Qt.Key_Down)
-        root.current = (root.current + 1) % root.items.length
-      else if (event.key === Qt.Key_Up)
-        root.current = (root.current + root.items.length - 1) % root.items.length
-      else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space)
-        root.trigger(root.items[root.current].id)
-      else
+        root.dismissed()
+      } else if ((event.key === Qt.Key_Down || event.key === Qt.Key_Up) && focused) {
+        const next = focused.nextItemInFocusChain(event.key === Qt.Key_Down)
+        if (next)
+          next.forceActiveFocus(Qt.TabFocusReason)
+      } else {
         return
+      }
       event.accepted = true
     }
 
@@ -91,6 +95,7 @@ PopupWindow {
       width: parent.width - 8
 
       Repeater {
+        id: rows
         model: root.items
 
         MouseArea {
@@ -101,8 +106,17 @@ PopupWindow {
           width: column.width
           height: 36
           hoverEnabled: true
-          onContainsMouseChanged: if (containsMouse) root.current = index
+          activeFocusOnTab: true
+          // The pointer and the keyboard share one current item: the one with focus.
+          onContainsMouseChanged: if (containsMouse) forceActiveFocus()
           onClicked: root.trigger(modelData.id)
+          Keys.onPressed: event => {
+            event.accepted = false
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+              root.trigger(modelData.id)
+              event.accepted = true
+            }
+          }
           Accessible.role: Accessible.MenuItem
           Accessible.name: modelData.label
           Accessible.onPressAction: root.trigger(modelData.id)
@@ -110,7 +124,7 @@ PopupWindow {
           Rectangle {
             anchors.fill: parent
             radius: Theme.controlCornerRadius
-            color: item.pressed ? Theme.subtleFillColorTertiary : root.current === item.index ? Theme.subtleFillColorSecondary : "transparent"
+            color: item.pressed ? Theme.subtleFillColorTertiary : item.activeFocus ? Theme.subtleFillColorSecondary : "transparent"
           }
 
           Image {

@@ -565,6 +565,36 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         Win32.SetFocus(Handle);
     }
 
+    /// <summary>
+    /// Takes the keyboard for a UI Automation client that focused an item here, as Narrator does. Windows gives the
+    /// foreground only to the process the last input went to, and the client's request is not input to this one,
+    /// so it joins the foreground thread's input for a moment, which is allowed to hand the foreground on. Only a
+    /// window that takes the keyboard for its focused item does this.
+    /// </summary>
+    internal void TakeKeyboardForAutomation()
+    {
+        if (!_visible || (_kind == WindowKind.Panel && !_focusable) || (_kind == WindowKind.Popup && _popup?.GrabFocus != true))
+            return;
+        if (!Win32.SetForegroundWindow(Handle))
+        {
+            var foreground = Win32.GetForegroundWindow();
+            var current = Win32.GetCurrentThreadId();
+            var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, 0);
+            if (other != 0 && other != current && Win32.AttachThreadInput(current, other, true))
+            {
+                try
+                {
+                    Win32.SetForegroundWindow(Handle);
+                }
+                finally
+                {
+                    Win32.AttachThreadInput(current, other, false);
+                }
+            }
+        }
+        Win32.SetFocus(Handle);
+    }
+
     // Frames
 
     public void RequestFrame()

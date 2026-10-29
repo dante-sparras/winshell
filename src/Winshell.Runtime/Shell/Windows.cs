@@ -370,8 +370,16 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
         }
     }
 
+    /// <summary>The item in this window that has keyboard focus, or null.</summary>
+    [Qml]
+    public Item? ActiveFocusItem
+    {
+        get { Track(); return Scene.FocusItem; }
+    }
+
     private void OnSceneFocus(Item? item)
     {
+        NotifyChanged("activeFocusItem");
         if (item is not null && WantsKeyboardFocus())
             _backend?.SetKeyboardFocus(true);
     }
@@ -625,14 +633,21 @@ public sealed class PanelWindow : ShellWindow
         }
     }
 
+    /// <summary>
+    /// Whether the panel takes the keyboard when an item in it takes focus. A panel that becomes focusable while an
+    /// item in it has focus takes the keyboard then.
+    /// </summary>
     [Qml]
     public bool Focusable
     {
         get { Track(); return _focusable; }
         set
         {
-            if (SetField(ref _focusable, value))
-                OnPlacementChanged();
+            if (!SetField(ref _focusable, value))
+                return;
+            OnPlacementChanged();
+            if (value && Scene.FocusItem is not null)
+                Backend?.SetKeyboardFocus(true);
         }
     }
 

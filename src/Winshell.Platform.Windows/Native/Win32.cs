@@ -473,6 +473,16 @@ internal static partial class Win32
     public static partial nint GetForegroundWindow();
 
     [LibraryImport("user32.dll")]
+    public static partial uint GetWindowThreadProcessId(nint hwnd, nint processId);
+
+    [LibraryImport("kernel32.dll")]
+    public static partial uint GetCurrentThreadId();
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool doAttach);
+
+    [LibraryImport("user32.dll")]
     public static partial short GetKeyState(int key);
 
     [LibraryImport("user32.dll")]
