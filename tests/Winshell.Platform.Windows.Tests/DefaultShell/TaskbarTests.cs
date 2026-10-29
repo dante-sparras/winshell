@@ -695,6 +695,48 @@ public class TaskbarTests
     }
 
     [Fact]
+    public void While_the_centered_group_slides_after_apps_or_tray_icons_arrive_the_apps_never_reach_the_tray()
+    {
+        var desk = new Desk();
+        desk.Services.SystemTray.Items.Add(new FakeTrayItem("Sync", "Sync", false));
+        var (shell, bar) = Taskbar(desk, 1280);
+        using var _ = shell;
+        var strip = In(bar, "taskStrip");
+        var right = In(bar, "taskbarRight");
+        var frames = 0;
+
+        void Frames()
+        {
+            for (var i = 0; i < 40; i++)
+            {
+                shell.Loop.Advance(TimeSpan.FromMilliseconds(16));
+                var stripRight = strip.MapToScene(strip.Width, 0).X;
+                var trayLeft = right.MapToScene(0, 0).X;
+                Assert.True(stripRight <= trayLeft - 12 + 0.5, $"frame {frames}: the apps end at {stripRight}, the tray starts at {trayLeft}");
+                Assert.True(strip.MapToScene(0, 0).X >= 12 + 88 - 0.5);
+                frames++;
+            }
+        }
+
+        // 30 apps arrive at once while the group sits in the middle.
+        for (var i = 0; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"App {i}", $"app{i}", $@"C:\Appspp{i}.exe"));
+        Frames();
+        // The tray grows while the apps are crowded, and shrinks again.
+        for (var i = 0; i < 6; i++)
+            desk.Services.SystemTray.Items.Add(new FakeTrayItem($"Tray {i}", $"Tray {i}", false));
+        Frames();
+        foreach (var item in desk.Services.SystemTray.Items.Values.Skip(1).ToList())
+            desk.Services.SystemTray.Items.Remove((QObject)item!);
+        Frames();
+        // Most apps leave: the group slides back to the middle.
+        foreach (var window in desk.Services.WindowList.Windows.Values.OfType<FakeAppWindow>().Where(w => w.AppId.StartsWith("app", StringComparison.Ordinal)).ToList())
+            desk.Services.WindowList.Windows.Remove(window);
+        Frames();
+        Assert.DoesNotContain(shell.Messages, m => m.Contains("loop", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void A_few_apps_take_only_their_own_width_and_do_not_scroll()
     {
         var (shell, bar) = Taskbar(new Desk());

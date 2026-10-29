@@ -29,6 +29,8 @@ Item {
 
   // The most room the apps may take. When they need more, they scroll sideways with the mouse wheel or a drag.
   property real maxWidth: Infinity
+  // How wide all the apps are side by side, before any limit.
+  readonly property real naturalWidth: row.implicitWidth
 
   implicitWidth: Math.min(row.implicitWidth, Math.max(0, maxWidth))
   implicitHeight: 40
