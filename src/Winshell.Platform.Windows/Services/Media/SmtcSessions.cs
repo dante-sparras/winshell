@@ -74,23 +74,57 @@ internal sealed class SmtcSessions
             Log.Warn("media", $"Cannot list media sessions: {e.Message}");
             return;
         }
-        foreach (var session in _sessions.ToArray())
+        // GetSessions returns a new object for a session that is already held, so reference equality
+        // drops it and starts again. That cancels the read of its title and art. Match the app id instead.
+        var incoming = current.ToList();
+        var held = _sessions.ToList();
+        var pair = Pair(held.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
+        var kept = new bool[held.Count];
+        for (var i = 0; i < incoming.Count; i++)
         {
-            if (current.Contains(session.Session))
+            var existing = pair[i];
+            if (existing >= 0)
+            {
+                kept[existing] = true;
+                held[existing].Retarget(incoming[i]);
                 continue;
-            _sessions.Remove(session);
-            session.Release();
-            SessionRemoved?.Invoke(session);
-        }
-        foreach (var native in current)
-        {
-            if (_sessions.Any(s => s.Session == native))
-                continue;
-            var session = new SmtcSession(this, native, _nextId++);
+            }
+            var session = new SmtcSession(this, incoming[i], _nextId++);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
         }
+        for (var i = 0; i < held.Count; i++)
+        {
+            if (kept[i])
+                continue;
+            _sessions.Remove(held[i]);
+            held[i].Release();
+            SessionRemoved?.Invoke(held[i]);
+        }
+    }
+
+    /// <summary>
+    /// Incoming index to held index, or -1 when that incoming session is new. The same app id pairs in
+    /// list order, because one app can have more than one session and Windows does not give them an id.
+    /// </summary>
+    internal static int[] Pair(IReadOnlyList<string> heldAppIds, IReadOnlyList<string> incomingAppIds)
+    {
+        var pair = new int[incomingAppIds.Count];
+        var used = new bool[heldAppIds.Count];
+        for (var i = 0; i < incomingAppIds.Count; i++)
+        {
+            pair[i] = -1;
+            for (var h = 0; h < heldAppIds.Count; h++)
+            {
+                if (used[h] || heldAppIds[h] != incomingAppIds[i])
+                    continue;
+                used[h] = true;
+                pair[i] = h;
+                break;
+            }
+        }
+        return pair;
     }
 }
 
@@ -99,7 +133,9 @@ internal sealed class SmtcSession
 {
     private readonly SmtcSessions _owner;
     private int _mediaRequest;
+    private int _mediaApplied;
     private int _artRequest;
+    private int _artApplied;
     private bool _released;
     private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
     private double _position;
@@ -109,11 +145,14 @@ internal sealed class SmtcSession
         _owner = owner;
         Session = session;
         Id = id;
-        AppId = SafeAppId(session);
+        AppId = IdOf(session);
         AppName = DescribeApp(AppId);
     }
 
-    public GlobalSystemMediaTransportControlsSession Session { get; }
+    public GlobalSystemMediaTransportControlsSession Session { get; private set; }
+
+    /// <summary>The app id Windows reports for a session. The same session gets a new object on every list.</summary>
+    internal static string IdOf(GlobalSystemMediaTransportControlsSession session) => SafeAppId(session);
 
     public int Id { get; }
 
@@ -199,21 +238,51 @@ internal sealed class SmtcSession
 
     public void Start()
     {
-        Session.MediaPropertiesChanged += OnMediaPropertiesChanged;
-        Session.PlaybackInfoChanged += OnPlaybackInfoChanged;
-        Session.TimelinePropertiesChanged += OnTimelinePropertiesChanged;
+        Hook();
+        Refresh();
+    }
+
+    /// <summary>Follows the new object Windows returned for this same session, without dropping the read in progress.</summary>
+    public void Retarget(GlobalSystemMediaTransportControlsSession session)
+    {
+        if (ReferenceEquals(Session, session))
+            return;
+        Unhook();
+        Session = session;
+        Hook();
         OnPlaybackInfoChanged(Session, null);
         OnTimelinePropertiesChanged(Session, null);
-        OnMediaPropertiesChanged(Session, null);
+        // A metadata or art read is already running. Starting another drops its result.
+        if (_mediaApplied == _mediaRequest && _artApplied == _artRequest)
+            OnMediaPropertiesChanged(Session, null);
     }
 
     public void Release()
     {
         _released = true;
+        Unhook();
+        ArtCache.Release(ArtUrl);
+    }
+
+    private void Refresh()
+    {
+        OnPlaybackInfoChanged(Session, null);
+        OnTimelinePropertiesChanged(Session, null);
+        OnMediaPropertiesChanged(Session, null);
+    }
+
+    private void Hook()
+    {
+        Session.MediaPropertiesChanged += OnMediaPropertiesChanged;
+        Session.PlaybackInfoChanged += OnPlaybackInfoChanged;
+        Session.TimelinePropertiesChanged += OnTimelinePropertiesChanged;
+    }
+
+    private void Unhook()
+    {
         Session.MediaPropertiesChanged -= OnMediaPropertiesChanged;
         Session.PlaybackInfoChanged -= OnPlaybackInfoChanged;
         Session.TimelinePropertiesChanged -= OnTimelinePropertiesChanged;
-        ArtCache.Release(ArtUrl);
     }
 
     // Commands. Each is asynchronous; Windows' events bring the result.
@@ -288,6 +357,7 @@ internal sealed class SmtcSession
     {
         if (_released || request != _mediaRequest)
             return;
+        _mediaApplied = request;
         var title = properties.Title ?? "";
         var artist = properties.Artist ?? "";
         var album = properties.AlbumTitle ?? "";
@@ -334,7 +404,14 @@ internal sealed class SmtcSession
             }
             catch (Exception e) when (e is COMException or IOException or UnauthorizedAccessException)
             {
-                _owner.Post(() => SetArt("", request));
+                // A failed read is not "this track has no art". Clearing the url here blanks art that already arrived.
+                var message = e.Message;
+                _owner.Post(() =>
+                {
+                    if (request == _artRequest)
+                        _artApplied = request;
+                    _owner.Log.Warn("media", $"Cannot read art from {AppName}: {message}");
+                });
             }
         }
     }
@@ -346,6 +423,7 @@ internal sealed class SmtcSession
             ArtCache.Release(url);
             return;
         }
+        _artApplied = request;
         if (url == ArtUrl)
         {
             ArtCache.Release(url);
