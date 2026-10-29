@@ -452,13 +452,19 @@ public class OnScreenDisplayTests
             Theme.Current = theme with { AnimationsEnabled = false };
             var directory = Temp();
             var source = Path.Combine(Repo(), "src", "Winshell", "DefaultShell");
-            foreach (var file in Directory.GetFiles(source, "*.qml"))
+            foreach (var file in Directory.GetFiles(source))
             {
                 var name = Path.GetFileName(file);
-                var text = File.ReadAllText(file);
+                var target = Path.Combine(directory, name);
                 if (name == "shell.qml")
-                    text = text.Replace("winshell-default", "winshell-osd-" + Guid.NewGuid().ToString("N"), StringComparison.Ordinal);
-                File.WriteAllText(Path.Combine(directory, name), text);
+                {
+                    var text = File.ReadAllText(file).Replace("winshell-default", "winshell-osd-" + Guid.NewGuid().ToString("N"), StringComparison.Ordinal);
+                    File.WriteAllText(target, text);
+                }
+                else
+                {
+                    File.Copy(file, target);
+                }
             }
             if (hostOnly)
             {
@@ -489,7 +495,8 @@ public class OnScreenDisplayTests
             Loop.Advance(TimeSpan.FromMilliseconds(400));
             Layout();
             Assert.False(Window.Visible);
-            Assert.DoesNotContain(Messages, m => m.Contains("Error", StringComparison.Ordinal) || m.StartsWith("scene:", StringComparison.Ordinal));
+            var scene = Messages.Where(m => m.Contains("Error", StringComparison.Ordinal) || m.StartsWith("scene:", StringComparison.Ordinal)).ToList();
+            Assert.True(scene.Count == 0, string.Join(Environment.NewLine, scene));
         }
 
         public void Layout()
