@@ -176,6 +176,23 @@ public sealed class NotificationSurfaceTests
     }
 
     [Fact]
+    public void A_contrast_theme_gives_the_calendar_flyout_an_opaque_background()
+    {
+        var saved = Theme.Current;
+        try
+        {
+            Theme.Current = Theme.Default(false) with { IsHighContrast = true };
+            using var surface = new Surface("CalendarFlyout.qml", 384, 780);
+            Assert.Empty(surface.Warnings);
+            Assert.Equal(Theme.Current.SolidBackgroundFillColorBase, surface.Root.ReadProperty("color"));
+        }
+        finally
+        {
+            Theme.Current = saved;
+        }
+    }
+
+    [Fact]
     public void Evidence_renders_the_complete_surface_with_synthetic_notifications_only()
     {
         using var surface = new Surface("CalendarFlyout.qml", 384, 780);
