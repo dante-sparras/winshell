@@ -998,6 +998,58 @@ public sealed class FileView : QObject
     }
 
     /// <summary>
+    /// Removes <c>path.tmp-*</c> left by a process that is no longer running.
+    /// The suffix is a process id, or <c>pid-guid</c> for a save in flight. A live process keeps its file.
+    /// </summary>
+    internal static void DeleteStaleTemps(string path)
+    {
+        var full = System.IO.Path.GetFullPath(path);
+        var dir = System.IO.Path.GetDirectoryName(full);
+        var name = System.IO.Path.GetFileName(full);
+        if (dir is null || name.Length == 0 || !Directory.Exists(dir))
+            return;
+        var prefix = name + ".tmp-";
+        foreach (var candidate in Directory.EnumerateFiles(dir, prefix + "*"))
+        {
+            var file = System.IO.Path.GetFileName(candidate);
+            if (file.Length <= prefix.Length || !file.StartsWith(prefix, StringComparison.Ordinal))
+                continue;
+            var suffix = file[prefix.Length..];
+            // The save names the temp pid-guid. An older temp is only the pid. Either way a live process keeps its file.
+            var pidText = suffix;
+            var dash = suffix.IndexOf('-');
+            if (dash >= 0)
+                pidText = suffix[..dash];
+            if (int.TryParse(pidText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid)
+                && ProcessIsRunning(pid))
+                continue;
+            try
+            {
+                File.Delete(candidate);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private static bool ProcessIsRunning(int pid)
+    {
+        if (pid == Environment.ProcessId)
+            return true;
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // ArgumentException is "no process with that id". Anything else means the id could not be checked.
+            return e is not ArgumentException;
+        }
+    }
+
+    /// <summary>
     /// The path a watch should use. A symbolic link is followed to its final target.
     /// A normal file is not opened. Counting hard links happens only when a save chooses how to write.
     /// A path that is not there yet is returned unchanged.
@@ -1307,6 +1359,7 @@ public sealed class FileView : QObject
             var directory = System.IO.Path.GetDirectoryName(destination);
             if (directory is not null)
                 Directory.CreateDirectory(directory);
+            DeleteStaleTemps(destination);
             // Captured before the temporary file exists. A hand save during that write changes the destination
             // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
             // recovers from it and the text above already includes it.
