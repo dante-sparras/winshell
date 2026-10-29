@@ -66,6 +66,7 @@ public class Item : QObject
     public Item()
     {
         _children = new QmlList<Item>(this, "children", added: OnChildListAdd, removed: OnChildListRemove);
+        _children.Changed += () => _paintOrder = null;
         _resources = new QmlList<QObject>(this, "resources", added: r => r.SetOwner(this));
         _data = new ItemData(this);
     }
@@ -107,7 +108,11 @@ public class Item : QObject
         set
         {
             if (SetField(ref _z, value))
+            {
+                if (_parent is not null)
+                    _parent._paintOrder = null;
                 Update();
+            }
         }
     }
 
@@ -419,6 +424,9 @@ public class Item : QObject
     [Qml]
     public LayerProperties Layer => _layer ??= new LayerProperties(this) { Engine = Engine };
 
+    /// <summary>The layer grouped property if QML has used it, without creating it.</summary>
+    internal LayerProperties? CreatedLayer => _layer;
+
     /// <summary>The pointer handlers declared in this item: HoverHandler, TapHandler, WheelHandler.</summary>
     public List<PointerHandler> PointerHandlers { get; } = [];
 
@@ -568,8 +576,13 @@ public class Item : QObject
     public IReadOnlyList<Item> ChildItems => _children.Snapshot;
 
     /// <summary>The children in the order they are drawn: by z, then by position in the list.</summary>
-    public IEnumerable<Item> PaintOrder =>
-        _children.Snapshot.Select((c, i) => (c, i)).OrderBy(t => t.c._z).ThenBy(t => t.i).Select(t => t.c);
+    /// <remarks>Kept until the list or a child's z changes. A change makes a new list, so a walk in progress keeps its own.</remarks>
+    public IReadOnlyList<Item> PaintOrder => _paintOrder ??= [.. _children.Snapshot.OrderBy(c => c._z)];
+
+    private Item[]? _paintOrder;
+
+    /// <summary>Whether a ListView made this item as a delegate, so a clipping view can skip it when it is out of sight.</summary>
+    internal bool IsListDelegate { get; set; }
 
     public void SetParentItem(Item? parent)
     {
@@ -786,8 +799,10 @@ public class Item : QObject
     [Qml]
     public Item? ChildAt(double x, double y)
     {
-        foreach (var child in PaintOrder.Reverse())
+        var order = PaintOrder;
+        for (var i = order.Count - 1; i >= 0; i--)
         {
+            var child = order[i];
             if (child.Visible && x >= child.X && y >= child.Y && x < child.X + child.Width && y < child.Y + child.Height)
                 return child;
         }
