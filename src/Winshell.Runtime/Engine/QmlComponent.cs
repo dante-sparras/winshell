@@ -46,14 +46,6 @@ public sealed class QmlComponent : QObject
         Engine = engine;
     }
 
-    public enum ComponentStatus
-    {
-        Null,
-        Ready,
-        Loading,
-        Error,
-    }
-
     [QmlEnum]
     public enum StatusValue
     {

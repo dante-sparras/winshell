@@ -167,7 +167,6 @@ public sealed class QmlEngine : IDisposable
             else if (parts.Length >= 2 && char.IsUpper(parts[0][0]) && parts[^1].EndsWith(".qml", StringComparison.Ordinal))
                 types[parts[0]] = Path.Combine(directory, parts[^1]);
         }
-        _ = Log;
     }
 
     public string? ResolveModuleDirectory(string uri)

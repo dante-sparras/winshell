@@ -44,17 +44,13 @@ public static class ValueConverter
                 return value is null ? "" : ToQmlString(value);
             case "color":
                 return ToColor(value);
-            case "var" or "variant" or "alias":
+            case "alias":
                 return value;
             case "date":
                 return value;
             case "point":
                 return value is QPoint ? value : value;
             default:
-                if (value is null or QObject)
-                    return value;
-                if (value is QmlComponent)
-                    return value;
                 return value;
         }
     }

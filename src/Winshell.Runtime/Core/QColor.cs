@@ -179,7 +179,7 @@ public readonly record struct QColor(double R, double G, double B, double A, boo
         }
         if (NamedColors.TryGetValue(s.ToLowerInvariant(), out var named))
         {
-            color = named == 0 && s.Equals("transparent", StringComparison.OrdinalIgnoreCase) ? Transparent : FromArgb(named);
+            color = FromArgb(named);
             return true;
         }
         return false;
