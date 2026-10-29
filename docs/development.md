@@ -25,6 +25,7 @@ pwsh scripts/dev.ps1
 | `pwsh scripts/dev.ps1 -Refresh` | Downloads the Quickshell manual again. |
 | `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the check CI runs. |
 | `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, and the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. |
+| `pwsh scripts/update-snapshots.ps1` | Renders the default shell's surfaces and replaces each [snapshot](#visual-snapshots) baseline its render no longer matches. `-Surface taskbar` replaces one surface's baselines only. |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
 Before opening a PR, run the checks CI runs: `pwsh scripts/check.ps1`.
@@ -127,3 +128,20 @@ Remove-Item Env:WINSHELL_SETTINGS_EVIDENCE
 ```
 
 `WINSHELL_SETTINGS_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that folder, and CI attaches them as the `settings-surface` workflow artifact; no images are committed. The tests run each shell with no config folder or one of their own, so they never write the user's `preferences.json`, and they never change a Windows setting. The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).
+
+## Visual snapshots
+
+`SnapshotTests` render every surface of the default shell (the taskbar, Start, quick settings, the notification center, the on-screen display and Winshell Settings) and compare each with a PNG in `tests/Winshell.Platform.Windows.Tests/Snapshots/Baselines`. Each surface is rendered at 100%, 150% and 200% scale, in light and dark, with the Windows default blue accent. They run in the default check.
+
+The whole default shell runs on a fake 1920×1080 screen, against fake services, with its folders in a temporary folder. The surfaces are opened as a user opens them, and each window is painted offscreen the way its composition surface is. A solid color stands in for the Mica or Acrylic that Windows draws behind it. To keep the renders the same on every PC, the time is Thursday 29 October 2026, 09:41, the date and time patterns are en-US, animations are off, and app icons are drawn from shapes. Text is drawn with the Segoe fonts Windows ships, so a PC with font smoothing turned off renders different text.
+
+A pixel differs when one of its channels moves by more than 16, and a render matches while no more than 0.1% of its pixels differ. When one does not match, the test writes `<name>.expected.png`, `<name>.actual.png` and `<name>.diff.png`, with the differing pixels in magenta, to the folder in `WINSHELL_SNAPSHOT_DIFFS`, or to `%TEMP%\winshell-snapshot-diffs`. CI uploads them as the `snapshot-diffs` workflow artifact.
+
+When a change to a surface is intended, update its baselines and commit them with the change:
+
+```powershell
+pwsh scripts/update-snapshots.ps1                    # every surface
+pwsh scripts/update-snapshots.ps1 -Surface taskbar   # one surface; the others are still compared
+```
+
+The script sets `WINSHELL_UPDATE_SNAPSHOTS`, to `1` or to the surface's name, for that run only. A baseline is replaced only when its render no longer matches, so small rendering differences do not churn the files. Look at the changed PNGs before you commit them. Neither variable is read by a shell instance.

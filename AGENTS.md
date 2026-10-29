@@ -8,7 +8,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
 - xUnit for `tests/`.
-- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, and the file-based app `scripts/fetch-reference.cs`.
+- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/update-snapshots.ps1`, and the file-based app `scripts/fetch-reference.cs`.
 
 ## Project Structure
 
@@ -25,7 +25,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── check.ps1                    # Build with warnings as errors, then test
 │   ├── dev.ps1                      # Prepares a fresh clone
 │   ├── fetch-reference.cs           # Fetches the Quickshell manual as markdown
-│   └── package.ps1                  # Builds the portable zips and winget manifests a release ships
+│   ├── package.ps1                  # Builds the portable zips and winget manifests a release ships
+│   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
 ├── src/
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
 │   ├── Winshell.Qml/                # The QML parser
