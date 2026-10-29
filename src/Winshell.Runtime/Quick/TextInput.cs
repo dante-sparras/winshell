@@ -388,7 +388,14 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     public QRect PositionToRectangle(int position) => new(OffsetOf(position) - _scrollX + _leftPadding, _topPadding, 1, LineHeight);
 
     [Qml]
-    public bool IsRightToLeft(int start, int end) => false;
+    public bool IsRightToLeft(int start, int end)
+    {
+        if (start > end)
+            return false;
+        start = Math.Clamp(start, 0, _text.Length);
+        end = Math.Clamp(end, start, _text.Length);
+        return TextLayout.IsRightToLeft(_text[start..end]);
+    }
 
     [Qml]
     public void EnsureVisible(int position) => EnsureCursorVisible();
