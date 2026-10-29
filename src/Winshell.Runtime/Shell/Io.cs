@@ -67,6 +67,8 @@ public sealed class SplitParser : DataStreamParser
 {
     private string _splitMarker = "\n";
     private readonly StringBuilder _buffer = new();
+    /// <summary>A CR that ended the previous chunk, so a following LF is one line break.</summary>
+    private bool _heldCr;
 
     [Qml]
     public string SplitMarker
@@ -77,27 +79,65 @@ public sealed class SplitParser : DataStreamParser
 
     public override void Feed(string data)
     {
-        _buffer.Append(data.Replace("\r\n", "\n"));
+        if (_splitMarker == "\n")
+            data = NormalizeNewlines(data);
+        _buffer.Append(data);
+        Drain();
+    }
+
+    /// <summary>
+    /// Turns CRLF into LF, including a CR that ended the previous chunk. The buffer is scanned once per chunk.
+    /// </summary>
+    private string NormalizeNewlines(string data)
+    {
+        if (_heldCr)
+        {
+            _heldCr = false;
+            data = data.Length > 0 && data[0] == '\n' ? data : "\r" + data;
+        }
+        if (data.Length > 0 && data[^1] == '\r')
+        {
+            _heldCr = true;
+            data = data[..^1];
+        }
+        return data.Replace("\r\n", "\n");
+    }
+
+    private void Drain()
+    {
         if (_splitMarker.Length == 0)
         {
+            if (_buffer.Length == 0)
+                return;
             var all = _buffer.ToString();
             _buffer.Clear();
             Emit("read", all);
             return;
         }
+        var text = _buffer.ToString();
+        var start = 0;
         while (true)
         {
-            var text = _buffer.ToString();
-            var index = text.IndexOf(_splitMarker, StringComparison.Ordinal);
+            var index = text.IndexOf(_splitMarker, start, StringComparison.Ordinal);
             if (index < 0)
                 break;
-            _buffer.Remove(0, index + _splitMarker.Length);
-            Emit("read", text[..index]);
+            Emit("read", text[start..index]);
+            start = index + _splitMarker.Length;
         }
+        if (start == 0)
+            return;
+        _buffer.Clear();
+        if (start < text.Length)
+            _buffer.Append(text, start, text.Length - start);
     }
 
     public override void End()
     {
+        if (_heldCr)
+        {
+            _buffer.Append('\r');
+            _heldCr = false;
+        }
         if (_buffer.Length > 0)
         {
             var rest = _buffer.ToString();
@@ -106,7 +146,11 @@ public sealed class SplitParser : DataStreamParser
         }
     }
 
-    public override void Reset() => _buffer.Clear();
+    public override void Reset()
+    {
+        _buffer.Clear();
+        _heldCr = false;
+    }
 }
 
 /// <summary>The <c>StdioCollector</c>: collects a whole stream as text.</summary>
