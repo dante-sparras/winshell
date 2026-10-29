@@ -63,6 +63,8 @@ public sealed class ShellHost : IShellHost, IDisposable
     private QmlEngine? _engine;
     private QObject? _root;
     private IDisposable? _reloadTimer;
+    // When the last load began reading its files. A save after this that no watcher saw still reloads.
+    private DateTime _loadStarted;
     private bool _inhibitPopup;
     private bool _disposed;
 
@@ -174,6 +176,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         // Each load starts with the popup allowed; the old generation's reloadFailed handler can inhibit it.
         _inhibitPopup = false;
         Log.ClearFirstScriptError();
+        _loadStarted = DateTime.UtcNow;
         var oldEngine = _engine;
         var oldRoot = _root;
         var engine = new QmlEngine(_modules(), _loop, Log, ShellDir);
@@ -272,14 +275,28 @@ public sealed class ShellHost : IShellHost, IDisposable
         _watchers.Clear();
         if (_disposed)
             return;
+        var returned = false;
         foreach (var dir in WatchedDirectories(engine))
         {
             if (Directory.Exists(dir))
+            {
                 ArmDirectory(engine, dir);
+            }
             else
+            {
                 ArmParent(engine, dir);
+                // A folder that came back before its parent watch started raises no event.
+                returned |= Directory.Exists(dir);
+            }
         }
+        // The old watchers are gone and the new ones only see what comes next. A file written in between, such as a
+        // shell.qml still being written when a reload read it, would otherwise wait for the next save.
+        if (returned || ChangedSince(engine, _loadStarted))
+            _loop.Post(ScheduleReload);
     }
+
+    private bool ChangedSince(QmlEngine engine, DateTime since) =>
+        engine.LoadedFiles.Append(_rootFile).Any(file => File.GetLastWriteTimeUtc(file) >= since);
 
     /// <summary>Directories of the loaded QML, including ones that are not there yet.</summary>
     private List<string> WatchedDirectories(QmlEngine engine) =>
