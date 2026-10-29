@@ -65,6 +65,17 @@ A running shell reads these. None is needed to build or test.
 
 `WINSHELL_TEST_CRASH` is read only for `FatalCrashTests`: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. Never set it otherwise.
 
+### Installer
+
+`scripts/install.ps1` and `scripts/uninstall.ps1` read these. A normal install sets none of them. `WINSHELL_VERSION` and `WINSHELL_AUTOSTART` are the `irm | iex` forms of `-Version` and `-AutoStart`; they are described with those commands above.
+
+| Variable | What it does |
+| --- | --- |
+| `WINSHELL_RELEASE_BASE` | Base URL `install.ps1` downloads from, instead of `https://github.com/dante-sparras/winshell/releases`. A trailing slash is ignored. Any other value must be `http://127.0.0.1` or `http://localhost`, with an optional port and path. Anything else stops the install. Installer tests point this at a local server. `uninstall.ps1` does not read it. |
+| `WINSHELL_INSTALL_TEST` | `1` marks an installer test. Both scripts then refuse the real `%LOCALAPPDATA%` and `%APPDATA%`, and they require `WINSHELL_USER_PATH_FILE` and `WINSHELL_AUTOSTART_FILE`. Any other value, including unset, is a normal install. |
+| `WINSHELL_USER_PATH_FILE` | File used instead of the user `Path` value under `HKCU\Environment`. The scripts read and write that file as UTF-8 without a BOM. A missing file reads as an empty path. Set only from installer tests. |
+| `WINSHELL_AUTOSTART_FILE` | File used instead of the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The scripts read and write that file as UTF-8 without a BOM. An empty or missing file means sign-in is off, and an empty command deletes the file. Set only from installer tests. |
+
 ## Where files live
 
 | What | Where |
