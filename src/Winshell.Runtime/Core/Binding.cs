@@ -181,6 +181,9 @@ public sealed class DynamicProperty
     {
         if (_alias is not null)
         {
+            // Bindings that read the alias subscribe here. The watch notifies this name when the path changes,
+            // including when an intermediate object is replaced and the old target would no longer tell them.
+            DependencyTracker.Read(Owner, Name);
             var (obj, prop) = _alias();
             return prop is null ? obj : obj.ReadProperty(prop);
         }

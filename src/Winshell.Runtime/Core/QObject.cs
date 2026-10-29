@@ -113,6 +113,10 @@ public class QObject
             list.Remove(observer);
     }
 
+    /// <summary>How many observers are registered for a property. Tests use this to see that an alias let go.</summary>
+    internal int ObserverCount(string qmlName) =>
+        _observers is not null && _observers.TryGetValue(qmlName, out var list) ? list.Count : 0;
+
     // Signals
 
     /// <summary>The slot list of a signal, created on first use. Returns null when the type has no such signal.</summary>
