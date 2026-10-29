@@ -5,7 +5,7 @@
 ```text
 winshell run [options]              start a shell
 winshell                            print this help
-winshell list [-a] [-j]             list running instances
+winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
 winshell log [-f] [-t N]            print an instance's log
@@ -34,7 +34,7 @@ winshell doctor [config options] [-j] [--no-color]
 
 The log goes to the console and to the instance's log file. The file is kept to about 4 MB, and the previous part is `log.1.txt` beside it. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.
 
-`--no-color`, `--log-times`, `--any-display`, `--newest`, `--log-rules <rules>`, `--manifest <path>` and `--debug <port>` are accepted for Quickshell's command lines and do nothing.
+Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2.
 
 ## Pick an instance
 
@@ -51,7 +51,7 @@ The log goes to the console and to the instance's log file. The file is kept to 
 
 | Command | What it does |
 | --- | --- |
-| `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. `-a`, `--all` is accepted and does nothing; stopped instances aren't listed. |
+| `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. |
 | `winshell log` | Prints an instance's log. With no instance running, it prints the log of one that has stopped. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions and properties. |
@@ -71,7 +71,7 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | --- | --- |
 | 0 | Done. For a shell, it was stopped. |
 | 1 | No such configuration or instance, an IPC call failed, the instance couldn't be reached or was still running, or a `winshell doctor` check failed. |
-| 2 | An unknown command, an option that needs a value without one, a `--pid` or `--tail` that is not a whole number, or an `ipc` command missing its arguments. |
+| 2 | An unknown command or option, an option that needs a value without one, a spare argument, a `--pid` or `--tail` that is not a whole number, or an `ipc` command missing its arguments. |
 
 `--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
 
