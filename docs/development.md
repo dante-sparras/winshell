@@ -104,11 +104,12 @@ Other release tasks:
 
 ## Docs
 
-The docs site is built from `docs/` by [DocFX](https://dotnet.github.io/docfx/), a .NET tool pinned in `dotnet-tools.json`. `docs/agents/` is left out. Each section has a `toc.yml` that lists its pages: `docs/toc.yml` is the top bar, and `guide/toc.yml` and `adr/toc.yml` are the sidebars. A page in another folder can be listed with a relative path, such as `../taskbar.md`.
+The docs site is built from `docs/` by [DocFX](https://dotnet.github.io/docfx/), a .NET tool pinned in `dotnet-tools.json`. `docs/agents/` is left out. Each section has a `toc.yml` that lists its pages: `docs/toc.yml` is the top bar, and `guide/toc.yml`, `reference/toc.yml` and `adr/toc.yml` are the sidebars. A page in another folder can be listed with a relative path, such as `../taskbar.md`.
 
 - **A new page** goes into a `toc.yml`. `DocsTests` fails for a page no table of contents lists.
 - **Links between pages** are relative `.md` links. DocFX fails the check on a link to a page or a heading that isn't there. Link to files outside `docs/`, such as `CONTRIBUTING.md`, with their GitHub URL.
 - **QML examples** in a `qml` code block are checked by `DocsTests`: each one parses, and every module, type, property and signal handler it uses exists. An example without imports is a fragment and can use any module's types. The default shell's files count as types, as they do in a copy of that folder.
+- **The reference** in `docs/reference/` has a page per `Winshell` module, `winshell-<module>.md`, with a `## Type` section for each type and a table whose first column names each member: `` `name` `` for a property, `` `name(args)` `` for a method or signal. `DocsTests` fails when a type, a member or an enum value is missing, or when a table names a member the type doesn't have. A type with a registered base type lists only what it adds. `reference/qt-quick.md` names every Qt Quick type. Add a new type or member to its page in the PR that adds it.
 - **Links to other sites** are checked by the `links` job of the Docs workflow, on each PR and every Monday. That job isn't part of `check.ps1`.
 
 The Docs workflow builds the site on every PR and on `main`, and attaches it to the run as the `github-pages` artifact. On `main` it publishes it to GitHub Pages once Pages is turned on (Settings > Pages > Source: GitHub Actions) and the repository variable `DOCS_PAGES` is `true`. Until then the `deploy` job is skipped.
