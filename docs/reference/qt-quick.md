@@ -65,6 +65,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Context2D.createImageData()` | Returns null. |
 | `Context2D.putImageData()` | Draws nothing. |
 | `Context2D.createPattern()` | Makes a pattern from a color only; for an image it returns null. |
+| `Context2D.fillText()` | Draws with the one typeface `font` names, without fallback or shaping: characters that typeface lacks don't draw, and scripts that need shaping, such as Arabic or Devanagari, draw wrong. `strokeText()` and `measureText()` work the same way. |
 | `Canvas.loadImage()` | Loads local images only. An `http` or `https` image never loads, and `isImageError()` turns true. |
 | `Shape.horizontalAlignment` | Ignored, as is `verticalAlignment`: content scaled by `fillMode` sits at the top left. |
 | `ShapePath.fillItem` | Ignored. |
