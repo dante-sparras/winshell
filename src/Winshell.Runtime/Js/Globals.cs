@@ -4,6 +4,7 @@ using Jint;
 using Jint.Native;
 using Jint.Native.Object;
 using Jint.Runtime;
+using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
 
 namespace Winshell.Runtime;
@@ -17,6 +18,15 @@ internal static class Globals
         engine.SetValue("console", MakeConsole(runtime, qml));
         engine.SetValue("print", Fn(engine, "print", args => { qml.Log.Info("", Join(runtime, args)); return JsValue.Undefined; }));
         engine.SetValue("Qt", MakeQt(runtime, qml));
+        // A typo such as `widht = 5` would otherwise become a property every component can read, and a
+        // script could replace Qt for the rest of the generation. Sloppy mode then drops the write.
+        var global = engine.Global;
+        foreach (var name in new[] { "Qt", "console", "print" })
+        {
+            var value = global.Get(name);
+            global.DefineOwnProperty(name, new PropertyDescriptor(value, writable: false, enumerable: true, configurable: false));
+        }
+        global.PreventExtensions();
     }
 
     private static ClrFunction Fn(Engine engine, string name, Func<JsValue[], JsValue> body) =>
