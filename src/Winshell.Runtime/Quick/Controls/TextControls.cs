@@ -195,19 +195,20 @@ public class TextField : TextInput, IPaintOverChildren, IHoverTarget
 
     private bool Focused => ActiveFocus && !ReadOnly;
 
+    protected virtual void PaintBackground(SKCanvas canvas, SKRect r) => PaintTextBox(canvas, r, Enabled, Focused, _hovered);
+
     /// <summary>
     /// The text box: a filled rounded rectangle with a strong line along the bottom, accent and 2 pixels when
     /// focused. A contrast theme draws a whole border instead, 2 pixels when focused.
     /// </summary>
-    protected virtual void PaintBackground(SKCanvas canvas, SKRect r)
+    internal static void PaintTextBox(SKCanvas canvas, SKRect r, bool enabled, bool focused, bool hovered)
     {
         var t = Theme.Current;
-        bool enabled = Enabled, focused = Focused;
-        var fill = FluentResources.TextControlBackground(t).For(enabled, focused, _hovered);
+        var fill = FluentResources.TextControlBackground(t).For(enabled, focused, hovered);
         if (t.IsHighContrast)
         {
             Fluent.FillRound(canvas, r, Fluent.ControlCornerRadius, fill);
-            Fluent.StrokeRound(canvas, r, Fluent.ControlCornerRadius, FluentResources.TextControlBorderBrush(t).For(enabled, focused, _hovered), focused ? 2 : 1);
+            Fluent.StrokeRound(canvas, r, Fluent.ControlCornerRadius, FluentResources.TextControlBorderBrush(t).For(enabled, focused, hovered), focused ? 2 : 1);
             return;
         }
         Fluent.ElevatedRect(canvas, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrokeColorDefault);
