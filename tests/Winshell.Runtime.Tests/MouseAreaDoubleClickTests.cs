@@ -15,7 +15,7 @@ public class MouseAreaDoubleClickTests
               property bool pressedOnDouble: false
               MouseArea {
                 x: 10; y: 10; width: 40; height: 40
-                onClicked: clicks++
+                onClicked: { clicks++ }
                 onDoubleClicked: { doubles++; pressedOnDouble = pressed }
               }
             }
@@ -37,7 +37,7 @@ public class MouseAreaDoubleClickTests
             import QtQuick
             Item {
               property int clicks: 0
-              MouseArea { x: 10; y: 10; width: 40; height: 40; onClicked: clicks++ }
+              MouseArea { x: 10; y: 10; width: 40; height: 40; onClicked: { clicks++ } }
             }
             """);
         using var _ = shell;
