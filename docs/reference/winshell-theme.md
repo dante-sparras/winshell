@@ -6,12 +6,12 @@ The default shell's Personalization page sets `colorScheme` and `accentColor`; s
 
 ## Theme
 
-A singleton, reached as `Theme`. Every color token is a read-only `color` property with its WinUI 3 theme resource name, first letter lowered, such as `Theme.textFillColorPrimary`; see [Color tokens](#color-tokens) below. `colorScheme` and `accentColor` are the shell's own choice on top of what Windows reports. A contrast theme still wins over both.
+A singleton, reached as `Theme`. Every color token is a read-only `color` property with its WinUI 3 theme resource name, first letter lowered, such as `Theme.textFillColorPrimary`; see [Color tokens](#color-tokens) below. `colorScheme` and `accentColor` are the shell's own choice for Winshell's windows, on top of what Windows reports for other programs. A contrast theme still wins over both.
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `dark` | bool, read-only | Whether the theme in use is dark, after `colorScheme`. |
-| `colorScheme` | string | `"system"` follows Windows' app mode; `"light"` and `"dark"` are the shell's own choice. Windows' window frames follow it too. Default `"system"`. Another value logs a warning in the `theme` category and changes nothing. |
+| `colorScheme` | string | `"system"` follows Windows' app mode; `"light"` and `"dark"` are the shell's own choice for Winshell's windows, including their title-bar frame. Other programs keep the Windows app mode. Default `"system"`. Another value logs a warning in the `theme` category and changes nothing. |
 | `accentColor` | color | The shell's own accent, from which the accent tokens and their shades are made. Default transparent, which follows the accent picked in Windows. |
 | `highContrast` | bool, read-only | Whether a contrast theme is on. Every color token is then one of the eight system colors, and the shadows are transparent. |
 | `animationsEnabled` | bool, read-only | Whether Windows animation effects are on. Skip motion when this is false. A contrast theme does not turn it off. |
