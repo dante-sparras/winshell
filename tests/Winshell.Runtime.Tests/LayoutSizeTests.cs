@@ -40,42 +40,6 @@ public class LayoutSizeTests
         Assert.Equal(100, row.ImplicitWidth);
     }
 
-    [Fact]
-    public void A_nested_layout_fills_unless_fill_was_set()
-    {
-        var shell = new TestShell(("shell.qml", """
-            import QtQuick
-            import QtQuick.Layouts
-            ColumnLayout {
-              objectName: "col"
-              width: 200
-              height: 80
-              spacing: 0
-              RowLayout {
-                objectName: "fill"
-                spacing: 0
-                Rectangle { objectName: "grow"; Layout.fillWidth: true; implicitWidth: 10; implicitHeight: 10 }
-                Rectangle { objectName: "fixed"; implicitWidth: 30; implicitHeight: 10 }
-              }
-              RowLayout {
-                objectName: "fixedRow"
-                Layout.fillWidth: false
-                spacing: 0
-                Rectangle { implicitWidth: 40; implicitHeight: 10 }
-              }
-            }
-            """));
-        var root = (Item)shell.Load();
-        using var _ = shell;
-        Polish(shell);
-        var fill = Named(root, "fill");
-        var fixedRow = Named(root, "fixedRow");
-        Assert.Equal(200, fill.Width);
-        Assert.Equal(170, Named(fill, "grow").Width);
-        Assert.Equal(30, Named(fill, "fixed").Width);
-        Assert.Equal(40, fixedRow.Width);
-    }
-
     private static void Polish(TestShell shell)
     {
         shell.Loop.Process();
