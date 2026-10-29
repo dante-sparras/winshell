@@ -12,7 +12,7 @@ PopupWindow {
   property alias showWeekNumbers: calendar.showWeekNumbers
   implicitWidth: Math.min(384, screen ? screen.workArea.width : 384)
   implicitHeight: Math.min(780, screen ? screen.workArea.height - 16 : 780)
-  color: Theme.isHighContrast ? Theme.solidBackgroundFillColorBase : "transparent"
+  color: Theme.highContrast ? Theme.solidBackgroundFillColorBase : "transparent"
   grabFocus: true
   WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
