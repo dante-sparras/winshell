@@ -4,13 +4,11 @@ Winshell runs on Windows 11. This page installs it, runs the default shell, and 
 
 ## Install
 
-Winshell runs on Windows 11. The portable zip and the PowerShell command install the same self-contained build. winget and the Microsoft Store are not available yet. v0.6.0's release page has no files, so building from source is the install that works today.
+Winshell runs on Windows 11. The portable zip and the PowerShell command install the same self-contained build from the latest release. winget and the Microsoft Store are not available yet. Building from source is for working on Winshell.
 
 ### Portable zip
 
 A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip needs no .NET install. Unzip one into a folder of its own and run `winshell.exe`.
-
-v0.6.0, the current release, was published with none of those files. GitHub marked the release immutable, and the upload was rejected ([#166](https://github.com/dante-sparras/winshell/issues/166)). Until a release page has the zip, build from source.
 
 The portable build updates itself from GitHub Releases, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
 
@@ -20,7 +18,7 @@ Releases will be signed through SignPath Foundation once its project for Winshel
 
 No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running.
 
-It needs `install.ps1` and the zip on the release. v0.6.0 has neither, so this fails until a release includes them.
+It needs `install.ps1` and the zip on that release.
 
 ```powershell
 irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
@@ -29,13 +27,13 @@ irm https://github.com/dante-sparras/winshell/releases/latest/download/install.p
 `iex` cannot take parameters. Set these first, or run the downloaded script as a script block:
 
 ```powershell
-$env:WINSHELL_VERSION = '0.6.0'  # optional. x.y.z. Omit it for the latest release.
+$env:WINSHELL_VERSION = 'x.y.z'  # optional. Omit it for the latest release.
 $env:WINSHELL_AUTOSTART = '1'    # optional. Run Winshell at sign-in.
 irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version 0.6.0 -AutoStart
+& ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 ```
 
 Remove that install with:

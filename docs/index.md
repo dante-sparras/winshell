@@ -4,7 +4,7 @@ Winshell is a desktop shell toolkit for Windows 11. A configuration written in Q
 
 Winshell ships with a default shell that looks like Windows 11: a taskbar on every screen, Start, quick settings, a notification center with a calendar, an on-screen display for volume and brightness, and Winshell Settings. It runs next to Explorer. It doesn't hide or replace Explorer's taskbar.
 
-The latest release is 0.6.0. Until 1.0 is tagged, a release can still break a configuration. The [changelog](https://github.com/dante-sparras/winshell/blob/main/CHANGELOG.md) lists every change.
+Until 1.0 is tagged, a release can still break a configuration. The [changelog](https://github.com/dante-sparras/winshell/blob/main/CHANGELOG.md) lists every change. The [release page](https://github.com/dante-sparras/winshell/releases) has the current build.
 
 ## Where to go next
 
