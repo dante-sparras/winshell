@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.6.0](https://github.com/dante-sparras/winshell/compare/v0.5.0...v0.6.0) (2026-10-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** user config files are TOML
+
+### Features
+
+* **cli:** winshell doctor checks the setup and says how to fix what's wrong ([#157](https://github.com/dante-sparras/winshell/issues/157)) ([884b0a1](https://github.com/dante-sparras/winshell/commit/884b0a16bf01c58c28ce2a54a92a05ef4aa39938))
+* **config:** user config files are TOML ([3876ef7](https://github.com/dante-sparras/winshell/commit/3876ef7b02706fc27123e9484a2fb3cf513e9a58))
+* **install:** add a per-user PowerShell install command ([8fe5158](https://github.com/dante-sparras/winshell/commit/8fe515822fb0054715d814e288b2f7df11d0c6e4))
+* **release:** a portable zip and a winget manifest with each release ([#121](https://github.com/dante-sparras/winshell/issues/121)) ([83eef64](https://github.com/dante-sparras/winshell/commit/83eef6422ce2c6a1a880dd4378485807d47f553f)), closes [#117](https://github.com/dante-sparras/winshell/issues/117)
+* **release:** sign release binaries through SignPath Foundation once its project is set up ([#145](https://github.com/dante-sparras/winshell/issues/145)) ([4417ad8](https://github.com/dante-sparras/winshell/commit/4417ad865e22bbaf24ca9b60841b5069b4eb64d9))
+* **runtime:** crash reports, and a crashed window opens again ([#122](https://github.com/dante-sparras/winshell/issues/122)) ([71bc9bb](https://github.com/dante-sparras/winshell/commit/71bc9bbb52e99c3f2a32fc7e728dbce450692845))
+* **shell:** a Windows 11 notice for a config error or a window that failed ([#148](https://github.com/dante-sparras/winshell/issues/148)) ([4e86c8b](https://github.com/dante-sparras/winshell/commit/4e86c8b21f4bcc484d330a06fc2bf5a9390afa33))
+* **store:** an MSIX package for the Microsoft Store, built in CI ([#141](https://github.com/dante-sparras/winshell/issues/141)) ([80169d4](https://github.com/dante-sparras/winshell/commit/80169d4af21d33597a50712e05ac51d176dde612)), closes [#119](https://github.com/dante-sparras/winshell/issues/119)
+* **updates:** the portable build updates itself from GitHub Releases ([#136](https://github.com/dante-sparras/winshell/issues/136)) ([16ff0e6](https://github.com/dante-sparras/winshell/commit/16ff0e6b43638003f794fcbdfe1299aedb9ee1a7)), closes [#120](https://github.com/dante-sparras/winshell/issues/120)
+
+
+### Bug Fixes
+
+* **instances:** list a reused process id once ([#125](https://github.com/dante-sparras/winshell/issues/125)) ([b66d766](https://github.com/dante-sparras/winshell/commit/b66d76625fbe8db9f840dcbb760887432680f373))
+* **media:** keep a session when Windows returns a new object for it ([#126](https://github.com/dante-sparras/winshell/issues/126)) ([4dd909f](https://github.com/dante-sparras/winshell/commit/4dd909f39d26e2a986708a1dd1ebdad9e095136a))
+* **shell:** notification times follow the regional short time ([03dd86b](https://github.com/dante-sparras/winshell/commit/03dd86b3cf0988b4fdf2a41aaa95ccc864fdce7c))
+
 ## [0.5.0](https://github.com/dante-sparras/winshell/compare/v0.4.0...v0.5.0) (2026-10-29)
 
 
