@@ -72,3 +72,6 @@ jobs:
           --exclude '^https://about\.signpath\.io/?$'
           'docs/**/*.md'
           README.md
+          CONTRIBUTING.md
+          GLOSSARY.md
+          '.github/*.md'
