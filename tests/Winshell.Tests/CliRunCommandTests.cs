@@ -16,13 +16,14 @@ public class CliRunCommandTests
     }
 
     [Fact]
-    public void Options_before_kill_do_not_start_a_shell()
+    public void Options_before_the_command_do_not_start_a_shell()
     {
-        var (code, output, error) = Run(["-v", "kill"]);
+        // An unknown command, not kill: kill would stop a real instance on this PC.
+        var (code, output, error) = Run(["-v", "nosuch"]);
 
-        Assert.Equal(1, code);
+        Assert.Equal(2, code);
         Assert.Equal("", output);
-        Assert.Equal("No running instances" + Environment.NewLine, error);
+        Assert.Equal("Unknown command \"nosuch\". Run winshell --help." + Environment.NewLine, error);
     }
 
     [Fact]
