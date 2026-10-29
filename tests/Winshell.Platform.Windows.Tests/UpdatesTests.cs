@@ -232,7 +232,11 @@ public sealed class UpdatesTests : IDisposable
         Stage("0.6.0", ("winshell.exe", "new"));
         using var updater = Create(Offline());
         var restarts = 0;
-        updater.Restart = () => restarts++;
+        updater.Restart = () =>
+        {
+            restarts++;
+            return null;
+        };
         var root = Load(updater);
 
         Assert.True((bool)root.ReadProperty("available")!);
@@ -268,10 +272,26 @@ public sealed class UpdatesTests : IDisposable
     {
         using var updater = Create(Offline());
         var restarts = 0;
-        updater.Restart = () => restarts++;
+        updater.Restart = () =>
+        {
+            restarts++;
+            return null;
+        };
 
         Assert.False(updater.RestartToUpdate());
         Assert.Equal(0, restarts);
+    }
+
+    [Fact]
+    public void A_refused_restart_keeps_the_update_ready_and_says_why()
+    {
+        Stage("0.6.0", ("winshell.exe", "new"));
+        using var updater = Create(Offline());
+        updater.Restart = () => "Another Winshell is running. Close it, then restart this one.";
+
+        Assert.True(updater.RestartToUpdate());
+        Assert.Equal(new UpdateState(UpdateStatus.Ready, "0.6.0", "Another Winshell is running. Close it, then restart this one."), updater.State);
+        Assert.Contains(_warnings, w => w.Contains("Another Winshell is running", StringComparison.Ordinal));
     }
 
     private Updater Create(FakeGitHub github) =>

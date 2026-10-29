@@ -709,6 +709,24 @@ public class SettingsTests
     }
 
     [Fact]
+    public void Restart_now_says_so_when_another_Winshell_runs_and_does_not_restart()
+    {
+        using var updates = new StagedUpdate("0.6.0") { Refusal = "Another Winshell is running. Close it, then restart this one." };
+        using var shell = Open(configure: e => WindowsModules.AddUpdates(e, updates.Updater));
+        Show(shell, "about");
+        var button = shell.Find("updateNow");
+
+        shell.Click(button);
+        Assert.Equal(0, updates.Restarts);
+        Assert.Equal("Another Winshell is running. Close it, then restart this one.", Card(shell, "winshellUpdates").ReadProperty("description"));
+        // Still ready: once the other one is closed, the same button restarts.
+        Assert.Equal("Restart now", button.ReadProperty("text"));
+        updates.Refusal = null;
+        shell.Click(button);
+        Assert.Equal(1, updates.Restarts);
+    }
+
+    [Fact]
     public void Checking_for_updates_says_why_it_failed()
     {
         using var updates = new StagedUpdate(null);

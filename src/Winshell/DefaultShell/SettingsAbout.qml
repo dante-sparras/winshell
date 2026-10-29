@@ -36,7 +36,8 @@ Column {
       : Updates.status === UpdateStatus.Checking ? "Checking for updates…"
       : Updates.status === UpdateStatus.UpToDate ? "You're up to date"
       : Updates.status === UpdateStatus.Downloading ? "Downloading Winshell " + Updates.version + "…"
-      : Updates.status === UpdateStatus.Ready ? "Winshell " + Updates.version + " is ready. Restart Winshell to finish updating"
+      : Updates.status === UpdateStatus.Ready ? (Updates.error !== "" ? Updates.error
+        : "Winshell " + Updates.version + " is ready. Restart Winshell to finish updating")
       : Updates.status === UpdateStatus.Failed ? Updates.error
       : "Get the newest Winshell from GitHub"
     focusTarget: Updates.available ? updateButton : null

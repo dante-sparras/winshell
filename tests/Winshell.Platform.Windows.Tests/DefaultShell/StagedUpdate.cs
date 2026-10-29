@@ -23,13 +23,23 @@ internal sealed class StagedUpdate : IDisposable
         }
         Updater = new Updater("dante-sparras/winshell", install, updates, "0.5.0", "win-x64", new Log(), new Offline())
         {
-            Restart = () => Restarts++,
+            Restart = () =>
+            {
+                if (Refusal is { } refusal)
+                    return refusal;
+                Restarts++;
+                return null;
+            },
         };
     }
 
     public Updater Updater { get; }
 
+    /// <summary>Restarts the host accepted.</summary>
     public int Restarts { get; private set; }
+
+    /// <summary>Why the host refuses to restart, as when another Winshell runs; null accepts.</summary>
+    public string? Refusal { get; set; }
 
     public void Dispose()
     {

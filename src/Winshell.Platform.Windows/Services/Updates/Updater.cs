@@ -114,8 +114,11 @@ public sealed class Updater : IDisposable
         get { lock (_lock) return _state; }
     }
 
-    /// <summary>Starts the shell over, so the update applies. The host that runs the shell sets it.</summary>
-    public Action? Restart { get; set; }
+    /// <summary>
+    /// Starts the shell over, so the update applies, and returns null; or returns why it does not, such as another
+    /// Winshell running, whose files the update must not replace. The host that runs the shell sets it.
+    /// </summary>
+    public Func<string?>? Restart { get; set; }
 
     /// <summary>
     /// Whether the updater checks by itself, <see cref="FirstCheck"/> after it is turned on and every
@@ -197,12 +200,19 @@ public sealed class Updater : IDisposable
         }
     }
 
-    /// <summary>Starts the shell over to apply the ready update. Returns false when none is ready or no host can.</summary>
+    /// <summary>
+    /// Starts the shell over to apply the ready update. Returns false when none is ready or no host can. When the host
+    /// will not restart, the update stays ready and <see cref="UpdateState.Error"/> says why.
+    /// </summary>
     internal bool RestartToUpdate()
     {
-        if (State.Status != UpdateStatus.Ready || Restart is not { } restart)
+        var state = State;
+        if (state.Status != UpdateStatus.Ready || Restart is not { } restart)
             return false;
-        restart();
+        var refused = restart();
+        if (refused is not null)
+            _log.Warn("updates", refused);
+        Set(state with { Error = refused ?? "" });
         return true;
     }
 

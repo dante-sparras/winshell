@@ -276,10 +276,7 @@ namespace Winshell
             // System.Diagnostics.Process is loaded first, from the files this one started with.
             RuntimeHelpers.PrepareMethod(typeof(Cli).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!.MethodHandle);
             using (Process.GetCurrentProcess()) { }
-            // A shell still running loads more files from this folder as it needs them, so an update installs only when
-            // no other runs. It stays ready until then.
-            var othersRun = Instances.List(false).Any(i => i.Info.Pid != o.After);
-            var update = othersRun ? null : Updater.InstallStaged(ReleaseRepository, Version);
+            var update = InstallUpdate(o.After);
             if (update is { Error: null })
             {
                 Console.Error.WriteLine($"Updated Winshell to {update.Version}.");
@@ -391,7 +388,15 @@ namespace Winshell
                 if (update is { Error: { } failure })
                     updater.ReportApplyFailure(update.Version, failure);
                 // Starts this winshell.exe again, with the same arguments, which puts the update in place as it starts.
-                updater.Restart = () => loop.Post(() =>
+                updater.Restart = () =>
+                {
+                    // That start would not install while another shell runs, so restarting would change nothing.
+                    if (Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId))
+                        return "Another Winshell is running. Close it, then restart this one.";
+                    loop.Post(Restart);
+                    return null;
+                };
+                void Restart()
                 {
                     var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
                     foreach (var a in originalArgs.Where(a => a is not ("-d" or "--daemonize")))
@@ -401,7 +406,7 @@ namespace Winshell
                     log.Info("updates", "Restarting Winshell to update it.");
                     using var next = Process.Start(psi);
                     loop.Quit(0);
-                });
+                }
             }
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);
@@ -477,6 +482,35 @@ namespace Winshell
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
+            }
+        }
+
+        /// <summary>
+        /// Puts a downloaded update in place, unless another shell runs: it would keep loading files from this folder
+        /// as it needs them and mix versions, so the update stays ready until a start finds none. A named mutex keeps
+        /// two starts at the same moment, before either is listed, from installing over each other: the second skips.
+        /// </summary>
+        private static InstalledUpdate? InstallUpdate(int? after)
+        {
+            using var installing = new Mutex(false, @"Local\winshell-update");
+            bool mine;
+            try
+            {
+                mine = installing.WaitOne(0);
+            }
+            catch (AbandonedMutexException)
+            {
+                mine = true;
+            }
+            if (!mine)
+                return null;
+            try
+            {
+                return Instances.List(false).Any(i => i.Info.Pid != after) ? null : Updater.InstallStaged(ReleaseRepository, Version);
+            }
+            finally
+            {
+                installing.ReleaseMutex();
             }
         }
 

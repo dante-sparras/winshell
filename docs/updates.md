@@ -10,9 +10,9 @@ A portable Winshell, the zip from GitHub Releases or the winget package, updates
 1. Winshell asks `https://api.github.com/repos/<repository>/releases/latest` for the latest release. A tag that is not newer than this Winshell is up to date.
 2. It downloads `winshell-<version>-win-x64.zip`, or `-win-arm64.zip` on an Arm PC. While downloading, it computes the file's SHA-256 and compares it with the `digest` GitHub reports for that file. A file without a digest, or whose hash differs, is deleted and never installed.
 3. It unzips the file into `%LOCALAPPDATA%\winshell\updates\<version>`. The update is now ready.
-4. The next `winshell.exe` that starts a shell while no other Winshell runs installs the update before the shell runs. While another shell runs, it would keep loading files from the folder as it needs them and mix versions, so the update waits, still ready, until a start finds no other shell. Each file the update replaces moves into `.winshell-old` in Winshell's folder, and the new one is copied in. If a file cannot be replaced, every file goes back and the update stays ready for the next start. The new `winshell.exe` then runs the shell, in the same console, with the same arguments. A later start that finds no other shell deletes `.winshell-old` and older or unfinished downloads.
+4. The next `winshell.exe` that starts a shell while no other Winshell runs installs the update before the shell runs. While another shell runs, it would keep loading files from the folder as it needs them and mix versions, so the update waits, still ready, until a start finds no other shell. Two starts at the same moment, before either is listed as running, take turns through a named mutex, so only one installs. Each file the update replaces moves into `.winshell-old` in Winshell's folder, and the new one is copied in. If a file cannot be replaced, every file goes back and the update stays ready for the next start. The new `winshell.exe` then runs the shell, in the same console, with the same arguments. A later start that finds no other shell deletes `.winshell-old` and older or unfinished downloads.
 
-**Restart to update** starts `winshell.exe` again with the same arguments and closes this shell. The new process waits for this one to exit, so the taskbar, the hotkeys and the tray come free first. Then it installs the update as in step 4, unless another Winshell still runs.
+**Restart to update** starts `winshell.exe` again with the same arguments and closes this shell. The new process waits for this one to exit, so the taskbar, the hotkeys and the tray come free first. Then it installs the update as in step 4. While another Winshell runs, the restart could not install the update, so **Restart now** does not restart: the update stays ready and the About page says "Another Winshell is running. Close it, then restart this one."
 
 Winshell checks for itself only while `Updates.automatic` is on: 30 seconds after it is turned on, and once a day after that. The default shell turns it on unless `autoUpdate` is `false` in `preferences.json`, which **Get Winshell updates automatically** on the About page of Winshell Settings changes. **Check for updates** works either way. Winshell must be able to write to its own folder; if it cannot, it says so and downloads nothing.
 
@@ -27,7 +27,7 @@ Winshell checks for itself only while `Updates.automatic` is on: 30 seconds afte
 | `automatic` | Check by itself and download what it finds. Off until a shell turns it on. |
 | `status` | `UpdateStatus.Idle`, `Checking`, `UpToDate`, `Downloading`, `Ready` or `Failed`. An update downloaded before this run started is `Ready` from the start. |
 | `version` | The release found: the latest one when up to date, or the one downloading or ready. |
-| `error` | Why the last check, download or install failed, while `status` is `Failed`. |
+| `error` | Why the last check, download or install failed, while `status` is `Failed`; or, while it is `Ready`, why `restart()` did not restart. |
 | `check()` | Checks now, and downloads a newer release. |
 | `restart()` | Starts Winshell over to install a `Ready` update. Does nothing otherwise. |
 

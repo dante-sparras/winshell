@@ -52,7 +52,10 @@ public sealed class UpdatesService : QObject
     /// <summary>The release found: the newest one when up to date, the one downloading or ready. Empty before a check.</summary>
     [Qml] public string Version { get { Track(); return _state.Version; } }
 
-    /// <summary>Why the last check, download or install failed, while <see cref="Status"/> is <c>Failed</c>.</summary>
+    /// <summary>
+    /// Why the last check, download or install failed, while <see cref="Status"/> is <c>Failed</c>; or, while it is
+    /// <c>Ready</c>, why <see cref="Restart"/> did not restart.
+    /// </summary>
     [Qml] public string Error { get { Track(); return _state.Error; } }
 
     /// <summary>Checks now, and downloads a newer release.</summary>
