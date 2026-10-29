@@ -504,12 +504,19 @@ public abstract class Container : Control
     [Qml]
     public void MoveItem(int from, int to)
     {
-        if (from < 0 || from >= _items.Count || to < 0 || to >= _items.Count)
+        if (from < 0 || from >= _items.Count || to < 0 || to >= _items.Count || from == to)
             return;
+        var oldCurrent = _currentIndex;
         var item = _items[from];
         _items.RemoveAt(from);
         _items.Insert(to, item);
         NotifyChanged("contentChildren");
+        if (from == oldCurrent)
+            SetCurrentIndex(to);
+        else if (from < oldCurrent && to >= oldCurrent)
+            SetCurrentIndex(oldCurrent - 1);
+        else if (from > oldCurrent && to <= oldCurrent)
+            SetCurrentIndex(oldCurrent + 1);
         ItemsChanged();
     }
 
@@ -537,17 +544,27 @@ public abstract class Container : Control
         var index = _items.IndexOf(item);
         if (index < 0)
             return null;
+        // Removing the current item selects the previous one, except at index 0, where the
+        // next item keeps that index. The index number does not change in that case, so the
+        // new item still has to become the checked tab.
+        var removedCurrent = index == _currentIndex;
+        var followedPrevious = removedCurrent && (index != 0 || _items.Count == 1);
+        if (followedPrevious)
+            SetCurrentIndex(_currentIndex - 1);
+        else if (index < _currentIndex)
+        {
+            _currentIndex--;
+            NotifyChanged("currentIndex");
+        }
         _items.RemoveAt(index);
         if (item.ParentItem == ItemHost)
             item.SetParentItem(null);
         NotifyChanged("count");
         NotifyChanged("contentChildren");
-        if (_currentIndex >= _items.Count)
-            SetCurrentIndex(_items.Count - 1);
-        else if (index < _currentIndex)
+        if (removedCurrent && !followedPrevious)
         {
-            _currentIndex--;
-            NotifyChanged("currentIndex");
+            NotifyChanged("currentItem");
+            OnCurrentIndexChanged();
         }
         ItemsChanged();
         return item;
@@ -1055,14 +1072,24 @@ public sealed class StackView : Control
         if (_stack.Count <= 1)
             return null;
         var before = CurrentItem;
-        var target = args.Length > 0 ? ValueConverter.Unwrap(args[0]) as Item : null;
+        // No argument pops one page. null unwinds to the first page. An item unwinds to that item.
+        var unwind = false;
+        Item? target = null;
+        if (args.Length > 0)
+        {
+            var first = ValueConverter.Unwrap(args[0]);
+            if (first is null)
+                unwind = true;
+            else if (first is Item page)
+                target = page;
+        }
         Item? popped = null;
         while (_stack.Count > 1)
         {
             if (target is not null && _stack[^1].Item == target)
                 break;
             popped = Remove(_stack.Count - 1);
-            if (target is null)
+            if (!unwind && target is null)
                 break;
         }
         Changed(before);
