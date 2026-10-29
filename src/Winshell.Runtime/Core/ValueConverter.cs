@@ -162,7 +162,11 @@ public static class ValueConverter
             return value;
         if (js is QObjectWrapper wrapper)
             return wrapper.Target;
-        if (js.IsObject() && js.ToObject() is not (QColor or QPoint or QSize or QRect))
+        // Value types cross as interop wrappers. A plain object or array must stay the JavaScript value:
+        // ToObject() would copy the whole graph and throw the copy away.
+        if (js is Jint.Runtime.Interop.ObjectWrapper objectWrapper)
+            return objectWrapper.Target;
+        if (js.IsObject())
             return js;
         return FromJs(js);
     }
@@ -199,9 +203,6 @@ public static class ValueConverter
         }
         if (js is Jint.Runtime.Interop.ObjectWrapper objectWrapper)
             return objectWrapper.Target;
-        var clr = js.ToObject();
-        if (clr is QColor or QPoint or QSize or QRect or QmlComponent or QObject)
-            return clr;
         return js;
     }
 
