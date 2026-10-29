@@ -615,6 +615,7 @@ internal sealed class SessionNode : AudioGraphNode
     private readonly SessionEvents _events;
     private readonly uint _processId;
     private Process? _process;
+    private EventHandler? _exited;
     private bool _released;
 
     public SessionNode(AudioGraph graph, EndpointNode endpoint, IAudioSessionControl2 control, string instanceId, AudioSessionState state)
@@ -673,8 +674,9 @@ internal sealed class SessionNode : AudioGraphNode
         try
         {
             _process = Process.GetProcessById((int)_processId);
+            _exited = (_, _) => _graph.Post(() => _graph.RemoveSession(this));
             _process.EnableRaisingEvents = true;
-            _process.Exited += (_, _) => _graph.Post(() => _graph.RemoveSession(this));
+            _process.Exited += _exited;
             if (_process.HasExited)
                 _graph.Post(() => _graph.RemoveSession(this));
         }
@@ -690,7 +692,14 @@ internal sealed class SessionNode : AudioGraphNode
         if (_released)
             return;
         _released = true;
-        _process?.Dispose();
+        if (_process is not null)
+        {
+            if (_exited is not null)
+                StopWatching(_process, _exited);
+            _process.Dispose();
+            _process = null;
+            _exited = null;
+        }
         try
         {
             _control.UnregisterAudioSessionNotification(_events);
@@ -698,6 +707,13 @@ internal sealed class SessionNode : AudioGraphNode
         catch (COMException)
         {
         }
+    }
+
+    /// <summary>Drops the exit callback before the process is disposed, so a late exit is not delivered.</summary>
+    internal static void StopWatching(Process process, EventHandler handler)
+    {
+        process.EnableRaisingEvents = false;
+        process.Exited -= handler;
     }
 
     private void ReadVolume()
