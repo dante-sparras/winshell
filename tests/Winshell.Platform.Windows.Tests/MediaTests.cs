@@ -100,7 +100,7 @@ public sealed class MediaTests : IDisposable
             // its AppUserModelID. Observe registration before publishing the metadata/art change under test.
             Assert.True(WaitUntil(() => media.Sessions.Values.OfType<MediaSession>()
                 .Any(s => s.TrackTitle == registrationTitle)),
-                "Windows did not publish the HWND-owned registration title.");
+                Missing(media, "Windows did not publish the HWND-owned registration title."));
             updater.MusicProperties.Title = _title;
             updater.MusicProperties.Artist = "Winshell";
             updater.MusicProperties.AlbumTitle = "Live";
@@ -181,6 +181,16 @@ public sealed class MediaTests : IDisposable
 
     private bool WaitForState(MediaSession session, int state) =>
         WaitUntil(() => session.PlaybackState == state);
+
+    private static string Missing(MediaService media, string message)
+    {
+        var sessions = media.Sessions.Values.OfType<MediaSession>()
+            .Select(session => $"{session.AppId} [{session.TrackTitle}]")
+            .ToArray();
+        return sessions.Length == 0
+            ? message + " The service listed no sessions."
+            : message + " Saw " + string.Join(", ", sessions) + ".";
+    }
 
     private bool WaitUntil(Func<bool> ready)
     {
