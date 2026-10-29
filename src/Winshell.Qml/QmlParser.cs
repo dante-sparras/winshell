@@ -601,6 +601,14 @@ public sealed class QmlParser
                 lastSignificant = 'a';
                 continue;
             }
+            // Postfix ++ and -- finish the expression. A single + or - still continues onto the next line.
+            if ((c is '+' or '-') && PeekAt(1) == c)
+            {
+                _pos += 2;
+                lastSignificant = 'a';
+                lastWord = "";
+                continue;
+            }
             lastSignificant = c;
             lastWord = "";
             Advance();
@@ -706,6 +714,13 @@ public sealed class QmlParser
                     _pos++;
                 lastWord = _text[start.._pos];
                 lastSignificant = 'a';
+                continue;
+            }
+            if ((c is '+' or '-') && PeekAt(1) == c)
+            {
+                _pos += 2;
+                lastSignificant = 'a';
+                lastWord = "";
                 continue;
             }
             lastSignificant = c;

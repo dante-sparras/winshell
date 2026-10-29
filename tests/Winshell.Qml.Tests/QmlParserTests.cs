@@ -120,6 +120,19 @@ public class QmlParserTests
         Assert.Equal("b", Assert.IsType<QmlAssignment>(doc.Root.Members[1]).Name);
     }
 
+    [Theory]
+    [InlineData("a: x++\nb: 3", "x++")]
+    [InlineData("a: x--\nb: 3", "x--")]
+    [InlineData("a: x++ +\n 1\nb: 3", "x++ +\n 1")]
+    [InlineData("a: x +\n +y\nb: 3", "x +\n +y")]
+    public void A_postfix_update_ends_the_expression(string body, string expected)
+    {
+        var doc = QmlParser.Parse("Item {\n" + body + "\n}");
+        var a = Assert.IsType<QmlAssignment>(doc.Root.Members[0]);
+        Assert.Equal(expected, Assert.IsType<QmlScriptValue>(a.Value).Code.Trim());
+        Assert.Equal("b", Assert.IsType<QmlAssignment>(doc.Root.Members[1]).Name);
+    }
+
     [Fact]
     public void A_one_line_object_ends_at_its_brace()
     {
