@@ -48,7 +48,6 @@ public sealed class QmlModule(string name)
         where T : QObject, new()
     {
         var qmlName = name ?? typeof(T).Name;
-        MetaType.Of(typeof(T)).QmlName = qmlName;
         return Add(new TypeEntry
         {
             Name = qmlName,
@@ -64,8 +63,6 @@ public sealed class QmlModule(string name)
     public QmlModule Uncreatable<T>(string? name = null, string? reason = null, Func<QObject, QObject>? attached = null, Type? attachedType = null)
     {
         var qmlName = name ?? typeof(T).Name;
-        if (typeof(QObject).IsAssignableFrom(typeof(T)))
-            MetaType.Of(typeof(T)).QmlName = qmlName;
         var enums = typeof(T).IsEnum
             ? Enum.GetValues(typeof(T)).Cast<object>().ToDictionary(v => Enum.GetName(typeof(T), v)!, v => Convert.ToInt32(v, System.Globalization.CultureInfo.InvariantCulture))
             : typeof(QObject).IsAssignableFrom(typeof(T)) ? MetaType.Of(typeof(T)).Enums : new Dictionary<string, int>();
@@ -88,7 +85,6 @@ public sealed class QmlModule(string name)
         where T : QObject
     {
         var qmlName = name ?? typeof(T).Name;
-        MetaType.Of(typeof(T)).QmlName = qmlName;
         return Add(new TypeEntry
         {
             Name = qmlName,
@@ -118,4 +114,18 @@ public sealed class ModuleRegistry
 
     /// <summary>Set by the visual modules: makes an item the visual child of another. Each registry has its own.</summary>
     internal Func<QObject, QObject, bool>? VisualParent { get; set; }
+
+    /// <summary>The name of the first type entry for a C# type, or its C# name when no module exports it.</summary>
+    public string NameOf(Type type)
+    {
+        foreach (var module in _modules.Values)
+        {
+            foreach (var entry in module.Types.Values)
+            {
+                if (entry.ClrType == type)
+                    return entry.Name;
+            }
+        }
+        return type.Name;
+    }
 }

@@ -108,11 +108,11 @@ public static class ValueConverter
         if (value is null)
         {
             if (target.IsValueType)
-                throw new QmlException($"Unable to assign [undefined] to {QmlTypeName(target)}");
+                throw new QmlException($"Unable to assign [undefined] to {QmlTypeName(target, engine)}");
             return null;
         }
         if (typeof(QObject).IsAssignableFrom(target))
-            throw new QmlException($"Unable to assign {Describe(value)} to {QmlTypeName(target)}");
+            throw new QmlException($"Unable to assign {Describe(value)} to {QmlTypeName(target, engine)}");
         if (target == typeof(IReadOnlyList<string>) || target == typeof(string[]) || target == typeof(List<string>))
         {
             var strings = ToList(value).Select(v => v is null ? "" : ToQmlString(v)).ToList();
@@ -125,7 +125,7 @@ public static class ValueConverter
             if (value is Dictionary<string, object?> dict)
                 return dict;
         }
-        throw new QmlException($"Unable to assign {Describe(value)} to {QmlTypeName(target)}");
+        throw new QmlException($"Unable to assign {Describe(value)} to {QmlTypeName(target, engine)}");
     }
 
     private static object? Get(IDictionary<string, object?> d, string key) => d.TryGetValue(key, out var v) ? v : null;
@@ -299,14 +299,14 @@ public static class ValueConverter
         return a.Equals(b);
     }
 
-    public static string QmlTypeName(Type type) => type switch
+    public static string QmlTypeName(Type type, QmlEngine? engine = null) => type switch
     {
         _ when type == typeof(double) => "double",
         _ when type == typeof(int) => "int",
         _ when type == typeof(bool) => "bool",
         _ when type == typeof(string) => "QString",
         _ when type == typeof(QColor) => "QColor",
-        _ => MetaType.Of(type).QmlName,
+        _ => engine?.Modules.NameOf(type) ?? type.Name,
     };
 
     public static string Describe(object? value) => value switch
