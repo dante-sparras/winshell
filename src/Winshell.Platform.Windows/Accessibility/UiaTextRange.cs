@@ -171,7 +171,23 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
         return Run(() => SetEndpoint(endpoint, other.Endpoint(targetEndpoint)));
     }
 
-    int ITextRangeProvider.Select() => Run(() => Input.Select(_start, _end));
+    int ITextRangeProvider.Select()
+    {
+        var start = 0;
+        var end = 0;
+        Runtime.Quick.AccessibleNode? node = null;
+        var hr = Run(() =>
+        {
+            start = _start;
+            end = _end;
+            node = owner.Node;
+        });
+        if (hr != Uia.S_OK || node is null)
+            return hr;
+        // Selecting runs the field's handlers. Do it after this call, as the other mutations do.
+        owner.Automation.Post(node, () => node.TextInput?.Select(start, end));
+        return Uia.S_OK;
+    }
 
     int ITextRangeProvider.AddToSelection() => Uia.InvalidOperation;
 

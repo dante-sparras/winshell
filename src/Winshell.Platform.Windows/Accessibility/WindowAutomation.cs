@@ -26,6 +26,16 @@ internal sealed class WindowAutomation : IDisposable
     private AccessibleTree? _tree;
     private bool _stale;
     private bool _focusPending;
+    private int _calls;
+
+    /// <summary>How many times the tree was refreshed. Tests use it to see that a nested call did not refresh again.</summary>
+    internal int SyncCount { get; private set; }
+
+    /// <summary>
+    /// A change that arrived inside a frame, or inside another automation call, waits until that call returns.
+    /// Running it there would run QML from the middle of layout.
+    /// </summary>
+    internal bool DeferMutations => _calls > 1 || _window.IsRendering;
 
     public WindowAutomation(Win32Window window, Scene scene, IEventLoop loop, Log log)
     {
@@ -101,11 +111,7 @@ internal sealed class WindowAutomation : IDisposable
     public int Run(Func<int> call)
     {
         if (Environment.CurrentManagedThreadId == _thread)
-        {
-            if (_stale)
-                Sync();
-            return Guard(call);
-        }
+            return RunHere(call);
         var handle = Handle;
         if (handle == 0)
             return Uia.ElementNotAvailable;
@@ -127,10 +133,27 @@ internal sealed class WindowAutomation : IDisposable
     {
         if (GCHandle.FromIntPtr(lParam).Target is Work work)
         {
-            if (_stale)
-                Sync();
-            work.Result = Guard(work.Call);
+            work.Result = RunHere(work.Call);
             work.Ran = true;
+        }
+    }
+
+    /// <summary>
+    /// Runs one call on the window thread. A call that arrives while a frame is drawing, or while another call is
+    /// already here, answers from the tree as it stands. Refreshing it would walk items in the middle of layout.
+    /// </summary>
+    private int RunHere(Func<int> call)
+    {
+        _calls++;
+        try
+        {
+            if (_stale && _calls == 1 && !_window.IsRendering)
+                Sync();
+            return Guard(call);
+        }
+        finally
+        {
+            _calls--;
         }
     }
 
@@ -257,6 +280,7 @@ internal sealed class WindowAutomation : IDisposable
     private void Sync()
     {
         _stale = false;
+        SyncCount++;
         var changes = Tree.Refresh();
         var listening = Listening();
         foreach (var change in changes)
