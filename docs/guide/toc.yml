@@ -34,6 +34,8 @@
     href: ../tray.md
 - name: Privacy
   href: ../privacy.md
+- name: Security threat model
+  href: ../security/threat-model.md
 - name: Code signing policy
   href: ../code-signing-policy.md
 - name: Contributing
