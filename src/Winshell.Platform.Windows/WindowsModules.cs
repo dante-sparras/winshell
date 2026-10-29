@@ -90,7 +90,7 @@ public sealed class WindowsTheme : QObject
         .Select(p => (Names.ToQml(p.Name), (Func<Theme, QColor>)p.GetMethod!.CreateDelegate(typeof(Func<Theme, QColor>))))
         .ToArray();
 
-    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "autoHideScrollBars", "colorScheme", "accentColor", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
+    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "textScaleFactor", "typography", "autoHideScrollBars", "colorScheme", "accentColor", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
 
     public WindowsTheme()
     {
@@ -167,11 +167,24 @@ public sealed class WindowsTheme : QObject
     /// <summary>False when "Always show scrollbars" is on in Windows. Scroll bars then stay wide.</summary>
     [Qml] public bool AutoHideScrollBars { get { Track(); return Theme.Current.AutoHideScrollBars; } }
 
+    /// <summary>
+    /// Windows text size as a multiplier. 1 is the Settings default. The type ramp and text with no
+    /// <c>font.pixelSize</c> of its own use it. An explicit pixel size or point size does not.
+    /// </summary>
+    [Qml] public double TextScaleFactor { get { Track(); return Theme.TextScale(Theme.Current.TextScaleFactor); } }
+
     [Qml] public string FontFamily => FontSpec.DefaultFamily;
 
     [Qml] public string IconFontFamily => "Segoe Fluent Icons";
 
-    [Qml] public WindowsTypography Typography { get; } = new();
+    private readonly WindowsTypography _typography = new();
+
+    /// <summary>The type ramp. Its sizes follow Windows text size.</summary>
+    [Qml]
+    public WindowsTypography Typography
+    {
+        get { Track(); return _typography; }
+    }
 
     [Qml] public double ControlCornerRadius => Fluent.ControlCornerRadius;
 
@@ -215,23 +228,24 @@ public sealed class WindowsTheme : QObject
 /// </summary>
 public sealed class WindowsTypography : QObject
 {
-    private static FontGroup Font(TypeStyle style) => new(FontSpec.DefaultFamily, style.PixelSize, style.Weight);
+    private static FontGroup Font(TypeStyle style) =>
+        new(FontSpec.DefaultFamily, style.PixelSize * Theme.TextScale(Theme.Current.TextScaleFactor), style.Weight);
 
-    [Qml] public FontGroup Caption => Font(Fluent.Caption);
+    [Qml] public FontGroup Caption { get { Track(); return Font(Fluent.Caption); } }
 
-    [Qml] public FontGroup Body => Font(Fluent.Body);
+    [Qml] public FontGroup Body { get { Track(); return Font(Fluent.Body); } }
 
-    [Qml] public FontGroup BodyStrong => Font(Fluent.BodyStrong);
+    [Qml] public FontGroup BodyStrong { get { Track(); return Font(Fluent.BodyStrong); } }
 
-    [Qml] public FontGroup BodyLarge => Font(Fluent.BodyLarge);
+    [Qml] public FontGroup BodyLarge { get { Track(); return Font(Fluent.BodyLarge); } }
 
-    [Qml] public FontGroup Subtitle => Font(Fluent.Subtitle);
+    [Qml] public FontGroup Subtitle { get { Track(); return Font(Fluent.Subtitle); } }
 
-    [Qml] public FontGroup Title => Font(Fluent.Title);
+    [Qml] public FontGroup Title { get { Track(); return Font(Fluent.Title); } }
 
-    [Qml] public FontGroup TitleLarge => Font(Fluent.TitleLarge);
+    [Qml] public FontGroup TitleLarge { get { Track(); return Font(Fluent.TitleLarge); } }
 
-    [Qml] public FontGroup Display => Font(Fluent.Display);
+    [Qml] public FontGroup Display { get { Track(); return Font(Fluent.Display); } }
 }
 
 /// <summary>A shadow of the Windows 11 elevation: its blur, how far it falls, and its color.</summary>

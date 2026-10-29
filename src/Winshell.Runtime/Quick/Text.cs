@@ -120,7 +120,10 @@ public class Text : Item, IPolishable
 
     private void OnThemeChanged()
     {
-        if (!_colorSet && !IsDestroyed)
+        if (IsDestroyed)
+            return;
+        _fontGroup.RefreshDefaultSize();
+        if (!_colorSet)
         {
             _color = Theme.Current.TextFillColorPrimary;
             NotifyChanged("color");

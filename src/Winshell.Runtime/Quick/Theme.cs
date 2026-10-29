@@ -73,7 +73,7 @@ public readonly record struct Elevation(float Blur, float OffsetY, QColor Color)
 /// The text caret blinks every <see cref="CaretBlinkTime"/> milliseconds,
 /// or not at all when it is <see cref="CaretNoBlink"/>, stops blinking after <see cref="CaretTimeout"/> milliseconds
 /// without input, and is <see cref="CaretWidth"/> logical pixels wide, as the Windows keyboard and text cursor settings say.
-/// The platform updates the theme when the user changes their Windows settings, and a shell can choose
+/// Text size follows Windows. The platform updates the theme when the user changes their Windows settings, and a shell can choose
 /// light or dark and its own accent on top (<see cref="Choose"/>).
 /// </summary>
 public sealed record Theme(
@@ -98,6 +98,15 @@ public sealed record Theme(
     /// <summary>The <see cref="CaretBlinkTime"/> of a caret that does not blink, Win32's <c>INFINITE</c>.</summary>
     public const uint CaretNoBlink = uint.MaxValue;
 
+    /// <summary>
+    /// Windows text size as a multiplier of the type ramp and of text that has no size of its own. 1 is the
+    /// default. Anything that is not a positive finite number counts as 1.
+    /// </summary>
+    public double TextScaleFactor { get; init; } = 1;
+
+    /// <summary>The text-size multiplier to apply. A missing or unusable value is 1.</summary>
+    public static double TextScale(double factor) => double.IsFinite(factor) && factor > 0 ? factor : 1;
+
     private static Theme _reported = Default(false);
     private static Theme _current = _reported;
     private static ThemeChoice _choice = ThemeChoice.None;
@@ -119,6 +128,8 @@ public sealed record Theme(
         set
         {
             _reported = value;
+            // Text with no size of its own reads this. An explicit pixel size or point size does not.
+            FontSpec.DefaultPixelSize = FontSpec.UnscaledDefaultPixelSize * TextScale(value.TextScaleFactor);
             Update(false);
         }
     }

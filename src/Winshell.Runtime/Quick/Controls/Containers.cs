@@ -197,6 +197,15 @@ public sealed class GroupBox : Frame
         base.CreateDefaults();
     }
 
+    protected override void OnFontChanged()
+    {
+        if (_defaultLabel && _label is Text text)
+        {
+            CopyFont(Font, text.Font);
+            text.Font.Weight = 600;
+        }
+    }
+
     protected override void LayoutParts()
     {
         if (_label is { } label && label.ParentItem == this && !label.HasAnchors)

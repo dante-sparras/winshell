@@ -20,6 +20,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
     private Services.Tray.TrayHost? _tray;
+    private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
     private static WindowsPlatform? _current;
 
     public WindowsPlatform(WinEventLoop loop, Log log)
@@ -30,6 +31,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         _current = this;
         Win32.SetProcessDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         _screens = Platform.Windows.Screens.Enumerate().Select(m => m.Info).ToList();
+        ListenForTextScale();
         ReadTheme();
         ListenForClipboard();
         SystemEvents.DisplaySettingsChanged += (_, _) => Loop.Post(RefreshScreens);
@@ -231,11 +233,13 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         };
         var animations = true;
         var autoHideScrollBars = true;
+        var textScale = 1.0;
         try
         {
-            var settings = new global::Windows.UI.ViewManagement.UISettings();
+            var settings = _uiSettings ?? new global::Windows.UI.ViewManagement.UISettings();
             animations = settings.AnimationsEnabled;
             autoHideScrollBars = settings.AutoHideScrollBars;
+            textScale = settings.TextScaleFactor;
             QColor Get(global::Windows.UI.ViewManagement.UIColorType type)
             {
                 var c = settings.GetColorValue(type);
@@ -253,11 +257,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
                     Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark3)),
                 AnimationsEnabled = animations,
                 AutoHideScrollBars = autoHideScrollBars,
+                TextScaleFactor = Theme.TextScale(textScale),
             };
         }
         catch (COMException)
         {
-            theme = theme with { AnimationsEnabled = animations, AutoHideScrollBars = autoHideScrollBars };
+            theme = theme with { AnimationsEnabled = animations, AutoHideScrollBars = autoHideScrollBars, TextScaleFactor = Theme.TextScale(textScale) };
         }
         Theme.Current = theme;
     }
@@ -269,6 +274,21 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     /// </summary>
     internal static bool WindowsModeDark(object? systemValue, object? appsValue) =>
         systemValue is int systemLight ? systemLight == 0 : appsValue is int appsLight && appsLight == 0;
+    private void ListenForTextScale()
+    {
+        try
+        {
+            _uiSettings = new global::Windows.UI.ViewManagement.UISettings();
+            _uiSettings.TextScaleFactorChanged += OnTextScaleFactorChanged;
+        }
+        catch (COMException)
+        {
+            _uiSettings = null;
+        }
+    }
+
+    private void OnTextScaleFactorChanged(global::Windows.UI.ViewManagement.UISettings sender, object args) =>
+        Loop.Post(ReadTheme);
 
     private static bool HighContrastOn()
     {
@@ -435,6 +455,11 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     public void Dispose()
     {
+        if (_uiSettings is not null)
+        {
+            _uiSettings.TextScaleFactorChanged -= OnTextScaleFactorChanged;
+            _uiSettings = null;
+        }
         Hotkeys.Dispose();
         // The next instance takes the notification area over, and apps register with it.
         if (_tray is not null)

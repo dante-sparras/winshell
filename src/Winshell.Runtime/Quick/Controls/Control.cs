@@ -516,6 +516,7 @@ public class Control : Item, IHoverTarget
         if (IsDestroyed)
             return;
         OnThemeChanged();
+        _fontGroup.RefreshDefaultSize();
         Update();
     }
 
