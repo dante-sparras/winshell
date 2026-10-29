@@ -90,6 +90,14 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
                         Leave(p.Name, $"{p.Name} is not a boolean, so it was left unchanged");
                         continue;
                     }
+                    // Converted to a string, the value would be written back over the user's line on the next save:
+                    // accentColor = 0x0078D4 became accentColor = "30932". The property keeps its value, as it does
+                    // for a key the file does not have, and the shell falls back the way it does for that.
+                    if (p.QmlType is "string" or "url" or "color" && value is not string)
+                    {
+                        _leave.Add(p.Name);
+                        continue;
+                    }
                     if (HasUnsafeInteger(value))
                     {
                         Leave(p.Name, $"{p.Name} is an integer past 2^53, so it was left unchanged");
