@@ -444,6 +444,96 @@ public sealed class UpdatesTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_signed_install_takes_an_update_its_own_signer_signed()
+    {
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
+        // A library SignPath does not sign keeps its own publisher's signature, or none, and is not checked.
+        var staged = await Download(("winshell.exe", "signed by CN=Winshell"), ("winshell.dll", "signed by CN=Winshell"), ("Jint.dll", "unsigned"));
+
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner));
+
+        Assert.Equal("signed by CN=Winshell", File.ReadAllText(Path.Combine(InstallDir, "winshell.dll")));
+        Assert.Equal("unsigned", File.ReadAllText(Path.Combine(InstallDir, "Jint.dll")));
+        Assert.False(Directory.Exists(staged));
+    }
+
+    [Fact]
+    public async Task A_signed_install_refuses_an_unsigned_update_and_deletes_it()
+    {
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
+        var staged = await Download(("winshell.exe", "unsigned"));
+
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner);
+
+        Assert.Equal("This Winshell is signed by CN=Winshell, but the update's winshell.exe is not validly signed, so Winshell does not install it.", error);
+        Assert.Equal("signed by CN=Winshell", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.False(Directory.Exists(staged));
+        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+        Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
+    }
+
+    [Fact]
+    public async Task A_signed_install_refuses_an_update_another_signer_signed()
+    {
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
+        var staged = await Download(("winshell.exe", "signed by CN=Winshell"), ("Winshell.Runtime.dll", "signed by CN=Someone Else"));
+
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner);
+
+        Assert.Equal("This Winshell is signed by CN=Winshell, but the update's Winshell.Runtime.dll is signed by CN=Someone Else, so Winshell does not install it.", error);
+        Assert.Equal(["winshell.exe"], Directory.EnumerateFileSystemEntries(InstallDir).Select(Path.GetFileName));
+        Assert.False(Directory.Exists(staged));
+    }
+
+    [Fact]
+    public async Task An_unsigned_install_takes_an_unsigned_update()
+    {
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "unsigned");
+        var staged = await Download(("winshell.exe", "new"));
+
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner));
+
+        Assert.Equal("new", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+    }
+
+    [Fact]
+    public void The_signer_is_read_from_a_valid_embedded_signature_only()
+    {
+        var unsigned = Path.Combine(_root, "unsigned.dll");
+        File.WriteAllText(unsigned, "unsigned");
+        var tampered = Path.Combine(_root, "tampered.dll");
+        File.Copy(typeof(object).Assembly.Location, tampered);
+        // Any change to the signed bytes breaks the signature.
+        using (var stream = new FileStream(tampered, FileMode.Open, FileAccess.ReadWrite))
+        {
+            stream.Position = 0x200;
+            var b = stream.ReadByte();
+            stream.Position = 0x200;
+            stream.WriteByte((byte)(b ^ 0xFF));
+        }
+
+        Assert.Null(UpdateSignature.Signer(unsigned));
+        Assert.Null(UpdateSignature.Signer(tampered));
+        Assert.Null(UpdateSignature.Signer(Path.Combine(_root, "missing.dll")));
+        // The .NET runtime's own files carry an embedded Authenticode signature, not a catalog one.
+        Assert.Contains("O=Microsoft Corporation", UpdateSignature.Signer(typeof(object).Assembly.Location), StringComparison.Ordinal);
+    }
+
+    /// <summary>Downloads 0.6.0 with these files through the fake GitHub, and returns its staged folder.</summary>
+    private async Task<string> Download(params (string Name, string Text)[] files)
+    {
+        var zip = Zip(files);
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+        await updater.CheckAsync();
+        Assert.Equal(UpdateStatus.Ready, updater.State.Status);
+        return Path.Combine(UpdatesDir, "0.6.0");
+    }
+
+    /// <summary>Signs a file by its text: "signed by &lt;subject&gt;". Anything else is unsigned.</summary>
+    private static string? FakeSigner(string path) =>
+        File.Exists(path) && File.ReadAllText(path) is var text && text.StartsWith("signed by ", StringComparison.Ordinal) ? text["signed by ".Length..] : null;
+
     private Updater Create(FakeGitHub github) =>
         new("dante-sparras/winshell", InstallDir, UpdatesDir, "0.5.0+test", "win-x64", _log, github);
 

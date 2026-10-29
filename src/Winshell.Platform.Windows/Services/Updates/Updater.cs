@@ -192,6 +192,8 @@ public sealed class Updater : IDisposable
                 return;
             }
             _log.Info("updates", $"Winshell {version} is ready. It applies when Winshell next starts.");
+            if (UpdateSignature.Signer(Path.Combine(_installDir, "winshell.exe")) is null)
+                _log.Info("updates", "This winshell.exe is not signed, so the update's signature is not checked, only its SHA-256.");
             Set(new UpdateState(UpdateStatus.Ready, version, ""));
         }
         finally
