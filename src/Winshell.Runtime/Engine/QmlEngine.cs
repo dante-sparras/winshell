@@ -19,8 +19,16 @@ public sealed class QmlEngine : IDisposable
     private readonly HashSet<string> _loadingScripts = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _scriptImportChain = [];
     private readonly HashSet<string> _creatingSingletons = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _instantiatingFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<QObject> _roots = [];
     private readonly Stack<CreationBatch> _batches = new();
+    private int _creationDepth;
+
+    /// <summary>
+    /// How many <see cref="Create"/> calls may be on the stack at once, including completion. Past this, creation
+    /// throws instead of overflowing the stack. File cycles are caught separately, by path.
+    /// </summary>
+    internal const int MaxCreationDepth = 64;
     private readonly Dictionary<Type, object> _services = [];
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SignalSlot, object?> _connectedSlots = [];
 
@@ -254,6 +262,21 @@ public sealed class QmlEngine : IDisposable
         return Create(doc.Root, context, doc, owner, initialProperties, isFileRoot: true);
     }
 
+    /// <summary>
+    /// Marks a QML file as being instantiated. A file already in the set is a cycle
+    /// (<c>Foo.qml</c> containing <c>Foo {}</c>, or <c>A</c> creating <c>B</c> creating <c>A</c>).
+    /// </summary>
+    internal void BeginFileInstance(string path, SourceLocation location)
+    {
+        if (!_instantiatingFiles.Add(Path.GetFullPath(path)))
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            throw new QmlCompileException($"{name} is instantiated recursively", location);
+        }
+    }
+
+    internal void EndFileInstance(string path) => _instantiatingFiles.Remove(Path.GetFullPath(path));
+
     internal QObject Create(
         QmlObjectNode node,
         ComponentContext context,
@@ -263,23 +286,35 @@ public sealed class QmlEngine : IDisposable
         bool isFileRoot,
         Action<QObject>? beforeCompletion = null)
     {
-        var batch = new CreationBatch();
-        _batches.Push(batch);
-        QObject root;
+        // Completion runs after the batch is popped, and Loader, Repeater and createObject nest there.
+        // Counting batches alone would miss that recursion.
+        if (_creationDepth >= MaxCreationDepth)
+            throw new QmlException("Object creation is nested too deeply");
+        _creationDepth++;
         try
         {
-            var builder = new ObjectBuilder(this, batch);
-            root = builder.Build(node, context, doc, owner);
-            if (initialProperties is not null)
-                builder.SetInitialProperties(root, context, initialProperties);
-            beforeCompletion?.Invoke(root);
+            var batch = new CreationBatch();
+            _batches.Push(batch);
+            QObject root;
+            try
+            {
+                var builder = new ObjectBuilder(this, batch);
+                root = builder.Build(node, context, doc, owner);
+                if (initialProperties is not null)
+                    builder.SetInitialProperties(root, context, initialProperties);
+                beforeCompletion?.Invoke(root);
+            }
+            finally
+            {
+                _batches.Pop();
+            }
+            batch.Complete(this);
+            return root;
         }
         finally
         {
-            _batches.Pop();
+            _creationDepth--;
         }
-        batch.Complete(this);
-        return root;
     }
 
     public void Dispose()

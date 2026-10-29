@@ -32,11 +32,19 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                 break;
             case FileTypeRef file:
                 {
-                    var fileDoc = engine.LoadDocument(file.Path);
-                    if (fileDoc.IsSingleton)
-                        throw new QmlCompileException($"{file.Name} is a singleton and cannot be created", node.Location);
-                    var fileContext = new ComponentContext(null, engine.ImportsOf(fileDoc));
-                    obj = Build(fileDoc.Root, fileContext, fileDoc, owner);
+                    engine.BeginFileInstance(file.Path, node.Location);
+                    try
+                    {
+                        var fileDoc = engine.LoadDocument(file.Path);
+                        if (fileDoc.IsSingleton)
+                            throw new QmlCompileException($"{file.Name} is a singleton and cannot be created", node.Location);
+                        var fileContext = new ComponentContext(null, engine.ImportsOf(fileDoc));
+                        obj = Build(fileDoc.Root, fileContext, fileDoc, owner);
+                    }
+                    finally
+                    {
+                        engine.EndFileInstance(file.Path);
+                    }
                     break;
                 }
             case InlineTypeRef inline:

@@ -107,6 +107,66 @@ public class BadConfigTests
         Assert.DoesNotContain(shell.Messages, m => m.Contains("Configuration Loaded", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void A_type_that_instantiates_itself_is_an_error()
+    {
+        using var shell = new TestShell(
+            ("shell.qml", """
+                import QtQuick
+                Foo {}
+                """),
+            ("Foo.qml", """
+                import QtQuick
+                Foo {}
+                """));
+
+        var error = Assert.Throws<QmlCompileException>(() => shell.Load());
+        Assert.Contains("Foo is instantiated recursively", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_cycle_between_two_types_is_an_error()
+    {
+        using var shell = new TestShell(
+            ("shell.qml", """
+                import QtQuick
+                A {}
+                """),
+            ("A.qml", """
+                import QtQuick
+                B {}
+                """),
+            ("B.qml", """
+                import QtQuick
+                A {}
+                """));
+
+        var error = Assert.Throws<QmlCompileException>(() => shell.Load());
+        Assert.Contains("is instantiated recursively", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_loader_that_loads_itself_stops_at_the_creation_depth()
+    {
+        using var shell = new TestShell(
+            ("shell.qml", """
+                import QtQuick
+                Item {
+                  Loader { source: "Self.qml" }
+                }
+                """),
+            ("Self.qml", """
+                import QtQuick
+                Item {
+                  Loader { source: "Self.qml" }
+                }
+                """));
+
+        var root = shell.Load();
+        Assert.False(root.IsDestroyed);
+        Assert.Contains(shell.Messages, m => m.Contains("Object creation is nested too deeply", StringComparison.Ordinal));
+    }
+
     private static ShellHost Host(TestShell shell) => new(Path.Combine(shell.Directory, "shell.qml"), shell.Loop, null, shell.Log, () =>
     {
         var modules = StandardModules.Create();
