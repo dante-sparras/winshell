@@ -107,6 +107,12 @@ public sealed class Binding : IPropertyObserver, IDisposable
 
     private void Resubscribe(List<(QObject Object, string Property)> reads)
     {
+        if (_disposed)
+        {
+            reads.Clear();
+            return;
+        }
+        reads.RemoveAll(static read => read.Object.IsDestroyed || read.Object.IsDestroying);
         for (var i = 1; i < reads.Count; i++)
         {
             if (!ContainsRead(reads, reads[i], i))
@@ -150,6 +156,8 @@ public sealed class Binding : IPropertyObserver, IDisposable
         }
         Evaluate();
     }
+
+    internal void ForgetDependency(QObject source, string property) => _dependencies.Remove((source, property));
 
     public void Dispose()
     {

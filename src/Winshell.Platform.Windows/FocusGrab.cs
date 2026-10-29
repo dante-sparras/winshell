@@ -112,11 +112,14 @@ public sealed unsafe class FocusGrab : QObject, IPropertyObserver
         if (code >= 0 && (uint)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN or Win32.WM_XBUTTONDOWN)
         {
             var pt = ((MSLLHOOKSTRUCT*)lParam)->pt;
-            foreach (var grab in Grabbing.ToArray())
+            NativeCallback.Guard(Log.Default, "focusgrab", () =>
             {
-                if (grab.Engine?.Loop is { } loop)
-                    loop.Post(() => grab.OnClick(pt));
-            }
+                foreach (var grab in Grabbing.ToArray())
+                {
+                    if (grab.Engine?.Loop is { } loop)
+                        loop.Post(() => grab.OnClick(pt));
+                }
+            });
         }
         return Win32.CallNextHookEx(0, code, wParam, lParam);
     }

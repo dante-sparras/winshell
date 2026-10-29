@@ -19,6 +19,7 @@ internal sealed class SmtcSessions
 
     private readonly IEventLoop _loop;
     private readonly List<SmtcSession> _sessions = [];
+    private readonly AppNames _names;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
     private Timer? _refresh;
@@ -32,11 +33,8 @@ internal sealed class SmtcSessions
     {
         _loop = loop;
         Log = log;
-        ArtCache.CleanOld();
-        // SessionsChanged is not delivered for every session GetSessions can already see. A manager requested
-        // on another thread can keep returning an empty list, so each read asks again on the pumping thread.
-        _refresh ??= new Timer(_ => RequestSync(), null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
-        RequestSync();
+        _names = new AppNames(loop, log, SmtcSession.DescribeApp, Sync);
+        _ = Start();
     }
 
     /// <summary>The session list, made on first use. Call on the UI thread.</summary>
@@ -52,6 +50,28 @@ internal sealed class SmtcSessions
 
     internal void Post(Action action) => _loop.Post(action);
 
+    private async Task Start()
+    {
+        try
+        {
+            // Art is stored only once there are sessions, so the cleanup has to finish before the first read.
+            await Task.Run(ArtCache.CleanOld).ConfigureAwait(false);
+            Post(Begin);
+        }
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException)
+        {
+            Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
+        }
+    }
+
+    private void Begin()
+    {
+        // SessionsChanged is not delivered for every session a later manager already lists. A manager requested
+        // on another thread can keep returning an empty list, so each read asks again on the pumping thread.
+        _refresh ??= new Timer(_ => RequestSync(), null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
+        RequestSync();
+    }
+
     /// <summary>Posts one list read. A loop nobody is pumping must not grow a queue of them.</summary>
     private void RequestSync()
     {
@@ -65,8 +85,8 @@ internal sealed class SmtcSessions
     }
 
     /// <summary>
-    /// Asks Windows for a manager on this thread and reads that manager's sessions. An older manager, requested
-    /// before the pumping thread existed, does not grow its list when <c>SessionsChanged</c> is skipped.
+    /// Asks Windows for a manager on this thread. An older manager, requested before the pumping thread
+    /// existed, does not grow its list when <c>SessionsChanged</c> is skipped.
     /// </summary>
     private void Sync()
     {
@@ -147,21 +167,9 @@ internal sealed class SmtcSessions
         // GetSessions returns a new object for a session that is already held, so reference equality
         // drops it and starts again. That cancels the read of its title and art. Match the app id instead.
         var incoming = current.ToList();
-        if (SameSessions(incoming))
-        {
-            // The fresh manager returned new objects for the sessions already held. Follow those objects so a
-            // title, art, or timeline that arrived without an event is read from the manager that can see it.
-            var same = _sessions.ToList();
-            var samePair = Pair(same.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
-            for (var i = 0; i < incoming.Count; i++)
-            {
-                if (samePair[i] >= 0)
-                    same[samePair[i]].Retarget(incoming[i]);
-            }
-            return;
-        }
         var held = _sessions.ToList();
-        var pair = Pair(held.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
+        var ids = incoming.Select(SmtcSession.IdOf).ToList();
+        var pair = Pair(held.Select(s => s.AppId).ToList(), ids);
         var kept = new bool[held.Count];
         for (var i = 0; i < incoming.Count; i++)
         {
@@ -172,7 +180,10 @@ internal sealed class SmtcSessions
                 held[existing].Retarget(incoming[i]);
                 continue;
             }
-            var session = new SmtcSession(this, incoming[i], _nextId++);
+            // A session is added once its app has a name. Naming it posts another Sync.
+            if (_names.Get(ids[i]) is not { } name)
+                continue;
+            var session = new SmtcSession(this, incoming[i], _nextId++, name);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
@@ -209,24 +220,6 @@ internal sealed class SmtcSessions
         }
         return pair;
     }
-
-    /// <summary>The held sessions are already these app ids. A poll must not retarget them.</summary>
-    private bool SameSessions(List<GlobalSystemMediaTransportControlsSession> incoming)
-    {
-        if (incoming.Count != _sessions.Count)
-            return false;
-        var counts = new Dictionary<string, int>();
-        foreach (var session in _sessions)
-            counts[session.AppId] = counts.GetValueOrDefault(session.AppId) + 1;
-        foreach (var session in incoming)
-        {
-            var id = SmtcSession.IdOf(session);
-            if (!counts.TryGetValue(id, out var count) || count == 0)
-                return false;
-            counts[id] = count - 1;
-        }
-        return true;
-    }
 }
 
 /// <summary>What one media session says about itself, kept up to date from the system media controls.</summary>
@@ -239,19 +232,19 @@ internal sealed class SmtcSession
     private int _artApplied;
     private bool _artMissLogged;
     private bool _released;
-    private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
-    private double _position;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>? _mediaChanged;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs>? _playbackChanged;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs>? _timelineChanged;
+    private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
+    private double _position;
 
-    public SmtcSession(SmtcSessions owner, GlobalSystemMediaTransportControlsSession session, int id)
+    public SmtcSession(SmtcSessions owner, GlobalSystemMediaTransportControlsSession session, int id, string appName)
     {
         _owner = owner;
         Session = session;
         Id = id;
         AppId = IdOf(session);
-        AppName = DescribeApp(AppId);
+        AppName = appName;
     }
 
     public GlobalSystemMediaTransportControlsSession Session { get; private set; }
@@ -366,7 +359,7 @@ internal sealed class SmtcSession
     {
         _released = true;
         Unhook();
-        ArtCache.Release(ArtUrl);
+        ArtCache.ReleaseLater(ArtUrl);
     }
 
     private void Refresh()
@@ -552,7 +545,7 @@ internal sealed class SmtcSession
     {
         if (_released || request != _artRequest)
         {
-            ArtCache.Release(url);
+            ArtCache.ReleaseLater(url);
             return;
         }
         _artApplied = request;
@@ -560,10 +553,10 @@ internal sealed class SmtcSession
             _artMissLogged = false;
         if (url == ArtUrl)
         {
-            ArtCache.Release(url);
+            ArtCache.ReleaseLater(url);
             return;
         }
-        ArtCache.Release(ArtUrl);
+        ArtCache.ReleaseLater(ArtUrl);
         ArtUrl = url;
         Changed?.Invoke(["trackArtUrl", "metadata"], false);
     }
@@ -703,8 +696,11 @@ internal sealed class SmtcSession
         }
     }
 
-    /// <summary>The name the Start menu shows for an AppUserModelID, or the program name when it has none.</summary>
-    private static string DescribeApp(string appId)
+    /// <summary>
+    /// The name the Start menu shows for an AppUserModelID, or the program name when it has none. It asks the
+    /// shell and can scan processes, so call it off the UI thread.
+    /// </summary>
+    internal static string DescribeApp(string appId)
     {
         var isProgram = appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
         var name = StartMenuName(appId);
@@ -765,6 +761,47 @@ internal sealed class SmtcSession
             }
         }
         return null;
+    }
+}
+
+/// <summary>
+/// The names of the apps behind media sessions, looked up on the thread pool and kept for the life of the
+/// process. Lives on the UI thread.
+/// </summary>
+internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> describe, Action named)
+{
+    private readonly Dictionary<string, string?> _names = [];
+
+    /// <summary>
+    /// The app's name, or null while it is looked up. When the lookup ends, <c>named</c> runs on the loop.
+    /// </summary>
+    public string? Get(string appId)
+    {
+        if (_names.TryGetValue(appId, out var name))
+            return name;
+        _names[appId] = null;
+        _ = LookUp(appId);
+        return null;
+    }
+
+    private async Task LookUp(string appId)
+    {
+        var name = appId;
+        try
+        {
+            name = await Task.Run(() => describe(appId)).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // A failed lookup still names the app, by its id.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            loop.Post(() => log.Warn("media", $"Cannot name {appId}: {e.Message}"));
+        }
+        loop.Post(() =>
+        {
+            _names[appId] = name;
+            named();
+        });
     }
 }
 
@@ -873,6 +910,16 @@ internal static class ArtCache
                 // An image loader still has it open; a later start cleans it up.
             }
         }
+    }
+
+    /// <summary>
+    /// <see cref="Release"/> on the thread pool, for the UI thread: the lock is held while art is written, and
+    /// the last release deletes the file.
+    /// </summary>
+    public static void ReleaseLater(string url)
+    {
+        if (url.Length > 0)
+            _ = Task.Run(() => Release(url));
     }
 
     /// <summary>Deletes art left behind by earlier runs, and their folders once empty.</summary>

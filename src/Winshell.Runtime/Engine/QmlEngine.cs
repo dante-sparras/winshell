@@ -247,8 +247,10 @@ public sealed class QmlEngine : IDisposable
         {
             if (!_scriptSources.TryGetValue(path, out var code))
                 _scriptSources[path] = code = File.ReadAllText(path);
-            module = ScriptModule.Load(this, code, path);
-            if (instance is null || ScriptModule.IsLibrary(code))
+            // A library is shared and has no component scope. Any other script is evaluated in this instance.
+            var scriptContext = ScriptModule.IsLibrary(code) ? null : context;
+            module = ScriptModule.Load(this, code, path, scriptContext);
+            if (instance is null || scriptContext is null)
                 _scripts[path] = module;
             else
                 (instance.Scripts ??= new(StringComparer.OrdinalIgnoreCase))[path] = module;

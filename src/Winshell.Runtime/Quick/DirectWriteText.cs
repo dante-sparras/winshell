@@ -381,6 +381,7 @@ internal sealed class DirectWriteLayout : IDisposable
 
     private IDWriteTextLayout? _layout;
     private IDWriteInlineObject? _ellipsis;
+    private int _reportedLines;
     private readonly List<(int Start, int Length, QColor Color)> _colors = [];
 
     private DirectWriteLayout(IDWriteTextLayout layout, IDWriteInlineObject? ellipsis, string source)
@@ -571,7 +572,14 @@ internal sealed class DirectWriteLayout : IDisposable
             height += raw[i].Height;
         if (ellipsis)
             EnsureEllipsis();
+        else
+        {
+            // DirectWrite keeps drawing the extra lines unless trimming is on. A cap with no ellipsis still trims, and draws no sign.
+            _layout.SetTrimming(new Trimming { Granularity = TrimmingGranularity.Character }, null);
+        }
         _layout.MaxHeight = Math.Max(1, height);
+        // Line metrics still list the hidden lines, so the reported height stops at the cap.
+        _reportedLines = maxLines;
         return true;
     }
 
@@ -593,8 +601,12 @@ internal sealed class DirectWriteLayout : IDisposable
         var raw = LineMetricsOf(_layout);
         uint pos = 0;
         double y = 0;
+        var seen = 0;
         foreach (var rawLine in raw)
         {
+            if (_reportedLines > 0 && seen >= _reportedLines)
+                break;
+            seen++;
             var content = rawLine.Length - rawLine.NewlineLength;
             var ink = includeTrailingWhitespace ? content : content - Math.Min(content, rawLine.TrailingWhitespaceLength);
             double width = 0;

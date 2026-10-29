@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Winshell.Platform.Windows.Native;
+using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Power;
 
@@ -53,11 +55,12 @@ internal sealed partial class PowerModeBackend : SnapshotSource<PowerModeSnapsho
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
-    private static void OnEffectivePowerModeChanged(int mode, nint context)
-    {
-        Volatile.Write(ref _effective, mode);
-        Instance.Refresh();
-    }
+    private static void OnEffectivePowerModeChanged(int mode, nint context) =>
+        NativeCallback.Guard(Log.Default, "power", () =>
+        {
+            Volatile.Write(ref _effective, mode);
+            Instance.Refresh();
+        });
 
     protected override Task<PowerModeSnapshot> ReadAsync()
     {

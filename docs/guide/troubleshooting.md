@@ -43,7 +43,7 @@ Check names against the [reference](../reference/index.md). A Quickshell name, s
 
 ## There are two taskbars
 
-Winshell doesn't hide or replace Explorer's taskbar, and never restarts Explorer. Both reserve the bottom of the screen, so they stack. To see only Winshell's, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar for Explorer's taskbar. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`.
+Winshell doesn't hide or replace Explorer's taskbar, and never restarts Explorer. Both reserve the bottom of the screen, so they stack. To see only Winshell's, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar for Explorer's taskbar. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`.
 
 ## A hotkey doesn't work
 

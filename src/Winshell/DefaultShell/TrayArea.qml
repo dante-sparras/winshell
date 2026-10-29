@@ -16,6 +16,11 @@ Row {
 
   readonly property var items: SystemTray.items.values
 
+  // Win+A, as a click on the network, volume and battery icons.
+  function toggleQuickSettings() {
+    quickSettings.visible = !quickSettings.visible
+  }
+
   height: 40
   spacing: 0
 
@@ -52,7 +57,7 @@ Row {
   QuickSettingsButton {
     id: quickSettingsButton
     anchors.verticalCenter: parent.verticalCenter
-    onClicked: quickSettings.visible = !quickSettings.visible
+    onClicked: root.toggleQuickSettings()
   }
 
   PopupWindow {

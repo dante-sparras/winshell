@@ -190,6 +190,12 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
     [Qml]
     public void Decrease() => SetValue(Snap(_value - (_stepSize > 0 ? _stepSize : (_to - _from) / 10)));
 
+    private void Page(int direction)
+    {
+        var span = _stepSize > 0 ? _stepSize * 10 : (_to - _from);
+        SetValue(Snap(_value + direction * span));
+    }
+
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
     {
         var t = Theme.Current;
@@ -357,15 +363,30 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
 
     public bool KeyPress(KeyEvent e)
     {
-        var forward = e.Key is 0x01000014 or 0x01000013;
-        var back = e.Key is 0x01000012 or 0x01000015;
-        if (!forward && !back)
-            return false;
         var old = _value;
-        if (forward)
-            Increase();
-        else
-            Decrease();
+        switch (e.Key)
+        {
+            case 0x01000014 or 0x01000013:
+                Increase();
+                break;
+            case 0x01000012 or 0x01000015:
+                Decrease();
+                break;
+            case 0x01000010:
+                SetValue(_from);
+                break;
+            case 0x01000011:
+                SetValue(_to);
+                break;
+            case 0x01000016:
+                Page(1);
+                break;
+            case 0x01000017:
+                Page(-1);
+                break;
+            default:
+                return false;
+        }
         if (old != _value)
             Emit("moved");
         return true;
@@ -453,8 +474,10 @@ public sealed class RangeSliderNode(RangeSlider owner) : QObject
 }
 
 /// <summary>QtQuick.Controls' <c>RangeSlider</c>: a slider with two handles.</summary>
-public sealed class RangeSlider : Control, IPointerTarget, IKeepsPointerGrab
+public sealed class RangeSlider : Control, IPointerTarget, IKeyTarget, IKeepsPointerGrab
 {
+    protected override int DefaultFocusPolicy => StrongFocus;
+
     private double _from, _to = 1, _stepSize;
     private int _orientation = 1;
     private int _snapMode;
@@ -677,6 +700,42 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeepsPointerGrab
         _dragging = null;
     }
 
+    public bool KeyPress(KeyEvent e)
+    {
+        var node = (e.Modifiers & QtEnums.ShiftModifier) != 0 ? First : Second;
+        var old = node.Value;
+        switch (e.Key)
+        {
+            case 0x01000014 or 0x01000013:
+                node.Increase();
+                break;
+            case 0x01000012 or 0x01000015:
+                node.Decrease();
+                break;
+            case 0x01000010:
+                SetNodeValue(node, _from);
+                break;
+            case 0x01000011:
+                SetNodeValue(node, _to);
+                break;
+            case 0x01000016:
+                SetNodeValue(node, node.Value + PageSpan());
+                break;
+            case 0x01000017:
+                SetNodeValue(node, node.Value - PageSpan());
+                break;
+            default:
+                return false;
+        }
+        if (node.Value != old)
+            node.Emit("moved");
+        return true;
+    }
+
+    public bool KeyRelease(KeyEvent e) => false;
+
+    private double PageSpan() => _stepSize > 0 ? _stepSize * 10 : (_to - _from);
+
     public override void HoverMove(double x, double y, int modifiers)
     {
         base.HoverMove(x, y, modifiers);
@@ -815,17 +874,19 @@ public sealed class BusyIndicator : Control
 
 /// <summary>QtQuick.Controls' <c>Dial</c>: a knob turned by dragging around it.</summary>
 [QmlSignal("moved")]
-public sealed class Dial : Control, IPointerTarget, IKeepsPointerGrab
+public sealed class Dial : Control, IPointerTarget, IKeyTarget, IKeepsPointerGrab
 {
+    protected override int DefaultFocusPolicy => StrongFocus;
+
     private double _from, _to = 1, _value, _stepSize;
     private bool _pressed;
     private bool _wrap;
     private int _snapMode;
     private Item? _handle;
 
-    [Qml] public double From { get { Track(); return _from; } set { if (SetField(ref _from, value)) Changed(); } }
+    [Qml] public double From { get { Track(); return _from; } set { if (SetField(ref _from, value)) Reclamp(); } }
 
-    [Qml] public double To { get { Track(); return _to; } set { if (SetField(ref _to, value)) Changed(); } }
+    [Qml] public double To { get { Track(); return _to; } set { if (SetField(ref _to, value)) Reclamp(); } }
 
     [Qml] public double Value { get { Track(); return _value; } set { if (SetField(ref _value, Math.Clamp(value, Math.Min(_from, _to), Math.Max(_from, _to)))) Changed(); } }
 
@@ -857,9 +918,40 @@ public sealed class Dial : Control, IPointerTarget, IKeepsPointerGrab
         Update();
     }
 
+    private void Reclamp()
+    {
+        var clamped = Math.Clamp(_value, Math.Min(_from, _to), Math.Max(_from, _to));
+        if (_value != clamped)
+            SetField(ref _value, clamped, nameof(Value));
+        Changed();
+    }
+
     [Qml] public void Increase() => Value = _value + (_stepSize > 0 ? _stepSize : (_to - _from) / 10);
 
     [Qml] public void Decrease() => Value = _value - (_stepSize > 0 ? _stepSize : (_to - _from) / 10);
+
+    public bool KeyPress(KeyEvent e)
+    {
+        switch (e.Key)
+        {
+            case 0x01000014 or 0x01000013:
+                Increase();
+                return true;
+            case 0x01000012 or 0x01000015:
+                Decrease();
+                return true;
+            case 0x01000010:
+                Value = _from;
+                return true;
+            case 0x01000011:
+                Value = _to;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public bool KeyRelease(KeyEvent e) => false;
 
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
     {
@@ -1189,7 +1281,7 @@ public sealed class SpinBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 
     public bool Wheel(double x, double y, double angleX, double angleY, double pixelX, double pixelY, int buttons, int modifiers, bool inverted)
     {
-        if (!WheelEnabled)
+        if (!WheelEnabled || Math.Abs(angleY) <= Math.Abs(angleX))
             return false;
         Step(angleY > 0 ? 1 : -1);
         return true;

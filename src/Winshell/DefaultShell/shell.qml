@@ -2,6 +2,7 @@
 import Winshell
 import Winshell.Input
 import Winshell.Notifications
+import QtQuick
 // Winshell's default shell. Copy this folder to %APPDATA%\winshell to make it your own. Winshell Settings
 // (SettingsWindow.qml) keeps its choices in Preferences, and everything here follows them as they change.
 ShellRoot {
@@ -36,14 +37,51 @@ ShellRoot {
     onPressed: settings.open("")
   }
 
-  // Win+T puts the keyboard in the main taskbar, as in Windows. While Explorer runs, it keeps Win+T for its own.
+  function mainTaskbar() {
+    var list = bars.instances
+    return list.find(t => t.isMainScreen) || list[0] || null
+  }
+
+  // The chords of Windows 11's taskbar, on the main taskbar. While Explorer runs, it keeps these for its own, and each
+  // reports that it is taken. Win+T puts the keyboard on the apps, Win+S opens Search, Win+A opens quick settings,
+  // Win+N the notification center, and Win+1 to Win+9 and Win+0 the apps in order, as a click does. With Shift, they
+  // open a new window. Win+D, Win+Alt+number, Win+X, Alt+Tab and Win+Tab stay with Windows until those surfaces exist.
   Hotkey {
     sequence: "Win+T"
-    onPressed: {
-      var list = bars.instances
-      var main = list.find(t => t.isMainScreen) || list[0]
-      if (main)
-        main.focusApps()
+    onPressed: shell.mainTaskbar()?.focusApps()
+  }
+
+  Hotkey {
+    sequence: "Win+A"
+    onPressed: shell.mainTaskbar()?.toggleQuickSettings()
+  }
+
+  Hotkey {
+    sequence: "Win+N"
+    onPressed: shell.mainTaskbar()?.toggleNotifications()
+  }
+
+  Hotkey {
+    sequence: "Win+S"
+    onPressed: shell.mainTaskbar()?.openSearch()
+  }
+
+  Variants {
+    model: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+
+    QtObject {
+      id: appKeys
+      required property int modelData
+      readonly property int place: modelData === 0 ? 9 : modelData - 1
+
+      property Hotkey open: Hotkey {
+        sequence: "Win+" + appKeys.modelData
+        onPressed: shell.mainTaskbar()?.taskList.invokeAt(appKeys.place, false)
+      }
+      property Hotkey openNew: Hotkey {
+        sequence: "Win+Shift+" + appKeys.modelData
+        onPressed: shell.mainTaskbar()?.taskList.invokeAt(appKeys.place, true)
+      }
     }
   }
 
@@ -78,6 +116,7 @@ ShellRoot {
       readonly property bool launcherOpen: launcher.visible
       function openLauncher() { launcher.open() }
       function closeLauncher() { launcher.close() }
+      function openSearch() { launcher.openSearch() }
 
       startOpen: launcher.visible
       searchOpen: launcher.searchOpen

@@ -25,6 +25,8 @@ Pinned apps come first, in the order they were pinned, then every other running 
 ## Keyboard
 
 - **Win+T** puts the keyboard on the first app of the main taskbar, with a focus rectangle. While Explorer runs, Windows keeps Win+T for its own taskbar, so the hotkey reports that it is `taken`.
+- **Win+S** opens Search on the main taskbar. **Win+A** opens quick settings, and **Win+N** opens the notification center, the same as a click on those buttons. While Explorer runs, Windows keeps these too, and each hotkey reports that it is `taken`.
+- **Win+1** through **Win+9**, and **Win+0** for the tenth app, do what a click on that button does. **Win+Shift** with the same number opens a new window of that app. The count is the buttons on the main taskbar, pinned apps first.
 - **Narrator** can move focus to any taskbar button; the taskbar then takes the keyboard if Windows lets it, and otherwise tells Narrator that focusing failed. The shell never forces its way to the foreground.
 - **Tab** and **Shift+Tab**, or **Left** and **Right**, move through Start, Search, the apps, the tray icons, quick settings and the clock. An app scrolled out of view scrolls back when it gets focus.
 - **Enter** or **Space** does what a click does. **Shift+Enter** opens a new window of an app. The **menu key** or **Shift+F10** opens an app's menu, or asks a tray app for its own.
