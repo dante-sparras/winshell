@@ -83,8 +83,8 @@ public class AppBarReservationTests
     }
 
     /// <summary>
-    /// The panel's placement loop as Win32Window runs it: each ABM_SETPOS sends ABN_POSCHANGED back, which places the
-    /// panel again with a fresh ABM_QUERYPOS.
+    /// The panel's placement loop as Win32Window runs it. Each ABM_SETPOS this stand-in performs is followed by one
+    /// posted placement and a fresh query. Explorer sends no notice when that request is the same rectangle again.
     /// </summary>
     private sealed class Placement(AppBarReservation reservation, Func<RECT> query)
     {
@@ -203,44 +203,19 @@ public class AppBarReservationTests
     }
 
     [Fact]
-    public void An_outside_position_notice_is_not_swallowed_by_a_grant_that_did_not_move()
+    public void Two_notices_before_the_short_grant_is_placed_again_ask_only_once_more()
     {
-        var notices = new AppBarPosNotices();
+        // A work-area change on this PC posted two notices, and neither arrived inside ABM_SETPOS.
         var reservation = new AppBarReservation();
-        reservation.Reserve(Bottom, asked => AboveOther);
-        Assert.Equal(AboveOther, reservation.Granted);
-
-        // Our SETPOS moved the bar, so its own notice is not an outside change.
-        notices.ExpectOwn();
-        notices.Delivered();
-        notices.SetPosReturned(true);
-        Assert.False(notices.TakeExternal());
-
-        // The other bar leaves. That notice is outside, and the same request is asked for again.
-        notices.Delivered();
-        Assert.True(notices.TakeExternal());
+        var placement = new Placement(reservation, () => Bottom) { Grant = asked => AboveOther };
+        placement.Place();
         reservation.NoteExternalChange();
-        var calls = 0;
-        Assert.True(reservation.Reserve(Bottom, asked =>
-        {
-            calls++;
-            return asked;
-        }));
-        Assert.Equal(1, calls);
-        Assert.Equal(Bottom, reservation.Granted);
-
-        // A SETPOS that does not move the bar sends no notice. The next real one is still outside.
-        notices.ExpectOwn();
-        notices.SetPosReturned(false);
-        notices.Delivered();
-        Assert.True(notices.TakeExternal());
-
-        // Removing the bar forgets a pending expectation, so the next reservation starts clean.
-        notices.ExpectOwn();
-        notices.Reset();
-        notices.ExpectOwn();
-        notices.Delivered();
-        Assert.False(notices.TakeExternal());
+        reservation.NoteExternalChange();
+        placement.Settle();
+        Assert.Equal(AboveOther, reservation.Granted);
+        Assert.Equal(2, placement.SetPosCalls);
+        Assert.Equal(0, placement.Settle());
+        Assert.Equal(2, placement.SetPosCalls);
     }
 
     [Fact]

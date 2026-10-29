@@ -33,7 +33,6 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _floatingPlaced;
     private bool _appBarRegistered;
     private readonly AppBarReservation _appBar = new();
-    private readonly AppBarPosNotices _posNotices = new();
     private bool _placePosted;
     private uint _appBarEdge;
     private bool _fullscreenAppActive;
@@ -236,14 +235,10 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 abd.rc.Left = abd.rc.Right - thickness;
                 break;
         }
-        var previous = _appBar.Granted;
         var moved = _appBar.Reserve(abd.rc, desired =>
         {
             abd.rc = desired;
-            // Counted before the call: Explorer can send ABN_POSCHANGED before ABM_SETPOS returns.
-            _posNotices.ExpectOwn();
             Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
-            _posNotices.SetPosReturned(!abd.rc.Equals(previous));
             return abd.rc;
         });
         abd.rc = _appBar.Granted;
@@ -287,7 +282,6 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
         _appBarRegistered = false;
         _appBar.Clear();
-        _posNotices.Reset();
         _platform.WorkAreaMayHaveChanged();
     }
 
@@ -824,11 +818,10 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             switch ((uint)wParam)
             {
                 case Win32.ABN_POSCHANGED:
-                    // A burst of these, as each ABM_SETPOS sends, places the panel once. A notice that is not the
-                    // one our own SETPOS just caused means some other bar moved, so a short grant is asked for again.
-                    _posNotices.Delivered();
-                    if (_posNotices.TakeExternal())
-                        _appBar.NoteExternalChange();
+                    // A burst of these places the panel once. Explorer does not send one notice per own request,
+                    // so each may be another bar. A short grant is asked for once more, and that same rectangle
+                    // sends no notice.
+                    _appBar.NoteExternalChange();
                     if (!_placePosted)
                     {
                         _placePosted = true;
