@@ -173,6 +173,36 @@ public sealed class ImportScope
         return true;
     }
 
+    /// <summary>
+    /// Whether a script name is a type, a namespace, or a script import. Unlike <see cref="TryResolveName"/>, this
+    /// does not load the script or the file.
+    /// </summary>
+    internal bool DeclaresName(string name)
+    {
+        if (name.Length == 0)
+            return false;
+        foreach (var entry in _entries)
+        {
+            if (entry.Qualifier == name)
+                return true;
+        }
+        if (_inline.ContainsKey(name))
+            return true;
+        for (var i = _entries.Count - 1; i >= 0; i--)
+        {
+            if (_entries[i].Qualifier is null && DeclaresType(_entries[i], name))
+                return true;
+        }
+        return _engine.FindDirectoryType(Directory, name) is not null;
+    }
+
+    private bool DeclaresType(Entry entry, string name) => entry switch
+    {
+        ModuleEntry module => module.Module.Types.ContainsKey(name),
+        DirectoryEntry directory => _engine.FindDirectoryType(directory.Path, name) is not null,
+        _ => false,
+    };
+
     internal JsValue TypeValue(TypeRef type, QObject? scopeObject)
     {
         var js = _engine.Js;
