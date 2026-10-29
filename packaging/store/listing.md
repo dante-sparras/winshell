@@ -59,7 +59,9 @@ https://github.com/dante-sparras/winshell/issues
 ## Restricted capabilities: why Winshell needs them
 
 - **runFullTrust:** Winshell is a desktop shell. It draws its own windows with DirectComposition, reserves screen edges for its taskbar, and reads the running windows and the notification area.
-- **unvirtualizedResources:** Winshell keeps its configuration in `%APPDATA%\winshell`, which users edit by hand and share between the Store and portable versions, and writes the user's choice to run at sign-in under the `Run` key. With file and registry writes virtualized, those would land in a copy only the package sees.
+- **unvirtualizedResources:** Winshell keeps its configuration in `%APPDATA%\winshell`, which users edit by hand and share between the Store and portable versions. With file writes virtualized, it would land in a copy only the package sees. Until #142 moves run-at-sign-in to a startup task, the sign-in entry also goes under the user's `Run` key, which registry virtualization would hide in the same way. Once #142 is in, check whether registry virtualization can stay on, and shorten this to the config folder.
+
+If review refuses `unvirtualizedResources`: MSIX virtualizes writes only under AppData and HKCU, so the Store build could keep its config in a folder outside AppData and drop this capability.
 
 ## Images
 

@@ -118,6 +118,14 @@ if ($Publish) {
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
         # SkiaSharp and HarfBuzz ship their native symbols, over 100 MB. Winshell's own symbols stay, for stack traces in logs.
         Get-ChildItem -LiteralPath $dir -Filter 'lib*.pdb' | Remove-Item -Force
+        # winshellw.exe: the same apphost, marked as a Windows app so it opens no console, as the Store package's Start
+        # entry runs it. It runs winshell.dll as winshell.exe does; the SDK makes a WinExe's apphost the same way. It is
+        # made here, before anything signs the folder: the subsystem is inside a signature's hash.
+        $gui = [IO.File]::ReadAllBytes((Join-Path $dir 'winshell.exe'))
+        $subsystem = [BitConverter]::ToInt32($gui, 0x3C) + 4 + 20 + 68
+        if ([BitConverter]::ToUInt16($gui, $subsystem) -ne 3) { throw 'winshell.exe is not a console app' }
+        $gui[$subsystem] = 2
+        [IO.File]::WriteAllBytes((Join-Path $dir 'winshellw.exe'), $gui)
     }
 }
 
@@ -223,13 +231,6 @@ ManifestVersion: $schema
         if (Test-Path -LiteralPath $layout) { Remove-Item -LiteralPath $layout -Recurse -Force }
         Copy-Item -LiteralPath (Join-Path $publishRoot $rid) -Destination $layout -Recurse
         Copy-Item -LiteralPath (Join-Path $root 'packaging/msix/Assets') -Destination (Join-Path $layout 'Assets') -Recurse
-        # Start runs winshellw.exe: the same apphost, marked as a Windows app so no console opens. It runs winshell.dll
-        # as winshell.exe does. The SDK makes a WinExe's apphost the same way.
-        $gui = [IO.File]::ReadAllBytes((Join-Path $layout 'winshell.exe'))
-        $subsystem = [BitConverter]::ToInt32($gui, 0x3C) + 4 + 20 + 68
-        if ([BitConverter]::ToUInt16($gui, $subsystem) -ne 3) { throw 'winshell.exe is not a console app' }
-        $gui[$subsystem] = 2
-        [IO.File]::WriteAllBytes((Join-Path $layout 'winshellw.exe'), $gui)
         $manifest = $template.Replace('$(IdentityName)', [Security.SecurityElement]::Escape($IdentityName)).
             Replace('$(Publisher)', [Security.SecurityElement]::Escape($Publisher)).
             Replace('$(PublisherDisplayName)', [Security.SecurityElement]::Escape($PublisherDisplayName)).
