@@ -189,13 +189,15 @@ public abstract class LayoutBase : Item, IPolishable, IPropertyObserver
         if (a is not null && (horizontal ? a.PreferredWidth : a.PreferredHeight) >= 0)
             pref = horizontal ? a.PreferredWidth : a.PreferredHeight;
         else if (horizontal ? item.HasExplicitWidth : item.HasExplicitHeight)
-            pref = horizontal ? item.Width : item.Height;
+            pref = horizontal ? item.DeclaredWidth : item.DeclaredHeight;
         else
             pref = horizontal ? item.ImplicitWidth : item.ImplicitHeight;
         var min = a is null ? 0 : horizontal ? a.MinimumWidth : a.MinimumHeight;
         var max = a is null ? double.PositiveInfinity : horizontal ? a.MaximumWidth : a.MaximumHeight;
         // An item that fills defaults to growing and shrinking freely; a fixed one keeps its preferred size.
-        var fill = a is not null && (horizontal ? a.FillWidth : a.FillHeight);
+        // A nested layout fills unless QML set fillWidth or fillHeight itself.
+        var fillSet = a is not null && (horizontal ? a.FillWidthSet : a.FillHeightSet);
+        var fill = fillSet ? (horizontal ? a!.FillWidth : a!.FillHeight) : item is LayoutBase;
         if (!fill)
         {
             max = Math.Min(max, Math.Max(pref, min));
