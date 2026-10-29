@@ -104,15 +104,6 @@ function setting(key) {
   return { key: key, page: "", glyph: "", title: key, description: "", keywords: "" }
 }
 
-function accentName(color) {
-  var c = String(color).toUpperCase()
-  for (var i = 0; i < accents.length; i++) {
-    if (accents[i][0] === c)
-      return accents[i][1]
-  }
-  return c
-}
-
 // Every word of the query must be in the setting's title, description, keywords or page; settings whose title
 // starts with the query come first.
 function search(query) {
@@ -136,15 +127,4 @@ function search(query) {
   }
   hits.sort(function (a, b) { return a.rank - b.rank || a.order - b.order })
   return hits.map(function (h) { return h.setting })
-}
-
-// Moves the item at index by offset in a copy of the list.
-function moved(list, index, offset) {
-  var out = list.slice()
-  var to = index + offset
-  if (index < 0 || index >= out.length || to < 0 || to >= out.length)
-    return out
-  var item = out.splice(index, 1)[0]
-  out.splice(to, 0, item)
-  return out
 }
