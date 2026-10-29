@@ -122,6 +122,35 @@ public sealed class TrayHostTests : IDisposable
         Assert.Equal(1, broadcasts());
     }
 
+    [Fact]
+    public void App_bar_requests_of_this_process_find_Explorers_taskbar_first_and_the_host_then_returns_to_the_front()
+    {
+        var explorer = StartExplorer();
+        var host = Start(HostNames, out _);
+        Assert.True(Above(host.Window, explorer.Window));
+
+        using (TrayHost.ExplorerFirst())
+            Assert.True(Above(explorer.Window, host.Window));
+
+        Assert.True(Above(host.Window, explorer.Window));
+    }
+
+    /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>
+    private static bool Above(nint upper, nint lower)
+    {
+        for (var hwnd = GetWindow(upper, GW_HWNDNEXT); hwnd != 0; hwnd = GetWindow(hwnd, GW_HWNDNEXT))
+        {
+            if (hwnd == lower)
+                return true;
+        }
+        return false;
+    }
+
+    private const uint GW_HWNDNEXT = 2;
+
+    [DllImport("user32.dll")]
+    private static extern nint GetWindow(nint hwnd, uint command);
+
     private TrayHost StartExplorer()
     {
         var names = new TrayNames(ExplorerClass, $"WinshellTestNone-{_id}", $@"Local\winshell-test-explorer-{Guid.NewGuid():N}");
