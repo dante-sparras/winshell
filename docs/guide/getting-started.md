@@ -71,15 +71,15 @@ The [configuration guide](configuration.md) explains what is in those files, and
 
 Winshell watches the folders your configuration was loaded from. When you save a `.qml` or `.js` file or a `qmldir` there, it reloads the configuration a moment later, without restarting. The new load takes over the old one's windows where it can, and [`PersistentProperties`](../reference/winshell.md#persistentproperties) keep their values.
 
-If the new version has an error, Winshell keeps running the old one and logs the error with its file and line:
+If the new version has an error, Winshell keeps running the old one. A notice in the bottom right corner of the main screen, drawn like a Windows 11 notification, says **Your configuration has an error**, with the file, the line and the column, and **Open file** opens that file. The log has the same error:
 
 ```text
 ERROR scene: Failed to reload configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
 ```
 
-Fix the file and save it again, and Winshell reloads. If the configuration fails when Winshell starts, there is nothing to keep running: Winshell stays open with no windows and loads the configuration once you save a fix.
+Fix the file and save it again: Winshell reloads, and the notice goes away. If the configuration fails when Winshell starts, there is nothing to keep running: the notice says so, and Winshell stays open with no windows until you save a fix.
 
-Read the log with `winshell log`, or `winshell log -f` to follow it as you edit. Reloads are reported only in the log; Winshell doesn't show a notice on screen ([#133](https://github.com/dante-sparras/winshell/issues/133)).
+Read the log with `winshell log`, or `winshell log -f` to follow it as you edit. To leave the notice out, set `WINSHELL_NO_RELOAD_POPUP=1`, or call `Shell.inhibitReloadPopup()` in your configuration's `Shell.onReloadFailed`.
 
 To stop reloading on save, set `settings.watchFiles: false` on your `ShellRoot`, or set the `WINSHELL_DISABLE_FILE_WATCHER` environment variable. A configuration can still reload itself with `Shell.reload()`.
 

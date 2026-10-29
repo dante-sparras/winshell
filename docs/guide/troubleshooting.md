@@ -25,13 +25,13 @@ Nothing printed and nothing on screen? Run `winshell` from a terminal, not with 
 
 ## My configuration has an error
 
-The log has an `ERROR` line with the file, the line and the column:
+A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The log has an `ERROR` line with the same error:
 
 ```text
 ERROR scene: Failed to load configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
 ```
 
-Winshell keeps running. Fix the file and save it, and it loads again. When a reload fails, the shell you had keeps running until a reload works. Errors in a binding or a signal handler don't stop the load: they are logged where they happen, and the rest of the shell goes on.
+Winshell keeps running. Fix the file and save it, and it loads again and the notice goes away. When a reload fails, the shell you had keeps running until a reload works. Errors in a binding or a signal handler don't stop the load: they are logged where they happen, and the rest of the shell goes on.
 
 Check names against the [reference](../reference/index.md). A Quickshell name, such as `import Quickshell` or `PwNode`, has a Winshell name in [Migrating from Quickshell](../migrating-from-quickshell.md).
 
@@ -86,7 +86,7 @@ The entry runs Winshell with the options it was started with. `WINSHELL_CONFIG_D
 
 When Winshell itself fails, as opposed to a mistake in the configuration, it writes a crash report to `%LOCALAPPDATA%\winshell\crashes`, and the log says where. Nothing is sent anywhere; reports leave out what scripts printed and the passwords, tokens and keys Winshell recognizes.
 
-A window that fails while drawing or handling input closes and opens again after 1, 2, 4, 8 and 16 seconds. If it fails a sixth time within five minutes, it stays closed until the configuration reloads; save a file or run `Shell.reload()` to bring it back. The rest of the shell keeps running throughout.
+A notice in the bottom right corner says which window stopped working and what Winshell did about it, and **Open report** opens the crash report. It goes away after 25 seconds. A window that fails while drawing or handling input closes and opens again after 1, 2, 4, 8 and 16 seconds. If it fails a sixth time within five minutes, it stays closed until the configuration reloads; save a file or run `Shell.reload()` to bring it back. The rest of the shell keeps running throughout.
 
 A crash is a bug in Winshell. Please report it.
 

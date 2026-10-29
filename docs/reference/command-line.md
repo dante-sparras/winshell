@@ -77,7 +77,7 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | `WINSHELL_CONFIG_DIR` | The folder configurations load from, instead of `%APPDATA%\winshell`. With it set, an old `%USERPROFILE%\.config\winshell` isn't copied. |
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
-| `WINSHELL_NO_RELOAD_POPUP` | `1` is meant to hide a notice about reloads. Winshell has no such notice yet, so it does nothing ([#133](https://github.com/dante-sparras/winshell/issues/133)). |
+| `WINSHELL_NO_RELOAD_POPUP` | `1` hides Winshell's notice for a configuration that failed to load. The notice for a window that failed still shows. |
 | `WINLAND_PIPE` | The named pipe [`Winshell.Winland`](winshell-winland.md) connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 A configuration can set variables for its own process with `//@ pragma Env NAME=value` ([configuration guide](../guide/configuration.md#pragmas)).
