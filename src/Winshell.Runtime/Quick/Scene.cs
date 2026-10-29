@@ -14,6 +14,7 @@ public sealed class Scene : IItemHost
     private int _buttons;
     private Item? _focusItem;
     private double _pressSceneX, _pressSceneY;
+    private int _pressButton;
     private int _cursor = -1;
     private bool _pointerInside;
     private double _pointerX, _pointerY;
@@ -323,13 +324,13 @@ public sealed class Scene : IItemHost
             {
                 for (var p = _grabberItem.ParentItem; p is not null; p = p.ParentItem)
                 {
-                    if (p is IPointerTarget stealer && stealer.WantsToSteal(x - _pressSceneX, y - _pressSceneY))
+                    if (p is IPointerTarget stealer && stealer.AcceptsButton(_pressButton) && stealer.WantsToSteal(x - _pressSceneX, y - _pressSceneY))
                     {
                         _grabber.PointerCancel();
                         _grabber = stealer;
                         _grabberItem = p;
                         var (sx, sy) = ToLocal(p, _pressSceneX, _pressSceneY);
-                        stealer.PointerPress(sx, sy, QtEnums.LeftButton, _buttons, modifiers);
+                        stealer.PointerPress(sx, sy, _pressButton, _buttons, modifiers);
                         break;
                     }
                 }
@@ -361,6 +362,7 @@ public sealed class Scene : IItemHost
         SetFocusVisible(false);
         _pressSceneX = x;
         _pressSceneY = y;
+        _pressButton = button;
         if (_grabber is not null && _grabberItem is not null)
         {
             // Another button while one is held goes to the same item.
