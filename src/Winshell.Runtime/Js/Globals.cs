@@ -300,7 +300,7 @@ public static class QtDateFormat
 {
     public static string Format(DateTime date, string format)
     {
-        var hasAmPm = format.Contains("AP", StringComparison.OrdinalIgnoreCase) || format.Contains('A') || format.Contains('a');
+        var hasAmPm = HasAmPm(format);
         var sb = new StringBuilder();
         var i = 0;
         while (i < format.Length)
@@ -391,5 +391,24 @@ public static class QtDateFormat
             i += run;
         }
         return sb.ToString();
+    }
+
+    /// <summary>An <c>a</c> or <c>A</c> outside quotes selects 12-hour time. Quoted text, such as <c>'at'</c>, does not.</summary>
+    private static bool HasAmPm(string format)
+    {
+        for (var i = 0; i < format.Length; i++)
+        {
+            if (format[i] != '\'')
+            {
+                if (format[i] is 'a' or 'A')
+                    return true;
+                continue;
+            }
+            var end = format.IndexOf('\'', i + 1);
+            if (end < 0)
+                return false;
+            i = end;
+        }
+        return false;
     }
 }
