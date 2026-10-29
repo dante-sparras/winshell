@@ -399,6 +399,43 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void Start_icons_decode_at_their_row_size_and_hover_uses_the_secondary_fill()
+    {
+        using var view = Open(dir => ViewQml(Apps(2), Recent(), PinIds(2)));
+        var pin = Named(view.Root, "pinTile")[1];
+        var pinImage = Assert.Single(pin.ChildItems.OfType<Image>());
+        Assert.Equal(new QSize(32, 32), (QSize)pinImage.ReadProperty("sourceSize")!);
+        var pinFill = One(pin, "pinFill");
+        Assert.Equal((double)Winshell.Runtime.Quick.Controls.Fluent.ControlCornerRadius, Number(pinFill.ReadProperty("radius")));
+        Assert.Equal(QColor.Transparent, Color(pinFill));
+
+        var point = pin.MapToScene(pin.Width / 2, pin.Height / 2);
+        view.Scene.PointerMove(point.X, point.Y);
+        view.Loop.Advance(TimeSpan.FromMilliseconds(120));
+        PolishQueue.Flush();
+        Assert.Equal(Theme.Current.SubtleFillColorSecondary, Color(pinFill));
+
+        Assert.Equal(new QSize(32, 32), (QSize)One(Named(view.Root, "appRow")[0], "rowIcon").ReadProperty("sourceSize")!);
+
+        view.Eval("showAll()");
+        view.Loop.Process();
+        PolishQueue.Flush();
+        var allImage = Assert.Single(Named(view.Root, "allRow")[0].ChildItems.OfType<Image>());
+        Assert.Equal(new QSize(24, 24), (QSize)allImage.ReadProperty("sourceSize")!);
+
+        view.Eval("showHome()");
+        view.Loop.Process();
+        view.Scene.TextInput("R");
+        view.Loop.Process();
+        PolishQueue.Flush();
+        view.Eval(Filter);
+        view.Loop.Process();
+        PolishQueue.Flush();
+        var searchImage = Assert.Single(Named(view.Root, "searchRow")[0].ChildItems.OfType<Image>());
+        Assert.Equal(new QSize(32, 32), (QSize)searchImage.ReadProperty("sourceSize")!);
+    }
+
+    [Fact]
     public void Search_apps_and_sections_are_exposed_to_assistive_technology()
     {
         using var view = Open(dir => ViewQml(Apps(2), Recent(), PinIds(2)));
