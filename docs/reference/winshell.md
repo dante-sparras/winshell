@@ -40,12 +40,12 @@ A few of its values come from `//@ pragma` comments at the top of the root file,
 | `statePath(path)` | method, returns string | `path` joined to `stateDir`. |
 | `cachePath(path)` | method, returns string | `path` joined to `cacheDir`. |
 | `reload(hard)` | method | Reloads the configuration once the current handler returns. By default, the new generation takes over the old windows and the values of [PersistentProperties](#persistentproperties); with `hard` true, it starts fresh. |
-| `inhibitReloadPopup()` | method | Asks for no reload popup after the current reload. Winshell has no reload popup yet, so this has no visible effect (issue #133). |
+| `inhibitReloadPopup()` | method | Hides Winshell's notice for the reload that just failed. Call it in `onReloadFailed`; the next reload shows the notice again. A window that failed still shows its own notice. |
 | `hasVersion(major, minor, features)` | method, returns bool | True when this Winshell release is at least `major`.`minor` and every named unreleased feature is present. A newer release includes those features. None are declared, so a feature list matches only on a newer release. |
 | `hasQtVersion(major, minor)` | method, returns bool | True when the Qt Quick language level the runtime implements, 6.10, is at least `major`.`minor`. |
 | `lastWindowClosed()` | signal | Emitted when the shell's last shown window closes or hides. |
 | `reloadCompleted()` | signal | Emitted by the new generation after each load, including the first. |
-| `reloadFailed(errorString)` | signal | Emitted when a reload fails, with the error. The shell keeps running the generation it had. |
+| `reloadFailed(errorString)` | signal | Emitted when a reload fails, with the error. The shell keeps running the generation it had, and Winshell shows a notice with the error unless the handler calls `inhibitReloadPopup()`. |
 
 ## ShellRoot
 
