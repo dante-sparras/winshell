@@ -189,7 +189,7 @@ public abstract class LayoutBase : Item, IPolishable, IPropertyObserver
         if (a is not null && (horizontal ? a.PreferredWidth : a.PreferredHeight) >= 0)
             pref = horizontal ? a.PreferredWidth : a.PreferredHeight;
         else if (horizontal ? item.HasExplicitWidth : item.HasExplicitHeight)
-            pref = horizontal ? item.Width : item.Height;
+            pref = horizontal ? item.DeclaredWidth : item.DeclaredHeight;
         else
             pref = horizontal ? item.ImplicitWidth : item.ImplicitHeight;
         var min = a is null ? 0 : horizontal ? a.MinimumWidth : a.MinimumHeight;

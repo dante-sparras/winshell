@@ -42,6 +42,7 @@ public class Item : QObject
     private double _width, _height;
     private double _implicitWidth, _implicitHeight;
     private bool _widthValid, _heightValid;
+    private double _declaredWidth, _declaredHeight;
     private bool _visible = true;
     private double _opacity = 1;
     private bool _enabled = true;
@@ -115,8 +116,9 @@ public class Item : QObject
         get { Track(); return _width; }
         set
         {
+            _declaredWidth = Math.Max(0, double.IsNaN(value) ? 0 : value);
             _widthValid = true;
-            SetGeometry(ref _width, Math.Max(0, value), "width");
+            SetGeometry(ref _width, _declaredWidth, "width");
         }
     }
 
@@ -126,8 +128,9 @@ public class Item : QObject
         get { Track(); return _height; }
         set
         {
+            _declaredHeight = Math.Max(0, double.IsNaN(value) ? 0 : value);
             _heightValid = true;
-            SetGeometry(ref _height, Math.Max(0, value), "height");
+            SetGeometry(ref _height, _declaredHeight, "height");
         }
     }
 
@@ -163,6 +166,12 @@ public class Item : QObject
     public bool HasExplicitWidth => _widthValid;
 
     public bool HasExplicitHeight => _heightValid;
+
+    /// <summary>The width QML set. A layout's assigned width does not replace it.</summary>
+    internal double DeclaredWidth => _declaredWidth;
+
+    /// <summary>The height QML set. A layout's assigned height does not replace it.</summary>
+    internal double DeclaredHeight => _declaredHeight;
 
     /// <summary>Sets the geometry from an anchor, layout or positioner, which keeps the implicit size link.</summary>
     public void SetLayoutX(double value) => SetGeometry(ref _x, value, "x");
