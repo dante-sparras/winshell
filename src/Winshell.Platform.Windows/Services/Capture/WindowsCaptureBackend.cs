@@ -7,6 +7,7 @@ using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
+using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Capture;
@@ -282,7 +283,7 @@ internal static unsafe partial class CaptureInterop
         {
             if (item != 0) Marshal.Release(item);
             if (factory != 0) Marshal.Release(factory);
-            WindowsDeleteString(name);
+            Win32.WindowsDeleteString(name);
         }
     }
 
@@ -311,8 +312,6 @@ internal static unsafe partial class CaptureInterop
 
     [LibraryImport("combase.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int WindowsCreateString(string source, int length, out nint value);
-    [LibraryImport("combase.dll")]
-    private static partial int WindowsDeleteString(nint value);
     [LibraryImport("combase.dll")]
     private static partial int RoGetActivationFactory(nint name, in Guid iid, out nint factory);
     [LibraryImport("d3d11.dll")]

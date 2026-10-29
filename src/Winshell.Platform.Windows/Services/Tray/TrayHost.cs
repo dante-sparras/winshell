@@ -153,7 +153,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
             return;
         }
         Hosts[_hwnd] = this;
-        SetLayeredWindowAttributes(_hwnd, 0, 0, LwaAlpha);
+        Win32.SetLayeredWindowAttributes(_hwnd, 0, 0, LwaAlpha);
         // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
         // start, and an app at a lower level can still add its icon.
         ChangeWindowMessageFilterEx(_hwnd, TaskbarCreated, MSGFLT_ALLOW, 0);
@@ -245,7 +245,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
             Raise();
             foreach (var icon in _icons.Values.ToArray())
             {
-                if (!IsWindow(icon.Window))
+                if (!Win32.IsWindow(icon.Window))
                     Remove(icon.Key);
             }
         }
@@ -259,7 +259,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private void Raise()
     {
         var explorer = ExplorerTray();
-        if (explorer != 0 && GetWindowRect(explorer, out var r))
+        if (explorer != 0 && Win32.GetWindowRect(explorer, out var r))
         {
             // Apps that read the taskbar's position from this window get Explorer's.
             Win32.SetWindowPos(_hwnd, Win32.HWND_TOPMOST, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top, Win32.SWP_NOACTIVATE);
@@ -397,7 +397,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
                 var added = !_icons.ContainsKey(icon.Key);
                 if (added)
                 {
-                    GetWindowThreadProcessId(icon.Window, out var pid);
+                    Win32.GetWindowThreadProcessId(icon.Window, out var pid);
                     icon.ProcessId = (int)pid;
                     icon.ProgramPath = ProgramPath(pid);
                     _icons[icon.Key] = icon;
@@ -477,9 +477,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at)
     {
-        if (!IsWindow(icon.Window) || icon.CallbackMessage == 0)
+        if (!Win32.IsWindow(icon.Window) || icon.CallbackMessage == 0)
             return;
-        GetWindowThreadProcessId(icon.Window, out var pid);
+        Win32.GetWindowThreadProcessId(icon.Window, out var pid);
         if (!MayClick(ShellIntegrity, IntegrityLevel(pid)))
             return;
         var point = at ?? CursorPosition();
@@ -509,18 +509,18 @@ internal sealed unsafe partial class TrayHost : IDisposable
         if (AllowSetForegroundWindow(pid))
             return;
         // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
-        var foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
-        var thread = GetCurrentThreadId();
-        var attached = foregroundThread != 0 && foregroundThread != thread && AttachThreadInput(foregroundThread, thread, true);
+        var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
+        var thread = Win32.GetCurrentThreadId();
+        var attached = foregroundThread != 0 && foregroundThread != thread && Win32.AttachThreadInput(foregroundThread, thread, true);
         try
         {
-            SetForegroundWindow(icon.Window);
+            Win32.SetForegroundWindow(icon.Window);
             AllowSetForegroundWindow(pid);
         }
         finally
         {
             if (attached)
-                AttachThreadInput(foregroundThread, thread, false);
+                Win32.AttachThreadInput(foregroundThread, thread, false);
         }
     }
 
@@ -532,7 +532,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     private static (int X, int Y) CursorPosition()
     {
-        GetCursorPos(out var p);
+        Win32.GetCursorPos(out var p);
         return (p.X, p.Y);
     }
 
@@ -541,30 +541,30 @@ internal sealed unsafe partial class TrayHost : IDisposable
     /// <summary>A process's mandatory integrity level, or <see cref="uint.MaxValue"/> when it cannot be read.</summary>
     internal static uint IntegrityLevel(uint pid)
     {
-        var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        var process = Win32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (process == 0)
             return uint.MaxValue;
         try
         {
-            if (!OpenProcessToken(process, TOKEN_QUERY, out var token))
+            if (!Win32.OpenProcessToken(process, TOKEN_QUERY, out var token))
                 return uint.MaxValue;
             try
             {
                 // A TOKEN_MANDATORY_LABEL, followed by the label's SID, S-1-16-level.
                 var label = stackalloc byte[64];
-                if (!GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
+                if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
                     return uint.MaxValue;
                 var sid = *(nint*)label;
                 return *GetSidSubAuthority(sid, (uint)(*GetSidSubAuthorityCount(sid) - 1));
             }
             finally
             {
-                CloseHandle(token);
+                Win32.CloseHandle(token);
             }
         }
         finally
         {
-            CloseHandle(process);
+            Win32.CloseHandle(process);
         }
     }
 
@@ -576,9 +576,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
         if (icon == 0 || !GetIconInfoExW(icon, ref info))
             return null;
         if (info.hbmColor != 0)
-            DeleteObject(info.hbmColor);
+            Win32.DeleteObject(info.hbmColor);
         if (info.hbmMask != 0)
-            DeleteObject(info.hbmMask);
+            Win32.DeleteObject(info.hbmMask);
         var module = new string(info.szModName);
         var name = new string(info.szResName);
         return module.Length > 0 && (info.wResID != 0 || name.Length > 0) ? new IconResource(module, info.wResID, name) : null;
@@ -599,8 +599,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
         {
             // Windows picks the image in the icon group closest to the size, and scales it only if none matches.
             var icon = resource.Id != 0
-                ? LoadImageW(module, resource.Id, IMAGE_ICON, size, size, 0)
-                : LoadImageW(module, resource.Name, IMAGE_ICON, size, size, 0);
+                ? Win32.LoadImageW(module, resource.Id, IMAGE_ICON, size, size, 0)
+                : Win32.LoadImageW(module, resource.Name, IMAGE_ICON, size, size, 0);
             if (icon == 0)
                 return null;
             try
@@ -640,7 +640,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
             if (size <= 0)
             {
                 size = 32;
-                if (GetObjectW(info.hbmColor != 0 ? info.hbmColor : info.hbmMask, sizeof(BITMAP), out var bmp) != 0)
+                if (Win32.GetObjectW(info.hbmColor != 0 ? info.hbmColor : info.hbmMask, sizeof(BITMAP), out var bmp) != 0)
                     size = Math.Clamp(bmp.bmWidth, 16, 256);
             }
             var header = new BITMAPINFOHEADER { biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = size, biHeight = -size, biPlanes = 1, biBitCount = 32 };
@@ -683,15 +683,15 @@ internal sealed unsafe partial class TrayHost : IDisposable
             {
                 DeleteDC(dc);
                 if (dib != 0)
-                    DeleteObject(dib);
+                    Win32.DeleteObject(dib);
             }
         }
         finally
         {
             if (info.hbmColor != 0)
-                DeleteObject(info.hbmColor);
+                Win32.DeleteObject(info.hbmColor);
             if (info.hbmMask != 0)
-                DeleteObject(info.hbmMask);
+                Win32.DeleteObject(info.hbmMask);
         }
     }
 
@@ -742,18 +742,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct BITMAP
-    {
-        public int bmType;
-        public int bmWidth;
-        public int bmHeight;
-        public int bmWidthBytes;
-        public ushort bmPlanes;
-        public ushort bmBitsPixel;
-        public nint bmBits;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct BITMAPINFOHEADER
     {
         public uint biSize;
@@ -769,28 +757,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
         public uint biClrImportant;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NATIVE_RECT
-    {
-        public int Left, Top, Right, Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NATIVE_POINT
-    {
-        public int X, Y;
-    }
-
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint FindWindowExW(nint parent, nint after, string className, string? windowName);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetWindowRect(nint hwnd, out NATIVE_RECT rect);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool IsWindow(nint hwnd);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -808,54 +776,14 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private static partial bool AllowSetForegroundWindow(uint processId);
 
     [LibraryImport("user32.dll")]
-    private static partial nint GetForegroundWindow();
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetForegroundWindow(nint hwnd);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AttachThreadInput(uint attachTo, uint attachFrom, [MarshalAs(UnmanagedType.Bool)] bool attach);
-
-    [LibraryImport("kernel32.dll")]
-    private static partial uint GetCurrentThreadId();
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetCursorPos(out NATIVE_POINT point);
-
-    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetCursorPos(int x, int y);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetLayeredWindowAttributes(nint hwnd, uint key, byte alpha, uint flags);
-
-    [LibraryImport("user32.dll")]
-    private static partial uint GetWindowThreadProcessId(nint hwnd, out uint processId);
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
-
-    [LibraryImport("advapi32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool OpenProcessToken(nint process, uint access, out nint token);
-
-    [LibraryImport("advapi32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetTokenInformation(nint token, int infoClass, void* info, int length, out int returned);
 
     [LibraryImport("advapi32.dll")]
     private static partial byte* GetSidSubAuthorityCount(nint sid);
 
     [LibraryImport("advapi32.dll")]
     private static partial uint* GetSidSubAuthority(nint sid, uint index);
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CloseHandle(nint handle);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -869,12 +797,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyIcon(nint icon);
 
-    [LibraryImport("user32.dll")]
-    private static partial nint LoadImageW(nint module, nint name, uint type, int width, int height, uint flags);
-
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint LoadImageW(nint module, string name, uint type, int width, int height, uint flags);
-
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint LoadLibraryExW(string fileName, nint file, uint flags);
 
@@ -887,9 +809,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private static partial bool DrawIconEx(nint dc, int x, int y, nint icon, int width, int height, uint step, nint brush, uint flags);
 
     [LibraryImport("gdi32.dll")]
-    private static partial int GetObjectW(nint handle, int size, out BITMAP bitmap);
-
-    [LibraryImport("gdi32.dll")]
     private static partial nint CreateCompatibleDC(nint dc);
 
     [LibraryImport("gdi32.dll")]
@@ -897,10 +816,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     [LibraryImport("gdi32.dll")]
     private static partial nint SelectObject(nint dc, nint obj);
-
-    [LibraryImport("gdi32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DeleteObject(nint obj);
 
     [LibraryImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

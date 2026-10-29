@@ -129,7 +129,7 @@ public sealed unsafe class WindowThumbnail : Item
     /// </summary>
     private RECT Source(nint hwnd, THUMBNAIL_SIZE size)
     {
-        if (!IsIconic(hwnd) && GetWindowRect(hwnd, out var window)
+        if (!Win32.IsIconic(hwnd) && Win32.GetWindowRect(hwnd, out var window)
             && DwmGetWindowRect(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var frame, sizeof(RECT)) == 0)
         {
             var visible = WindowRules.PreviewSource(window, frame);

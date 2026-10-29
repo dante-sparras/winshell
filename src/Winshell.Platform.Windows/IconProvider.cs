@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using SkiaSharp;
+using Winshell.Platform.Windows.Native;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
 
@@ -186,26 +187,8 @@ public sealed class IconProvider : IImageProvider, IIconLookup
         public int Cy;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BITMAP
-    {
-        public int bmType;
-        public int bmWidth;
-        public int bmHeight;
-        public int bmWidthBytes;
-        public ushort bmPlanes;
-        public ushort bmBitsPixel;
-        public nint bmBits;
-    }
-
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
     private static extern void SHCreateItemFromParsingName(string path, nint bindContext, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory item);
-
-    [DllImport("gdi32.dll")]
-    private static extern int GetObjectW(nint handle, int size, out BITMAP bitmap);
-
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(nint handle);
 
     /// <summary>The icon the Windows shell shows for a file or program, at the size asked.</summary>
     public static SKImage? ShellIcon(string path, int size)
@@ -218,7 +201,7 @@ public sealed class IconProvider : IImageProvider, IIconLookup
                 return null;
             try
             {
-                if (GetObjectW(hbitmap, Marshal.SizeOf<BITMAP>(), out var bmp) == 0 || bmp.bmBits == 0 || bmp.bmBitsPixel != 32)
+                if (Win32.GetObjectW(hbitmap, Marshal.SizeOf<BITMAP>(), out var bmp) == 0 || bmp.bmBits == 0 || bmp.bmBitsPixel != 32)
                     return null;
                 var info = new SKImageInfo(bmp.bmWidth, Math.Abs(bmp.bmHeight), SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var bitmap = new SKBitmap(info);
@@ -242,7 +225,7 @@ public sealed class IconProvider : IImageProvider, IIconLookup
             }
             finally
             {
-                DeleteObject(hbitmap);
+                Win32.DeleteObject(hbitmap);
             }
         }
         catch (COMException)

@@ -49,7 +49,7 @@ internal struct PropVariant
     public const ushort VtBlob = 65;
 }
 
-internal static class CoreAudio
+internal static partial class CoreAudio
 {
     public const uint DeviceStateActive = 1;
     public const uint ClsctxAll = 0x17;
@@ -67,11 +67,11 @@ internal static class CoreAudio
     public static readonly PropertyKey EndpointFormFactor = new(new Guid("1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E"), 0);
     public static readonly PropertyKey EngineDeviceFormat = new(new Guid("F19F064D-082C-4E27-BC73-6882A1BB8E4C"), 0);
 
-    [DllImport("ole32.dll")]
-    public static extern int PropVariantClear(ref PropVariant value);
+    [LibraryImport("ole32.dll")]
+    public static partial int PropVariantClear(ref PropVariant value);
 
-    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
-    public static extern int SHLoadIndirectString(string source, char[] output, int outputLength, nint reserved);
+    [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int SHLoadIndirectString(string source, [Out] char[] output, int outputLength, nint reserved);
 
     public static T Create<T>(Guid clsid)
     {

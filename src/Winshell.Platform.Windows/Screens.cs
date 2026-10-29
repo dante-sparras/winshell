@@ -13,7 +13,7 @@ internal sealed record Monitor(nint Handle, ScreenInfo Info, RECT Bounds, RECT W
 }
 
 /// <summary>Reads the connected monitors: their names, models, DPI and areas.</summary>
-internal static unsafe class Screens
+internal static unsafe partial class Screens
 {
     [ThreadStatic]
     private static List<nint>? _found;
@@ -138,8 +138,9 @@ internal static unsafe class Screens
         public uint dmPanningHeight;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool EnumDisplaySettingsW(string device, int mode, ref DEVMODEW devMode);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool EnumDisplaySettingsW(string device, int mode, ref DEVMODEW devMode);
 
     private static int RefreshRate(string device)
     {

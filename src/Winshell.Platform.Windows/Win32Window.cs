@@ -512,11 +512,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         _clickThrough = on;
         SetExStyle(Win32.WS_EX_TRANSPARENT | Win32.WS_EX_LAYERED, on);
         if (on)
-            SetLayeredWindowAttributes(Handle, 0, 255, 2);
+            Win32.SetLayeredWindowAttributes(Handle, 0, 255, 2);
     }
-
-    [DllImport("user32.dll")]
-    private static extern bool SetLayeredWindowAttributes(nint hwnd, uint key, byte alpha, uint flags);
 
     public void SetCursor(int shape)
     {

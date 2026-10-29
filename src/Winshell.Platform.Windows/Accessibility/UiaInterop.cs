@@ -150,7 +150,7 @@ internal struct UiaPoint
 }
 
 /// <summary>The UI Automation ids winshell uses, and the functions of UIAutomationCore.dll.</summary>
-internal static class Uia
+internal static partial class Uia
 {
     public const int S_OK = 0;
     public const int E_FAIL = unchecked((int)0x80004005);
@@ -245,15 +245,15 @@ internal static class Uia
     [DllImport("UIAutomationCore.dll")]
     public static extern int UiaRaiseStructureChangedEvent(IRawElementProviderSimple provider, int changeType, int[] runtimeId, int runtimeIdLength);
 
-    [DllImport("UIAutomationCore.dll")]
+    [LibraryImport("UIAutomationCore.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool UiaClientsAreListening();
+    public static partial bool UiaClientsAreListening();
 
     [DllImport("UIAutomationCore.dll")]
     public static extern int UiaDisconnectProvider(IRawElementProviderSimple provider);
 
-    [DllImport("UIAutomationCore.dll")]
-    private static extern int UiaGetReservedNotSupportedValue(out nint value);
+    [LibraryImport("UIAutomationCore.dll")]
+    private static partial int UiaGetReservedNotSupportedValue(out nint value);
 
     /// <summary>The value a text attribute has when the provider does not support it.</summary>
     public static object NotSupported => _notSupported ??= GetNotSupported();

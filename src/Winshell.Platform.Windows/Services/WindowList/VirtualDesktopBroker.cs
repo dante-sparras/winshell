@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.WindowList;
@@ -75,7 +76,7 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
 /// 23H2 uses the same interface id and different slots, so <see cref="DesktopContract"/> refuses every other build.
 /// A failed read never calls create, switch or remove.
 /// </summary>
-internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
+internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
 {
     public static VirtualDesktopBroker Shared { get; } = new();
 
@@ -494,7 +495,7 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
         }
         finally
         {
-            WindowsDeleteString(name);
+            Win32.WindowsDeleteString(name);
         }
     }
 
@@ -506,14 +507,11 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
 
     private static string Hex(int hr) => $"0x{hr:X8}";
 
-    [DllImport("ole32.dll")]
-    private static extern int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
+    [LibraryImport("ole32.dll")]
+    private static partial int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
 
-    [DllImport("combase.dll")]
-    private static extern nint WindowsGetStringRawBuffer(nint hstring, out uint length);
-
-    [DllImport("combase.dll")]
-    private static extern int WindowsDeleteString(nint hstring);
+    [LibraryImport("combase.dll")]
+    private static partial nint WindowsGetStringRawBuffer(nint hstring, out uint length);
 }
 
 [ComImport]

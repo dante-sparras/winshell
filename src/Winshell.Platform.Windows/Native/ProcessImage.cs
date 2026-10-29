@@ -23,7 +23,7 @@ internal static partial class ProcessImage
     /// <summary>The image path, or null when the process cannot be opened or the name cannot be read.</summary>
     internal static string? TryRead(uint processId)
     {
-        var process = OpenProcess(QueryLimitedInformation, false, processId);
+        var process = Win32.OpenProcess(QueryLimitedInformation, false, processId);
         if (process == 0)
             return null;
         try
@@ -60,9 +60,6 @@ internal static partial class ProcessImage
         var ok = QueryFullProcessImageNameW(process, 0, buffer, ref size);
         return new QueryResult(ok, size, ok ? 0 : Marshal.GetLastPInvokeError());
     }
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
 
     [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
