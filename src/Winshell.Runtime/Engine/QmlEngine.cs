@@ -303,6 +303,8 @@ public sealed class QmlEngine : IDisposable
         // Counting batches alone would miss that recursion.
         if (_creationDepth >= MaxCreationDepth)
             throw new QmlException("Object creation is nested too deeply");
+        // A binding that creates an object must not depend on what the new object reads while it is built.
+        using var _ = DependencyTracker.Suspend();
         _creationDepth++;
         try
         {
