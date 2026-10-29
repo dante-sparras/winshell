@@ -118,6 +118,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `RowLayout.uniformCellSizes` | Ignored, as on `ColumnLayout` and `GridLayout`. |
 | `Binding.delayed` | Ignored, as is `restoreMode`. |
 | `Text.font` | `font.styleName`, `font.kerning`, `font.features` and `font.variableAxes` are ignored, here and on every item and control with a `font`. |
+| `Loader.asynchronous` | Ignored. The component is still created on this thread before the property assignment returns. |
 
 ## The Qt object
 
