@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Winshell.Platform.Windows.Native;
 
 namespace Winshell.Platform.Windows.Services.WindowList;
 
@@ -47,7 +48,6 @@ internal static unsafe partial class NativeMethods
     public const int SW_RESTORE = 9;
     public const uint WM_SYSCOMMAND = 0x0112;
     public const nint SC_CLOSE = 0xF060;
-    public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 
     [LibraryImport("user32.dll")]
     public static partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
@@ -146,17 +146,6 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("kernel32.dll")]
     public static partial uint GetCurrentThreadId();
 
-    [LibraryImport("kernel32.dll")]
-    public static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
-
-    [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool QueryFullProcessImageName(nint process, uint flags, char* name, ref int size);
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool CloseHandle(nint handle);
-
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int attribute, out int value, int size);
 
@@ -202,19 +191,7 @@ internal static unsafe partial class NativeMethods
     public static string ExePath(nint hwnd)
     {
         GetWindowThreadProcessId(hwnd, out var pid);
-        var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (process == 0)
-            return "";
-        try
-        {
-            var buffer = stackalloc char[1024];
-            var size = 1024;
-            return QueryFullProcessImageName(process, 0, buffer, ref size) ? new string(buffer, 0, size) : "";
-        }
-        finally
-        {
-            CloseHandle(process);
-        }
+        return ProcessImage.TryRead(pid) ?? "";
     }
 
     public static bool IsCloaked(nint hwnd) => DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0;

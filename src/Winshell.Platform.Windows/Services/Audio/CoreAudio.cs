@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Winshell.Platform.Windows.Native;
 
 namespace Winshell.Platform.Windows.Services.Audio;
 
@@ -72,15 +73,6 @@ internal static class CoreAudio
     [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
     public static extern int SHLoadIndirectString(string source, char[] output, int outputLength, nint reserved);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    public static extern nint OpenProcess(uint access, bool inherit, uint processId);
-
-    [DllImport("kernel32.dll")]
-    public static extern bool CloseHandle(nint handle);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern bool QueryFullProcessImageNameW(nint process, uint flags, char[] name, ref uint size);
-
     public static T Create<T>(Guid clsid)
     {
         var type = Type.GetTypeFromCLSID(clsid, true)!;
@@ -148,24 +140,8 @@ internal static class CoreAudio
         return SHLoadIndirectString(text, buffer, buffer.Length, 0) == 0 ? new string(buffer).TrimEnd('\0') : "";
     }
 
-    /// <summary>The full path of a process's program, or null when the process cannot be opened.</summary>
-    public static string? ProcessImagePath(uint processId)
-    {
-        // PROCESS_QUERY_LIMITED_INFORMATION works for most processes, elevated ones included.
-        var handle = OpenProcess(0x1000, false, processId);
-        if (handle == 0)
-            return null;
-        try
-        {
-            var buffer = new char[1024];
-            var size = (uint)buffer.Length;
-            return QueryFullProcessImageNameW(handle, 0, buffer, ref size) ? new string(buffer, 0, (int)size) : null;
-        }
-        finally
-        {
-            CloseHandle(handle);
-        }
-    }
+    /// <summary>The full path of a process's program, or null when the process cannot be opened or the name cannot be read.</summary>
+    public static string? ProcessImagePath(uint processId) => ProcessImage.TryRead(processId);
 }
 
 [ComImport]
