@@ -15,7 +15,7 @@
     are the same choices as -Version and -AutoStart.
 
         irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
-        & ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version 0.6.0 -AutoStart
+        & ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 
     This file is a release asset. It does not dot-source a neighbor, and it does not run downloaded text.
 #>

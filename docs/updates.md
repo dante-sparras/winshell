@@ -35,4 +35,4 @@ The default shell shows the status on the About page. While an update is `Ready`
 
 ## Not checked by the automated tests
 
-The tests download from a fake GitHub into temporary folders. They never contact GitHub or replace an installed Winshell. No published release has included the zip yet. Installing on start, running the new `winshell.exe` and waiting for the old process were checked by hand, with two published builds of different versions in a temporary folder.
+The tests download from a fake GitHub into temporary folders. They never contact GitHub or replace an installed Winshell. Installing on start, running the new `winshell.exe` and waiting for the old process were checked by hand, with two published builds of different versions in a temporary folder.
