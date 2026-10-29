@@ -31,8 +31,7 @@ ColumnLayout {
     Text {
       Layout.fillWidth: true
       text: month.monthLabel
-      font.pixelSize: 14
-      font.weight: Font.DemiBold
+      font: Theme.typography.bodyStrong
       color: Theme.textFillColorPrimary
     }
     Button { text: "Today"; flat: true; onClicked: month.reset(); onActiveFocusChanged: if (activeFocus && root.scrollView) root.scrollView.reveal(this) }
@@ -52,7 +51,7 @@ ColumnLayout {
         text: modelData
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        font.pixelSize: 12
+        font: Theme.typography.caption
         color: Theme.textFillColorSecondary
       }
     }
@@ -73,7 +72,7 @@ ColumnLayout {
           Accessible.name: "Week " + modelData
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter
-          font.pixelSize: 12
+          font: Theme.typography.caption
           color: Theme.textFillColorSecondary
         }
       }
@@ -96,7 +95,7 @@ ColumnLayout {
             text: modelData.label
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            font.pixelSize: 14
+            font: Theme.typography.body
             color: modelData.isToday ? Theme.textOnAccentFillColorPrimary : modelData.inMonth ? Theme.textFillColorPrimary : Theme.textFillColorDisabled
           }
           Accessible.name: modelData.fullDate

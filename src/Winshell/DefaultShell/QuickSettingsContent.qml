@@ -427,7 +427,7 @@ Item {
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: modelData.title
-            font.pixelSize: 14
+            font: Theme.typography.body
             color: Theme.textFillColorPrimary
           }
         }
@@ -473,7 +473,7 @@ Item {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: SystemStatus.batteryPercent + "%"
-          font.pixelSize: 12
+          font: Theme.typography.caption
           color: Theme.textFillColorPrimary
         }
       }
@@ -532,7 +532,7 @@ Item {
             height: 20
             verticalAlignment: Text.AlignVCenter
             text: "Add"
-            font.pixelSize: 14
+            font: Theme.typography.body
             color: parent.parent.enabled ? Theme.textFillColorPrimary : Theme.textFillColorDisabled
           }
         }
@@ -654,7 +654,7 @@ Item {
         width: parent.width
         elide: Text.ElideRight
         text: card.session ? card.session.appName : ""
-        font.pixelSize: 12
+        font: Theme.typography.caption
         color: Theme.textFillColorSecondary
       }
 
@@ -664,8 +664,7 @@ Item {
         topPadding: 4
         elide: Text.ElideRight
         text: card.session ? card.session.trackTitle : ""
-        font.pixelSize: 14
-        font.weight: Font.DemiBold
+        font: Theme.typography.bodyStrong
         color: Theme.textFillColorPrimary
       }
 
@@ -674,7 +673,7 @@ Item {
         width: parent.width
         elide: Text.ElideRight
         text: card.session ? card.session.trackArtist : ""
-        font.pixelSize: 12
+        font: Theme.typography.caption
         color: Theme.textFillColorSecondary
       }
     }
@@ -742,8 +741,7 @@ Item {
       height: 40
       verticalAlignment: Text.AlignVCenter
       text: parent.title
-      font.pixelSize: 14
-      font.weight: Font.DemiBold
+      font: Theme.typography.bodyStrong
       color: Theme.textFillColorPrimary
     }
   }

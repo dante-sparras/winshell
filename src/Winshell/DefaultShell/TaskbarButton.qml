@@ -71,7 +71,7 @@ MouseArea {
           width: 9
           height: 9
           radius: 1
-          color: Theme.dark ? "#4cc2ff" : "#0078d4"
+          color: Theme.highContrast ? Theme.accentFillColorDefault : Theme.dark ? "#4cc2ff" : "#0078d4"
         }
       }
     }

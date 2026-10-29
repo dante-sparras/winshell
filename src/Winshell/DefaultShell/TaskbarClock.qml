@@ -1,4 +1,5 @@
 import Winshell
+import Winshell.Theme
 import QtQuick
 import QtQuick.Controls
 
@@ -29,7 +30,7 @@ Item {
     id: clockButton
     anchors.verticalCenter: parent.verticalCenter
     text: clockFormat.timeLabel + "\n" + clockFormat.shortDateLabel
-    font.pixelSize: 12
+    font: Theme.typography.caption
     padding: 0
     horizontalPadding: 10
     implicitHeight: 40
