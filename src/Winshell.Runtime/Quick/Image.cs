@@ -13,9 +13,25 @@ public interface IImageProvider
 /// <summary>Loads image sources: files, <c>file://</c> and <c>data:</c> URLs, http, SVG and image providers.</summary>
 public static class ImageLoader
 {
+    /// <summary>How many decoded images the cache keeps. Callers hold their own copies, so a drop can be disposed.</summary>
+    private const int CacheLimit = 32;
+
+    private readonly record struct CacheKey(string Source, int Width, int Height, long Stamp);
+
     private static readonly ConcurrentDictionary<string, IImageProvider> Providers = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly ConcurrentDictionary<(string, int, int), SKImage?> Cache = new();
+    private static readonly object Gate = new();
+    private static readonly Dictionary<CacheKey, SKImage> Images = [];
+    private static readonly Dictionary<CacheKey, LinkedListNode<CacheKey>> Nodes = [];
+    private static readonly LinkedList<CacheKey> Order = [];
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    static ImageLoader() => Theme.Changed += DropProviderEntries;
+
+    /// <summary>How many images the cache currently owns.</summary>
+    internal static int CachedCount
+    {
+        get { lock (Gate) return Images.Count; }
+    }
 
     public static void AddProvider(string name, IImageProvider provider) => Providers[name] = provider;
 
@@ -39,35 +55,50 @@ public static class ImageLoader
         return Path.IsPathRooted(source) ? source : Path.Combine(baseDirectory ?? Environment.CurrentDirectory, source);
     }
 
-    public static void ClearCache() => Cache.Clear();
+    public static void ClearCache()
+    {
+        lock (Gate)
+        {
+            foreach (var key in Images.Keys.ToArray())
+                Drop(key);
+        }
+    }
 
     /// <summary>Loads an image. Remote sources are not loaded here; see <see cref="LoadAsync"/>.</summary>
     public static SKImage? Load(string source, string? baseDirectory, int width, int height, bool cache = true)
     {
         if (string.IsNullOrEmpty(source))
             return null;
-        var key = (source, width, height);
-        if (cache && Cache.TryGetValue(key, out var cached))
-            return cached;
+        if (cache && TryRemembered(source, baseDirectory, width, height, out var remembered))
+            return remembered;
         var image = LoadUncached(source, baseDirectory, width, height);
-        if (cache)
-            Cache[key] = image;
-        return image;
+        // A miss, a provider image and a data URL stay out of the cache. The caller owns what comes back.
+        if (!cache || image is null || !TryKey(source, baseDirectory, width, height, out var key))
+            return image;
+        var copy = Copy(image);
+        if (copy is null)
+            return image;
+        Remember(key, image);
+        return copy;
     }
 
     public static async Task<SKImage?> LoadAsync(string source, string? baseDirectory, int width, int height)
     {
         if (!IsRemote(source))
             return await Task.Run(() => Load(source, baseDirectory, width, height)).ConfigureAwait(false);
-        var key = (source, width, height);
-        if (Cache.TryGetValue(key, out var cached))
-            return cached;
+        if (TryRemembered(source, baseDirectory, width, height, out var remembered))
+            return remembered;
         try
         {
             var bytes = await Http.GetByteArrayAsync(new Uri(source)).ConfigureAwait(false);
             var image = Decode(bytes, source, width, height);
-            Cache[key] = image;
-            return image;
+            if (image is null || !TryKey(source, baseDirectory, width, height, out var key))
+                return image;
+            var copy = Copy(image);
+            if (copy is null)
+                return image;
+            Remember(key, image);
+            return copy;
         }
         catch (HttpRequestException)
         {
@@ -77,6 +108,110 @@ public static class ImageLoader
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// A file key includes the last-write time, so a rewritten picture misses. <c>image://</c> and <c>data:</c> are
+    /// never keys: providers cache themselves, and a data URL is already the bytes.
+    /// </summary>
+    private static bool TryKey(string source, string? baseDirectory, int width, int height, out CacheKey key)
+    {
+        key = default;
+        if (source.StartsWith("image://", StringComparison.OrdinalIgnoreCase) || source.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (IsRemote(source))
+        {
+            key = new CacheKey(source, width, height, 0);
+            return true;
+        }
+        var path = LocalPath(source, baseDirectory);
+        if (path is null || !File.Exists(path))
+            return false;
+        try
+        {
+            key = new CacheKey(path, width, height, File.GetLastWriteTimeUtc(path).Ticks);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryRemembered(string source, string? baseDirectory, int width, int height, out SKImage? copy)
+    {
+        copy = null;
+        if (!TryKey(source, baseDirectory, width, height, out var key))
+            return false;
+        lock (Gate)
+        {
+            if (!Images.TryGetValue(key, out var image))
+                return false;
+            Touch(key);
+            copy = Copy(image);
+            return copy is not null;
+        }
+    }
+
+    private static void Remember(CacheKey key, SKImage image)
+    {
+        lock (Gate)
+        {
+            foreach (var stale in Images.Keys.Where(item => item.Source == key.Source && item.Width == key.Width && item.Height == key.Height && item.Stamp != key.Stamp).ToArray())
+                Drop(stale);
+            if (Images.TryGetValue(key, out var previous))
+            {
+                previous.Dispose();
+                Images[key] = image;
+                Touch(key);
+                return;
+            }
+            while (Images.Count >= CacheLimit && Order.Last is { } oldest)
+                Drop(oldest.Value);
+            Images[key] = image;
+            Nodes[key] = Order.AddFirst(key);
+        }
+    }
+
+    private static void Touch(CacheKey key)
+    {
+        var node = Nodes[key];
+        Order.Remove(node);
+        Order.AddFirst(node);
+    }
+
+    private static void Drop(CacheKey key)
+    {
+        if (Nodes.Remove(key, out var node))
+            Order.Remove(node);
+        if (Images.Remove(key, out var image))
+            image.Dispose();
+    }
+
+    private static void DropProviderEntries()
+    {
+        lock (Gate)
+        {
+            foreach (var key in Images.Keys.Where(item => item.Source.StartsWith("image://", StringComparison.OrdinalIgnoreCase)).ToArray())
+                Drop(key);
+        }
+    }
+
+    /// <summary>A second image, so disposing the cached one leaves the caller's picture intact.</summary>
+    private static SKImage? Copy(SKImage image)
+    {
+        if (image.Width <= 0 || image.Height <= 0)
+            return null;
+        using var surface = SKSurface.Create(new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        if (surface is null)
+            return null;
+        surface.Canvas.DrawImage(image, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
+        surface.Canvas.Flush();
+        return surface.Snapshot();
     }
 
     private static SKImage? LoadUncached(string source, string? baseDirectory, int width, int height)
@@ -190,6 +325,8 @@ public class Image : Item
     private SKImage? _image;
     private double _progress;
     private int _loadGeneration;
+
+    public Image() => Theme.Changed += OnTheme;
 
     [QmlEnum]
     public enum FillModeValue
@@ -372,10 +509,17 @@ public class Image : Item
             _ = ImageLoader.LoadAsync(source, baseDir, w, h).ContinueWith(t =>
             {
                 var image = t.IsCompletedSuccessfully ? t.Result : null;
-                loop?.Post(() =>
+                if (loop is null)
+                {
+                    image?.Dispose();
+                    return;
+                }
+                loop.Post(() =>
                 {
                     if (generation == _loadGeneration && !IsDestroyed)
                         SetImage(image, image is null ? (int)StatusValue.Error : (int)StatusValue.Ready);
+                    else
+                        image?.Dispose();
                 });
             }, TaskScheduler.Default);
             return;
@@ -386,9 +530,27 @@ public class Image : Item
             Engine?.Log.Warn("scene", $"QML {TypeName}: Cannot open: {_source}");
     }
 
+    private void OnTheme()
+    {
+        if (!IsDestroyed && _source.StartsWith("image://", StringComparison.OrdinalIgnoreCase))
+            Reload();
+    }
+
+    protected override void OnDestroy()
+    {
+        Theme.Changed -= OnTheme;
+        _image?.Dispose();
+        _image = null;
+        base.OnDestroy();
+    }
+
     private void SetImage(SKImage? image, int status)
     {
-        _image = image;
+        if (!ReferenceEquals(_image, image))
+        {
+            _image?.Dispose();
+            _image = image;
+        }
         var dpr = Host?.DevicePixelRatio ?? 1;
         if (image is not null)
         {

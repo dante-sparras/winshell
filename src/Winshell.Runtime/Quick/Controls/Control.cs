@@ -637,6 +637,17 @@ public sealed class IconLabel : Item
 
     public string? BaseDirectory { get; set; }
 
+    public IconLabel() => Theme.Changed += OnTheme;
+
+    private void OnTheme()
+    {
+        if (IsDestroyed || !_iconSource.StartsWith("image://", StringComparison.OrdinalIgnoreCase))
+            return;
+        _icon?.Dispose();
+        _icon = null;
+        Update();
+    }
+
     public string Text
     {
         get => _text;
@@ -668,6 +679,7 @@ public sealed class IconLabel : Item
         _iconSource = source;
         _iconWidth = width;
         _iconHeight = height;
+        _icon?.Dispose();
         _icon = null;
         Relayout();
     }
@@ -722,6 +734,7 @@ public sealed class IconLabel : Item
         var key = (_iconSource, (int)Math.Ceiling(_iconWidth * dpr), (int)Math.Ceiling(_iconHeight * dpr));
         if (_icon is null || _iconKey != key)
         {
+            _icon?.Dispose();
             _iconKey = key;
             _icon = ImageLoader.IsRemote(_iconSource) ? null : ImageLoader.Load(_iconSource, BaseDirectory, key.Item2, key.Item3);
         }
@@ -780,6 +793,9 @@ public sealed class IconLabel : Item
 
     protected override void OnDestroy()
     {
+        Theme.Changed -= OnTheme;
+        _icon?.Dispose();
+        _icon = null;
         _layout?.Dispose();
         _layout = null;
         base.OnDestroy();

@@ -30,6 +30,7 @@ public sealed class Canvas : Item
     public Canvas()
     {
         _frame = RunPaint;
+        Theme.Changed += OnTheme;
     }
 
     [QmlEnum]
@@ -173,6 +174,8 @@ public sealed class Canvas : Item
             return image;
         var baseDir = CreationContext?.Imports?.Directory ?? Engine?.ShellDir;
         image = ImageLoader.IsRemote(url) ? null : ImageLoader.Load(url, baseDir, 0, 0);
+        if (_images.Remove(url, out var previous))
+            previous?.Dispose();
         _images[url] = image;
         return image;
     }
@@ -185,7 +188,19 @@ public sealed class Canvas : Item
     }
 
     [Qml]
-    public void UnloadImage(string url) => _images.Remove(url);
+    public void UnloadImage(string url)
+    {
+        if (_images.Remove(url, out var image))
+            image?.Dispose();
+    }
+
+    private void OnTheme()
+    {
+        if (IsDestroyed)
+            return;
+        foreach (var url in _images.Keys.Where(item => item.StartsWith("image://", StringComparison.OrdinalIgnoreCase)).ToArray())
+            UnloadImage(url);
+    }
 
     [Qml]
     public bool IsImageLoaded(string url) => _images.TryGetValue(url, out var i) && i is not null;
@@ -262,6 +277,9 @@ public sealed class Canvas : Item
 
     protected override void OnDestroy()
     {
+        Theme.Changed -= OnTheme;
+        foreach (var url in _images.Keys.ToArray())
+            UnloadImage(url);
         _surface?.Dispose();
         _surface = null;
         base.OnDestroy();
