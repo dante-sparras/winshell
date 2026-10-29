@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using Jint;
 using Jint.Native;
+using Jint.Native.Object;
 
 namespace Winshell.Runtime;
 
@@ -47,9 +48,13 @@ public static class ValueConverter
             case "var" or "variant" or "alias":
                 return value;
             case "date":
-                return value;
+                return Convert(value, typeof(DateTime), engine);
             case "point":
-                return value is QPoint ? value : value;
+                return Convert(value, typeof(QPoint), engine);
+            case "size":
+                return Convert(value, typeof(QSize), engine);
+            case "rect":
+                return Convert(value, typeof(QRect), engine);
             default:
                 if (value is null or QObject)
                     return value;
@@ -96,13 +101,15 @@ public static class ValueConverter
                 return parsed;
             return Enum.ToObject(target, ToInt(value, target.Name));
         }
-        if (target == typeof(QPoint) && value is IDictionary<string, object?> pd)
-            return new QPoint(ToDouble(Get(pd, "x"), "real"), ToDouble(Get(pd, "y"), "real"));
-        if (target == typeof(QSize) && value is IDictionary<string, object?> sd)
-            return new QSize(ToDouble(Get(sd, "width"), "real"), ToDouble(Get(sd, "height"), "real"));
-        if (target == typeof(QRect) && value is IDictionary<string, object?> rd)
-            return new QRect(ToDouble(Get(rd, "x"), "real"), ToDouble(Get(rd, "y"), "real"),
-                ToDouble(Get(rd, "width"), "real"), ToDouble(Get(rd, "height"), "real"));
+        if (target == typeof(QPoint) && TryObject(value, out var point))
+            return new QPoint(Member(point, "x"), Member(point, "y"));
+        if (target == typeof(QSize) && TryObject(value, out var size))
+            return new QSize(Member(size, "width"), Member(size, "height"));
+        if (target == typeof(QRect) && TryObject(value, out var rect))
+            return new QRect(Member(rect, "x"), Member(rect, "y"), Member(rect, "width"), Member(rect, "height"));
+        if (target == typeof(DateTime) && value is string text
+            && DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var date))
+            return date;
         if (target == typeof(TimeSpan))
             return TimeSpan.FromMilliseconds(ToDouble(value, "int"));
         if (value is null)
@@ -128,7 +135,25 @@ public static class ValueConverter
         throw new QmlException($"Unable to assign {Describe(value)} to {QmlTypeName(target)}");
     }
 
-    private static object? Get(IDictionary<string, object?> d, string key) => d.TryGetValue(key, out var v) ? v : null;
+    private static bool TryObject(object? value, out ObjectInstance obj)
+    {
+        if (value is JsValue js && js.IsObject() && !js.IsArray() && !js.IsDate())
+        {
+            obj = js.AsObject();
+            return true;
+        }
+        obj = null!;
+        return false;
+    }
+
+    /// <summary>A missing field is 0, as in a QML value type built from a partial object.</summary>
+    private static double Member(ObjectInstance obj, string key)
+    {
+        var member = obj.Get(key);
+        if (member.IsUndefined() || member.IsNull())
+            return 0;
+        return ToDouble(FromJs(member), "real");
+    }
 
     /// <summary>Replaces the items of a list property with the given value: one object, or an array of them.</summary>
     public static void AssignList(IQmlList list, object? value, QmlEngine? engine)
