@@ -524,8 +524,10 @@ public sealed class VisibleAreaGroup(Flickable owner) : QObject
 /// <summary>QtQuick's <c>ListView</c>. Delegates are made for every row and laid out in a line.</summary>
 [QmlSignal("add")]
 [QmlSignal("remove")]
-public sealed class ListView : Flickable, IPolishable
+public sealed class ListView : Flickable, IPolishable, IKeyTarget
 {
+    private const int KeyLeft = 0x01000012, KeyUp = 0x01000013, KeyRight = 0x01000014, KeyDown = 0x01000015;
+
     private object? _model;
     private QmlComponent? _delegate;
     private int _orientation = 2;
@@ -533,9 +535,10 @@ public sealed class ListView : Flickable, IPolishable
     private int _currentIndex = -1;
     private QmlComponent? _header, _footer, _highlight;
     private Item? _headerItem, _footerItem, _highlightItem;
-    private bool _keyNavigationEnabled = true;
+    private bool? _keyNavigationEnabled;
     private bool _keyNavigationWraps;
     private int _verticalLayoutDirection;
+    private int _layoutDirection;
     private bool _highlightFollowsCurrentItem = true;
     private readonly DelegateSet _set;
     private IObservableModel? _observed;
@@ -616,6 +619,10 @@ public sealed class ListView : Flickable, IPolishable
 
     [Qml] public int VerticalLayoutDirection { get { Track(); return _verticalLayoutDirection; } set { if (SetField(ref _verticalLayoutDirection, value)) Relayout(); } }
 
+    [Qml] public int LayoutDirection { get { Track(); return _layoutDirection; } set { if (SetField(ref _layoutDirection, value)) Relayout(); } }
+
+    [Qml] public int EffectiveLayoutDirection => LayoutDirection;
+
     [Qml]
     public int CurrentIndex
     {
@@ -661,7 +668,8 @@ public sealed class ListView : Flickable, IPolishable
 
     [Qml] public double PreferredHighlightEnd { get; set; }
 
-    [Qml] public bool KeyNavigationEnabled { get => _keyNavigationEnabled; set => _keyNavigationEnabled = value; }
+    /// <summary>Whether the arrow keys move the current item. Until it is set, it follows <c>interactive</c>, as in Qt.</summary>
+    [Qml] public bool KeyNavigationEnabled { get => _keyNavigationEnabled ?? Interactive; set => _keyNavigationEnabled = value; }
 
     [Qml] public bool KeyNavigationWraps { get => _keyNavigationWraps; set => _keyNavigationWraps = value; }
 
@@ -752,6 +760,61 @@ public sealed class ListView : Flickable, IPolishable
 
     [Qml]
     public void ForceLayout() => UpdatePolish();
+
+    /// <summary>Item 0 is at the bottom (or the right), and later items go up (or left).</summary>
+    private bool Reversed => _orientation == 2 ? _verticalLayoutDirection == 1 : _layoutDirection == 1;
+
+    /// <summary>The arrow keys along the list move the current item, and move focus with it when a row had focus.</summary>
+    public bool KeyPress(KeyEvent e)
+    {
+        if (!KeyNavigationEnabled || _set.Count == 0)
+            return false;
+        var step = (e.Key, _orientation == 2) switch
+        {
+            (KeyUp, true) or (KeyLeft, false) => -1,
+            (KeyDown, true) or (KeyRight, false) => 1,
+            _ => 0,
+        };
+        if (step == 0)
+            return false;
+        if (Reversed)
+            step = -step;
+        var next = _currentIndex + step;
+        if (next < 0 || next >= _set.Count)
+        {
+            if (!_keyNavigationWraps)
+                return false;
+            next = (next + _set.Count) % _set.Count;
+        }
+        CurrentIndex = next;
+        PositionViewAtIndex(next, (int)PositionMode.Contain);
+        FocusCurrentRow();
+        return true;
+    }
+
+    public bool KeyRelease(KeyEvent e) => false;
+
+    private void FocusCurrentRow()
+    {
+        if (Host is not Scene scene || CurrentItem is not { } current || !FocusNavigation.IsTabStop(current))
+            return;
+        for (var item = scene.FocusItem; item is not null; item = item.ParentItem)
+        {
+            if (item.ParentItem != ContentItem)
+                continue;
+            if (item != current && _set.Instances.Contains(item))
+                scene.MoveFocus(current);
+            return;
+        }
+    }
+
+    protected override void OnGeometryChanged()
+    {
+        base.OnGeometryChanged();
+        // Reversed rows hug the far end of the view, so they move when it resizes.
+        if (Reversed)
+            Relayout();
+    }
 
     public override void ComponentComplete()
     {
@@ -849,27 +912,41 @@ public sealed class ListView : Flickable, IPolishable
                 _footerItem.SetLayoutX(pos);
             pos += vertical ? _footerItem.Height : _footerItem.Width;
         }
+        var reversed = Reversed;
+        var view = vertical ? Height : Width;
+        if (reversed)
+        {
+            // Mirrors the layout: the header and item 0 go at the far end, of the content or of the view when the
+            // content is shorter, and later items stack back from there.
+            var end = Math.Max(pos, view);
+            IEnumerable<Item?> laid = [_headerItem, .. _set.Instances.OfType<Item>().Where(i => i.IsVisibleFlag), _footerItem];
+            foreach (var item in laid)
+            {
+                if (item is null)
+                    continue;
+                if (vertical)
+                    item.SetLayoutY(end - item.Y - item.Height);
+                else
+                    item.SetLayoutX(end - item.X - item.Width);
+            }
+        }
+        // Reversed, the view keeps its distance from the far end as rows come and go, so it opens on item 0.
+        var grew = pos - (vertical ? ContentHeight : ContentWidth);
         if (vertical)
         {
-            if (_verticalLayoutDirection == 1 && pos < Height)
-            {
-                // Bottom to top: rows start at the bottom of the view.
-                var shift = Height - pos;
-                foreach (var o in _set.Instances)
-                {
-                    if (o is Item item)
-                        item.SetLayoutY(item.Y + shift);
-                }
-            }
             ContentHeight = pos;
             ImplicitHeight = pos;
             ImplicitWidth = maxCross;
+            if (reversed && grew != 0)
+                SetContentY(Math.Clamp(ContentY + grew, 0, Math.Max(0, pos - view)));
         }
         else
         {
             ContentWidth = pos;
             ImplicitWidth = pos;
             ImplicitHeight = maxCross;
+            if (reversed && grew != 0)
+                SetContentX(Math.Clamp(ContentX + grew, 0, Math.Max(0, pos - view)));
         }
         UpdateHighlight();
     }
