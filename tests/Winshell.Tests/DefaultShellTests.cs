@@ -17,10 +17,12 @@ public class DefaultShellTests
         Assert.Contains("sequence: \"Win\"", shell);
         Assert.Contains("toggleStart", shell);
 
-        var bar = Read(assembly, "DefaultShell/Bar.qml");
-        Assert.Contains("toggleLauncher", bar);
-        Assert.Contains("Accessible.name: \"Start\"", bar);
-        Assert.Contains("anchors.bottom", bar);
+        // The taskbar's Start hook opens it, and the taskbar shows Start pressed while it is open.
+        Assert.Contains("onStartRequested: launcher.toggle()", shell);
+        Assert.Contains("startOpen: launcher.visible", shell);
+        var taskbar = Read(assembly, "DefaultShell/Taskbar.qml");
+        Assert.Contains("label: \"Start\"", taskbar);
+        Assert.Contains("bottom: true", taskbar);
 
         var launcher = Read(assembly, "DefaultShell/Launcher.qml");
         Assert.Contains("showIcons: launcher.visible", launcher);

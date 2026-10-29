@@ -26,15 +26,38 @@ ShellRoot {
   }
 
   NotificationListener { id: notifications }
+  TaskbarPins { id: taskbarPins }
 
   Variants {
     id: bars
     model: Shell.screens
 
-    Bar {
+    // The taskbar's Start and Search hooks open the launcher and Windows search.
+    Taskbar {
+      id: taskbar
       required property var modelData
       screen: modelData
+      pins: taskbarPins
       notificationListener: notifications
+
+      readonly property bool launcherOpen: launcher.visible
+      function openLauncher() { launcher.open() }
+      function closeLauncher() { launcher.close() }
+
+      startOpen: launcher.visible
+      onStartRequested: launcher.toggle()
+      onSearchRequested: Shell.execDetached(["explorer.exe", "search-ms:"])
+
+      // In the middle of the screen over a centered taskbar, as Windows 11 opens Start; from Start otherwise.
+      Launcher {
+        id: launcher
+        anchor.window: taskbar
+        anchor.rect.x: taskbar.centered ? taskbar.width / 2 : taskbar.startX
+        anchor.rect.y: 0
+        anchor.edges: taskbar.centered ? Edges.Top : Edges.Top | Edges.Left
+        anchor.gravity: taskbar.centered ? Edges.Top : Edges.Top | Edges.Right
+        anchor.margins.top: 12
+      }
     }
   }
 
