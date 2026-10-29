@@ -14,14 +14,17 @@ PopupWindow {
   WindowEffects.corners: WindowEffects.RoundCorners
 
   // The Bluetooth singleton starts with the shell. Enumeration waits until this flyout is open.
-  Component.onCompleted: if (!visible) Bluetooth.stopMonitoring()
+  // A host that does not enumerate has no monitor methods. Calling a missing one is a scene error.
+  function setBluetoothMonitoring(on) {
+    var fn = on ? Bluetooth.startMonitoring : Bluetooth.stopMonitoring
+    if (typeof fn === "function")
+      fn()
+  }
+  Component.onCompleted: if (!visible) setBluetoothMonitoring(false)
   onVisibleChanged: {
     content.page = ""
     content.editing = false
-    if (visible)
-      Bluetooth.startMonitoring()
-    else
-      Bluetooth.stopMonitoring()
+    setBluetoothMonitoring(visible)
   }
 
   QuickSettingsContent {
