@@ -40,7 +40,7 @@ internal static class UpdateInstall
         var placed = new List<string>();
         try
         {
-            foreach (var file in Directory.EnumerateFiles(staged, "*", SearchOption.AllDirectories))
+            foreach (var file in Files(staged))
             {
                 var relative = Path.GetRelativePath(staged, file);
                 var target = Path.Combine(installDir, relative);
@@ -72,6 +72,95 @@ internal static class UpdateInstall
     }
 
     /// <summary>
+    /// Hashes the saved zip again, extracts that zip, and copies the extract. A staged folder whose bytes were
+    /// swapped after the download is not what gets copied. Returns null when it is in place, or why not.
+    /// </summary>
+    public static string? ApplyVerified(string updatesDir, string staged, string installDir) =>
+        ApplyVerified(updatesDir, staged, installDir, Environment.IsPrivilegedProcess);
+
+    /// <summary>The same install, with elevation supplied so a test can cover it without an elevated process.</summary>
+    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, bool privileged)
+    {
+        // The update was saved by this user at medium integrity; an elevated process must not run what that user can rewrite.
+        if (privileged)
+            return "An elevated Winshell does not install updates. Start Winshell normally to install it.";
+        var version = Path.GetFileName(staged);
+        var zip = UpdateTrust.ZipPath(updatesDir, version);
+        var digestPath = UpdateTrust.DigestPath(updatesDir, version);
+        if (!File.Exists(zip) || !File.Exists(digestPath))
+        {
+            DeleteStaged(updatesDir, staged, version);
+            return "The staged update has no saved digest, so Winshell will not copy it.";
+        }
+        var fresh = UpdateTrust.ExtractPath(updatesDir);
+        try
+        {
+            var digest = File.ReadAllText(digestPath).Trim();
+            string? mismatch = null;
+            // One handle hashes and extracts, and FileShare.Read keeps anyone from writing the zip in between.
+            using (var stream = new FileStream(zip, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var actual = UpdateTrust.Hash(stream);
+                if (!string.Equals(actual, digest, StringComparison.OrdinalIgnoreCase))
+                {
+                    mismatch = $"The staged update's SHA-256 is {actual}, but the saved digest says {digest.ToLowerInvariant()}.";
+                }
+                else
+                {
+                    stream.Position = 0;
+                    System.IO.Compression.ZipFile.ExtractToDirectory(stream, fresh);
+                }
+            }
+            if (mismatch is not null)
+            {
+                DeleteStaged(updatesDir, staged, version);
+                return mismatch;
+            }
+            var error = Apply(fresh, installDir);
+            if (error is not null)
+                return error;
+            DeleteStaged(updatesDir, staged, version);
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return e.Message;
+        }
+        finally
+        {
+            if (Directory.Exists(fresh))
+                TryDeleteDirectory(fresh);
+        }
+    }
+
+    private static void DeleteStaged(string updatesDir, string staged, string version)
+    {
+        TryDeleteDirectory(staged);
+        UpdateTrust.Discard(updatesDir, version);
+    }
+
+    /// <summary>Every file under <paramref name="root"/>. A link fails the copy instead of being followed.</summary>
+    private static List<string> Files(string root)
+    {
+        var files = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            foreach (var child in Directory.EnumerateFileSystemEntries(pending.Pop()))
+            {
+                if ((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException($"'{Path.GetRelativePath(root, child)}' is a link.");
+                if ((File.GetAttributes(child) & FileAttributes.Directory) != 0)
+                    pending.Push(child);
+                else
+                    files.Add(child);
+            }
+        }
+        return files;
+    }
+
+    /// <summary>
     /// Deletes the files an update replaced, and updates that are no newer than <paramref name="current"/> or never
     /// finished downloading. Whatever another running Winshell still holds stays until a later start.
     /// </summary>
@@ -84,6 +173,7 @@ internal static class UpdateInstall
                 TryDeleteDirectory(dir);
             TryDeleteDirectory(old);
         }
+        UpdateTrust.Clean(updatesDir, current);
         if (!Directory.Exists(updatesDir))
             return;
         foreach (var dir in Directory.EnumerateDirectories(updatesDir))
