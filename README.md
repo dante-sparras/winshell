@@ -4,12 +4,18 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Install
 
-Winshell runs on Windows 11.
+Winshell runs on Windows 11. Build it from source. You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
 
-- **winget:** `winget install DanteSparras.Winshell`, once winget has accepted the package, then run `winshell`.
-- **Portable:** download `winshell-<version>-win-x64.zip` (or `win-arm64`) from the [latest release](https://github.com/dante-sparras/winshell/releases/latest), unzip it anywhere and run `winshell.exe`. `SHA256SUMS.txt` on the release has each file's hash.
+```powershell
+git clone https://github.com/dante-sparras/winshell.git
+cd winshell
+dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
+```
 
-Both are self-contained: no .NET install is needed. Both update themselves from GitHub Releases, unless you turn that off in Winshell Settings > About. See [Winshell updates](docs/updates.md). Releases will be signed through SignPath Foundation once its project for Winshell is approved; see the [Code signing policy](docs/code-signing-policy.md).
+That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed. [Getting started](docs/guide/getting-started.md) covers the first run.
+
+> [!NOTE]
+> 0.5.0, the current release, has no download. The release after it will carry a self-contained build, which needs no .NET install, on its [GitHub release page](https://github.com/dante-sparras/winshell/releases): `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. A winget package, `winget install DanteSparras.Winshell`, follows once winget has accepted it. Those builds update themselves from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md). Releases will be signed through SignPath Foundation once its project for Winshell is approved; see the [Code signing policy](docs/code-signing-policy.md).
 
 ## Documentation
 

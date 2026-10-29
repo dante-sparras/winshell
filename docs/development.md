@@ -43,7 +43,7 @@ A running shell reads these. None is needed to build or test.
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
 | `WINSHELL_NO_RELOAD_POPUP` | `1` hides Winshell's notice for a configuration that failed to load. A shell can hide it for one failed reload with `Shell.inhibitReloadPopup()` in `Shell.onReloadFailed`. The notice for a window that failed still shows. |
-| `WINLAND_PIPE` | The named pipe `Winshell.Winland` connects to, instead of `winland-<session id>`. |
+| `WINLAND_PIPE` | The named pipe `Winshell.Winland` connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 `WINSHELL_TEST_CRASH` is read only for `FatalCrashTests`: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. Never set it otherwise.
 
