@@ -24,6 +24,18 @@ public class SurfaceCrashTests
         }
     }
 
+    /// <summary>An item each of whose paints fails as a lost graphics device fails Present.</summary>
+    public sealed class DeviceLoser : Item
+    {
+        public static int Paints;
+
+        public override void Paint(SKCanvas canvas, PaintContext context)
+        {
+            Interlocked.Increment(ref Paints);
+            throw new SharpGen.Runtime.SharpGenException(SharpGen.Runtime.Result.Fail);
+        }
+    }
+
     private const string Config = """
         import Winshell
         import Crashy
@@ -88,6 +100,66 @@ public class SurfaceCrashTests
             var report = File.ReadAllText(Assert.Single(Directory.GetFiles(crashes.Folder)));
             Assert.Contains("Where: PanelWindow in shell.qml", report, StringComparison.Ordinal);
             Assert.Contains("System.InvalidOperationException: the first paint fails", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(dir, true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void Frames_the_device_cannot_draw_write_one_report_and_keep_the_window()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var root = Path.Combine(dir, "shell.qml");
+        File.WriteAllText(root, Config.Replace("PaintThrower", "DeviceLoser", StringComparison.Ordinal));
+        var log = new Log { Sink = (_, _, _) => { } };
+        DeviceLoser.Paints = 0;
+        try
+        {
+            using var loop = new WinEventLoop { Log = log };
+            using var platform = new WindowsPlatform(loop, log);
+            var crashes = new CrashReports(Path.Combine(dir, "crashes"));
+            using var host = new ShellHost(root, loop, platform, log, () =>
+            {
+                var modules = StandardModules.Create();
+                modules.Module("Crashy").Type<DeviceLoser>("DeviceLoser");
+                return modules;
+            })
+            { WatchFiles = false, Crashes = crashes };
+            Assert.True(host.Start());
+            var window = Assert.Single(platform.Windows);
+            var handle = window.Handle;
+            var scene = ((ShellWindow)window.Client).Scene;
+
+            // Ask for a frame every 20 ms, as an animation would, until ten frames have failed.
+            void Next()
+            {
+                if (DeviceLoser.Paints >= 10)
+                {
+                    loop.Schedule(TimeSpan.FromMilliseconds(100), () => loop.Quit(0));
+                    return;
+                }
+                scene.RequestUpdate();
+                loop.Schedule(TimeSpan.FromMilliseconds(20), Next);
+            }
+            loop.Schedule(TimeSpan.FromMilliseconds(20), Next);
+            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(1));
+            Assert.Equal(0, loop.Run());
+
+            Assert.InRange(DeviceLoser.Paints, 10, int.MaxValue);
+            Assert.Equal(handle, Assert.Single(platform.Windows).Handle);
+            var report = File.ReadAllText(Assert.Single(Directory.GetFiles(crashes.Folder)));
+            Assert.Contains("Where: PanelWindow in shell.qml", report, StringComparison.Ordinal);
+            Assert.Contains(" drawing", report, StringComparison.Ordinal);
+            Assert.Contains("SharpGen.Runtime.SharpGenException", report, StringComparison.Ordinal);
         }
         finally
         {

@@ -50,7 +50,7 @@ public sealed class CrashTests : IDisposable
     {
         Directory.CreateDirectory(_folder);
         var log = Path.Combine(_folder, "log.txt");
-        File.WriteAllLines(log, Enumerable.Range(1, 100).Select(i => $"line {i}"));
+        File.WriteAllLines(log, Enumerable.Range(1, 100).Select(i => $"12:00:00.000  INFO window: line {i}"));
         var crashes = new CrashReports(Path.Combine(_folder, "crashes")) { ShellId = "my-shell", ConfigPath = @"C:\config\shell.qml", LogPath = log };
         CrashReport? raised = null;
         crashes.Written += r => raised = r;

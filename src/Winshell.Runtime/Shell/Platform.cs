@@ -148,6 +148,12 @@ public interface IWindowClient
     /// once per backend; the window disposes that backend and makes another.
     /// </summary>
     void OnFailed(Exception error);
+
+    /// <summary>
+    /// The graphics device could not draw a frame, and the frame was skipped. Making the window again would not help,
+    /// since every window draws with the same device, so it stays; this is for the crash report. Called on the loop.
+    /// </summary>
+    void OnDrawFailed(Exception error);
 }
 
 /// <summary>The platform: screens and windows.</summary>

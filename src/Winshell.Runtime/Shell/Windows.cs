@@ -266,17 +266,26 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
     protected override void OnReload(QObject? oldInstance)
     {
         var old = oldInstance as ShellWindow;
-        // Take over the old shell's native window when it is the same kind, so a reload does not flicker.
-        if (old is not null && old.Kind == Kind && old._backend is not null && Engine?.GetService<IShellPlatform>() is not null)
+        // A native window that cannot be made or placed fails like one that throws later: it is reported and made
+        // again after a backoff, and the shell's other windows still open.
+        try
         {
-            _backend = old.DetachBackend(this);
+            // Take over the old shell's native window when it is the same kind, so a reload does not flicker.
+            if (old is not null && old.Kind == Kind && old._backend is not null && Engine?.GetService<IShellPlatform>() is not null)
+            {
+                _backend = old.DetachBackend(this);
+            }
+            else
+            {
+                CreateBackend();
+            }
+            OnBackendCreated();
+            Emit("windowConnected");
         }
-        else
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
-            CreateBackend();
+            OnFailed(e);
         }
-        OnBackendCreated();
-        Emit("windowConnected");
         ReloadChildrenRecursive(this, oldInstance);
         foreach (var child in Scene.Root.ChildItems)
             ReloadRecursive(child, old?.Scene.Root);
@@ -498,6 +507,14 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
             engine.Log.Info("window", $"Wrote a crash report to \"{report.Path}\"");
         if (delay is not null)
             _restartTimer = engine.Loop.Schedule(delay.Value, Restart);
+    }
+
+    public void OnDrawFailed(Exception error)
+    {
+        if (IsDestroyed || Engine is not { } engine)
+            return;
+        if (engine.GetService<CrashReports>()?.WriteOnce(SurfaceName + " drawing", error) is { } report)
+            engine.Log.Info("window", $"Wrote a crash report to \"{report.Path}\"");
     }
 
     private void Restart()

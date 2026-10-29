@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Winshell.Runtime.Shell;
 
@@ -9,16 +11,23 @@ public sealed record CrashReport(string Path, string Where, Exception Error, boo
 
 /// <summary>
 /// Writes crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent anywhere.
-/// A report says where the runtime failed, the exception with its stack, and the end of the instance's log.
+/// A report says where the runtime failed, the exception with its stack, and the end of the instance's log, with
+/// the secrets <see cref="CrashRedaction"/> recognizes taken out and what scripts logged left out. Several instances
+/// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted.
 /// </summary>
-public sealed class CrashReports(string folder)
+public sealed partial class CrashReports(string folder)
 {
+    private const string Heading = "Winshell crash report";
     private const int LogLines = 40;
+    private const int LogBytes = 16 * 1024;
+    private const int ErrorFileExists = 80;
+    private static readonly object TimeGate = new();
+    private static long _lastTicks;
     private readonly object _lock = new();
     private readonly HashSet<string> _reported = [];
 
     /// <summary>The folder reports go to: <see cref="ShellLocations.CrashRoot"/> for <c>winshell.exe</c>.</summary>
-    public string Folder { get; } = folder;
+    public string Folder { get; } = Path.GetFullPath(folder);
 
     /// <summary>How many reports the folder keeps. Writing one deletes the oldest beyond this.</summary>
     public int Keep { get; init; } = 50;
@@ -30,60 +39,143 @@ public sealed class CrashReports(string folder)
     /// <summary>The instance's log, whose last lines go into each report. Empty when there is none.</summary>
     public string LogPath { get; set; } = "";
 
+    /// <summary>The time a report is written at. Tests set it.</summary>
+    internal Func<DateTimeOffset> Clock { get; init; } = () => DateTimeOffset.Now;
+
     /// <summary>Raised after a report is written, on the thread that wrote it.</summary>
     public event Action<CrashReport>? Written;
 
-    /// <summary>Writes a report. Returns null when the folder cannot be written; a report must never crash the shell.</summary>
+    /// <summary>
+    /// Writes a report. Returns null when the folder cannot be written. Nothing it does throws: it runs when
+    /// something else already failed, sometimes as the process ends.
+    /// </summary>
     public CrashReport? Write(string where, Exception error, bool fatal = false)
     {
-        CrashReport report;
+        CrashReport? report;
         lock (_lock)
-        {
-            var time = DateTimeOffset.Now;
-            try
-            {
-                Directory.CreateDirectory(Folder);
-                var path = NewPath(time, where);
-                File.WriteAllText(path, Format(time, where, error, fatal));
-                report = new CrashReport(path, where, error, fatal);
-                Prune();
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return null;
-            }
-        }
-        Written?.Invoke(report);
+            report = WriteLocked(where, error, fatal);
+        Raise(report);
         return report;
     }
 
     /// <summary>
-    /// Writes a report unless one was already written for the same exception thrown from the same place, so work
-    /// that fails each time it runs, such as a timer, writes one report rather than filling the disk.
+    /// Writes a report unless one was already written for the same exceptions thrown along the same stacks from the
+    /// same place, so work that fails each time it runs, such as a timer, writes one report rather than filling
+    /// the disk. A report that could not be written is tried again the next time.
     /// </summary>
     public CrashReport? WriteOnce(string where, Exception error)
     {
+        CrashReport? report;
         lock (_lock)
         {
-            if (!_reported.Add(Signature(where, error)))
+            var fingerprint = Fingerprint(where, error);
+            if (_reported.Contains(fingerprint))
                 return null;
+            report = WriteLocked(where, error, fatal: false);
+            if (report is not null)
+                _reported.Add(fingerprint);
         }
-        return Write(where, error);
+        Raise(report);
+        return report;
     }
 
-    private static string Signature(string where, Exception error)
+    private void Raise(CrashReport? report)
     {
-        var frame = error.StackTrace?.Split('\n', 2)[0].Trim() ?? "";
-        return $"{where}|{error.GetType().FullName}|{frame}";
+        if (report is null)
+            return;
+        try
+        {
+            Written?.Invoke(report);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+        }
     }
 
-    private string NewPath(DateTimeOffset time, string where)
+    /// <summary>
+    /// What makes two failures the same: where, and each exception's type and full stack, inner and aggregated ones
+    /// included. Messages are left out, since they often carry values that change from one run to the next.
+    /// </summary>
+    internal static string Fingerprint(string where, Exception error)
     {
-        var name = time.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture) + "-" + Slug(where);
-        var path = System.IO.Path.Combine(Folder, name + ".txt");
-        for (var i = 2; File.Exists(path); i++)
-            path = System.IO.Path.Combine(Folder, $"{name}-{i}.txt");
-        return path;
+        var text = new StringBuilder(where);
+        void Add(Exception e, int depth)
+        {
+            text.Append('\n').Append(depth).Append(' ').Append(e.GetType().FullName).Append('\n').Append(e.StackTrace);
+            if (depth >= 16)
+                return;
+            if (e is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions)
+                    Add(inner, depth + 1);
+            }
+            else if (e.InnerException is { } inner)
+            {
+                Add(inner, depth + 1);
+            }
+        }
+        Add(error, 0);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+    }
+
+    private CrashReport? WriteLocked(string where, Exception error, bool fatal)
+    {
+        try
+        {
+            var now = Clock();
+            var text = Format(now, where, error, fatal);
+            Directory.CreateDirectory(Folder);
+            var ticks = NextTicks(now.UtcTicks);
+            // The name is unique to this process and instant; another instance writing into the folder at the same
+            // time cannot take it over, since each file is created only if it is not there yet.
+            for (var attempt = 0; ; attempt++)
+            {
+                var path = Path.Combine(Folder, FileName(ticks, where));
+                try
+                {
+                    using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                    using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                        writer.Write(text);
+                    Prune(path);
+                    return new CrashReport(path, where, error, fatal);
+                }
+                catch (IOException e) when ((e.HResult & 0xFFFF) == ErrorFileExists && attempt < 16)
+                {
+                    ticks = NextTicks(ticks);
+                }
+            }
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The instant of a new report: never the same as, or before, the last one this process wrote.</summary>
+    private static long NextTicks(long utcTicks)
+    {
+        lock (TimeGate)
+        {
+            _lastTicks = Math.Max(utcTicks, _lastTicks + 1);
+            return _lastTicks;
+        }
+    }
+
+    /// <summary><c>crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-qml.txt</c>: the UTC instant, the process, where.</summary>
+    private static string FileName(long utcTicks, string where) =>
+        $"crash-{new DateTime(utcTicks, DateTimeKind.Utc).ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-{Environment.ProcessId}-{Slug(where)}.txt";
+
+    [GeneratedRegex(@"^crash-(?<time>\d{8}-\d{6}-\d{7})Z-(?<pid>\d{1,10})-[a-z0-9\-]{1,40}\.txt$")]
+    private static partial Regex ReportName();
+
+    /// <summary>The order reports are kept in, newest first: the UTC instant in the name, then the process.</summary>
+    private static (long Ticks, long Pid)? OrderOf(string name)
+    {
+        var m = ReportName().Match(name);
+        if (!m.Success || !DateTime.TryParseExact(m.Groups["time"].Value, "yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var time))
+            return null;
+        return (time.Ticks, long.Parse(m.Groups["pid"].Value, CultureInfo.InvariantCulture));
     }
 
     /// <summary>A file name part: lowercase letters and digits, the rest dashes.</summary>
@@ -106,8 +198,9 @@ public sealed class CrashReports(string folder)
     private string Format(DateTimeOffset time, string where, Exception error, bool fatal)
     {
         var text = new StringBuilder();
-        text.AppendLine("Winshell crash report");
-        text.AppendLine("This file stays on this PC. Attach it to a bug report if you like; read it first, it has the paths of your config.");
+        text.AppendLine(Heading);
+        text.AppendLine("This file stays on this PC. Passwords, tokens and keys Winshell recognizes are taken out, and what scripts logged is left out,");
+        text.AppendLine("but read it before you attach it to a bug report: it has the paths of your config.");
         text.AppendLine();
         text.AppendLine(CultureInfo.InvariantCulture, $"Time: {time:yyyy-MM-dd HH:mm:ss.fff zzz}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Winshell: {ProductVersion.Current.Text}");
@@ -118,58 +211,140 @@ public sealed class CrashReports(string folder)
             text.AppendLine(CultureInfo.InvariantCulture, $"Shell id: {ShellId}");
         if (ConfigPath.Length > 0)
             text.AppendLine(CultureInfo.InvariantCulture, $"Config: {ConfigPath}");
-        text.AppendLine(CultureInfo.InvariantCulture, $"Where: {where}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Where: {CrashRedaction.Redact(where)}");
         text.AppendLine(fatal ? "Winshell closed: yes" : "Winshell closed: no");
         text.AppendLine();
         text.AppendLine("Exception");
-        text.AppendLine(error.ToString());
-        var log = LogTail();
-        if (log.Count > 0)
+        text.AppendLine(CrashRedaction.Redact(Describe(error)));
+        var (log, omitted) = LogTail();
+        if (log.Count > 0 || omitted > 0)
         {
             text.AppendLine();
             text.AppendLine(CultureInfo.InvariantCulture, $"Log: {LogPath}, last {log.Count} lines");
+            if (omitted > 0)
+                text.AppendLine(CultureInfo.InvariantCulture, $"({omitted} lines of script output left out)");
             foreach (var line in log)
                 text.AppendLine(line);
         }
         return text.ToString();
     }
 
-    /// <summary>The last lines of the log. Only its end is read, however long it has grown.</summary>
-    private List<string> LogTail()
+    /// <summary>The exception as .NET writes it, or its type and message when writing it throws too.</summary>
+    private static string Describe(Exception error)
     {
-        if (LogPath.Length == 0 || !File.Exists(LogPath))
-            return [];
         try
         {
-            using var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            stream.Seek(Math.Max(0, stream.Length - 16 * 1024), SeekOrigin.Begin);
-            using var reader = new StreamReader(stream);
-            var lines = reader.ReadToEnd().Split('\n').Select(l => l.TrimEnd('\r')).ToList();
-            // The first line may start halfway; the last is empty after the final newline.
-            if (stream.Length > 16 * 1024 && lines.Count > 0)
-                lines.RemoveAt(0);
-            if (lines.Count > 0 && lines[^1].Length == 0)
-                lines.RemoveAt(lines.Count - 1);
-            return lines.TakeLast(LogLines).ToList();
+            return error.ToString();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
-            return [];
+            return $"{error.GetType().FullName}: (the exception could not be written: {e.GetType().Name})";
         }
     }
 
-    private void Prune()
+    // A log line as winshell.exe writes it: "12:00:00.000  INFO window: message", or no category for the lines
+    // QML's console writes. Lines that do not start like this continue the line before.
+    [GeneratedRegex(@"^\d{2}:\d{2}:\d{2}\.\d{3} +(?:DEBUG|INFO|WARN|ERROR|FATAL)(?<category> [^\s:]+)?:")]
+    private static partial Regex LogLine();
+
+    /// <summary>
+    /// The last lines of the log, cleaned. Lines without a category are what a configuration's scripts printed,
+    /// which can be anything, so they are left out and counted. Only the end of the log is read.
+    /// </summary>
+    private (List<string> Lines, int Omitted) LogTail()
     {
-        var reports = new DirectoryInfo(Folder).GetFiles("*.txt").OrderByDescending(f => f.Name, StringComparer.Ordinal).ToList();
-        foreach (var old in reports.Skip(Keep))
+        if (LogPath.Length == 0 || !File.Exists(LogPath))
+            return ([], 0);
+        List<string> lines;
+        try
         {
-            try
+            using var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var start = Math.Max(0, stream.Length - LogBytes);
+            stream.Seek(start, SeekOrigin.Begin);
+            using var reader = new StreamReader(stream);
+            lines = reader.ReadToEnd().Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+            // The first line may start halfway; the last is empty after the final newline.
+            if (start > 0 && lines.Count > 0)
+                lines.RemoveAt(0);
+            if (lines.Count > 0 && lines[^1].Length == 0)
+                lines.RemoveAt(lines.Count - 1);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return ([], 0);
+        }
+        var kept = new List<string>();
+        var omitted = 0;
+        // Until the first line that says what it is, a line cannot be told from script output.
+        var keep = false;
+        foreach (var line in lines)
+        {
+            if (LogLine().Match(line) is { Success: true } m)
+                keep = m.Groups["category"].Success;
+            if (keep)
+                kept.Add(CrashRedaction.Redact(line));
+            else
+                omitted++;
+        }
+        var tail = kept.TakeLast(LogLines).ToList();
+        return (tail, omitted);
+    }
+
+    /// <summary>
+    /// Deletes the oldest reports beyond <see cref="Keep"/>. Only files named and headed as Winshell reports are
+    /// counted or deleted, and nothing is deleted when the folder is a link or junction to somewhere else.
+    /// </summary>
+    private void Prune(string written)
+    {
+        try
+        {
+            var folder = new DirectoryInfo(Folder);
+            if (folder.Attributes.HasFlag(FileAttributes.ReparsePoint) || folder.LinkTarget is not null)
+                return;
+            var reports = new List<(FileInfo File, (long Ticks, long Pid) Order)>();
+            foreach (var file in folder.EnumerateFiles("crash-*.txt", SearchOption.TopDirectoryOnly))
             {
-                old.Delete();
+                if (file.Attributes.HasFlag(FileAttributes.ReparsePoint)
+                    || !string.Equals(file.DirectoryName, Folder, StringComparison.OrdinalIgnoreCase)
+                    || OrderOf(file.Name) is not { } order
+                    || !StartsWithHeading(file.FullName))
+                    continue;
+                reports.Add((file, order));
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            var old = reports
+                .OrderByDescending(r => r.Order.Ticks)
+                .ThenByDescending(r => r.Order.Pid)
+                .ThenByDescending(r => r.File.Name, StringComparer.Ordinal)
+                .Skip(Keep);
+            foreach (var (file, _) in old)
             {
+                if (string.Equals(file.FullName, written, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try
+                {
+                    file.Delete();
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                }
             }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static bool StartsWithHeading(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadLine() == Heading;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 }

@@ -45,6 +45,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private string _screenId = "";
     private bool _placing;
     private bool _failed;
+    private bool _drawFailureReported;
 
     public Win32Window(WindowsPlatform platform, WindowKind kind, IWindowClient client)
     {
@@ -60,20 +61,29 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         _automation = new WindowAutomation(this, client.Scene, platform.Loop, platform.Log);
         _self = GCHandle.Alloc(this);
         Win32.SetWindowLongPtr(Handle, Win32.GWLP_USERDATA, GCHandle.ToIntPtr(_self));
-        _scale = Win32.GetDpiForWindow(Handle) / 96.0;
-        // The DWM backdrop shows wherever the content is transparent.
-        var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-        Win32.DwmExtendFrameIntoClientArea(Handle, margins);
-        if (kind != WindowKind.Floating)
+        // A window that could not be finished is destroyed here; its client never gets it to dispose.
+        try
         {
-            // Panels and popups appear without the Windows fade, as layer surfaces do.
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_TRANSITIONS_FORCEDISABLED, 1, 4);
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_EXCLUDED_FROM_PEEK, 1, 4);
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, 1, 4);
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, Win32.DWMWA_COLOR_NONE, 4);
+            _scale = Win32.GetDpiForWindow(Handle) / 96.0;
+            // The DWM backdrop shows wherever the content is transparent.
+            var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            Win32.DwmExtendFrameIntoClientArea(Handle, margins);
+            if (kind != WindowKind.Floating)
+            {
+                // Panels and popups appear without the Windows fade, as layer surfaces do.
+                Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_TRANSITIONS_FORCEDISABLED, 1, 4);
+                Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_EXCLUDED_FROM_PEEK, 1, 4);
+                Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, 1, 4);
+                Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, Win32.DWMWA_COLOR_NONE, 4);
+            }
+            _surface = new CompositionSurface(Handle);
+            _cursor = Win32.LoadCursorW(0, Win32.IDC_ARROW);
         }
-        _surface = new CompositionSurface(Handle);
-        _cursor = Win32.LoadCursorW(0, Win32.IDC_ARROW);
+        catch
+        {
+            Dispose();
+            throw;
+        }
     }
 
     public nint Handle { get; private set; }
@@ -623,6 +633,16 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         catch (SharpGen.Runtime.SharpGenException e)
         {
             _platform.Log.Error("render", $"Could not draw a frame: {e.Message}");
+            // Once for this window: a lost device fails every frame after it.
+            if (!_drawFailureReported)
+            {
+                _drawFailureReported = true;
+                _platform.Loop.Post(() =>
+                {
+                    if (Handle != 0)
+                        _client.OnDrawFailed(e);
+                });
+            }
         }
         catch (Exception e)
         {

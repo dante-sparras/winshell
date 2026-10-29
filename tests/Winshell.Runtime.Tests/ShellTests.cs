@@ -20,8 +20,22 @@ public sealed class FakePlatform : IShellPlatform
 
     public void ChangeScreens() => ScreensChanged?.Invoke();
 
+    /// <summary>How many of the next native windows fail to be made, as a failing CreateWindowEx would.</summary>
+    public int FailCreations { get; set; }
+
+    /// <summary>How many of the next panel placements throw.</summary>
+    public int FailPlacements { get; set; }
+
+    public int Creations { get; private set; }
+
     public IWindowBackend CreateWindow(WindowKind kind, IWindowClient client)
     {
+        Creations++;
+        if (FailCreations > 0)
+        {
+            FailCreations--;
+            throw new InvalidOperationException("the native window could not be made");
+        }
         var w = new FakeWindow(kind, client, this);
         Windows.Add(w);
         return w;
@@ -52,6 +66,11 @@ public sealed class FakeWindow(WindowKind kind, IWindowClient client, FakePlatfo
 
     public void SetPanel(PanelPlacement placement)
     {
+        if (platform.FailPlacements > 0)
+        {
+            platform.FailPlacements--;
+            throw new InvalidOperationException("the panel could not be placed");
+        }
         Panel = placement;
         var screen = placement.Screen?.Geometry ?? new QRect(0, 0, 1920, 1080);
         var w = placement.Anchors.HasFlag(Edges.Left) && placement.Anchors.HasFlag(Edges.Right) ? screen.Width - placement.MarginLeft - placement.MarginRight : placement.Width;
