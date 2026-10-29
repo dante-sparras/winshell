@@ -680,7 +680,12 @@ public class Item : QObject
     }
 
     /// <summary>Schedules a repaint of the window this item is in.</summary>
-    public void Update() => _host?.RequestUpdate();
+    public void Update()
+    {
+        if (_host is Scene scene)
+            scene.NotePointerTreeChanged(Engine?.Loop);
+        _host?.RequestUpdate();
+    }
 
     /// <summary>Remember that this item is a notification, so the platform can find it without walking the scene.</summary>
     internal void TrackNotification()
@@ -802,6 +807,8 @@ public class Item : QObject
 
     protected override void OnDestroy()
     {
+        if (_host is Scene scene)
+            scene.ItemDestroyed(this);
         UntrackNotification();
         // A destroyed item can't keep focus: the window's focus item becomes none, and the window's
         // activeFocusItem says so.

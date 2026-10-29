@@ -15,6 +15,12 @@ public sealed class Scene : IItemHost
     private Item? _focusItem;
     private double _pressSceneX, _pressSceneY;
     private int _cursor = -1;
+    private bool _pointerInside;
+    private double _pointerX, _pointerY;
+    private int _pointerModifiers;
+    private bool _hoverQueued;
+    private bool _refreshingHover;
+    private bool _hoverAgain;
 
     public Scene(QObject? window = null)
     {
@@ -307,6 +313,8 @@ public sealed class Scene : IItemHost
 
     public void PointerMove(double x, double y, int modifiers = 0)
     {
+        RememberPointer(x, y, modifiers);
+        DropDeadGrabber();
         UpdateHover(x, y, modifiers);
         if (_grabber is not null && _grabberItem is not null)
         {
@@ -347,6 +355,8 @@ public sealed class Scene : IItemHost
 
     private void DispatchPress(double x, double y, int button, int modifiers, bool doubleClick)
     {
+        RememberPointer(x, y, modifiers);
+        DropDeadGrabber();
         _buttons |= button;
         SetFocusVisible(false);
         _pressSceneX = x;
@@ -402,6 +412,8 @@ public sealed class Scene : IItemHost
 
     public void PointerRelease(double x, double y, int button, int modifiers = 0)
     {
+        RememberPointer(x, y, modifiers);
+        DropDeadGrabber();
         _buttons &= ~button;
         if (_grabber is not null && _grabberItem is not null)
         {
@@ -420,8 +432,12 @@ public sealed class Scene : IItemHost
     /// <summary>The pointer left the window.</summary>
     public void PointerLeave()
     {
+        _pointerInside = false;
         foreach (var h in _hovered.ToArray())
-            h.HoverLeave();
+        {
+            if (h is not QObject { IsDestroyed: true })
+                h.HoverLeave();
+        }
         _hovered.Clear();
         SetCursor(-1);
     }
@@ -449,6 +465,94 @@ public sealed class Scene : IItemHost
         }
     }
 
+    /// <summary>
+    /// The items under the pointer changed without the pointer moving. Hover is refreshed once the current
+    /// turn finishes, so a closing popup or a destroyed delegate does not leave <c>containsMouse</c> stuck.
+    /// </summary>
+    internal void NotePointerTreeChanged(IEventLoop? loop)
+    {
+        if (!_pointerInside)
+            return;
+        if (_refreshingHover)
+        {
+            _hoverAgain = true;
+            return;
+        }
+        if (_hoverQueued)
+            return;
+        _hoverQueued = true;
+        if (loop is null)
+            RefreshHover();
+        else
+            loop.Post(RefreshHover);
+    }
+
+    /// <summary>Drops a destroyed item from hover and from the grab, without delivering events to it.</summary>
+    internal void ItemDestroyed(Item item)
+    {
+        for (var i = _hovered.Count - 1; i >= 0; i--)
+        {
+            var target = _hovered[i];
+            if (ReferenceEquals(target, item) || target is QObject { IsDestroyed: true })
+                _hovered.RemoveAt(i);
+        }
+        if (ReferenceEquals(_grabberItem, item) || ReferenceEquals(_grabber, item)
+            || _grabber is QObject { IsDestroyed: true } || _grabberItem is { IsDestroyed: true })
+        {
+            _grabber = null;
+            _grabberItem = null;
+        }
+        NotePointerTreeChanged(item.Engine?.Loop);
+    }
+
+    /// <summary>Drops one destroyed hover handler without releasing a grab held by something else.</summary>
+    internal void HoverTargetDestroyed(IHoverTarget target, IEventLoop? loop)
+    {
+        _hovered.Remove(target);
+        if (ReferenceEquals(_grabber, target))
+        {
+            _grabber = null;
+            _grabberItem = null;
+        }
+        NotePointerTreeChanged(loop);
+    }
+
+    private void DropDeadGrabber()
+    {
+        if (_grabber is QObject { IsDestroyed: true } || _grabberItem is { IsDestroyed: true })
+        {
+            _grabber = null;
+            _grabberItem = null;
+        }
+    }
+
+    private void RememberPointer(double x, double y, int modifiers)
+    {
+        _pointerInside = true;
+        _pointerX = x;
+        _pointerY = y;
+        _pointerModifiers = modifiers;
+    }
+
+    private void RefreshHover()
+    {
+        _hoverQueued = false;
+        if (!_pointerInside)
+            return;
+        _refreshingHover = true;
+        try
+        {
+            UpdateHover(_pointerX, _pointerY, _pointerModifiers);
+            if (_hoverAgain && _pointerInside)
+                UpdateHover(_pointerX, _pointerY, _pointerModifiers);
+        }
+        finally
+        {
+            _refreshingHover = false;
+            _hoverAgain = false;
+        }
+    }
+
     private void UpdateHover(double x, double y, int modifiers)
     {
         var now = new List<(IHoverTarget Target, double X, double Y)>();
@@ -456,6 +560,11 @@ public sealed class Scene : IItemHost
             CollectHover(Root, x, y, now, isRoot: true);
         foreach (var old in _hovered.ToArray())
         {
+            if (old is QObject { IsDestroyed: true })
+            {
+                _hovered.Remove(old);
+                continue;
+            }
             if (!now.Any(n => n.Target == old))
             {
                 old.HoverLeave();
