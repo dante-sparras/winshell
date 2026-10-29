@@ -32,6 +32,7 @@ public sealed class WinlandService : QObject
     public WinlandService(QmlEngine engine)
     {
         _engine = engine;
+        WinlandConnection.RegisterLog(_engine.Log);
         WinlandConnection.ConnectionChanged += OnConnectionChanged;
         WinlandConnection.EventReceived += OnEventReceived;
         WinlandConnection.EnsureStarted();
@@ -586,6 +587,7 @@ public sealed class WinlandService : QObject
 
     protected override void OnDestroy()
     {
+        WinlandConnection.UnregisterLog(_engine.Log);
         WinlandConnection.ConnectionChanged -= OnConnectionChanged;
         WinlandConnection.EventReceived -= OnEventReceived;
     }

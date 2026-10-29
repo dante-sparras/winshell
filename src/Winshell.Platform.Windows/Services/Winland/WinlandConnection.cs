@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
+using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Winland;
 
@@ -15,9 +16,31 @@ internal static partial class WinlandConnection
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(3);
     private static readonly int SessionId = Process.GetCurrentProcess().SessionId;
     private static readonly IReadOnlyList<string> Candidates = WinlandProtocol.PipeNames(Environment.GetEnvironmentVariable("WINLAND_PIPE"), SessionId);
+    private static readonly object LogsLock = new();
+    private static readonly List<Log> Logs = [];
     private static int _started;
     private static volatile string? _pipeName;
     private static volatile bool _connected;
+
+    /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
+    internal static void RegisterLog(Log log)
+    {
+        lock (LogsLock)
+        {
+            if (!Logs.Contains(log))
+                Logs.Add(log);
+        }
+    }
+
+    /// <summary>Drops a log registered by <see cref="RegisterLog"/>.</summary>
+    internal static void UnregisterLog(Log log)
+    {
+        lock (LogsLock)
+            Logs.Remove(log);
+    }
+
+    /// <summary>Runs one listener the way an event does, so a test can see a thrown listener get logged.</summary>
+    internal static void RaiseForTest(Action listener) => Raise<int>(_ => listener(), 0);
 
     /// <summary>Raised when the event stream connects (true) or is lost (false).</summary>
     public static event Action<bool>? ConnectionChanged;
@@ -138,7 +161,15 @@ internal static partial class WinlandConnection
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e);
+                var message = e.ToString();
+                Log[] logs;
+                lock (LogsLock)
+                    logs = Logs.ToArray();
+                if (logs.Length == 0)
+                    Log.Default.Warn("winland", message);
+                else
+                    foreach (var log in logs)
+                        log.Warn("winland", message);
             }
         }
     }
