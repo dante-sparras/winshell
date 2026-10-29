@@ -601,10 +601,12 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     /// <summary>
     /// Draws an icon from its resource at a size in pixels, so it is sharp at any scale. Null when the module or the
-    /// resource is gone. The library is only mapped as data.
+    /// resource is gone or is not on a local drive. The library is only mapped as data.
     /// </summary>
     public static SKImage? ResourceImage(IconResource resource, int size)
     {
+        if (!IsLocalPath(resource.Module))
+            return null;
         var module = LoadLibraryExW(resource.Module, 0, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
         if (module == 0)
             return null;
@@ -631,6 +633,18 @@ internal sealed unsafe partial class TrayHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// False for a network path, which would open a connection, and for device paths. Among the paths that start with
+    /// two separators only \\?\C:\ is local.
+    /// </summary>
+    internal static bool IsLocalPath(string path)
+    {
+        static bool Separator(char c) => c is '\\' or '/';
+        if (path.Length < 2 || !Separator(path[0]) || !Separator(path[1]))
+            return true;
+        return path.StartsWith(@"\\?\", StringComparison.Ordinal) && path.Length >= 7 && char.IsAsciiLetter(path[4]) && path[5] == ':' && path[6] == '\\';
+    }
+
     /// <summary>Draws an icon into a straight-alpha image, at its own size unless one is given.</summary>
     private static SKImage? IconImage(nint icon, int size = 0)
     {
@@ -646,39 +660,46 @@ internal sealed unsafe partial class TrayHost : IDisposable
             }
             var header = new BITMAPINFOHEADER { biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = size, biHeight = -size, biPlanes = 1, biBitCount = 32 };
             var dc = CreateCompatibleDC(0);
-            var dib = CreateDIBSection(dc, &header, 0, out var bits, 0, 0);
-            if (dib == 0)
+            if (dc == 0)
+                return null;
+            nint dib = 0;
+            try
+            {
+                dib = CreateDIBSection(dc, &header, 0, out var bits, 0, 0);
+                if (dib == 0)
+                    return null;
+                var old = SelectObject(dc, dib);
+                DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_NORMAL);
+                var pixels = new Span<uint>((void*)bits, size * size);
+                var hasAlpha = false;
+                foreach (var p in pixels)
+                {
+                    if ((p & 0xff000000) != 0)
+                    {
+                        hasAlpha = true;
+                        break;
+                    }
+                }
+                if (!hasAlpha)
+                {
+                    // An old icon: draw its mask, which is black where the icon is opaque.
+                    var mask = new uint[size * size];
+                    DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_MASK);
+                    pixels.CopyTo(mask);
+                    DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_NORMAL);
+                    for (var i = 0; i < pixels.Length; i++)
+                        pixels[i] = (mask[i] & 0xffffff) == 0 ? pixels[i] | 0xff000000 : 0;
+                }
+                var image = SKImage.FromPixelCopy(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Unpremul), bits, size * 4);
+                SelectObject(dc, old);
+                return image;
+            }
+            finally
             {
                 DeleteDC(dc);
-                return null;
+                if (dib != 0)
+                    DeleteObject(dib);
             }
-            var old = SelectObject(dc, dib);
-            DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_NORMAL);
-            var pixels = new Span<uint>((void*)bits, size * size);
-            var hasAlpha = false;
-            foreach (var p in pixels)
-            {
-                if ((p & 0xff000000) != 0)
-                {
-                    hasAlpha = true;
-                    break;
-                }
-            }
-            if (!hasAlpha)
-            {
-                // An old icon: draw its mask, which is black where the icon is opaque.
-                var mask = new uint[size * size];
-                DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_MASK);
-                pixels.CopyTo(mask);
-                DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_NORMAL);
-                for (var i = 0; i < pixels.Length; i++)
-                    pixels[i] = (mask[i] & 0xffffff) == 0 ? pixels[i] | 0xff000000 : 0;
-            }
-            var image = SKImage.FromPixelCopy(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Unpremul), bits, size * 4);
-            SelectObject(dc, old);
-            DeleteObject(dib);
-            DeleteDC(dc);
-            return image;
         }
         finally
         {
