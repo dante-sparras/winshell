@@ -112,6 +112,28 @@ public class WindowListTests
     }
 
     [Fact]
+    public void Only_HSHELL_FLASH_asks_for_attention()
+    {
+        Assert.True(WindowRules.IsFlash(0x8006));
+        Assert.False(WindowRules.IsFlash(6));
+        Assert.False(WindowRules.IsFlash(0x8004));
+        Assert.False(WindowRules.IsFlash(1));
+    }
+
+    [Fact]
+    public void A_window_wants_attention_until_it_is_activated_or_leaves_the_list()
+    {
+        HashSet<nint> wanting = [1, 2, 3];
+        var listed = new HashSet<nint> { 1, 2 };
+        Assert.True(WindowRules.SettleAttention(wanting, 1, listed.Contains));
+        Assert.Equal([2], wanting);
+        Assert.False(WindowRules.SettleAttention(wanting, 0, listed.Contains));
+        Assert.Equal([2], wanting);
+        Assert.True(WindowRules.SettleAttention(wanting, 2, listed.Contains));
+        Assert.Empty(wanting);
+    }
+
+    [Fact]
     public void The_window_list_speaks_Windows_names()
     {
         var list = MetaType.Of(typeof(WindowListService));
@@ -125,6 +147,7 @@ public class WindowListTests
         Assert.True(window.Properties.ContainsKey("executable"));
         Assert.True(window.Properties.ContainsKey("icon"));
         Assert.False(window.Properties["fullscreen"].CanWrite);
+        Assert.False(window.Properties["attention"].CanWrite);
         Assert.True(window.Properties["maximized"].CanWrite);
         Assert.True(window.Properties["minimized"].CanWrite);
         Assert.True(window.Methods.ContainsKey("activate"));

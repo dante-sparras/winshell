@@ -19,6 +19,9 @@ internal static unsafe partial class NativeMethods
     public const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
+    public const nint HSHELL_REDRAW = 6;
+    public const nint HSHELL_HIGHBIT = 0x8000;
+
     public const int OBJID_WINDOW = 0;
     public const int CHILDID_SELF = 0;
 
@@ -46,6 +49,10 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("user32.dll")]
     public static partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool RegisterShellHookWindow(nint hwnd);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

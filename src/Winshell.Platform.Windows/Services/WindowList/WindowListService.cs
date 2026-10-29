@@ -70,7 +70,10 @@ public sealed class WindowListService : QObject
         var active = _byHwnd.GetValueOrDefault(WindowTracker.Active);
         SetField(ref _activeWindow, active, nameof(ActiveWindow));
         foreach (var window in _byHwnd.Values)
+        {
             window.SetActivated(window == active);
+            window.SetAttention(WindowTracker.WantsAttention(window.Hwnd));
+        }
     }
 
     internal void NotifyDesktopsChanged()
@@ -95,6 +98,7 @@ public sealed class AppWindow : QObject
     private WindowInfo? _info;
     private AppWindow? _parent;
     private bool _activated;
+    private bool _attention;
 
     internal AppWindow(WindowListService manager, nint hwnd)
     {
@@ -133,6 +137,12 @@ public sealed class AppWindow : QObject
     }
 
     [Qml] public bool Activated { get { Track(); return _activated; } }
+
+    /// <summary>
+    /// Whether the window flashed to ask for attention, as a chat or a finished download does, and has not been
+    /// activated since. The taskbar shows this as a highlighted button.
+    /// </summary>
+    [Qml] public bool Attention { get { Track(); return _attention; } }
 
     [Qml] public AppWindow? Parent { get { Track(); return _parent; } }
 
@@ -212,6 +222,8 @@ public sealed class AppWindow : QObject
     internal void SetParent(AppWindow? parent) => SetField(ref _parent, parent, nameof(Parent));
 
     internal void SetActivated(bool activated) => SetField(ref _activated, activated, nameof(Activated));
+
+    internal void SetAttention(bool attention) => SetField(ref _attention, attention, nameof(Attention));
 
     public override string ToString() => $"AppWindow({_info?.AppId}: {_info?.Title})";
 }
