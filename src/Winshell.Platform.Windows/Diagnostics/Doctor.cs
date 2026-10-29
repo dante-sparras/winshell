@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Winshell.Platform.Windows.Services.Session;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -331,7 +332,10 @@ public static class Doctor
         var exe = DoctorProbe.ExeOf(command);
         if (exe is null || !exists(exe))
             return new("signIn", "Sign-in", CheckStatus.Fail, $"The sign-in entry starts {exe ?? command}, which is not there.", "Turn Run Winshell when I sign in off and on again in Winshell Settings > Startup.");
-        if (!string.Equals(resolve(Path.GetFullPath(exe)), resolve(Path.GetFullPath(thisExe)), StringComparison.OrdinalIgnoreCase))
+        var started = resolve(Path.GetFullPath(exe));
+        var here = resolve(Path.GetFullPath(thisExe));
+        // Start launches winshellw.exe. Sign-in runs the winshell.exe beside it. They are one install.
+        if (!string.Equals(started, here, StringComparison.OrdinalIgnoreCase) && !WindowsStartupRegistry.SameInstall(started, here))
             return new("signIn", "Sign-in", CheckStatus.Warn, $"The sign-in entry starts another winshell.exe: {exe}.", "Turn Run Winshell when I sign in on in Winshell Settings > Startup, from the Winshell you use.");
         if (turnedOff)
             return new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup.");

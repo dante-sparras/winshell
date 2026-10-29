@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Winshell.Runtime;
 
@@ -109,7 +110,7 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
     public bool PointsElsewhere() => Try(() =>
     {
         using var key = Registry.CurrentUser.OpenSubKey(runKey);
-        return key?.GetValue(ValueName) is string value && !string.Equals(value, command, StringComparison.OrdinalIgnoreCase);
+        return key?.GetValue(ValueName) is string value && !SameSignInCommand(value, command);
     });
 
     // The page writes 12 bytes: an odd first byte is off, with the time it was turned off after it.
@@ -146,14 +147,17 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
     }
 
     /// <summary>
-    /// The command a sign-in runs: this <c>winshell.exe</c> with the arguments it was started with, under a console
-    /// host that has no window. <c>winshell.exe</c> is a console program, so started on its own it would open a
-    /// console or Windows Terminal at every sign-in. <c>--no-duplicate</c> keeps a second sign-in entry from starting
-    /// a second shell, and <c>--daemonize</c> is left out because the console host already runs it in the background.
-    /// A <c>--path</c> is made absolute, since a sign-in does not start in this working directory.
+    /// The command a sign-in runs: this install's <c>winshell.exe</c> with the arguments it was started with, under a
+    /// console host that has no window. <c>winshell.exe</c> is a console program, so started on its own it would open a
+    /// console or Windows Terminal at every sign-in. Start launches <c>winshellw.exe</c> in the same folder; that name
+    /// is written as the sibling <c>winshell.exe</c>, so the Start menu and the installer describe one entry.
+    /// <c>--no-duplicate</c> keeps a second sign-in entry from starting a second shell, and <c>--daemonize</c> is left
+    /// out because the console host already runs it in the background. A <c>--path</c> is made absolute, since a
+    /// sign-in does not start in this working directory.
     /// </summary>
     public static string CommandFor(string exe, IEnumerable<string> args)
     {
+        exe = ConsoleTwin(exe);
         var kept = new List<string>();
         var path = false;
         foreach (var a in args)
@@ -190,4 +194,34 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
         sb.Append('\\', slashes * 2).Append('"');
         return sb.ToString();
     }
+
+    /// <summary>The console <c>winshell.exe</c> beside a <c>winshellw.exe</c>. Any other path is unchanged.</summary>
+    internal static string ConsoleTwin(string exe)
+    {
+        if (!Path.GetFileName(exe).Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase))
+            return exe;
+        var dir = Path.GetDirectoryName(exe);
+        return string.IsNullOrEmpty(dir) ? "winshell.exe" : Path.Combine(dir, "winshell.exe");
+    }
+
+    /// <summary><c>winshell.exe</c> and <c>winshellw.exe</c> in the same folder are one install.</summary>
+    internal static bool SameInstall(string left, string right)
+    {
+        static bool Pair(string path)
+        {
+            var name = Path.GetFileName(path);
+            return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
+        }
+        if (!Pair(left) || !Pair(right))
+            return false;
+        return string.Equals(Path.GetDirectoryName(Path.GetFullPath(left)), Path.GetDirectoryName(Path.GetFullPath(right)), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether two sign-in commands start the same install. The windowed name counts as the console name.</summary>
+    internal static bool SameSignInCommand(string left, string right) =>
+        string.Equals(NormalizeSignInExe(left), NormalizeSignInExe(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeSignInExe(string command) =>
+        Regex.Replace(command, @"winshellw\.exe(?=$|[\s""])", "winshell.exe", RegexOptions.IgnoreCase);
 }

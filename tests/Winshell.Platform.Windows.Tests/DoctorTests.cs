@@ -362,6 +362,15 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(target, DoctorProbe.ResolveLinks(target));
     }
 
+    [Fact]
+    public void A_sign_in_entry_for_the_console_exe_is_the_windowed_copy_beside_it()
+    {
+        const string windowed = @"C:\Program Files\Winshell\winshellw.exe";
+        const string console = @"C:\Program Files\Winshell\winshell.exe";
+        var command = $@"C:\Windows\System32\conhost.exe --headless ""{console}"" --no-duplicate";
+        Assert.Equal(CheckStatus.Pass, SignIn(command, false, windowed, path => path == console).Status);
+    }
+
     // Notifications, instances, crashes
 
     [Theory]
