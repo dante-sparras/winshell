@@ -48,6 +48,7 @@ A running shell reads these. None is needed to build or test.
 | State | `%LOCALAPPDATA%\winshell\state` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data` |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
+| Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens, with the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. |
 
 The first launch that uses the default config folder copies `%USERPROFILE%\.config\winshell` into `%APPDATA%\winshell` when the old folder exists. The copy leaves the old folder in place, and it does not replace a file already in the new folder.
 
@@ -79,6 +80,10 @@ Remove-Item Env:WINSHELL_TEST_CAPTURE
 ```
 
 `WINSHELL_TEST_CAPTURE=1` opts the native capture test in; it is not read by a running shell. That test creates its own panel, captures/resizes it, reads monitor dimensions in memory, and reloads four live capture generations. Its one PNG is of the test panel, written inside a unique test temp folder and deleted in teardown. The test leaves the user's clipboard alone, never uploads pixels and changes no system settings. Without the variable, the native probe reports that it was not requested.
+
+## Run at sign-in
+
+`StartupTests` use a fake, or a key of their own under `HKCU\Software\Winshell\Tests` that they delete. They never write the user's `Run` or `StartupApproved` keys.
 
 ## Hotkeys
 

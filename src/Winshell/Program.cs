@@ -310,6 +310,7 @@ namespace Winshell
                 engine.AddService<IPlatformServices>(platform);
                 engine.AddService<IIconLookup>(IconProvider.Instance);
                 WindowsModules.AddServices(engine, platform);
+                WindowsModules.AddStartup(engine, Environment.ProcessPath!, originalArgs);
             });
             log.Info("", $"Launching config: \"{root}\"");
             log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
