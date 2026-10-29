@@ -15,16 +15,30 @@ PopupWindow {
   WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
 
+  // True when Search opened this surface, so the taskbar can show Search pressed.
+  property bool searchOpen: false
+
   function open() {
+    searchOpen = false
     visible = true
+  }
+
+  function openSearch() {
+    searchOpen = true
+    visible = true
+    view.focusSearch()
   }
 
   function close() {
     visible = false
+    searchOpen = false
   }
 
   function toggle() {
-    visible = !visible
+    if (visible)
+      close()
+    else
+      open()
   }
 
   onVisibleChanged: {

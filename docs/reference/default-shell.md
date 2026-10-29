@@ -32,7 +32,7 @@ A Windows 11 taskbar along the bottom of each screen, or of the main screen only
 
 [The taskbar](../taskbar.md) explains its settings (`centered`, `autoHide`, `appsOn`), pinned apps, previews, the keyboard and Narrator, and the hooks other surfaces plug into: `startRequested`, `searchRequested`, `trayArea` and `clockArea`. Pins are in `taskbar.json` in the shell's data folder.
 
-Right-click an empty part of the taskbar for **Taskbar settings**. Search starts `explorer.exe` with `search-ms:`, which opens a File Explorer search window. While a Winshell update is ready to install, an icon in the notification area opens the updates card in Winshell Settings; see [Winshell updates](../updates.md).
+Right-click an empty part of the taskbar for **Taskbar settings**. Search opens Start and focuses its search box. While a Winshell update is ready to install, an icon in the notification area opens the updates card in Winshell Settings; see [Winshell updates](../updates.md).
 
 ## Start
 

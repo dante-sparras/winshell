@@ -61,7 +61,7 @@ ShellRoot {
     id: bars
     model: Preferences.taskbarAllScreens ? Shell.screens : shell.mainScreen ? [shell.mainScreen] : []
 
-    // The taskbar's Start hook opens the launcher. Search starts explorer.exe with search-ms:.
+    // The taskbar's Start and Search hooks open the launcher. Search focuses its box.
     Taskbar {
       id: taskbar
       required property var modelData
@@ -80,8 +80,9 @@ ShellRoot {
       function closeLauncher() { launcher.close() }
 
       startOpen: launcher.visible
+      searchOpen: launcher.searchOpen
       onStartRequested: launcher.toggle()
-      onSearchRequested: Shell.execDetached(["explorer.exe", "search-ms:"])
+      onSearchRequested: launcher.openSearch()
 
       // In the middle of the screen over a centered taskbar, as Windows 11 opens Start; from Start otherwise.
       Launcher {
