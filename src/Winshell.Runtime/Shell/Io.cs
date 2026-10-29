@@ -985,6 +985,80 @@ public sealed class FileView : QObject
         return code is 5 or 32 or 33;
     }
 
+    /// <summary>
+    /// The file a save should change. A symbolic link is followed to its final target, so the link stays a link.
+    /// A hard link is the same path, and <paramref name="hardLink"/> is true so the save writes in place.
+    /// A path that is not there yet is returned unchanged.
+    /// </summary>
+    internal static string SaveTarget(string path, out bool hardLink)
+    {
+        hardLink = false;
+        var full = System.IO.Path.GetFullPath(path);
+        if (!EntryExists(full))
+            return full;
+        try
+        {
+            var target = new FileInfo(full).ResolveLinkTarget(returnFinalTarget: true);
+            if (target is not null)
+                return target.FullName;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+        if (File.Exists(full))
+            hardLink = LinkCount(full) > 1;
+        return full;
+    }
+
+    private static bool EntryExists(string path)
+    {
+        try
+        {
+            _ = File.GetAttributes(path);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+#pragma warning disable CA1416
+    private static int LinkCount(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (!GetFileInformationByHandle(stream.SafeFileHandle, out var info))
+                return 1;
+            return (int)info.NumberOfLinks;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return 1;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetFileInformationByHandle(
+        Microsoft.Win32.SafeHandles.SafeFileHandle hFile, out ByHandleFileInformation lpFileInformation);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct ByHandleFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+#pragma warning restore CA1416
+
     private void Apply(int generation, (string? Text, bool Bom, FileViewError Error, string Message) result)
     {
         if (generation != _generation || IsDestroyed)
@@ -1040,28 +1114,33 @@ public sealed class FileView : QObject
         {
             string? error = null;
             var handSaveWon = false;
+            var destination = path;
             try
             {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
+                destination = SaveTarget(path, out var hardLink);
+                var directory = System.IO.Path.GetDirectoryName(destination);
+                if (directory is not null)
+                    Directory.CreateDirectory(directory);
                 // Captured before the temporary file exists. A hand save during that write changes the destination
                 // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
                 // recovers from it and the text above already includes it.
-                var diskAtStart = Read(path).Text;
-                if (atomic)
+                var diskAtStart = Read(destination).Text;
+                // A hard link shares its bytes with another name. Replacing the name would break that link.
+                if (atomic && !hardLink)
                 {
-                    var temp = path + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
+                    var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     WriteText(temp, text, bom);
                     try
                     {
                         // A slow scan of the temporary file is when a hand save usually lands.
-                        _beforeReplace?.Invoke(path);
-                        if (HandSaveWins(Read(path).Text, diskAtStart, text))
+                        _beforeReplace?.Invoke(destination);
+                        if (HandSaveWins(Read(destination).Text, diskAtStart, text))
                         {
                             handSaveWon = true;
                         }
                         else
                         {
-                            MoveReplacing(temp, path);
+                            MoveReplacing(temp, destination);
                         }
                     }
                     finally
@@ -1078,13 +1157,13 @@ public sealed class FileView : QObject
                         }
                     }
                 }
-                else if (HandSaveWins(Read(path).Text, diskAtStart, text))
+                else if (HandSaveWins(Read(destination).Text, diskAtStart, text))
                 {
                     handSaveWon = true;
                 }
                 else
                 {
-                    WriteText(path, text, bom);
+                    WriteText(destination, text, bom);
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -1101,7 +1180,7 @@ public sealed class FileView : QObject
                     // Arm only when the directory has just appeared, then read once: a hand save that landed
                     // while this write ran is already on disk and will not produce a later event.
                     Watch();
-                    AcceptHandSave(path);
+                    AcceptHandSave(destination);
                     if (!handSaveWon)
                         Emit("saved");
                 }
@@ -1184,7 +1263,7 @@ public sealed class FileView : QObject
             StopWatching();
             return;
         }
-        var full = System.IO.Path.GetFullPath(_path);
+        var full = SaveTarget(_path, out _);
         var dir = System.IO.Path.GetDirectoryName(full);
         if (dir is null || !Directory.Exists(dir))
         {
