@@ -205,9 +205,11 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         {
         }
         var theme = Theme.Default(dark) with { System = ReadSystemColors(), IsHighContrast = HighContrastOn() };
+        var animations = true;
         try
         {
             var settings = new global::Windows.UI.ViewManagement.UISettings();
+            animations = settings.AnimationsEnabled;
             QColor Get(global::Windows.UI.ViewManagement.UIColorType type)
             {
                 var c = settings.GetColorValue(type);
@@ -223,10 +225,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
                     Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark1),
                     Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark2),
                     Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark3)),
+                AnimationsEnabled = animations,
             };
         }
         catch (COMException)
         {
+            theme = theme with { AnimationsEnabled = animations };
         }
         Theme.Current = theme;
     }

@@ -38,10 +38,10 @@ public readonly record struct Elevation(float Blur, float OffsetY, QColor Color)
 /// <summary>
 /// The Windows 11 theme: light or dark, whether a contrast theme is on, the accent and the system colors, with the
 /// Fluent design tokens made from them. A token has the name of its WinUI 3 theme resource and the values of the
-/// Windows App SDK 1.8 <c>generic.xaml</c>. The platform updates the theme when the user changes their Windows
-/// settings.
+/// Windows App SDK 1.8 <c>generic.xaml</c>. Animation effects follow Windows, and a contrast theme does not turn
+/// them off. The platform updates the theme when the user changes their Windows settings.
 /// </summary>
-public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false)
+public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false, bool AnimationsEnabled = true)
 {
     private static Theme _current = Default(false);
 

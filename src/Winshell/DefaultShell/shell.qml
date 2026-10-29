@@ -37,4 +37,7 @@ ShellRoot {
       notificationListener: notifications
     }
   }
+
+  // Volume, brightness, media and microphone changes. It sits above the taskbar and does not reserve space.
+  OnScreenDisplayHost {}
 }

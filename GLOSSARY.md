@@ -58,6 +58,10 @@ _Avoid_: action center, control center
 A button in quick settings for one setting, such as Wi-Fi. It shows whether the setting is on, and opens Settings when Winshell cannot change it.
 _Avoid_: quick action, toggle
 
+**On-screen display**:
+The panel Windows 11 shows when volume, brightness, media or the microphone mute changes. It sits above the taskbar and does not reserve space.
+_Avoid_: volume flyout, indicator, toast
+
 **Screen**:
 One monitor on the desktop.
 _Avoid_: display, output

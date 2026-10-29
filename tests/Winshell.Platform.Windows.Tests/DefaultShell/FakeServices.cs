@@ -121,10 +121,12 @@ public sealed class FakeBrightness : QObject
     [Qml] public ObjectModel Monitors { get; }
 }
 
-public sealed class FakeBrightnessMonitor(BrightnessConnection connection, int minimum, int maximum) : QObject
+public sealed class FakeBrightnessMonitor(BrightnessConnection connection, int minimum, int maximum, string deviceName = "", string name = "") : QObject
 {
     private int _brightness;
 
+    [Qml] public string DeviceName => deviceName;
+    [Qml] public string Name => name;
     [Qml] public BrightnessConnection Connection => connection;
     [Qml] public int Minimum => minimum;
     [Qml] public int Maximum => maximum;
@@ -134,11 +136,13 @@ public sealed class FakeBrightnessMonitor(BrightnessConnection connection, int m
 public sealed class FakeAudio : QObject
 {
     private FakeAudioNode? _defaultPlaybackDevice;
+    private FakeAudioNode? _defaultRecordingDevice;
 
     public FakeAudio() => Nodes = FakeModel.Of(this);
 
     [Qml] public ObjectModel Nodes { get; }
     [Qml] public FakeAudioNode? DefaultPlaybackDevice { get { Track(); return _defaultPlaybackDevice; } set => SetField(ref _defaultPlaybackDevice, value); }
+    [Qml] public FakeAudioNode? DefaultRecordingDevice { get { Track(); return _defaultRecordingDevice; } set => SetField(ref _defaultRecordingDevice, value); }
 }
 
 public sealed class FakeAudioNode : QObject
@@ -177,6 +181,7 @@ public sealed class FakeMedia : QObject
 public sealed class FakeMediaSession(string appName, string title, string artist) : QObject
 {
     private bool _isPlaying;
+    private int _playbackState = 2;
     private string _trackArtUrl = "";
 
     public List<string> Calls { get; } = [];
@@ -185,7 +190,19 @@ public sealed class FakeMediaSession(string appName, string title, string artist
     [Qml] public string TrackTitle => title;
     [Qml] public string TrackArtist => artist;
     [Qml] public string TrackArtUrl { get { Track(); return _trackArtUrl; } internal set => SetField(ref _trackArtUrl, value); }
-    [Qml] public bool IsPlaying { get { Track(); return _isPlaying; } set => SetField(ref _isPlaying, value); }
+    [Qml] public int PlaybackState { get { Track(); return _playbackState; } set => SetField(ref _playbackState, value); }
+
+    [Qml]
+    public bool IsPlaying
+    {
+        get { Track(); return _isPlaying; }
+        set
+        {
+            if (SetField(ref _isPlaying, value))
+                PlaybackState = value ? 1 : _playbackState == 1 ? 2 : _playbackState;
+        }
+    }
+
     [Qml] public bool CanTogglePlaying => true;
     [Qml] public bool CanGoNext => true;
     [Qml] public bool CanGoPrevious => false;

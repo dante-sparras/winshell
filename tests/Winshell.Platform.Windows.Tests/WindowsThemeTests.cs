@@ -29,6 +29,7 @@ public class WindowsThemeTests
             Item {
               property bool dark: Theme.dark
               property bool contrast: Theme.highContrast
+              property bool animations: Theme.animationsEnabled
               property color text: Theme.textFillColorPrimary
               property color accent: Theme.accentFillColorDefault
               property color window: Theme.systemColorWindowColor
@@ -55,6 +56,11 @@ public class WindowsThemeTests
             loop.Process();
 
             Assert.False((bool)root.ReadProperty("dark")!);
+            Assert.True((bool)root.ReadProperty("animations")!);
+            Theme.Current = Theme.Current with { AnimationsEnabled = false };
+            loop.Process();
+            Assert.False((bool)root.ReadProperty("animations")!);
+            Theme.Current = Theme.Current with { AnimationsEnabled = true };
             Assert.Equal(QColor.Parse("#e4000000"), root.ReadProperty("text"));
             Assert.Equal(AccentColors.Default.Dark1, root.ReadProperty("accent"));
             Assert.Equal(4.0, root.ReadProperty("controlRadius"));
