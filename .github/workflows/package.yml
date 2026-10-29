@@ -10,6 +10,7 @@ on:
       - ".github/workflows/release-please.yml"
       - ".release-please-manifest.json"
       - "scripts/package.ps1"
+      - "packaging/**"
       - "src/Winshell/Winshell.csproj"
       - "Directory.Build.props"
       - "Directory.Packages.props"
@@ -57,7 +58,42 @@ jobs:
         env:
           # Empty outside a release. For a release, the script stops unless the checkout is that version.
           TAG: ${{ inputs.tag }}
-        run: pwsh scripts/package.ps1 -Out "$env:RUNNER_TEMP/artifacts" -Tag $env:TAG
+          # The Store identity Partner Center reserved. Unset, the package has a test identity.
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+        run: >-
+          pwsh scripts/package.ps1 -Out "$env:RUNNER_TEMP/artifacts" -Tag $env:TAG
+          -IdentityName $env:MSIX_IDENTITY_NAME -Publisher $env:MSIX_PUBLISHER -PublisherDisplayName $env:MSIX_PUBLISHER_DISPLAY_NAME
+      - name: Install the Store package on this runner
+        # Windows accepts the manifest, and the winshell alias runs in the package. A throwaway certificate that only
+        # this runner trusts signs a copy; the Store signs the real package.
+        shell: pwsh
+        env:
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+        run: |
+          $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=Winshell Test' }
+          $msix = Get-ChildItem "$env:RUNNER_TEMP/artifacts/msix" -Filter '*-win-x64.msix' | Select-Object -First 1
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher -CertStoreLocation Cert:\CurrentUser\My `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $cer = Join-Path $env:RUNNER_TEMP 'test-signing.cer'
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" -Directory -Filter '10.*' |
+            Sort-Object { [version] $_.Name } -Descending | ForEach-Object { Join-Path $_.FullName 'x64/signtool.exe' } |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+          $signed = Join-Path $env:RUNNER_TEMP 'winshell-test.msix'
+          Copy-Item $msix.FullName $signed
+          & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint $signed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-AppxPackage -Path $signed
+          $package = Get-AppxPackage | Where-Object { $_.Publisher -eq $publisher -and $_.Name -like '*Winshell*' } | Select-Object -First 1
+          if (-not $package) { throw 'The package did not install' }
+          Write-Output "Installed $($package.PackageFullName)"
+          $reported = & (Join-Path $env:LOCALAPPDATA 'Microsoft/WindowsApps/winshell.exe') --version
+          Write-Output "The winshell alias reports: $reported"
+          Remove-AppxPackage -Package $package.PackageFullName
+          if ($reported -notmatch '^winshell \d+\.\d+\.\d+') { throw 'The winshell alias did not run' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages
@@ -65,6 +101,12 @@ jobs:
             ${{ runner.temp }}/artifacts/*.zip
             ${{ runner.temp }}/artifacts/SHA256SUMS.txt
             ${{ runner.temp }}/artifacts/winget/
+          if-no-files-found: error
+      # For Partner Center, which signs it. Not on the release: unsigned, it installs nowhere else.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: store-package
+          path: ${{ runner.temp }}/artifacts/*.msixbundle
           if-no-files-found: error
 
   release:

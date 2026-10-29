@@ -6,8 +6,9 @@
 - PowerShell 7
 - .NET 10 SDK
 - Node.js, for `npx` when updating agent skills
+- The Windows SDK, for `makeappx.exe`, only to run `scripts/package.ps1`
 
-Reading Windows notifications additionally requires listener permission and a package identity declaring `userNotificationListener`; native toast sending requires an installed Windows AppUserModelID. Neither is needed to build or run automated tests. The unpackaged CLI does not provision these identities. See [Windows notifications](notifications.md) for deployment requirements, permission behavior and platform limits.
+Reading Windows notifications additionally requires listener permission and a package identity declaring `userNotificationListener`; native toast sending requires an installed Windows AppUserModelID. Neither is needed to build or run automated tests. The unpackaged CLI does not provision these identities; the Microsoft Store package declares the listener capability (see [Releasing](#releasing)). See [Windows notifications](notifications.md) for deployment requirements, permission behavior and platform limits.
 
 ## First checkout
 
@@ -24,7 +25,8 @@ pwsh scripts/dev.ps1
 | `pwsh scripts/dev.ps1` | Clones Quickshell v0.3.2 into `docs/agents/quickshell/` and fetches its manual into `site/` there. |
 | `pwsh scripts/dev.ps1 -Refresh` | Downloads the Quickshell manual again. |
 | `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the check CI runs. |
-| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, and the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. |
+| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, and the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
+| `dotnet run scripts/render-logo.cs` | Renders `packaging/logo.svg` into the package's and the Store listing's PNGs. Commit them after changing the logo. |
 | `pwsh scripts/update-snapshots.ps1` | Renders the default shell's surfaces and replaces each [snapshot](#visual-snapshots) baseline its render no longer matches. `-Surface taskbar` replaces one surface's baselines only. |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
@@ -70,6 +72,15 @@ When a release has no files:
 
 - **Packaging or the upload failed:** open the Release Please run and choose **Re-run failed jobs**. It keeps the release it created and runs only what failed.
 - **Packaging never ran**, because the whole Release Please run was re-run after the release existed, or Release Please failed after it published the release: run the Package workflow by hand (**Actions > Package > Run workflow**) with the release's tag, such as `v1.2.3`. It builds that tag, stops unless the tag is the version in `.release-please-manifest.json` there and the release exists, and uploads what the release does not have yet. It works for any release whose tagged commit has `scripts/package.ps1`.
+
+### Microsoft Store
+
+The Package workflow also builds `winshell-<version>.msixbundle` (x64 and arm64) from `packaging/msix/AppxManifest.xml` and keeps it as the run's `store-package` artifact. It is not attached to the release: it is unsigned, and the Store signs it. Each run also test-signs the x64 package with a certificate only that runner trusts, installs it there and runs the `winshell` alias.
+
+- The Store build reads and writes the same `%APPDATA%\winshell` and `Run` key as every other build: the manifest turns off file and registry write virtualization (`unvirtualizedResources`). It declares `userNotificationListener`, `wiFiControl`, `bluetooth` and `location`. Start runs `winshellw.exe`, a copy of `winshell.exe` that opens no console; `winshell` in a terminal is the command line.
+- The Store takes no 0 as the first part of a package version and installs the highest, so Winshell x.y.z is package version (x+1).y.z.0.
+- The repository variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME` are the identity Partner Center shows under **Product identity**. Without them, the package is `Winshell.Test` by `CN=Winshell Test`, which the Store refuses.
+- To submit a release: download `store-package` from the release's Package run, upload the `.msixbundle` in Partner Center, and paste the listing from `packaging/store/listing.md`. Its privacy policy is [docs/privacy.md](privacy.md).
 
 Other release tasks:
 

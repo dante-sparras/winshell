@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The MSIX package for the Microsoft Store, which signs it. scripts/package.ps1 fills in the $(...) values: the identity
+  Partner Center reserved (repository variables in CI, a test identity otherwise), the architecture, and the version.
+  The Store takes no 0 as the first part of a version and always installs the highest, so a Winshell x.y.z is package
+  version (x+1).y.z.0.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 desktop desktop6 rescap">
+
+  <Identity
+    Name="$(IdentityName)"
+    Publisher="$(Publisher)"
+    Version="$(PackageVersion)"
+    ProcessorArchitecture="$(Architecture)" />
+
+  <Properties>
+    <DisplayName>Winshell</DisplayName>
+    <PublisherDisplayName>$(PublisherDisplayName)</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <!-- Writes go where every other Winshell writes them: the config in %APPDATA%\winshell, and the sign-in entry
+         under the user's Run key. Packaged, they would otherwise land in a copy only this package sees. -->
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <!-- Start runs winshellw.exe, the same app with no console window. In a terminal, winshell is the command line. -->
+    <Application Id="Winshell" Executable="winshellw.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Winshell"
+        Description="A desktop shell for Windows 11, described in QML."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="winshell.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="winshell.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+    <!-- The notification center reads Windows' notifications. -->
+    <uap3:Capability Name="userNotificationListener" />
+    <!-- Quick settings' Wi-Fi list and Bluetooth devices. Windows asks for location before it lists Wi-Fi networks. -->
+    <DeviceCapability Name="wiFiControl" />
+    <DeviceCapability Name="bluetooth" />
+    <DeviceCapability Name="location" />
+  </Capabilities>
+</Package>

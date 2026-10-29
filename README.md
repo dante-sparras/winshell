@@ -21,6 +21,10 @@ Coming from Quickshell? See [Migrating from Quickshell](docs/migrating-from-quic
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or PR.
 
+## Privacy
+
+Winshell collects nothing. See [Privacy](docs/privacy.md).
+
 ## License
 
 [MIT](LICENSE)
