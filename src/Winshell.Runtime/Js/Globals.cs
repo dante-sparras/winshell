@@ -155,9 +155,9 @@ internal static class Globals
             qml.GetService<IPlatformServices>()?.Quit((int)Num(a, 0, 0));
             return JsValue.Undefined;
         });
-        Set("formatDateTime", a => FormatDate(a, "ddd MMM d hh:mm:ss yyyy"));
-        Set("formatDate", a => FormatDate(a, "ddd MMM d yyyy"));
-        Set("formatTime", a => FormatDate(a, "hh:mm:ss"));
+        Set("formatDateTime", a => FormatDate(a, "ddd MMM d hh:mm:ss yyyy", LocalePart.DateTime));
+        Set("formatDate", a => FormatDate(a, "ddd MMM d yyyy", LocalePart.Date));
+        Set("formatTime", a => FormatDate(a, "hh:mm:ss", LocalePart.Time));
         Set("md5", a => Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(Str(a, 0, "")))));
         Set("btoa", a => Convert.ToBase64String(Encoding.UTF8.GetBytes(Str(a, 0, ""))));
         Set("atob", a => Encoding.UTF8.GetString(Convert.FromBase64String(Str(a, 0, ""))));
@@ -205,7 +205,7 @@ internal static class Globals
         return qt;
     }
 
-    private static JsValue FormatDate(JsValue[] args, string defaultFormat)
+    private static JsValue FormatDate(JsValue[] args, string defaultFormat, LocalePart part)
     {
         if (args.Length == 0)
             return "";
@@ -227,10 +227,31 @@ internal static class Globals
                 1 => date.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture),
                 9 => date.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture),
                 8 => date.ToString("dd MMM yyyy HH:mm:ss zzz", CultureInfo.InvariantCulture),
+                // Qt.SystemLocaleShortDate, Qt.DefaultLocaleShortDate, and the deprecated locale aliases.
+                // The same patterns as CalendarMonth.timeLabel: the process regional format.
+                2 or 3 or 4 or 6 => Regional(date, part, longFormat: false),
+                5 or 7 => Regional(date, part, longFormat: true),
                 _ => QtDateFormat.Format(date, defaultFormat),
             };
         }
         return QtDateFormat.Format(date, TypeConverter.ToString(args[1]));
+    }
+
+    /// <summary>Which part of a date <c>Qt.formatDate</c>, <c>Qt.formatTime</c>, or <c>Qt.formatDateTime</c> is writing.</summary>
+    private enum LocalePart { DateTime, Date, Time }
+
+    private static string Regional(DateTime date, LocalePart part, bool longFormat)
+    {
+        var pattern = (part, longFormat) switch
+        {
+            (LocalePart.Time, false) => "t",
+            (LocalePart.Time, true) => "T",
+            (LocalePart.Date, false) => "d",
+            (LocalePart.Date, true) => "D",
+            (_, false) => "g",
+            _ => "F",
+        };
+        return date.ToString(pattern, CultureInfo.CurrentCulture);
     }
 }
 
