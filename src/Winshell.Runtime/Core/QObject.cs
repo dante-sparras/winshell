@@ -56,7 +56,7 @@ public class QObject
     public ComponentContext? CreationContext { get; internal set; }
 
     /// <summary>The QML type name, for messages.</summary>
-    public virtual string TypeName => Meta.QmlName;
+    public virtual string TypeName => Engine?.Modules.NameOf(GetType()) ?? GetType().Name;
 
     internal JsValue? Wrapper { get; set; }
 

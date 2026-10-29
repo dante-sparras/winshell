@@ -143,7 +143,6 @@ public sealed class MetaType
     private MetaType(Type type)
     {
         Type = type;
-        QmlName = type.Name;
         var properties = new Dictionary<string, MetaProperty>(StringComparer.Ordinal);
         var methods = new Dictionary<string, List<MethodInfo>>(StringComparer.Ordinal);
         foreach (var p in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
@@ -197,8 +196,6 @@ public sealed class MetaType
     public static MetaType Of(Type type) => Cache.GetOrAdd(type, static t => new MetaType(t));
 
     public Type Type { get; }
-
-    public string QmlName { get; internal set; }
 
     public IReadOnlyDictionary<string, MetaProperty> Properties { get; }
 
