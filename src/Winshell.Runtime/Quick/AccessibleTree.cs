@@ -257,6 +257,39 @@ public sealed partial class AccessibleNode
 
     public Role Role { get; internal set; }
 
+    /// <summary>Heading level 1 through 9. An unset or out-of-range value is 2.</summary>
+    public int HeadingLevel
+    {
+        get
+        {
+            var level = Attached?.HeadingLevel ?? 0;
+            return level is >= 1 and <= 9 ? level : 2;
+        }
+    }
+
+    /// <summary>
+    /// The 1-based place of a list item, menu item, or tab among siblings with the same role, and how many there are.
+    /// </summary>
+    public (int Position, int Size)? PlaceInSet
+    {
+        get
+        {
+            if (Role is not (Role.ListItem or Role.MenuItem or Role.PageTab) || Parent is not { } parent)
+                return null;
+            var size = 0;
+            var position = 0;
+            foreach (var child in parent.Children)
+            {
+                if (child.Role != Role)
+                    continue;
+                size++;
+                if (child == this)
+                    position = size;
+            }
+            return position == 0 ? null : (position, size);
+        }
+    }
+
     public bool IsRoot => this == Tree.Root;
 
     internal State? LastState { get; set; }

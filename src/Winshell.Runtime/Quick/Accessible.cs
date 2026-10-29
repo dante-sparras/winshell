@@ -108,6 +108,19 @@ public sealed class AccessibleAttached(QObject owner) : QObject
         set { if (SetField(ref _checked, value)) Changed(); }
     }
 
+    private int _headingLevel;
+
+    /// <summary>
+    /// The heading level, from 1 to 9. Zero, the default, means level 2. Narrator uses it when
+    /// <c>role</c> is <c>Heading</c>.
+    /// </summary>
+    [Qml]
+    public int HeadingLevel
+    {
+        get { Track(); return _headingLevel; }
+        set { if (SetField(ref _headingLevel, value)) Changed(); }
+    }
+
     // An accessibility change draws a frame, after which the window tells UI Automation what changed.
     private void Changed() => (owner as Item)?.Update();
 }
