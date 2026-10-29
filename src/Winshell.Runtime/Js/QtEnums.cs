@@ -192,7 +192,8 @@ public static class QtEnums
 /// <summary>What the platform does for scripts: open a URL, quit.</summary>
 public interface IPlatformServices
 {
-    void OpenUrl(string url);
+    /// <summary>Opens <paramref name="url"/> with the system. Returns whether the system accepted it.</summary>
+    bool OpenUrl(string url);
 
     void Quit(int code);
 }

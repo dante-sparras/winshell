@@ -414,15 +414,20 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     // Platform services
 
-    public void OpenUrl(string url)
+    public bool OpenUrl(string url)
     {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
         try
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+            var process = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            process?.Dispose();
+            return process is not null;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             Log.Warn("platform", $"Could not open {url}: {e.Message}");
+            return false;
         }
     }
 

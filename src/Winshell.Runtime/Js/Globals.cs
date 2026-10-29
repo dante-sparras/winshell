@@ -185,9 +185,10 @@ internal static class Globals
         Set("createComponent", a => CreateComponent(runtime, qml, Resolve(Str(a, 0, ""), ShellDir())));
         Set("openUrlExternally", a =>
         {
-            if (a.Length > 0)
-                qml.GetService<IPlatformServices>()?.OpenUrl(TypeConverter.ToString(a[0]));
-            return true;
+            // The string is handed to the system as given, so it may be a page, a file, or a program.
+            if (a.Length == 0)
+                return false;
+            return qml.GetService<IPlatformServices>()?.OpenUrl(TypeConverter.ToString(a[0])) ?? false;
         });
         Set("quit", _ =>
         {

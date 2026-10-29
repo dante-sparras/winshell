@@ -227,7 +227,11 @@ public sealed class FakeUrls : IPlatformServices
 {
     public List<string> Opened { get; } = [];
 
-    public void OpenUrl(string url) => Opened.Add(url);
+    public bool OpenUrl(string url)
+    {
+        Opened.Add(url);
+        return true;
+    }
 
     public void Quit(int code)
     {
