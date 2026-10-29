@@ -41,6 +41,7 @@ PopupWindow {
     recent: Apps.recent.values
     searchResults: Apps.search(view.query)
     pinsPath: Shell.configPath("launcher.json")
+    showIcons: launcher.visible
     onLaunched: app => {
       app.launch()
       launcher.close()

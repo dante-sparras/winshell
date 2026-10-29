@@ -61,6 +61,33 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void App_icons_stay_unloaded_until_start_is_open()
+    {
+        using var hidden = Open(_ => $$"""
+            LauncherView {
+              apps: [ {{App("note", "Notepad", icon: "C:/Apps/Notepad.lnk")}} ]
+              recent: []
+              pinIds: [ "note" ]
+            }
+            """);
+        var image = Assert.Single(One(hidden.Root, "pinTile").ChildItems.OfType<Image>());
+        Assert.Equal("", image.Source);
+        Assert.Equal("", hidden.Eval("iconSource('C:/Apps/Notepad.lnk')"));
+        Assert.Empty(hidden.Messages);
+
+        using var open = Open(dir => ViewQml(Apps(1), Recent(), PinIds(1)));
+        open.Eval("showIcons = true");
+        open.Loop.Process();
+        PolishQueue.Flush();
+        var shortcut = "C:/Apps/Notepad.lnk";
+        var packaged = @"shell:AppsFolder\Microsoft.Windows.Notepad";
+        Assert.Equal("image://icon/" + Uri.EscapeDataString(shortcut), open.Eval("iconSource('C:/Apps/Notepad.lnk')"));
+        Assert.Equal("image://icon/" + Uri.EscapeDataString(packaged), open.Eval("iconSource('shell:AppsFolder\\\\Microsoft.Windows.Notepad')"));
+        Assert.Equal("", open.Eval("iconSource('')"));
+        Assert.Empty(open.Messages);
+    }
+
+    [Fact]
     public void Arrows_move_through_the_grid_then_recommended_and_enter_launches()
     {
         using var view = Open(dir => ViewQml(Apps(8), Recent(), PinIds(8)));

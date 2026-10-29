@@ -21,6 +21,9 @@ public class DefaultShellTests
         Assert.Contains("toggleLauncher", bar);
         Assert.Contains("Accessible.name: \"Start\"", bar);
         Assert.Contains("anchors.bottom", bar);
+
+        var launcher = Read(assembly, "DefaultShell/Launcher.qml");
+        Assert.Contains("showIcons: launcher.visible", launcher);
     }
 
     private static string Read(Assembly assembly, string name)

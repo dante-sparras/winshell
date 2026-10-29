@@ -27,6 +27,8 @@ Item {
   property int dismissCount: 0
   property bool pinsKnown: false
   property bool pinsReady: false
+  // A shortcut path is not an image file. Draw it only while Start is open, through the icon provider.
+  property bool showIcons: false
 
   readonly property string query: searchField.text
   readonly property bool searching: query.length > 0
@@ -38,6 +40,12 @@ Item {
 
   implicitWidth: Launcher.menuWidth
   implicitHeight: Launcher.menuHeight
+
+  function iconSource(icon) {
+    if (!showIcons || !icon)
+      return ""
+    return Shell.iconPath(icon)
+  }
 
   function focusSearch() {
     searchField.forceActiveFocus()
@@ -338,7 +346,7 @@ Item {
 
             Image {
               visible: (modelData.icon || "") !== ""
-              source: modelData.icon || ""
+              source: root.iconSource(modelData.icon)
               x: (Launcher.tileWidth - Launcher.pinnedIcon) / 2
               y: 8
               width: Launcher.pinnedIcon
@@ -416,7 +424,7 @@ Item {
         Image {
           objectName: "rowIcon"
           visible: (modelData.icon || "") !== ""
-          source: modelData.icon || ""
+          source: root.iconSource(modelData.icon)
           x: 8
           y: (Launcher.recommendedRow - Launcher.rowIcon) / 2
           width: Launcher.rowIcon
@@ -555,7 +563,7 @@ Item {
 
         Image {
           visible: (modelData.icon || "") !== ""
-          source: modelData.icon || ""
+          source: root.iconSource(modelData.icon)
           x: 8
           y: (Launcher.allRow - Launcher.allIcon) / 2
           width: Launcher.allIcon
@@ -632,7 +640,7 @@ Item {
 
       Image {
         visible: (modelData.icon || "") !== ""
-        source: modelData.icon || ""
+        source: root.iconSource(modelData.icon)
         x: 8
         y: (Launcher.recommendedRow - Launcher.rowIcon) / 2
         width: Launcher.rowIcon
