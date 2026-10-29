@@ -70,16 +70,90 @@ public class AppBarReservationTests
     }
 
     [Fact]
-    public void A_grant_that_stays_short_of_the_request_does_not_move_the_work_area_again()
+    public void A_grant_that_stays_short_of_the_request_is_not_asked_for_again()
     {
-        // Explorer keeps granting less than asked: each placement asks once more, but the work area does not move,
-        // so it does not start another round of placements.
+        // Explorer keeps granting less than asked. The answer stands until the request changes.
         var explorer = new Explorer { Other = 40 };
         var reservation = new AppBarReservation();
         Assert.True(reservation.Reserve(Bottom, explorer.SetPos));
         Assert.False(reservation.Reserve(Bottom, explorer.SetPos));
         Assert.False(reservation.Reserve(Bottom, explorer.SetPos));
         Assert.Equal(AboveOther, reservation.Granted);
+        Assert.Equal(1, explorer.Requests);
+    }
+
+    /// <summary>
+    /// The panel's placement loop as Win32Window runs it: each ABM_SETPOS sends ABN_POSCHANGED back, which places the
+    /// panel again with a fresh ABM_QUERYPOS.
+    /// </summary>
+    private sealed class Placement(AppBarReservation reservation, Func<RECT> query)
+    {
+        private readonly Queue<Action> _callbacks = new();
+
+        public int SetPosCalls { get; private set; }
+
+        public void Place() => reservation.Reserve(query(), asked =>
+        {
+            SetPosCalls++;
+            _callbacks.Enqueue(Place);
+            return Grant(asked);
+        });
+
+        public Func<RECT, RECT> Grant { get; set; } = asked => asked;
+
+        /// <summary>Delivers callbacks until none are left, or gives up. Returns how many were delivered.</summary>
+        public int Settle(int limit = 1000)
+        {
+            var delivered = 0;
+            while (_callbacks.Count > 0 && delivered < limit)
+            {
+                _callbacks.Dequeue()();
+                delivered++;
+            }
+            Assert.Empty(_callbacks);
+            return delivered;
+        }
+    }
+
+    [Fact]
+    public void Callbacks_from_a_grant_that_stays_short_settle_instead_of_asking_forever()
+    {
+        // The query always offers the whole edge and Explorer always grants less: the case the review found looping.
+        var offer = Bottom;
+        var placement = new Placement(new AppBarReservation(), () => offer) { Grant = asked => AboveOther };
+        placement.Place();
+        Assert.True(placement.Settle() <= 1);
+        Assert.Equal(1, placement.SetPosCalls);
+
+        // Something outside changes what the query offers: that is asked for, and settles again.
+        offer = new RECT(0, 1000, 1920, 1048);
+        placement.Grant = asked => asked;
+        placement.Place();
+        placement.Settle();
+        Assert.Equal(2, placement.SetPosCalls);
+    }
+
+    [Fact]
+    public void Callbacks_settle_while_another_bar_comes_and_goes_and_the_edge_is_won_back()
+    {
+        var reservation = new AppBarReservation();
+        var other = 0;
+        // The query leaves out another bar's height; the grant is what was asked for.
+        var placement = new Placement(reservation, () => other == 0 ? Bottom : AboveOther);
+        placement.Place();
+        placement.Settle();
+        Assert.Equal(Bottom, reservation.Granted);
+
+        other = 40;
+        placement.Place();
+        placement.Settle();
+        Assert.Equal(AboveOther, reservation.Granted);
+
+        other = 0;
+        placement.Place();
+        placement.Settle();
+        Assert.Equal(Bottom, reservation.Granted);
+        Assert.Equal(3, placement.SetPosCalls);
     }
 
     [Fact]

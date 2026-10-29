@@ -33,6 +33,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _floatingPlaced;
     private bool _appBarRegistered;
     private readonly AppBarReservation _appBar = new();
+    private bool _placePosted;
     private uint _appBarEdge;
     private bool _fullscreenAppActive;
     private bool _frameScheduled;
@@ -817,7 +818,16 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             switch ((uint)wParam)
             {
                 case Win32.ABN_POSCHANGED:
-                    _platform.Loop.Post(PlacePanel);
+                    // A burst of these, as each ABM_SETPOS sends, places the panel once.
+                    if (!_placePosted)
+                    {
+                        _placePosted = true;
+                        _platform.Loop.Post(() =>
+                        {
+                            _placePosted = false;
+                            PlacePanel();
+                        });
+                    }
                     break;
                 case Win32.ABN_FULLSCREENAPP:
                     // Step back while another app is fullscreen on this monitor, as the taskbar does.
