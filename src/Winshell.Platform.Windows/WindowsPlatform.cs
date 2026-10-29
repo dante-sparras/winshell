@@ -152,7 +152,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     internal void UpdatePopupGrab(Win32Window window, bool grabbing)
     {
-        if (grabbing)
+        if (grabbing && window.Handle != 0)
             _grabbing.Add(window);
         else
             _grabbing.Remove(window);
