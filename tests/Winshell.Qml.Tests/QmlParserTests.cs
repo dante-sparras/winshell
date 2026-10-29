@@ -173,6 +173,16 @@ public class QmlParserTests
     }
 
     [Fact]
+    public void Required_name_marks_an_existing_property()
+    {
+        var doc = QmlParser.Parse("Item {\n  required label\n  required property int value: 1\n}");
+        Assert.Equal("label", Assert.IsType<QmlRequiredMember>(doc.Root.Members[0]).Name);
+        var declared = Assert.IsType<QmlPropertyDeclaration>(doc.Root.Members[1]);
+        Assert.True(declared.IsRequired);
+        Assert.Equal("value", declared.Name);
+    }
+
+    [Fact]
     public void Reports_where_a_syntax_error_is()
     {
         var ex = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse("Item {\n  width: 5\n  height 3\n}", "shell.qml"));

@@ -186,7 +186,7 @@ public sealed class DynamicProperty
 
     public bool IsReadonly { get; init; }
 
-    public bool IsRequired { get; init; }
+    public bool IsRequired { get; set; }
 
     public bool IsDefault { get; init; }
 
