@@ -1,6 +1,8 @@
+using SkiaSharp;
 using Winshell.Platform.Windows.Native;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
+using Winshell.Runtime.Quick;
 
 namespace Winshell.Platform.Windows.Tests;
 
@@ -134,6 +136,54 @@ public class WindowListTests
     }
 
     [Fact]
+    public void A_preview_leaves_out_the_invisible_resize_borders()
+    {
+        // A 1280x720 frame with 7-pixel borders on the left, right and bottom, as Windows 11 draws a normal window.
+        Assert.Equal(new RECT(7, 0, 1287, 720), WindowRules.PreviewSource(new RECT(93, 100, 1387, 827), new RECT(100, 100, 1380, 820)));
+        // A maximized window hangs over the monitor by its borders; the frame is the monitor.
+        Assert.Equal(new RECT(8, 8, 1928, 1048), WindowRules.PreviewSource(new RECT(-8, -8, 1928, 1048), new RECT(0, 0, 1920, 1040)));
+    }
+
+    [Fact]
+    public void Without_a_frame_inside_the_window_the_preview_is_the_whole_window()
+    {
+        Assert.Equal(new RECT(0, 0, 400, 300), WindowRules.PreviewSource(new RECT(10, 10, 410, 310), default));
+        Assert.Equal(new RECT(0, 0, 400, 300), WindowRules.PreviewSource(new RECT(10, 10, 410, 310), new RECT(500, 500, 600, 600)));
+        Assert.Equal(new RECT(0, 0, 0, 0), WindowRules.PreviewSource(default, new RECT(0, 0, 10, 10)));
+    }
+
+    [Fact]
+    public void A_preview_fits_its_box_keeping_its_shape_centered()
+    {
+        Assert.Equal(new RECT(10, 38, 210, 150), WindowRules.FitPreview(new RECT(10, 20, 210, 168), 1280, 720));
+        Assert.Equal(new RECT(70, 20, 150, 168), WindowRules.FitPreview(new RECT(10, 20, 210, 168), 540, 1000));
+    }
+
+    [Fact]
+    public void A_small_window_is_previewed_at_its_own_size_not_enlarged() =>
+        Assert.Equal(new RECT(60, 59, 160, 129), WindowRules.FitPreview(new RECT(10, 20, 210, 168), 100, 70));
+
+    [Fact]
+    public void A_preview_with_no_box_or_no_source_is_empty()
+    {
+        Assert.Equal(default, WindowRules.FitPreview(default, 100, 100));
+        Assert.Equal(default, WindowRules.FitPreview(new RECT(0, 0, 100, 100), 0, 100));
+    }
+
+    [Fact]
+    public void A_thumbnail_without_a_native_window_draws_nothing_and_keeps_no_preview()
+    {
+        var scene = new Scene();
+        var thumbnail = new WindowThumbnail { Width = 200, Height = 120 };
+        thumbnail.SetParentItem(scene.Root);
+        using var surface = SKSurface.Create(new SKImageInfo(200, 120));
+        scene.Paint(surface.Canvas, TimeSpan.Zero);
+        Assert.Equal(new QSize(0, 0), thumbnail.SourceSize);
+        Assert.Null(thumbnail.Window);
+        thumbnail.Destroy();
+    }
+
+    [Fact]
     public void The_window_list_speaks_Windows_names()
     {
         var list = MetaType.Of(typeof(WindowListService));
@@ -159,5 +209,9 @@ public class WindowListTests
         Assert.False(window.Methods.ContainsKey("fullscreenOn"));
         Assert.False(window.Methods.ContainsKey("setRectangle"));
         Assert.False(window.Methods.ContainsKey("unsetRectangle"));
+
+        var thumbnail = MetaType.Of(typeof(WindowThumbnail));
+        Assert.True(thumbnail.Properties["window"].CanWrite);
+        Assert.False(thumbnail.Properties["sourceSize"].CanWrite);
     }
 }

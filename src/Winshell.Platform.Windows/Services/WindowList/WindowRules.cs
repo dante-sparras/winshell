@@ -119,4 +119,36 @@ internal static class WindowRules
     /// </summary>
     public static bool SettleAttention(HashSet<nint> wanting, nint active, Func<nint, bool> listed) =>
         wanting.RemoveWhere(hwnd => hwnd == active || !listed(hwnd)) > 0;
+
+    /// <summary>
+    /// The part of a window a preview shows, relative to the window's corner: its visible frame, without the
+    /// invisible borders Windows puts around it for resizing. The whole window when the frame is unknown.
+    /// </summary>
+    public static RECT PreviewSource(RECT window, RECT frame)
+    {
+        var whole = new RECT(0, 0, Math.Max(0, window.Width), Math.Max(0, window.Height));
+        if (frame.Width <= 0 || frame.Height <= 0 || window.Width <= 0 || window.Height <= 0)
+            return whole;
+        var left = Math.Clamp(frame.Left - window.Left, 0, window.Width);
+        var top = Math.Clamp(frame.Top - window.Top, 0, window.Height);
+        var right = Math.Clamp(frame.Right - window.Left, left, window.Width);
+        var bottom = Math.Clamp(frame.Bottom - window.Top, top, window.Height);
+        return right - left <= 0 || bottom - top <= 0 ? whole : new RECT(left, top, right, bottom);
+    }
+
+    /// <summary>
+    /// Where a preview of a source this many pixels in size goes in a box: as large as fits without being enlarged,
+    /// keeping its shape, and centered. Empty when either has no area.
+    /// </summary>
+    public static RECT FitPreview(RECT box, int sourceWidth, int sourceHeight)
+    {
+        if (box.Width <= 0 || box.Height <= 0 || sourceWidth <= 0 || sourceHeight <= 0)
+            return default;
+        var scale = Math.Min(1, Math.Min((double)box.Width / sourceWidth, (double)box.Height / sourceHeight));
+        var width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
+        var height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
+        var left = box.Left + (box.Width - width) / 2;
+        var top = box.Top + (box.Height - height) / 2;
+        return new RECT(left, top, left + width, top + height);
+    }
 }

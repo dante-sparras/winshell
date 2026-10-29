@@ -36,7 +36,7 @@ ShellRoot {
 }
 ```
 
-For an app window preview, assign an `AppWindow` to `target` instead. A taskbar or switcher can start sessions when its previews open and stop them when they close. The target must come from the current generation. Changing or destroying it stops capture; restarting requires another explicit `start()`. `includeCursor` takes effect on the next start. `frameInterval` is the minimum interval between reads, clamped to 16–1000 milliseconds; Windows supplies frames when content changes.
+To capture an app window, assign an `AppWindow` to `target` instead. For a taskbar or switcher preview, use `WindowThumbnail` from `Winshell.Windows`: DWM draws it live, with no capture border around the source and no pixels copied. The target must come from the current generation. Changing or destroying it stops capture; restarting requires another explicit `start()`. `includeCursor` takes effect on the next start. `frameInterval` is the minimum interval between reads, clamped to 16–1000 milliseconds; Windows supplies frames when content changes.
 
 `CaptureView` fits and centers the image, preserving its aspect ratio. Its implicit size is the image's physical size divided by the preview window's scale. Explicit width and height are logical scene coordinates. `pixelSize` and exports always use physical pixels, including on mixed-DPI monitors. Window capture uses Windows' capture bounds, which can include the frame; it does not map a logical desktop rectangle or reposition the source. Resize replaces the capture pool/session and waits for a complete frame at the new size. A minimized, protected, locked or otherwise unavailable source may stop producing pixels. There is no GDI fallback or attempt to bypass content protection.
 
