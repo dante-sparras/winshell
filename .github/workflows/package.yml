@@ -47,7 +47,7 @@ permissions:
 jobs:
   package:
     name: package
-    runs-on: windows-latest
+    runs-on: windows-2025
     # A release waits for a person to approve its signing request in SignPath.
     timeout-minutes: ${{ inputs.tag != '' && 150 || 30 }}
     env:
@@ -179,7 +179,7 @@ jobs:
     name: release
     if: ${{ inputs.tag != '' }}
     needs: package
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 15
     permissions:
       contents: write # uploads to the release
