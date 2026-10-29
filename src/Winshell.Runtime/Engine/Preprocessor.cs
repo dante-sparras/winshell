@@ -9,6 +9,7 @@ namespace Winshell.Runtime;
 /// <c>hasVersion</c> checks the Winshell release stamped into this build.
 /// An expression is only <c>hasVersion</c>, <c>hasQtVersion</c>, <c>true</c>, <c>false</c>,
 /// <c>!</c>, <c>&amp;&amp;</c>, <c>||</c>, and parentheses. It is not script.
+/// <c>//@ pragma</c> is left in place. The shell reads those lines from the source file.
 /// </summary>
 public static class Preprocessor
 {
@@ -75,7 +76,7 @@ public static class Preprocessor
                     else
                         active = stack.Pop().ParentActive;
                 }
-                else
+                else if (!IsPragma(directive))
                     warnings?.Add($"line {lineNumber}: unknown preprocessor directive '{directive}'");
                 output.Append(line).Append('\n');
                 continue;
@@ -87,6 +88,14 @@ public static class Preprocessor
         if (output.Length > 0 && !text.EndsWith('\n'))
             output.Length--;
         return output.ToString();
+    }
+
+    /// <summary><c>//@ pragma</c> names shell settings. It is not a conditional, and it is not a typo.</summary>
+    private static bool IsPragma(string directive)
+    {
+        var space = directive.IndexOfAny([' ', '\t']);
+        var word = space < 0 ? directive : directive[..space];
+        return word == "pragma";
     }
 
     private static bool Evaluate(string expression, int line, ICollection<string>? warnings)

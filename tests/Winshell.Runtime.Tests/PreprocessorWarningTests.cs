@@ -23,6 +23,15 @@ public class PreprocessorWarningTests
     }
 
     [Fact]
+    public void A_pragma_stays_in_the_file_and_is_not_a_warning()
+    {
+        var warnings = new List<string>();
+        var text = Preprocessor.Run("//@ pragma ShellId demo\nItem {}", warnings);
+        Assert.Contains("//@ pragma ShellId demo", text, StringComparison.Ordinal);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
     public void An_else_without_an_if_is_reported()
     {
         var warnings = new List<string>();
