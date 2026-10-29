@@ -484,7 +484,10 @@ internal sealed class DirectWriteLayout : IDisposable
         try
         {
             _layout.TextAlignment = Alignment(horizontalAlignment);
-            if (!wrapping && boxWidth > 0 && !double.IsNaN(boxWidth))
+            // A wrap with no width is laid out at the unbounded sentinel. Centre and right alignment
+            // would then paint around the middle of that width, off the item. Align inside the box.
+            var unbounded = previousWidth >= 999_999f;
+            if (boxWidth > 0 && !double.IsNaN(boxWidth) && (!wrapping || unbounded))
                 _layout.MaxWidth = (float)boxWidth;
             var width = (float)(boxWidth > 0 && !double.IsNaN(boxWidth) ? boxWidth : Width);
             if (textStyle != 0)
