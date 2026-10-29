@@ -392,18 +392,25 @@ PopupWindow {
     Accessible.onPressAction: window.close()
     onClicked: window.close()
 
+    // Windows' caption close red with a white glyph, in light and dark alike; a contrast theme highlights instead.
     Rectangle {
+      objectName: "previewCloseFill"
       anchors.fill: parent
       radius: Theme.controlCornerRadius
-      color: close.pressed ? Theme.systemFillColorCritical : close.containsMouse ? Theme.systemFillColorCriticalBackground : "transparent"
+      color: !close.containsMouse && !close.pressed ? "transparent"
+        : Theme.highContrast ? Theme.systemColorHighlightColor
+        : close.pressed ? "#e6c42b1c" : "#c42b1c"
     }
 
     Text {
+      objectName: "previewCloseGlyph"
       anchors.centerIn: parent
       text: ""
       font.family: Theme.iconFontFamily
       font.pixelSize: 10
-      color: Theme.textFillColorPrimary
+      color: !close.containsMouse && !close.pressed ? Theme.textFillColorPrimary
+        : Theme.highContrast ? Theme.systemColorHighlightTextColor
+        : close.pressed ? "#b3ffffff" : "#ffffff"
     }
   }
 }
