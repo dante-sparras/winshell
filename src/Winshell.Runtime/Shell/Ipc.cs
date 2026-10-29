@@ -366,6 +366,8 @@ public sealed class SocketServer : QObject
     private bool _active;
     private QmlComponent? _handler;
     private CancellationTokenSource? _cancel;
+    private Task? _listen;
+    private int _generation;
     private readonly List<QObject> _clients = [];
 
     [Qml] public string Path { get { Track(); return _path; } set { if (SetField(ref _path, value ?? "")) Restart(); } }
@@ -378,46 +380,94 @@ public sealed class SocketServer : QObject
 
     private void Restart()
     {
-        _cancel?.Cancel();
-        _cancel = null;
+        StopListening();
         if (!IsComplete || !_active || _path.Length == 0 || Engine is null)
             return;
         var cancel = _cancel = new CancellationTokenSource();
+        var generation = _generation;
         var loop = Engine.Loop;
         var path = _path;
-        Task.Run(async () =>
+        var token = cancel.Token;
+        _listen = Task.Run(() => Listen(path, token, generation, loop));
+    }
+
+    private void StopListening()
+    {
+        var previous = _cancel;
+        var listen = _listen;
+        _cancel = null;
+        _listen = null;
+        Interlocked.Increment(ref _generation);
+        if (previous is null)
+            return;
+        previous.Cancel();
+        if (listen is null || listen.IsCompleted)
+            previous.Dispose();
+        else
+            listen.ContinueWith(static (_, state) => ((CancellationTokenSource)state!).Dispose(), previous,
+                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    private async Task Listen(string path, CancellationToken token, int generation, IEventLoop loop)
+    {
+        System.IO.Pipes.NamedPipeServerStream? pipe = null;
+        try
         {
-            try
+            if (path.StartsWith(@"\\.\pipe\", StringComparison.OrdinalIgnoreCase))
             {
-                if (path.StartsWith(@"\\.\pipe\", StringComparison.OrdinalIgnoreCase))
+                while (!token.IsCancellationRequested)
                 {
-                    while (!cancel.IsCancellationRequested)
+                    pipe = new System.IO.Pipes.NamedPipeServerStream(path[9..], System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.NamedPipeServerStream.MaxAllowedServerInstances, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+                    await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
+                    var connected = pipe;
+                    pipe = null;
+                    var seen = generation;
+                    loop.Post(() =>
                     {
-                        var pipe = new System.IO.Pipes.NamedPipeServerStream(path[9..], System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.NamedPipeServerStream.MaxAllowedServerInstances, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
-                        await pipe.WaitForConnectionAsync(cancel.Token).ConfigureAwait(false);
-                        loop.Post(() => Accept(pipe));
-                    }
-                    return;
+                        if (seen != _generation || IsDestroyed)
+                        {
+                            connected.Dispose();
+                            return;
+                        }
+                        Accept(connected);
+                    });
                 }
-                if (File.Exists(path))
-                    File.Delete(path);
-                using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                listener.Bind(new UnixDomainSocketEndPoint(path));
-                listener.Listen(16);
-                while (!cancel.IsCancellationRequested)
+                return;
+            }
+            if (File.Exists(path))
+                File.Delete(path);
+            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            listener.Bind(new UnixDomainSocketEndPoint(path));
+            listener.Listen(16);
+            while (!token.IsCancellationRequested)
+            {
+                var client = await listener.AcceptAsync(token).ConfigureAwait(false);
+                var seen = generation;
+                loop.Post(() =>
                 {
-                    var client = await listener.AcceptAsync(cancel.Token).ConfigureAwait(false);
-                    loop.Post(() => Accept(new NetworkStream(client, ownsSocket: true)));
-                }
+                    if (seen != _generation || IsDestroyed)
+                    {
+                        client.Dispose();
+                        return;
+                    }
+                    Accept(new NetworkStream(client, ownsSocket: true));
+                });
             }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception e) when (e is SocketException or IOException or UnauthorizedAccessException)
-            {
-                loop.Post(() => Engine?.Log.Warn("io", $"SocketServer: cannot listen on {path}: {e.Message}"));
-            }
-        });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (Exception e) when (e is SocketException or IOException or UnauthorizedAccessException)
+        {
+            loop.Post(() => Engine?.Log.Warn("io", $"SocketServer: cannot listen on {path}: {e.Message}"));
+        }
+        finally
+        {
+            pipe?.Dispose();
+        }
     }
 
     private void Accept(Stream stream)
@@ -437,7 +487,7 @@ public sealed class SocketServer : QObject
 
     protected override void OnDestroy()
     {
-        _cancel?.Cancel();
+        StopListening();
         if (_path.Length > 0 && !_path.StartsWith(@"\\", StringComparison.Ordinal))
         {
             try
