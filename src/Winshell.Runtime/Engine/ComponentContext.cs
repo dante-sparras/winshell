@@ -43,6 +43,9 @@ public sealed class ComponentContext
         return true;
     }
 
+    /// <summary>Whether this context has the name. Unlike <see cref="TryGetContextProperty"/>, this does not read it.</summary>
+    public bool HasContextProperty(string name) => _properties is not null && _properties.ContainsKey(name);
+
     public bool TryGetContextProperty(string name, out object? value)
     {
         if (_properties is not null && _properties.TryGetValue(name, out value))

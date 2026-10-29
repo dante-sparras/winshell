@@ -13,9 +13,26 @@ namespace Winshell.Runtime;
 /// </summary>
 public sealed class ScopeObject : ObjectInstance
 {
+    /// <summary>
+    /// Names the JavaScript globals provide. A scope that does not have one still has to be walked once, in case a
+    /// property uses the name, and the miss is remembered so the next binding does not walk it again.
+    /// </summary>
+    private static readonly HashSet<string> Intrinsics = new(StringComparer.Ordinal)
+    {
+        "AggregateError", "Array", "ArrayBuffer", "Atomics", "BigInt", "BigInt64Array", "BigUint64Array", "Boolean",
+        "DataView", "Date", "Error", "EvalError", "FinalizationRegistry", "Float32Array", "Float64Array", "Function",
+        "Infinity", "Int16Array", "Int32Array", "Int8Array", "Intl", "JSON", "Map", "Math", "NaN", "Number", "Object",
+        "Promise", "Proxy", "Qt", "RangeError", "ReferenceError", "Reflect", "RegExp", "Set", "SharedArrayBuffer",
+        "String", "Symbol", "SyntaxError", "TypeError", "URIError", "Uint16Array", "Uint32Array", "Uint8Array",
+        "Uint8ClampedArray", "WeakMap", "WeakRef", "WeakSet", "console", "decodeURI", "decodeURIComponent",
+        "encodeURI", "encodeURIComponent", "escape", "eval", "globalThis", "isFinite", "isNaN", "parseFloat",
+        "parseInt", "undefined", "unescape",
+    };
+
     private readonly JsRuntime _runtime;
     private readonly QObject? _scopeObject;
     private readonly ComponentContext _context;
+    private HashSet<string>? _absent;
 
     public ScopeObject(JsRuntime runtime, QObject? scopeObject, ComponentContext context)
         : base(runtime.Engine)
@@ -67,7 +84,33 @@ public sealed class ScopeObject : ObjectInstance
         var name = property.AsString();
         if (name.Length == 0)
             return false;
-        return TryResolve(name, out _, out _);
+        if (_absent is not null && _absent.Contains(name))
+            return false;
+        if (Declares(name))
+            return true;
+        if (Intrinsics.Contains(name))
+            (_absent ??= new HashSet<string>(StringComparer.Ordinal)).Add(name);
+        return false;
+    }
+
+    /// <summary>Whether this scope has the name. This does not read the value, and it does not load a script import.</summary>
+    private bool Declares(string name)
+    {
+        var first = true;
+        for (var ctx = _context; ctx is not null; ctx = ctx.Parent)
+        {
+            if (ctx.TryGetId(name, out _))
+                return true;
+            if (ctx.HasContextProperty(name))
+                return true;
+            if (first && _scopeObject is not null && !_scopeObject.IsDestroyed && _scopeObject.HasMember(name))
+                return true;
+            first = false;
+            if (ctx.ContextObject is { IsDestroyed: false } root && root.HasMember(name))
+                return true;
+        }
+        var imports = _context.Imports;
+        return imports is not null && name.Length > 0 && char.IsUpper(name[0]) && imports.DeclaresName(name);
     }
 
     public override JsValue Get(JsValue property, JsValue receiver)
