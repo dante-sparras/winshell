@@ -59,6 +59,7 @@ The shell lets the app take the foreground (`AllowSetForegroundWindow`) and acti
 
 - Icons that Explorer draws itself, such as volume, network and battery on Windows 11, are not `Shell_NotifyIcon` icons. Use `Winshell.Audio`, `Winshell.Network` and `Winshell.Power`.
 - The order of `items` is the order apps added their icons. It is not the order the user arranged in the taskbar.
+- An app that finds the taskbar with `FindWindow("Shell_TrayWnd")` finds the shell's window. Menu commands (`WM_COMMAND` with no control window) and `WM_SYSCOMMAND` are posted on to Explorer's taskbar, but a command sent for an answer gets 0. Private `WM_USER` messages are not forwarded because their data layout is unknown. The window has none of the children of Explorer's, such as `TrayNotifyWnd` or `ReBarWindow32`, so an app that looks for those finds nothing.
 
 ## Checks only a live session can do
 
