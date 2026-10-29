@@ -95,8 +95,11 @@ public sealed class Scene : IItemHost
             return;
         var old = _focusItem;
         _focusItem = item;
-        old?.SetActiveFocus(false);
+        // Activate the new item first. A control shown only while it or its parent has focus
+        // (visible: parent.activeFocus || activeFocus) would otherwise hide for one binding
+        // update, and that hide would drop the focus that just moved onto it.
         item?.SetActiveFocus(true);
+        old?.SetActiveFocus(false);
         // Siblings in the same focus scope lose their focus flag.
         if (old is not null && item is not null && old.Focus)
             old.Focus = false;

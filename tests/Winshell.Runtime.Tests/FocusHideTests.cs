@@ -1,3 +1,4 @@
+using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -60,6 +61,37 @@ public class FocusHideTests
         root.Enabled = false;
         Assert.False(child.Enabled);
         Assert.True(Convert.ToInt32(child.ReadProperty("notes")) > before);
+    }
+
+    [Fact]
+    public void Focus_can_move_onto_a_child_that_is_visible_only_while_focused()
+    {
+        var (card, scene, shell) = Show("""
+            import QtQuick
+            Item {
+              id: card
+              width: 40
+              height: 40
+              activeFocusOnTab: true
+              property Item closer: close
+              Item {
+                id: close
+                objectName: "close"
+                width: 10
+                height: 10
+                activeFocusOnTab: true
+                visible: card.activeFocus || activeFocus
+              }
+            }
+            """);
+        using var _ = shell;
+        card.ForceActiveFocus(QtEnums.TabFocusReason);
+        var close = (Item)card.ReadProperty("closer")!;
+        Assert.True(close.Visible);
+        close.ForceActiveFocus(QtEnums.TabFocusReason);
+        Assert.Same(close, scene.FocusItem);
+        Assert.True(close.ActiveFocus);
+        Assert.True(close.Visible);
     }
 
     private static (Item Root, Scene Scene, TestShell Shell) Show(string qml)
