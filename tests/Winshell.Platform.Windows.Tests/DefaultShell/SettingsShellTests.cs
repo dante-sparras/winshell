@@ -156,6 +156,30 @@ public class SettingsShellTests
     }
 
     [Fact]
+    public void An_update_ready_to_install_shows_in_the_notification_area_and_opens_its_card()
+    {
+        using var updates = new StagedUpdate("0.6.0");
+        using var run = new RunningShell(null, configure: e => WindowsModules.AddUpdates(e, updates.Updater));
+        var taskbar = run.Taskbars[0];
+        var icon = RunningShell.Walk(taskbar.ContentItem).Single(i => i.ObjectName == "updateReady");
+        Assert.True(icon.Visible);
+        Assert.Equal("Winshell 0.6.0 is ready. Restart Winshell to update", icon.ReadProperty("label"));
+
+        run.Click(taskbar, icon);
+        Assert.True(run.Settings.Visible);
+        Assert.Equal("about", run.View.ReadProperty("page"));
+        // The default shell checks by itself until the user turns it off.
+        Assert.True(updates.Updater.Automatic);
+    }
+
+    [Fact]
+    public void Without_an_update_the_notification_area_has_no_update_icon()
+    {
+        using var run = new RunningShell(null);
+        Assert.All(run.Taskbars, t => Assert.False(RunningShell.Walk(t.ContentItem).Single(i => i.ObjectName == "updateReady").Visible));
+    }
+
+    [Fact]
     public void Closing_Settings_hides_it_and_the_next_open_brings_it_back_where_it_was()
     {
         using var run = new RunningShell(null);
@@ -178,7 +202,7 @@ public class SettingsShellTests
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "winshell-settings-tests", Guid.NewGuid().ToString("N"));
         private readonly Theme _theme = Theme.Current;
 
-        public RunningShell(string? preferences, bool configFolder = true)
+        public RunningShell(string? preferences, bool configFolder = true, Action<QmlEngine>? configure = null)
         {
             var shell = Path.Combine(_directory, "shell");
             var config = Path.Combine(_directory, "config");
@@ -220,6 +244,8 @@ public class SettingsShellTests
                 return registry;
             })
             { ConfigRoot = config };
+            if (configure is not null)
+                Host.Services.Add(configure);
             Host.WatchFiles = false;
             Assert.True(Host.Start(), string.Join(Environment.NewLine, Messages));
             Settle();
@@ -270,11 +296,13 @@ public class SettingsShellTests
             }
         }
 
-        public void Click(Item item)
+        public void Click(Item item) => Click(Settings, item);
+
+        public void Click(ShellWindow window, Item item)
         {
             var at = item.MapToScene(item.Width / 2, item.Height / 2);
-            Settings.Scene.PointerPress(at.X, at.Y, QtEnums.LeftButton);
-            Settings.Scene.PointerRelease(at.X, at.Y, QtEnums.LeftButton);
+            window.Scene.PointerPress(at.X, at.Y, QtEnums.LeftButton);
+            window.Scene.PointerRelease(at.X, at.Y, QtEnums.LeftButton);
             Settle();
         }
 

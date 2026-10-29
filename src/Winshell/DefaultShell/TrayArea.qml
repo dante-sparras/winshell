@@ -4,7 +4,8 @@ import Winshell.Tray
 import QtQuick
 
 // The taskbar's default tray area, as Windows 11 lays it out: the chevron that opens the hidden icons, the icons
-// Settings shows on the taskbar, and the network, volume and battery icons that open quick settings.
+// Settings shows on the taskbar, and the network, volume and battery icons that open quick settings. While a Winshell
+// update waits for a restart, an icon for it opens its card in Winshell Settings, as Windows Update's does.
 Row {
   id: root
 
@@ -37,6 +38,15 @@ Row {
       item: modelData
       window: root.window
     }
+  }
+
+  TaskbarButton {
+    objectName: "updateReady"
+    visible: Updates.status === UpdateStatus.Ready
+    implicitWidth: 32
+    glyph: ""
+    label: "Winshell " + Updates.version + " is ready. Restart Winshell to update"
+    onInvoked: if (root.window) root.window.updatesRequested()
   }
 
   QuickSettingsButton {

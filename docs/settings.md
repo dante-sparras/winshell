@@ -21,7 +21,7 @@ Closing the window hides it. The next open brings it back on the page it was on.
 | Notifications | Do not disturb as Windows reports it, and per app whether Winshell's notification center shows its notifications. **Clear all** in the notification center leaves an app that is turned off alone. Windows still decides banners and sounds. |
 | Hotkeys | Open Start (`Win` until changed) and Open Winshell Settings (none until set). Empty turns one off. A hotkey starts with Win, Ctrl or Alt, or is `Win` alone, so it never takes a key other apps type with; the two hotkeys cannot be the same. A chord Windows or another app holds says so and is not taken. |
 | Startup | Run Winshell when you sign in, for your account only, off until you turn it on. If Windows' Startup apps page turned it off, the switch shows off and only that page turns it back on. An entry that starts a `winshell.exe` in another folder, or with other options, also shows off; turning it on points it at this one. |
-| About | The version, the config folder and this instance's log, each with a button to open it. Opening a config folder that does not exist yet makes it, with a `preferences.json` of defaults. |
+| About | The version; Winshell's updates, with **Check for updates** or **Restart now** and **Get Winshell updates automatically** (see [Winshell updates](updates.md)); the config folder and this instance's log, each with a button to open it. Opening a config folder that does not exist yet makes it, with a `preferences.json` of defaults. |
 
 Search matches every word typed against each setting's title, description and a few keywords. Titles that start with what was typed come first. Enter or a click opens the setting's page with the keyboard on it.
 
@@ -42,10 +42,11 @@ Everything the window chooses applies at once, without a reload, and is kept in 
 | `hiddenNotificationApps` | `[]` | `{ "id": "<AppUserModelID>", "name": "<app name>" }` for each app turned off |
 | `startHotkey` | `"Win"` | a sequence as `Hotkey.sequence` takes it, or `""` |
 | `settingsHotkey` | `""` | the same |
+| `autoUpdate` | `true` | `false` stops automatic checks and downloads. Only a portable Winshell updates itself. |
 
 Start pins and quick settings tiles stay in the files those surfaces already keep: `launcher.json` next to the shell and `quick-settings.json` in its state folder. Start and quick settings follow those files as they change. The sign-in entry is the `Winshell` value under the user's `Run` key; see [where files live](development.md#where-files-live).
 
-In QML, `Preferences` is the singleton that reads and writes `preferences.json`. Surfaces bind to it: `centered: Preferences.taskbarCentered`, `WindowEffects.backdrop: Preferences.material`. It sets `Theme.colorScheme` and `Theme.accentColor`, and `Shell.configRoot`, `Shell.logPath` and `Shell.version` fill the About page.
+In QML, `Preferences` is the singleton that reads and writes `preferences.json`. Surfaces bind to it: `centered: Preferences.taskbarCentered`, `WindowEffects.backdrop: Preferences.material`. It sets `Theme.colorScheme`, `Theme.accentColor` and `Updates.automatic`, and `Shell.configRoot`, `Shell.logPath` and `Shell.version` fill the About page.
 
 ## Checks only a live session can do
 
@@ -55,3 +56,4 @@ In QML, `Preferences` is the singleton that reads and writes `preferences.json`.
 4. Pick **Mica**. The taskbar and the flyouts show Mica instead of Acrylic.
 5. Turn on Narrator and move through the pane and a page with Tab and the arrow keys. Each page is read as a list item, selected or not, and each control by its setting.
 6. Turn on **Run Winshell when I sign in**, sign out and in again. Winshell starts without a console window, and Windows' Startup apps page lists it.
+7. In a portable Winshell older than the latest release, choose **Check for updates** on the About page. It downloads the release, the notification area shows the update icon, and **Restart now** brings Winshell back at the new version.

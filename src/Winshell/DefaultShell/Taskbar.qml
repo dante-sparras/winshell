@@ -31,6 +31,8 @@ PanelWindow {
   signal searchRequested(Item button)
   // Taskbar settings, from the menu a right click on an empty part of the taskbar opens.
   signal settingsRequested()
+  // Winshell's updates, from the notification area icon of an update that is ready to install.
+  signal updatesRequested()
   property Component trayArea: Component { TrayArea { window: root } }
   property Component clockArea: Component { TaskbarClock { notificationListener: root.notificationListener } }
 
