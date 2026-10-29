@@ -67,6 +67,9 @@ public class QuickSettingsTests
     private static Item Button(DefaultShellHarness shell, string tile) =>
         DefaultShellHarness.FindAll(Tile(shell, tile)).Single(i => i.ObjectName == "tileButton");
 
+    private static Item OutputChevron(DefaultShellHarness shell) =>
+        DefaultShellHarness.FindAll(shell.Find("volume")).Single(i => i.ObjectName == "page");
+
     private static Slider Slider(DefaultShellHarness shell, string row) =>
         (Slider)DefaultShellHarness.FindAll(shell.Find(row)).Single(i => i.ObjectName == "slider");
 
@@ -185,7 +188,7 @@ public class QuickSettingsTests
         shell.Settle();
         Assert.Equal(0.5, slider.Value, 3);
 
-        var mute = DefaultShellHarness.FindAll(shell.Find("volume")).OfType<Button>().Single();
+        var mute = DefaultShellHarness.FindAll(shell.Find("volume")).Single(i => i.ObjectName == "glyph");
         shell.Click(mute);
         Assert.True(speakers.Audio.Muted);
         Assert.Equal(0.5, speakers.Audio.Volume, 3);
@@ -224,6 +227,84 @@ public class QuickSettingsTests
         Assert.Equal(["ms-settings:"], shell.Urls.Opened);
         shell.Click(battery);
         Assert.Equal(["ms-settings:", "ms-settings:batterysaver"], shell.Urls.Opened);
+    }
+
+    [Fact]
+    public void The_output_page_makes_the_device_the_user_picks_the_default()
+    {
+        var services = Laptop();
+        var headset = new FakeAudioNode("Headset");
+        services.Audio.Nodes.Add(new FakeAudioNode("Microphone", isPlayback: false));
+        services.Audio.Nodes.Add(new FakeAudioNode("Music app", isSession: true));
+        services.Audio.Nodes.Add(headset);
+        using var shell = new DefaultShellHarness(Content, services: services);
+
+        shell.Click(OutputChevron(shell));
+        Assert.False(shell.Has("mainPage"));
+        Assert.Equal("Speakers", shell.Find("output:0").ReadProperty("text"));
+        Assert.Equal("Headset", shell.Find("output:1").ReadProperty("text"));
+        Assert.False(shell.Has("output:2"));
+        Assert.True((bool)shell.Find("output:0").ReadProperty("checked")!);
+
+        shell.Click(shell.Find("output:1"));
+        Assert.Same(headset, services.Audio.DefaultPlaybackDevice);
+        Assert.False((bool)shell.Find("output:0").ReadProperty("checked")!);
+
+        // Windows changing the default moves the choice with it.
+        services.Audio.DefaultPlaybackDevice = (FakeAudioNode)services.Audio.Nodes.Values[0]!;
+        shell.Settle();
+        Assert.True((bool)shell.Find("output:0").ReadProperty("checked")!);
+        Assert.False((bool)shell.Find("output:1").ReadProperty("checked")!);
+
+        shell.Click(shell.Find("moreVolume"));
+        Assert.Equal(["ms-settings:apps-volume"], shell.Urls.Opened);
+        Assert.Equal(1, shell.Root.ReadProperty("closed"));
+    }
+
+    [Fact]
+    public void The_output_list_scrolls_inside_quick_settings_when_there_are_many_devices()
+    {
+        var services = Laptop();
+        for (var i = 0; i < 20; i++)
+            services.Audio.Nodes.Add(new FakeAudioNode($"Monitor {i}"));
+        using var shell = new DefaultShellHarness(Content, services: services);
+        shell.Click(OutputChevron(shell));
+        var more = shell.Find("moreVolume");
+        Assert.True(more.MapToScene(0, 0).Y + more.Height <= shell.Find("footer").MapToScene(0, 0).Y);
+    }
+
+    [Fact]
+    public void The_media_card_shows_the_playing_session_and_its_controls()
+    {
+        var services = Laptop();
+        var paused = new FakeMediaSession("Spotify", "Paused song", "Someone");
+        var playing = new FakeMediaSession("Firefox", "A video", "A channel") { IsPlaying = true };
+        services.Media.Sessions.Add(paused);
+        services.Media.Sessions.Add(playing);
+        using var shell = new DefaultShellHarness(Content, services: services);
+
+        Assert.Equal("A video", shell.Find("mediaTitle").ReadProperty("text"));
+        Assert.Equal("A channel", shell.Find("mediaArtist").ReadProperty("text"));
+        Assert.False(shell.Has("mediaArt"));
+        Assert.False(shell.Find("previous").Enabled);
+        var tree = new AccessibleTree(shell.Scene);
+        tree.Refresh();
+        Assert.Equal("Pause", tree.Find(shell.Find("playPause"))!.Name);
+
+        shell.Click(shell.Find("next"));
+        shell.Click(shell.Find("playPause"));
+        Assert.Equal(["next", "togglePlaying"], playing.Calls);
+        Assert.Empty(paused.Calls);
+
+        // Nothing plays now, so the card shows the first session.
+        Assert.Equal("Paused song", shell.Find("mediaTitle").ReadProperty("text"));
+        tree.Refresh();
+        Assert.Equal("Play", tree.Find(shell.Find("playPause"))!.Name);
+
+        services.Media.Sessions.RemoveAt(1);
+        services.Media.Sessions.RemoveAt(0);
+        shell.Settle();
+        Assert.False(shell.Has("media"));
     }
 
     [Fact]
@@ -327,8 +408,15 @@ public class QuickSettingsTests
             .Where(p => p.GetCustomAttribute<QmlAttribute>() is not null)
             .ToDictionary(p => p.Name);
 
+        static HashSet<string> Methods(Type type) => type
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.GetCustomAttribute<QmlAttribute>() is not null)
+            .Select(m => m.Name)
+            .ToHashSet();
+
         foreach (var (fake, real) in FakeServices.Pairs)
         {
+            Assert.Subset(Methods(real), Methods(fake));
             var realProperties = Qml(real);
             foreach (var property in Qml(fake).Values)
             {
