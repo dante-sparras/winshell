@@ -55,7 +55,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell.Qml.Tests/
 │   ├── Winshell.Runtime.Tests/
 │   ├── Winshell.Platform.Windows.Tests/
-│   └── Winshell.Tests/              # Runs winshell.exe instances side by side
+│   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
+│   └── TestSupport/                 # Source files the test projects link instead of copying
 ├── winshell.slnx                    # The solution the check builds
 ├── dotnet-tools.json                # DocFX, pinned
 ├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
