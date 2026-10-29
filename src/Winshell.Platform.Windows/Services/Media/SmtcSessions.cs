@@ -19,6 +19,7 @@ internal sealed class SmtcSessions
 
     private readonly IEventLoop _loop;
     private readonly List<SmtcSession> _sessions = [];
+    private readonly AppNames _names;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private int _nextId = 1;
 
@@ -26,7 +27,7 @@ internal sealed class SmtcSessions
     {
         _loop = loop;
         Log = log;
-        ArtCache.CleanOld();
+        _names = new AppNames(loop, log, SmtcSession.DescribeApp, Sync);
         _ = Start();
     }
 
@@ -47,7 +48,10 @@ internal sealed class SmtcSessions
     {
         try
         {
+            var clean = Task.Run(ArtCache.CleanOld);
             var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            // Art is stored only once there are sessions, so the cleanup cannot delete art this run wrote.
+            await clean;
             Post(() =>
             {
                 _manager = manager;
@@ -79,7 +83,8 @@ internal sealed class SmtcSessions
         // drops it and starts again. That cancels the read of its title and art. Match the app id instead.
         var incoming = current.ToList();
         var held = _sessions.ToList();
-        var pair = Pair(held.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
+        var ids = incoming.Select(SmtcSession.IdOf).ToList();
+        var pair = Pair(held.Select(s => s.AppId).ToList(), ids);
         var kept = new bool[held.Count];
         for (var i = 0; i < incoming.Count; i++)
         {
@@ -90,7 +95,10 @@ internal sealed class SmtcSessions
                 held[existing].Retarget(incoming[i]);
                 continue;
             }
-            var session = new SmtcSession(this, incoming[i], _nextId++);
+            // A session is added once its app has a name. Naming it posts another Sync.
+            if (_names.Get(ids[i]) is not { } name)
+                continue;
+            var session = new SmtcSession(this, incoming[i], _nextId++, name);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
@@ -141,13 +149,13 @@ internal sealed class SmtcSession
     private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
     private double _position;
 
-    public SmtcSession(SmtcSessions owner, GlobalSystemMediaTransportControlsSession session, int id)
+    public SmtcSession(SmtcSessions owner, GlobalSystemMediaTransportControlsSession session, int id, string appName)
     {
         _owner = owner;
         Session = session;
         Id = id;
         AppId = IdOf(session);
-        AppName = DescribeApp(AppId);
+        AppName = appName;
     }
 
     public GlobalSystemMediaTransportControlsSession Session { get; private set; }
@@ -262,7 +270,7 @@ internal sealed class SmtcSession
     {
         _released = true;
         Unhook();
-        ArtCache.Release(ArtUrl);
+        ArtCache.ReleaseLater(ArtUrl);
     }
 
     private void Refresh()
@@ -423,16 +431,16 @@ internal sealed class SmtcSession
     {
         if (_released || request != _artRequest)
         {
-            ArtCache.Release(url);
+            ArtCache.ReleaseLater(url);
             return;
         }
         _artApplied = request;
         if (url == ArtUrl)
         {
-            ArtCache.Release(url);
+            ArtCache.ReleaseLater(url);
             return;
         }
-        ArtCache.Release(ArtUrl);
+        ArtCache.ReleaseLater(ArtUrl);
         ArtUrl = url;
         Changed?.Invoke(["trackArtUrl", "metadata"], false);
     }
@@ -552,8 +560,11 @@ internal sealed class SmtcSession
         }
     }
 
-    /// <summary>The name the Start menu shows for an AppUserModelID, or the program name when it has none.</summary>
-    private static string DescribeApp(string appId)
+    /// <summary>
+    /// The name the Start menu shows for an AppUserModelID, or the program name when it has none. It asks the
+    /// shell and can scan processes, so call it off the UI thread.
+    /// </summary>
+    internal static string DescribeApp(string appId)
     {
         var isProgram = appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
         var name = StartMenuName(appId);
@@ -614,6 +625,47 @@ internal sealed class SmtcSession
             }
         }
         return null;
+    }
+}
+
+/// <summary>
+/// The names of the apps behind media sessions, looked up on the thread pool and kept for the life of the
+/// process. Lives on the UI thread.
+/// </summary>
+internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> describe, Action named)
+{
+    private readonly Dictionary<string, string?> _names = [];
+
+    /// <summary>
+    /// The app's name, or null while it is looked up. When the lookup ends, <c>named</c> runs on the loop.
+    /// </summary>
+    public string? Get(string appId)
+    {
+        if (_names.TryGetValue(appId, out var name))
+            return name;
+        _names[appId] = null;
+        _ = LookUp(appId);
+        return null;
+    }
+
+    private async Task LookUp(string appId)
+    {
+        var name = appId;
+        try
+        {
+            name = await Task.Run(() => describe(appId));
+        }
+#pragma warning disable CA1031 // A failed lookup still names the app, by its id.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            loop.Post(() => log.Warn("media", $"Cannot name {appId}: {e.Message}"));
+        }
+        loop.Post(() =>
+        {
+            _names[appId] = name;
+            named();
+        });
     }
 }
 
@@ -722,6 +774,16 @@ internal static class ArtCache
                 // An image loader still has it open; a later start cleans it up.
             }
         }
+    }
+
+    /// <summary>
+    /// <see cref="Release"/> on the thread pool, for the UI thread: the lock is held while art is written, and
+    /// the last release deletes the file.
+    /// </summary>
+    public static void ReleaseLater(string url)
+    {
+        if (url.Length > 0)
+            _ = Task.Run(() => Release(url));
     }
 
     /// <summary>Deletes art left behind by earlier runs, and their folders once empty.</summary>
