@@ -76,6 +76,18 @@ Item {
       action.activate.activate()
   }
 
+  // Win+number: the app at that place, counted from 0, as a click on its button. newWindow opens another window of
+  // it, as Win+Shift+number does.
+  function invokeAt(index, newWindow) {
+    const task = (tasks || [])[index]
+    if (!task)
+      return
+    if (newWindow)
+      launch(task)
+    else
+      invoke(task)
+  }
+
   // The button with keyboard focus is scrolled fully into view, as Tab, the arrows or Narrator reach it.
   function reveal(button) {
     if (button.x < strip.contentX)
