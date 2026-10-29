@@ -79,6 +79,9 @@ public sealed partial class TextLayout : IDisposable
     /// <summary>The font faces DirectWrite used, in draw order.</summary>
     public IReadOnlyList<FontRun> FontRuns => _native?.FontRuns ?? [];
 
+    /// <summary>How many times drawing made DirectWrite lay the text out again.</summary>
+    internal int Relayouts => _native?.Relayouts ?? 0;
+
     public static TextLayout Build(
         IReadOnlyList<TextSpan> spans,
         double maxWidth,

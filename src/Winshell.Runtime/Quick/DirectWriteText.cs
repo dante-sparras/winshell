@@ -36,6 +36,9 @@ internal static class DirectWriteServices
     }
 }
 
+/// <summary>One copy of a layout to draw: its origin in DIPs, its colour, and whether span colours apply.</summary>
+internal readonly record struct TextPass(float X, float Y, QColor Color, bool UseSpans);
+
 internal sealed class DirectWriteEngine
 {
     private readonly IDWriteFactory7 _factory;
@@ -100,18 +103,19 @@ internal sealed class DirectWriteEngine
     }
 
     /// <summary>
-    /// Draws the layout into the Skia canvas. Axis-aligned text is read back in device pixels so ClearType
-    /// blends with what is already painted and the scale matches the canvas. Rotated text is grayscale.
+    /// Draws the passes of a layout into the Skia canvas, in order. Axis-aligned text is read back in device pixels
+    /// so ClearType blends with what is already painted and the scale matches the canvas. Rotated text is grayscale.
     /// </summary>
-    internal void Blit(IDWriteTextLayout layout, int textLength, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKCanvas canvas, SKRect dipBox, float originX, float originY, TextPixelMode mode, QColor color, bool useSpanColors, bool readRoot = true)
+    internal void Blit(IDWriteTextLayout layout, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKCanvas canvas, SKRect dipBox, ReadOnlySpan<TextPass> passes, TextPixelMode mode, bool readRoot = true)
     {
         var matrix = canvas.TotalMatrix;
         var axis = Math.Abs(matrix.SkewX) < 1e-3f && Math.Abs(matrix.SkewY) < 1e-3f && matrix.ScaleX > 0.01f && matrix.ScaleY > 0.01f;
+        var grayscale = mode == TextPixelMode.Aliased ? TextAntialiasMode.Aliased : TextAntialiasMode.Grayscale;
         // A SaveLayer is not what ReadPixels returns. Reading the root and writing it back with Src
         // replaces the layer, so text inside opacity punches a hole. Draw grayscale over the layer instead.
-        if (!axis || !readRoot)
+        if (!axis || !readRoot || canvas.Surface is not { } surface)
         {
-            BlitTransformed(layout, textLength, spans, canvas, dipBox, originX, originY, mode == TextPixelMode.Aliased ? TextAntialiasMode.Aliased : TextAntialiasMode.Grayscale, color, useSpanColors);
+            BlitTransformed(layout, spans, canvas, dipBox, passes, grayscale);
             return;
         }
         var aa = mode switch
@@ -133,113 +137,192 @@ internal sealed class DirectWriteEngine
         var pixelH = bottom - top;
         if (pixelW <= 0 || pixelH <= 0 || (long)pixelW * pixelH > 4096L * 4096L)
             return;
-        var info = new SKImageInfo(pixelW, pixelH, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using var read = new SKBitmap(info);
-        if (!TryRead(canvas, read, left, top))
+        lock (DirectWriteServices.Gate)
         {
-            var fallback = mode == TextPixelMode.Aliased ? TextAntialiasMode.Aliased : TextAntialiasMode.Grayscale;
-            BlitTransformed(layout, textLength, spans, canvas, dipBox, originX, originY, fallback, color, useSpanColors);
-            return;
+            var scratch = ScratchFor(pixelW, pixelH);
+            try
+            {
+                bool read;
+                using (var locked = scratch.Bitmap.Lock(BitmapLockFlags.Write))
+                using (var pixels = View(locked, pixelW, pixelH))
+                    read = surface.ReadPixels(pixels.Info, pixels.GetPixels(), pixels.RowBytes, left, top);
+                if (read)
+                {
+                    var dipLeft = (left - matrix.TransX) / matrix.ScaleX;
+                    var dipTop = (top - matrix.TransY) / matrix.ScaleY;
+                    DrawPasses(scratch, layout, spans, passes, matrix.ScaleX, matrix.ScaleY, -dipLeft, -dipTop, aa);
+                    canvas.Save();
+                    canvas.ResetMatrix();
+                    using (var paint = new SKPaint { BlendMode = SKBlendMode.Src })
+                    using (var locked = scratch.Bitmap.Lock(BitmapLockFlags.Read))
+                    using (var pixels = View(locked, pixelW, pixelH))
+                        canvas.DrawBitmap(pixels, left, top, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None), paint);
+                    canvas.Restore();
+                    return;
+                }
+            }
+            finally
+            {
+                Release(scratch);
+            }
         }
-        var dipLeft = (left - matrix.TransX) / matrix.ScaleX;
-        var dipTop = (top - matrix.TransY) / matrix.ScaleY;
-        DrawWic(layout, textLength, spans, read, matrix.ScaleX, matrix.ScaleY, originX - dipLeft, originY - dipTop, aa, color, useSpanColors, copyIn: true);
-        canvas.Save();
-        canvas.ResetMatrix();
-        using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
-        canvas.DrawBitmap(read, left, top, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None), paint);
-        canvas.Restore();
+        BlitTransformed(layout, spans, canvas, dipBox, passes, grayscale);
     }
 
-    private static bool TryRead(SKCanvas canvas, SKBitmap destination, int x, int y)
-    {
-        var surface = canvas.Surface;
-        return surface is not null && surface.ReadPixels(destination.Info, destination.GetPixels(), destination.RowBytes, x, y);
-    }
+    /// <summary>Direct2D render targets made for text. Text drawing keeps one and reuses it, so a repaint makes none.</summary>
+    internal int TargetsCreated { get; private set; }
 
-    private void BlitTransformed(IDWriteTextLayout layout, int textLength, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKCanvas canvas, SKRect dipBox, float originX, float originY, TextAntialiasMode aa, QColor color, bool useSpanColors)
+    private void BlitTransformed(IDWriteTextLayout layout, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKCanvas canvas, SKRect dipBox, ReadOnlySpan<TextPass> passes, TextAntialiasMode aa)
     {
         var scale = Math.Max(1f, Math.Max(Math.Abs(canvas.TotalMatrix.ScaleX), Math.Abs(canvas.TotalMatrix.ScaleY)));
         var pixelW = Math.Max(1, (int)Math.Ceiling(dipBox.Width * scale));
         var pixelH = Math.Max(1, (int)Math.Ceiling(dipBox.Height * scale));
         if ((long)pixelW * pixelH > 4096L * 4096L)
             return;
-        var info = new SKImageInfo(pixelW, pixelH, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using var bitmap = new SKBitmap(info);
         var dpiScaleX = pixelW / Math.Max(1f, dipBox.Width);
         var dpiScaleY = pixelH / Math.Max(1f, dipBox.Height);
-        DrawWic(layout, textLength, spans, bitmap, dpiScaleX, dpiScaleY, originX - dipBox.Left, originY - dipBox.Top, aa, color, useSpanColors, copyIn: false);
-        canvas.DrawBitmap(bitmap, dipBox, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None), paint: null);
-    }
-
-    private void DrawWic(IDWriteTextLayout layout, int textLength, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKBitmap bitmap, float scaleX, float scaleY, float originX, float originY, TextAntialiasMode aa, QColor color, bool useSpanColors, bool copyIn)
-    {
         lock (DirectWriteServices.Gate)
         {
-            var wic = _wic.CreateBitmap((uint)bitmap.Width, (uint)bitmap.Height, Vortice.WIC.PixelFormat.Format32bppPBGRA, BitmapCreateCacheOption.CacheOnLoad);
+            var scratch = ScratchFor(pixelW, pixelH);
             try
             {
-                if (copyIn)
-                    Copy(bitmap, wic, toWic: true);
-                var props = new RenderTargetProperties(RenderTargetType.Default, new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96f * scaleX, 96f * scaleY, RenderTargetUsage.None, FeatureLevel.Default);
-                var target = _d2d.CreateWicBitmapRenderTarget(wic, props);
-                var brushes = new List<ID2D1Brush>();
-                try
-                {
-                    target.TextAntialiasMode = aa;
-                    target.TextRenderingParams = _rendering;
-                    target.BeginDraw();
-                    if (!copyIn)
-                        target.Clear(new Color4(0, 0, 0, 0));
-                    var fill = target.CreateSolidColorBrush(ToColor(color), null);
-                    brushes.Add(fill);
-                    if (textLength > 0)
-                        layout.SetDrawingEffect(fill, new TextRange(0, (uint)textLength));
-                    if (useSpanColors)
-                    {
-                        foreach (var (start, length, spanColor) in spans)
-                        {
-                            if (length <= 0)
-                                continue;
-                            var brush = target.CreateSolidColorBrush(ToColor(spanColor), null);
-                            brushes.Add(brush);
-                            layout.SetDrawingEffect(brush, new TextRange((uint)start, (uint)length));
-                        }
-                    }
-                    target.DrawTextLayout(new Vector2(originX, originY), layout, fill, DrawTextOptions.EnableColorFont);
-                    target.EndDraw().CheckError();
-                }
-                finally
-                {
-                    if (textLength > 0)
-                        layout.SetDrawingEffect(null!, new TextRange(0, (uint)textLength));
-                    foreach (var brush in brushes)
-                        brush.Dispose();
-                    target.Dispose();
-                }
-                Copy(bitmap, wic, toWic: false);
+                using (var locked = scratch.Bitmap.Lock(BitmapLockFlags.Write))
+                using (var pixels = View(locked, pixelW, pixelH))
+                    pixels.Erase(SKColors.Transparent);
+                DrawPasses(scratch, layout, spans, passes, dpiScaleX, dpiScaleY, -dipBox.Left, -dipBox.Top, aa);
+                using (var locked = scratch.Bitmap.Lock(BitmapLockFlags.Read))
+                using (var pixels = View(locked, pixelW, pixelH))
+                    canvas.DrawBitmap(pixels, dipBox, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None), paint: null);
             }
             finally
             {
-                wic.Dispose();
+                Release(scratch);
             }
         }
     }
 
+    /// <summary>Draws every pass in one Direct2D draw. The pass that uses the span colours comes last.</summary>
+    private void DrawPasses(Scratch scratch, IDWriteTextLayout layout, IReadOnlyList<(int Start, int Length, QColor Color)> spans, ReadOnlySpan<TextPass> passes, float scaleX, float scaleY, float offsetX, float offsetY, TextAntialiasMode aa)
+    {
+        var target = scratch.Target;
+        var brushes = new List<ID2D1Brush>();
+        var colored = false;
+        try
+        {
+            target.SetDpi(96f * scaleX, 96f * scaleY);
+            target.TextAntialiasMode = aa;
+            target.BeginDraw();
+            foreach (var pass in passes)
+            {
+                var fill = target.CreateSolidColorBrush(ToColor(pass.Color), null);
+                brushes.Add(fill);
+                if (pass.UseSpans)
+                {
+                    foreach (var (start, length, spanColor) in spans)
+                    {
+                        if (length <= 0)
+                            continue;
+                        var brush = target.CreateSolidColorBrush(ToColor(spanColor), null);
+                        brushes.Add(brush);
+                        layout.SetDrawingEffect(brush, new TextRange((uint)start, (uint)length));
+                        colored = true;
+                    }
+                }
+                target.DrawTextLayout(new Vector2(offsetX + pass.X, offsetY + pass.Y), layout, fill, DrawTextOptions.EnableColorFont);
+            }
+            target.EndDraw().CheckError();
+        }
+        catch
+        {
+            // A target that failed mid-draw is not drawn with again; Release disposes it.
+            if (_scratch == scratch)
+                _scratch = null;
+            throw;
+        }
+        finally
+        {
+            if (colored)
+            {
+                foreach (var (start, length, _) in spans)
+                {
+                    if (length > 0)
+                        layout.SetDrawingEffect(null!, new TextRange((uint)start, (uint)length));
+                }
+            }
+            foreach (var brush in brushes)
+                brush.Dispose();
+        }
+    }
+
+    /// <summary>The largest scratch bitmap kept between draws. A larger draw gets its own, released after.</summary>
+    private const long KeptPixels = 1024L * 1024L;
+
+    private Scratch? _scratch;
+
+    /// <summary>A scratch bitmap at least this size. The kept one grows to cover each draw, up to <see cref="KeptPixels"/>.</summary>
+    private Scratch ScratchFor(int width, int height)
+    {
+        if (_scratch is { } kept && kept.Width >= width && kept.Height >= height)
+            return kept;
+        var w = Math.Max(width, _scratch?.Width ?? 0);
+        var h = Math.Max(height, _scratch?.Height ?? 0);
+        if ((long)w * h > KeptPixels)
+            (w, h) = (width, height);
+        var wic = _wic.CreateBitmap((uint)w, (uint)h, Vortice.WIC.PixelFormat.Format32bppPBGRA, BitmapCreateCacheOption.CacheOnLoad);
+        var props = new RenderTargetProperties(RenderTargetType.Default, new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96f, 96f, RenderTargetUsage.None, FeatureLevel.Default);
+        ID2D1RenderTarget target;
+        try
+        {
+            target = _d2d.CreateWicBitmapRenderTarget(wic, props);
+        }
+        catch
+        {
+            wic.Dispose();
+            throw;
+        }
+        TargetsCreated++;
+        target.TextRenderingParams = _rendering;
+        var created = new Scratch(wic, target, w, h);
+        if ((long)w * h <= KeptPixels)
+        {
+            _scratch?.Dispose();
+            _scratch = created;
+        }
+        return created;
+    }
+
+    private void Release(Scratch scratch)
+    {
+        if (scratch != _scratch)
+            scratch.Dispose();
+    }
+
+    /// <summary>The top-left corner of a locked WIC bitmap as a Skia bitmap. Skia copies it when it is drawn.</summary>
+    private static SKBitmap View(IWICBitmapLock locked, int width, int height)
+    {
+        var bitmap = new SKBitmap();
+        bitmap.InstallPixels(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul), locked.Data.DataPointer, (int)locked.Data.Pitch);
+        return bitmap;
+    }
+
     private static Color4 ToColor(QColor color) => new((float)color.R, (float)color.G, (float)color.B, (float)color.A);
 
-    private static unsafe void Copy(SKBitmap bitmap, IWICBitmap wic, bool toWic)
+    /// <summary>A WIC bitmap and the Direct2D target that draws into it.</summary>
+    private sealed class Scratch(IWICBitmap bitmap, ID2D1RenderTarget target, int width, int height) : IDisposable
     {
-        using var locker = wic.Lock(BitmapLockFlags.Read | BitmapLockFlags.Write);
-        var data = locker.Data;
-        var width = bitmap.Width * 4;
-        var height = bitmap.Height;
-        var srcPitch = toWic ? bitmap.RowBytes : (int)data.Pitch;
-        var dstPitch = toWic ? (int)data.Pitch : bitmap.RowBytes;
-        var src = toWic ? (byte*)bitmap.GetPixels() : (byte*)data.DataPointer;
-        var dst = toWic ? (byte*)data.DataPointer : (byte*)bitmap.GetPixels();
-        for (var y = 0; y < height; y++)
-            Buffer.MemoryCopy(src + y * srcPitch, dst + y * dstPitch, width, width);
+        public IWICBitmap Bitmap { get; } = bitmap;
+
+        public ID2D1RenderTarget Target { get; } = target;
+
+        public int Width { get; } = width;
+
+        public int Height { get; } = height;
+
+        public void Dispose()
+        {
+            Target.Dispose();
+            Bitmap.Dispose();
+        }
     }
 
     private IDWriteTextFormat CreateFormat(FontSpec font)
@@ -411,12 +494,18 @@ internal sealed class DirectWriteLayout : IDisposable
     private IDWriteInlineObject? _ellipsis;
     private int _reportedLines;
     private readonly List<(int Start, int Length, QColor Color)> _colors = [];
+    private readonly float _builtWidth;
+    private readonly bool _wraps;
+    private TextAlignment _alignment = TextAlignment.Leading;
+    private float _maxWidth;
 
     private DirectWriteLayout(IDWriteTextLayout layout, IDWriteInlineObject? ellipsis, string source)
     {
         _layout = layout;
         _ellipsis = ellipsis;
         Source = source;
+        _builtWidth = _maxWidth = layout.MaxWidth;
+        _wraps = layout.WordWrapping != WordWrapping.NoWrap;
     }
 
     public string Source { get; }
@@ -504,38 +593,40 @@ internal sealed class DirectWriteLayout : IDisposable
             _layout.SetUnderline(true, new TextRange((uint)start, (uint)count));
     }
 
+    /// <summary>
+    /// Draws the text, and for <c>Text.Outline</c>, <c>Raised</c> or <c>Sunken</c> its style copies first, in one Direct2D draw.
+    /// The layout keeps the alignment and box width it was last drawn with, so hit tests match what is on screen.
+    /// </summary>
     public void Draw(SKCanvas canvas, double boxWidth, int horizontalAlignment, QColor color, double offsetY, bool antialias, PaintContext? paint, int textStyle, QColor? styleColor)
     {
         if (_layout is null)
             return;
         var inLayer = (paint?.LayerDepth ?? 0) > 0;
         var mode = TextRaster.Choose((paint?.TextOnBackdrop ?? false) || inLayer, antialias);
-        var previousAlign = _layout.TextAlignment;
-        var previousWidth = _layout.MaxWidth;
-        var wrapping = _layout.WordWrapping != WordWrapping.NoWrap;
-        try
-        {
-            _layout.TextAlignment = Alignment(horizontalAlignment);
-            // A wrap with no width is laid out at the unbounded sentinel. Centre and right alignment
-            // would then paint around the middle of that width, off the item. Align inside the box.
-            var unbounded = previousWidth >= 999_999f;
-            if (boxWidth > 0 && !double.IsNaN(boxWidth) && (!wrapping || unbounded))
-                _layout.MaxWidth = (float)boxWidth;
-            var width = (float)(boxWidth > 0 && !double.IsNaN(boxWidth) ? boxWidth : Width);
-            if (textStyle != 0)
-            {
-                var shadow = styleColor ?? QColor.Black;
-                foreach (var (dx, dy) in Offsets(textStyle))
-                    Pass(canvas, dx, (float)offsetY + dy, width, mode, shadow, useSpans: false, inLayer);
-            }
-            Pass(canvas, 0, (float)offsetY, width, mode, color, useSpans: true, inLayer);
-        }
-        finally
-        {
-            _layout.TextAlignment = previousAlign;
-            _layout.MaxWidth = previousWidth;
-        }
+        var hasBox = boxWidth > 0 && !double.IsNaN(boxWidth);
+        // A wrap with no width is laid out at the unbounded sentinel. Centre and right alignment
+        // would then paint around the middle of that width, off the item. Align inside the box.
+        Arrange(Alignment(horizontalAlignment), hasBox && (!_wraps || _builtWidth >= 999_999f) ? (float)boxWidth : _builtWidth);
+        var width = (float)(hasBox ? boxWidth : Width);
+        var y = (float)offsetY;
+        var offsets = Offsets(textStyle);
+        Span<TextPass> passes = stackalloc TextPass[offsets.Length + 1];
+        var shadow = styleColor ?? QColor.Black;
+        for (var i = 0; i < offsets.Length; i++)
+            passes[i] = new TextPass(offsets[i].X, y + offsets[i].Y, shadow, UseSpans: false);
+        passes[^1] = new TextPass(0, y, color, UseSpans: true);
+        // The 8 DIP margin holds the 1 DIP style offsets too. Growing the box for them would move
+        // the text off the pixel grid when the box is scaled.
+        var box = new SKRect(0, y, Math.Max(width, 1), y + (float)Math.Max(Height, 1));
+        box.Inflate(8, 8);
+        DirectWriteServices.Current.Blit(_layout, _colors, canvas, box, passes, mode, readRoot: !inLayer);
     }
+
+    /// <summary>
+    /// How many times a draw changed the layout's alignment or width. DirectWrite lays the text out again
+    /// after each change, so a repaint with the same box changes nothing.
+    /// </summary>
+    internal int Relayouts { get; private set; }
 
     public void Dispose()
     {
@@ -545,13 +636,20 @@ internal sealed class DirectWriteLayout : IDisposable
 
     ~DirectWriteLayout() => Release();
 
-    private void Pass(SKCanvas canvas, float dx, float originY, float width, TextPixelMode mode, QColor color, bool useSpans, bool inLayer)
+    private void Arrange(TextAlignment alignment, float maxWidth)
     {
-        if (_layout is null)
-            return;
-        var box = new SKRect(dx, originY, dx + Math.Max(width, 1), originY + (float)Math.Max(Height, 1));
-        box.Inflate(8, 8);
-        DirectWriteServices.Current.Blit(_layout, Source.Length, _colors, canvas, box, dx, originY, mode, color, useSpans, readRoot: !inLayer);
+        if (alignment != _alignment)
+        {
+            _layout!.TextAlignment = alignment;
+            _alignment = alignment;
+            Relayouts++;
+        }
+        if (maxWidth != _maxWidth)
+        {
+            _layout!.MaxWidth = maxWidth;
+            _maxWidth = maxWidth;
+            Relayouts++;
+        }
     }
 
     private void ApplyRanges(List<Range> ranges)
@@ -755,11 +853,15 @@ internal sealed class DirectWriteLayout : IDisposable
         return TextAlignment.Leading;
     }
 
+    private static readonly (float X, float Y)[] Outline = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)];
+    private static readonly (float X, float Y)[] Raised = [(0, 1)];
+    private static readonly (float X, float Y)[] Sunken = [(0, -1)];
+
     private static (float X, float Y)[] Offsets(int style) => style switch
     {
-        1 => [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)],
-        2 => [(0, 1)],
-        3 => [(0, -1)],
+        1 => Outline,
+        2 => Raised,
+        3 => Sunken,
         _ => [],
     };
 
