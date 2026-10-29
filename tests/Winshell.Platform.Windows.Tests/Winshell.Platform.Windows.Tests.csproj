@@ -12,4 +12,7 @@
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\Winshell.Platform.Windows\Winshell.Platform.Windows.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\Winshell\DefaultShell\**" LinkBase="DefaultShell" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

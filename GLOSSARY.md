@@ -50,6 +50,14 @@ _Avoid_: popup, flyout
 A control shown in the overlay of the window that holds it. It is not a window of its own.
 _Avoid_: popup window, flyout, dialog
 
+**Quick settings**:
+The popup window Windows 11 opens from the taskbar's network, volume and battery icons: tiles, the volume and brightness sliders, and the battery.
+_Avoid_: action center, control center
+
+**Tile**:
+A button in quick settings for one setting, such as Wi-Fi. It shows whether the setting is on, and opens Settings when Winshell cannot change it.
+_Avoid_: quick action, toggle
+
 **Screen**:
 One monitor on the desktop.
 _Avoid_: display, output

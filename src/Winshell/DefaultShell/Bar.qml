@@ -35,6 +35,11 @@ PanelWindow {
 
     Item { Layout.fillWidth: true }
 
+    QuickSettingsButton {
+      id: quickSettingsButton
+      onClicked: quickSettings.visible = !quickSettings.visible
+    }
+
     BarButton {
       id: clockButton
       label: Qt.formatDateTime(clock.date, "HH:mm") + "\n" + Qt.formatDateTime(clock.date, "d.M.yyyy")
@@ -49,5 +54,13 @@ PanelWindow {
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.top: 8
     date: clock.date
+  }
+
+  QuickSettings {
+    id: quickSettings
+    anchor.item: quickSettingsButton
+    anchor.edges: Edges.Bottom | Edges.Right
+    anchor.gravity: Edges.Bottom | Edges.Left
+    anchor.margins.top: 8
   }
 }
