@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Jint.Native;
 using Winshell.Qml;
 
@@ -10,6 +12,7 @@ namespace Winshell.Runtime;
 public sealed class QmlEngine : IDisposable
 {
     private readonly Dictionary<string, QmlDocument> _documents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, QmlDocument> _inlineDocuments = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<QmlDocument, ImportScope> _imports = [];
     private readonly Dictionary<string, Dictionary<string, string>> _directories = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, QObject> _fileSingletons = new(StringComparer.OrdinalIgnoreCase);
@@ -104,6 +107,21 @@ public sealed class QmlEngine : IDisposable
         path = Path.GetFullPath(path);
         var doc = QmlParser.Parse(Preprocessor.Run(text), path);
         _documents[path] = doc;
+        return doc;
+    }
+
+    /// <summary>
+    /// Parses QML text for <c>Qt.createQmlObject</c>. The same text is parsed once. It is not a loaded file, so
+    /// the watcher does not follow a path that was never written.
+    /// </summary>
+    internal QmlDocument LoadInline(string text, string directory)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        var path = Path.GetFullPath(Path.Combine(directory, "__inline_" + hash + ".qml"));
+        if (_inlineDocuments.TryGetValue(path, out var cached))
+            return cached;
+        var doc = QmlParser.Parse(Preprocessor.Run(text), path);
+        _inlineDocuments[path] = doc;
         return doc;
     }
 
