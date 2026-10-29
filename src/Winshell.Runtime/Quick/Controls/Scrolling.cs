@@ -4,7 +4,9 @@ namespace Winshell.Runtime.Quick.Controls;
 
 /// <summary>
 /// QtQuick.Controls' <c>ScrollBar</c>, drawn as WinUI's: a thin line that widens into a bar with a track and
-/// arrows once the pointer has rested on it for 400 ms, and narrows again 2 s after the pointer leaves.
+/// arrows once the pointer has rested on it for 400 ms, and narrows again 2 s after the pointer leaves. It is wide at
+/// once while pressed or <c>active</c> from outside, and always when Windows' "Always show scrollbars" is on. As in
+/// Windows, a press on the track pages toward the pointer, and the arrows and the track repeat while held.
 /// </summary>
 public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 {
@@ -14,6 +16,9 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
     private int _policy;
     private int _snapMode;
     private double _pressOffset;
+    private Action? _held;
+    private IDisposable? _repeat;
+    private double _heldAt;
 
     [QmlEnum]
     public enum PolicyValue
@@ -38,7 +43,9 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
     private bool _wantsExpanded;
     private TimeSpan _wantsSince = TimeSpan.MinValue;
     private IDisposable? _wake;
-    private double _expanded;
+
+    /// <summary>How long a held arrow or track waits before it repeats, then how often it repeats.</summary>
+    private static readonly TimeSpan RepeatDelay = TimeSpan.FromMilliseconds(400), RepeatInterval = TimeSpan.FromMilliseconds(50);
 
     public ScrollBar()
     {
@@ -61,11 +68,14 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 
     [Qml] public double MinimumSize { get { Track(); return _minimumSize; } set { if (SetField(ref _minimumSize, value)) GeometryUpdated(); } }
 
-    [Qml] public bool Active { get { Track(); return _active || _pressed || Hovered; } set => SetField(ref _active, value); }
+    /// <summary>True while hovered or pressed, if interactive, and while set from outside, as a moving view does.</summary>
+    [Qml] public bool Active { get { Track(); return IsActive; } set { if (SetField(ref _active, value)) Update(); } }
+
+    private bool IsActive => _active || (_interactive && (_pressed || Hovered));
 
     [Qml("pressed")] public bool IsPressed { get { Track("pressed"); return _pressed; } set => SetPressed(value); }
 
-    [Qml] public bool Interactive { get { Track(); return _interactive; } set => SetField(ref _interactive, value); }
+    [Qml] public bool Interactive { get { Track(); return _interactive; } set { if (SetField(ref _interactive, value)) StateChanged(); } }
 
     [Qml]
     public int Orientation
@@ -125,11 +135,14 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 
     /// <summary>
     /// How far the bar has widened, 0 to 1. It widens 400 ms after the pointer comes to rest on it, or at once when
-    /// pressed, and narrows 2 s after the pointer leaves, each over 100 ms.
+    /// pressed, active from outside or always shown, and narrows 2 s after none of those holds, each over 100 ms.
+    /// The default background and handle both ask, so each is right without the other. A second ask in the same
+    /// frame gets the same answer.
     /// </summary>
     private double Expansion(PaintContext context)
     {
-        var wants = Hovered || _pressed;
+        var alwaysShown = !Theme.Current.AutoHideScrollBars;
+        var wants = IsActive || alwaysShown;
         if (context.Time <= TimeSpan.Zero)
             return wants ? 1 : 0;
         if (_wantsSince == TimeSpan.MinValue)
@@ -146,7 +159,9 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
             _wake?.Dispose();
             _wake = null;
         }
-        var delay = _pressed ? TimeSpan.Zero : TimeSpan.FromMilliseconds(wants ? 400 : 2000);
+        var delay = !wants ? TimeSpan.FromMilliseconds(2000)
+            : _pressed || _active || alwaysShown ? TimeSpan.Zero
+            : TimeSpan.FromMilliseconds(400);
         var waited = context.Time - _wantsSince;
         if (waited < delay)
         {
@@ -188,16 +203,16 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, context) =>
     {
-        _expanded = Expansion(context);
-        if (_expanded <= 0 || !IsNeeded)
+        var expanded = Expansion(context);
+        if (expanded <= 0 || !IsNeeded)
             return;
         var t = Theme.Current;
         var r = i.Bounds;
-        Fluent.FillRound(c, r, 6, FluentResources.ScrollBarTrackFill(t).Faded(_expanded));
+        Fluent.FillRound(c, r, 6, FluentResources.ScrollBarTrackFill(t).Faded(expanded));
         if (t.IsHighContrast)
-            Fluent.StrokeRound(c, r, 6, t.SystemColorButtonTextColor.Faded(_expanded));
+            Fluent.StrokeRound(c, r, 6, t.SystemColorButtonTextColor.Faded(expanded));
         // Segoe Fluent Icons' solid carets at 8 pixels, centered in each end's arrow zone.
-        var arrow = FluentResources.ScrollBarButtonArrowForeground(t).For(Enabled, false, false).Faded(_expanded);
+        var arrow = FluentResources.ScrollBarButtonArrowForeground(t).For(Enabled, false, false).Faded(expanded);
         var zone = (float)ArrowZone;
         if (_orientation == 2)
         {
@@ -233,17 +248,18 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
         c.DrawPath(path, paint);
     }
 
-    protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
+    protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, context) =>
     {
+        var e = (float)Expansion(context);
         if (!IsNeeded)
             return;
         var t = Theme.Current;
         var r = i.Bounds;
         // A 2 pixel line near the far edge widens into a centered 6 pixel thumb.
-        var e = (float)_expanded;
         var thickness = 2 + 4 * e;
         var offset = 2 * (1 - e);
-        var color = FluentResources.ScrollBarThumbFill(t).For(Enabled, _pressed, Hovered);
+        // The thumb looks pressed while it is dragged, not while an arrow or the track is held.
+        var color = FluentResources.ScrollBarThumbFill(t).For(Enabled, _pressed && _held is null, Hovered);
         var rect = _orientation == 2
             ? SKRect.Create(r.MidX - thickness / 2 + offset, r.Top, thickness, r.Height)
             : SKRect.Create(r.Left, r.MidY - thickness / 2 + offset, r.Width, thickness);
@@ -306,37 +322,88 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 
     public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
+        StopRepeat();
         var length = _orientation == 2 ? AvailableHeight : AvailableWidth;
         var at = _orientation == 2 ? y - TopPadding : x - LeftPadding;
+        SetPressed(true);
         // The arrows at the ends step, as WinUI's small decrease and increase buttons do.
         if (at < 0 || at > length)
         {
-            if (at < 0)
-                Decrease();
-            else
-                Increase();
+            Hold(at < 0 ? Decrease : Increase);
             return true;
         }
         var start = VisualPosition * length;
         var size = VisualSize * length;
-        // A press on the handle drags it from where it was taken; elsewhere the handle centers on the press.
-        _pressOffset = at >= start && at <= start + size ? at - start : size / 2;
-        SetPressed(true);
-        Position = PointerPosition(x, y);
+        if (at >= start && at <= start + size)
+        {
+            // A press on the handle drags it from where it was taken.
+            _pressOffset = at - start;
+            Position = PointerPosition(x, y);
+            return true;
+        }
+        // Elsewhere the track pages toward the press, as WinUI's large decrease and increase buttons do.
+        _heldAt = at;
+        var direction = at < start ? -1 : 1;
+        Hold(() => Page(direction));
         return true;
+    }
+
+    /// <summary>Moves a page toward the held point, until the handle reaches it.</summary>
+    private void Page(int direction)
+    {
+        var length = _orientation == 2 ? AvailableHeight : AvailableWidth;
+        var start = VisualPosition * length;
+        if (direction < 0 && _heldAt < start)
+            Position = Math.Max(0, _position - _size);
+        else if (direction > 0 && _heldAt > start + VisualSize * length)
+            Position = Math.Min(1 - _size, _position + _size);
+    }
+
+    /// <summary>Takes a step now, then again after a delay and on an interval until the press ends.</summary>
+    private void Hold(Action step)
+    {
+        _held = step;
+        step();
+        _repeat = Engine?.Loop.Schedule(RepeatDelay, Repeat);
+    }
+
+    private void Repeat()
+    {
+        _repeat = null;
+        if (_held is not { } step)
+            return;
+        step();
+        _repeat = Engine?.Loop.Schedule(RepeatInterval, Repeat);
+    }
+
+    private void StopRepeat()
+    {
+        _repeat?.Dispose();
+        _repeat = null;
+        _held = null;
     }
 
     public void PointerMove(double x, double y, int buttons, int modifiers)
     {
-        if (_pressed)
+        if (!_pressed)
+            return;
+        if (_held is null)
             Position = PointerPosition(x, y);
+        else
+            _heldAt = _orientation == 2 ? y - TopPadding : x - LeftPadding;
     }
 
-    public void PointerRelease(double x, double y, int button, int buttons, int modifiers) => SetPressed(false);
+    public void PointerRelease(double x, double y, int button, int buttons, int modifiers) => EndPress();
 
     public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
-    public void PointerCancel() => SetPressed(false);
+    public void PointerCancel() => EndPress();
+
+    private void EndPress()
+    {
+        StopRepeat();
+        SetPressed(false);
+    }
 
     /// <summary>How many objects still listen for policy changes. Rebinding must not stack listeners.</summary>
     internal int PolicyListenerCount => PolicyChanged?.GetInvocationList().Length ?? 0;
@@ -345,6 +412,7 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
     {
         _wake?.Dispose();
         _wake = null;
+        StopRepeat();
         base.OnDestroy();
     }
 }

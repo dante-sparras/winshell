@@ -221,10 +221,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
             DoubleClickHeight = Metric(Win32.SM_CYDOUBLECLK, 4),
         };
         var animations = true;
+        var autoHideScrollBars = true;
         try
         {
             var settings = new global::Windows.UI.ViewManagement.UISettings();
             animations = settings.AnimationsEnabled;
+            autoHideScrollBars = settings.AutoHideScrollBars;
             QColor Get(global::Windows.UI.ViewManagement.UIColorType type)
             {
                 var c = settings.GetColorValue(type);
@@ -241,11 +243,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
                     Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark2),
                     Get(global::Windows.UI.ViewManagement.UIColorType.AccentDark3)),
                 AnimationsEnabled = animations,
+                AutoHideScrollBars = autoHideScrollBars,
             };
         }
         catch (COMException)
         {
-            theme = theme with { AnimationsEnabled = animations };
+            theme = theme with { AnimationsEnabled = animations, AutoHideScrollBars = autoHideScrollBars };
         }
         Theme.Current = theme;
     }
