@@ -305,8 +305,8 @@ public sealed class UpdatesTests : IDisposable
 
         Assert.Equal(["0.6.0"], Directory.EnumerateFileSystemEntries(UpdatesDir).Select(Path.GetFileName));
         var saved = UpdateTrust.ZipPath(UpdatesDir, "0.6.0");
-        Assert.Equal(Sha(zip)["sha256:".Length..], UpdateTrust.Hash(saved));
-        Assert.Equal(UpdateTrust.Hash(saved), File.ReadAllText(UpdateTrust.DigestPath(UpdatesDir, "0.6.0")).Trim());
+        Assert.Equal(Sha(File.ReadAllBytes(saved)), Sha(zip));
+        Assert.Equal(Sha(zip)["sha256:".Length..], File.ReadAllText(UpdateTrust.DigestPath(UpdatesDir, "0.6.0")).Trim());
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public sealed class UpdatesTests : IDisposable
         File.WriteAllText(Path.Combine(UpdatesDir, "0.6.0", "winshell.exe"), "swapped");
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
 
-        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false, processRid: Medium));
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false));
 
         Assert.Equal("from-zip", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
         Assert.False(Directory.Exists(Path.Combine(UpdatesDir, "0.6.0")));
@@ -334,7 +334,7 @@ public sealed class UpdatesTests : IDisposable
         File.WriteAllBytes(UpdateTrust.ZipPath(UpdatesDir, "0.6.0"), Zip(("winshell.exe", "changed")));
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false, processRid: Medium);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false);
 
         Assert.Contains("SHA-256", error, StringComparison.Ordinal);
         Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
@@ -348,7 +348,7 @@ public sealed class UpdatesTests : IDisposable
         var staged = Stage("0.6.0", ("winshell.exe", "new"));
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, processRid: Medium);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false);
 
         Assert.Contains("digest", error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
@@ -356,18 +356,7 @@ public sealed class UpdatesTests : IDisposable
     }
 
     [Fact]
-    public void Elevation_refuses_a_lower_or_unknown_label_and_allows_the_same_or_higher()
-    {
-        Assert.True(UpdateTrust.ElevationAllows(privileged: false, directoryRid: 0, processRid: Medium));
-        Assert.False(UpdateTrust.ElevationAllows(privileged: true, directoryRid: 0, processRid: Medium));
-        Assert.False(UpdateTrust.ElevationAllows(privileged: true, directoryRid: Medium, processRid: High));
-        Assert.True(UpdateTrust.ElevationAllows(privileged: true, directoryRid: High, processRid: High));
-        Assert.True(UpdateTrust.ElevationAllows(privileged: true, directoryRid: System, processRid: High));
-        Assert.False(UpdateTrust.ElevationAllows(privileged: true, directoryRid: Medium, processRid: 0));
-    }
-
-    [Fact]
-    public async Task An_elevated_apply_leaves_a_lower_integrity_update_in_place()
+    public async Task An_elevated_apply_copies_nothing_and_leaves_the_update_for_a_normal_start()
     {
         var zip = Zip(("winshell.exe", "from-zip"));
         using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
@@ -375,12 +364,52 @@ public sealed class UpdatesTests : IDisposable
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
         var staged = Path.Combine(UpdatesDir, "0.6.0");
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: true, processRid: AboveSystem);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: true);
 
-        Assert.Contains("lower integrity", error, StringComparison.Ordinal);
+        Assert.Equal("An elevated Winshell does not install updates. Start Winshell normally to install it.", error);
+        Assert.Equal(["winshell.exe"], Directory.EnumerateFileSystemEntries(InstallDir).Select(Path.GetFileName));
         Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
         Assert.True(Directory.Exists(staged));
         Assert.True(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+        Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
+    }
+
+    [Fact]
+    public async Task A_zip_another_process_has_open_for_writing_is_not_installed()
+    {
+        var zip = Zip(("winshell.exe", "from-zip"));
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+        await updater.CheckAsync();
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+        var staged = Path.Combine(UpdatesDir, "0.6.0");
+
+        // A writer that still lets others read. Apply's handle denies writers, so it cannot open the zip while this
+        // one is open, and no writer can open the zip while apply holds it between the hash and the extract.
+        string? error;
+        using (new FileStream(UpdateTrust.ZipPath(UpdatesDir, "0.6.0"), FileMode.Open, FileAccess.Write, FileShare.Read))
+            error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false);
+
+        Assert.NotNull(error);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.True(Directory.Exists(staged));
+        Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
+    }
+
+    [Fact]
+    public void Clean_up_deletes_the_scratch_a_crash_leaves_beside_the_updates_folder()
+    {
+        var root = UpdateTrust.Root(UpdatesDir);
+        Directory.CreateDirectory(Path.Combine(root, "extract-0123456789abcdef", "sub"));
+        File.WriteAllText(Path.Combine(root, "extract-0123456789abcdef", "sub", "winshell.dll"), "half");
+        File.WriteAllText(Path.Combine(root, "0.6.0.sha256.partial"), "half");
+        File.WriteAllText(Path.Combine(root, "0.5.0.zip"), "installed");
+        File.WriteAllText(Path.Combine(root, "0.5.0.sha256"), "installed");
+        File.WriteAllText(Path.Combine(root, "0.6.0.zip"), "waiting");
+        File.WriteAllText(Path.Combine(root, "0.6.0.sha256"), "waiting");
+
+        UpdateInstall.CleanUp(InstallDir, UpdatesDir, new Version(0, 5, 0));
+
+        Assert.Equal(["0.6.0.sha256", "0.6.0.zip"], Directory.EnumerateFileSystemEntries(root).Select(Path.GetFileName).Order());
     }
 
     [Fact]
@@ -414,11 +443,6 @@ public sealed class UpdatesTests : IDisposable
             Directory.Delete(junction);
         }
     }
-
-    private const int Medium = 0x2000;
-    private const int High = 0x3000;
-    private const int System = 0x4000;
-    private const int AboveSystem = 0x5000;
 
     private Updater Create(FakeGitHub github) =>
         new("dante-sparras/winshell", InstallDir, UpdatesDir, "0.5.0+test", "win-x64", _log, github);

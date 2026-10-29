@@ -76,11 +76,14 @@ internal static class UpdateInstall
     /// swapped after the download is not what gets copied. Returns null when it is in place, or why not.
     /// </summary>
     public static string? ApplyVerified(string updatesDir, string staged, string installDir) =>
-        ApplyVerified(updatesDir, staged, installDir, Environment.IsPrivilegedProcess, UpdateTrust.CurrentRid());
+        ApplyVerified(updatesDir, staged, installDir, Environment.IsPrivilegedProcess);
 
-    /// <summary>The same install, with the elevation decision supplied so a test can cover it without an elevated process.</summary>
-    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, bool privileged, int processRid)
+    /// <summary>The same install, with elevation supplied so a test can cover it without an elevated process.</summary>
+    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, bool privileged)
     {
+        // The update was saved by this user at medium integrity; an elevated process must not run what that user can rewrite.
+        if (privileged)
+            return "An elevated Winshell does not install updates. Start Winshell normally to install it.";
         var version = Path.GetFileName(staged);
         var zip = UpdateTrust.ZipPath(updatesDir, version);
         var digestPath = UpdateTrust.DigestPath(updatesDir, version);
@@ -89,37 +92,30 @@ internal static class UpdateInstall
             DeleteStaged(updatesDir, staged, version);
             return "The staged update has no saved digest, so Winshell will not copy it.";
         }
-        string actual;
-        string digest;
+        var fresh = UpdateTrust.ExtractPath(updatesDir);
         try
         {
-            actual = UpdateTrust.Hash(zip);
-            digest = File.ReadAllText(digestPath).Trim();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return e.Message;
-        }
-        if (!string.Equals(actual, digest, StringComparison.OrdinalIgnoreCase))
-        {
-            DeleteStaged(updatesDir, staged, version);
-            return $"The staged update's SHA-256 is {actual}, but the saved digest says {digest.ToLowerInvariant()}.";
-        }
-        if (!UpdateTrust.ElevationAllows(privileged, UpdateTrust.LabelRid(zip), processRid)
-            || !UpdateTrust.ElevationAllows(privileged, UpdateTrust.LabelRid(staged), processRid))
-            return "An elevated Winshell will not install an update stored at a lower integrity.";
-        var fresh = Path.Combine(UpdateTrust.Root(updatesDir), "extract-" + Guid.NewGuid().ToString("N"));
-        var scratch = zip + "." + Guid.NewGuid().ToString("N") + ".copy";
-        try
-        {
-            File.Copy(zip, scratch);
-            if (!string.Equals(UpdateTrust.Hash(scratch), digest, StringComparison.OrdinalIgnoreCase))
+            var digest = File.ReadAllText(digestPath).Trim();
+            string? mismatch = null;
+            // One handle hashes and extracts, and FileShare.Read keeps anyone from writing the zip in between.
+            using (var stream = new FileStream(zip, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var actual = UpdateTrust.Hash(stream);
+                if (!string.Equals(actual, digest, StringComparison.OrdinalIgnoreCase))
+                {
+                    mismatch = $"The staged update's SHA-256 is {actual}, but the saved digest says {digest.ToLowerInvariant()}.";
+                }
+                else
+                {
+                    stream.Position = 0;
+                    System.IO.Compression.ZipFile.ExtractToDirectory(stream, fresh);
+                }
+            }
+            if (mismatch is not null)
             {
                 DeleteStaged(updatesDir, staged, version);
-                return "The staged update changed while Winshell was checking it.";
+                return mismatch;
             }
-            Directory.CreateDirectory(fresh);
-            System.IO.Compression.ZipFile.ExtractToDirectory(scratch, fresh);
             var error = Apply(fresh, installDir);
             if (error is not null)
                 return error;
@@ -132,7 +128,6 @@ internal static class UpdateInstall
         }
         finally
         {
-            TryDeleteFile(scratch);
             if (Directory.Exists(fresh))
                 TryDeleteDirectory(fresh);
         }
@@ -178,6 +173,7 @@ internal static class UpdateInstall
                 TryDeleteDirectory(dir);
             TryDeleteDirectory(old);
         }
+        UpdateTrust.Clean(updatesDir, current);
         if (!Directory.Exists(updatesDir))
             return;
         foreach (var dir in Directory.EnumerateDirectories(updatesDir))
@@ -187,7 +183,6 @@ internal static class UpdateInstall
         }
         foreach (var file in Directory.EnumerateFiles(updatesDir, "*.partial"))
             TryDeleteFile(file);
-        UpdateTrust.Clean(updatesDir, current);
     }
 
     private static void TryDeleteFile(string path)
