@@ -20,11 +20,23 @@ Button {
 
       Text {
         required property string modelData
+        required property int index
         anchors.verticalCenter: parent.verticalCenter
         text: modelData
         font.family: Theme.iconFontFamily
         font.pixelSize: 16
         color: Theme.textFillColorPrimary
+
+        // The Wi-Fi bars the signal does not reach, under the ones it does.
+        Text {
+          objectName: "wifiTrack"
+          z: -1
+          visible: index === 0 && text !== ""
+          text: SystemStatus.networkTrackGlyph
+          font.family: Theme.iconFontFamily
+          font.pixelSize: 16
+          color: Theme.textFillColorDisabled
+        }
       }
     }
   }

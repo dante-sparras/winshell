@@ -13,8 +13,13 @@ Singleton {
   readonly property bool online: Networking.connectivity === NetworkConnectivity.InternetAccess
     || Networking.connectivity === NetworkConnectivity.LocalAccess
     || Networking.connectivity === NetworkConnectivity.CaptivePortal
-  // Wi-Fi when it is connected; otherwise any connection is drawn as wired, as Windows does for virtual adapters.
-  readonly property string networkGlyph: wifi && wifi.connected ? "" : online ? "" : ""
+  // Wi-Fi's signal in bars, from 1 to 4, as Windows draws it. No signal reading draws all four.
+  readonly property int wifiBars: wifiNetwork && wifiNetwork.signalStrength > 0 ? Math.max(1, Math.min(4, Math.ceil(wifiNetwork.signalStrength * 4))) : 4
+  // Wi-Fi when it is connected, with its bars; otherwise any connection is drawn as wired, as Windows does for virtual
+  // adapters.
+  readonly property string networkGlyph: wifi && wifi.connected ? ["", "", "", ""][wifiBars - 1] : online ? "" : ""
+  // The bars Wi-Fi does not have, which Windows draws faintly under networkGlyph.
+  readonly property string networkTrackGlyph: wifi && wifi.connected && wifiBars < 4 ? "" : ""
 
   readonly property var output: Audio.defaultPlaybackDevice
   readonly property real volume: output ? output.audio.volume : 0
