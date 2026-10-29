@@ -28,13 +28,6 @@ public static partial class StandardModules
             .Type<QmlComponent>("Component", attached: _ => new ComponentAttached(), attachedType: typeof(ComponentAttached));
     }
 
-    /// <summary>Copies every type of one module into another, as QtQuick re-exports QtQml.</summary>
-    internal static void Include(QmlModule target, QmlModule source)
-    {
-        foreach (var entry in source.Types.Values)
-            target.Add(entry);
-    }
-
     static partial void RegisterQuickModules(ModuleRegistry registry);
 
     private static void RegisterQuick(ModuleRegistry registry)
