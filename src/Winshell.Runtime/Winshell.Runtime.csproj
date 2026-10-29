@@ -6,7 +6,6 @@
   <ItemGroup>
     <PackageReference Include="Jint" />
     <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="SkiaSharp.HarfBuzz" />
     <PackageReference Include="Svg.Skia" />
     <PackageReference Include="Tomlyn" />
     <PackageReference Include="Vortice.Direct2D1" />

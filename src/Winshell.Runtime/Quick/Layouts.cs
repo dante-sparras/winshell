@@ -7,7 +7,6 @@ public sealed class LayoutAttached(QObject owner) : QObject
     private double _preferredWidth = -1, _preferredHeight = -1;
     private double _maximumWidth = double.PositiveInfinity, _maximumHeight = double.PositiveInfinity;
     private bool _fillWidth, _fillHeight;
-    private bool _fillWidthSet, _fillHeightSet;
     private int _alignment;
     private double _margins;
     private double? _leftMargin, _rightMargin, _topMargin, _bottomMargin;
@@ -34,31 +33,9 @@ public sealed class LayoutAttached(QObject owner) : QObject
 
     [Qml] public double MaximumHeight { get { Track(); return _maximumHeight; } set => Set(ref _maximumHeight, value); }
 
-    [Qml]
-    public bool FillWidth
-    {
-        get { Track(); return _fillWidth; }
-        set
-        {
-            _fillWidthSet = true;
-            Set(ref _fillWidth, value);
-        }
-    }
+    [Qml] public bool FillWidth { get { Track(); return _fillWidth; } set => Set(ref _fillWidth, value); }
 
-    [Qml]
-    public bool FillHeight
-    {
-        get { Track(); return _fillHeight; }
-        set
-        {
-            _fillHeightSet = true;
-            Set(ref _fillHeight, value);
-        }
-    }
-
-    public bool FillWidthSet => _fillWidthSet;
-
-    public bool FillHeightSet => _fillHeightSet;
+    [Qml] public bool FillHeight { get { Track(); return _fillHeight; } set => Set(ref _fillHeight, value); }
 
     [Qml] public int Alignment { get { Track(); return _alignment; } set => Set(ref _alignment, value); }
 

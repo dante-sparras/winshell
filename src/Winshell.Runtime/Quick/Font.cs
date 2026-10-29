@@ -272,12 +272,10 @@ public sealed class FontGroup(Item? owner) : QObject
     }
 }
 
-/// <summary>Finds typefaces by family and style, and the fallback for characters a typeface lacks.</summary>
+/// <summary>Finds typefaces by family and style.</summary>
 public static class FontCache
 {
     private static readonly ConcurrentDictionary<(string, int, bool), SKTypeface> Typefaces = new();
-    private static readonly ConcurrentDictionary<(int, int, bool), SKTypeface?> Fallbacks = new();
-    private static readonly ConcurrentDictionary<SKTypeface, SkiaSharp.HarfBuzz.SKShaper> Shapers = new();
 
     public static SKTypeface Get(string family, int weight, bool italic) =>
         Typefaces.GetOrAdd((family, weight, italic), static key =>
@@ -306,30 +304,4 @@ public static class FontCache
         yield return "Segoe UI Variable";
         yield return "Segoe UI";
     }
-
-    /// <summary>A typeface that has the character, or null.</summary>
-    public static SKTypeface? Fallback(int codepoint, int weight, bool italic) =>
-        Fallbacks.GetOrAdd((codepoint, weight, italic), static key =>
-        {
-            var style = new SKFontStyle(key.Item2, (int)SKFontStyleWidth.Normal, key.Item3 ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
-            // Emoji first, since symbols that have both forms should look like Windows shows them.
-            if (IsEmoji(key.Item1) && SKFontManager.Default.MatchFamily("Segoe UI Emoji", style) is { } emoji && Contains(emoji, key.Item1))
-                return emoji;
-            return SKFontManager.Default.MatchCharacter(null, style, null, key.Item1);
-        });
-
-    private static readonly ConcurrentDictionary<SKTypeface, SKFont> Probes = new();
-
-    /// <summary>Whether a typeface has a glyph for the character.</summary>
-    public static bool Contains(SKTypeface typeface, int codepoint)
-    {
-        var font = Probes.GetOrAdd(typeface, static tf => new SKFont(tf));
-        lock (font)
-            return font.ContainsGlyph(codepoint);
-    }
-
-    private static bool IsEmoji(int cp) => cp is >= 0x1F300 and <= 0x1FAFF or >= 0x2600 and <= 0x27BF;
-
-    public static SkiaSharp.HarfBuzz.SKShaper Shaper(SKTypeface typeface) =>
-        Shapers.GetOrAdd(typeface, static tf => new SkiaSharp.HarfBuzz.SKShaper(tf));
 }
