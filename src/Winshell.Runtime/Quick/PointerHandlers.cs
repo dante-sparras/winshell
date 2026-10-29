@@ -6,6 +6,7 @@ public sealed class EventPoint : QObject
     private QPoint _position;
     private QPoint _scenePosition;
     private QPoint _pressPosition;
+    private QPoint _scenePressPosition;
 
     [Qml] public QPoint Position { get { Track(); return _position; } }
 
@@ -13,7 +14,7 @@ public sealed class EventPoint : QObject
 
     [Qml] public QPoint PressPosition { get { Track(); return _pressPosition; } }
 
-    [Qml] public QPoint ScenePressPosition => _pressPosition;
+    [Qml] public QPoint ScenePressPosition { get { Track(); return _scenePressPosition; } }
 
     [Qml] public int Pressure => 1;
 
@@ -27,10 +28,13 @@ public sealed class EventPoint : QObject
         NotifyChanged("scenePosition");
     }
 
+    /// <summary>Records the press at <paramref name="x"/>, <paramref name="y"/>, the point just passed to <see cref="Set"/>.</summary>
     internal void Press(double x, double y)
     {
         _pressPosition = new QPoint(x, y);
+        _scenePressPosition = _scenePosition;
         NotifyChanged("pressPosition");
+        NotifyChanged("scenePressPosition");
     }
 }
 
@@ -295,15 +299,19 @@ public sealed class WheelHandler : PointerHandler, IWheelTarget
     {
         if (!Enabled)
             return false;
-        var delta = _orientation == 1 ? angleX : angleY;
-        if (delta == 0)
-            delta = angleX + angleY;
-        _rotation += delta / 8 * _rotationScale;
+        // A wheel on the other axis is left for whatever is underneath.
+        var horizontal = _orientation == 1;
+        var angle = horizontal ? angleX : angleY;
+        var pixel = horizontal ? pixelX : pixelY;
+        if (angle == 0 && pixel == 0)
+            return false;
+        var step = angle / 8 * _rotationScale;
+        _rotation += step;
         NotifyChanged("rotation");
         if (_property.Length > 0 && Target is { } target && target.HasProperty(_property))
         {
             using (DependencyTracker.Suspend())
-                target.WriteProperty(_property, ValueConverter.ToDouble(target.ReadProperty(_property), "real") + delta / 8 * _rotationScale);
+                target.WriteProperty(_property, ValueConverter.ToDouble(target.ReadProperty(_property), "real") + (pixel != 0 ? pixel : step));
         }
         Emit("wheel", new WheelEvent { X = x, Y = y, AngleDelta = new QPoint(angleX, angleY), PixelDelta = new QPoint(pixelX, pixelY), Modifiers = modifiers, Inverted = inverted, Engine = Engine });
         return true;
