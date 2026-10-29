@@ -92,37 +92,61 @@ public class EventQueue : IEventLoop
         }
     }
 
-    /// <summary>Runs posted work and due timers. Returns whether anything ran.</summary>
+    /// <summary>
+    /// Runs one batch of posted work and timers that were already due. Work queued by that batch waits for the
+    /// next pass, so a handler that posts itself or a timer that fires slower than its interval cannot starve
+    /// the message pump. Returns whether anything ran.
+    /// </summary>
     public bool RunDue()
     {
         var ran = false;
+        var posted = new List<Action>();
         while (_posted.TryDequeue(out var action))
+            posted.Add(action);
+        foreach (var action in posted)
         {
             Run(action);
             ran = true;
         }
-        while (true)
+
+        var now = Now;
+        var dueNow = new List<TimerEntry>();
+        lock (_timers)
         {
-            TimerEntry? next = null;
-            lock (_timers)
+            while (_timers.TryPeek(out var entry, out var due) && due.Item1 <= now)
             {
-                if (_timers.TryPeek(out var entry, out var due) && due.Item1 <= Now)
-                {
-                    _timers.Dequeue();
-                    next = entry;
-                }
+                _timers.Dequeue();
+                if (!entry.Cancelled)
+                    dueNow.Add(entry);
             }
-            if (next is null)
-                break;
-            if (next.Cancelled)
-                continue;
+        }
+        foreach (var next in dueNow)
+        {
             next.Cancelled = true;
             Run(next.Action);
             ran = true;
-            while (_posted.TryDequeue(out var action))
-                Run(action);
         }
+
+        if (HasQueuedWork(now))
+            Woken?.Invoke();
         return ran;
+    }
+
+    /// <summary>Whether a later pass still has posted work, or a timer that was due at <paramref name="now"/>.</summary>
+    private bool HasQueuedWork(TimeSpan now)
+    {
+        if (!_posted.IsEmpty)
+            return true;
+        lock (_timers)
+        {
+            while (_timers.TryPeek(out var entry, out var due))
+            {
+                if (!entry.Cancelled)
+                    return due.Item1 <= now;
+                _timers.Dequeue();
+            }
+        }
+        return false;
     }
 
     /// <summary>Runs the frame callbacks requested so far.</summary>
