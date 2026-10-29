@@ -1,5 +1,6 @@
-// Renders packaging/logo.svg into the PNGs the MSIX package and the Store listing use. Run it after changing the logo,
-// and commit the PNGs it writes.
+// Renders packaging/logo.svg into the PNGs the MSIX package and the Store listing use, and into
+// packaging/winshell.ico for the executable and the window class. Run it after changing the logo,
+// and commit the files it writes.
 //
 //   dotnet run scripts/render-logo.cs
 #:property PublishAot=false
@@ -23,6 +24,14 @@ var picture = svg.Picture ?? throw new InvalidOperationException("packaging/logo
     ("store/logo-300.png", 300),
 ];
 foreach (var (path, size) in images)
+    WritePng(Path.Combine(packaging, path), path, Render(picture, size), size);
+
+// Shell sizes for the executable icon. 0 in the directory means 256.
+int[] iconSizes = [16, 20, 24, 32, 40, 48, 64, 256];
+WriteIcon(Path.Combine(packaging, "winshell.ico"), iconSizes.Select(size => Render(picture, size)).ToArray(), iconSizes);
+Console.WriteLine($"winshell.ico ({string.Join(", ", iconSizes)})");
+
+static byte[] Render(SKPicture picture, int size)
 {
     using var bitmap = new SKBitmap(size, size, SKColorType.Rgba8888, SKAlphaType.Premul);
     using (var canvas = new SKCanvas(bitmap))
@@ -33,8 +42,37 @@ foreach (var (path, size) in images)
     }
     using var image = SKImage.FromBitmap(bitmap);
     using var png = image.Encode(SKEncodedImageFormat.Png, 100);
-    var target = Path.Combine(packaging, path);
+    return png.ToArray();
+}
+
+static void WritePng(string target, string display, byte[] png, int size)
+{
     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-    File.WriteAllBytes(target, png.ToArray());
-    Console.WriteLine($"{path} ({size}x{size})");
+    File.WriteAllBytes(target, png);
+    Console.WriteLine($"{display} ({size}x{size})");
+}
+
+static void WriteIcon(string target, byte[][] images, int[] sizes)
+{
+    using var stream = File.Create(target);
+    using var writer = new BinaryWriter(stream);
+    writer.Write((ushort)0);
+    writer.Write((ushort)1);
+    writer.Write((ushort)images.Length);
+    var offset = 6 + 16 * images.Length;
+    for (var i = 0; i < images.Length; i++)
+    {
+        var side = sizes[i] >= 256 ? 0 : sizes[i];
+        writer.Write((byte)side);
+        writer.Write((byte)side);
+        writer.Write((byte)0);
+        writer.Write((byte)0);
+        writer.Write((ushort)1);
+        writer.Write((ushort)32);
+        writer.Write(images[i].Length);
+        writer.Write(offset);
+        offset += images[i].Length;
+    }
+    foreach (var image in images)
+        writer.Write(image);
 }

@@ -127,6 +127,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 style = Win32.CS_DBLCLKS,
                 lpfnWndProc = &WndProc,
                 hInstance = Win32.GetModuleHandleW(null),
+                hIcon = AppIcon(Win32.GetSystemMetrics(Win32.SM_CXICON), Win32.GetSystemMetrics(Win32.SM_CYICON)),
+                hIconSm = AppIcon(Win32.GetSystemMetrics(Win32.SM_CXSMICON), Win32.GetSystemMetrics(Win32.SM_CYSMICON)),
                 hCursor = Win32.LoadCursorW(0, Win32.IDC_ARROW),
                 lpszClassName = name,
             };
@@ -134,6 +136,13 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
         _registered = true;
     }
+
+    /// <summary>
+    /// The logo embedded in winshell.exe. The C# compiler stores <c>ApplicationIcon</c> as icon group 32512.
+    /// Panels and popups share this class and are tool windows, so the icon shows on a floating window.
+    /// </summary>
+    private static nint AppIcon(int width, int height) =>
+        Win32.LoadImageW(Win32.GetModuleHandleW(null), Win32.IDI_APPLICATION, Win32.IMAGE_ICON, width, height, 0);
 
     [UnmanagedCallersOnly]
     private static nint WndProc(nint hwnd, uint msg, nint wParam, nint lParam)

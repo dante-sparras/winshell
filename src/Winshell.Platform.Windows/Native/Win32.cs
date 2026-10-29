@@ -329,6 +329,13 @@ internal static partial class Win32
 
     public static readonly nint DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4;
 
+    public const uint IMAGE_ICON = 1;
+    public const int IDI_APPLICATION = 32512;
+    public const int SM_CXICON = 11;
+    public const int SM_CYICON = 12;
+    public const int SM_CXSMICON = 49;
+    public const int SM_CYSMICON = 50;
+
     public const int IDC_ARROW = 32512;
     public const int IDC_IBEAM = 32513;
     public const int IDC_WAIT = 32514;
@@ -498,6 +505,9 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     public static partial nint LoadCursorW(nint instance, nint name);
+
+    [LibraryImport("user32.dll", EntryPoint = "LoadImageW", SetLastError = true)]
+    public static partial nint LoadImageW(nint instance, nint name, uint type, int width, int height, uint flags);
 
     [LibraryImport("user32.dll")]
     public static partial nint SetCursor(nint cursor);

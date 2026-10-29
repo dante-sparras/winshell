@@ -6,6 +6,7 @@
     <AssemblyName>winshell</AssemblyName>
     <RootNamespace>Winshell</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\packaging\winshell.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
