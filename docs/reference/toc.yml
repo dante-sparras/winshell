@@ -1,5 +1,9 @@
 - name: Overview
   href: index.md
+- name: Command line
+  href: command-line.md
+- name: The default shell
+  href: default-shell.md
 - name: Qt Quick
   href: qt-quick.md
 - name: Shell

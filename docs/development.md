@@ -43,6 +43,7 @@ A running shell reads these. None is needed to build or test.
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
 | `WINSHELL_NO_RELOAD_POPUP` | `1` hides Winshell's notice for a configuration that failed to load. A shell can hide it for one failed reload with `Shell.inhibitReloadPopup()` in `Shell.onReloadFailed`. The notice for a window that failed still shows. |
+| `WINLAND_PIPE` | The named pipe `Winshell.Winland` connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 `WINSHELL_TEST_CRASH` is read only for `FatalCrashTests`: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. Never set it otherwise.
 
@@ -51,9 +52,10 @@ A running shell reads these. None is needed to build or test.
 | What | Where |
 | --- | --- |
 | User configurations | `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR` when it is set |
-| Cache | `%LOCALAPPDATA%\winshell\cache` |
-| State | `%LOCALAPPDATA%\winshell\state` |
-| Per-shell data | `%LOCALAPPDATA%\winshell\data` |
+| Cache | `%LOCALAPPDATA%\winshell\cache\by-shell\<shell id>` |
+| State | `%LOCALAPPDATA%\winshell\state\by-shell\<shell id>` |
+| Per-shell data | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>` |
+| The default shell | `%LOCALAPPDATA%\winshell\default-shell`, written again each time Winshell starts without a config |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
 | Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. Reports leave out what scripts printed to the log and take out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
 | Downloaded updates | `%LOCALAPPDATA%\winshell\updates\<version>`, until the next start installs them. See [Winshell updates](updates.md) |
