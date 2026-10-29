@@ -1,3 +1,4 @@
+import Winshell
 import Winshell.Notifications
 import Winshell.Theme
 import QtQuick
@@ -10,6 +11,16 @@ ColumnLayout {
   // An app turned off in Winshell Settings is left out, and Clear all leaves its notifications alone.
   readonly property var visibleGroups: listener === null ? [] : listener.groups.values.filter(g => Preferences.showsNotificationsFrom(g.appId))
   spacing: 8
+
+  // Same regional short time as the taskbar clock. The weekday stays only after that local day.
+  SystemClock { id: clock; precision: SystemClock.Minutes }
+
+  function notificationTime(createdAt) {
+    var time = Qt.formatTime(createdAt, Qt.DefaultLocaleShortDate)
+    if (Qt.formatDateTime(createdAt, "yyyy-MM-dd") === Qt.formatDateTime(clock.date, "yyyy-MM-dd"))
+      return time
+    return Qt.formatDateTime(createdAt, "ddd") + " " + time
+  }
 
   RowLayout {
     Layout.fillWidth: true
@@ -92,7 +103,7 @@ ColumnLayout {
                   Button { text: ""; font.family: Theme.iconFontFamily; padding: 0; implicitWidth: 32; flat: true; Accessible.name: "Dismiss " + card.modelData.title; onClicked: card.modelData.dismiss(); onActiveFocusChanged: if (activeFocus) scroll.reveal(this) }
                 }
                 Text { Layout.fillWidth: true; text: card.modelData.body; wrapMode: Text.Wrap; color: Theme.textFillColorPrimary }
-                Text { text: Qt.formatDateTime(card.modelData.createdAt, "ddd HH:mm"); font.pixelSize: 12; color: Theme.textFillColorSecondary }
+                Text { text: root.notificationTime(card.modelData.createdAt); font.pixelSize: 12; color: Theme.textFillColorSecondary }
               }
             }
           }
