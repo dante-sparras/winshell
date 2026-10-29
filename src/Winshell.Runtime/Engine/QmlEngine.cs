@@ -36,12 +36,18 @@ public sealed class QmlEngine : IDisposable
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SignalSlot, object?> _connectedSlots = [];
 
     public QmlEngine(ModuleRegistry modules, IEventLoop loop, Log? log = null, string? shellDir = null)
+        : this(modules, loop, log, shellDir, JsRuntime.DefaultScriptBudget)
+    {
+    }
+
+    /// <summary>Same as the public constructor, with a script budget a test can shorten.</summary>
+    internal QmlEngine(ModuleRegistry modules, IEventLoop loop, Log? log, string? shellDir, TimeSpan scriptBudget)
     {
         Modules = modules;
         Loop = loop;
         Log = log ?? Log.Default;
         ShellDir = shellDir is null ? null : Path.GetFullPath(shellDir);
-        Js = new JsRuntime(this);
+        Js = new JsRuntime(this, scriptBudget);
     }
 
     public ModuleRegistry Modules { get; }

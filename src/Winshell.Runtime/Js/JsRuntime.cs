@@ -21,9 +21,13 @@ public sealed class JsRuntime
     private readonly QmlEngine _qml;
     private readonly ConcurrentDictionary<string, JsValue> _factories = new(StringComparer.Ordinal);
 
-    public JsRuntime(QmlEngine qml)
+    /// <summary>How long one script entry may run before it is stopped. A test can pass a shorter budget.</summary>
+    internal static readonly TimeSpan DefaultScriptBudget = TimeSpan.FromSeconds(2);
+
+    public JsRuntime(QmlEngine qml, TimeSpan? scriptBudget = null)
     {
         _qml = qml;
+        var budget = scriptBudget ?? DefaultScriptBudget;
         Engine = new Engine(options =>
         {
             options.Strict(false);
@@ -35,6 +39,10 @@ public sealed class JsRuntime
             options.Interop.AllowGetType = false;
             options.Interop.AllowSystemReflection = false;
             options.LimitRecursion(512);
+            // A binding, signal or callLater that never returns would freeze the shell. Two seconds is long
+            // enough for a real handler and short enough to get the taskbar back. The same bound covers a regex.
+            options.TimeoutInterval(budget);
+            options.Constraints.RegexTimeout = budget;
         });
         Globals.Install(this, qml);
     }
