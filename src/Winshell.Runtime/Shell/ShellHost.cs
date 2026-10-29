@@ -361,7 +361,9 @@ public sealed class ShellHost : IShellHost, IDisposable
         }
         void Appeared(object? _, FileSystemEventArgs e)
         {
-            if (Directory.Exists(dir))
+            var changed = Path.GetFullPath(e.FullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (dir.Equals(changed, StringComparison.OrdinalIgnoreCase)
+                || dir.StartsWith(changed + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 _loop.Post(() => RecoverWatch(engine, watcher));
         }
         watcher.Created += Appeared;
