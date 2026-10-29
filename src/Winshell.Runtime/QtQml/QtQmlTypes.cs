@@ -99,9 +99,11 @@ public sealed class Timer : QObject
             return;
         if (_repeat)
             _scheduled = Engine!.Loop.Schedule(TimeSpan.FromMilliseconds(Math.Max(1, _interval)), Fire);
-        else
-            SetField(ref _running, false, nameof(Running));
+        // A one-shot timer reports triggered while it is still running, then runningChanged.
         Emit("triggered");
+        if (_repeat || IsDestroyed || !_running || _scheduled is not null)
+            return;
+        SetField(ref _running, false, nameof(Running));
     }
 
     private void CancelTimer()
@@ -132,8 +134,9 @@ public sealed class Connections : QObject
         set
         {
             _targetSet = true;
-            if (SetField(ref _target, value))
-                Reconnect();
+            SetField(ref _target, value);
+            // An explicit target, including null, replaces the owner even when the field was already null.
+            Reconnect();
         }
     }
 
