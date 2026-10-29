@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -76,12 +77,14 @@ internal static class Instances
         return result.OrderByDescending(r => r.Item1.LaunchTime).ToList();
     }
 
-    private static bool IsAlive(int pid)
+    internal static bool IsAlive(int pid)
     {
         try
         {
             using var p = Process.GetProcessById(pid);
-            return !p.HasExited && p.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase);
+            // Windows reuses process ids, and this user may not be able to open the process that has the id now,
+            // so the name is read first: reading it needs no handle.
+            return p.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase) && !p.HasExited;
         }
         catch (ArgumentException)
         {
@@ -90,6 +93,11 @@ internal static class Instances
         catch (InvalidOperationException)
         {
             return false;
+        }
+        catch (Win32Exception)
+        {
+            // A winshell this user cannot open, such as one running elevated, is still running.
+            return true;
         }
     }
 
