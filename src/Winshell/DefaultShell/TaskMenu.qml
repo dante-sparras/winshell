@@ -16,6 +16,8 @@ PopupWindow {
   signal unpinRequested()
   // Escape closed the menu, so the keyboard goes back to the button it opened from.
   signal dismissed()
+  // The app this menu was for is gone while the keyboard was in it. Its button is going too.
+  signal anchorGone()
 
   readonly property var items: {
     if (!task)
@@ -68,7 +70,12 @@ PopupWindow {
       task.windows.slice().forEach(w => w.close())
   }
 
-  onTaskChanged: if (task === null) visible = false
+  onTaskChanged: if (task === null) {
+    const keyboard = visible
+    visible = false
+    if (keyboard)
+      anchorGone()
+  }
 
   // An item that went away, as Close when the app's last window closes, took focus with it: the first item gets it.
   onItemsChanged: if (visible) Qt.callLater(() => {

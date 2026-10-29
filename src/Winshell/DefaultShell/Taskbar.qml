@@ -212,6 +212,8 @@ PanelWindow {
         showPins: root.appsOn === "all" || root.isMainScreen
         onPinRequested: id => root.pins.pin(id)
         onUnpinRequested: id => root.pins.unpin(id)
+        // The focused app left. Start, or whichever app is first, is still there; the one that left is not.
+        onKeyboardDisplaced: if (root.keyboardActive) root.focusApps()
         // Up to the tray area, after the margins and Start and Search.
         // Up to the tray area from where the group is now, so the apps never reach it, even while the group slides.
         maxWidth: right.x - 12 - middle.x - x

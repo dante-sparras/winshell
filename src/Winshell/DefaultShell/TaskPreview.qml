@@ -17,6 +17,9 @@ PopupWindow {
   // Escape closed previews opened from the keyboard, or their last window closed, so the keyboard goes back to
   // their button.
   signal dismissed()
+  // The app these previews were for is gone, and the keyboard was in them. Their button is going too, so the
+  // taskbar has to choose another place for it.
+  signal anchorGone()
 
   readonly property bool running: task !== null && task.windows.length > 0
   readonly property var windows: running ? task.windows : []
@@ -51,7 +54,9 @@ PopupWindow {
 
   function hoverEnded() {
     openTimer.stop()
-    if (visible)
+    // The keyboard has these previews. The pointer leaving must not close them, or the focus they hold goes with
+    // them and never comes back to a button.
+    if (visible && !grabFocus)
       closeTimer.restart()
   }
 
@@ -93,8 +98,15 @@ PopupWindow {
 
   // Opened by hovering again, the previews leave the keyboard where it is.
   onVisibleChanged: if (!visible) grabFocus = false
+  onGrabFocusChanged: if (grabFocus) closeTimer.stop()
 
-  onTaskChanged: if (task === null) hide()
+  onTaskChanged: if (task === null) {
+    // Captured before hide() drops it. The windows-change handler runs too late: the button is already gone.
+    const keyboard = grabFocus
+    hide()
+    if (keyboard)
+      anchorGone()
+  }
 
   // A window that closed, or a group that switched between previews and its list, took focus with it: it goes to
   // the same window if it is still there, or the first one; with no windows left, back to the app's button.
@@ -122,7 +134,7 @@ PopupWindow {
   Timer {
     id: closeTimer
     interval: 300
-    onTriggered: if (!hover.hovered) root.visible = false
+    onTriggered: if (!hover.hovered && !root.grabFocus) root.visible = false
   }
 
   Item {
@@ -132,7 +144,14 @@ PopupWindow {
 
     HoverHandler {
       id: hover
-      onHoveredChanged: hovered ? closeTimer.stop() : closeTimer.restart()
+      onHoveredChanged: {
+        if (root.grabFocus)
+          return
+        if (hovered)
+          closeTimer.stop()
+        else
+          closeTimer.restart()
+      }
     }
 
     // Left and Right move between previews and their close buttons; Up and Down between the rows of the list.

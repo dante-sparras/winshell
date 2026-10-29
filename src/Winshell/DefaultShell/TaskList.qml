@@ -26,6 +26,8 @@ Item {
 
   signal pinRequested(string id)
   signal unpinRequested(string id)
+  // The button the keyboard was on has gone. The taskbar focuses one that is still there, never this one.
+  signal keyboardDisplaced()
 
   // The most room the apps may take. When they need more, they scroll sideways with the mouse wheel or a drag.
   property real maxWidth: Infinity
@@ -124,18 +126,27 @@ Item {
           }
           onPreviewRequested: preview.openFromKeyboard(button, modelData)
           onActiveFocusChanged: if (activeFocus) root.reveal(button)
+          // Pinning or reordering keeps this button and moves it. Focus does not change, so the strip would
+          // otherwise stay scrolled to where the button used to be.
+          onXChanged: if (activeFocus) Qt.callLater(() => { if (button.activeFocus) root.reveal(button) })
           onContainsMouseChanged: {
             if (containsMouse && !menu.visible)
               preview.hoverStarted(button, modelData)
             else if (!containsMouse)
               preview.hoverEnded()
           }
-          // The app is gone: what was open from its button closes with it.
+          // The app is gone: what was open from its button closes with it. Read before hide(): closing drops
+          // the keyboard flag, and the button is not a place focus can return to.
           Component.onDestruction: {
+            const keyboard = button.activeFocus
+              || (preview.grabFocus && preview.anchor.item === button)
+              || (menu.visible && menu.anchor.item === button)
             if (preview.anchor.item === button)
               preview.hide()
             if (menu.anchor.item === button)
               menu.visible = false
+            if (keyboard)
+              Qt.callLater(() => root.keyboardDisplaced())
           }
         }
       }
@@ -151,6 +162,7 @@ Item {
       window.activate()
     }
     onDismissed: if (anchor.item) anchor.item.forceActiveFocus(Qt.TabFocusReason)
+    onAnchorGone: Qt.callLater(() => root.keyboardDisplaced())
   }
 
   TaskMenu {
@@ -160,5 +172,6 @@ Item {
     onPinRequested: root.pinRequested(task.pinId)
     onUnpinRequested: root.unpinRequested(task.pin)
     onDismissed: if (anchor.item) anchor.item.forceActiveFocus(Qt.TabFocusReason)
+    onAnchorGone: Qt.callLater(() => root.keyboardDisplaced())
   }
 }
