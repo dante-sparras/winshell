@@ -86,7 +86,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private bool _waiting;
     private IDisposable? _timer;
     private IDisposable? _answer;
-    private IDisposable? _cursorRestore;
+    private readonly TrayCursor _cursor;
 
     /// <param name="broadcast">Asks every app to add its icons again; <see cref="BroadcastTaskbarCreated"/> in a shell.</param>
     public TrayHost(IEventLoop loop, Log log, TrayNames names, Action broadcast)
@@ -96,6 +96,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
         _names = names;
         _broadcast = broadcast;
         _owner = new Mutex(false, names.Owner);
+        _cursor = new TrayCursor(loop, CursorPosition, point => SetCursorPos(point.X, point.Y));
     }
 
     /// <summary>The notification area window, or 0 while another host owns the tray.</summary>
@@ -173,9 +174,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
     {
         _timer?.Dispose();
         _answer?.Dispose();
-        _cursorRestore?.Dispose();
+        _cursor.Dispose();
         _settingsWatch?.Dispose();
-        _timer = _answer = _cursorRestore = _settingsWatch = null;
+        _timer = _answer = _settingsWatch = null;
         if (_hwnd != 0)
         {
             Hosts.Remove(_hwnd);
@@ -472,7 +473,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
         var point = at ?? CursorPosition();
         // Apps read the cursor when they open a menu, and many ignore the point in the message.
         if (at is { } target)
-            PlaceCursor(target);
+            _cursor.Place(target);
         LetAppTakeForeground(icon, pid);
         foreach (var message in TrayProtocol.ClickMessages(click, icon.Version))
             Send(icon, message, point);
@@ -509,15 +510,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
             if (attached)
                 AttachThreadInput(foregroundThread, thread, false);
         }
-    }
-
-    /// <summary>Moves the cursor to where the menu should open, then puts it back once the app has read it.</summary>
-    private void PlaceCursor((int X, int Y) target)
-    {
-        GetCursorPos(out var previous);
-        SetCursorPos(target.X, target.Y);
-        _cursorRestore?.Dispose();
-        _cursorRestore = _loop.Schedule(TimeSpan.FromMilliseconds(400), () => SetCursorPos(previous.X, previous.Y));
     }
 
     private static void Send(TrayIcon icon, uint message, (int X, int Y) point)
