@@ -23,7 +23,7 @@ function Publish-WinshellRelease {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing release asset: $name" }
         [pscustomobject]@{ Name = $name; Path = $path; Digest = 'sha256:' + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
     }
-    $release = gh api "repos/$Repository/releases/tags/$Tag" | ConvertFrom-Json
+    $release = gh release view $Tag --repo $Repository --json 'isDraft,body,assets' | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0) { throw "Could not read release $Tag." }
     # Preflight every existing digest before uploading anything. Published releases are never repaired in place.
     $missing = @(
@@ -35,7 +35,7 @@ function Publish-WinshellRelease {
             }
         }
     )
-    if (-not $release.draft) {
+    if (-not $release.isDraft) {
         if ($missing.Count -gt 0) {
             throw "$Tag is published and lacks release assets. It cannot be repaired by this workflow; publish a later approved version through a draft."
         }
@@ -47,8 +47,8 @@ function Publish-WinshellRelease {
         if ($LASTEXITCODE -ne 0) { throw "Could not upload $($file.Name). $Tag remains a draft." }
     }
     # Re-read GitHub's digests: a successful upload command alone is not permission to freeze the release.
-    $uploaded = gh api "repos/$Repository/releases/tags/$Tag" | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0 -or -not $uploaded.draft) { throw "Could not verify draft $Tag before publication." }
+    $uploaded = gh release view $Tag --repo $Repository --json 'isDraft,body,assets' | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $uploaded.isDraft) { throw "Could not verify draft $Tag before publication." }
     foreach ($file in $files) {
         $asset = @($uploaded.assets | Where-Object name -CEQ $file.Name)
         if ($asset.Count -ne 1 -or $asset[0].digest -cne $file.Digest) {

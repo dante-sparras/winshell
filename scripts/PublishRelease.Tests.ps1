@@ -22,8 +22,17 @@ Describe 'Publishing a complete draft release' {
         $global:LASTEXITCODE = 0
         Mock gh {
             $script:Calls.Add(($args -join ' '))
-            if ($args[0] -eq 'api') {
+            $global:LASTEXITCODE = 0
+            if ($args[0] -eq 'api' -and $args[1] -like 'repos/*/releases/tags/*') {
+                # The REST tag lookup cannot find a draft, even when its tag already exists.
+                if ($script:Draft) {
+                    $global:LASTEXITCODE = 1
+                    return '{"message":"Not Found"}'
+                }
                 return (@{ draft = $script:Draft; body = ''; assets = $script:Assets.ToArray() } | ConvertTo-Json -Depth 5)
+            }
+            if ($args[0] -eq 'release' -and $args[1] -eq 'view') {
+                return (@{ isDraft = $script:Draft; body = ''; assets = $script:Assets.ToArray() } | ConvertTo-Json -Depth 5)
             }
             if ($args[0] -eq 'release' -and $args[1] -eq 'upload') {
                 if ($script:FailUpload) { $global:LASTEXITCODE = 1; return }
@@ -42,7 +51,7 @@ Describe 'Publishing a complete draft release' {
         Publish-WinshellRelease -Tag v0.6.1 -PackageDirectory $script:Directory -Repository owner/repo
         $script:Draft | Should -BeFalse
         $script:Assets.Count | Should -Be 6
-        $script:Calls[-2] | Should -Be 'api repos/owner/repo/releases/tags/v0.6.1'
+        $script:Calls[-2] | Should -Be 'release view v0.6.1 --repo owner/repo --json isDraft,body,assets'
         $script:Calls[-1] | Should -Be 'release edit v0.6.1 --repo owner/repo --draft=false'
     }
 
