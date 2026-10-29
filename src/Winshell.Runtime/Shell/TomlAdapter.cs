@@ -23,6 +23,10 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     private const double ExactIntegerLimit = 9007199254740992d;
 
     private readonly HashSet<string> _leave = new(StringComparer.Ordinal);
+
+    /// <summary>Properties assigned since the last deserialize that parsed. A torn buffer must not replace the rest.</summary>
+    private readonly HashSet<string> _dirty = new(StringComparer.Ordinal);
+
     private bool _loading;
 
     /// <summary>A comment for each key, as <c>{ key: "text" }</c>, written above a key the file does not have yet.</summary>
@@ -40,6 +44,7 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         if (_loading)
             return;
         _leave.Remove(property);
+        _dirty.Add(property);
         Emit("adapterUpdated");
     }
 
@@ -57,12 +62,21 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
             Warn($"failed to parse {Where}: {e.Message}");
             return;
         }
+        Apply(table, skipDirty: false);
+        _dirty.Clear();
+    }
+
+    /// <summary>Loads <paramref name="table"/> into the properties. A recovery skips properties assigned since the last good read.</summary>
+    private void Apply(TomlTable table, bool skipDirty)
+    {
+        if (Engine is null)
+            return;
         _loading = true;
         try
         {
             foreach (var p in DynamicProperties)
             {
-                if (p.IsReadonly)
+                if (p.IsReadonly || (skipDirty && _dirty.Contains(p.Name)))
                     continue;
                 try
                 {
@@ -98,12 +112,16 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
 
     public override string Serialize()
     {
+        PreserveFile = false;
         if (Engine is null)
             return "";
         var buffer = View?.Text ?? "";
         var document = SyntaxParser.Parse(buffer);
-        if (!Recover(ref document, buffer, out var unchanged))
-            return unchanged;
+        if (!Recover(ref document))
+        {
+            PreserveFile = true;
+            return "";
+        }
         var newline = NewlineOf(document);
         var comments = Engine.Js.ToJs(ValueConverter.Unwrap(Comments));
         TomlTable? model = null;
@@ -153,36 +171,51 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     }
 
     /// <summary>
-    /// A buffer that does not parse is read from disk again. A good read is edited; a bad one is returned as it is.
+    /// A buffer that does not parse is read from disk again. A good read is loaded into the properties that were not
+    /// assigned, then edited. A bad read, or a read that throws, writes nothing.
     /// </summary>
-    private bool Recover(ref DocumentSyntax document, string buffer, out string unchanged)
+    private bool Recover(ref DocumentSyntax document)
     {
-        unchanged = buffer;
         if (!document.HasErrors)
             return true;
+        var detail = document.Diagnostics.Count > 0 ? document.Diagnostics[0].Message : "invalid TOML";
         var path = View?.Path;
         if (!string.IsNullOrEmpty(path))
         {
             try
             {
-                var disk = File.ReadAllText(path);
-                var again = SyntaxParser.Parse(disk);
-                if (!again.HasErrors)
+                var again = SyntaxParser.Parse(File.ReadAllText(path));
+                if (!again.HasErrors && LoadClean(again))
                 {
                     document = again;
                     return true;
                 }
-                unchanged = disk;
-                document = again;
+                if (again.HasErrors && again.Diagnostics.Count > 0)
+                    detail = again.Diagnostics[0].Message;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                // The buffer is all there is.
+                detail = e.Message;
             }
         }
-        var detail = document.Diagnostics.Count > 0 ? document.Diagnostics[0].Message : "invalid TOML";
         Warn($"failed to parse {Where}: {detail}; the file was left unchanged");
         return false;
+    }
+
+    /// <summary>Loads a document that parses into the properties that have not been assigned since the last good read.</summary>
+    private bool LoadClean(DocumentSyntax document)
+    {
+        if (Engine is null)
+            return false;
+        try
+        {
+            Apply(TomlSerializer.Deserialize<TomlTable>(document.ToString()) ?? [], skipDirty: true);
+            return true;
+        }
+        catch (TomlException)
+        {
+            return false;
+        }
     }
 
     private bool UpdateOwned(DocumentSyntax document, Owned owned, string name, JsValue desired, string newline)
@@ -298,6 +331,10 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
                 return UpdateInteger(integer, desired.AsNumber());
             case FloatValueSyntax number when desired.IsNumber():
                 return UpdateFloat(number, desired.AsNumber());
+            case DateTimeValueSyntax date when desired.IsString():
+                // The token is the user's spelling. Quoting it would turn a date into a string.
+                var written = desired.AsString();
+                return date.Token?.Text == written || date.Value.ToString() == written;
             case ArraySyntax array when desired.IsArray():
                 UpdateArray(array, desired.AsArray(), newline);
                 return true;
@@ -688,7 +725,22 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
                     return nested;
             }
         }
+        // A comment-only file has its newline in trivia, not on a key.
+        if (TriviaNewline(document.TrailingTrivia) is { } trailing)
+            return trailing;
         return "\n";
+    }
+
+    private static string? TriviaNewline(List<SyntaxTrivia>? trivia)
+    {
+        if (trivia is null)
+            return null;
+        foreach (var item in trivia)
+        {
+            if (item.Kind == TokenKind.NewLine && item.Text is { Length: > 0 } text)
+                return text == "\r\n" ? "\r\n" : "\n";
+        }
+        return null;
     }
 
     private static string? Line(SyntaxToken? token) =>

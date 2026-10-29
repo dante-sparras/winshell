@@ -548,6 +548,9 @@ public abstract class FileViewAdapter : QObject
 {
     internal FileView? View { get; set; }
 
+    /// <summary>Set by <see cref="Serialize"/> when the bytes on disk must be left as they are.</summary>
+    internal bool PreserveFile { get; set; }
+
     public abstract void Deserialize(string text);
 
     public abstract string Serialize();
@@ -918,8 +921,12 @@ public sealed class FileView : QObject
     [Qml]
     public void WriteAdapter()
     {
-        if (_adapter is not null)
-            Write(_adapter.Serialize());
+        if (_adapter is null)
+            return;
+        var text = _adapter.Serialize();
+        if (_adapter.PreserveFile)
+            return;
+        Write(text);
     }
 
     private void Write(string text)

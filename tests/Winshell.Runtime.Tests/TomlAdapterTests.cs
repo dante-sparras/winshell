@@ -326,10 +326,83 @@ public class TomlAdapterTests
 
         var text = File.ReadAllText(path);
         Assert.False(Tomlyn.Parsing.SyntaxParser.Parse(text).HasErrors);
-        Assert.Contains("name = \"default\" # keep", text, StringComparison.Ordinal);
+        Assert.Contains("name = \"disk\" # keep", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("name = \"default\"", text, StringComparison.Ordinal);
+        Assert.Equal("disk", shell.Eval(root, "settings.name"));
         Assert.Contains("[other]", text, StringComparison.Ordinal);
         Assert.Contains("kept = true", text, StringComparison.Ordinal);
         Assert.Contains("on = false", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_reread_that_throws_writes_nothing()
+    {
+        using var shell = new TestShell(("shell.qml", Settings), ("settings.toml", "name = \"broken"));
+        var root = shell.Load();
+        var path = FileOf(shell);
+        const string Disk = "name = \"disk\" # keep\n";
+        File.WriteAllText(path, Disk);
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            shell.Eval(root, "settings.on = false");
+            shell.Loop.Process();
+            Assert.Contains(shell.Messages, m => m.Contains("left unchanged", StringComparison.Ordinal));
+            Assert.DoesNotContain(shell.Messages, m => m.Contains("failed to write", StringComparison.Ordinal));
+        }
+        Assert.Equal(Disk, File.ReadAllText(path));
+        Assert.Equal("default", shell.Eval(root, "settings.name"));
+    }
+
+    [Fact]
+    public void A_date_inside_a_changed_value_keeps_its_text()
+    {
+        const string Original = """
+            row = { when = 1979-05-27 07:32:00, n = 1 }
+
+            times = [07:32:00, 1979-05-27]
+
+            [item]
+            name = "Chat"
+            when = 1979-05-27
+            """;
+        using var shell = new TestShell(("shell.qml", Dates));
+        var path = FileOf(shell);
+        File.WriteAllText(path, Original.ReplaceLineEndings("\n"));
+        var root = shell.Load();
+        shell.Eval(root, """
+            (settings.item = { name: 'Mail', when: '1979-05-27' },
+             settings.row = { when: '1979-05-27T07:32:00', n: 2 },
+             settings.times = ['07:32:00', '1979-05-27', 'later'])
+            """);
+        shell.Loop.Process();
+
+        var text = File.ReadAllText(path);
+        Assert.Contains("name = \"Mail\"\nwhen = 1979-05-27", text, StringComparison.Ordinal);
+        Assert.Contains("when = 1979-05-27 07:32:00", text, StringComparison.Ordinal);
+        Assert.Contains("[07:32:00, 1979-05-27, \"later\"]", text, StringComparison.Ordinal);
+        Assert.Contains("n = 2", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"1979-05-27\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"07:32:00\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"1979-05-27T07:32:00\"", text, StringComparison.Ordinal);
+        Assert.Equal(1, Count(text, "row ="));
+        Assert.Equal(1, Count(text, "times ="));
+        Assert.Equal(1, Count(text, "[item]"));
+    }
+
+    [Fact]
+    public void A_key_added_to_a_comment_only_crlf_file_uses_crlf()
+    {
+        using var shell = new TestShell(("shell.qml", Settings));
+        var path = FileOf(shell);
+        File.WriteAllBytes(path, "# header\r\n"u8.ToArray());
+        var root = shell.Load();
+        shell.Eval(root, "view.writeAdapter()");
+        shell.Loop.Process();
+
+        var text = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(path));
+        Assert.Contains("# header\r\n", text, StringComparison.Ordinal);
+        Assert.Contains("name = \"default\"\r\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n", text.Replace("\r\n", "", StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -501,6 +574,28 @@ public class TomlAdapterTests
         Assert.Contains("size = 8", text, StringComparison.Ordinal);
         Assert.DoesNotContain("size = \"x\"", text, StringComparison.Ordinal);
     }
+
+    private const string Dates = """
+        import Winshell
+        import Winshell.Io
+        import QtQuick
+        Scope {
+          property alias settings: adapter
+          FileView {
+            path: Shell.shellDir + "/settings.toml"
+            blockLoading: true
+            blockWrites: true
+            printErrors: false
+            onAdapterUpdated: writeAdapter()
+            TomlAdapter {
+              id: adapter
+              property var item: ({ name: "Chat", when: "1979-05-27" })
+              property var row: ({ when: "1979-05-27T07:32:00", n: 1 })
+              property var times: ["07:32:00", "1979-05-27"]
+            }
+          }
+        }
+        """;
 
     private const string Spellings = """
         import Winshell
