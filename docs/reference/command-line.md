@@ -75,6 +75,8 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 
 `--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
 
+An unexpected failure of `list`, `kill`, `log`, `ipc` or `doctor` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
+
 ## Environment variables
 
 | Variable | What it does |
