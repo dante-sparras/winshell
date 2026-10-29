@@ -117,6 +117,8 @@ public sealed class PopupWindow : ShellWindow, IItemContainerChild
     private bool _grabFocus;
     private bool _popupVisible;
     private Item? _containerItem;
+    private ShellWindow? _watchedParent;
+    private IDisposable? _parentVisibility;
 
     public PopupWindow()
     {
@@ -194,8 +196,22 @@ public sealed class PopupWindow : ShellWindow, IItemContainerChild
 
     internal void AnchorChanged()
     {
+        WatchParent();
         OnPlacementChanged();
         UpdateVisibility();
+    }
+
+    /// <summary>One connection to the current parent. A new backend or a new parent replaces it.</summary>
+    private void WatchParent()
+    {
+        var parent = Anchor.Window;
+        if (ReferenceEquals(parent, _watchedParent))
+            return;
+        _parentVisibility?.Dispose();
+        _parentVisibility = null;
+        _watchedParent = parent;
+        if (parent is not null)
+            _parentVisibility = parent.Connect("backingWindowVisibleChanged", _ => UpdateVisibility());
     }
 
     public override void OnDismissed()
@@ -281,8 +297,15 @@ public sealed class PopupWindow : ShellWindow, IItemContainerChild
     protected override void OnBackendCreated()
     {
         base.OnBackendCreated();
-        if (Anchor.Window is { } parent)
-            parent.Connect("backingWindowVisibleChanged", _ => UpdateVisibility());
+        WatchParent();
+    }
+
+    protected override void OnDestroy()
+    {
+        _parentVisibility?.Dispose();
+        _parentVisibility = null;
+        _watchedParent = null;
+        base.OnDestroy();
     }
 }
 
