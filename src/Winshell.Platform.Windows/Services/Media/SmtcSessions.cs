@@ -23,6 +23,9 @@ internal sealed class SmtcSessions
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
     private Timer? _refresh;
     private int _syncPosted;
+    private int _generation;
+    private int _requesting;
+    private int _requestThread = -1;
     private int _nextId = 1;
 
     private SmtcSessions(IEventLoop loop, Log log)
@@ -30,7 +33,10 @@ internal sealed class SmtcSessions
         _loop = loop;
         Log = log;
         ArtCache.CleanOld();
-        _ = Start();
+        // SessionsChanged is not delivered for every session GetSessions can already see. A manager requested
+        // on another thread can keep returning an empty list, so each read asks again on the pumping thread.
+        _refresh ??= new Timer(_ => RequestSync(), null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
+        RequestSync();
     }
 
     /// <summary>The session list, made on first use. Call on the UI thread.</summary>
@@ -46,34 +52,6 @@ internal sealed class SmtcSessions
 
     internal void Post(Action action) => _loop.Post(action);
 
-    private async Task Start()
-    {
-        try
-        {
-            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask().ConfigureAwait(false);
-            Post(() => Attach(manager));
-        }
-        catch (Exception e) when (e is COMException or UnauthorizedAccessException)
-        {
-            Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Subscribes on the UI thread and keeps reading the list. Windows can omit
-    /// <c>SessionsChanged</c> for a session <c>GetSessions</c> already returns, which left the shell
-    /// waiting on an event that never came.
-    /// </summary>
-    private void Attach(GlobalSystemMediaTransportControlsSessionManager manager)
-    {
-        _manager = manager;
-        // The projection does not root the delegate. A collected handler never hears a later session.
-        _sessionsChanged = (_, _) => RequestSync();
-        manager.SessionsChanged += _sessionsChanged;
-        _refresh ??= new Timer(_ => RequestSync(), null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
-        Sync();
-    }
-
     /// <summary>Posts one list read. A loop nobody is pumping must not grow a queue of them.</summary>
     private void RequestSync()
     {
@@ -86,25 +64,102 @@ internal sealed class SmtcSessions
         });
     }
 
+    /// <summary>
+    /// Asks Windows for a manager on this thread and reads that manager's sessions. An older manager, requested
+    /// before the pumping thread existed, does not grow its list when <c>SessionsChanged</c> is skipped.
+    /// </summary>
     private void Sync()
     {
-        if (_manager is null)
+        var thread = Environment.CurrentManagedThreadId;
+        // A slow request has to finish. Starting another on this same thread drops the result, and under load
+        // none of them land. A different thread is the one that can see the window, so it does replace it.
+        if (Volatile.Read(ref _requesting) == 1 && Volatile.Read(ref _requestThread) == thread)
             return;
-        IReadOnlyList<GlobalSystemMediaTransportControlsSession> current;
+
+        var generation = Interlocked.Increment(ref _generation);
+        Volatile.Write(ref _requestThread, thread);
+        Interlocked.Exchange(ref _requesting, 1);
+        global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation;
         try
         {
-            current = _manager.GetSessions();
+            operation = GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         }
-        catch (COMException e)
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
-            Log.Warn("media", $"Cannot list media sessions: {e.Message}");
+            if (generation == Volatile.Read(ref _generation))
+                Interlocked.Exchange(ref _requesting, 0);
+            Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
             return;
         }
+
+        operation.Completed = (completed, status) => Post(() => Finish(completed, status, generation));
+    }
+
+    private void Finish(
+        global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation,
+        global::Windows.Foundation.AsyncStatus status,
+        int generation)
+    {
+        if (generation != Volatile.Read(ref _generation))
+            return;
+        Interlocked.Exchange(ref _requesting, 0);
+        if (status != global::Windows.Foundation.AsyncStatus.Completed)
+        {
+            if (status == global::Windows.Foundation.AsyncStatus.Error)
+            {
+                try
+                {
+                    Log.Warn("media", $"Windows media sessions are not available: {operation.ErrorCode.Message}");
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+            return;
+        }
+
+        try
+        {
+            var manager = operation.GetResults();
+            Subscribe(manager);
+            Read(manager.GetSessions());
+        }
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Log.Warn("media", $"Cannot list media sessions: {e.Message}");
+        }
+    }
+
+    /// <summary>The projection does not root the delegate. A collected handler never hears a later session.</summary>
+    private void Subscribe(GlobalSystemMediaTransportControlsSessionManager manager)
+    {
+        if (ReferenceEquals(_manager, manager))
+            return;
+        if (_manager is not null && _sessionsChanged is not null)
+            _manager.SessionsChanged -= _sessionsChanged;
+        _manager = manager;
+        _sessionsChanged ??= (_, _) => RequestSync();
+        manager.SessionsChanged += _sessionsChanged;
+    }
+
+    private void Read(IReadOnlyList<GlobalSystemMediaTransportControlsSession> current)
+    {
         // GetSessions returns a new object for a session that is already held, so reference equality
         // drops it and starts again. That cancels the read of its title and art. Match the app id instead.
         var incoming = current.ToList();
         if (SameSessions(incoming))
+        {
+            // The fresh manager returned new objects for the sessions already held. Follow those objects so a
+            // title, art, or timeline that arrived without an event is read from the manager that can see it.
+            var same = _sessions.ToList();
+            var samePair = Pair(same.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
+            for (var i = 0; i < incoming.Count; i++)
+            {
+                if (samePair[i] >= 0)
+                    same[samePair[i]].Retarget(incoming[i]);
+            }
             return;
+        }
         var held = _sessions.ToList();
         var pair = Pair(held.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
         var kept = new bool[held.Count];
@@ -182,6 +237,7 @@ internal sealed class SmtcSession
     private int _mediaApplied;
     private int _artRequest;
     private int _artApplied;
+    private bool _artMissLogged;
     private bool _released;
     private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
     private double _position;
@@ -405,7 +461,12 @@ internal sealed class SmtcSession
             }
             catch (COMException)
             {
-                // The session closed while it was being read.
+                // The session closed while it was being read. Allow a later poll to try again.
+                _owner.Post(() =>
+                {
+                    if (!_released && request == _mediaRequest)
+                        _mediaApplied = request;
+                });
             }
         }
     }
@@ -418,6 +479,15 @@ internal sealed class SmtcSession
         var title = properties.Title ?? "";
         var artist = properties.Artist ?? "";
         var album = properties.AlbumTitle ?? "";
+        var albumArtist = properties.AlbumArtist ?? "";
+        if (title == Title && artist == Artist && album == Album && albumArtist == AlbumArtist
+            && TrackNumber == properties.TrackNumber && SameGenres(properties.Genres))
+        {
+            // The title can land before the thumbnail. A later read with the same title still has to fetch art.
+            if (ArtUrl.Length == 0 && properties.Thumbnail is not null && _artApplied == _artRequest)
+                LoadArt(properties.Thumbnail);
+            return;
+        }
         var trackChanged = title != Title || artist != Artist || album != Album;
         var changed = new List<string>();
         if (trackChanged)
@@ -428,7 +498,7 @@ internal sealed class SmtcSession
         Set(title, Title, v => Title = v, "trackTitle", changed);
         Set(artist, Artist, v => Artist = v, "trackArtist", changed);
         Set(album, Album, v => Album = v, "trackAlbum", changed);
-        Set(properties.AlbumArtist ?? "", AlbumArtist, v => AlbumArtist = v, "trackAlbumArtist", changed);
+        Set(albumArtist, AlbumArtist, v => AlbumArtist = v, "trackAlbumArtist", changed);
         Genres = properties.Genres?.ToArray() ?? [];
         TrackNumber = properties.TrackNumber;
         changed.Add("metadata");
@@ -471,6 +541,9 @@ internal sealed class SmtcSession
         {
             if (request == _artRequest)
                 _artApplied = request;
+            if (_artMissLogged)
+                return;
+            _artMissLogged = true;
             _owner.Log.Warn("media", $"Cannot read art from {AppName}: {reason}");
         });
     }
@@ -483,6 +556,8 @@ internal sealed class SmtcSession
             return;
         }
         _artApplied = request;
+        if (url.Length > 0)
+            _artMissLogged = false;
         if (url == ArtUrl)
         {
             ArtCache.Release(url);
@@ -545,6 +620,8 @@ internal sealed class SmtcSession
         Set(ShuffleSupported && (info.IsShuffleActive ?? false), Shuffle, v => Shuffle = v, "shuffle", changed);
         Set(LoopSupported ? (int)(info.AutoRepeatMode ?? MediaPlaybackAutoRepeatMode.None) : 0, LoopState, v => LoopState = v, "loopState", changed);
         Set(rate, Rate, v => Rate = v, "rate", changed);
+        if (changed.Count == 0)
+            return;
         changed.Add("canTogglePlaying");
         Changed?.Invoke(changed, false);
         if (seeked)
@@ -568,10 +645,15 @@ internal sealed class SmtcSession
     {
         if (_released)
             return;
-        var changed = new List<string>();
-        StartTime = timeline.StartTime;
         var length = Math.Max(0, (timeline.EndTime - timeline.StartTime).TotalSeconds);
         var supported = length > 0 || timeline.Position > TimeSpan.Zero;
+        var position = (timeline.Position - timeline.StartTime).TotalSeconds;
+        // A poll repeats the last report. Applying it again restarts interpolation and looks like a seek.
+        if (StartTime == timeline.StartTime && Length == length && PositionSupported == supported
+            && Math.Abs(_position - position) < 0.001)
+            return;
+        var changed = new List<string>();
+        StartTime = timeline.StartTime;
         Set(supported, PositionSupported, v => PositionSupported = v, "positionSupported", changed);
         Set(length, Length, v => Length = v, "length", changed);
         if (changed.Contains("length"))
@@ -579,11 +661,24 @@ internal sealed class SmtcSession
         // The app says when it took the position; trust that unless the time is clearly wrong.
         var updated = timeline.LastUpdatedTime;
         var time = updated.Year > 2000 && updated <= received && received - updated < TimeSpan.FromHours(1) ? updated : received;
-        _position = (timeline.Position - timeline.StartTime).TotalSeconds;
+        _position = position;
         _positionTime = time;
         if (changed.Count > 0)
             Changed?.Invoke(changed, false);
         Seeked?.Invoke();
+    }
+
+    private bool SameGenres(IReadOnlyList<string>? genres)
+    {
+        var count = genres?.Count ?? 0;
+        if (count != Genres.Count)
+            return false;
+        for (var i = 0; i < count; i++)
+        {
+            if (genres![i] != Genres[i])
+                return false;
+        }
+        return true;
     }
 
     private static void Set<T>(T value, T current, Action<T> assign, string name, List<string> changed)
