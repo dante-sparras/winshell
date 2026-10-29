@@ -169,12 +169,13 @@ namespace Winshell
         }
 
         /// <summary>
-        /// A process id or a tail count. <c>int.Parse</c> throws <see cref="FormatException"/> or
-        /// <see cref="OverflowException"/>, and <see cref="Run"/> only turns <see cref="ArgumentException"/> into exit code 2.
+        /// A process id or a tail count. A value that isn't one is an <see cref="ArgumentException"/>,
+        /// which <see cref="Run"/> turns into exit code 2.
         /// </summary>
         private static int WholeNumber(string option, string text)
         {
-            if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+            // NumberStyles.Integer keeps "+5", surrounding whitespace and "-0" (which is 0). A negative is not a whole number.
+            if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
                 throw new ArgumentException($"{option} needs a whole number");
             return value;
         }
@@ -734,8 +735,8 @@ namespace Winshell
             }
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
-            var all = (await reader.ReadToEndAsync()).Split('\n');
-            foreach (var line in o.Tail is { } n ? all.TakeLast(n + 1) : all)
+            var all = (await reader.ReadToEndAsync()).TrimEnd('\n').Split('\n');
+            foreach (var line in o.Tail is { } n ? all.TakeLast(n) : all)
             {
                 if (line.Length > 0)
                     Console.WriteLine(line.TrimEnd('\r'));
