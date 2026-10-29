@@ -460,6 +460,12 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     public static partial nint SendMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
 
+    /// <summary>The message was delivered with SendMessage, not posted or broadcast as a notification.</summary>
+    public const uint ISMEX_SEND = 0x00000001;
+
+    [LibraryImport("user32.dll")]
+    public static partial uint InSendMessageEx(nint reserved);
+
     public const uint GR_GDIOBJECTS = 0;
     public const uint GR_USEROBJECTS = 1;
 
