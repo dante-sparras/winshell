@@ -127,6 +127,7 @@ Item {
   TaskPreview {
     id: preview
     task: root.taskFor(taskKey)
+    workArea: root.screen ? root.screen.workArea : null
     onActivateRequested: window => {
       hide()
       window.activate()

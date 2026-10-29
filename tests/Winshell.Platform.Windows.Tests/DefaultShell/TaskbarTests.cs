@@ -189,6 +189,80 @@ public class TaskbarTests
         Assert.Equal(1, desk.Store.Launches);
     }
 
+    private static PopupWindow Popup(DefaultShellHarness shell, string name) => (PopupWindow)shell.Root.ReadProperty(name)!;
+
+    private static void Hover(DefaultShellHarness shell, Item item)
+    {
+        var p = item.MapToScene(item.Width / 2, item.Height / 2);
+        shell.Scene.PointerMove(p.X, p.Y);
+        shell.Settle();
+    }
+
+    private static void ClickIn(ShellWindow window, Item item)
+    {
+        var p = item.MapToScene(item.Width / 2, item.Height / 2);
+        window.Scene.PointerMove(p.X, p.Y);
+        window.Scene.PointerPress(p.X, p.Y, QtEnums.LeftButton);
+        window.Scene.PointerRelease(p.X, p.Y, QtEnums.LeftButton);
+    }
+
+    [Theory]
+    [InlineData(1920, 3, false)]
+    [InlineData(1920, 9, false)]
+    [InlineData(1280, 9, true)]
+    [InlineData(960, 9, true)]
+    [InlineData(1920, 20, true)]
+    public void A_large_group_fits_its_screen_and_every_window_can_be_reached_activated_and_closed(double workWidth, int count, bool asList)
+    {
+        // A screen whose work area is this many logical pixels wide: 1920 physical pixels at 100%, 150% and 200%.
+        var desk = new Desk();
+        for (var i = 2; i < count; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"Window {i}", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        shell.Root.WriteProperty("screen", new ShellScreen(new ScreenInfo("DISPLAY1", "DISPLAY1", "", "", "", new QRect(0, 0, workWidth, 1080), new QRect(0, 0, workWidth, 1032), 1920 / workWidth, 0, 0, 60, true)));
+        var preview = Popup(shell, "preview");
+        Hover(shell, Button(shell, "app:microsoft.windowsterminal_8wekyb3d8bbwe!app"));
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(preview.Visible);
+        Assert.True(preview.ImplicitWidth <= workWidth - 32, $"{preview.ImplicitWidth} wide on a {workWidth} work area");
+        Assert.True(preview.ImplicitHeight <= 1032 * 0.6 + 16);
+        preview.OnResized(preview.ImplicitWidth, preview.ImplicitHeight, 1);
+        shell.Settle();
+
+        var items = DefaultShellHarness.FindAll(preview.Scene.Root)
+            .Where(i => (i.ObjectName.StartsWith("preview:", StringComparison.Ordinal) || i.ObjectName.StartsWith("previewRow:", StringComparison.Ordinal)) && i.Visible)
+            .ToList();
+        Assert.Equal(count, items.Count);
+        var listed = items[0].ObjectName.StartsWith("previewRow:", StringComparison.Ordinal);
+        // Previews while they can be 152 px or wider; a list of titles below that.
+        Assert.Equal(asList, listed);
+        Assert.All(items, i => Assert.True(i.MapToScene(0, 0).X >= 0 && i.MapToScene(i.Width, 0).X <= preview.ImplicitWidth));
+
+        // The last window: scrolled to when listed, then brought forward, then closed.
+        var lastWindow = (FakeAppWindow)desk.Services.WindowList.Windows.Values.Last()!;
+        var last = items[^1];
+        for (var i = 0; i < 40 && last.MapToScene(0, last.Height).Y > preview.ImplicitHeight; i++)
+        {
+            preview.Scene.Wheel(20, 20, 0, -120);
+            shell.Loop.Advance(TimeSpan.FromMilliseconds(300));
+        }
+        Assert.True(last.MapToScene(0, last.Height).Y <= preview.ImplicitHeight);
+        ClickIn(preview, last);
+        shell.Settle();
+        Assert.Equal(["activate"], lastWindow.Calls);
+
+        preview.Visible = true;
+        shell.Settle();
+        var close = DefaultShellHarness.FindAll(last).First(i => i.ObjectName == "previewClose");
+        var p = last.MapToScene(last.Width / 2, last.Height / 2);
+        preview.Scene.PointerMove(p.X, p.Y);
+        shell.Settle();
+        Assert.True(close.Visible);
+        ClickIn(preview, close);
+        shell.Settle();
+        Assert.Equal(["activate", "close"], lastWindow.Calls);
+    }
+
     [Fact]
     public void The_menu_has_the_app_pin_or_unpin_and_close()
     {
