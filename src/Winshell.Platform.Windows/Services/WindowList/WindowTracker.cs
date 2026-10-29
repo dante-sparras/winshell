@@ -282,7 +282,8 @@ internal static unsafe class WindowTracker
     {
         if (deviceName.Length == 0 || !IsWindow(hwnd))
             return;
-        var target = Screens.Find(deviceName);
+        var monitors = Screens.Enumerate();
+        var target = monitors.FirstOrDefault(m => m.Info.Id == deviceName);
         if (target is null)
             return;
         var sourceHandle = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -295,7 +296,15 @@ internal static unsafe class WindowTracker
         var hasPlacement = GetWindowPlacement(hwnd, ref placement);
         var minimized = IsIconic(hwnd);
         var maximized = !minimized && IsZoomed(hwnd);
-        var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current, hasPlacement ? placement.Normal : current);
+        // The placement is in workspace coordinates and the monitor frames are in screen coordinates. A restored
+        // window shows the difference as a constant. A minimized or maximized one does not, so it takes the offset
+        // of the primary monitor's work area.
+        var bias = (X: 0, Y: 0);
+        if (hasPlacement && !minimized && !maximized)
+            bias = (current.Left - placement.Normal.Left, current.Top - placement.Normal.Top);
+        else if (hasPlacement && monitors.FirstOrDefault(m => m.Info.IsPrimary) is { } primary)
+            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, ((long)GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0);
+        var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current, WindowRules.Shift(placement.Normal, bias.X, bias.Y));
         if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
             return;
         var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
@@ -304,10 +313,7 @@ internal static unsafe class WindowTracker
             Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
             return;
         }
-        // A restored window can disagree with its placement by a constant. Carry that into the placement.
-        var biasX = !minimized && !maximized ? current.Left - placement.Normal.Left : 0;
-        var biasY = !minimized && !maximized ? current.Top - placement.Normal.Top : 0;
-        placement.Normal = new RECT(next.Left - biasX, next.Top - biasY, next.Right - biasX, next.Bottom - biasY);
+        placement.Normal = WindowRules.Shift(next, -bias.X, -bias.Y);
         placement.ShowCmd = (uint)(minimized ? SW_SHOWMINIMIZED : maximized ? SW_MAXIMIZE : SW_SHOWNORMAL);
         placement.Flags |= WPF_ASYNCWINDOWPLACEMENT;
         SetWindowPlacement(hwnd, placement);

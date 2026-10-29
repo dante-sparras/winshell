@@ -87,6 +87,33 @@ public class WindowListTests
     }
 
     [Fact]
+    public void A_restored_rectangle_is_offset_by_the_primary_work_area_unless_the_window_is_a_tool_window()
+    {
+        var monitor = new RECT(0, 0, 1920, 1080);
+        var work = new RECT(0, 48, 1920, 1080);
+        Assert.Equal((0, 48), WindowRules.WorkspaceOffset(monitor, work, false));
+        Assert.Equal((0, 0), WindowRules.WorkspaceOffset(monitor, work, true));
+        Assert.Equal((0, 0), WindowRules.WorkspaceOffset(monitor, default, false));
+        Assert.Equal((64, 40), WindowRules.WorkspaceOffset(new RECT(-3, 0, 1917, 1080), new RECT(61, 40, 1917, 1080), false));
+    }
+
+    [Fact]
+    public void A_restored_rectangle_moves_in_screen_space_across_scales()
+    {
+        // A window restored at 100, 148 on the screen is at 100, 100 in the workspace under a 48 px top bar.
+        var offset = WindowRules.WorkspaceOffset(new RECT(0, 0, 1920, 1080), new RECT(0, 48, 1920, 1080), false);
+        var workspace = new RECT(100, 100, 500, 400);
+        var screen = WindowRules.Shift(workspace, offset.X, offset.Y);
+        Assert.Equal(new RECT(100, 148, 500, 448), screen);
+        var onScaled = WindowRules.MoveOnto(screen, Primary, Scaled);
+        Assert.Equal(new RECT(2070, 222, 2670, 672), onScaled);
+        Assert.Equal(new RECT(2070, 174, 2670, 624), WindowRules.Shift(onScaled, -offset.X, -offset.Y));
+        // Mapping the workspace rectangle as if it were in screen space gives a placement 24 px too high.
+        Assert.Equal(new RECT(2070, 150, 2670, 600), WindowRules.MoveOnto(workspace, Primary, Scaled));
+        Assert.Equal(screen, WindowRules.MoveOnto(onScaled, Scaled, Primary));
+    }
+
+    [Fact]
     public void A_minimized_or_maximized_window_moves_by_its_restored_rectangle()
     {
         var current = new RECT(-32000, -32000, -31800, -31000);
