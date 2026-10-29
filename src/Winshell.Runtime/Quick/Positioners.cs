@@ -10,6 +10,9 @@ public abstract class Positioner : Item, IPolishable, IPropertyObserver
     private int _layoutDirection;
     private static readonly string[] Watched = ["width", "height", "implicitWidth", "implicitHeight", "visible"];
 
+    // Children are placed in their order, which a Repeater changes when its model moves a row.
+    protected Positioner() => Children.Changed += Invalidate;
+
     [Qml]
     public double Spacing
     {
