@@ -77,6 +77,14 @@ public static class FocusNavigation
     public static (Item Target, Action<Item>? Select)? Arrow(Item focus, int key)
     {
         using var _ = DependencyTracker.Suspend();
+        // A menu opened with the pointer has focus itself. Down enters it at the first item, Up at the last.
+        if (focus is PopupItem { ContentItem: MenuColumn column })
+        {
+            var items = column.ChildItems.Where(IsTabStop).ToList();
+            if (items.Count == 0 || key is not (KeyUp or KeyDown))
+                return null;
+            return (key == KeyDown ? items[0] : items[^1], null);
+        }
         if (GroupOf(focus) is not { } group)
             return null;
         var step = key switch

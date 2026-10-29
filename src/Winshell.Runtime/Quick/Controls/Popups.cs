@@ -666,7 +666,8 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
 public sealed class ToolTip : Popup
 {
     private string _text = "";
-    private int _delay;
+    // Windows tool tips wait the double-click time, 500 ms by default. Qt's default is 0.
+    private int _delay = 500;
     private int _timeout = -1;
     private IDisposable? _delayTimer, _timeoutTimer;
     private Quick.Text? _label;
@@ -842,7 +843,7 @@ public sealed class ToolTip : Popup
 public sealed class ToolTipAttached(QObject owner) : QObject, IDestructionListener
 {
     private string _text = "";
-    private int _delay;
+    private int _delay = 500;
     private int _timeout = -1;
     private bool _visible;
     private ToolTip? _toolTip;
@@ -990,6 +991,7 @@ public sealed class Menu : Popup
 {
     private string _title = "";
     private MenuColumn? _column;
+    private bool _atPoint;
 
     public Menu()
     {
@@ -998,6 +1000,8 @@ public sealed class Menu : Popup
         TopPadding = 3;
         BottomPadding = 3;
         SetDefaultMargins(0);
+        // As in Qt, a menu takes focus when it opens, so the arrow keys and Escape reach it.
+        Focus = true;
     }
 
     internal override Item? CreateContentItem() => _column = new MenuColumn(this);
@@ -1087,10 +1091,31 @@ public sealed class Menu : Popup
         {
             at = PointerIn(parent);
         }
+        _atPoint = true;
         X = at.X;
         Y = at.Y;
         Open();
         Reposition();
+    }
+
+    protected override void OnClosed() => _atPoint = false;
+
+    /// <summary>
+    /// A menu opened at a point that does not fit right of it or below it opens left of it or above it, as Windows
+    /// menus do. Only a menu that fits neither way is moved inside the window.
+    /// </summary>
+    protected override (double X, double Y) KeepInside(double x, double y)
+    {
+        if (_atPoint && Overlay is { } overlay)
+        {
+            var w = PopupItem.Width;
+            var h = PopupItem.Height;
+            if (LeftMargin >= 0 && RightMargin >= 0 && x + w > overlay.Width - RightMargin && x - w >= LeftMargin)
+                x -= w;
+            if (TopMargin >= 0 && BottomMargin >= 0 && y + h > overlay.Height - BottomMargin && y - h >= TopMargin)
+                y -= h;
+        }
+        return base.KeepInside(x, y);
     }
 
     /// <summary>The last pointer position over an item, in its coordinates.</summary>
