@@ -1205,7 +1205,7 @@ public sealed class StackView : Control
                         owned = true;
                         return new QmlComponent(Engine, Engine.LoadDocument(path)).CreateObject(this, properties) as Item;
                     }
-                    catch (Exception e) when (e is IOException or Winshell.Qml.QmlSyntaxException)
+                    catch (Exception e) when (e is IOException or Winshell.Qml.QmlSyntaxException or QmlException)
                     {
                         Engine.Log.Warn("scene", $"StackView: cannot load {url}: {e.Message}");
                         return null;

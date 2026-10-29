@@ -21,6 +21,8 @@ A configuration is a folder of QML files that describes a shell. This guide buil
 - **A JavaScript file** is imported with `import "util.js" as Util`, and its functions are `Util.name()`. Without `.pragma library`, each component that imports the file gets its own copy, and that copy can use the component's ids and properties. The file's own variables and functions come first. `.pragma library` shares one copy, which cannot see them. A `.import` inside the file names another `.js` file, and a path in quotes may contain a space. A `.import` of a QML module, such as `.import QtQuick 2.0 as Q`, is skipped with a warning.
 - **A singleton** is a file whose first line is `pragma Singleton` and whose root is a [`Singleton`](../reference/winshell.md#singleton). Every file that uses it shares the one object, by the file's name. The default shell's `Preferences.qml` is one.
 
+These files must be inside the configuration's folder, the one `shell.qml` is in. An import, `.import`, `Qt.createComponent` or `Loader.source` that names a file or folder outside it, by a full path, a `\\server\share` path or a `..`, fails to load like a missing file.
+
 Winshell reloads when you save any of these files ([reload](getting-started.md#reload)).
 
 ## The root and the screens

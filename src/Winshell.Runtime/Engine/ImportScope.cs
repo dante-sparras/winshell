@@ -50,7 +50,7 @@ public sealed class ImportScope
                     {
                         var shellDir = engine.ShellDir ?? dir;
                         var relative = import.Uri.Length > 6 ? import.Uri[7..].Replace('.', System.IO.Path.DirectorySeparatorChar) : "";
-                        _entries.Add(new DirectoryEntry(import.Qualifier, System.IO.Path.Combine(shellDir, relative)));
+                        _entries.Add(new DirectoryEntry(import.Qualifier, InShellDir(System.IO.Path.Combine(shellDir, relative), import)));
                         break;
                     }
                 case ImportKind.Module:
@@ -70,7 +70,7 @@ public sealed class ImportScope
                         var path = import.Uri.StartsWith("root:", StringComparison.Ordinal)
                             ? System.IO.Path.Combine(engine.ShellDir ?? dir, import.Uri[5..].TrimStart('/'))
                             : System.IO.Path.Combine(dir, import.Uri);
-                        _entries.Add(new DirectoryEntry(import.Qualifier, System.IO.Path.GetFullPath(path)));
+                        _entries.Add(new DirectoryEntry(import.Qualifier, InShellDir(path, import)));
                         break;
                     }
                 case ImportKind.Script:
@@ -78,7 +78,7 @@ public sealed class ImportScope
                         var path = import.Uri.StartsWith("root:", StringComparison.Ordinal)
                             ? System.IO.Path.Combine(engine.ShellDir ?? dir, import.Uri[5..].TrimStart('/'))
                             : System.IO.Path.Combine(dir, import.Uri);
-                        _entries.Add(new ScriptEntry(import.Qualifier!, System.IO.Path.GetFullPath(path)));
+                        _entries.Add(new ScriptEntry(import.Qualifier!, InShellDir(path, import)));
                         break;
                     }
             }
@@ -87,6 +87,11 @@ public sealed class ImportScope
             _inline[inline.Name] = inline;
         CollectInline(document.Root);
     }
+
+    /// <summary>The full path of a file or folder import, which must be inside the configuration folder.</summary>
+    private string InShellDir(string path, QmlImport import) => _engine.IsInShellDir(path)
+        ? System.IO.Path.GetFullPath(path)
+        : throw new QmlCompileException($"import \"{import.Uri}\" is outside the configuration folder", import.Location);
 
     private void CollectInline(QmlObjectNode node)
     {
