@@ -1,6 +1,6 @@
 # Command line
 
-`winshell` runs a shell, and talks to the instances that are running. `winshell --help` prints this summary.
+`winshell` runs a shell, talks to the instances that are running, and checks this PC's setup. `winshell --help` prints this summary.
 
 ```text
 winshell [options]                  run a shell
@@ -12,6 +12,8 @@ winshell ipc call <target> <function> [args...]
 winshell ipc prop get <target> <property>
 winshell ipc wait <target> <signal>
 winshell ipc listen <target> <signal>
+winshell doctor [config options] [-j] [--no-color]
+                                    check this PC's setup for Winshell
 ```
 
 ## Run a shell
@@ -55,6 +57,7 @@ The log goes to the console and to the instance's log file. Ctrl+C in the consol
 | `winshell ipc prop get <target> <property>` | Prints a property of an `IpcHandler`. |
 | `winshell ipc wait <target> <signal>` | Waits for a signal of an `IpcHandler` once and prints its first argument. |
 | `winshell ipc listen <target> <signal>` | Prints the first argument of each signal until you press Ctrl+C. |
+| `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. See [winshell doctor](../doctor.md). |
 
 `winshell msg` is the old name of `winshell ipc call`; it still works and says so. There is no command that reloads a running shell yet ([#134](https://github.com/dante-sparras/winshell/issues/134)); save a file, or call [`Shell.reload()`](winshell.md#shell) from an `IpcHandler`.
 
@@ -65,7 +68,7 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | Code | Meaning |
 | --- | --- |
 | 0 | Done. For a shell, it was stopped. |
-| 1 | No such configuration or instance, an IPC call failed, or the instance couldn't be reached. |
+| 1 | No such configuration or instance, an IPC call failed, the instance couldn't be reached, or a `winshell doctor` check failed. |
 | 2 | An unknown command, an option that needs a value without one, or an `ipc` command missing its arguments. |
 
 `--pid` and `--tail` take a whole number. Anything else ends `winshell` with an unhandled error, not exit code 2 ([#150](https://github.com/dante-sparras/winshell/issues/150)).

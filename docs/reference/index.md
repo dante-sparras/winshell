@@ -7,7 +7,7 @@ See also the [command line](command-line.md) and [the default shell](default-she
 | Module | What it has |
 | --- | --- |
 | [Qt Quick](qt-quick.md) | The QML language's own modules: items, controls in the Windows 11 style, layouts, shapes, effects |
-| [Winshell](winshell.md) | `Shell`, `ShellRoot`, panels, popup windows and floating windows, screens, `Variants`, the backdrop, menus, a clock, a month grid, locking the session and running at sign-in |
+| [Winshell](winshell.md) | `Shell`, `ShellRoot`, panels, popup windows and floating windows, screens, `Variants`, the backdrop, menus, a clock, a month grid, locking the session, running at sign-in, and the checks `winshell doctor` runs |
 | [Winshell.Io](winshell-io.md) | Running programs, reading and writing files, JSON files as properties, sockets and named pipes, and `IpcHandler` for `winshell ipc` |
 | [Winshell.Widgets](winshell-widgets.md) | Icons that stay sharp at every scale, clipping rectangles, and wrappers that size to their child |
 | [Winshell.Theme](winshell-theme.md) | Light or dark, the accent color, and the WinUI 3 tokens of the Windows 11 look |

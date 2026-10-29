@@ -303,6 +303,18 @@ The `Startup` singleton: whether Winshell runs when the current user signs in. T
 | `registeredElsewhere` | bool, read-only | True when the entry is there but starts Winshell another way: a `winshell.exe` in another folder, as after an update unzipped somewhere new, or other arguments. `runAtSignIn` is false until it is set. |
 | `refresh()` | method | Reads the entry again, after the user may have changed it in Windows. |
 
+## Diagnostics
+
+The `Diagnostics` singleton: the checks `winshell doctor` prints, for the About page of Winshell Settings. `run()` runs them off the loop, and they only read. Without `winshell.exe` there is no doctor, and `available` is false. See [winshell doctor](../doctor.md).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `available` | bool, read-only | Whether this shell can run the checks: false when it does not run as `winshell.exe`. |
+| `running` | bool, read-only | Whether a run is in progress. A second `run()` while this is true does nothing. |
+| `checks` | ObjectModel, read-only | The checks of the last run, in the order `winshell doctor` prints them. Each object has `id`, `title`, `status` (`pass`, `warn` or `fail`), `message` and `fix` (empty when the check passed). Empty before the first run. |
+| `summary` | string, read-only | The last run counted, such as `8 passed, 2 warnings, 0 failed.`. Empty before the first run. |
+| `run()` | method | Runs the checks. Does nothing when `available` is false or a run is already in progress. A run that cannot finish shows one failed check and the reason. |
+
 ## Updates
 
 The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip from GitHub Releases or the winget package, checks that repository's releases, downloads a newer one and installs it when a start finds no other Winshell running. While one is running, the downloaded update stays ready. A build from source and a packaged Winshell, such as the Microsoft Store's, never update themselves. Winshell Settings shows it on the About page; see [Winshell updates](../updates.md).
