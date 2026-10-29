@@ -35,6 +35,7 @@ public sealed class Binding : IPropertyObserver, IDisposable
 {
     private readonly Func<object?> _evaluate;
     private readonly HashSet<(QObject, string)> _dependencies = [];
+    private readonly List<(QObject Object, string Property)> _reads = [];
     private bool _evaluating;
     private bool _disposed;
 
@@ -67,10 +68,10 @@ public sealed class Binding : IPropertyObserver, IDisposable
         _evaluating = true;
         try
         {
-            var reads = new List<(QObject, string)>();
+            _reads.Clear();
             object? value;
             bool ok;
-            using (DependencyTracker.Begin(reads))
+            using (DependencyTracker.Begin(_reads))
             {
                 try
                 {
@@ -85,7 +86,7 @@ public sealed class Binding : IPropertyObserver, IDisposable
                     ok = false;
                 }
             }
-            Resubscribe(reads);
+            Resubscribe(_reads);
             HasEvaluated = true;
             if (!ok || _disposed)
                 return;
@@ -104,21 +105,39 @@ public sealed class Binding : IPropertyObserver, IDisposable
         }
     }
 
-    private void Resubscribe(List<(QObject, string)> reads)
+    private void Resubscribe(List<(QObject Object, string Property)> reads)
     {
-        var next = new HashSet<(QObject, string)>(reads);
+        for (var i = 1; i < reads.Count; i++)
+        {
+            if (!ContainsRead(reads, reads[i], i))
+                continue;
+            reads.RemoveAt(i);
+            i--;
+        }
         foreach (var old in _dependencies)
         {
-            if (!next.Contains(old))
+            if (!ContainsRead(reads, old, reads.Count))
                 old.Item1.RemoveObserver(old.Item2, this);
         }
-        foreach (var dep in next)
+        foreach (var dep in reads)
         {
             if (!_dependencies.Contains(dep) && !dep.Item1.IsDestroyed)
                 dep.Item1.AddObserver(dep.Item2, this);
         }
         _dependencies.Clear();
-        _dependencies.UnionWith(next);
+        foreach (var dep in reads)
+            _dependencies.Add(dep);
+        reads.Clear();
+    }
+
+    private static bool ContainsRead(List<(QObject Object, string Property)> reads, (QObject Object, string Property) dep, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            if (ReferenceEquals(reads[i].Object, dep.Object) && reads[i].Property == dep.Property)
+                return true;
+        }
+        return false;
     }
 
     public void OnPropertyChanged(QObject sender, string property)
