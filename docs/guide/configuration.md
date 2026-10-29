@@ -256,7 +256,7 @@ Lines at the very top of `shell.qml`, before any `import`, set up the shell:
 | --- | --- |
 | `//@ pragma ShellId <id>` | The shell id, which names its data, state and cache folders. Without it, the id comes from the path of `shell.qml`, so moving the folder starts with empty folders. |
 | `//@ pragma AppId <id>` | `Shell.appId`, instead of `winshell` or `WINSHELL_APP_ID`. |
-| `//@ pragma DataDir <path>`, `StateDir`, `CacheDir` | Other folders for `Shell.dataDir`, `stateDir` and `cacheDir`. `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
+| `//@ pragma DataDir <path>`, `StateDir`, `CacheDir` | Other folders for `Shell.dataDir`, `stateDir` and `cacheDir`. A relative path is next to the shell file, and `%NAME%` expands. `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
 | `//@ pragma Env NAME=value` | Sets an environment variable for this process, such as for the programs it starts. One per line. |
 
 `//@ if hasVersion(0, 6)` … `//@ elif` … `//@ else` … `//@ endif` keeps lines only for a Winshell release, so one configuration can run on several. `hasQtVersion(6, 10)` checks the Qt Quick language level instead.
@@ -265,7 +265,7 @@ Lines at the very top of `shell.qml`, before any `import`, set up the shell:
 
 Saving a file reloads the configuration ([getting started](getting-started.md#reload)). A reload makes a new generation of every object, then hands the old generation's windows and `PersistentProperties` to the new one, matched by their place in the tree or by `reloadableId`, so windows don't flicker. `Shell.reload(true)` reloads without handing anything over, as if Winshell had just started.
 
-`Shell.reloadCompleted` and `Shell.reloadFailed(errorString)` tell the configuration how a reload went. A failed reload keeps the old generation running.
+`Shell.reloadCompleted` and `Shell.reloadFailed(errorString)` tell the configuration how a reload went. A failed reload keeps the old generation running. A reload does not apply a new `ShellId`, `AppId`, `DataDir`, `StateDir`, `CacheDir` or `Env`. Those stay as they were at launch, and the log warns that a restart is needed.
 
 ## Building on the default shell
 
