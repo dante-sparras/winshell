@@ -317,7 +317,7 @@ The `Diagnostics` singleton: the checks `winshell doctor` prints, for the About 
 
 ## Updates
 
-The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip from GitHub Releases or the winget package, checks that repository's releases, downloads a newer one and installs it when a start finds no other Winshell running. While one is running, the downloaded update stays ready. A build from source and a packaged Winshell, such as the Microsoft Store's, never update themselves. Winshell Settings shows it on the About page; see [Winshell updates](../updates.md).
+The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip from GitHub Releases, checks that repository's releases, downloads a newer one and installs it when a start finds no other Winshell running. winget, once the package is accepted, installs that same build. While one Winshell is running, the downloaded update stays ready. A build from source never updates itself. A packaged Winshell, such as the Microsoft Store package once it is published, is updated by whatever installed it. Winshell Settings shows it on the About page; see [Winshell updates](../updates.md).
 
 | Member | Type | Description |
 | --- | --- | --- |
