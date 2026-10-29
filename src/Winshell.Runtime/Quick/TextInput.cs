@@ -648,6 +648,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     public bool KeyPress(KeyEvent e)
     {
         var ctrl = (e.Modifiers & QtEnums.ControlModifier) != 0;
+        var alt = (e.Modifiers & QtEnums.AltModifier) != 0;
         var shift = (e.Modifiers & QtEnums.ShiftModifier) != 0;
         switch (e.Key)
         {
@@ -695,7 +696,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                 Emit("editingFinished");
                 return true;
         }
-        if (ctrl)
+        // AltGr arrives as Ctrl+Alt. Those keys are characters, not shortcuts.
+        if (ctrl && !alt)
         {
             switch (e.Key)
             {
