@@ -103,11 +103,13 @@ internal sealed class DirectWriteEngine
     /// Draws the layout into the Skia canvas. Axis-aligned text is read back in device pixels so ClearType
     /// blends with what is already painted and the scale matches the canvas. Rotated text is grayscale.
     /// </summary>
-    internal void Blit(IDWriteTextLayout layout, int textLength, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKCanvas canvas, SKRect dipBox, float originX, float originY, TextPixelMode mode, QColor color, bool useSpanColors)
+    internal void Blit(IDWriteTextLayout layout, int textLength, IReadOnlyList<(int Start, int Length, QColor Color)> spans, SKCanvas canvas, SKRect dipBox, float originX, float originY, TextPixelMode mode, QColor color, bool useSpanColors, bool readRoot = true)
     {
         var matrix = canvas.TotalMatrix;
         var axis = Math.Abs(matrix.SkewX) < 1e-3f && Math.Abs(matrix.SkewY) < 1e-3f && matrix.ScaleX > 0.01f && matrix.ScaleY > 0.01f;
-        if (!axis)
+        // A SaveLayer is not what ReadPixels returns. Reading the root and writing it back with Src
+        // replaces the layer, so text inside opacity punches a hole. Draw grayscale over the layer instead.
+        if (!axis || !readRoot)
         {
             BlitTransformed(layout, textLength, spans, canvas, dipBox, originX, originY, mode == TextPixelMode.Aliased ? TextAntialiasMode.Aliased : TextAntialiasMode.Grayscale, color, useSpanColors);
             return;
@@ -477,7 +479,8 @@ internal sealed class DirectWriteLayout : IDisposable
     {
         if (_layout is null)
             return;
-        var mode = TextRaster.Choose(paint?.TextOnBackdrop ?? false, antialias);
+        var inLayer = (paint?.LayerDepth ?? 0) > 0;
+        var mode = TextRaster.Choose((paint?.TextOnBackdrop ?? false) || inLayer, antialias);
         var previousAlign = _layout.TextAlignment;
         var previousWidth = _layout.MaxWidth;
         var wrapping = _layout.WordWrapping != WordWrapping.NoWrap;
@@ -491,9 +494,9 @@ internal sealed class DirectWriteLayout : IDisposable
             {
                 var shadow = styleColor ?? QColor.Black;
                 foreach (var (dx, dy) in Offsets(textStyle))
-                    Pass(canvas, dx, (float)offsetY + dy, width, mode, shadow, useSpans: false);
+                    Pass(canvas, dx, (float)offsetY + dy, width, mode, shadow, useSpans: false, inLayer);
             }
-            Pass(canvas, 0, (float)offsetY, width, mode, color, useSpans: true);
+            Pass(canvas, 0, (float)offsetY, width, mode, color, useSpans: true, inLayer);
         }
         finally
         {
@@ -510,13 +513,13 @@ internal sealed class DirectWriteLayout : IDisposable
 
     ~DirectWriteLayout() => Release();
 
-    private void Pass(SKCanvas canvas, float dx, float originY, float width, TextPixelMode mode, QColor color, bool useSpans)
+    private void Pass(SKCanvas canvas, float dx, float originY, float width, TextPixelMode mode, QColor color, bool useSpans, bool inLayer)
     {
         if (_layout is null)
             return;
         var box = new SKRect(dx, originY, dx + Math.Max(width, 1), originY + (float)Math.Max(Height, 1));
         box.Inflate(8, 8);
-        DirectWriteServices.Current.Blit(_layout, Source.Length, _colors, canvas, box, dx, originY, mode, color, useSpans);
+        DirectWriteServices.Current.Blit(_layout, Source.Length, _colors, canvas, box, dx, originY, mode, color, useSpans, readRoot: !inLayer);
     }
 
     private void ApplyRanges(List<Range> ranges)

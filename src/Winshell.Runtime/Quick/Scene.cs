@@ -151,6 +151,7 @@ public sealed class Scene : IItemHost
         {
             using var paint = new SKPaint { Color = new SKColor(255, 255, 255, (byte)Math.Round(item.Opacity * 255)) };
             canvas.SaveLayer(paint);
+            context.LayerDepth++;
         }
         if (item.Layer.Enabled && item.Layer.Effect is IItemEffect layerEffect)
         {
@@ -163,7 +164,10 @@ public sealed class Scene : IItemHost
         if (context.FocusRing == item)
             Controls.Fluent.FocusRing(canvas, SKRect.Create((float)item.Width, (float)item.Height), (item as Controls.Control)?.FocusRadius ?? Controls.Fluent.ControlCornerRadius);
         if (layered)
+        {
+            context.LayerDepth--;
             canvas.Restore();
+        }
         canvas.Restore();
     }
 
