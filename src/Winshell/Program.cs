@@ -129,7 +129,7 @@ namespace Winshell
                         o.Id = Next();
                         break;
                     case "--pid":
-                        o.Pid = int.Parse(Next(), CultureInfo.InvariantCulture);
+                        o.Pid = WholeNumber(args[i], Next());
                         break;
                     case "-d" or "--daemonize":
                         o.Daemonize = true;
@@ -150,7 +150,7 @@ namespace Winshell
                         o.Follow = true;
                         break;
                     case "-t" or "--tail":
-                        o.Tail = int.Parse(Next(), CultureInfo.InvariantCulture);
+                        o.Tail = WholeNumber(args[i], Next());
                         break;
                     case "--no-color":
                         o.NoColor = true;
@@ -166,6 +166,18 @@ namespace Winshell
                 }
             }
             return o;
+        }
+
+        /// <summary>
+        /// A process id or a tail count. A value that isn't one is an <see cref="ArgumentException"/>,
+        /// which <see cref="Run"/> turns into exit code 2.
+        /// </summary>
+        private static int WholeNumber(string option, string text)
+        {
+            // NumberStyles.Integer keeps "+5", surrounding whitespace and "-0" (which is 0). A negative is not a whole number.
+            if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
+                throw new ArgumentException($"{option} needs a whole number");
+            return value;
         }
 
         /// <summary>
@@ -723,8 +735,8 @@ namespace Winshell
             }
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
-            var all = (await reader.ReadToEndAsync()).Split('\n');
-            foreach (var line in o.Tail is { } n ? all.TakeLast(n + 1) : all)
+            var all = (await reader.ReadToEndAsync()).TrimEnd('\n').Split('\n');
+            foreach (var line in o.Tail is { } n ? all.TakeLast(n) : all)
             {
                 if (line.Length > 0)
                     Console.WriteLine(line.TrimEnd('\r'));
