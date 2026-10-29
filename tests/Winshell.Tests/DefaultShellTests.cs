@@ -31,6 +31,18 @@ public class DefaultShellTests
     }
 
     [Fact]
+    public void The_taskbar_search_button_opens_start_search()
+    {
+        var assembly = typeof(global::Winshell.DefaultShell).Assembly;
+        var shell = Read(assembly, "DefaultShell/shell.qml");
+        var launcher = Read(assembly, "DefaultShell/Launcher.qml");
+        Assert.Contains("onSearchRequested: launcher.openSearch()", shell);
+        Assert.Contains("searchOpen: launcher.searchOpen", shell);
+        Assert.DoesNotContain("search-ms:", shell);
+        Assert.Contains("function openSearch()", launcher);
+    }
+
+    [Fact]
     public void The_default_shell_embeds_Winshell_Settings()
     {
         var assembly = typeof(global::Winshell.DefaultShell).Assembly;
