@@ -65,6 +65,8 @@ The log goes to the console and to the instance's log file. The file is kept to 
 
 The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
 
+A `--` ends options. Words after it are arguments, so `winshell log -- -f` prints the file `-f`. `ipc call` and `msg` do the same after the function name, with no `--`: `winshell ipc call notes add -v` passes `-v` to `add`. `--after <pid>` is removed while options are still being read, which is where an update's restart puts it. After `--`, and after an `ipc call` or `msg` function name, those words stay arguments.
+
 ## Exit codes
 
 | Code | Meaning |

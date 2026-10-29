@@ -27,7 +27,7 @@ namespace Winshell
     /// <summary>The command line.</summary>
     internal static class Cli
     {
-        private sealed class Options
+        internal sealed class Options
         {
             public string? Path { get; set; }
 
@@ -75,7 +75,8 @@ namespace Winshell
         {
             args = WithoutAfter(args, out var after);
             // Help is checked before any command runs. `winshell kill --help` must not kill the shell.
-            if (args.Any(static a => a is "-h" or "--help" or "/?"))
+            // A --, and the arguments of ipc call, end that scan so a help word there is data.
+            if (HelpRequested(args))
             {
                 PrintHelp(FirstCommand(args));
                 return 0;
@@ -85,7 +86,7 @@ namespace Winshell
             Options options;
             try
             {
-                options = Parse(rest);
+                options = Parse(rest, command);
                 options.After = after;
             }
             catch (ArgumentException e)
@@ -100,7 +101,7 @@ namespace Winshell
             switch (command)
             {
                 case null:
-                    if (args.Contains("-V") || args.Contains("--version"))
+                    if (VersionRequested(args))
                     {
                         Console.WriteLine($"winshell {Version}");
                         return 0;
@@ -150,11 +151,14 @@ namespace Winshell
         }
 
         /// <summary>The first word that is not an option. Options may come before it, so <c>-c work kill</c> is kill.</summary>
-        private static string? FirstCommand(string[] args)
+        internal static string? FirstCommand(string[] args)
         {
             for (var i = 0; i < args.Length; i++)
             {
                 var token = args[i];
+                // Words after -- are arguments, not a command.
+                if (token == "--")
+                    return null;
                 if (token is "-h" or "--help" or "/?" or "-V" or "--version")
                     continue;
                 if (token.StartsWith('-'))
@@ -207,11 +211,27 @@ namespace Winshell
         private static bool IsWindowlessHost() =>
             string.Equals(System.IO.Path.GetFileName(Environment.ProcessPath), "winshellw.exe", StringComparison.OrdinalIgnoreCase);
 
-        private static Options Parse(string[] args)
+        /// <summary>
+        /// Reads options. <paramref name="command"/> is the word <see cref="FirstCommand"/> already took out of
+        /// <paramref name="args"/>. A <c>--</c> ends options. So does the function name of <c>ipc call</c> and
+        /// <c>msg</c>: hotkeys pass <c>-v</c> and <c>-p</c> as arguments, and those must not become winshell options.
+        /// </summary>
+        internal static Options Parse(string[] args, string? command = null)
         {
             var o = new Options();
+            var raw = false;
             for (var i = 0; i < args.Length; i++)
             {
+                if (raw)
+                {
+                    o.Positional.Add(args[i]);
+                    continue;
+                }
+                if (args[i] == "--")
+                {
+                    raw = true;
+                    continue;
+                }
                 string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value");
                 switch (args[i])
                 {
@@ -261,10 +281,67 @@ namespace Winshell
                         break;
                     default:
                         o.Positional.Add(args[i]);
+                        if (IpcCallArguments(command, o.Positional))
+                            raw = true;
                         break;
                 }
             }
             return o;
+        }
+
+        /// <summary>
+        /// True when <paramref name="positional"/> already holds the function name. Later words belong to the call.
+        /// <paramref name="command"/> is <c>ipc</c> or <c>msg</c>; the positionals are what follows that word.
+        /// </summary>
+        private static bool IpcCallArguments(string? command, List<string> positional) =>
+            (command == "ipc" && positional.Count >= 3 && positional[0] == "call")
+            || (command == "msg" && positional.Count >= 2);
+
+        private static readonly string[] HelpFlags = ["-h", "--help", "/?"];
+
+        private static readonly string[] VersionFlags = ["-V", "--version"];
+
+        /// <summary>True when help was asked for as an option, before <c>--</c> and before ipc call arguments.</summary>
+        internal static bool HelpRequested(string[] args) => OptionBeforeEnd(args, HelpFlags);
+
+        /// <summary>True when <c>-V</c> or <c>--version</c> is an option. After <c>--</c> it is an argument.</summary>
+        internal static bool VersionRequested(string[] args) => OptionBeforeEnd(args, VersionFlags);
+
+        private static bool OptionBeforeEnd(string[] args, string[] names)
+        {
+            var end = OptionRegionLength(args);
+            for (var i = 0; i < end; i++)
+            {
+                if (Array.IndexOf(names, args[i]) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// How far options extend. <c>--</c> ends them, and so does the first argument of <c>ipc call</c> or <c>msg</c>.
+        /// </summary>
+        private static int OptionRegionLength(string[] args)
+        {
+            string? command = null;
+            var positional = new List<string>();
+            for (var i = 0; i < args.Length; i++)
+            {
+                var token = args[i];
+                if (token == "--" || IpcCallArguments(command, positional))
+                    return i;
+                if (token.StartsWith('-'))
+                {
+                    if (TakesValue(token))
+                        i++;
+                    continue;
+                }
+                if (command is null)
+                    command = token;
+                else
+                    positional.Add(token);
+            }
+            return args.Length;
         }
 
         /// <summary>
@@ -280,13 +357,15 @@ namespace Winshell
         }
 
         /// <summary>
-        /// Takes <c>--after &lt;pid&gt;</c> out of the arguments. Only an update's restart passes it, and it is not one
-        /// of the arguments the shell was started with: a restart or a sign-in entry must not repeat it.
+        /// Takes <c>--after &lt;pid&gt;</c> out of the options. Only an update's restart passes it, and it is not one
+        /// of the arguments the shell was started with: a restart or a sign-in entry must not repeat it. It stays in
+        /// place after <c>--</c> and after an <c>ipc call</c> or <c>msg</c> function name, where it is an argument.
         /// </summary>
         internal static string[] WithoutAfter(string[] args, out int? after)
         {
             after = null;
-            var i = Array.IndexOf(args, "--after");
+            var region = OptionRegionLength(args);
+            var i = Array.IndexOf(args, "--after", 0, region);
             if (i < 0 || i + 1 >= args.Length || !int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var pid))
                 return args;
             after = pid;
@@ -328,6 +407,8 @@ namespace Winshell
                           prop get <target> <property>          print a property
                           wait <target> <signal>                wait for one signal
                           listen <target> <signal>              print each signal until Ctrl+C
+                          Words after the function name are arguments, even when they start with -.
+                          A -- ends options on every command.
                         """);
                     return;
                 case "doctor":
@@ -379,6 +460,7 @@ namespace Winshell
                       --no-color         print doctor without color
                   -h, --help, /?         print help and exit
                   -V, --version          print the version
+                  --                     end options; later words are arguments
 
                 Exit codes: 0 done, 1 the command failed, 2 the command line was wrong.
                 """);
