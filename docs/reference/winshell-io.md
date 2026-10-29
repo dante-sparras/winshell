@@ -168,6 +168,7 @@ A key the file does not have keeps its value. A string, url or color property is
 | Member | Type | Description |
 | --- | --- | --- |
 | `comments` | object | A comment for each key, as `{ key: "text" }`, written above a key the file does not have yet. A key already in the file keeps the comment it has. |
+| `check` | function | Called as `check(key, value)` for each value read from the file. It returns why the value is refused, such as `"is not \"acrylic\" or \"mica\""`, or `""` to take it. A refused key keeps its value, is left as written, and logs `<key> <reason>, so it was left unchanged` in the `io` category. |
 
 ## JsonObject
 

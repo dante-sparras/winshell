@@ -23,14 +23,11 @@ Column {
     color: Theme.textFillColorSecondary
   }
 
-  // Why a sequence typed is not taken, or "". A first chord without Win, Ctrl or Alt would take that key from every
-  // app on the PC: Shift alone is still typing.
+  // Why a sequence typed is not taken, or "". The file is held to the same rule by Preferences.
   function refusal(text, other) {
-    if (text === "")
-      return ""
-    const first = text.split(",")[0].split("+").map(p => p.trim().toLowerCase())
-    if (!first.some(p => p === "win" || p === "left win" || p === "right win" || p === "ctrl" || p === "alt"))
-      return "Start it with Win, Ctrl or Alt, so " + text + " still types in other apps"
+    const why = Preferences.hotkeyRefusal(text)
+    if (text === "" || why !== "")
+      return why
     const same = s => s.toLowerCase().split(",").map(c => c.split("+").map(p => p.trim()).join("+")).join(",")
     if (other.sequence !== "" && same(text) === same(other.sequence))
       return other.title + " already uses " + other.sequence
