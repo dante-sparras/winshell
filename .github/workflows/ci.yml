@@ -62,3 +62,66 @@ jobs:
           name: snapshot-diffs
           path: ${{ runner.temp }}/snapshot-diffs/*.png
           if-no-files-found: ignore
+
+  installer:
+    name: installer
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Pester and PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'psmodules'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $policy = (Get-PSRepository PSGallery).InstallationPolicy
+          if ($policy -ne 'Trusted') { Set-PSRepository PSGallery -InstallationPolicy Trusted }
+          try {
+            Save-Module Pester -RequiredVersion 5.6.1 -Path $dest -Repository PSGallery
+            Save-Module PSScriptAnalyzer -RequiredVersion 1.22.0 -Path $dest -Repository PSGallery
+          } finally {
+            if ($policy -ne 'Trusted') { Set-PSRepository PSGallery -InstallationPolicy $policy }
+          }
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
+          Import-Module PSScriptAnalyzer -RequiredVersion 1.22.0
+          $settings = Join-Path $env:RUNNER_TEMP 'winshell-analyzer.psd1'
+          @'
+          @{
+              Severity = @('Error', 'Warning')
+              ExcludeRules = @(
+                  # The user invoked the installer. Prompting would break irm | iex.
+                  'PSUseShouldProcessForStateChangingFunctions'
+              )
+          }
+          '@ | Set-Content -LiteralPath $settings -Encoding utf8
+          $findings = @()
+          foreach ($script in @('scripts/install.ps1', 'scripts/uninstall.ps1')) {
+            $findings += @(Invoke-ScriptAnalyzer -Path $script -Settings $settings -Severity Warning, Error)
+          }
+          if ($findings.Count -gt 0) {
+              $findings | Format-Table -AutoSize | Out-String | Write-Output
+              exit 1
+          }
+      - name: Installer tests (PowerShell 7)
+        shell: pwsh
+        run: |
+          $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
+          Import-Module Pester -RequiredVersion 5.6.1
+          Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
+          exit $LASTEXITCODE
+      - name: Installer tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
+          Import-Module Pester -RequiredVersion 5.6.1
+          Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
+          exit $LASTEXITCODE

@@ -36,7 +36,8 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # A new release gets its portable zips, SHA256SUMS.txt and winget manifests. See docs/development.md#releasing.
+  # A new release gets its portable zips, SHA256SUMS.txt, winget manifests, install.ps1 and uninstall.ps1.
+  # See docs/development.md#releasing.
   package:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
