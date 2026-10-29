@@ -34,8 +34,8 @@ FloatingWindow {
     id: view
     anchors.fill: parent
     apps: Apps.apps.values
-    pinsPath: Shell.configPath("launcher.json")
-    tilesPath: Shell.statePath("quick-settings.json")
+    pinsPath: Shell.configPath("launcher.toml")
+    tilesPath: Shell.statePath("quick-settings.toml")
     showIcons: root.visible
   }
 

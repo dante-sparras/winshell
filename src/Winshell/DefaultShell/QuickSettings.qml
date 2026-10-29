@@ -20,7 +20,7 @@ PopupWindow {
   QuickSettingsContent {
     id: content
     anchors.fill: parent
-    layoutPath: Shell.statePath("quick-settings.json")
+    layoutPath: Shell.statePath("quick-settings.toml")
     onCloseRequested: root.visible = false
   }
 }

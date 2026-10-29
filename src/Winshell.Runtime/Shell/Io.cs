@@ -818,6 +818,9 @@ public sealed class FileView : QObject
     [Qml("data")]
     public string GetData() => GetText();
 
+    /// <summary>The text last read or written, without reading the file.</summary>
+    internal string? Text => _text;
+
     [Qml]
     public void Reload() => Load(sync: _blockLoading || _blockAllReads);
 

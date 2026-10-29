@@ -18,7 +18,7 @@ Item {
   // The page shown instead of the tiles, "powerMode", "output" or "add", or "" for the tiles.
   property string page: ""
   property bool editing: false
-  // The JSON file the pinned tiles are kept in. Empty keeps them for this run only.
+  // The TOML file the pinned tiles are kept in. Empty keeps them for this run only.
   property string layoutPath: ""
   // The keys of the pinned tiles, in order. A pinned tile the PC has no hardware for keeps its place, hidden.
   property var pinned: ["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"]
@@ -46,7 +46,8 @@ Item {
 
   function setPinned(keys) {
     pinned = keys
-    layoutFile.setText(JSON.stringify({ pinned: keys }, null, 2) + "\n")
+    layout.pinned = keys
+    layoutFile.writeAdapter()
   }
 
   // Puts the tile with this key where the tile with another key is, before it when moving back, after it when moving on.
@@ -81,14 +82,9 @@ Item {
       tile.focusButton()
   }
 
-  function restore(text) {
-    try {
-      const keys = JSON.parse(text).pinned
-      if (Array.isArray(keys))
-        pinned = keys.filter(k => typeof k === "string")
-    } catch (e) {
-      console.warn("Quick settings could not read " + layoutPath + ": " + e)
-    }
+  function restore() {
+    if (Array.isArray(layout.pinned))
+      pinned = layout.pinned.filter(k => typeof k === "string")
   }
 
   implicitWidth: 360
@@ -105,7 +101,14 @@ Item {
     // Winshell Settings changes the tiles in the same file.
     watchChanges: true
     onFileChanged: reload()
-    onLoaded: root.restore(text())
+    onLoaded: root.restore()
+
+    TomlAdapter {
+      id: layout
+      comments: ({ pinned: "The quick settings tiles, in order: wifi, bluetooth, airplaneMode, energySaver, powerMode, nightLight,\naccessibility. A tile left out is not shown until quick settings or Winshell Settings adds it back." })
+      // null until the file has tiles.
+      property var pinned: null
+    }
   }
 
   component TileSpec: QtObject {

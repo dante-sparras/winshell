@@ -75,7 +75,7 @@ internal sealed class SnapshotShell : IDisposable
             services.Apps.Recent.Add(calculator);
             services.Apps.Recent.Add(weather);
             File.WriteAllText(Path.Combine(data, "taskbar.json"), """{ "pinned": ["Contoso.Mail", "Contoso.Notes"] }""");
-            File.WriteAllText(Path.Combine(shell, "launcher.json"), """{ "pins": ["Contoso.Mail", "Contoso.Notes", "Contoso.Photos", "Contoso.Terminal", "Contoso.Maps"] }""");
+            File.WriteAllText(Path.Combine(shell, "launcher.toml"), """pins = ["Contoso.Mail", "Contoso.Notes", "Contoso.Photos", "Contoso.Terminal", "Contoso.Maps"]""");
             var inbox = new FakeAppWindow("Inbox - Mail", "Contoso.Mail", mail.Icon);
             var shellWindow = new FakeAppWindow("Windows PowerShell", "Contoso.Terminal", terminal.Icon);
             services.WindowList.Windows.Add(inbox);

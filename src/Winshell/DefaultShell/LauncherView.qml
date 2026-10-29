@@ -6,7 +6,7 @@ import QtQuick.Controls
 import "launcher.js" as Launcher
 
 // The Start surface, without its window, so a test can parent it to a scene.
-// Pins live in launcher.json next to the shell. An empty pins array is a choice; a missing file is not.
+// Pins live in launcher.toml next to the shell. An empty pins array is a choice; a missing file is not.
 Item {
   id: root
 
@@ -71,14 +71,8 @@ Item {
 
   function readPins() {
     pinsKnown = true
-    var data = null
-    try {
-      data = JSON.parse(pinFile.text() || "")
-    } catch (e) {
-      data = null
-    }
-    if (data && Array.isArray(data.pins))
-      pinIds = data.pins.slice()
+    if (Array.isArray(pinData.pins))
+      pinIds = pinData.pins.slice()
   }
 
   function ensureSeed() {
@@ -95,7 +89,8 @@ Item {
   function writePins() {
     if (pinsPath === "")
       return
-    pinFile.setText(JSON.stringify({ pins: pinIds }))
+    pinData.pins = pinIds
+    pinFile.writeAdapter()
   }
 
   function togglePin(app) {
@@ -225,6 +220,13 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.readPins()
+
+    TomlAdapter {
+      id: pinData
+      comments: ({ pins: "The apps pinned to Start, in order. [] pins nothing; without this file Start pins its defaults." })
+      // null until the file has pins.
+      property var pins: null
+    }
   }
 
   TextField {
