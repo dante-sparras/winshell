@@ -75,7 +75,7 @@ A window laid out like Windows 11 Settings, for Winshell's own choices: light or
 
 | File | Where | What |
 | --- | --- | --- |
-| `preferences.toml` | The config folder, `%APPDATA%\winshell` | Winshell Settings' choices |
+| `preferences.toml` | Next to `shell.qml` for a config in `%APPDATA%\winshell`; `%APPDATA%\winshell` itself for the default shell | Winshell Settings' choices |
 | `launcher.toml` | Next to `shell.qml`: `%LOCALAPPDATA%\winshell\default-shell` for the default shell | Start pins |
 | `taskbar.json` | The shell's data folder, `%LOCALAPPDATA%\winshell\data\by-shell\winshell-default` | Taskbar pins |
 | `quick-settings.toml` | The shell's state folder, `%LOCALAPPDATA%\winshell\state\by-shell\winshell-default` | Quick settings tiles and their order |

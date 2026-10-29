@@ -74,19 +74,19 @@ Column {
   SettingsCard {
     id: folder
     key: "configFolder"
-    description: Shell.configRoot !== "" ? Shell.configRoot : "This shell has no config folder"
+    description: Preferences.folder !== "" ? Preferences.folder : "This shell has no config folder"
     focusTarget: openFolder
 
     Button {
       id: openFolder
       objectName: "openConfigFolder"
       text: "Open folder"
-      enabled: Shell.configRoot !== ""
+      enabled: Preferences.folder !== ""
       Accessible.name: "Open the config folder"
       onClicked: {
         // A new user has no config folder until the first choice; opening it makes it.
         Preferences.save()
-        Qt.openUrlExternally(Shell.configRoot)
+        Qt.openUrlExternally(Preferences.folder)
       }
       onActiveFocusChanged: if (activeFocus) folder.reveal()
     }
