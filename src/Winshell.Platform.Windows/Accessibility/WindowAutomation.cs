@@ -60,6 +60,10 @@ internal sealed class WindowAutomation : IDisposable
     {
         get
         {
+            // UI Automation's threads must come in through Run. Building the tree off the window thread races the scene.
+            // A debug-only assert would be compiled out of the published binary, so this fails closed in every build.
+            if (Environment.CurrentManagedThreadId != _thread)
+                throw new InvalidOperationException("The accessibility tree is read on the window thread.");
             if (_tree is null)
             {
                 _tree = new AccessibleTree(_scene);

@@ -185,9 +185,16 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
 
     int IRawElementProviderFragment.GetRuntimeId(out int[]? runtimeId)
     {
+        // Read the node once. Node throws after Detach, and this call does not go through the window thread.
+        var node = _node;
+        if (node is not { IsAlive: true })
+        {
+            runtimeId = null;
+            return Uia.ElementNotAvailable;
+        }
         // The root's id comes from its window.
-        runtimeId = Node.IsRoot ? null : RuntimeId;
-        return Node.IsAlive ? Uia.S_OK : Uia.ElementNotAvailable;
+        runtimeId = node.IsRoot ? null : [Uia.AppendRuntimeId, node.Id];
+        return Uia.S_OK;
     }
 
     public int[] RuntimeId => [Uia.AppendRuntimeId, Node.Id];
@@ -214,11 +221,8 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
         return hr != Uia.S_OK ? hr : taken ? Uia.S_OK : Uia.InvalidOperation;
     }
 
-    int IRawElementProviderFragment.get_FragmentRoot(out IRawElementProviderFragmentRoot? root)
-    {
-        root = Automation.Root;
-        return Uia.S_OK;
-    }
+    int IRawElementProviderFragment.get_FragmentRoot(out IRawElementProviderFragmentRoot? root) =>
+        Get(() => (IRawElementProviderFragmentRoot)Automation.Root, out root);
 
     // Invoke
 
