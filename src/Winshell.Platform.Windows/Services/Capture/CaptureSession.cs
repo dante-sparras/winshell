@@ -104,12 +104,15 @@ public sealed class CaptureSession : QObject
                 SetImage(image);
                 Emit("frameReady");
             }
-            if (generation == _generation && _backend is not null)
-                Schedule(generation);
         }
         catch (Exception e) when (IsCaptureError(e))
         {
             Fail(e);
+        }
+        finally
+        {
+            if (generation == _generation && _backend is not null && !IsDestroyed)
+                Schedule(generation);
         }
     });
 

@@ -41,17 +41,43 @@ public static class AnimationClock
         if (_running is null || _running.Count == 0 || _loop is null)
             return;
         var now = _loop.Now;
-        foreach (var a in _running.ToArray())
+        try
         {
-            if (a.IsDestroyed)
+            foreach (var a in _running.ToArray())
             {
-                _running.Remove(a);
-                continue;
+                if (a.IsDestroyed)
+                {
+                    _running.Remove(a);
+                    continue;
+                }
+                try
+                {
+                    a.Tick(now);
+                }
+#pragma warning disable CA1031 // One throwing animation must not stop the clock.
+                catch (Exception e)
+#pragma warning restore CA1031
+                {
+                    var log = a.Engine?.Log ?? Log.Default;
+                    log.ScriptError(e, a.TypeName);
+                    try
+                    {
+                        a.Stop();
+                    }
+#pragma warning disable CA1031 // Stopping the failed animation must not stop the clock.
+                    catch (Exception stop)
+#pragma warning restore CA1031
+                    {
+                        log.ScriptError(stop, a.TypeName);
+                    }
+                }
             }
-            a.Tick(now);
         }
-        if (_running.Count > 0)
-            _timer = _loop.Schedule(FrameInterval, Tick);
+        finally
+        {
+            if (_running.Count > 0 && _loop is not null)
+                _timer = _loop.Schedule(FrameInterval, Tick);
+        }
     }
 }
 
@@ -554,12 +580,15 @@ public class PropertyAnimation : AnimationBase
         {
             if (target.IsDestroyed)
                 continue;
-            var value = Interpolate(from, to, eased);
+            object? value;
             try
             {
+                value = Interpolate(from, to, eased);
                 target.WritePropertyDirect(property, value);
             }
-            catch (QmlException e)
+#pragma warning disable CA1031 // A bad interpolation is a script error, not a dead clock.
+            catch (Exception e)
+#pragma warning restore CA1031
             {
                 Engine?.Log.Warn("scene", $"{TypeName}: {e.Message}");
             }
@@ -715,8 +744,18 @@ public sealed class ScriptAction : AnimationBase
         if (_done)
             return;
         _done = true;
-        if (_script is not null && _script.IsCallable() && Engine is not null)
+        if (_script is null || !_script.IsCallable() || Engine is null)
+            return;
+        try
+        {
             Engine.Js.Engine.Call(_script, JsValue.Undefined, []);
+        }
+#pragma warning disable CA1031 // A script error is logged. The animation still finishes.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            Engine.Log.ScriptError(e, TypeName);
+        }
     }
 }
 
@@ -733,8 +772,18 @@ public sealed class PropertyAction : AnimationBase
 
     internal override void Apply(double progress)
     {
-        if (progress >= 1 && Target is not null && Property.Length > 0 && Value is not null)
+        if (progress < 1 || Target is null || Property.Length == 0 || Value is null)
+            return;
+        try
+        {
             Target.WritePropertyDirect(Property, Value);
+        }
+#pragma warning disable CA1031 // A bad write is a script error, not a dead clock.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            Engine?.Log.Warn("scene", $"{TypeName}: {e.Message}");
+        }
     }
 }
 

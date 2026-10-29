@@ -236,13 +236,20 @@ internal sealed unsafe partial class TrayHost : IDisposable
     /// </summary>
     private void KeepInFront()
     {
-        Raise();
-        foreach (var icon in _icons.Values.ToArray())
+        try
         {
-            if (!IsWindow(icon.Window))
-                Remove(icon.Key);
+            Raise();
+            foreach (var icon in _icons.Values.ToArray())
+            {
+                if (!IsWindow(icon.Window))
+                    Remove(icon.Key);
+            }
         }
-        _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), KeepInFront);
+        finally
+        {
+            if (_hwnd != 0)
+                _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), KeepInFront);
+        }
     }
 
     private void Raise()

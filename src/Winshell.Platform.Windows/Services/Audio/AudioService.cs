@@ -546,7 +546,11 @@ public sealed class AudioPeakMonitor : QObject
         {
             // The device went away; the node is removed shortly.
         }
-        _timer = Engine.Loop.Schedule(Interval, Tick);
+        finally
+        {
+            if (_meter is not null && Engine is not null && !IsDestroyed && _node is { IsDestroyed: false })
+                _timer = Engine.Loop.Schedule(Interval, Tick);
+        }
     }
 
     private void Apply(float[] values)
