@@ -11,7 +11,7 @@ A configuration is a folder of QML files that describes a shell. This guide buil
 ├── widgets\
 │   └── Clock.qml      # import "widgets", then Clock { }
 ├── util.js            # import "util.js" as Util
-└── preferences.json   # Winshell Settings' choices, if you use the default shell's
+└── preferences.toml   # Winshell Settings' choices, if you use the default shell's
 ```
 
 `shell.qml` is the only file Winshell looks for. Every other file is loaded because `shell.qml`, or a file it uses, refers to it:

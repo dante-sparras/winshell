@@ -90,7 +90,7 @@ ShellRoot {
 
 ## FileView
 
-A file the shell reads, watches and writes, created with `FileView { }`. Its default property is `adapter`, so a [JsonAdapter](#jsonadapter) declared inside it turns the file into properties.
+A file the shell reads, watches and writes, created with `FileView { }`. Its default property is `adapter`, so a [JsonAdapter](#jsonadapter) or a [TomlAdapter](#tomladapter) declared inside it turns the file into properties.
 
 Use a full path, such as one built from `Shell.dataDir`. A relative path is taken from winshell's current folder, not from the config folder. Reads and writes happen off the UI thread unless `blockLoading` or `blockWrites` says otherwise.
 
@@ -103,7 +103,7 @@ Use a full path, such as one built from `Shell.dataDir`. A relative path is take
 | `blockAllReads` | bool | Makes the first read and `reload()` read on the UI thread. Default `false`. A change of `path` still follows `blockLoading`. |
 | `atomicWrites` | bool | Writes a temporary file next to the file, then moves it over the file, so a reader never sees half a write. Default `true`. |
 | `printErrors` | bool | Logs a failed read or write as a warning in the `io` category. A missing file is not logged. Default `true`. |
-| `watchChanges` | bool | Emits `fileChanged` when the file changes on disk. Default `false`. This view's own writes do not count. The folder must exist; a write that creates it starts the watch. |
+| `watchChanges` | bool | Emits `fileChanged` when the file's text on disk differs from the text this view holds. Default `false`. Its own write does not count, and a hand save in the same moment does. The folder must exist; a write that creates it starts the watch. |
 | `loaded` | bool, read-only | Whether the file's text has been read. |
 | `adapter` | [FileViewAdapter](#fileviewadapter) | Turns the file's text into properties and back. It reads the text each time the file is read. |
 | `text()` | method, returns string | The file's text. If it was not read yet, reads it now. Returns an empty string when the file cannot be read. |
@@ -158,6 +158,16 @@ ShellRoot {
 ```
 
 The file is read at start, written each time a property changes, and read again when another program saves it. When it does not exist yet, the defaults are written.
+
+## TomlAdapter
+
+The adapter for a TOML file, created with `TomlAdapter { }` inside a [FileView](#fileview). Every property declared on it is a key. Reading the file sets each writable property. `writeAdapter()` changes a key only when its value changed, and updates a table, an array of tables, or a dotted key already in the file instead of writing a second one. Comments, blank lines, number spellings, and keys it does not own stay. A key the file does not have yet goes at the end, under the line from `comments` when that key has one. It has the members of [FileViewAdapter](#fileviewadapter).
+
+A key the file does not have keeps its value. A bool property is set only from a TOML boolean or number; a string, array, or table is left as written. An integer past 2^53, or a value that cannot be converted, is left as written. Each of those logs a warning in the `io` category. A file that is not valid TOML logs a warning and changes nothing. A later `writeAdapter()` reads the file again: when that read parses, the change is written into it, and when it does not, the bytes stay and a warning is logged.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `comments` | object | A comment for each key, as `{ key: "text" }`, written above a key the file does not have yet. A key already in the file keeps the comment it has. |
 
 ## JsonObject
 
@@ -285,7 +295,7 @@ The base of [StdioCollector](#stdiocollector) and [SplitParser](#splitparser), w
 
 ## FileViewAdapter
 
-The base of [JsonAdapter](#jsonadapter), which turns a file's text into properties and back. It is not created on its own; it is reached as `FileView.adapter`.
+The base of [JsonAdapter](#jsonadapter) and [TomlAdapter](#tomladapter), which turns a file's text into properties and back. It is not created on its own; it is reached as `FileView.adapter`.
 
 | Member | Type | Description |
 | --- | --- | --- |
