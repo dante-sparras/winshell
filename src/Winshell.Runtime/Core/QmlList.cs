@@ -100,6 +100,16 @@ public class QmlList<T> : IQmlList
         OnChanged();
     }
 
+    /// <summary>Puts the same items in a new order, as one change.</summary>
+    public void Reorder(IReadOnlyList<T> items)
+    {
+        if (items.Count != _items.Count)
+            throw new ArgumentException("A reorder keeps the same items.", nameof(items));
+        _items.Clear();
+        _items.AddRange(items);
+        OnChanged();
+    }
+
     public int IndexOf(T item) => _items.IndexOf(item);
 
     public bool Contains(T item) => _items.Contains(item);
