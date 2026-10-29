@@ -74,25 +74,34 @@ Item {
     anchors.verticalCenter: parent.verticalCenter
     spacing: 4
 
+    // One button per app, kept by the app's key, so a window that comes or goes regroups the apps without
+    // replacing the buttons a preview or a menu is anchored to.
     Repeater {
-      model: root.tasks
+      model: root.tasks.map(t => t.key)
 
       TaskButton {
         id: button
-        required property var modelData
-        objectName: "task:" + modelData.key
-        task: modelData
-        onInvoked: root.invoke(modelData)
-        onLaunchRequested: root.launch(modelData)
+        required property string modelData
+        objectName: "task:" + modelData
+        task: root.taskFor(modelData)
+        onInvoked: root.invoke(task)
+        onLaunchRequested: root.launch(task)
         onMenuRequested: {
           preview.hide()
-          menu.open(button, modelData.key)
+          menu.open(button, modelData)
         }
         onContainsMouseChanged: {
           if (containsMouse && !menu.visible)
-            preview.hoverStarted(button, modelData.key)
+            preview.hoverStarted(button, modelData)
           else if (!containsMouse)
             preview.hoverEnded()
+        }
+        // The app is gone: what was open from its button closes with it.
+        Component.onDestruction: {
+          if (preview.anchor.item === button)
+            preview.hide()
+          if (menu.anchor.item === button)
+            menu.visible = false
         }
       }
     }
