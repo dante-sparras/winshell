@@ -129,8 +129,14 @@ internal sealed class SnapshotShell : IDisposable
         catch
         {
             // A shell that does not start leaves nothing behind for the next test.
-            Host?.Dispose();
-            Restore();
+            try
+            {
+                Host?.Dispose();
+            }
+            finally
+            {
+                Restore();
+            }
             throw;
         }
     }
