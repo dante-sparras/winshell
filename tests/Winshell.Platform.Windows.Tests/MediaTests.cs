@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Windows.Media;
-using Windows.Media.Playback;
 using Windows.Storage.Streams;
+using Winshell.Platform.Windows.Native;
 using Winshell.Platform.Windows.Services.Media;
 using Winshell.Runtime;
 using Xunit.Abstractions;
@@ -64,10 +64,20 @@ public sealed class MediaTests : IDisposable
         writer.DetachStream();
         writer.Dispose();
         art.Seek(0);
-        var player = new MediaPlayer { CommandManager = { IsEnabled = false } };
+        ExerciseSession(media, art);
+    }
+
+    private void ExerciseSession(MediaService media, IRandomAccessStream art)
+    {
+        // Give the desktop publisher an actual HWND and keep its creating thread pumping messages. A source-less
+        // MediaPlayer leaves registration up to its implicit playback machinery, which was unreliable on CI.
+        var window = Win32.CreateWindowExW(Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE, "STATIC",
+            "Winshell media probe", Win32.WS_POPUP | Win32.WS_VISIBLE, -4000, -4000, 80, 40, 0, 0, 0, 0);
+        Assert.NotEqual(0, window);
+        SystemMediaTransportControls? controls = null;
         try
         {
-            var controls = player.SystemMediaTransportControls;
+            controls = SystemMediaTransportControlsInterop.GetForWindow(window);
             controls.IsEnabled = true;
             controls.IsPlayEnabled = true;
             controls.IsPauseEnabled = true;
@@ -83,13 +93,14 @@ public sealed class MediaTests : IDisposable
             };
             var updater = controls.DisplayUpdater;
             updater.Type = MediaPlaybackType.Music;
+            var registrationTitle = _title + " registering";
+            updater.MusicProperties.Title = registrationTitle;
             updater.Update();
-            // Session registration is independent of its property events. Let the real consumer subscribe before
-            // publishing the one metadata/art update, just as the timeline below is published after discovery.
-            var appId = Path.GetFileName(Environment.ProcessPath);
-            Assert.True(await WaitUntil(() => media.Sessions.Values.OfType<MediaSession>()
-                .Any(s => string.Equals(s.AppId, appId, StringComparison.OrdinalIgnoreCase))),
-                "Windows did not register this process's probe session.");
+            // A nonempty, unique title identifies this publisher without assuming Windows uses the exe name as
+            // its AppUserModelID. Observe registration before publishing the metadata/art change under test.
+            Assert.True(WaitUntil(() => media.Sessions.Values.OfType<MediaSession>()
+                .Any(s => s.TrackTitle == registrationTitle)),
+                "Windows did not publish the HWND-owned registration title.");
             updater.MusicProperties.Title = _title;
             updater.MusicProperties.Artist = "Winshell";
             updater.MusicProperties.AlbumTitle = "Live";
@@ -98,9 +109,9 @@ public sealed class MediaTests : IDisposable
             updater.Thumbnail = RandomAccessStreamReference.CreateFromStream(art);
             updater.Update();
 
-            var session = await WaitForSession(media);
+            var session = WaitForSession(media);
             Assert.NotNull(session);
-            Assert.True(await WaitUntil(() => session.TrackArtUrl.Length > 0),
+            Assert.True(WaitUntil(() => session.TrackArtUrl.Length > 0),
                 "The probe's metadata arrived without its artwork.");
             // Windows publishes metadata/art and the timeline independently. Publish the timeline only after
             // discovery so this test always exercises the later timeline event instead of depending on a race.
@@ -113,7 +124,7 @@ public sealed class MediaTests : IDisposable
                 MaxSeekTime = TimeSpan.FromSeconds(125),
                 Position = TimeSpan.FromSeconds(5),
             });
-            Assert.True(await WaitUntil(() => session.LengthSupported && session.PlaybackState == 1),
+            Assert.True(WaitUntil(() => session.LengthSupported && session.PlaybackState == 1),
                 "The discovered session did not receive its timeline and playing state.");
             _output.WriteLine($"session: {session.AppName} ({session.AppId}) state {session.PlaybackState} art {session.TrackArtUrl}");
             Assert.Equal(_title, session.TrackTitle);
@@ -137,23 +148,30 @@ public sealed class MediaTests : IDisposable
             Assert.Equal(1, session.PlaybackState);
 
             session.Pause();
-            var paused = await WaitForState(session, 2);
+            var paused = WaitForState(session, 2);
             Assert.True(paused, "The session did not pause.");
             Assert.True(session.CanPlay);
             session.Play();
-            Assert.True(await WaitForState(session, 1), "The session did not resume.");
+            Assert.True(WaitForState(session, 1), "The session did not resume.");
         }
         finally
         {
-            player.SystemMediaTransportControls.IsEnabled = false;
-            player.Dispose();
+            try
+            {
+                if (controls is not null)
+                    controls.IsEnabled = false;
+            }
+            finally
+            {
+                Assert.True(Win32.DestroyWindow(window), "The probe window did not close on its creating thread.");
+            }
         }
     }
 
-    private async Task<MediaSession?> WaitForSession(MediaService media)
+    private MediaSession? WaitForSession(MediaService media)
     {
         MediaSession? session = null;
-        await WaitUntil(() =>
+        WaitUntil(() =>
         {
             session = media.Sessions.Values.OfType<MediaSession>().FirstOrDefault(s => s.TrackTitle == _title);
             return session is not null;
@@ -161,22 +179,27 @@ public sealed class MediaTests : IDisposable
         return session;
     }
 
-    private Task<bool> WaitForState(MediaSession session, int state) =>
+    private bool WaitForState(MediaSession session, int state) =>
         WaitUntil(() => session.PlaybackState == state);
 
-    private async Task<bool> WaitUntil(Func<bool> ready)
+    private bool WaitUntil(Func<bool> ready)
     {
-        // GSMTC publication/commands cross processes. Use an elapsed-time deadline and keep pumping the engine,
-        // including when a shared runner delays a continuation. No fixed sleep stands in for readiness.
+        // Stay on the HWND's creating thread while pumping both Windows and the engine. Every phase still has a
+        // readiness condition and an elapsed-time deadline; waiting for messages is not a substitute for readiness.
         var elapsed = Stopwatch.StartNew();
         while (true)
         {
+            for (var i = 0; i < 200 && Win32.PeekMessageW(out var message, 0, 0, 0, Win32.PM_REMOVE); i++)
+            {
+                Win32.TranslateMessage(message);
+                Win32.DispatchMessageW(message);
+            }
             _loop.Process();
             if (ready())
                 return true;
             if (elapsed.Elapsed >= TimeSpan.FromSeconds(30))
                 return false;
-            await Task.Delay(50);
+            Win32.MsgWaitForMultipleObjectsEx(0, [], 50, Win32.QS_ALLINPUT, Win32.MWMO_INPUTAVAILABLE);
         }
     }
 
