@@ -6,7 +6,8 @@
 winshell run [options]              start a shell
 winshell                            print this help
 winshell list [-a] [-j]             list running instances
-winshell kill [instance options]    stop an instance
+winshell kill [--force] [instance options]
+                                    stop an instance and wait until it exits
 winshell log [-f] [-t N]            print an instance's log
 winshell ipc show                   list IPC targets
 winshell ipc call <target> <function> [args...]
@@ -51,7 +52,7 @@ The log goes to the console and to the instance's log file. Ctrl+C in the consol
 | Command | What it does |
 | --- | --- |
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. `-a`, `--all` is accepted and does nothing; stopped instances aren't listed. |
-| `winshell kill` | Asks an instance to exit, and prints `Killed <id>`. |
+| `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. |
 | `winshell log` | Prints an instance's log. With no instance running, it prints the log of one that has stopped. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions and properties. |
 | `winshell ipc call <target> <function> [args...]` | Calls a function of an [`IpcHandler`](winshell-io.md#ipchandler) and prints what it returns. |
@@ -69,7 +70,7 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | Code | Meaning |
 | --- | --- |
 | 0 | Done. For a shell, it was stopped. |
-| 1 | No such configuration or instance, an IPC call failed, the instance couldn't be reached, or a `winshell doctor` check failed. |
+| 1 | No such configuration or instance, an IPC call failed, the instance couldn't be reached or was still running, or a `winshell doctor` check failed. |
 | 2 | An unknown command, an option that needs a value without one, a `--pid` or `--tail` that is not a whole number, or an `ipc` command missing its arguments. |
 
 `--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
