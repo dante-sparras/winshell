@@ -178,12 +178,12 @@ internal sealed class SmtcSessions
             {
                 kept[existing] = true;
                 held[existing].Retarget(incoming[i]);
+                // The shell name arrives after the session. The UI thread does not wait for that lookup.
+                if (_names.Get(ids[i]) is { } name)
+                    held[existing].Rename(name);
                 continue;
             }
-            // A session is added once its app has a name. Naming it posts another Sync.
-            if (_names.Get(ids[i]) is not { } name)
-                continue;
-            var session = new SmtcSession(this, incoming[i], _nextId++, name);
+            var session = new SmtcSession(this, incoming[i], _nextId++, _names.Get(ids[i]) ?? SmtcSession.FallbackName(ids[i]));
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
@@ -258,7 +258,20 @@ internal sealed class SmtcSession
     public string AppId { get; }
 
     /// <summary>The name Windows shows for the app.</summary>
-    public string AppName { get; }
+    public string AppName { get; private set; }
+
+    /// <summary>The exe or app id, before the shell lookup replaces it.</summary>
+    internal static string FallbackName(string appId) =>
+        appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? appId[..^4] : appId;
+
+    /// <summary>The shell finished naming this app. The session is already shown.</summary>
+    internal void Rename(string name)
+    {
+        if (_released || name.Length == 0 || name == AppName)
+            return;
+        AppName = name;
+        Changed?.Invoke(["appName"], false);
+    }
 
     public string Title { get; private set; } = "";
 
