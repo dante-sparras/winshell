@@ -12,9 +12,12 @@ namespace Winshell.Platform.Windows;
 [QmlSignal("cleared")]
 public sealed unsafe class FocusGrab : QObject, IPropertyObserver
 {
+    // The hook thread reads Grabbing; the loop threads change it.
+    private static readonly object Gate = new();
     private static readonly HashSet<FocusGrab> Grabbing = [];
-    private static nint _hook;
+    private static HookThread? _hook;
     private readonly List<ShellWindow> _observed = [];
+    private IEventLoop? _loop;
     private bool _active;
     private bool _wanted;
 
@@ -23,6 +26,8 @@ public sealed unsafe class FocusGrab : QObject, IPropertyObserver
         Windows = new QmlList<QObject>(this, "windows");
         Windows.Changed += OnWindowsChanged;
     }
+
+    internal static Thread? InstalledHookThread => _hook?.Thread;
 
     [Qml]
     public bool Active
@@ -71,9 +76,10 @@ public sealed unsafe class FocusGrab : QObject, IPropertyObserver
     {
         if (_active || IsDestroyed || !AnyVisible)
             return;
-        Grabbing.Add(this);
-        if (_hook == 0)
-            _hook = Win32.SetWindowsHookExW(Win32.WH_MOUSE_LL, &MouseHook, Win32.GetModuleHandleW(null), 0);
+        _loop = Engine?.Loop;
+        lock (Gate)
+            Grabbing.Add(this);
+        _hook ??= HookThread.Start(Win32.WH_MOUSE_LL, &MouseHook, "Winshell focus grab hook");
         SetField(ref _active, true, nameof(Active));
     }
 
@@ -81,11 +87,16 @@ public sealed unsafe class FocusGrab : QObject, IPropertyObserver
     {
         if (!_active)
             return;
-        Grabbing.Remove(this);
-        if (Grabbing.Count == 0 && _hook != 0)
+        bool none;
+        lock (Gate)
         {
-            Win32.UnhookWindowsHookEx(_hook);
-            _hook = 0;
+            Grabbing.Remove(this);
+            none = Grabbing.Count == 0;
+        }
+        if (none && _hook is not null)
+        {
+            _hook.Stop();
+            _hook = null;
         }
         _wanted = false;
         SetField(ref _active, false, nameof(Active));
@@ -114,9 +125,12 @@ public sealed unsafe class FocusGrab : QObject, IPropertyObserver
             var pt = ((MSLLHOOKSTRUCT*)lParam)->pt;
             NativeCallback.Guard(Log.Default, "focusgrab", () =>
             {
-                foreach (var grab in Grabbing.ToArray())
+                FocusGrab[] grabs;
+                lock (Gate)
+                    grabs = [.. Grabbing];
+                foreach (var grab in grabs)
                 {
-                    if (grab.Engine?.Loop is { } loop)
+                    if (grab._loop is { } loop)
                         loop.Post(() => grab.OnClick(pt));
                 }
             });

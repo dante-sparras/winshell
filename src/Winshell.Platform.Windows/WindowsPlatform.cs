@@ -15,6 +15,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private readonly List<Win32Window> _windows = [];
     private readonly HashSet<Win32Window> _grabbing = [];
     private List<ScreenInfo> _screens = [];
+    private HookThread? _mouseThread;
     private nint _mouseHook;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
@@ -157,19 +158,25 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         else
             _grabbing.Remove(window);
         if (_grabbing.Count > 0 && _mouseHook == 0)
-            _mouseHook = Win32.SetWindowsHookExW(Win32.WH_MOUSE_LL, &MouseHook, Win32.GetModuleHandleW(null), 0);
+        {
+            _mouseThread = HookThread.Start(Win32.WH_MOUSE_LL, &MouseHook, "Winshell popup mouse hook");
+            _mouseHook = _mouseThread?.Handle ?? 0;
+        }
         else if (_grabbing.Count == 0)
             Unhook();
     }
 
     private void Unhook()
     {
-        if (_mouseHook == 0)
-            return;
-        Win32.UnhookWindowsHookEx(_mouseHook);
+        _mouseThread?.Stop();
+        _mouseThread = null;
         _mouseHook = 0;
     }
 
+    /// <summary>The thread that serves the popup mouse hook, or null while no popup grabs focus.</summary>
+    internal Thread? MouseHookThread => _mouseThread?.Thread;
+
+    // The procedure runs on the hook thread, so it only reads the click and posts the rest to the loop.
     [UnmanagedCallersOnly]
     private static nint MouseHook(int code, nint wParam, nint lParam)
     {
@@ -181,17 +188,19 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
             {
                 var info = (MSLLHOOKSTRUCT*)lParam;
                 var pt = info->pt;
-                NativeCallback.Guard(platform.Log, "shell", () =>
-                {
-                    foreach (var w in platform._grabbing.ToArray())
-                    {
-                        if (!w.ContainsScreenPoint(pt))
-                            platform.Loop.Post(w.Dismiss);
-                    }
-                });
+                NativeCallback.Guard(platform.Log, "shell", () => platform.Loop.Post(() => platform.DismissOutside(pt)));
             }
         }
         return Win32.CallNextHookEx(0, code, wParam, lParam);
+    }
+
+    private void DismissOutside(POINT pt)
+    {
+        foreach (var w in _grabbing.ToArray())
+        {
+            if (!w.ContainsScreenPoint(pt))
+                w.Dismiss();
+        }
     }
 
     // Theme
