@@ -18,6 +18,8 @@ param(
     [switch] $Publish,
     [switch] $Pack,
     [switch] $Verify,
+    # With -Verify: Winshell's own binaries in each zip must carry a valid Authenticode signature, as after SignPath.
+    [switch] $Signed,
     [string] $Out = 'artifacts',
     [ValidateSet('win-x64', 'win-arm64')]
     [string[]] $Runtime = @('win-x64', 'win-arm64'),
@@ -255,6 +257,8 @@ if ($Verify) {
         $listed[$name] = $hash
     }
     $machines = @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }
+    # What SignPath signs: the binaries built from this repository. The runtime and libraries keep their publishers' signatures.
+    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Qml.dll', 'Winshell.Runtime.dll', 'Winshell.Platform.Windows.dll'
     $verifyRoot = Join-Path $Out 'verify'
     foreach ($rid in $Runtime) {
         $name = "winshell-$Version-$rid.zip"
@@ -279,6 +283,20 @@ if ($Verify) {
                 throw "The x64 winshell.exe reported '$reported', not version $Version"
             }
             Write-Output "$name runs: $reported"
+        }
+        # The product name and version SignPath's artifact configuration requires of each binary it signs.
+        foreach ($binary in $ownBinaries) {
+            $info = (Get-Item -LiteralPath (Join-Path $dir $binary)).VersionInfo
+            if ($info.ProductName -cne 'Winshell' -or $info.ProductVersion -notmatch "^$([regex]::Escape($Version))(\+|$)") {
+                throw "$binary in $name is product '$($info.ProductName)' $($info.ProductVersion), not Winshell $Version"
+            }
+        }
+        if ($Signed) {
+            foreach ($binary in $ownBinaries) {
+                $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $dir $binary)
+                if ($signature.Status -ne 'Valid') { throw "$binary in $name is not signed: $($signature.StatusMessage)" }
+                Write-Output "$binary in $name is signed by $($signature.SignerCertificate.Subject)"
+            }
         }
         Remove-Item -LiteralPath $dir -Recurse -Force
     }

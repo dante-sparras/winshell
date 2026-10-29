@@ -14,6 +14,8 @@
     <_WinshellReleaseManifest>$(MSBuildThisFileDirectory).release-please-manifest.json</_WinshellReleaseManifest>
     <IsPackable>false</IsPackable>
     <Authors>dante-sparras</Authors>
+    <!-- Every binary's product name, which code signing checks along with the product version. -->
+    <Product>Winshell</Product>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Version)' == '' and Exists('$(_WinshellReleaseManifest)')">
     <_WinshellReleaseManifestText>$([System.IO.File]::ReadAllText('$(_WinshellReleaseManifest)'))</_WinshellReleaseManifestText>

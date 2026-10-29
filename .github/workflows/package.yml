@@ -27,6 +27,8 @@ on:
     secrets:
       WINGET_TOKEN:
         required: false
+      SIGNPATH_API_TOKEN:
+        required: false
   # Repairs a release that exists but has no files, such as after a full re-run of Release Please, which skips
   # packaging once the release is there. See docs/development.md#releasing.
   workflow_dispatch:
@@ -43,7 +45,11 @@ jobs:
   package:
     name: package
     runs-on: windows-latest
-    timeout-minutes: 30
+    # A release waits for a person to approve its signing request in SignPath.
+    timeout-minutes: ${{ inputs.tag != '' && 150 || 30 }}
+    env:
+      # A release is signed once the SignPath Foundation project is set up: see docs/code-signing-policy.md.
+      SIGN: ${{ inputs.tag != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,17 +59,70 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      - name: Build and verify the packages
+      - name: Check the commit to sign
+        # SignPath records the run's commit as the origin of what it signs, so the checkout must be that commit. This
+        # runs before the build, so a repair started from main stops at once: start it from the release's tag.
+        if: ${{ env.SIGN == 'true' }}
+        shell: pwsh
+        run: |
+          $checkedOut = git rev-parse HEAD
+          if ($checkedOut -ne $env:GITHUB_SHA) { throw "This run is for $env:GITHUB_SHA but checked out $checkedOut. Start it from the release's tag." }
+      - name: Build
         shell: pwsh
         env:
           # Empty outside a release. For a release, the script stops unless the checkout is that version.
+          TAG: ${{ inputs.tag }}
+        run: pwsh scripts/package.ps1 -Publish -Out "$env:RUNNER_TEMP/artifacts" -Tag $env:TAG
+      - name: Read the product version
+        id: product
+        if: ${{ env.SIGN == 'true' }}
+        shell: pwsh
+        run: |
+          $version = (Get-Item "$env:RUNNER_TEMP/artifacts/publish/win-x64/winshell.dll").VersionInfo.ProductVersion
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Upload the binaries to sign
+        id: unsigned
+        if: ${{ env.SIGN == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned
+          path: ${{ runner.temp }}/artifacts/publish/
+          if-no-files-found: error
+          # Re-run failed jobs after a rejected or timed-out request uploads again.
+          overwrite: true
+      - name: Sign with SignPath
+        # SignPath signs only Winshell's own binaries, as its artifact configuration (packaging/signpath/) lists, after
+        # an approver approves the request.
+        if: ${{ env.SIGN == 'true' }}
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'winshell' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          # Every signed binary must carry this product version, as packaging/signpath/artifact-configuration.xml says.
+          parameters: |
+            version: ${{ toJSON(steps.product.outputs.version) }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 6600
+          output-artifact-directory: ${{ runner.temp }}/signed
+      - name: Use the signed binaries
+        if: ${{ env.SIGN == 'true' }}
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "$env:RUNNER_TEMP/artifacts/publish" -Recurse -Force
+          Move-Item -LiteralPath "$env:RUNNER_TEMP/signed" -Destination "$env:RUNNER_TEMP/artifacts/publish"
+      - name: Pack and verify
+        shell: pwsh
+        env:
           TAG: ${{ inputs.tag }}
           # The Store identity Partner Center reserved. Unset, the package has a test identity.
           MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
           MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
           MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
         run: >-
-          pwsh scripts/package.ps1 -Out "$env:RUNNER_TEMP/artifacts" -Tag $env:TAG
+          ./scripts/package.ps1 -Pack -Verify -Out "$env:RUNNER_TEMP/artifacts" -Tag $env:TAG -Signed:($env:SIGN -eq 'true')
           -IdentityName $env:MSIX_IDENTITY_NAME -Publisher $env:MSIX_PUBLISHER -PublisherDisplayName $env:MSIX_PUBLISHER_DISPLAY_NAME
       - name: Install the Store package on this runner
         # Windows accepts the manifest, and the winshell alias runs in the package. A throwaway certificate that only
@@ -131,6 +190,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
+          # Set once releases are signed, which is when the notes link the Code signing policy.
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
         run: |
           # Fails unless the release exists.
           $release = gh api "repos/$env:GH_REPO/releases/tags/$env:TAG" | ConvertFrom-Json
@@ -146,6 +207,12 @@ jobs:
               continue
             }
             gh release upload $env:TAG $file.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          # SignPath Foundation asks every download page to name the Code signing policy.
+          if ($env:SIGNPATH_ORGANIZATION_ID -and $release.body -notmatch 'Code signing policy') {
+            $notes = "$($release.body)`n`n[Code signing policy](https://github.com/$env:GH_REPO/blob/main/docs/code-signing-policy.md)"
+            gh release edit $env:TAG --notes $notes
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Submit to winget
