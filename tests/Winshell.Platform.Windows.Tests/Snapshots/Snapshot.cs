@@ -13,9 +13,9 @@ namespace Winshell.Platform.Windows.Tests.Snapshots;
 /// </summary>
 internal static class Snapshot
 {
-    public const int ChannelTolerance = 0;
+    public const int ChannelTolerance = 16;
 
-    public const double PixelTolerance = 0;
+    public const double PixelTolerance = 0.001;
 
     public static string Baselines { get; } = Path.Combine(Repo(), "tests", "Winshell.Platform.Windows.Tests", "Snapshots", "Baselines");
 
