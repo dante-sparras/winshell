@@ -493,7 +493,9 @@ namespace Winshell
             Directory.CreateDirectory(dir);
             var logPath = System.IO.Path.Combine(dir, "log.txt");
             var logFile = new StreamWriter(logPath, append: true) { AutoFlush = true };
-            var log = new Log { MinimumLevel = o.Verbose ? LogLevel.Debug : LogLevel.Info };
+            // Objects with no engine log through Log.Default. That is this process's log.
+            var log = Log.Default;
+            log.MinimumLevel = o.Verbose ? LogLevel.Debug : LogLevel.Info;
             var consoleLock = new object();
             var logClosed = false;
             log.Sink = (level, category, message) =>
