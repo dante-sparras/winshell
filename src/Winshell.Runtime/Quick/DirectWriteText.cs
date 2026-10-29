@@ -1,5 +1,6 @@
 #pragma warning disable CA1416
 
+using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using SharpGen.Runtime;
@@ -40,16 +41,15 @@ internal sealed class DirectWriteEngine
     private readonly IDWriteFactory7 _factory;
     private readonly ID2D1Factory1 _d2d;
     private readonly IWICImagingFactory _wic;
-    private readonly IDWriteFontFallback _fallback;
+    private readonly Dictionary<string, IDWriteFontFallback> _fallbacks = [];
     private readonly IDWriteFontCollection? _typographic;
     private readonly IDWriteRenderingParams _rendering;
 
-    private DirectWriteEngine(IDWriteFactory7 factory, ID2D1Factory1 d2d, IWICImagingFactory wic, IDWriteFontFallback fallback, IDWriteFontCollection? typographic, IDWriteRenderingParams rendering)
+    private DirectWriteEngine(IDWriteFactory7 factory, ID2D1Factory1 d2d, IWICImagingFactory wic, IDWriteFontCollection? typographic, IDWriteRenderingParams rendering)
     {
         _factory = factory;
         _d2d = d2d;
         _wic = wic;
-        _fallback = fallback;
         _typographic = typographic;
         _rendering = rendering;
     }
@@ -68,7 +68,7 @@ internal sealed class DirectWriteEngine
         {
             typographic = null;
         }
-        return new DirectWriteEngine(factory, d2d, wic, BuildFallback(factory), typographic, factory.CreateRenderingParams());
+        return new DirectWriteEngine(factory, d2d, wic, typographic, factory.CreateRenderingParams());
     }
 
     internal (IDWriteTextLayout Layout, IDWriteInlineObject? Ellipsis) CreateLayout(string text, FontSpec font, WordWrapping wrapping, float maxWidth, float maxHeight, bool ellipsis, double lineHeight, bool proportional)
@@ -250,17 +250,18 @@ internal sealed class DirectWriteEngine
         var weight = (FontWeight)Math.Clamp(font.Weight, 1, 999);
         var style = font.Italic ? FontStyle.Italic : FontStyle.Normal;
         var resolved = DirectWriteServices.ResolveFamily(font.Family);
+        var locale = CultureInfo.CurrentUICulture.Name;
         IDWriteTextFormat? format = null;
         foreach (var name in new[] { resolved, "Segoe UI Variable", "Segoe UI" })
         {
-            format = TryFormat(name, _typographic, weight, style, size) ?? TryFormat(name, null, weight, style, size);
+            format = TryFormat(name, _typographic, weight, style, size, locale) ?? TryFormat(name, null, weight, style, size, locale);
             if (format is not null)
                 break;
         }
-        format ??= _factory.CreateTextFormat("Segoe UI", weight, style, FontStretch.Normal, size);
+        format ??= _factory.CreateTextFormat("Segoe UI", null, weight, style, FontStretch.Normal, size, locale);
         using var format1 = format.QueryInterfaceOrNull<IDWriteTextFormat1>();
         if (format1 is not null)
-            format1.FontFallback = _fallback;
+            format1.FontFallback = FallbackFor(locale);
         ApplyOpticalSize(format, size);
         return format;
     }
@@ -295,13 +296,11 @@ internal sealed class DirectWriteEngine
             format3.SetFontAxisValues(axes, count);
     }
 
-    private IDWriteTextFormat? TryFormat(string family, IDWriteFontCollection? collection, FontWeight weight, FontStyle style, float size)
+    private IDWriteTextFormat? TryFormat(string family, IDWriteFontCollection? collection, FontWeight weight, FontStyle style, float size, string locale)
     {
         try
         {
-            return collection is null
-                ? _factory.CreateTextFormat(family, weight, style, FontStretch.Normal, size)
-                : _factory.CreateTextFormat(family, collection, weight, style, FontStretch.Normal, size, "");
+            return _factory.CreateTextFormat(family, collection!, weight, style, FontStretch.Normal, size, locale);
         }
         catch (SharpGenException)
         {
@@ -329,14 +328,43 @@ internal sealed class DirectWriteEngine
             format.SetLineSpacing(LineSpacingMethod.Uniform, (float)lineHeight, (float)(lineHeight * 0.8));
     }
 
-    private static IDWriteFontFallback BuildFallback(IDWriteFactory7 factory)
+    private IDWriteFontFallback FallbackFor(string locale)
+    {
+        var han = HanFamilies(locale);
+        lock (_fallbacks)
+        {
+            if (!_fallbacks.TryGetValue(han[0], out var fallback))
+                _fallbacks[han[0]] = fallback = BuildFallback(_factory, han);
+            return fallback;
+        }
+    }
+
+    /// <summary>
+    /// The same Han code point has Chinese, Taiwanese, Korean and Japanese glyph forms.
+    /// The first font tried follows the UI language. Japanese and every other language keep Yu Gothic UI.
+    /// </summary>
+    internal static string[] HanFamilies(string locale)
+    {
+        if (Is(locale, "zh-Hant") || Is(locale, "zh-TW") || Is(locale, "zh-HK") || Is(locale, "zh-MO"))
+            return ["Microsoft JhengHei UI", "Microsoft YaHei UI", "Yu Gothic UI", "Meiryo"];
+        if (Is(locale, "zh"))
+            return ["Microsoft YaHei UI", "Microsoft JhengHei UI", "Yu Gothic UI", "Meiryo"];
+        if (Is(locale, "ko"))
+            return ["Malgun Gothic", "Yu Gothic UI", "Microsoft YaHei UI", "Meiryo"];
+        return ["Yu Gothic UI", "Yu Gothic", "Microsoft YaHei UI", "Meiryo"];
+
+        static bool Is(string locale, string tag) =>
+            locale.Equals(tag, StringComparison.OrdinalIgnoreCase) || locale.StartsWith(tag + "-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IDWriteFontFallback BuildFallback(IDWriteFactory7 factory, string[] han)
     {
         try
         {
             using var builder = factory.CreateFontFallbackBuilder();
             Map(builder, [Range(0xE700, 0xF8FF)], "Segoe Fluent Icons", "Segoe MDL2 Assets");
             Map(builder, [Range(0x1F300, 0x1FAFF), Range(0x2600, 0x27BF), Range(0xFE0E, 0xFE0F), Range(0x200D, 0x200D), Range(0x20E3, 0x20E3)], "Segoe UI Emoji");
-            Map(builder, [Range(0x3040, 0x30FF), Range(0x31F0, 0x31FF), Range(0x3400, 0x9FFF)], "Yu Gothic UI", "Yu Gothic", "Microsoft YaHei UI", "Meiryo");
+            Map(builder, [Range(0x3040, 0x30FF), Range(0x31F0, 0x31FF), Range(0x3400, 0x9FFF)], han);
             Map(builder, [Range(0xAC00, 0xD7AF)], "Malgun Gothic", "Microsoft YaHei UI");
             builder.AddMappings(factory.SystemFontFallback);
             return builder.CreateFontFallback();
