@@ -492,12 +492,15 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
         if (IsDestroyed || Engine is not { } engine)
             return;
         var where = SurfaceName;
-        var report = engine.GetService<CrashReports>()?.Write(where, error);
+        var delay = (_restarts ??= new SurfaceRestarts()).Fail(engine.Loop.Now);
+        var recovery = delay is { } next
+            ? $"Winshell opens it again in {next.TotalSeconds:0} second{(next.TotalSeconds == 1 ? "" : "s")}."
+            : "It failed several times in a few minutes, so Winshell leaves it closed until the configuration reloads.";
+        var report = engine.GetService<CrashReports>()?.Write(where, error, subject: Subject, recovery: recovery);
         _backend?.Dispose();
         _backend = null;
         NotifyChanged("backingWindowVisible");
         WindowRegistry.Changed(this);
-        var delay = (_restarts ??= new SurfaceRestarts()).Fail(engine.Loop.Now);
         if (delay is { } wait)
             engine.Log.Error("window", $"{where} failed and opens again in {wait.TotalSeconds:0} s: {error.GetType().Name}: {error.Message}");
         else
@@ -531,6 +534,30 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             OnFailed(e);
+        }
+    }
+
+    /// <summary>
+    /// The window as a sentence names it for a person: a floating window's title, or the file it is declared in, so
+    /// <c>Taskbar.qml</c> is "the taskbar". A window declared in <c>shell.qml</c> is "a window".
+    /// </summary>
+    internal string Subject
+    {
+        get
+        {
+            if (this is FloatingWindow { Title.Length: > 0 } floating)
+                return floating.Title;
+            var name = CreationContext?.Imports?.Document.File is { Length: > 0 } file ? Path.GetFileNameWithoutExtension(file) : "";
+            if (name.Length == 0 || name.Equals("shell", StringComparison.OrdinalIgnoreCase))
+                return "a window";
+            var words = new System.Text.StringBuilder("the ");
+            for (var i = 0; i < name.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(name[i]) && !char.IsUpper(name[i - 1]))
+                    words.Append(' ');
+                words.Append(char.ToLowerInvariant(name[i]));
+            }
+            return words.ToString();
         }
     }
 
@@ -607,26 +634,45 @@ public sealed class SurfaceFormatGroup(ShellWindow window) : QObject
 /// <summary>Tracks the shell's visible windows, for <c>Shell.lastWindowClosed</c>.</summary>
 public static class WindowRegistry
 {
+    // One set per shell: its settings, which outlive its generations, or its engine when it has none. Winshell's own
+    // notice runs in an engine of its own, so it never keeps a shell's last window from closing.
     [ThreadStatic]
-    private static HashSet<ShellWindow>? _windows;
+    private static Dictionary<object, HashSet<ShellWindow>>? _windows;
 
     internal static void Changed(ShellWindow window)
     {
-        _windows ??= [];
-        var wasAny = _windows.Count > 0;
-        if (window.BackingWindowVisible)
-            _windows.Add(window);
-        else
-            _windows.Remove(window);
-        if (!wasAny || _windows.Count != 0 || window.Engine is not { } engine)
+        if (window.Engine is not { } engine)
             return;
-        if (engine.GetService<ShellSettings>() is { } settings)
+        var settings = engine.GetService<ShellSettings>();
+        _windows ??= [];
+        var key = (object?)settings ?? engine;
+        if (!_windows.TryGetValue(key, out var windows))
+            _windows[key] = windows = [];
+        var wasAny = windows.Count > 0;
+        if (window.BackingWindowVisible)
+            windows.Add(window);
+        else
+            windows.Remove(window);
+        if (windows.Count == 0)
+            _windows.Remove(key);
+        if (!wasAny || windows.Count != 0)
+            return;
+        if (settings is not null)
             settings.Emit("lastWindowClosed");
         else if (engine.FindNativeSingleton<ShellGlobal>() is { } shell)
             shell.Emit("lastWindowClosed");
     }
 
-    internal static void Remove(ShellWindow window) => _windows?.Remove(window);
+    internal static void Remove(ShellWindow window)
+    {
+        if (_windows is null)
+            return;
+        foreach (var (key, windows) in _windows.ToList())
+        {
+            if (windows.Remove(window) && windows.Count == 0)
+                _windows.Remove(key);
+        }
+    }
 }
 
 /// <summary>The <c>anchors</c> group of a PanelWindow.</summary>

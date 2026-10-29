@@ -342,6 +342,8 @@ namespace Winshell
             WindowsModules.Install(platform);
             var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath, Crashes = crashes };
             crashes.ShellId = host.ShellId;
+            // Winshell's own notice for a config error or a window that failed; it shows even when the config does not.
+            using var notices = new ShellNotices(host, loop, platform, log, path => ShellNotices.Open(path, log));
             host.Services.Add(engine =>
             {
                 engine.AddService<IClipboard>(platform);

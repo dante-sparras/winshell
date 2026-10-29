@@ -41,7 +41,7 @@ A running shell reads these. None is needed to build or test.
 | `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. This run does not copy an old `~/.config/winshell`. |
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
-| `WINSHELL_NO_RELOAD_POPUP` | `1` hides the popup that reports a reload. |
+| `WINSHELL_NO_RELOAD_POPUP` | `1` hides Winshell's notice for a configuration that failed to load. A shell can hide it for one failed reload with `Shell.inhibitReloadPopup()` in `Shell.onReloadFailed`. The notice for a window that failed still shows. |
 
 `WINSHELL_TEST_CRASH` is read only for `FatalCrashTests`: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. Never set it otherwise.
 
@@ -148,7 +148,7 @@ Remove-Item Env:WINSHELL_SETTINGS_EVIDENCE
 
 ## Visual snapshots
 
-`SnapshotTests` render every surface of the default shell (the taskbar, Start, quick settings, the notification center, the on-screen display and Winshell Settings) and compare each with a PNG in `tests/Winshell.Platform.Windows.Tests/Snapshots/Baselines`. Each surface is rendered at 100%, 150% and 200% scale, in light and dark, with the Windows default blue accent. They run in the default check.
+`SnapshotTests` render every surface of the default shell (the taskbar, Start, quick settings, the notification center, the on-screen display and Winshell Settings) and compare each with a PNG in `tests/Winshell.Platform.Windows.Tests/Snapshots/Baselines`. Each surface is rendered at 100%, 150% and 200% scale, in light and dark, with the Windows default blue accent. They run in the default check. `NoticeSnapshotTests` do the same for Winshell's own notice (`notice-…`), for a configuration error and for a window that failed; `-Surface` cannot pick it, so update it with the script and no `-Surface`.
 
 The whole default shell runs on a fake 1920×1080 screen, against fake services, with its folders in a temporary folder. The surfaces are opened as a user opens them, and each window is painted offscreen the way its composition surface is. A solid color stands in for the Mica or Acrylic that Windows draws behind it. To keep the renders the same on every PC, the time is Thursday 29 October 2026, 09:41, the date and time patterns are en-US, animations are off, and app icons are drawn from shapes. Text is drawn with the Segoe fonts Windows ships and with this PC's text settings, so a PC with font smoothing turned off, or with ClearType Text Tuner settings other than the defaults, renders different text.
 
