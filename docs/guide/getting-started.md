@@ -4,24 +4,20 @@ Winshell runs on Windows 11. This page installs it, runs the default shell, and 
 
 ## Install
 
-Releases after 0.5.0 carry a portable build on their [GitHub release page](https://github.com/dante-sparras/winshell/releases/latest). It is self-contained, so no .NET install is needed.
+Build Winshell from source. You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
 
-- **winget:** `winget install DanteSparras.Winshell`, then run `winshell`. This works once winget has accepted the package; until then, use the zip.
-- **Portable zip:** download `winshell-<version>-win-x64.zip`, or `win-arm64` on an Arm PC. Unzip it into a folder of its own, such as `%LOCALAPPDATA%\Programs\winshell`, and run `winshell.exe` from there. `SHA256SUMS.txt` on the same release has each file's hash:
+```powershell
+git clone https://github.com/dante-sparras/winshell.git
+cd winshell
+dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
+```
 
-  ```powershell
-  Get-FileHash .\winshell-0.6.0-win-x64.zip -Algorithm SHA256
-  ```
+That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed.
 
-- **From source:** with Git and the .NET 10 SDK, clone the repository and publish it:
+> [!NOTE]
+> 0.5.0, the current release, has no download. The release after it will carry a self-contained build, which needs no .NET install, on its [GitHub release page](https://github.com/dante-sparras/winshell/releases): `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. A winget package, `winget install DanteSparras.Winshell`, follows once winget has accepted it.
 
-  ```powershell
-  git clone https://github.com/dante-sparras/winshell.git
-  cd winshell
-  dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
-  ```
-
-To update, unzip or publish the newer release over the same folder while Winshell is closed. The default shell updates with it. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
+To update, close Winshell, pull the newer source and publish it over the same folder. The default shell updates with it. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
 
 To uninstall, turn off **Run Winshell when I sign in** in Winshell Settings if you turned it on, close Winshell, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
 

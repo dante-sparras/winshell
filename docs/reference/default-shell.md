@@ -38,7 +38,7 @@ Right-click an empty part of the taskbar for **Taskbar settings**. Search opens 
 
 A popup window over the taskbar, opened by the Start button or the Windows key, on the material chosen in Winshell Settings. It has a search box, the pinned apps, and up to six recommended apps: the ones used most recently that aren't pinned. **All apps** lists every app. Typing searches every app Start lists ([`Apps.search`](winshell-apps.md#apps)). The arrow keys move between apps, Enter opens the selected one, and Escape or the Windows key closes Start.
 
-Pins are in `launcher.json` in the shell's folder. Until you pin or unpin something, Start shows its default pins. Winshell Settings' Start page turns recommended apps off and moves or unpins pins.
+Pins are in `launcher.json` next to the shell's `shell.qml`: for the default shell, `%LOCALAPPDATA%\winshell\default-shell\launcher.json`. Until you pin or unpin something, Start shows its default pins. Winshell Settings' Start page turns recommended apps off and moves or unpins pins.
 
 ## Quick settings
 
@@ -53,7 +53,7 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 ## Notification center and calendar
 
-The clock on the taskbar opens one popup window with the notifications above a month calendar. Notifications are grouped by app; Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
+The clock on the taskbar opens one popup window with the notifications above a month calendar. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
 
 [Windows notifications](../notifications.md#default-notification-center-and-calendar) explains access, grouping, the calendar's regional formats and the keyboard.
 
@@ -72,8 +72,8 @@ A window laid out like Windows 11 Settings, for Winshell's own choices: light or
 | File | Where | What |
 | --- | --- | --- |
 | `preferences.json` | The config folder, `%APPDATA%\winshell` | Winshell Settings' choices |
-| `launcher.json` | The shell's folder | Start pins |
+| `launcher.json` | Next to `shell.qml`: `%LOCALAPPDATA%\winshell\default-shell` for the default shell | Start pins |
 | `taskbar.json` | The shell's data folder, `%LOCALAPPDATA%\winshell\data\by-shell\winshell-default` | Taskbar pins |
 | `quick-settings.json` | The shell's state folder, `%LOCALAPPDATA%\winshell\state\by-shell\winshell-default` | Quick settings tiles and their order |
 
-The data and state folders follow the shell id, which the default shell sets with `//@ pragma ShellId winshell-default`. A copy that keeps that line keeps these files.
+The data and state folders follow the shell id, which the default shell sets with `//@ pragma ShellId winshell-default`, so a copy that keeps that line keeps `taskbar.json` and `quick-settings.json`. `launcher.json` doesn't follow the shell id: it is beside each copy's own `shell.qml`, and copying the folder copies it.

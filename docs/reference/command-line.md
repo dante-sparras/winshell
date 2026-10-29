@@ -25,7 +25,7 @@ winshell ipc listen <target> <signal>
 | `-d`, `--daemonize` | Starts the shell in the background, with no console window, and returns at once. |
 | `-n`, `--no-duplicate` | Does nothing when an instance of this configuration is already running. |
 | `-v`, `--verbose` | Also logs debug messages. |
-| `-V`, `--version` | Prints the version, such as `winshell 0.6.0`, and exits. |
+| `-V`, `--version` | Prints the version, such as `winshell 0.5.0+e8d05d1…` for a build from source, and exits. |
 | `-h`, `--help` | Prints the summary and exits. |
 
 The log goes to the console and to the instance's log file. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.
@@ -47,7 +47,7 @@ The log goes to the console and to the instance's log file. Ctrl+C in the consol
 
 | Command | What it does |
 | --- | --- |
-| `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. |
+| `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. `-a`, `--all` is accepted and does nothing; stopped instances aren't listed. |
 | `winshell kill` | Asks an instance to exit, and prints `Killed <id>`. |
 | `winshell log` | Prints an instance's log. With no instance running, it prints the log of one that has stopped. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions and properties. |
@@ -66,7 +66,9 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | --- | --- |
 | 0 | Done. For a shell, it was stopped. |
 | 1 | No such configuration or instance, an IPC call failed, or the instance couldn't be reached. |
-| 2 | The command or its options couldn't be read. |
+| 2 | An unknown command, an option that needs a value without one, or an `ipc` command missing its arguments. |
+
+`--pid` and `--tail` take a whole number. Anything else ends `winshell` with an unhandled error, not exit code 2 ([#150](https://github.com/dante-sparras/winshell/issues/150)).
 
 ## Environment variables
 
@@ -76,7 +78,7 @@ The default shell has one IPC target, `settings`: `winshell ipc call settings op
 | `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
 | `WINSHELL_NO_RELOAD_POPUP` | `1` is meant to hide a notice about reloads. Winshell has no such notice yet, so it does nothing ([#133](https://github.com/dante-sparras/winshell/issues/133)). |
-| `WINLAND_PIPE` | The named pipe [`Winshell.Winland`](winshell-winland.md) connects to, instead of `winland-<session id>`. |
+| `WINLAND_PIPE` | The named pipe [`Winshell.Winland`](winshell-winland.md) connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 A configuration can set variables for its own process with `//@ pragma Env NAME=value` ([configuration guide](../guide/configuration.md#pragmas)).
 
