@@ -72,7 +72,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     protected void SetText(string value, bool fromUser)
     {
         if (value.Length > _maximumLength)
-            value = value[.._maximumLength];
+            value = TextClusters.Limit(value, _maximumLength);
         if (_text == value)
             return;
         _composition = "";
@@ -103,7 +103,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             return _echoMode switch
             {
                 1 => "",
-                2 or 3 => string.Concat(Enumerable.Repeat(_passwordCharacter, _text.Length)),
+                2 or 3 => Mask(_text),
                 _ => _text,
             };
         }
@@ -154,7 +154,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         get { Track(); return _cursorPosition; }
         set
         {
-            value = Math.Clamp(value, 0, _text.Length);
+            value = TextClusters.Snap(_text, value);
             if (SetField(ref _cursorPosition, value))
             {
                 if (_composition.Length > 0)
@@ -194,7 +194,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public int EchoMode { get { Track(); return _echoMode; } set { if (SetField(ref _echoMode, value)) { NotifyChanged("displayText"); UpdateImplicit(); } } }
 
-    [Qml] public string PasswordCharacter { get { Track(); return _passwordCharacter; } set { if (SetField(ref _passwordCharacter, string.IsNullOrEmpty(value) ? "●" : value[..1])) UpdateImplicit(); } }
+    [Qml] public string PasswordCharacter { get { Track(); return _passwordCharacter; } set { if (SetField(ref _passwordCharacter, string.IsNullOrEmpty(value) ? "●" : TextClusters.First(value))) UpdateImplicit(); } }
 
     [Qml] public int PasswordMaskDelay { get; set; }
 
@@ -299,7 +299,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public void Insert(int position, string text)
     {
-        position = Math.Clamp(position, 0, _text.Length);
+        position = TextClusters.Snap(_text, Math.Clamp(position, 0, _text.Length));
         SetText(_text.Insert(position, text), fromUser: false);
     }
 
@@ -308,6 +308,10 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         start = Math.Clamp(start, 0, _text.Length);
         end = Math.Clamp(end, start, _text.Length);
+        if (start == end)
+            return;
+        start = TextClusters.Snap(_text, start);
+        end = TextClusters.Ceil(_text, end);
         SetText(_text.Remove(start, end - start), fromUser: false);
     }
 
@@ -316,7 +320,9 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         start = Math.Clamp(start, 0, _text.Length);
         end = Math.Clamp(end, start, _text.Length);
-        return _text[start..end];
+        if (start == end)
+            return "";
+        return _text[TextClusters.Snap(_text, start)..TextClusters.Ceil(_text, end)];
     }
 
     [Qml]
@@ -400,8 +406,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private void ClampSelection()
     {
-        _selectionStart = Math.Clamp(_selectionStart, 0, _text.Length);
-        _selectionEnd = Math.Clamp(_selectionEnd, 0, _text.Length);
+        _selectionStart = TextClusters.Snap(_text, _selectionStart);
+        _selectionEnd = TextClusters.Snap(_text, _selectionEnd);
     }
 
     private FontSpec Spec => Font.Spec;
@@ -415,12 +421,34 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         }
     }
 
-    private int Insertion => Math.Clamp(_cursorPosition, 0, DisplayTextRaw.Length);
+    private bool Masked => _echoMode is 2 or 3;
+
+    private string Mask(string text) => TextClusters.Repeat(_passwordCharacter, TextClusters.Count(text));
+
+    /// <summary>A UTF-16 index in the text, as an index into <see cref="DisplayTextRaw"/>.</summary>
+    private int TextToMask(int textIndex)
+    {
+        if (!Masked)
+            return Math.Clamp(textIndex, 0, _text.Length);
+        return TextClusters.CountBefore(_text, textIndex) * _passwordCharacter.Length;
+    }
+
+    /// <summary>An index into the mask, as a UTF-16 index in the text.</summary>
+    private int MaskToText(int maskIndex)
+    {
+        if (!Masked)
+            return Math.Clamp(maskIndex, 0, _text.Length);
+        var unit = Math.Max(1, _passwordCharacter.Length);
+        var element = Math.Clamp(maskIndex, 0, int.MaxValue) / unit;
+        return TextClusters.IndexOfElement(_text, element);
+    }
+
+    private int Insertion => Math.Clamp(TextToMask(_cursorPosition), 0, DisplayTextRaw.Length);
 
     private string DisplayTextRaw => _echoMode switch
     {
         1 => "",
-        2 or 3 => new string(_passwordCharacter[0], _text.Length),
+        2 or 3 => Mask(_text),
         _ => _text,
     };
 
@@ -435,20 +463,20 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private int ToVisual(int index)
     {
-        index = Math.Clamp(index, 0, DisplayTextRaw.Length);
-        if (_composition.Length == 0 || index < Insertion)
-            return index;
-        return index + _composition.Length;
+        var visual = Math.Clamp(TextToMask(index), 0, DisplayTextRaw.Length);
+        if (_composition.Length == 0 || visual < Insertion)
+            return visual;
+        return visual + _composition.Length;
     }
 
     private int FromVisual(int visual)
     {
         var start = Insertion;
         if (_composition.Length == 0)
-            return Math.Clamp(visual, 0, _text.Length);
+            return MaskToText(visual);
         if (visual < start + _composition.Length)
-            return Math.Clamp(_cursorPosition, 0, _text.Length);
-        return Math.Clamp(visual - _composition.Length, 0, _text.Length);
+            return TextClusters.Snap(_text, _cursorPosition);
+        return MaskToText(visual - _composition.Length);
     }
 
     private TextLayout? VisualLayout()
@@ -588,7 +616,9 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         if (room <= 0)
             return;
         if (text.Length > room)
-            text = text[..room];
+            text = TextClusters.Limit(text, room);
+        if (text.Length == 0)
+            return;
         var pos = _cursorPosition;
         SetText(_text.Insert(pos, text), fromUser: true);
         _selectionStart = _selectionEnd = pos + text.Length;
@@ -622,25 +652,27 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private int PreviousWord(int pos)
     {
+        pos = TextClusters.Snap(_text, pos);
         while (pos > 0 && char.IsWhiteSpace(_text[pos - 1]))
-            pos--;
+            pos = TextClusters.Previous(_text, pos);
         while (pos > 0 && !char.IsWhiteSpace(_text[pos - 1]))
-            pos--;
+            pos = TextClusters.Previous(_text, pos);
         return pos;
     }
 
     private int NextWord(int pos)
     {
+        pos = TextClusters.Snap(_text, pos);
         while (pos < _text.Length && !char.IsWhiteSpace(_text[pos]))
-            pos++;
+            pos = TextClusters.Next(_text, pos);
         while (pos < _text.Length && char.IsWhiteSpace(_text[pos]))
-            pos++;
+            pos = TextClusters.Next(_text, pos);
         return pos;
     }
 
     private void MoveCursor(int to, bool select)
     {
-        to = Math.Clamp(to, 0, _text.Length);
+        to = TextClusters.Snap(_text, to);
         if (select)
         {
             if (_selectionStart == _selectionEnd)
@@ -667,13 +699,13 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                 if (!shift && SelectionEnd > SelectionStart)
                     MoveCursor(SelectionStart, false);
                 else
-                    MoveCursor(ctrl ? PreviousWord(_cursorPosition) : _cursorPosition - 1, shift);
+                    MoveCursor(ctrl ? PreviousWord(_cursorPosition) : TextClusters.Previous(_text, _cursorPosition), shift);
                 return true;
             case 0x01000014: // Right
                 if (!shift && SelectionEnd > SelectionStart)
                     MoveCursor(SelectionEnd, false);
                 else
-                    MoveCursor(ctrl ? NextWord(_cursorPosition) : _cursorPosition + 1, shift);
+                    MoveCursor(ctrl ? NextWord(_cursorPosition) : TextClusters.Next(_text, _cursorPosition), shift);
                 return true;
             case 0x01000010: // Home
                 MoveCursor(0, shift);
@@ -686,8 +718,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                     return true;
                 if (!DeleteSelection(true) && _cursorPosition > 0)
                 {
-                    var from = ctrl ? PreviousWord(_cursorPosition) : _cursorPosition - 1;
-                    var at = _cursorPosition;
+                    var at = TextClusters.Snap(_text, _cursorPosition);
+                    var from = ctrl ? PreviousWord(at) : TextClusters.Previous(_text, at);
                     SetText(_text.Remove(from, at - from), true);
                     MoveCursor(from, false);
                 }
@@ -697,9 +729,10 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                     return true;
                 if (!DeleteSelection(true) && _cursorPosition < _text.Length)
                 {
-                    var to = ctrl ? NextWord(_cursorPosition) : _cursorPosition + 1;
-                    SetText(_text.Remove(_cursorPosition, to - _cursorPosition), true);
-                    MoveCursor(_cursorPosition, false);
+                    var at = TextClusters.Snap(_text, _cursorPosition);
+                    var to = ctrl ? NextWord(at) : TextClusters.Next(_text, at);
+                    SetText(_text.Remove(at, to - at), true);
+                    MoveCursor(at, false);
                 }
                 return true;
             case 0x01000004 or 0x01000005: // Return, Enter
