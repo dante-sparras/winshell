@@ -25,7 +25,7 @@ pwsh scripts/dev.ps1
 | --- | --- |
 | `pwsh scripts/dev.ps1` | Clones Quickshell v0.3.2 into `docs/agents/quickshell/` and fetches its manual into `site/` there. |
 | `pwsh scripts/dev.ps1 -Refresh` | Downloads the Quickshell manual again. |
-| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, and the docs site with `--warningsAsErrors`. Then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the check CI runs. |
+| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, and the docs site with `--warningsAsErrors`. Then runs `dotnet test` on that build. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. This is the required `ci` job. It does not run the installer tests, link check, workflow audit or package build. |
 | `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, and the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
 | `pwsh scripts/install.ps1` | Installs the portable build for the current user from a GitHub release into `%LOCALAPPDATA%\Programs\winshell\bin`, adds that folder to the user PATH, and creates a Start menu shortcut. `-Version x.y.z` picks a release; `-AutoStart` registers sign-in. Under `irm \| iex` those are `WINSHELL_VERSION` and `WINSHELL_AUTOSTART`. The Package workflow uploads this script next to the zip. See the [README](https://github.com/dante-sparras/winshell/blob/main/README.md#install-with-powershell). |
 | `pwsh scripts/uninstall.ps1` | Removes that install folder, that PATH entry, that shortcut and that sign-in entry. It leaves `%APPDATA%\winshell`. The Package workflow uploads this script next to `install.ps1`. |
@@ -36,7 +36,19 @@ pwsh scripts/dev.ps1
 | `dotnet tool restore`, then `dotnet docfx docs/docfx.json --serve` | Builds the docs site into `docs/_site/` and serves it at `http://localhost:8080`. See [Docs](#docs). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
-Before opening a PR, run the checks CI runs: `pwsh scripts/check.ps1`.
+Before opening a PR, run `pwsh scripts/check.ps1`. That is the required `ci` job.
+
+These jobs are not inside `check.ps1`. A PR still has to leave them green:
+
+| Job | When it runs | How to run it locally |
+| --- | --- | --- |
+| `installer` | Every pull request, in `ci.yml` | Pester 5.6.1: `Invoke-Pester -Path scripts/Install.Tests.ps1 -CI`, then the same for `scripts/Uninstall.Tests.ps1` and `scripts/PublishRelease.Tests.ps1`. Windows PowerShell 5.1 runs the install and uninstall files again. PSScriptAnalyzer 1.22.0 must report no warning or error on `scripts/install.ps1` and `scripts/uninstall.ps1` (the `PSUseShouldProcessForStateChangingFunctions` rule is excluded, because prompting would break `irm \| iex`). |
+| `links` | Every pull request, in `docs.yml` | lychee 0.24.2 over `docs/**/*.md` and `README.md`, excluding `docs/agents` and `https://about.signpath.io`. |
+| `actionlint` | Pull requests and pushes to `main` that change `.github/` | actionlint on `.github/workflows`. |
+| `zizmor` | The same `.github/` changes | zizmor on `.github`. |
+| `package` | Pushes to `main`, and pull requests that change packaging or the package workflow | `pwsh scripts/package.ps1`. It publishes both architectures and needs the Windows SDK for the MSIX check. |
+
+The docs `build` job is DocFX with warnings as errors, which `check.ps1` already runs. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
 
 ## Environment variables
 

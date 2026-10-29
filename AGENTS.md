@@ -8,7 +8,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
 - xUnit for `tests/`.
-- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1.
+- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`.
 
 ## Project Structure
 
@@ -21,6 +21,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
 │   ├── guide/                       # The docs site's guide section
 │   ├── reference/                   # A page per module, checked against the code by DocsTests
+│   ├── release-notes/               # Notes for a release, once that release exists
+│   ├── security/                    # The threat model
 │   ├── development.md               # Setup, environment, and every command
 │   ├── docfx.json                   # Builds docs/ into the docs site
 │   ├── index.md                     # The docs site's home page
@@ -38,6 +40,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Install.Tests.ps1            # Pester tests for the installer, including a local fake release
 │   ├── Install.TestHelpers.ps1      # Temp profile and fake-release helpers for those tests
 │   ├── package.ps1                  # Builds the portable zips, winget manifests and Store package a release ships
+│   ├── publish-release.ps1          # Uploads the six release assets to a draft and publishes it after the hashes match
+│   ├── PublishRelease.Tests.ps1     # Pester tests for that publisher, with a mocked gh
 │   ├── uninstall.ps1                # Removes the per-user install; published on the release
 │   ├── Uninstall.Tests.ps1          # Pester tests for the uninstaller
 │   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs
@@ -61,7 +65,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Run `pwsh scripts/check.ps1`. Everything must pass.
+- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. It does not run the installer Pester tests, PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`.
+- If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.
 - Added or changed a command, prerequisite, environment variable, or top-level folder? Update [docs/development.md](docs/development.md) or Project Structure.

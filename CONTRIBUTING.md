@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Run the checks CI runs** before you open the PR, and make them pass. The [commands](docs/development.md#commands) are in the runbook.
+**Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the required `ci` job. The [commands](docs/development.md#commands) list the other jobs (`installer`, `links`, `actionlint`, `zizmor`, `package`) and how to run each one locally. Run the ones your change can break.
 
 ## Open a PR
 
