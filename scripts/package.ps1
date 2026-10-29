@@ -5,8 +5,9 @@
 #   pwsh scripts/package.ps1 -Pack            only packs what artifacts/publish/ already has
 #   pwsh scripts/package.ps1 -Verify          only checks what artifacts/ already has
 #
-# Publishing is a self-contained build of src/Winshell for each runtime, so no .NET install is needed. It names
-# -Repository as where the build is released, so it updates itself from that repository's GitHub Releases.
+# Publishing is a self-contained ReadyToRun build of src/Winshell for each runtime, so no .NET install is needed and
+# sign-in does less JIT work. It names -Repository as where the build is released, so it updates itself from
+# that repository's GitHub Releases.
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
 # and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
 # from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
@@ -148,7 +149,7 @@ if ($Publish) {
         $dir = Assert-Inside (Join-Path $publishRoot $rid) $publishRoot
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         dotnet publish (Join-Path $root 'src/Winshell/Winshell.csproj') --nologo -c Release -r $rid --self-contained `
-            "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
+            -p:PublishReadyToRun=true "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
         # SkiaSharp and HarfBuzz ship their native symbols, over 100 MB. Winshell's own symbols stay, for stack traces in logs.
         Get-ChildItem -LiteralPath $dir -Filter 'lib*.pdb' | Remove-Item -Force
@@ -299,8 +300,8 @@ if ($Verify) {
         $dir = Assert-Inside (Join-Path $verifyRoot $rid) $Out
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         [IO.Compression.ZipFile]::ExtractToDirectory($zip, $dir)
-        # The apphost, the runtime and the native drawing libraries are all built for this architecture.
-        foreach ($binary in 'winshell.exe', 'hostfxr.dll', 'coreclr.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll') {
+        # The apphost, the runtime, the native drawing libraries and the ReadyToRun code are all built for this architecture.
+        foreach ($binary in 'winshell.exe', 'hostfxr.dll', 'coreclr.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'winshell.dll', 'Jint.dll') {
             $path = Join-Path $dir $binary
             if (-not (Test-Path -LiteralPath $path)) { throw "$name has no $binary at its root" }
             $bytes = [IO.File]::ReadAllBytes($path)
