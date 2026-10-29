@@ -37,6 +37,10 @@ public class Rectangle : Item
     private double _radius;
     private double? _topLeftRadius, _topRightRadius, _bottomLeftRadius, _bottomRightRadius;
     private Gradient? _gradient;
+    private SKShader? _shader;
+    private double _shaderWidth = double.NaN;
+    private double _shaderHeight = double.NaN;
+    private int _shaderVersion = -1;
 
     public Rectangle()
     {
@@ -88,11 +92,42 @@ public class Rectangle : Item
         {
             if (_gradient == value)
                 return;
+            if (_gradient is not null)
+                _gradient.Changed.Remove(Update);
             _gradient = value;
+            DropShader();
             _gradient?.Changed.Add(Update);
             NotifyChanged("gradient");
             Update();
         }
+    }
+
+    private SKShader ShaderFor(Gradient gradient)
+    {
+        if (_shader is not null && _shaderWidth == Width && _shaderHeight == Height && _shaderVersion == gradient.Version)
+            return _shader;
+        DropShader();
+        _shader = gradient.CreateShader(Width, Height);
+        _shaderWidth = Width;
+        _shaderHeight = Height;
+        _shaderVersion = gradient.Version;
+        return _shader;
+    }
+
+    private void DropShader()
+    {
+        _shader?.Dispose();
+        _shader = null;
+        _shaderVersion = -1;
+    }
+
+    protected override void OnDestroy()
+    {
+        if (_gradient is not null)
+            _gradient.Changed.Remove(Update);
+        _gradient = null;
+        DropShader();
+        base.OnDestroy();
     }
 
     /// <summary>The outline of the rectangle, with its corners.</summary>
@@ -123,7 +158,7 @@ public class Rectangle : Item
         var gradient = _gradient;
         if (gradient is not null && gradient.Stops.Count > 0)
         {
-            fill.Shader = gradient.CreateShader(Width, Height);
+            fill.Shader = ShaderFor(gradient);
         }
         else
         {
@@ -223,8 +258,12 @@ public sealed class Gradient : QObject
 
     internal List<Action> Changed { get; } = [];
 
+    /// <summary>Bumps when stops or orientation change, so a cached shader can tell it is stale.</summary>
+    internal int Version { get; private set; }
+
     internal void Notify()
     {
+        Version++;
         foreach (var c in Changed)
             c();
     }
@@ -245,12 +284,15 @@ public sealed class Gradient : QObject
 
     public SKShader CreateShader(double width, double height)
     {
+        ShaderBuilds++;
         var stops = Stops.Snapshot.OrderBy(s => s.Position).ToArray();
         var colors = stops.Select(s => s.Color.ToSk()).ToArray();
         var positions = stops.Select(s => (float)Math.Clamp(s.Position, 0, 1)).ToArray();
         var end = _orientation == (int)OrientationValue.Horizontal ? new SKPoint((float)width, 0) : new SKPoint(0, (float)height);
         return SKShader.CreateLinearGradient(new SKPoint(0, 0), end, colors, positions, SKShaderTileMode.Clamp);
     }
+
+    internal int ShaderBuilds { get; private set; }
 }
 
 public sealed class GradientStop : QObject

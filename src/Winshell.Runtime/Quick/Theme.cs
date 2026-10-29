@@ -78,6 +78,9 @@ public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors Syste
     /// <summary>Raised when <see cref="Current"/> or <see cref="Choice"/> changes.</summary>
     public static event Action? Changed;
 
+    /// <summary>How many listeners <see cref="Changed"/> has. A destroyed palette must not leave any behind.</summary>
+    internal static int ListenerCount => Changed?.GetInvocationList().Length ?? 0;
+
     /// <summary>
     /// The theme to draw with: what Windows reports, with the shell's <see cref="Choice"/> on top. Setting it
     /// replaces what Windows reports, and the choice still applies.

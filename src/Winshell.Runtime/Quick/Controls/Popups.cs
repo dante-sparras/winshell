@@ -547,11 +547,13 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
             _overlay.Add(this);
             _opened = true;
             Reposition();
-            // A flyout opened from the keyboard takes focus, as in Windows, and gives it back when it closes.
+            // A modal popup takes focus however it was opened, so keys do not fall through to the
+            // field under it. A flyout opened from the keyboard does the same, and gives focus back
+            // when it closes. focus: true focuses the popup item itself.
             var scene = _item.Host as Scene;
             _restoreFocus = scene?.FocusItem;
-            if (scene is { FocusVisible: true })
-                (FocusNavigation.TabStops(_item).FirstOrDefault() ?? _item).ForceActiveFocus();
+            if (_modal || scene is { FocusVisible: true })
+                ItemToFocusOnOpen().ForceActiveFocus();
             else if (_focus)
                 _item.ForceActiveFocus();
             NotifyChanged("opened");
@@ -578,6 +580,9 @@ public class Popup : QObject, IItemContainerChild, IPropertyObserver
             OnClosed();
         }
     }
+
+    /// <summary>The item that receives focus when the popup opens from the keyboard, or because it is modal.</summary>
+    protected virtual Item ItemToFocusOnOpen() => FocusNavigation.TabStops(_item).FirstOrDefault() ?? _item;
 
     protected virtual void OnAboutToShow()
     {
@@ -1235,6 +1240,9 @@ internal sealed class ComboBoxPopup : Popup
     /// <summary>However it is opened, from the box or by <c>popup.open()</c>, the list shows the current rows.</summary>
     protected override void OnAboutToShow() => _box.PrepareRows();
 
+    /// <summary>The current row, not the first one. Arrow keys and Enter then apply to the entry that is shown.</summary>
+    protected override Item ItemToFocusOnOpen() => _box.HighlightedRow() ?? base.ItemToFocusOnOpen();
+
     protected override void OnClosed() => _box.OnPopupClosed();
 }
 
@@ -1755,6 +1763,8 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 
     public bool KeyPress(KeyEvent e)
     {
+        if (IsPopupOpen)
+            return KeyPressOpen(e);
         var alt = (e.Modifiers & QtEnums.AltModifier) != 0;
         switch (e.Key)
         {
@@ -1772,6 +1782,63 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// While the list is open, arrows move the highlight. Enter and Space commit it. They do not
+    /// change the current entry on the way down, and they do not reopen the list.
+    /// </summary>
+    private bool KeyPressOpen(KeyEvent e)
+    {
+        var alt = (e.Modifiers & QtEnums.AltModifier) != 0;
+        switch (e.Key)
+        {
+            case 0x01000013:
+                MoveHighlight(-1);
+                return true;
+            case 0x01000015 when !alt:
+                MoveHighlight(1);
+                return true;
+            case 0x01000015 when alt:
+            case 0x01000033:
+            case 0x01000000:
+                _popup?.Close();
+                return true;
+            case 0x20 or 0x01000004 or 0x01000005:
+                if (!e.IsAutoRepeat)
+                    AcceptHighlight();
+                return true;
+        }
+        return false;
+    }
+
+    private void CloseList() => _popup?.Close();
+
+    private void MoveHighlight(int delta)
+    {
+        if (_rows.Count == 0)
+            return;
+        var start = _highlightedIndex >= 0 ? _highlightedIndex : Math.Max(0, _currentIndex);
+        var next = Math.Clamp(start + delta, 0, _rows.Count - 1);
+        SetHighlighted(next);
+        HighlightedRow()?.ForceActiveFocus();
+    }
+
+    private void AcceptHighlight()
+    {
+        var index = _highlightedIndex >= 0 ? _highlightedIndex : _currentIndex;
+        if (index >= 0)
+            Activate(index);
+        _popup?.Close();
+    }
+
+    internal Item? HighlightedRow()
+    {
+        if (_popup is not ComboBoxPopup popup)
+            return null;
+        var rows = popup.Column.ChildItems;
+        var index = _highlightedIndex >= 0 ? _highlightedIndex : Math.Max(0, _currentIndex);
+        return (uint)index < (uint)rows.Count ? rows[index] : null;
     }
 
     /// <summary>Whether the list is open.</summary>
@@ -1814,5 +1881,22 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         public bool IsCurrent => box.CurrentIndex == index;
 
         protected override bool ShowsSelection => IsCurrent;
+
+        public override bool KeyPress(KeyEvent e)
+        {
+            switch (e.Key)
+            {
+                case 0x01000000:
+                    box.CloseList();
+                    return true;
+                case 0x01000013:
+                    box.MoveHighlight(-1);
+                    return true;
+                case 0x01000015 when (e.Modifiers & QtEnums.AltModifier) == 0:
+                    box.MoveHighlight(1);
+                    return true;
+            }
+            return base.KeyPress(e);
+        }
     }
 }

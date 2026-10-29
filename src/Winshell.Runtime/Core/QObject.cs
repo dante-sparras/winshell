@@ -17,6 +17,8 @@ public interface IPropertyObserver
 public class QObject
 {
     private Dictionary<string, List<IPropertyObserver?>>? _observers;
+    // First registration is the first index, matching a front-to-back search. Compaction rewrites them.
+    private Dictionary<string, Dictionary<IPropertyObserver, Queue<int>>>? _observerIndexes;
     private int _notifyDepth;
     private int _observerHoles;
     private int _observerSlots;
@@ -56,7 +58,7 @@ public class QObject
     public ComponentContext? CreationContext { get; internal set; }
 
     /// <summary>The QML type name, for messages.</summary>
-    public virtual string TypeName => Meta.QmlName;
+    public virtual string TypeName => Engine?.Modules.NameOf(GetType()) ?? GetType().Name;
 
     internal JsValue? Wrapper { get; set; }
 
@@ -117,22 +119,35 @@ public class QObject
     public void AddObserver(string qmlName, IPropertyObserver observer)
     {
         _observers ??= [];
+        _observerIndexes ??= [];
         if (!_observers.TryGetValue(qmlName, out var list))
+        {
             _observers[qmlName] = list = [];
+            _observerIndexes[qmlName] = new Dictionary<IPropertyObserver, Queue<int>>(ReferenceEqualityComparer.Instance);
+        }
+        var slots = _observerIndexes[qmlName];
+        if (!slots.TryGetValue(observer, out var indexes))
+            slots[observer] = indexes = new Queue<int>();
+        indexes.Enqueue(list.Count);
         list.Add(observer);
         _observerSlots++;
     }
 
     public void RemoveObserver(string qmlName, IPropertyObserver observer)
     {
-        if (_observers is null || !_observers.TryGetValue(qmlName, out var list))
+        if (_observers is null || _observerIndexes is null
+            || !_observers.TryGetValue(qmlName, out var list)
+            || !_observerIndexes.TryGetValue(qmlName, out var slots)
+            || !slots.TryGetValue(observer, out var indexes)
+            || indexes.Count == 0)
             return;
-        var index = list.IndexOf(observer);
-        if (index < 0)
+        var index = indexes.Dequeue();
+        if (indexes.Count == 0)
+            slots.Remove(observer);
+        if ((uint)index >= (uint)list.Count)
             return;
         list[index] = null;
         _observerHoles++;
-        // Shifting on every removal is quadratic when a popular property loses many observers.
         // Holes stay until they are half the list, and a notification compacts when it ends.
         if (_notifyDepth == 0 && _observerHoles * 2 >= _observerSlots)
             CompactObservers();
@@ -157,7 +172,7 @@ public class QObject
         if (_observers is null)
             return;
         var slots = 0;
-        foreach (var list in _observers.Values)
+        foreach (var (name, list) in _observers)
         {
             var write = 0;
             for (var read = 0; read < list.Count; read++)
@@ -168,6 +183,17 @@ public class QObject
             if (write < list.Count)
                 list.RemoveRange(write, list.Count - write);
             slots += write;
+            if (_observerIndexes is not null && _observerIndexes.TryGetValue(name, out var indexes))
+            {
+                indexes.Clear();
+                for (var i = 0; i < write; i++)
+                {
+                    var observer = list[i]!;
+                    if (!indexes.TryGetValue(observer, out var queue))
+                        indexes[observer] = queue = new Queue<int>();
+                    queue.Enqueue(i);
+                }
+            }
         }
         _observerSlots = slots;
         _observerHoles = 0;
@@ -477,6 +503,7 @@ public class QObject
                         binding.ForgetDependency(this, property);
             _observers.Clear();
         }
+        _observerIndexes?.Clear();
     }
 
     /// <summary>Releases what the object holds: timers, processes, windows.</summary>
