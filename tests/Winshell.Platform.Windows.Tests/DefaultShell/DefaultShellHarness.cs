@@ -84,9 +84,22 @@ public sealed class DefaultShellHarness : IDisposable
         Settle();
     }
 
-    public void Key(int key)
+    public void Key(int key, int modifiers = 0)
     {
-        Scene.KeyPress(new KeyEvent { Key = key });
+        Scene.KeyPress(new KeyEvent { Key = key, Modifiers = modifiers });
+        Settle();
+    }
+
+    /// <summary>Presses an item at its center, moves to a point in the scene, and lets go there.</summary>
+    public void Drag(Item item, QPoint to, Action? whileHeld = null)
+    {
+        var from = item.MapToScene(item.Width / 2, item.Height / 2);
+        Scene.PointerPress(from.X, from.Y, QtEnums.LeftButton);
+        Scene.PointerMove((from.X + to.X) / 2, (from.Y + to.Y) / 2);
+        Scene.PointerMove(to.X, to.Y);
+        Settle();
+        whileHeld?.Invoke();
+        Scene.PointerRelease(to.X, to.Y, QtEnums.LeftButton);
         Settle();
     }
 

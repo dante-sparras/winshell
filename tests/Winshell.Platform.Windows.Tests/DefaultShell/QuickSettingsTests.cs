@@ -21,6 +21,23 @@ public class QuickSettingsTests
         """;
 
     private const int Escape = 0x01000000;
+    private const int Delete = 0x01000007;
+    private const int Right = 0x01000014;
+    private const int Down = 0x01000015;
+    private const int AltShift = 0x08000000 | 0x02000000;
+
+    private static readonly string[] DefaultTiles = ["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"];
+
+    /// <summary>The content with its layout kept in layout.json in the shell's temporary folder.</summary>
+    private const string Saved = """
+        import Winshell
+        import QtQuick
+        QuickSettingsContent {
+          property int closed: 0
+          layoutPath: Shell.shellDir + "/layout.json"
+          onCloseRequested: closed++
+        }
+        """;
 
     /// <summary>A laptop on Wi-Fi with Bluetooth headphones, a battery and a built-in panel.</summary>
     private static FakeServices Laptop()
@@ -78,7 +95,7 @@ public class QuickSettingsTests
     {
         using var shell = new DefaultShellHarness(Content, services: Laptop());
         Assert.Empty(shell.Messages);
-        Assert.Equal(["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Tiles(shell));
+        Assert.Equal(DefaultTiles, Tiles(shell));
 
         Assert.Equal("Home", Tile(shell, "wifi").ReadProperty("label"));
         Assert.True((bool)Tile(shell, "wifi").ReadProperty("on")!);
@@ -159,6 +176,15 @@ public class QuickSettingsTests
         shell.Click(shell.Find("back"));
         Assert.True(shell.Has("mainPage"));
         Assert.Equal(0, shell.Root.ReadProperty("closed"));
+    }
+
+    [Fact]
+    public void Escape_closes_quick_settings_from_a_focused_tile()
+    {
+        using var shell = new DefaultShellHarness(Content, services: Laptop());
+        Button(shell, "wifi").ForceActiveFocus();
+        shell.Key(Escape);
+        Assert.Equal(1, shell.Root.ReadProperty("closed"));
     }
 
     [Fact]
@@ -305,6 +331,156 @@ public class QuickSettingsTests
         services.Media.Sessions.RemoveAt(0);
         shell.Settle();
         Assert.False(shell.Has("media"));
+    }
+
+    private static string[] SavedTiles(DefaultShellHarness shell) =>
+        System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(shell.Directory, "layout.json")))
+            .RootElement.GetProperty("pinned").EnumerateArray().Select(e => e.GetString()!).ToArray();
+
+    private static DefaultShellHarness Editing(FakeServices? services = null)
+    {
+        var shell = new DefaultShellHarness(Saved, services: services ?? Laptop());
+        shell.Click(shell.Find("edit"));
+        return shell;
+    }
+
+    [Fact]
+    public void Edit_mode_unpins_and_adds_tiles_and_saves_them()
+    {
+        using var shell = Editing();
+        Assert.True((bool)shell.Root.ReadProperty("editing")!);
+        Assert.False(shell.Has("battery"));
+        Assert.False(shell.Has("add:wifi"));
+        Assert.False(shell.Find("add").Enabled);
+
+        // A tile does nothing while it is being edited.
+        shell.Click(Button(shell, "wifi"));
+        Assert.Empty(shell.Urls.Opened);
+
+        shell.Click(DefaultShellHarness.FindAll(Tile(shell, "bluetooth")).Single(i => i.ObjectName == "unpin"));
+        Assert.Equal(["wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Tiles(shell));
+        Assert.Equal(Tiles(shell), SavedTiles(shell));
+
+        shell.Click(shell.Find("add"));
+        Assert.True(shell.Has("addPage"));
+        Assert.Equal("Bluetooth", shell.Find("add:bluetooth").ReadProperty("text"));
+        shell.Click(shell.Find("add:bluetooth"));
+        Assert.True(shell.Has("mainPage"));
+        Assert.Equal(["wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility", "bluetooth"], Tiles(shell));
+        Assert.Equal(Tiles(shell), SavedTiles(shell));
+
+        shell.Click(shell.Find("done"));
+        Assert.False((bool)shell.Root.ReadProperty("editing")!);
+        Assert.True(shell.Has("battery"));
+        Assert.False(shell.Has("unpin"));
+    }
+
+    [Fact]
+    public void Dragging_a_tile_moves_it_to_where_it_is_let_go()
+    {
+        using var shell = Editing();
+        var wifi = Tile(shell, "wifi");
+        var airplane = Button(shell, "airplaneMode");
+        shell.Drag(Button(shell, "wifi"), airplane.MapToScene(80, 24), () =>
+        {
+            Assert.Equal(0.5, wifi.Opacity);
+            Assert.Equal(1, Tile(shell, "airplaneMode").ReadProperty("dropSide"));
+        });
+        Assert.Equal(["bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "nightLight", "accessibility"], Tiles(shell));
+        Assert.Equal(Tiles(shell), SavedTiles(shell));
+        Assert.All(Tiles(shell), t => Assert.Equal(0, Tile(shell, t).ReadProperty("dropSide")));
+
+        // Back to the start of a row, before the tile there.
+        shell.Drag(Button(shell, "nightLight"), Button(shell, "bluetooth").MapToScene(10, 24));
+        Assert.Equal(["nightLight", "bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "accessibility"], Tiles(shell));
+
+        // A press that does not move is not a move.
+        shell.Click(Button(shell, "energySaver"));
+        Assert.Equal(["nightLight", "bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "accessibility"], Tiles(shell));
+        Assert.Empty(shell.Urls.Opened);
+    }
+
+    [Fact]
+    public void Alt_Shift_and_the_arrow_keys_move_the_focused_tile_and_Delete_unpins_it()
+    {
+        using var shell = Editing();
+        Button(shell, "wifi").ForceActiveFocus();
+        shell.Key(Right, AltShift);
+        Assert.Equal(["bluetooth", "wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Tiles(shell));
+        // The keyboard stays on the tile that moved.
+        Assert.True((bool)Button(shell, "wifi").ReadProperty("activeFocus")!);
+
+        shell.Key(Down, AltShift);
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Tiles(shell));
+        Assert.True((bool)Button(shell, "wifi").ReadProperty("activeFocus")!);
+
+        // Without both modifiers an arrow key only moves the focus.
+        shell.Key(Right);
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Tiles(shell));
+
+        Button(shell, "nightLight").ForceActiveFocus();
+        shell.Key(Delete);
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "accessibility"], SavedTiles(shell));
+        // The tile that took its place has the keyboard.
+        Assert.True((bool)Button(shell, "accessibility").ReadProperty("activeFocus")!);
+
+        shell.Key(Escape);
+        Assert.False((bool)shell.Root.ReadProperty("editing")!);
+        Assert.Equal(0, shell.Root.ReadProperty("closed"));
+    }
+
+    [Fact]
+    public void A_saved_layout_is_restored_and_keeps_tiles_this_PC_has_no_hardware_for()
+    {
+        var services = Desktop();
+        var shell = new DefaultShellHarness(Saved, services: services);
+        try
+        {
+            Assert.Equal(["airplaneMode", "energySaver", "nightLight", "accessibility"], Tiles(shell));
+            shell.Click(shell.Find("edit"));
+            shell.Click(DefaultShellHarness.FindAll(Tile(shell, "energySaver")).Single(i => i.ObjectName == "unpin"));
+            // Wi-Fi, Bluetooth and power mode are hidden here, and stay pinned in their places.
+            Assert.Equal(["wifi", "bluetooth", "airplaneMode", "powerMode", "nightLight", "accessibility"], SavedTiles(shell));
+        }
+        finally
+        {
+            shell.Dispose();
+        }
+
+        using var again = new DefaultShellHarness(Saved, services: Laptop());
+        File.WriteAllText(Path.Combine(again.Directory, "layout.json"), """{ "pinned": ["nightLight", "gone", "wifi", 3] }""");
+        again.Root.WriteProperty("layoutPath", "");
+        again.Root.WriteProperty("layoutPath", Path.Combine(again.Directory, "layout.json"));
+        again.Settle();
+        Assert.Equal(["nightLight", "wifi"], Tiles(again));
+        Assert.Empty(again.Messages);
+    }
+
+    [Fact]
+    public void A_layout_file_that_is_not_JSON_leaves_the_default_tiles_and_warns()
+    {
+        using var shell = new DefaultShellHarness(Saved, services: Laptop());
+        File.WriteAllText(Path.Combine(shell.Directory, "broken.json"), "not json");
+        shell.Root.WriteProperty("layoutPath", Path.Combine(shell.Directory, "broken.json"));
+        shell.Settle();
+        Assert.Equal(DefaultTiles, Tiles(shell));
+        Assert.Contains(shell.Messages, m => m.Contains("broken.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Narrator_reads_the_edit_buttons_and_how_to_move_a_tile()
+    {
+        using var shell = Editing();
+        var tree = new AccessibleTree(shell.Scene);
+        tree.Refresh();
+        var wifi = tree.Find(Button(shell, "wifi"))!;
+        Assert.Null(wifi.Toggle);
+        Assert.Equal("Alt+Shift+arrow keys move it, Delete unpins it", wifi.Description);
+        Assert.Equal("Unpin Wi-Fi", tree.Find(DefaultShellHarness.FindAll(Tile(shell, "wifi")).Single(i => i.ObjectName == "unpin"))!.Name);
+        Assert.Equal("Done", tree.Find(shell.Find("done"))!.Name);
+        shell.Click(shell.Find("done"));
+        tree.Refresh();
+        Assert.Equal("Edit quick settings", tree.Find(shell.Find("edit"))!.Name);
     }
 
     [Fact]
