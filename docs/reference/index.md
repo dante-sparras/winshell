@@ -2,6 +2,8 @@
 
 Every type a configuration can use, by module. A module's page lists each type with all of its properties, methods and signals; a test fails when a type or member is missing from it, or when it lists one the type doesn't have. The guide pages linked from each module explain behavior, permissions and limits in more depth.
 
+See also the [command line](command-line.md) and [the default shell](default-shell.md).
+
 | Module | What it has |
 | --- | --- |
 | [Qt Quick](qt-quick.md) | The QML language's own modules: items, controls in the Windows 11 style, layouts, shapes, effects |

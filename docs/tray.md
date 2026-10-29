@@ -38,6 +38,7 @@ Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that
 | `doubleClick()` | A double click at the cursor. Many older apps show their window only for this |
 | `middleClick()` | A middle click at the cursor |
 | `display(window, x, y)` | A right click, which asks the app to open its menu at that point in the window, or at the cursor when `window` is null |
+| `ready()` | Emitted once, just after the icon is added to `items` |
 | `balloon(title, message, icon)` | The app asked for a balloon notification. `icon` is a `BalloonIcon`: `None`, `Info`, `Warning`, `Error`, or `App` for the app's own icon |
 
 `overflow` follows Settings > Personalization > Taskbar > Other system tray icons, and changes as soon as the user flips a switch there. Windows keeps that choice per icon in `HKCU\Control Panel\NotifyIconSettings`. An icon Windows has not stored a choice for yet is in the overflow, as Windows 11 does with a new icon.

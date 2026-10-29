@@ -8,6 +8,9 @@ Winshell is not at 1.0 yet, and a release can still break a configuration. The [
 
 ## Where to go next
 
+- **[Getting started](guide/getting-started.md)**: install Winshell, run the default shell, and find your configuration.
+- **[Configuration guide](guide/configuration.md)**: write a shell of your own, from one panel up.
+- **[Troubleshooting](guide/troubleshooting.md)**: when something doesn't start, show or work.
 - **[Migrating from Quickshell](migrating-from-quickshell.md)**: Quickshell's modules and types, and their Winshell names.
 - **[The taskbar](taskbar.md)** and **[Winshell Settings](settings.md)**: the default shell.
 - **[Reference](reference/index.md)**: every module, type and member a configuration can use.

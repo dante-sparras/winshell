@@ -13,7 +13,7 @@ Both are self-contained: no .NET install is needed. Both update themselves from 
 
 ## Documentation
 
-The [docs](docs/index.md) cover the default shell, the Windows services a configuration can use, and the decisions behind Winshell. To build Winshell from source, see the [development runbook](docs/development.md).
+Start with [Getting started](docs/guide/getting-started.md). The [docs](docs/index.md) also have a configuration guide, troubleshooting, and a reference for every module. To build Winshell from source, see the [development runbook](docs/development.md).
 
 Coming from Quickshell? See [Migrating from Quickshell](docs/migrating-from-quickshell.md).
 
