@@ -860,13 +860,10 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             case ImeSession.WmImeComposition:
                 {
                     var flags = (int)lParam;
-                    var text = "";
-                    if ((flags & (ImeSession.GcsResultStr | ImeSession.GcsCompStr)) != 0)
-                    {
-                        var index = (flags & ImeSession.GcsResultStr) != 0 ? ImeSession.GcsResultStr : ImeSession.GcsCompStr;
-                        text = ImeNative.CompositionString(Handle, index);
-                    }
-                    ApplyIme(scene, _ime.OnComposition(flags, text));
+                    var result = (flags & ImeSession.GcsResultStr) != 0 ? ImeNative.CompositionString(Handle, ImeSession.GcsResultStr) : "";
+                    var composition = (flags & ImeSession.GcsCompStr) != 0 ? ImeNative.CompositionString(Handle, ImeSession.GcsCompStr) : "";
+                    foreach (var action in _ime.ReadComposition(flags, result, composition))
+                        ApplyIme(scene, action);
                     PlaceIme(scene);
                     return 0;
                 }

@@ -63,6 +63,22 @@ internal sealed class ImeSession
         return new ImeAction(ImeActionKind.None, "");
     }
 
+    /// <summary>
+    /// A composition message can carry a committed string and the next preedit together, as the Korean IME does
+    /// at a syllable boundary. The commit is first, then the preedit, so the new composition is not dropped.
+    /// </summary>
+    public ImeAction[] ReadComposition(int flags, string? result, string? composition)
+    {
+        if ((flags & (GcsResultStr | GcsCompStr)) == 0)
+            return [OnComposition(flags, "")];
+        var actions = new List<ImeAction>(2);
+        if ((flags & GcsResultStr) != 0)
+            actions.Add(OnComposition(GcsResultStr, result));
+        if ((flags & GcsCompStr) != 0)
+            actions.Add(OnComposition(GcsCompStr, composition));
+        return [.. actions];
+    }
+
     public ImeAction OnImeChar(char unit)
     {
         if (PendingResult.Length > 0 && PendingResult[0] == unit)
