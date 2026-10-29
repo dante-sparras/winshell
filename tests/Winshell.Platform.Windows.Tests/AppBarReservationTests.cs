@@ -157,6 +157,93 @@ public class AppBarReservationTests
     }
 
     [Fact]
+    public void A_bar_that_leaves_before_the_short_grant_is_observed_is_asked_for_again()
+    {
+        // QUERYPOS keeps offering the whole edge: nothing asks for the short grant in between. The other bar leaves
+        // before the callback from that SETPOS runs.
+        var other = 40;
+        var reservation = new AppBarReservation();
+        var placement = new Placement(reservation, () => Bottom)
+        {
+            Grant = asked => other == 0 ? asked : AboveOther,
+        };
+        placement.Place();
+        Assert.Equal(AboveOther, reservation.Granted);
+        Assert.Equal(1, placement.SetPosCalls);
+
+        other = 0;
+        reservation.NoteExternalChange();
+        placement.Settle();
+        Assert.Equal(Bottom, reservation.Granted);
+        Assert.Equal(2, placement.SetPosCalls);
+        // The full grant's own callback must not ask again.
+        Assert.Equal(0, placement.Settle());
+        Assert.Equal(2, placement.SetPosCalls);
+    }
+
+    [Fact]
+    public void Each_outside_change_asks_once_more_for_a_grant_that_stays_short_and_then_stands()
+    {
+        var reservation = new AppBarReservation();
+        var placement = new Placement(reservation, () => Bottom) { Grant = asked => AboveOther };
+        placement.Place();
+        placement.Settle();
+        Assert.Equal(1, placement.SetPosCalls);
+
+        reservation.NoteExternalChange();
+        placement.Place();
+        placement.Settle();
+        Assert.Equal(AboveOther, reservation.Granted);
+        Assert.Equal(2, placement.SetPosCalls);
+
+        // No further outside change: the short answer stands, and the callback queue stays empty.
+        placement.Place();
+        Assert.Equal(0, placement.Settle());
+        Assert.Equal(2, placement.SetPosCalls);
+    }
+
+    [Fact]
+    public void An_outside_position_notice_is_not_swallowed_by_a_grant_that_did_not_move()
+    {
+        var notices = new AppBarPosNotices();
+        var reservation = new AppBarReservation();
+        reservation.Reserve(Bottom, asked => AboveOther);
+        Assert.Equal(AboveOther, reservation.Granted);
+
+        // Our SETPOS moved the bar, so its own notice is not an outside change.
+        notices.ExpectOwn();
+        notices.Delivered();
+        notices.SetPosReturned(true);
+        Assert.False(notices.TakeExternal());
+
+        // The other bar leaves. That notice is outside, and the same request is asked for again.
+        notices.Delivered();
+        Assert.True(notices.TakeExternal());
+        reservation.NoteExternalChange();
+        var calls = 0;
+        Assert.True(reservation.Reserve(Bottom, asked =>
+        {
+            calls++;
+            return asked;
+        }));
+        Assert.Equal(1, calls);
+        Assert.Equal(Bottom, reservation.Granted);
+
+        // A SETPOS that does not move the bar sends no notice. The next real one is still outside.
+        notices.ExpectOwn();
+        notices.SetPosReturned(false);
+        notices.Delivered();
+        Assert.True(notices.TakeExternal());
+
+        // Removing the bar forgets a pending expectation, so the next reservation starts clean.
+        notices.ExpectOwn();
+        notices.Reset();
+        notices.ExpectOwn();
+        notices.Delivered();
+        Assert.False(notices.TakeExternal());
+    }
+
+    [Fact]
     public void After_the_app_bar_is_removed_the_same_rectangle_is_asked_for_again()
     {
         var explorer = new Explorer();
