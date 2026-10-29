@@ -16,7 +16,10 @@ public interface IPropertyObserver
 [QmlSignal("destroyed")]
 public class QObject
 {
-    private Dictionary<string, List<IPropertyObserver>>? _observers;
+    private Dictionary<string, List<IPropertyObserver?>>? _observers;
+    private int _notifyDepth;
+    private int _observerHoles;
+    private int _observerSlots;
     private Dictionary<string, SignalSlot>? _signals;
     private Dictionary<string, Binding>? _bindings;
     private Dictionary<string, IPropertyInterceptor>? _interceptors;
@@ -92,8 +95,20 @@ public class QObject
             return;
         if (_observers is not null && _observers.TryGetValue(qmlName, out var list) && list.Count > 0)
         {
-            foreach (var observer in list.ToArray())
-                observer.OnPropertyChanged(this, qmlName);
+            // A copy would allocate on every animated change. Holes keep indexes stable while a
+            // callback removes an observer, and the list compacts after the notification.
+            _notifyDepth++;
+            var count = list.Count;
+            try
+            {
+                for (var i = 0; i < count && i < list.Count; i++)
+                    list[i]?.OnPropertyChanged(this, qmlName);
+            }
+            finally
+            {
+                if (--_notifyDepth == 0 && _observerHoles > 0)
+                    CompactObservers();
+            }
         }
         if (_signals is not null && _signals.TryGetValue(qmlName + "Changed", out var slot))
             slot.Emit([]);
@@ -105,17 +120,58 @@ public class QObject
         if (!_observers.TryGetValue(qmlName, out var list))
             _observers[qmlName] = list = [];
         list.Add(observer);
+        _observerSlots++;
     }
 
     public void RemoveObserver(string qmlName, IPropertyObserver observer)
     {
-        if (_observers is not null && _observers.TryGetValue(qmlName, out var list))
-            list.Remove(observer);
+        if (_observers is null || !_observers.TryGetValue(qmlName, out var list))
+            return;
+        var index = list.IndexOf(observer);
+        if (index < 0)
+            return;
+        list[index] = null;
+        _observerHoles++;
+        // Shifting on every removal is quadratic when a popular property loses many observers.
+        // Holes stay until they are half the list, and a notification compacts when it ends.
+        if (_notifyDepth == 0 && _observerHoles * 2 >= _observerSlots)
+            CompactObservers();
     }
 
     /// <summary>How many observers are registered for a property. Tests use this to see that an alias let go.</summary>
-    internal int ObserverCount(string qmlName) =>
-        _observers is not null && _observers.TryGetValue(qmlName, out var list) ? list.Count : 0;
+    internal int ObserverCount(string qmlName)
+    {
+        if (_observers is null || !_observers.TryGetValue(qmlName, out var list))
+            return 0;
+        var count = 0;
+        foreach (var observer in list)
+        {
+            if (observer is not null)
+                count++;
+        }
+        return count;
+    }
+
+    private void CompactObservers()
+    {
+        if (_observers is null)
+            return;
+        var slots = 0;
+        foreach (var list in _observers.Values)
+        {
+            var write = 0;
+            for (var read = 0; read < list.Count; read++)
+            {
+                if (list[read] is { } observer)
+                    list[write++] = observer;
+            }
+            if (write < list.Count)
+                list.RemoveRange(write, list.Count - write);
+            slots += write;
+        }
+        _observerSlots = slots;
+        _observerHoles = 0;
+    }
 
     // Signals
 
