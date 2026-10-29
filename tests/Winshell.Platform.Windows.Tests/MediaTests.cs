@@ -13,7 +13,7 @@ namespace Winshell.Platform.Windows.Tests;
 /// </summary>
 public sealed class MediaTests : IDisposable
 {
-    private readonly string Title = "Winshell probe " + Guid.NewGuid().ToString("N");
+    private readonly string _title = "Winshell probe " + Guid.NewGuid().ToString("N");
 
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
@@ -83,7 +83,14 @@ public sealed class MediaTests : IDisposable
             };
             var updater = controls.DisplayUpdater;
             updater.Type = MediaPlaybackType.Music;
-            updater.MusicProperties.Title = Title;
+            updater.Update();
+            // Session registration is independent of its property events. Let the real consumer subscribe before
+            // publishing the one metadata/art update, just as the timeline below is published after discovery.
+            var appId = Path.GetFileName(Environment.ProcessPath);
+            Assert.True(await WaitUntil(() => media.Sessions.Values.OfType<MediaSession>()
+                .Any(s => string.Equals(s.AppId, appId, StringComparison.OrdinalIgnoreCase))),
+                "Windows did not register this process's probe session.");
+            updater.MusicProperties.Title = _title;
             updater.MusicProperties.Artist = "Winshell";
             updater.MusicProperties.AlbumTitle = "Live";
             updater.MusicProperties.AlbumArtist = "Winshell";
@@ -93,6 +100,8 @@ public sealed class MediaTests : IDisposable
 
             var session = await WaitForSession(media);
             Assert.NotNull(session);
+            Assert.True(await WaitUntil(() => session.TrackArtUrl.Length > 0),
+                "The probe's metadata arrived without its artwork.");
             // Windows publishes metadata/art and the timeline independently. Publish the timeline only after
             // discovery so this test always exercises the later timeline event instead of depending on a race.
             Assert.False(session.LengthSupported);
@@ -107,13 +116,13 @@ public sealed class MediaTests : IDisposable
             Assert.True(await WaitUntil(() => session.LengthSupported && session.PlaybackState == 1),
                 "The discovered session did not receive its timeline and playing state.");
             _output.WriteLine($"session: {session.AppName} ({session.AppId}) state {session.PlaybackState} art {session.TrackArtUrl}");
-            Assert.Equal(Title, session.TrackTitle);
+            Assert.Equal(_title, session.TrackTitle);
             Assert.Equal("Winshell", session.TrackArtist);
             Assert.Equal("Live", session.TrackAlbum);
             Assert.Equal("Winshell", session.TrackAlbumArtist);
             Assert.False(string.IsNullOrWhiteSpace(session.AppName));
             var metadata = session.Metadata;
-            Assert.Equal(Title, metadata["title"] as string);
+            Assert.Equal(_title, metadata["title"] as string);
             Assert.Equal("Winshell", metadata["artist"] as string);
             Assert.Equal("Live", metadata["album"] as string);
             Assert.Equal(125d, metadata["duration"]);
@@ -146,7 +155,7 @@ public sealed class MediaTests : IDisposable
         MediaSession? session = null;
         await WaitUntil(() =>
         {
-            session = media.Sessions.Values.OfType<MediaSession>().FirstOrDefault(s => s.TrackTitle == Title && s.TrackArtUrl.Length > 0);
+            session = media.Sessions.Values.OfType<MediaSession>().FirstOrDefault(s => s.TrackTitle == _title);
             return session is not null;
         });
         return session;
