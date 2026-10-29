@@ -115,4 +115,7 @@ public sealed class ModuleRegistry
     public bool TryGetModule(string name, out QmlModule module) => _modules.TryGetValue(name, out module!);
 
     public IEnumerable<QmlModule> All => _modules.Values;
+
+    /// <summary>Set by the visual modules: makes an item the visual child of another. Each registry has its own.</summary>
+    internal Func<QObject, QObject, bool>? VisualParent { get; set; }
 }

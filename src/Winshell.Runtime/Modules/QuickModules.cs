@@ -64,8 +64,8 @@ public static partial class StandardModules
             .Type<StackLayout>("StackLayout")
             .Uncreatable<LayoutAttached>("Layout", "Layout is only available via attached properties", attached: o => new LayoutAttached(o), attachedType: typeof(LayoutAttached));
 
-        // Parenting a created object to an item makes it a visual child.
-        QmlParenting.VisualParent = (child, parent) =>
+        // Parenting a created object to an item makes it a visual child. The rule belongs to this registry.
+        registry.VisualParent = (child, parent) =>
         {
             if (child is Item item && parent is Item parentItem)
             {

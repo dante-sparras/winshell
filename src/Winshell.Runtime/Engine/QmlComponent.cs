@@ -138,12 +138,9 @@ public sealed class QmlComponent : QObject
 /// <summary>Lets the visual layer decide what a parent means for a created object.</summary>
 public static class QmlParenting
 {
-    /// <summary>Set by the visual layer: makes an item the visual child of another.</summary>
-    public static Func<QObject, QObject, bool>? VisualParent { get; set; }
-
     public static void SetParent(QObject child, QObject parent)
     {
-        if (VisualParent?.Invoke(child, parent) == true)
+        if (child.Engine?.Modules.VisualParent?.Invoke(child, parent) == true)
             return;
         child.SetOwner(parent);
     }

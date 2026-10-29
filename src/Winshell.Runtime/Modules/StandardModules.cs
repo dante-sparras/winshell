@@ -5,8 +5,11 @@ namespace Winshell.Runtime;
 /// <summary>Registers the built-in QML modules.</summary>
 public static partial class StandardModules
 {
-    /// <summary>Extra registrations, such as the platform's modules, run after the built-in ones.</summary>
-    public static event Action<ModuleRegistry>? Registering;
+    /// <summary>
+    /// One extra registration, such as the platform's modules, run after the built-in ones.
+    /// Assigning replaces the previous action, so repeated installs do not stack.
+    /// </summary>
+    public static Action<ModuleRegistry>? ExtraModules { get; set; }
 
     public static ModuleRegistry Create()
     {
@@ -15,7 +18,7 @@ public static partial class StandardModules
         RegisterQtQml(registry.Module("QtQml.Models"));
         RegisterQuick(registry);
         RegisterShell(registry);
-        Registering?.Invoke(registry);
+        ExtraModules?.Invoke(registry);
         return registry;
     }
 

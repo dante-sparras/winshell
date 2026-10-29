@@ -233,7 +233,7 @@ public static class WindowsModules
         if (_installed)
             return;
         _installed = true;
-        StandardModules.Registering += registry =>
+        StandardModules.ExtraModules = registry =>
         {
             Register(registry);
             ServiceModules.Register(registry);
