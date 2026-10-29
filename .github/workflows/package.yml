@@ -1,0 +1,128 @@
+name: Package
+
+# Builds and verifies what a release ships with scripts/package.ps1: on PRs that change packaging or the release
+# workflow, and on every push to main, so a broken package shows before a release. release-please.yml calls it for a
+# new release, and it can be run by hand for a release that exists already; both upload to that release.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package.yml"
+      - ".github/workflows/release-please.yml"
+      - ".release-please-manifest.json"
+      - "scripts/package.ps1"
+      - "src/Winshell/Winshell.csproj"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+  push:
+    branches:
+      - main
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to build and upload to.
+        type: string
+        required: true
+    secrets:
+      WINGET_TOKEN:
+        required: false
+  # Repairs a release that exists but has no files, such as after a full re-run of Release Please, which skips
+  # packaging once the release is there. See docs/development.md#releasing.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The existing release tag to build and upload to, such as v1.2.3.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: package
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # A release builds its tagged commit, not whatever commit started this run.
+          ref: ${{ inputs.tag || github.sha }}
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build and verify the packages
+        shell: pwsh
+        env:
+          # Empty outside a release. For a release, the script stops unless the checkout is that version.
+          TAG: ${{ inputs.tag }}
+        run: pwsh scripts/package.ps1 -Out "$env:RUNNER_TEMP/artifacts" -Tag $env:TAG
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: |
+            ${{ runner.temp }}/artifacts/*.zip
+            ${{ runner.temp }}/artifacts/SHA256SUMS.txt
+            ${{ runner.temp }}/artifacts/winget/
+          if-no-files-found: error
+
+  release:
+    name: release
+    if: ${{ inputs.tag != '' }}
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # uploads to the release
+    concurrency:
+      group: package-release-${{ inputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - name: Upload to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          # Fails unless the release exists.
+          $release = gh api "repos/$env:GH_REPO/releases/tags/$env:TAG" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "No release $env:TAG" }
+          # A file already on the release stays: winget and users may hold its hash. The same bytes are skipped, and
+          # different bytes stop the upload rather than replace it.
+          foreach ($file in Get-ChildItem packages -File) {
+            $hash = 'sha256:' + (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $existing = @($release.assets | Where-Object name -eq $file.Name)
+            if ($existing.Count -gt 0) {
+              if ($existing[0].digest -ne $hash) { throw "$($file.Name) is on $env:TAG already as $($existing[0].digest), and this build is $hash. Leaving it." }
+              Write-Output "$($file.Name) is on $env:TAG already, with the same hash."
+              continue
+            }
+            gh release upload $env:TAG $file.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Submit to winget
+        shell: pwsh
+        env:
+          # A classic token with public_repo, from the account that forks microsoft/winget-pkgs. Without it, the
+          # manifests stay on the release for a manual wingetcreate submit.
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          # scripts/package.ps1 validates the manifests with the WinGetUtil.dll this version is built with.
+          WINGETCREATE_URL: https://github.com/microsoft/winget-create/releases/download/v1.12.13.0/wingetcreate.exe
+          WINGETCREATE_SHA256: 24042BD37915805615E6CF969AC57C6439124C3FE85823327F5F3FB24BD9FFEA
+        run: |
+          if (-not $env:WINGET_TOKEN) {
+            Write-Output 'No WINGET_TOKEN secret: the manifests are on the release, not submitted.'
+            exit 0
+          }
+          $exe = Join-Path $env:RUNNER_TEMP 'wingetcreate.exe'
+          Invoke-WebRequest $env:WINGETCREATE_URL -OutFile $exe
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne $env:WINGETCREATE_SHA256) { throw 'wingetcreate.exe does not have the pinned hash' }
+          $manifests = Get-ChildItem packages/winget -Directory | Select-Object -First 1
+          & $exe submit --token $env:WINGET_TOKEN --prtitle "New version: DanteSparras.Winshell $($manifests.Name)" $manifests.FullName
+          exit $LASTEXITCODE
