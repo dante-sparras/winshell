@@ -55,7 +55,8 @@ var settings = [
   { key: "winshellUpdates", page: "about", glyph: "\uE895", title: "Winshell updates", description: "", keywords: "update upgrade new version download restart check" },
   { key: "autoUpdate", page: "about", glyph: "\uE896", title: "Get Winshell updates automatically", description: "Download a new version in the background. It installs when Winshell next starts.", keywords: "update upgrade automatic download" },
   { key: "configFolder", page: "about", glyph: "\uE8B7", title: "Config folder", description: "", keywords: "configuration folder appdata files preferences" },
-  { key: "log", page: "about", glyph: "\uE9F9", title: "Log", description: "What this instance of Winshell reported", keywords: "logs log file errors debug" }
+  { key: "log", page: "about", glyph: "\uE9F9", title: "Log", description: "What this instance of Winshell reported", keywords: "logs log file errors debug" },
+  { key: "diagnostics", page: "about", glyph: "\uE9D9", title: "Diagnostics", description: "Check how this PC is set up for Winshell, as winshell doctor does", keywords: "doctor troubleshoot problems check setup crash reports" }
 ]
 
 // The quick settings tiles, as QuickSettingsContent names them, in its default order.

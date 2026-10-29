@@ -14,6 +14,8 @@
     href: ../settings.md
   - name: Updates
     href: ../updates.md
+- name: winshell doctor
+  href: ../doctor.md
 - name: Windows services
   items:
   - name: Notifications
