@@ -1,6 +1,7 @@
 //@ pragma ShellId winshell-default
 import Winshell
 import Winshell.Input
+import Winshell.Io
 import Winshell.Notifications
 import QtQuick
 // Winshell's default shell. Copy this folder to %APPDATA%\winshell to make it your own. Winshell Settings
@@ -87,11 +88,29 @@ ShellRoot {
   NotificationListener { id: notifications }
   TaskbarPins { id: taskbarPins }
 
-  SettingsWindow {
+  // Winshell Settings is built on its first open, so its pages, files and bindings cost nothing until then.
+  // It stays built after that, and the next open brings it back as it was.
+  LazyLoader {
     id: settings
-    notificationListener: notifications
-    startHotkey: startKey
-    settingsHotkey: settingsKey
+
+    function open(key) {
+      settings.active = true
+      settings.item.open(key)
+    }
+
+    SettingsWindow {
+      notificationListener: notifications
+      startHotkey: startKey
+      settingsHotkey: settingsKey
+    }
+  }
+
+  IpcHandler {
+    target: "settings"
+
+    function open(page: string): void {
+      settings.open(page)
+    }
   }
 
   Variants {

@@ -1,6 +1,5 @@
 import Winshell
 import Winshell.Apps
-import Winshell.Io
 import QtQuick
 import "settings.js" as Settings
 
@@ -37,13 +36,5 @@ FloatingWindow {
     pinsPath: Shell.configPath("launcher.toml")
     tilesPath: Shell.statePath("quick-settings.toml")
     showIcons: root.visible
-  }
-
-  IpcHandler {
-    target: "settings"
-
-    function open(page: string): void {
-      root.open(page)
-    }
   }
 }
