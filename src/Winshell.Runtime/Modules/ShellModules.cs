@@ -19,6 +19,8 @@ public static partial class StandardModules
             .Type<LazyLoader>("LazyLoader")
             .Type<PersistentProperties>("PersistentProperties")
             .Type<SystemClock>("SystemClock")
+            .Type<CalendarMonth>("CalendarMonth")
+            .Uncreatable<CalendarDay>("CalendarDay")
             .Type<EasingCurve>("EasingCurve")
             .Type<ColorQuantizer>("ColorQuantizer")
             .Type<TransformWatcher>("TransformWatcher")

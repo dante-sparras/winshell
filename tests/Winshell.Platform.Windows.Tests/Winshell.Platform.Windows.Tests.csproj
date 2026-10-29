@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <Content Include="..\..\src\Winshell\DefaultShell\*.qml" Link="NotificationSurface\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\Winshell.Platform.Windows\Winshell.Platform.Windows.csproj" />
   </ItemGroup>
   <ItemGroup>

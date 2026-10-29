@@ -114,6 +114,41 @@ public class NotificationTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Group_dismissal_clears_only_that_app_and_clear_all_removes_the_rest()
+    {
+        var backend = new FakeBackend();
+        var listener = new NotificationListener(backend);
+        listener.Apply(Snapshot(Toast(1), Toast(2), Toast(3, "Other.App")));
+        var group = listener.Groups.Rows.Cast<NotificationGroup>().Single(g => g.AppId == "Mail.App");
+        Assert.True(group.Dismiss());
+        Assert.True(group.IsDestroyed);
+        Assert.False(group.Dismiss());
+        Assert.Equal(3, Item(listener).Id);
+        Assert.True(listener.ClearAll());
+        Assert.Empty(listener.Groups.Rows);
+        Assert.Equal(new uint[] { 1, 2, 3 }, backend.Dismissed.Order());
+        Assert.True(listener.ClearAll());
+        listener.Destroy();
+    }
+
+    [Fact]
+    public void Clear_all_preserves_failed_items_and_reports_failure_even_after_later_success()
+    {
+        var backend = new FakeBackend { FailedId = 2 };
+        var listener = new NotificationListener(backend);
+        listener.Apply(Snapshot(Toast(1), Toast(2), Toast(3)));
+        Assert.False(listener.ClearAll());
+        Assert.Equal(2, Item(listener).Id);
+        Assert.Equal("Removal failed", listener.Error);
+        backend.FailedId = null;
+        Assert.True(listener.ClearAll());
+        Assert.Equal("", listener.Error);
+        Assert.Empty(listener.Notifications.Rows);
+        listener.Destroy();
+        Assert.False(listener.ClearAll());
+    }
+
+    [Fact]
     public void Unsupported_activation_is_explicit_and_does_not_dismiss_or_launch_an_app()
     {
         var backend = new FakeBackend();
@@ -363,8 +398,10 @@ public class NotificationTests(ITestOutputHelper output)
         public Task<NotificationSnapshot> ReadAsync() => Read;
         public void Dismiss(uint id)
         {
+            if (id == FailedId) throw new UnauthorizedAccessException("Removal failed");
             if (DismissError is { } error) throw error;
             Dismissed.Add(id);
         }
+        public uint? FailedId { get; set; }
     }
 }
