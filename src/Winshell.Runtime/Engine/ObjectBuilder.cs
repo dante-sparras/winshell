@@ -116,7 +116,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                     AssignValue(obj, obj, p.Name, value, context, doc, p.Location);
                     break;
                 case QmlChildObject child:
-                    AppendDefault(obj, child.Object, context, doc);
+                    AppendDefault(obj, child.Object, context, doc, node);
                     break;
                 case QmlAssignment a:
                     AssignPath(obj, a.Name, a.Value, context, doc, a.Location);
@@ -277,9 +277,15 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
         }
     }
 
-    private void AppendDefault(QObject obj, QmlObjectNode childNode, ComponentContext context, QmlDocument doc)
+    /// <summary>
+    /// Adds a child object to the default property. A default property the same object declares is for the documents
+    /// that use it: the object's own children go to the default property it had before, as in Qt, so
+    /// <c>default property alias content: row.data</c> does not take the children that make up <c>row</c>.
+    /// </summary>
+    private void AppendDefault(QObject obj, QmlObjectNode childNode, ComponentContext context, QmlDocument doc, QmlObjectNode declaredBy)
     {
-        var defaultName = obj.DynamicProperties.FirstOrDefault(p => p.IsDefault)?.Name ?? obj.Meta.DefaultProperty
+        var own = declaredBy.Members.OfType<QmlPropertyDeclaration>().Where(p => p.IsDefault).Select(p => p.Name).ToHashSet();
+        var defaultName = obj.DynamicProperties.FirstOrDefault(p => p.IsDefault && !own.Contains(p.Name))?.Name ?? obj.Meta.DefaultProperty
             ?? throw new QmlCompileException($"Cannot assign to non-existent default property of {obj.TypeName}", childNode.Location);
 
         if (IsComponentProperty(obj, defaultName))
