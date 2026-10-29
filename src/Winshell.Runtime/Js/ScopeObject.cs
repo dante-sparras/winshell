@@ -137,14 +137,24 @@ public sealed class ScopeObject : ObjectInstance
         {
             if (ctx.TryGetId(name, out _))
                 throw new JavaScriptException(Engine.Intrinsics.TypeError, $"Invalid write to id \"{name}\"");
+            // Same order as TryResolve: a context property hides an object property of the same name.
+            if (ctx.HasContextProperty(name))
+            {
+                ctx.SetContextProperty(name, ValueConverter.FromJs(value));
+                return true;
+            }
             if (first && _scopeObject is not null && _scopeObject.HasProperty(name))
             {
+                if (_scopeObject.IsDestroyed)
+                    return false;
                 _runtime.AssignProperty(_scopeObject, name, value);
                 return true;
             }
             first = false;
             if (ctx.ContextObject is { } root && root.HasProperty(name))
             {
+                if (root.IsDestroyed)
+                    return false;
                 _runtime.AssignProperty(root, name, value);
                 return true;
             }
