@@ -493,7 +493,7 @@ namespace Winshell
             var dir = Instances.DirOf(id);
             Directory.CreateDirectory(dir);
             var logPath = System.IO.Path.Combine(dir, "log.txt");
-            var logFile = new StreamWriter(logPath, append: true) { AutoFlush = true };
+            var instanceLog = new InstanceLog(logPath);
             // Objects with no engine log through Log.Default. That is this process's log.
             var log = Log.Default;
             log.MinimumLevel = o.Verbose ? LogLevel.Debug : LogLevel.Info;
@@ -516,7 +516,7 @@ namespace Winshell
                     try
                     {
                         if (!logClosed)
-                            logFile.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {line}");
+                            instanceLog.Write(level, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {line}");
                     }
                     catch (Exception e) when (e is IOException or ObjectDisposedException)
                     {
@@ -678,7 +678,7 @@ namespace Winshell
                 lock (consoleLock)
                 {
                     logClosed = true;
-                    logFile.Dispose();
+                    instanceLog.Dispose();
                 }
             }
             return code;
