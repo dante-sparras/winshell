@@ -37,6 +37,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private readonly SemaphoreSlim _readGate = new(1, 1);
     private readonly Dictionary<string, BluetoothEndpointInfo> _nearby = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DeviceInformation> _pairingEndpoints = new(StringComparer.Ordinal);
+    private readonly Dictionary<DeviceInformation, List<DeviceInformationUpdate>> _pairingUpdates = new(ReferenceEqualityComparer.Instance);
     private readonly List<DeviceWatcher> _watchers = [];
     private readonly Dictionary<Guid, (double? Level, DateTimeOffset Read)> _batteries = [];
     private string? _adapterId;
@@ -200,8 +201,13 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             lock (_lock)
             {
                 if (_disposed || !_watchers.Contains(watcher) || !entries.TryGetValue(update.Id, out var info)) return;
-                info.Update(update);
-                _nearby[info.Id] = ReadEndpoint(info);
+                if (_pairingUpdates.TryGetValue(info, out var pending))
+                    pending.Add(update);
+                else
+                {
+                    info.Update(update);
+                    _nearby[info.Id] = ReadEndpoint(info);
+                }
             }
         };
         watcher.Removed += (_, update) =>
@@ -258,16 +264,35 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     public async Task<string?> PairAsync(string id, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        DeviceInformation? info;
-        lock (_lock) _pairingEndpoints.TryGetValue(id, out info);
-        if (info is null) return "The device is no longer available.";
-        if (info.Pairing.IsPaired) return null;
-        if (!info.Pairing.CanPair) return "Windows reports that this device cannot be paired.";
-        // Start on the caller's UI thread, using the endpoint already supplied by discovery. An
-        // asynchronous lookup here would move the consent call off that thread. Basic pairing lets
-        // Windows perform the consent/PIN ceremony; never auto-accept PIN matches.
-        var result = await info.Pairing.PairAsync().AsTask(cancellation).ConfigureAwait(false);
-        return PairingError(result.Status);
+        DeviceInformation info;
+        lock (_lock)
+        {
+            if (!_pairingEndpoints.TryGetValue(id, out info!)) return "The device is no longer available.";
+            if (_pairingUpdates.ContainsKey(info)) return "Pairing is already in progress.";
+            _pairingUpdates.Add(info, []);
+        }
+        try
+        {
+            if (info.Pairing.IsPaired) return null;
+            if (!info.Pairing.CanPair) return "Windows reports that this device cannot be paired.";
+            // Start consent on the caller's UI thread. The watcher defers updates to this object
+            // until the WinRT pairing operation has finished, including cancellation or failure.
+            var result = await info.Pairing.PairAsync().AsTask(cancellation).ConfigureAwait(false);
+            return PairingError(result.Status);
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                var pending = _pairingUpdates[info];
+                _pairingUpdates.Remove(info);
+                if (!_disposed && _pairingEndpoints.TryGetValue(id, out var current) && ReferenceEquals(current, info))
+                {
+                    foreach (var update in pending) info.Update(update);
+                    _nearby[id] = ReadEndpoint(info);
+                }
+            }
+        }
     }
 
     public async Task<string?> UnpairAsync(string id)
