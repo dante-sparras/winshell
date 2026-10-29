@@ -182,8 +182,9 @@ public sealed class ImportScope
             value = JsValue.Undefined;
             return false;
         }
-        value = TypeValue(type, scopeObject);
-        Remember(name, scopeObject, value, perScopeObject: type is NativeTypeRef { Entry: { Singleton: null, Attached: not null } });
+        var perScopeObject = type is NativeTypeRef { Entry: { Singleton: null, Attached: not null } };
+        value = TypeValue(type, perScopeObject ? scopeObject : null);
+        Remember(name, scopeObject, value, perScopeObject);
         return true;
     }
 
