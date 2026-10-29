@@ -108,6 +108,9 @@ public sealed class ShellHost : IShellHost, IDisposable
 
     public string ShellDir { get; }
 
+    /// <summary>The configuration's root file, its <c>shell.qml</c>.</summary>
+    public string RootFile => _rootFile;
+
     public string DataDir { get; }
 
     public string StateDir { get; }
@@ -168,6 +171,8 @@ public sealed class ShellHost : IShellHost, IDisposable
     {
         if (_disposed)
             return false;
+        // Each load starts with the popup allowed; the old generation's reloadFailed handler can inhibit it.
+        _inhibitPopup = false;
         var oldEngine = _engine;
         var oldRoot = _root;
         var engine = new QmlEngine(_modules(), _loop, Log, ShellDir);
@@ -206,7 +211,6 @@ public sealed class ShellHost : IShellHost, IDisposable
         _engine = engine;
         _root = root;
         Ipc = ipc;
-        _inhibitPopup = false;
         // Hand the old objects to the new ones, then end the reload stage. The new generation exists by now, so a
         // failure here is reported and the shell goes on with it.
         try

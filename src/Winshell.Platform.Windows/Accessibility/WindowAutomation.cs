@@ -22,6 +22,7 @@ internal sealed class WindowAutomation : IDisposable
     private readonly Log _log;
     private readonly int _thread = Environment.CurrentManagedThreadId;
     private readonly Dictionary<AccessibleNode, UiaElement> _elements = [];
+    private readonly HashSet<AccessibleNode> _announced = [];
     private AccessibleTree? _tree;
     private bool _stale;
     private bool _focusPending;
@@ -36,6 +37,13 @@ internal sealed class WindowAutomation : IDisposable
     }
 
     public nint Handle => _window.Handle;
+
+    /// <summary>Whether any UI Automation client listens. Tests replace it.</summary>
+    internal Func<bool> Listening { get; set; } = Uia.UiaClientsAreListening;
+
+    /// <summary>Speaks a notification's text through a screen reader. Tests replace it.</summary>
+    internal Action<UiaElement, string> Announce { get; set; } = (element, text) =>
+        Uia.UiaRaiseNotificationEvent(element, Uia.NotificationKindOther, Uia.NotificationProcessingImportantMostRecent, text, "Winshell.Notification");
 
     /// <summary>The provider a client gets for an item, or null when the item is not exposed.</summary>
     internal UiaElement? ElementFor(Item item) => Tree.Find(item) is { } node ? For(node) : null;
@@ -181,11 +189,42 @@ internal sealed class WindowAutomation : IDisposable
     public void AfterFrame()
     {
         if (_tree is null)
+        {
+            // No client has asked for this window yet, but one that listens still hears a notification it shows:
+            // a notification does not take focus, so nothing else would bring a screen reader to it.
+            if (Listening() && ShowsNotification(_scene.Root))
+                Sync();
             return;
-        if (Uia.UiaClientsAreListening())
+        }
+        if (Listening())
             Sync();
         else
             _stale = true;
+    }
+
+    private static bool ShowsNotification(Item item)
+    {
+        foreach (var child in item.ChildItems)
+        {
+            if (!child.IsVisibleFlag || child.Opacity <= 0)
+                continue;
+            if (child.FindAttached(typeof(AccessibleAttached)) is AccessibleAttached { Role: (int)Role.Notification })
+                return true;
+            if (ShowsNotification(child))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Speaks each notification once, when it first shows with its text.</summary>
+    private void AnnounceNotifications(AccessibleNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Role == Role.Notification && child.Name.Length > 0 && _announced.Add(child))
+                Announce(For(child), child.Name);
+            AnnounceNotifications(child);
+        }
     }
 
     private void OnFocusChanged(Item? item)
@@ -200,7 +239,7 @@ internal sealed class WindowAutomation : IDisposable
             if (_tree is null || Handle == 0)
                 return;
             Sync();
-            if (Uia.UiaClientsAreListening() && FocusedElement is { } focused)
+            if (Listening() && FocusedElement is { } focused)
                 Uia.UiaRaiseAutomationEvent(focused, Uia.FocusChangedEvent);
         });
     }
@@ -209,11 +248,12 @@ internal sealed class WindowAutomation : IDisposable
     {
         _stale = false;
         var changes = Tree.Refresh();
-        var listening = changes.Count > 0 && Uia.UiaClientsAreListening();
+        var listening = Listening();
         foreach (var change in changes)
         {
             if (change.Kind == AccessibleChangeKind.Removed)
             {
+                _announced.Remove(change.Node);
                 if (_elements.Remove(change.Node, out var gone) && listening)
                     Uia.UiaDisconnectProvider(gone);
                 continue;
@@ -221,6 +261,8 @@ internal sealed class WindowAutomation : IDisposable
             if (listening)
                 Raise(change);
         }
+        if (listening)
+            AnnounceNotifications(Tree.Root);
     }
 
     private void Raise(AccessibleChange change)
@@ -264,7 +306,7 @@ internal sealed class WindowAutomation : IDisposable
 
     public void Raise(AccessibleNode node, int eventId)
     {
-        if (node.IsAlive && Uia.UiaClientsAreListening())
+        if (node.IsAlive && Listening())
             Uia.UiaRaiseAutomationEvent(For(node), eventId);
     }
 

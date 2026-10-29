@@ -6,8 +6,18 @@ using System.Text.RegularExpressions;
 
 namespace Winshell.Runtime.Shell;
 
-/// <summary>A crash report on disk, and what it is about.</summary>
-public sealed record CrashReport(string Path, string Where, Exception Error, bool Fatal);
+/// <summary>
+/// A crash report on disk, and what it is about. A window's report also names the window for a person,
+/// <see cref="Subject"/>, and says what Winshell did about it, <see cref="Recovery"/>.
+/// </summary>
+public sealed record CrashReport(string Path, string Where, Exception Error, bool Fatal)
+{
+    /// <summary>What failed, as a sentence names it: "the taskbar", "Winshell Settings", "a window". Empty when it is not a window.</summary>
+    public string Subject { get; init; } = "";
+
+    /// <summary>What Winshell did about it, such as "Winshell opens it again in 1 second." Empty when nothing.</summary>
+    public string Recovery { get; init; } = "";
+}
 
 /// <summary>
 /// Writes crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent anywhere.
@@ -49,11 +59,11 @@ public sealed partial class CrashReports(string folder)
     /// Writes a report. Returns null when the folder cannot be written. Nothing it does throws: it runs when
     /// something else already failed, sometimes as the process ends.
     /// </summary>
-    public CrashReport? Write(string where, Exception error, bool fatal = false)
+    public CrashReport? Write(string where, Exception error, bool fatal = false, string subject = "", string recovery = "")
     {
         CrashReport? report;
         lock (_lock)
-            report = WriteLocked(where, error, fatal);
+            report = WriteLocked(where, error, fatal, subject, recovery);
         Raise(report);
         return report;
     }
@@ -71,7 +81,7 @@ public sealed partial class CrashReports(string folder)
             var fingerprint = Fingerprint(where, error);
             if (_reported.Contains(fingerprint))
                 return null;
-            report = WriteLocked(where, error, fatal: false);
+            report = WriteLocked(where, error, fatal: false, subject: "", recovery: "");
             if (report is not null)
                 _reported.Add(fingerprint);
         }
@@ -118,12 +128,12 @@ public sealed partial class CrashReports(string folder)
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
     }
 
-    private CrashReport? WriteLocked(string where, Exception error, bool fatal)
+    private CrashReport? WriteLocked(string where, Exception error, bool fatal, string subject, string recovery)
     {
         try
         {
             var now = Clock();
-            var text = Format(now, where, error, fatal);
+            var text = Format(now, where, error, fatal, recovery);
             Directory.CreateDirectory(Folder);
             var ticks = NextTicks(now.UtcTicks);
             // The name is unique to this process and instant; another instance writing into the folder at the same
@@ -137,7 +147,7 @@ public sealed partial class CrashReports(string folder)
                     using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                         writer.Write(text);
                     Prune(path);
-                    return new CrashReport(path, where, error, fatal);
+                    return new CrashReport(path, where, error, fatal) { Subject = subject, Recovery = recovery };
                 }
                 catch (IOException e) when ((e.HResult & 0xFFFF) == ErrorFileExists && attempt < 16)
                 {
@@ -195,7 +205,7 @@ public sealed partial class CrashReports(string folder)
         return result.Length > 0 ? result : "crash";
     }
 
-    private string Format(DateTimeOffset time, string where, Exception error, bool fatal)
+    private string Format(DateTimeOffset time, string where, Exception error, bool fatal, string recovery)
     {
         var text = new StringBuilder();
         text.AppendLine(Heading);
@@ -213,6 +223,8 @@ public sealed partial class CrashReports(string folder)
             text.AppendLine(CultureInfo.InvariantCulture, $"Config: {ConfigPath}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Where: {CrashRedaction.Redact(where)}");
         text.AppendLine(fatal ? "Winshell closed: yes" : "Winshell closed: no");
+        if (recovery.Length > 0)
+            text.AppendLine(CultureInfo.InvariantCulture, $"Then: {recovery}");
         text.AppendLine();
         text.AppendLine("Exception");
         text.AppendLine(CrashRedaction.Redact(Describe(error)));

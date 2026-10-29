@@ -46,6 +46,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _placing;
     private bool _failed;
     private bool _drawFailureReported;
+    private bool _rendering;
+    private bool _renderAgain;
 
     public Win32Window(WindowsPlatform platform, WindowKind kind, IWindowClient client)
     {
@@ -625,10 +627,42 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     {
         if (_surface is null || Handle == 0 || _failed)
             return;
+        // Drawing lays items out, and a window sized to its content then resizes; Windows answers with WM_SIZE
+        // inside this frame. A frame started there would replace the buffer this one is drawing into, so the window
+        // draws again once this frame is done: right away once, so the old size never shows, and on the next frame
+        // if that resizes it again.
+        if (_rendering)
+        {
+            _renderAgain = true;
+            return;
+        }
+        _rendering = true;
+        try
+        {
+            RenderFrame(_surface);
+            if (_renderAgain && _surface is { } surface && Handle != 0 && !_failed)
+            {
+                _renderAgain = false;
+                RenderFrame(surface);
+            }
+        }
+        finally
+        {
+            _rendering = false;
+        }
+        if (_renderAgain)
+        {
+            _renderAgain = false;
+            RequestFrame();
+        }
+    }
+
+    private void RenderFrame(CompositionSurface surface)
+    {
         _lastFrame = _platform.Loop.Now;
         try
         {
-            _surface.Render(_physicalWidth, _physicalHeight, canvas => _client.OnPaint(canvas));
+            surface.Render(_physicalWidth, _physicalHeight, canvas => _client.OnPaint(canvas));
         }
         catch (SharpGen.Runtime.SharpGenException e)
         {

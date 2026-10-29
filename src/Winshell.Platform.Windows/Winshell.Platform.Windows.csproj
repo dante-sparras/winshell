@@ -15,4 +15,7 @@
     <ProjectReference Include="..\Winshell.Runtime\Winshell.Runtime.csproj" />
     <InternalsVisibleTo Include="Winshell.Platform.Windows.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Notice\ShellNotice.qml" LogicalName="Winshell.Platform.Windows.ShellNotice.qml" />
+  </ItemGroup>
 </Project>

@@ -32,6 +32,10 @@ _Avoid_: logon session, user session
 Replacing the running generation with a new load of the same configuration.
 _Avoid_: restart, refresh
 
+**Notice**:
+Winshell's own window, drawn like a Windows 11 notification, for a configuration error or a window that failed. It is Winshell's, not the configuration's, so it shows even when the configuration did not load.
+_Avoid_: toast, popup, reload popup
+
 **Crash report**:
 A text file Winshell writes on this PC when the runtime itself fails: where, the exception, and the end of the log. A mistake in the configuration is a config error, not a crash.
 _Avoid_: dump, telemetry
