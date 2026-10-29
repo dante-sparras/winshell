@@ -47,8 +47,9 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
         _handlers.RemoveAll(h => h.Runtime == runtime);
     }
 
-    public bool DisconnectScript(JsValue function)
+    public bool DisconnectScript(JsValue function, JsValue? receiver = null)
     {
+        var receiverObject = receiver is QObjectWrapper wrapper ? wrapper.Target : null;
         var found = false;
         foreach (var h in _handlers)
         {
@@ -58,6 +59,13 @@ public sealed class SignalSlot(QObject owner, SignalDefinition definition)
             var signal = h.SignalKey is not null && ReferenceEquals(h.SignalKey, function);
             if (!script && !signal)
                 continue;
+            if (receiver is not null)
+            {
+                var sameThis = h.This is not null && ReferenceEquals(h.This, receiver);
+                var sameObject = receiverObject is not null && ReferenceEquals(h.Receiver, receiverObject);
+                if (!sameThis && !sameObject)
+                    continue;
+            }
             h.Removed = true;
             found = true;
         }
