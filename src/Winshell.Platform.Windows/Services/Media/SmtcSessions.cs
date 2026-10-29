@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using SkiaSharp;
 using Windows.Media;
 using Windows.Media.Control;
 using Winshell.Runtime;
@@ -397,23 +398,25 @@ internal sealed class SmtcSession
             {
                 using var stream = await thumbnail.OpenReadAsync();
                 using var input = stream.AsStreamForRead();
-                using var bytes = new MemoryStream();
-                await input.CopyToAsync(bytes);
-                var url = ArtCache.Store(bytes.ToArray(), stream.ContentType);
-                _owner.Post(() => SetArt(url, request));
+                var url = await ArtCache.StoreAsync(input, stream.ContentType);
+                if (url is null)
+                    Skip("it is not a picture under the size limit");
+                else
+                    _owner.Post(() => SetArt(url, request));
             }
             catch (Exception e) when (e is COMException or IOException or UnauthorizedAccessException)
             {
-                // A failed read is not "this track has no art". Clearing the url here blanks art that already arrived.
-                var message = e.Message;
-                _owner.Post(() =>
-                {
-                    if (request == _artRequest)
-                        _artApplied = request;
-                    _owner.Log.Warn("media", $"Cannot read art from {AppName}: {message}");
-                });
+                Skip(e.Message);
             }
         }
+
+        // A failed read is not "this track has no art". Clearing the url here blanks art that already arrived.
+        void Skip(string reason) => _owner.Post(() =>
+        {
+            if (request == _artRequest)
+                _artApplied = request;
+            _owner.Log.Warn("media", $"Cannot read art from {AppName}: {reason}");
+        });
     }
 
     private void SetArt(string url, int request)
@@ -633,6 +636,41 @@ internal static class ArtCache
     private static readonly string Folder = Path.Combine(Root, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
     private static readonly Dictionary<string, int> Uses = [];
     private static readonly Lock Gate = new();
+
+    /// <summary>The most art an app can hand over, in bytes.</summary>
+    internal const int MaxBytes = 8 * 1024 * 1024;
+
+    /// <summary>The most pixels art can decode to.</summary>
+    internal const long MaxPixels = 4096 * 4096;
+
+    /// <summary>
+    /// Reads art another app hands over and stores it, or returns null when it is not a PNG, JPEG, GIF, BMP or
+    /// WebP picture within <see cref="MaxBytes"/> and <see cref="MaxPixels"/>. That leaves out SVG, which the
+    /// shell would render at whatever size it asks for.
+    /// </summary>
+    public static async Task<string?> StoreAsync(Stream input, string? contentType)
+    {
+        using var bytes = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await input.ReadAsync(buffer)) > 0)
+        {
+            if (bytes.Length + read > MaxBytes)
+                return null;
+            bytes.Write(buffer, 0, read);
+        }
+        var data = bytes.ToArray();
+        return data.Length == 0 || IsBitmap(data) ? Store(data, contentType) : null;
+    }
+
+    private static bool IsBitmap(byte[] data)
+    {
+        using var skData = SKData.CreateCopy(data);
+        using var codec = SKCodec.Create(skData);
+        return codec is not null
+            && codec.EncodedFormat is SKEncodedImageFormat.Png or SKEncodedImageFormat.Jpeg or SKEncodedImageFormat.Gif or SKEncodedImageFormat.Bmp or SKEncodedImageFormat.Webp
+            && (long)codec.Info.Width * codec.Info.Height <= MaxPixels;
+    }
 
     /// <summary>Writes the art and returns its url. Each url returned must be released once.</summary>
     public static string Store(byte[] data, string? contentType)

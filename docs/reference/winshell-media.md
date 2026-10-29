@@ -40,7 +40,7 @@ A control that the app does not allow at the moment, such as `next()` while `can
 | `trackArtist` | string, read-only | The track's artist, as one string. |
 | `trackAlbum` | string, read-only | The track's album. |
 | `trackAlbumArtist` | string, read-only | The album's artist. |
-| `trackArtUrl` | string, read-only | A `file:///` url of the art Windows gives, written to the temp folder. Empty when there is no art. |
+| `trackArtUrl` | string, read-only | A `file:///` url of the art Windows gives, written to the temp folder. Empty when there is no art. Art over 8 MiB or 4096 by 4096 pixels, or not a PNG, JPEG, GIF, BMP or WebP picture, is ignored. |
 | `playbackState` | [MediaPlaybackState](#mediaplaybackstate) | Whether the app is playing, paused or stopped. Setting it calls `play()`, `pause()` or `stop()`. |
 | `isPlaying` | bool | True while playing. Setting it plays or pauses. |
 | `loopState` | [MediaLoopState](#medialoopstate) | Whether the app repeats the track or the list. Setting it changes the app's repeat when `loopSupported` is true. |
