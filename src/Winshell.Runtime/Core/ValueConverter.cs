@@ -250,7 +250,7 @@ public static class ValueConverter
         bool b => b ? 1 : 0,
         string s when double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) => d,
         string s when s.Length == 0 => 0,
-        Enum e => System.Convert.ToInt32(e, CultureInfo.InvariantCulture),
+        Enum e => EnumToInt(e),
         null => throw new QmlException($"Unable to assign [undefined] to {type}"),
         var other => throw new QmlException($"Unable to assign {Describe(other)} to {type}"),
     };
@@ -337,4 +337,9 @@ public static class ValueConverter
         string s => $"\"{s}\"",
         _ => value.ToString() ?? "",
     };
+
+    /// <summary>An enum value as the int QML sees. A value wider than an int wraps, as a C++ cast does.</summary>
+    internal static int EnumToInt(Enum value) => unchecked(value.GetTypeCode() == TypeCode.UInt64
+        ? (int)System.Convert.ToUInt64(value, CultureInfo.InvariantCulture)
+        : (int)System.Convert.ToInt64(value, CultureInfo.InvariantCulture));
 }

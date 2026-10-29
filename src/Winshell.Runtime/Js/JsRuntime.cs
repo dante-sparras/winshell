@@ -68,7 +68,7 @@ public sealed class JsRuntime
             case float f:
                 return f;
             case Enum e:
-                return Convert.ToInt32(e, System.Globalization.CultureInfo.InvariantCulture);
+                return ValueConverter.EnumToInt(e);
             case QObject o:
                 return Wrap(o);
             case DateTime dt:

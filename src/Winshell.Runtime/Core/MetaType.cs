@@ -14,7 +14,8 @@ public static class Names
         Cache.GetOrAdd(csName, static n => n.Length == 0 || char.IsLower(n[0]) ? n : char.ToLowerInvariant(n[0]) + n[1..]);
 
     /// <summary>The handler name of a signal: <c>clicked</c> becomes <c>onClicked</c>.</summary>
-    public static string HandlerName(string signal) => "on" + char.ToUpperInvariant(signal[0]) + signal[1..];
+    public static string HandlerName(string signal) =>
+        signal.Length == 0 ? "on" : "on" + char.ToUpperInvariant(signal[0]) + signal[1..];
 
     /// <summary>The signal a handler name refers to, or null when the name is not a handler name.</summary>
     public static string? SignalOfHandler(string handler)
@@ -187,7 +188,7 @@ public sealed class MetaType
                 if (!nested.IsEnum || nested.GetCustomAttribute<QmlEnumAttribute>() is null)
                     continue;
                 foreach (var value in Enum.GetValues(nested))
-                    enums.TryAdd(Enum.GetName(nested, value)!, Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture));
+                    enums.TryAdd(Enum.GetName(nested, value)!, ValueConverter.EnumToInt((Enum)value));
             }
         }
         Enums = enums;
