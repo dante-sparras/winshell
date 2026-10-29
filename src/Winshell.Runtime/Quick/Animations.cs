@@ -154,7 +154,7 @@ public static class Easing
             2 => x => x * x * x * x,
             3 => x => x * x * x * x * x,
             4 => x => 1 - Math.Cos(x * Math.PI / 2),
-            5 => x => x == 0 ? 0 : Math.Pow(2, 10 * (x - 1)) - 0.001,
+            5 => x => x is 0 or 1 ? x : Math.Pow(2, 10 * (x - 1)) - 0.001,
             6 => x => -(Math.Sqrt(1 - x * x) - 1),
             7 => x => Elastic(x, amplitude, period),
             8 => x => x * x * ((overshoot + 1) * x - overshoot),
