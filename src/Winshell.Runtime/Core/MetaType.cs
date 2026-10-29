@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 
 namespace Winshell.Runtime;
 
@@ -71,14 +72,27 @@ public sealed class MetaProperty
 
 public sealed class MetaMethod(string name, IReadOnlyList<MethodInfo> overloads)
 {
+    private readonly Overload[] _overloads = overloads.Select(static m =>
+    {
+        var parameters = m.GetParameters();
+        var required = 0;
+        foreach (var parameter in parameters)
+        {
+            if (!parameter.HasDefaultValue && !parameter.IsDefined(typeof(ParamArrayAttribute)))
+                required++;
+        }
+        var variadic = parameters.Length > 0 && parameters[^1].IsDefined(typeof(ParamArrayAttribute));
+        return new Overload(m, parameters, required, variadic);
+    }).ToArray();
+
     public string Name { get; } = name;
 
     public IReadOnlyList<MethodInfo> Overloads { get; } = overloads;
 
     public object? Invoke(QObject target, object?[] args)
     {
-        var method = Pick(args.Length);
-        var parameters = method.GetParameters();
+        var overload = Pick(args.Length);
+        var parameters = overload.Parameters;
         var converted = new object?[parameters.Length];
         for (var i = 0; i < parameters.Length; i++)
         {
@@ -94,31 +108,31 @@ public sealed class MetaMethod(string name, IReadOnlyList<MethodInfo> overloads)
         }
         try
         {
-            return method.Invoke(target, converted);
+            return overload.Method.Invoke(target, converted);
         }
         catch (TargetInvocationException e) when (e.InnerException is not null)
         {
-            throw e.InnerException;
+            ExceptionDispatchInfo.Capture(e.InnerException).Throw();
+            return null;
         }
     }
 
-    private MethodInfo Pick(int argCount)
+    private Overload Pick(int argCount)
     {
-        MethodInfo? best = null;
-        foreach (var m in Overloads)
+        Overload? best = null;
+        foreach (var overload in _overloads)
         {
-            var ps = m.GetParameters();
-            var required = ps.Count(p => !p.HasDefaultValue && !p.IsDefined(typeof(ParamArrayAttribute)));
-            var variadic = ps.Length > 0 && ps[^1].IsDefined(typeof(ParamArrayAttribute));
-            if (argCount >= required && (variadic || argCount <= ps.Length))
+            if (argCount >= overload.Required && (overload.Variadic || argCount <= overload.Parameters.Length))
             {
-                if (ps.Length == argCount)
-                    return m;
-                best ??= m;
+                if (overload.Parameters.Length == argCount)
+                    return overload;
+                best ??= overload;
             }
         }
-        return best ?? Overloads[0];
+        return best ?? _overloads[0];
     }
+
+    private readonly record struct Overload(MethodInfo Method, ParameterInfo[] Parameters, int Required, bool Variadic);
 }
 
 /// <summary>What QML can see of a C# type: its properties, methods, signals, enums and default property.</summary>
