@@ -763,6 +763,9 @@ public sealed class FileView : QObject
     private string? _watchedPath;
     private int _generation;
     private bool _bom;
+    // One queue, so a later save cannot finish before an earlier one. Each save also uses its own temp file.
+    private readonly object _writeGate = new();
+    private Task _writes = Task.CompletedTask;
 
     /// <summary>
     /// Tests only. Runs on the writing thread after a temporary file is in place and before it replaces the
@@ -1046,7 +1049,7 @@ public sealed class FileView : QObject
                 var diskAtStart = Read(path).Text;
                 if (atomic)
                 {
-                    var temp = path + ".tmp-" + Environment.ProcessId;
+                    var temp = path + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
                     WriteText(temp, text, bom);
                     try
                     {
@@ -1065,7 +1068,9 @@ public sealed class FileView : QObject
                     {
                         try
                         {
-                            if (handSaveWon && File.Exists(temp))
+                            // A successful replace has already moved the temp away. A hand save or a failed
+                            // replace leaves it, and the next save must not see it.
+                            if (File.Exists(temp))
                                 File.Delete(temp);
                         }
                         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -1112,10 +1117,53 @@ public sealed class FileView : QObject
             else
                 loop.Post(Report);
         }
-        if (_blockWrites || loop is null)
-            DoWrite();
+        // A blocking write runs on this thread, so a test probe set here still runs. It only decides that the
+        // caller waits. Async writes take the same queue and cannot pass one another.
+        var wait = _blockWrites || loop is null;
+        if (wait)
+        {
+            Task prior;
+            TaskCompletionSource ready;
+            lock (_writeGate)
+            {
+                prior = _writes;
+                ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _writes = ready.Task;
+            }
+            try
+            {
+                try
+                {
+                    prior.GetAwaiter().GetResult();
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                }
+                DoWrite();
+            }
+            finally
+            {
+                ready.TrySetResult();
+            }
+        }
         else
-            Task.Run(DoWrite);
+        {
+            lock (_writeGate)
+            {
+                var previous = _writes;
+                _writes = Task.Run(() =>
+                {
+                    try
+                    {
+                        previous.GetAwaiter().GetResult();
+                    }
+                    catch (Exception e) when (e is not OutOfMemoryException)
+                    {
+                    }
+                    DoWrite();
+                });
+            }
+        }
     }
 
     private void AcceptHandSave(string path)
