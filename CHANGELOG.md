@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.5.0](https://github.com/dante-sparras/winshell/compare/v0.4.0...v0.5.0) (2026-10-29)
+
+
+### Features
+
+* **shell:** a Windows 11 settings app for the default shell, Winshell Settings ([#112](https://github.com/dante-sparras/winshell/issues/112)) ([f088b7a](https://github.com/dante-sparras/winshell/commit/f088b7a2ee5c01d7dc52d8ba7949c318fbf37f19))
+* **shell:** a Windows 11 taskbar on every screen ([#98](https://github.com/dante-sparras/winshell/issues/98)) ([a8b7475](https://github.com/dante-sparras/winshell/commit/a8b7475f1e0b0fc5dc13c7dce161d3543d1aa1f9))
+* **shell:** add a Windows 11 Start launcher ([#93](https://github.com/dante-sparras/winshell/issues/93)) ([9ab2698](https://github.com/dante-sparras/winshell/commit/9ab2698ac9f23ac49537720668950d43380a578d))
+* **shell:** add notification center and regional calendar ([daf1ff3](https://github.com/dante-sparras/winshell/commit/daf1ff3d3e453cea3e66d9c09da66dbb4b4002c3))
+* **shell:** add quick settings with tiles, volume, brightness and battery ([#87](https://github.com/dante-sparras/winshell/issues/87)) ([1f4327b](https://github.com/dante-sparras/winshell/commit/1f4327b8a07aa8f879b1d740c93b3e906370e6f9))
+* **shell:** edit, reorder and keep the quick settings tiles ([#95](https://github.com/dante-sparras/winshell/issues/95)) ([75c85ce](https://github.com/dante-sparras/winshell/commit/75c85cefc8665a0bd46efecb45fb5f16dde2b375))
+* **shell:** pick the sound output and control media from quick settings ([#90](https://github.com/dante-sparras/winshell/issues/90)) ([08e1e67](https://github.com/dante-sparras/winshell/commit/08e1e6715b2aa12efbebb6f137e62ea09b9a3439))
+* **shell:** run winshell at sign-in when the user turns it on ([#104](https://github.com/dante-sparras/winshell/issues/104)) ([b65cd2b](https://github.com/dante-sparras/winshell/commit/b65cd2bb1d0cb15ddda88f1cc4cb39f80999e34a))
+* **shell:** show an on-screen display for volume, brightness, media and mute ([#94](https://github.com/dante-sparras/winshell/issues/94)) ([a12ae91](https://github.com/dante-sparras/winshell/commit/a12ae91018aea114ed1d07ba4a08bee1551c4182))
+* **theme:** a shell can choose light or dark and its own accent ([#101](https://github.com/dante-sparras/winshell/issues/101)) ([91e2dda](https://github.com/dante-sparras/winshell/commit/91e2dda7c7f9f2f97d383e23f2e0175c4ea9b4c1))
+* **windows:** live window previews drawn by DWM ([#91](https://github.com/dante-sparras/winshell/issues/91)) ([dce0586](https://github.com/dante-sparras/winshell/commit/dce0586b879eebd9fd57f3e1d516532300889760))
+* **windows:** show which app windows flash for attention ([#86](https://github.com/dante-sparras/winshell/issues/86)) ([be560d4](https://github.com/dante-sparras/winshell/commit/be560d472802a53b5df3fb6bc05f83a6203d4e99))
+
+
+### Bug Fixes
+
+* **cli:** a recycled instance process id no longer crashes winshell ([#83](https://github.com/dante-sparras/winshell/issues/83)) ([065c0d8](https://github.com/dante-sparras/winshell/commit/065c0d81ea0c866ff56562578e85e0db66eaa29b))
+* **qml:** a component's own children no longer go to the default property it declares ([#108](https://github.com/dante-sparras/winshell/issues/108)) ([ba86ff5](https://github.com/dante-sparras/winshell/commit/ba86ff560da8f83f3cd48084d4909f1601464cbc))
+* **qml:** a value a document assigns replaces the binding its component declared ([#110](https://github.com/dante-sparras/winshell/issues/110)) ([83f3858](https://github.com/dante-sparras/winshell/commit/83f38586d16a418ed48fe4db13e8eb7b7461a379))
+* **runtime:** positioners and layouts follow a repeater that reorders its rows ([#92](https://github.com/dante-sparras/winshell/issues/92)) ([ced75e8](https://github.com/dante-sparras/winshell/commit/ced75e840b3394989ef1210fa96e7486a1546b16))
+* **shell:** a large window group fits its taskbar preview ([#107](https://github.com/dante-sparras/winshell/issues/107)) ([c6bd815](https://github.com/dante-sparras/winshell/commit/c6bd81506582287462d19b040d4618765bbf1445))
+* **shell:** a taskbar pin made while the saved pins load is kept ([#100](https://github.com/dante-sparras/winshell/issues/100)) ([468bcdc](https://github.com/dante-sparras/winshell/commit/468bcdc2f10c95497e00aba370edd3302a4534be))
+* **shell:** an auto-hiding taskbar stays on its own screen ([#103](https://github.com/dante-sparras/winshell/issues/103)) ([0836cd8](https://github.com/dante-sparras/winshell/commit/0836cd855880ac962579a75cca662e6934ece35f))
+* **shell:** taskbar apps that do not fit scroll instead of running under the tray ([#106](https://github.com/dante-sparras/winshell/issues/106)) ([ce290a6](https://github.com/dante-sparras/winshell/commit/ce290a633d5d0d7bb79df40fb4bfd9febf6509c9))
+* **shell:** taskbar buttons stay put while other apps come and go ([#105](https://github.com/dante-sparras/winshell/issues/105)) ([e9613ee](https://github.com/dante-sparras/winshell/commit/e9613ee6c3767d9e1d089a30aab82b66151a575d))
+* **shell:** the taskbar works from the keyboard and follows Narrator's focus ([#109](https://github.com/dante-sparras/winshell/issues/109)) ([0c1aa8a](https://github.com/dante-sparras/winshell/commit/0c1aa8ab7f5e45e7e6270cbb8028307e7a78c293))
+* **tray:** the shell's app bars reserve their edge while it hosts the tray ([#97](https://github.com/dante-sparras/winshell/issues/97)) ([a4a72ab](https://github.com/dante-sparras/winshell/commit/a4a72ab4e78f46f3c129d875ca730fc6b9bf1b96))
+* **windows:** a panel asks for its edge again when the app bar it yielded to is gone ([#102](https://github.com/dante-sparras/winshell/issues/102)) ([1a21d1c](https://github.com/dante-sparras/winshell/commit/1a21d1cc8e18a150a873c59349c793c358f1fc5c))
+* **windows:** a panel that reserves an edge no longer places itself over and over ([#96](https://github.com/dante-sparras/winshell/issues/96)) ([f8ee427](https://github.com/dante-sparras/winshell/commit/f8ee4275002423090eb983b89967e069f357c026))
+
 ## [0.4.0](https://github.com/dante-sparras/winshell/compare/v0.3.0...v0.4.0) (2026-10-28)
 
 
