@@ -327,18 +327,27 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         _scrollAnimation = null;
         if (IsDestroyed || Engine is null)
             return;
-        var nx = _contentX + (_targetX - _contentX) * 0.3;
-        var ny = _contentY + (_targetY - _contentY) * 0.3;
-        if (Math.Abs(_targetX - nx) < 0.5 && Math.Abs(_targetY - ny) < 0.5)
+        var again = true;
+        try
         {
-            SetContentX(_targetX);
-            SetContentY(_targetY);
-            SetMoving(false);
-            return;
+            var nx = _contentX + (_targetX - _contentX) * 0.3;
+            var ny = _contentY + (_targetY - _contentY) * 0.3;
+            if (Math.Abs(_targetX - nx) < 0.5 && Math.Abs(_targetY - ny) < 0.5)
+            {
+                SetContentX(_targetX);
+                SetContentY(_targetY);
+                SetMoving(false);
+                again = false;
+                return;
+            }
+            SetContentX(nx);
+            SetContentY(ny);
         }
-        SetContentX(nx);
-        SetContentY(ny);
-        _scrollAnimation = Engine.Loop.Schedule(AnimationClock.FrameInterval, StepScroll);
+        finally
+        {
+            if (again && !IsDestroyed && Engine is not null)
+                _scrollAnimation = Engine.Loop.Schedule(AnimationClock.FrameInterval, StepScroll);
+        }
     }
 
     public bool AcceptsButton(int button) => _interactive && Enabled && button == QtEnums.LeftButton;

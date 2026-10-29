@@ -85,11 +85,25 @@ public sealed class IdleMonitor : QObject
     {
         if (IsDestroyed || Engine is null)
             return;
-        var idle = _enabled && _timeout > 0 && IdleSeconds() >= _timeout && !(_respectKeepAwake && KeepAwake.AnyActive);
-        SetField(ref _isIdle, idle, nameof(IsIdle));
-        // Poll faster while idle, so the end of idleness shows quickly.
-        var next = idle ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromSeconds(Math.Clamp(_timeout - IdleSeconds(), 0.25, 5));
-        _timer = Engine.Loop.Schedule(next, Check);
+        var next = TimeSpan.FromSeconds(1);
+        try
+        {
+            var idle = _enabled && _timeout > 0 && IdleSeconds() >= _timeout && !(_respectKeepAwake && KeepAwake.AnyActive);
+            SetField(ref _isIdle, idle, nameof(IsIdle));
+            // Poll faster while idle, so the end of idleness shows quickly.
+            next = idle ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromSeconds(Math.Clamp(_timeout - IdleSeconds(), 0.25, 5));
+        }
+#pragma warning disable CA1031 // A failed idle read must not stop the poll.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            Engine.Log.Warn("power", e.Message);
+        }
+        finally
+        {
+            if (!IsDestroyed && Engine is not null)
+                _timer = Engine.Loop.Schedule(next, Check);
+        }
     }
 
     protected override void OnDestroy() => _timer?.Dispose();

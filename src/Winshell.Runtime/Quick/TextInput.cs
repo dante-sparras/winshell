@@ -563,9 +563,16 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         _blink = null;
         if (IsDestroyed || !ActiveFocus || Engine is null)
             return;
-        _blinkOn = !_blinkOn;
-        Update();
-        _blink = Engine.Loop.Schedule(TimeSpan.FromMilliseconds(530), Blink);
+        try
+        {
+            _blinkOn = !_blinkOn;
+            Update();
+        }
+        finally
+        {
+            if (!IsDestroyed && ActiveFocus && Engine is not null)
+                _blink = Engine.Loop.Schedule(TimeSpan.FromMilliseconds(530), Blink);
+        }
     }
 
     public void InsertText(string text)
