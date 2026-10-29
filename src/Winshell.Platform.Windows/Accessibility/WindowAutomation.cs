@@ -8,8 +8,9 @@ namespace Winshell.Platform.Windows.Accessibility;
 
 /// <summary>
 /// Exposes a window's items to UI Automation. The window answers WM_GETOBJECT with the root of its tree. Once a
-/// client has asked, the tree is brought up to date after every frame while any client listens, raising what changed
-/// as UI Automation events; when none listens, it is brought up to date when the next call comes in.
+/// client has asked, the tree is brought up to date at most ten times a second while any client listens, and at once
+/// when an accessible property or a notification changes. When none listens, it is brought up to date when the next
+/// call comes in.
 /// </summary>
 internal sealed class WindowAutomation : IDisposable
 {
@@ -23,12 +24,22 @@ internal sealed class WindowAutomation : IDisposable
     private readonly int _thread = Environment.CurrentManagedThreadId;
     private readonly Dictionary<AccessibleNode, UiaElement> _elements = [];
     private readonly HashSet<AccessibleNode> _announced = [];
+    private readonly HashSet<Item> _shown = [];
+    private readonly HashSet<Item> _shownNow = [];
     private AccessibleTree? _tree;
     private bool _stale;
     private bool _focusPending;
     private int _calls;
 
-    /// <summary>How many times the tree was refreshed. Tests use it to see that a nested call did not refresh again.</summary>
+    private bool _syncScheduled;
+    private bool _everSynced;
+    private TimeSpan _syncedAt;
+    private static readonly TimeSpan SyncInterval = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// How many times the tree was refreshed. Tests use it to see that a nested call did not refresh again, and that
+    /// frames are coalesced.
+    /// </summary>
     internal int SyncCount { get; private set; }
 
     /// <summary>
@@ -224,29 +235,111 @@ internal sealed class WindowAutomation : IDisposable
         if (_tree is null)
         {
             // No client has asked for this window yet, but one that listens still hears a notification it shows:
-            // a notification does not take focus, so nothing else would bring a screen reader to it.
-            if (Listening() && ShowsNotification(_scene.Root))
+            // a notification does not take focus, so nothing else would bring a screen reader to it. The items are
+            // the ones registered as notifications, so this does not walk the scene.
+            if (Listening() && AnyShown())
                 Sync();
             return;
         }
-        if (Listening())
+        if (!Listening())
+        {
+            _stale = true;
+            return;
+        }
+        // A full walk every animation frame costs a shell that is only moving. Accessible edits and notifications
+        // still go out on this frame; anything else waits until the interval, including after the frames stop.
+        if (ShownChanged() || _scene.Signals.TakeDirty() || SyncDue)
             Sync();
         else
+        {
             _stale = true;
+            ScheduleSync();
+        }
     }
 
-    private static bool ShowsNotification(Item item)
+    private bool SyncDue
     {
-        foreach (var child in item.ChildItems)
+        get
         {
-            if (!child.IsVisibleFlag || child.Opacity <= 0)
-                continue;
-            if (child.FindAttached(typeof(AccessibleAttached)) is AccessibleAttached { Role: (int)Role.Notification })
+            if (!_everSynced)
                 return true;
-            if (ShowsNotification(child))
+            var elapsed = _loop.Now - _syncedAt;
+            return elapsed < TimeSpan.Zero || elapsed >= SyncInterval;
+        }
+    }
+
+    private void ScheduleSync()
+    {
+        if (_syncScheduled)
+            return;
+        _syncScheduled = true;
+        var wait = SyncInterval - (_loop.Now - _syncedAt);
+        if (wait < TimeSpan.FromMilliseconds(1))
+            wait = TimeSpan.FromMilliseconds(1);
+        _loop.Schedule(wait, () =>
+        {
+            _syncScheduled = false;
+            if (Handle == 0 || _tree is null)
+                return;
+            if (!Listening())
+            {
+                _stale = true;
+                return;
+            }
+            if (_stale || ShownChanged() || _scene.Signals.TakeDirty() || SyncDue)
+                Sync();
+        });
+    }
+
+    private bool AnyShown()
+    {
+        _scene.Signals.Prune();
+        foreach (var item in _scene.Signals.Notifications)
+        {
+            if (IsShown(item))
                 return true;
         }
         return false;
+    }
+
+    /// <summary>True when a notification was shown or hidden since the last refresh.</summary>
+    private bool ShownChanged()
+    {
+        _scene.Signals.Prune();
+        _shownNow.Clear();
+        foreach (var item in _scene.Signals.Notifications)
+        {
+            if (IsShown(item))
+                _shownNow.Add(item);
+        }
+        if (_shownNow.SetEquals(_shown))
+            return false;
+        _shown.Clear();
+        foreach (var item in _shownNow)
+            _shown.Add(item);
+        return true;
+    }
+
+    private void RememberShown()
+    {
+        _scene.Signals.Prune();
+        _shown.Clear();
+        foreach (var item in _scene.Signals.Notifications)
+        {
+            if (IsShown(item))
+                _shown.Add(item);
+        }
+    }
+
+    /// <summary>A notification counts as showing when it and every ancestor except the window root are visible.</summary>
+    private static bool IsShown(Item item)
+    {
+        for (var node = item; node.ParentItem is not null; node = node.ParentItem)
+        {
+            if (node.IsDestroyed || !node.IsVisibleFlag || node.Opacity <= 0)
+                return false;
+        }
+        return !item.IsDestroyed;
     }
 
     /// <summary>Speaks each notification once, when it first shows with its text.</summary>
@@ -280,6 +373,9 @@ internal sealed class WindowAutomation : IDisposable
     private void Sync()
     {
         _stale = false;
+        _everSynced = true;
+        _syncedAt = _loop.Now;
+        _scene.Signals.TakeDirty();
         SyncCount++;
         var changes = Tree.Refresh();
         var listening = Listening();
@@ -305,6 +401,7 @@ internal sealed class WindowAutomation : IDisposable
         }
         if (listening)
             AnnounceNotifications(Tree.Root);
+        RememberShown();
     }
 
     private void Raise(AccessibleChange change)

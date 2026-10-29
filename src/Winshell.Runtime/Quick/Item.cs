@@ -44,6 +44,7 @@ public class Item : QObject
     private bool _widthValid, _heightValid;
     private double _declaredWidth, _declaredHeight;
     private bool _visible = true;
+    private bool _notification;
     private double _opacity = 1;
     private bool _enabled = true;
     private bool _clip;
@@ -609,6 +610,8 @@ public class Item : QObject
             return;
         if (_host?.FocusItem == this && host is null)
             _host.SetFocusItem(null);
+        if (_notification)
+            MoveNotification(_host, host);
         _host = host;
         foreach (var child in _children.Snapshot)
             child.SetHost(host);
@@ -631,6 +634,32 @@ public class Item : QObject
 
     /// <summary>Schedules a repaint of the window this item is in.</summary>
     public void Update() => _host?.RequestUpdate();
+
+    /// <summary>Remember that this item is a notification, so the platform can find it without walking the scene.</summary>
+    internal void TrackNotification()
+    {
+        _notification = true;
+        if (_host is Scene scene)
+            scene.Signals.Add(this);
+    }
+
+    /// <summary>The item is no longer a notification.</summary>
+    internal void UntrackNotification()
+    {
+        if (!_notification)
+            return;
+        _notification = false;
+        if (_host is Scene scene)
+            scene.Signals.Remove(this);
+    }
+
+    private void MoveNotification(IItemHost? from, IItemHost? to)
+    {
+        if (from is Scene old)
+            old.Signals.Remove(this);
+        if (to is Scene next)
+            next.Signals.Add(this);
+    }
 
     // Painting
 
@@ -726,6 +755,7 @@ public class Item : QObject
 
     protected override void OnDestroy()
     {
+        UntrackNotification();
         // A destroyed item can't keep focus: the window's focus item becomes none, and the window's
         // activeFocusItem says so.
         if (_host?.FocusItem == this)
