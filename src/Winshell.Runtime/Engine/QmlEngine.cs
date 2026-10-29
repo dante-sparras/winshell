@@ -249,12 +249,7 @@ public sealed class QmlEngine : IDisposable
     // Creation
 
     /// <summary>Creates the root object of a file, such as <c>shell.qml</c>.</summary>
-    public QObject CreateRoot(string path)
-    {
-        var root = CreateFromDocument(LoadDocument(path), null, null);
-        _roots.Add(root);
-        return root;
-    }
+    public QObject CreateRoot(string path) => CreateFromDocument(LoadDocument(path), null, null);
 
     public QObject CreateFromDocument(QmlDocument doc, QObject? owner, IReadOnlyDictionary<string, object?>? initialProperties)
     {
@@ -309,6 +304,9 @@ public sealed class QmlEngine : IDisposable
                 _batches.Pop();
             }
             batch.Complete(this);
+            // A parent destroys what it owns. An object created with no parent would otherwise survive reload.
+            if (owner is null && !_creatingSingletons.Contains(doc.File))
+                _roots.Add(root);
             return root;
         }
         finally
