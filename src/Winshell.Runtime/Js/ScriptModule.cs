@@ -13,33 +13,27 @@ public static class ScriptModule
 {
     /// <summary>Whether a script says <c>.pragma library</c>, so one copy is shared by every importer.</summary>
     public static bool IsLibrary(string code) =>
-        code.Split('\n').Any(l => l.Trim() is var t && t.StartsWith(".pragma", StringComparison.Ordinal) && t.Contains("library", StringComparison.Ordinal));
+        code.Replace("\r\n", "\n").Split('\n').Any(static line => IsLibraryDirective(line.Trim()));
 
-    public static JsValue Load(QmlEngine engine, string code, string path)
+    /// <summary>A <c>.pragma</c> line is a library only when its directive is <c>library</c>, not when that word appears somewhere in it.</summary>
+    private static bool IsLibraryDirective(string line)
     {
-        var imports = new List<(string Name, string File)>();
+        if (!line.StartsWith(".pragma", StringComparison.Ordinal))
+            return false;
+        var rest = line.AsSpan(7).TrimStart();
+        if (!rest.StartsWith("library"))
+            return false;
+        rest = rest[7..].TrimStart();
+        return rest.IsEmpty || rest.StartsWith("//");
+    }
+
+    public static JsValue Load(QmlEngine engine, string code, string path, ComponentContext? context = null)
+    {
         var lines = code.Replace("\r\n", "\n").Split('\n');
-        for (var i = 0; i < lines.Length; i++)
-        {
-            var line = lines[i].Trim();
-            if (line.StartsWith(".pragma", StringComparison.Ordinal))
-            {
-                lines[i] = "";
-            }
-            else if (line.StartsWith(".import", StringComparison.Ordinal))
-            {
-                // .import "other.js" as Other
-                var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 4 && parts[^2] == "as")
-                {
-                    var file = parts[1].Trim('"', '\'');
-                    if (file.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
-                        imports.Add((parts[^1], Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, file))));
-                }
-                lines[i] = "";
-            }
-        }
+        var imports = ReadImports(engine, path, lines);
         var body = string.Join("\n", lines);
+        // A script without .pragma library runs in the component that imported it, so it can see that component's ids.
+        var scope = context is null ? null : new ScopeObject(engine.Js, context.ContextObject, context);
 
         var names = new List<string>();
         try
@@ -70,14 +64,113 @@ public static class ScriptModule
             throw new QmlException($"{path}: {e.Message}");
         }
 
-        var sb = new StringBuilder("(function(");
-        sb.Append(string.Join(", ", imports.Select(i => i.Name)));
         // The body starts on the factory's first line, so a script error names the file's own line.
-        sb.Append(") { ").Append(body).Append("\nreturn {");
+        // The factory is made inside the with block, so the script's own declarations and imports come first
+        // and only the names it does not declare resolve on the component.
+        var sb = new StringBuilder("(");
+        if (scope is not null)
+            sb.Append("function(__qmlScope) { with (__qmlScope) { return ");
+        sb.Append("function(").Append(string.Join(", ", imports.Select(i => i.Alias))).Append(") { ");
+        sb.Append(body).Append("\nreturn {");
         sb.Append(string.Join(", ", names.Distinct().Select(n => $"get {n}() {{ return {n}; }}, set {n}(v) {{ {n} = v; }}")));
-        sb.Append("};\n})");
+        sb.Append("};\n}");
+        if (scope is not null)
+            sb.Append("; } }");
+        sb.Append(')');
         var factory = engine.Js.Engine.Evaluate(sb.ToString(), path);
-        var args = imports.Select(i => engine.LoadScript(i.File)).ToArray();
+        if (scope is not null)
+            factory = engine.Js.Engine.Call(factory, JsValue.Undefined, [scope]);
+        var args = imports.Select(i => engine.LoadScript(i.File, context)).ToArray();
         return engine.Js.Engine.Call(factory, JsValue.Undefined, args);
+    }
+
+    private readonly record struct ScriptImport(string Alias, string File);
+
+    private static List<ScriptImport> ReadImports(QmlEngine engine, string path, string[] lines)
+    {
+        var imports = new List<ScriptImport>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+            if (line.StartsWith(".pragma", StringComparison.Ordinal))
+            {
+                lines[i] = "";
+                continue;
+            }
+            if (!line.StartsWith(".import", StringComparison.Ordinal))
+                continue;
+            lines[i] = "";
+            if (!TryParseImport(line, out var specifier, out var alias))
+                throw new QmlException($"{path}: {line} is not a javascript import");
+            // .import QtQuick 2.0 as Q is common boilerplate. A script has no use for a QML module, so it is skipped.
+            var quoted = line.AsSpan(7).TrimStart() is [ '"' or '\'', ..];
+            if (!quoted)
+            {
+                engine.Log.Warn("scene", $"{path}: {line} is ignored; a script can only import a javascript file");
+                continue;
+            }
+            if (!specifier.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
+                throw new QmlException($"{path}: .import \"{specifier}\" is not a javascript file");
+            var directory = Path.GetDirectoryName(path)!;
+            imports.Add(new ScriptImport(alias, Path.GetFullPath(Path.Combine(directory, specifier))));
+        }
+        return imports;
+    }
+
+    /// <summary><c>.import "file.js" as Name</c>, or <c>.import Module Version as Name</c>.</summary>
+    private static bool TryParseImport(string line, out string specifier, out string alias)
+    {
+        specifier = "";
+        alias = "";
+        var rest = line.AsSpan(7).Trim();
+        if (rest.IsEmpty)
+            return false;
+        if (rest[0] is '"' or '\'')
+        {
+            var quote = rest[0];
+            rest = rest[1..];
+            var end = rest.IndexOf(quote);
+            if (end < 0)
+                return false;
+            specifier = rest[..end].ToString();
+            rest = rest[(end + 1)..].Trim();
+        }
+        else
+        {
+            var space = rest.IndexOf(' ');
+            if (space < 0)
+                return false;
+            specifier = rest[..space].ToString();
+            rest = rest[(space + 1)..].Trim();
+        }
+        if (!StartsWithAs(rest))
+        {
+            var space = rest.IndexOf(' ');
+            if (space < 0)
+                return false;
+            rest = rest[(space + 1)..].Trim();
+        }
+        if (!StartsWithAs(rest))
+            return false;
+        rest = rest[2..].Trim();
+        if (rest.IsEmpty || !IsIdentifier(rest))
+            return false;
+        alias = rest.ToString();
+        return specifier.Length > 0;
+    }
+
+    private static bool StartsWithAs(ReadOnlySpan<char> text) =>
+        text.Length >= 2 && text.StartsWith("as") && (text.Length == 2 || char.IsWhiteSpace(text[2]));
+
+    private static bool IsIdentifier(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty || !(char.IsLetter(text[0]) || text[0] is '_' or '$'))
+            return false;
+        for (var i = 1; i < text.Length; i++)
+        {
+            if (!(char.IsLetterOrDigit(text[i]) || text[i] is '_' or '$'))
+                return false;
+        }
+        return true;
     }
 }
