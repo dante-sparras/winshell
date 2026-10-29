@@ -3,6 +3,8 @@ using System.Globalization;
 using System.IO.Pipes;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using Winshell;
 using Winshell.Platform.Windows;
 using Winshell.Platform.Windows.Diagnostics;
@@ -373,7 +375,7 @@ namespace Winshell
                       --pid <pid>        an instance's process id
                 Other:
                   -d, --daemonize        run in the background
-                  -n, --no-duplicate     do nothing if the shell is already running
+                  -n, --no-duplicate     exit quietly if this config is already running
                   -v, --verbose          log debug messages
                   -j, --json             print list or doctor as JSON
                       --no-color         print doctor without color
@@ -484,15 +486,7 @@ namespace Winshell
                 Console.Error.WriteLine(error);
                 return 1;
             }
-            if (o.NoDuplicate)
-            {
-                var running = Instances.List(false).FirstOrDefault(i => string.Equals(i.Info.ConfigPath, root, StringComparison.OrdinalIgnoreCase));
-                if (running.Info is not null)
-                {
-                    Console.Error.WriteLine($"Winshell is already running this config (instance {running.Info.Id}).");
-                    return 0;
-                }
-            }
+            // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
             if (o.Daemonize)
             {
                 var exe = Environment.ProcessPath!;
@@ -506,6 +500,10 @@ namespace Winshell
                 using var child = Process.Start(psi);
                 return 0;
             }
+            // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
+            using var duplicate = o.NoDuplicate ? DuplicateHold.TryClaim(root) : default;
+            if (o.NoDuplicate && !duplicate.Acquired)
+                return 0;
 
             Instances.Clean();
             var id = Instances.NewId();
@@ -736,6 +734,65 @@ namespace Winshell
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
+            }
+        }
+
+        /// <summary>
+        /// Session mutex for one configuration. <c>--no-duplicate</c> holds it for the life of the shell, so two starts
+        /// that both pass the instance list, because neither has written it yet, cannot both keep running. The name is
+        /// a hash so a long path still fits, and the hash ignores case so Windows paths match.
+        /// </summary>
+        internal static string DuplicateMutexName(string configPath)
+        {
+            var full = System.IO.Path.GetFullPath(configPath).ToUpperInvariant();
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(full)));
+            return @"Local\winshell-" + hash;
+        }
+
+        /// <summary>Owns the <c>--no-duplicate</c> mutex until disposed. A failed claim owns nothing, and that start exits.</summary>
+        private readonly struct DuplicateHold : IDisposable
+        {
+            private readonly Mutex? _mutex;
+
+            private DuplicateHold(Mutex mutex) => _mutex = mutex;
+
+            public bool Acquired => _mutex is not null;
+
+            public static DuplicateHold TryClaim(string configPath)
+            {
+                var mutex = new Mutex(false, DuplicateMutexName(configPath));
+                bool mine;
+                try
+                {
+                    mine = mutex.WaitOne(0);
+                }
+                catch (AbandonedMutexException)
+                {
+                    // The previous shell crashed while it held this. The wait succeeded and this start owns it.
+                    mine = true;
+                }
+                if (!mine)
+                {
+                    mutex.Dispose();
+                    return default;
+                }
+                // A shell started without --no-duplicate holds no mutex. Its instance.json is the only record of it.
+                var running = Instances.List(false).FirstOrDefault(i => string.Equals(i.Info.ConfigPath, configPath, StringComparison.OrdinalIgnoreCase));
+                if (running.Info is not null)
+                {
+                    mutex.ReleaseMutex();
+                    mutex.Dispose();
+                    return default;
+                }
+                return new DuplicateHold(mutex);
+            }
+
+            public void Dispose()
+            {
+                if (_mutex is null)
+                    return;
+                _mutex.ReleaseMutex();
+                _mutex.Dispose();
             }
         }
 

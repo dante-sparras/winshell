@@ -18,7 +18,7 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 | `No shell.qml at <path>` | `--path` names a folder without a `shell.qml`, or a file that isn't there. |
 | `No config named "<name>" in <folder>` | `--config` names a folder of the config folder that has no `shell.qml`. |
 | `Several configs in <folder>; pick one with -c: …` | The config folder has no `shell.qml` of its own and several subfolders with one. Run `winshell -c <name>`. To make one the default, move its files up into the config folder, so the folder has a `shell.qml` of its own, or leave only one subfolder with a `shell.qml`. |
-| `Winshell is already running this config (instance <id>).` | `--no-duplicate` found an instance of this configuration. `winshell list` shows it. |
+| Nothing, and it exits at once | `--no-duplicate` found this configuration already running, or a second start overlapped the first. `winshell list` shows the one that is running. |
 | `Unknown command "<name>". Run winshell --help.` | The first word isn't a command. Options start with `-`. |
 
 Nothing printed and nothing on screen? Run `winshell` from a terminal, not with `-d`, so you see the log.
