@@ -75,17 +75,13 @@ Scope {
         width: 0
         height: 0
 
-        function publish() {
-          osd.brightnessScreenId = host.screenIdFor(modelData)
-          osd.brightnessMinimum = modelData.minimum
-          osd.brightnessMaximum = modelData.maximum
-          // The level is written before the source is known, so the first reading is the baseline.
-          osd.brightness = level
-          osd.brightnessKnown = true
+        // A monitor's first reading is its baseline; each change after that shows on its screen.
+        function publish(changed) {
+          osd.publishBrightness(host.screenIdFor(modelData), modelData.minimum, modelData.maximum, level, changed)
         }
 
-        Component.onCompleted: publish()
-        onLevelChanged: publish()
+        Component.onCompleted: publish(false)
+        onLevelChanged: publish(true)
       }
     }
   }

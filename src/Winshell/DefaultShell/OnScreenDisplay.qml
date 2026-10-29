@@ -169,7 +169,7 @@ PanelWindow {
   }
 
   function noteBrightness() {
-    if (!settled || !brightnessKnown)
+    if (publishing || !settled || !brightnessKnown)
       return
     if (!sawBrightness) {
       sawBrightness = true
@@ -181,6 +181,27 @@ PanelWindow {
       return
     seenBrightness = brightness
     brightnessScreen = resolveScreen(brightnessScreenId)
+    show("brightness")
+  }
+
+  // One monitor's reading, from a host that watches several. A change shows even when it lands on the level another
+  // monitor published last; a reading that is not a change, such as a monitor that appears, is only its baseline.
+  property bool publishing: false
+  function publishBrightness(screenId, minimum, maximum, level, changed) {
+    publishing = true
+    brightnessScreenId = screenId
+    brightnessMinimum = minimum
+    brightnessMaximum = maximum
+    brightness = level
+    brightnessKnown = true
+    publishing = false
+    if (!settled)
+      return
+    sawBrightness = true
+    seenBrightness = level
+    if (!changed)
+      return
+    brightnessScreen = resolveScreen(screenId)
     show("brightness")
   }
 
