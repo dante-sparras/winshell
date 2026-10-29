@@ -38,3 +38,5 @@
   items:
   - name: Development
     href: ../development.md
+  - name: 1.0 readiness
+    href: ../1.0-readiness.md
