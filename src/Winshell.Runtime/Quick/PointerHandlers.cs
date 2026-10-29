@@ -93,6 +93,13 @@ public abstract class PointerHandler : QObject
             item.PointerHandlers.Add(this);
     }
 
+    protected override void OnDestroy()
+    {
+        if (this is IHoverTarget hover && ParentItem?.Host is Scene scene)
+            scene.HoverTargetDestroyed(hover, ParentItem.Engine?.Loop);
+        base.OnDestroy();
+    }
+
     protected bool Contains(Item item, double x, double y) =>
         x >= -_margin && y >= -_margin && x < item.Width + _margin && y < item.Height + _margin;
 }
