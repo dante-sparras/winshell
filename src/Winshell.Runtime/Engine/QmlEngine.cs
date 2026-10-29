@@ -409,7 +409,8 @@ internal sealed class CreationBatch
             }
             catch (Exception e)
             {
-                engine.Log.Error("scene", $"{obj.TypeName}: {e.Message}");
+                engine.Log.Error("scene", Log.Describe(e, obj.TypeName));
+                engine.Log.Debug("scene", e.ToString());
             }
         }
         foreach (var obj in Objects)
