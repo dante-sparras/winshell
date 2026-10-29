@@ -258,6 +258,7 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
 {
     private bool _running;
     private bool _paused;
+    private TimeSpan _pausedAt;
     private int _loops = 1;
     private bool _alwaysRunToEnd;
     private TimeSpan _start;
@@ -289,7 +290,17 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
     public bool Paused
     {
         get { Track(); return _paused; }
-        set => SetField(ref _paused, value);
+        set
+        {
+            if (value == _paused)
+                return;
+            var now = Engine?.Loop.Now ?? TimeSpan.Zero;
+            if (value)
+                _pausedAt = now;
+            else
+                _start += now - _pausedAt;
+            SetField(ref _paused, value);
+        }
     }
 
     [Qml]
