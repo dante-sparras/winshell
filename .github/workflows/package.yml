@@ -1,8 +1,9 @@
 name: Package
 
 # Builds and verifies what a release ships with scripts/package.ps1: on PRs that change packaging or the release
-# workflow, and on every push to main, so a broken package shows before a release. release-please.yml calls it for a
-# new draft release, and it can be run by hand to resume a draft; both publish only after its assets are verified.
+# workflow, and on a push to main that is not only docs or Markdown, so a broken package shows before a release.
+# release-please.yml calls it for a new draft release, and it can be run by hand to resume a draft; both publish only
+# after its assets are verified. A docs-only push does not start this workflow. A release still does, through workflow_call.
 # The upload also includes scripts/install.ps1 and scripts/uninstall.ps1, copied from the tagged commit.
 on:
   pull_request:
@@ -22,6 +23,9 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_call:
     inputs:
       tag:
@@ -180,6 +184,8 @@ jobs:
         with:
           name: store-package
           path: ${{ runner.temp }}/artifacts/*.msixbundle
+          # The release assets are the durable copy. This bundle is for Partner Center.
+          retention-days: 14
           if-no-files-found: error
 
   release:
