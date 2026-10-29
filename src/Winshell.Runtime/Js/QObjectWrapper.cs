@@ -159,7 +159,7 @@ public static class SignalFunction
             var thisValue = args.Length >= 2 ? args[0] : null;
             if (Slots.TryGetValue(target, out var other))
             {
-                slot.ConnectFor(runtime, a => other.Owner.Emit(other.Definition.Name, a));
+                slot.ConnectFor(runtime, a => other.Owner.Emit(other.Definition.Name, a), target);
                 return JsValue.Undefined;
             }
             slot.ConnectScript(target, thisValue, runtime);
