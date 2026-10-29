@@ -168,6 +168,38 @@ public sealed partial class TextLayout : IDisposable
     [GeneratedRegex(@"<\s*/?\s*[a-zA-Z][a-zA-Z0-9]*(\s[^>]*)?/?\s*>")]
     private static partial Regex TagPattern();
 
+    /// <summary>
+    /// Whether the first strong character is right-to-left, as Qt's QString::isRightToLeft decides.
+    /// Characters in the Hebrew, Arabic, Syriac, Thaana, NKo and other right-to-left blocks are strong right-to-left,
+    /// except their marks, digits and format characters. Any other letter is strong left-to-right.
+    /// </summary>
+    public static bool IsRightToLeft(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+        {
+            if (rune.Value == 0x200F)
+                return true;
+            if (rune.Value == 0x200E)
+                return false;
+            var category = Rune.GetUnicodeCategory(rune);
+            if (InRightToLeftBlock(rune.Value))
+            {
+                if (category is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.EnclosingMark or UnicodeCategory.DecimalDigitNumber or UnicodeCategory.Format))
+                    return true;
+            }
+            else if (Rune.IsLetter(rune))
+                return false;
+        }
+        return false;
+    }
+
+    private static bool InRightToLeftBlock(int c) =>
+        c is >= 0x0590 and <= 0x08FF
+            or >= 0xFB1D and <= 0xFDFF
+            or >= 0xFE70 and <= 0xFEFF
+            or >= 0x10800 and <= 0x10FFF
+            or >= 0x1E800 and <= 0x1EFFF;
+
     /// <summary>Turns the HTML subset Qt's StyledText and RichText accept into styled spans.</summary>
     public static List<TextSpan> ParseRichText(string html, FontSpec font, QColor? linkColor)
     {

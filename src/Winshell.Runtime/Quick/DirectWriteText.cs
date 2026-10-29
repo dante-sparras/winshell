@@ -1,5 +1,6 @@
 #pragma warning disable CA1416
 
+using System.Buffers;
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -637,13 +638,7 @@ internal sealed class DirectWriteLayout : IDisposable
             seen++;
             var content = rawLine.Length - rawLine.NewlineLength;
             var ink = includeTrailingWhitespace ? content : content - Math.Min(content, rawLine.TrailingWhitespaceLength);
-            double width = 0;
-            if (ink > 0)
-            {
-                var start = HitX(pos, trailing: false);
-                var end = HitX(pos + ink - 1, trailing: true);
-                width = Math.Max(0, end - start);
-            }
+            var width = ink > 0 ? Extent(pos, ink) : 0;
             Lines.Add(new TextLayout.Line
             {
                 Width = width,
@@ -670,10 +665,30 @@ internal sealed class DirectWriteLayout : IDisposable
             Width = 0;
             Lines[0].Width = 0;
         }
-        else if (includeTrailingWhitespace && Lines.Count == 1)
+    }
+
+    /// <summary>
+    /// The width a range covers. A right-to-left run starts on its right edge, so the width comes from
+    /// the leftmost and rightmost edges of the boxes the range hits, not from its first and last caret.
+    /// </summary>
+    private double Extent(uint position, uint length)
+    {
+        var boxes = ArrayPool<HitTestMetrics>.Shared.Rent((int)length);
+        try
         {
-            Width = CaretX(Source.Length);
-            Lines[0].Width = Width;
+            _layout!.HitTestTextRange(position, length, 0, 0, boxes, out var count);
+            var left = float.MaxValue;
+            var right = float.MinValue;
+            for (var i = 0; i < count; i++)
+            {
+                left = Math.Min(left, boxes[i].Left);
+                right = Math.Max(right, boxes[i].Left + boxes[i].Width);
+            }
+            return count == 0 ? 0 : Math.Max(0, right - left);
+        }
+        finally
+        {
+            ArrayPool<HitTestMetrics>.Shared.Return(boxes);
         }
     }
 
