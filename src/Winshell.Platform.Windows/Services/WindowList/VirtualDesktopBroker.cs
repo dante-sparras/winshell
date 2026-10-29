@@ -81,7 +81,6 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
 
     private const uint ClsctxInprocServer = 1;
     private const uint ClsctxLocalServer = 4;
-    private const int ChangedMode = unchecked((int)0x80010106);
 
     private static readonly Guid ManagerClass = new("AA509086-5CA9-4C25-8F95-589D3C07B48A");
     private static readonly Guid ImmersiveShellClass = new("C2F03A33-21F5-47FA-B4BB-156362A2F239");
@@ -378,7 +377,6 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
     {
         if (_documented is not null)
             return _documented;
-        EnsureCom();
         var iid = typeof(IVirtualDesktopManager).GUID;
         var hr = CoCreateInstance(in ManagerClass, 0, ClsctxInprocServer, in iid, out var pointer);
         if (hr < 0 || pointer == 0)
@@ -409,7 +407,6 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
     {
         manager = null;
         error = "";
-        EnsureCom();
         var providerId = typeof(IServiceProvider).GUID;
         var hr = CoCreateInstance(in ImmersiveShellClass, 0, ClsctxLocalServer, in providerId, out var shellPointer);
         if (hr < 0 || shellPointer == 0)
@@ -501,13 +498,6 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
         }
     }
 
-    private static void EnsureCom()
-    {
-        var hr = CoInitializeEx(0, 2);
-        if (hr < 0 && hr != ChangedMode)
-            Log.Default.Warn("desktops", $"CoInitializeEx failed ({Hex(hr)}).");
-    }
-
     private static void Release(object? com)
     {
         if (com is not null && Marshal.IsComObject(com))
@@ -518,9 +508,6 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
 
     [DllImport("ole32.dll")]
     private static extern int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
-
-    [DllImport("ole32.dll")]
-    private static extern int CoInitializeEx(nint reserved, uint model);
 
     [DllImport("combase.dll")]
     private static extern nint WindowsGetStringRawBuffer(nint hstring, out uint length);
