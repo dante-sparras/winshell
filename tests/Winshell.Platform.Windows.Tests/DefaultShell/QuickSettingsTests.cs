@@ -28,13 +28,13 @@ public class QuickSettingsTests
 
     private static readonly string[] DefaultTiles = ["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"];
 
-    /// <summary>The content with its layout kept in layout.json in the shell's temporary folder.</summary>
+    /// <summary>The content with its layout kept in layout.toml in the shell's temporary folder.</summary>
     private const string Saved = """
         import Winshell
         import QtQuick
         QuickSettingsContent {
           property int closed: 0
-          layoutPath: Shell.shellDir + "/layout.json"
+          layoutPath: Shell.shellDir + "/layout.toml"
           onCloseRequested: closed++
         }
         """;
@@ -334,8 +334,8 @@ public class QuickSettingsTests
     }
 
     private static string[] SavedTiles(DefaultShellHarness shell) =>
-        System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(shell.Directory, "layout.json")))
-            .RootElement.GetProperty("pinned").EnumerateArray().Select(e => e.GetString()!).ToArray();
+        ((Tomlyn.Model.TomlArray)Tomlyn.TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(File.ReadAllText(Path.Combine(shell.Directory, "layout.toml")))!["pinned"])
+            .Select(e => (string)e!).ToArray();
 
     private static DefaultShellHarness Editing(FakeServices? services = null)
     {
@@ -448,9 +448,9 @@ public class QuickSettingsTests
         }
 
         using var again = new DefaultShellHarness(Saved, services: Laptop());
-        File.WriteAllText(Path.Combine(again.Directory, "layout.json"), """{ "pinned": ["nightLight", "gone", "wifi", 3] }""");
+        File.WriteAllText(Path.Combine(again.Directory, "layout.toml"), """pinned = ["nightLight", "gone", "wifi", 3]""");
         again.Root.WriteProperty("layoutPath", "");
-        again.Root.WriteProperty("layoutPath", Path.Combine(again.Directory, "layout.json"));
+        again.Root.WriteProperty("layoutPath", Path.Combine(again.Directory, "layout.toml"));
         again.Settle();
         Assert.Equal(["nightLight", "wifi"], Tiles(again));
         Assert.Empty(again.Messages);
@@ -460,15 +460,15 @@ public class QuickSettingsTests
     public void Quick_settings_follows_its_layout_file_as_Winshell_Settings_changes_it()
     {
         using var shell = new DefaultShellHarness(Saved, services: Laptop());
-        File.WriteAllText(Path.Combine(shell.Directory, "layout.json"), """{ "pinned": ["wifi", "bluetooth"] }""");
+        File.WriteAllText(Path.Combine(shell.Directory, "layout.toml"), """pinned = ["wifi", "bluetooth"]""");
         shell.Root.WriteProperty("layoutPath", "");
-        shell.Root.WriteProperty("layoutPath", Path.Combine(shell.Directory, "layout.json"));
+        shell.Root.WriteProperty("layoutPath", Path.Combine(shell.Directory, "layout.toml"));
         shell.Settle();
         Assert.Equal(["wifi", "bluetooth"], Tiles(shell));
 
         // Past the time a FileView takes its own writes to be.
         Thread.Sleep(300);
-        File.WriteAllText(Path.Combine(shell.Directory, "layout.json"), """{ "pinned": ["bluetooth", "nightLight"] }""");
+        File.WriteAllText(Path.Combine(shell.Directory, "layout.toml"), """pinned = ["bluetooth", "nightLight"]""");
         var until = DateTime.UtcNow.AddSeconds(5);
         while (!Tiles(shell).SequenceEqual(["bluetooth", "nightLight"]))
         {
@@ -480,14 +480,14 @@ public class QuickSettingsTests
     }
 
     [Fact]
-    public void A_layout_file_that_is_not_JSON_leaves_the_default_tiles_and_warns()
+    public void A_layout_file_that_is_not_TOML_leaves_the_default_tiles_and_warns()
     {
         using var shell = new DefaultShellHarness(Saved, services: Laptop());
-        File.WriteAllText(Path.Combine(shell.Directory, "broken.json"), "not json");
-        shell.Root.WriteProperty("layoutPath", Path.Combine(shell.Directory, "broken.json"));
+        File.WriteAllText(Path.Combine(shell.Directory, "broken.toml"), "not toml");
+        shell.Root.WriteProperty("layoutPath", Path.Combine(shell.Directory, "broken.toml"));
         shell.Settle();
         Assert.Equal(DefaultTiles, Tiles(shell));
-        Assert.Contains(shell.Messages, m => m.Contains("broken.json", StringComparison.Ordinal));
+        Assert.Contains(shell.Messages, m => m.Contains("broken.toml", StringComparison.Ordinal));
     }
 
     [Fact]

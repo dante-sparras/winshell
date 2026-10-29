@@ -4,7 +4,7 @@ import Winshell.Theme
 import QtQuick
 import "launcher.js" as Launcher
 
-// Start > Pinned apps: the pins in Start's order, to move or unpin. They are Start's own file, launcher.json next
+// Start > Pinned apps: the pins in Start's order, to move or unpin. They are Start's own file, launcher.toml next
 // to the shell, which Start follows as it changes. Until something is pinned or moved, Start has its default pins.
 Column {
   id: root
@@ -21,21 +21,17 @@ Column {
   spacing: 4
 
   function read() {
-    var data = null
-    try {
-      data = JSON.parse(file.text() || "")
-    } catch (e) {
-      data = null
-    }
-    known = data !== null && Array.isArray(data.pins)
-    ids = known ? data.pins.slice() : []
+    known = Array.isArray(pinData.pins)
+    ids = known ? pinData.pins.slice() : []
   }
 
   function write(next) {
     ids = next
     known = true
-    if (pinsPath !== "")
-      file.setText(JSON.stringify({ pins: next }))
+    if (pinsPath === "")
+      return
+    pinData.pins = next
+    file.writeAdapter()
   }
 
   // Moves a pin past the pin next to it in Start. Pins Start cannot show keep their place.
@@ -63,6 +59,13 @@ Column {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.read()
+
+    TomlAdapter {
+      id: pinData
+      comments: ({ pins: "The apps pinned to Start, in order. [] pins nothing; without this file Start pins its defaults." })
+      // null until the file has pins.
+      property var pins: null
+    }
   }
 
   SettingsHeader {

@@ -18,18 +18,16 @@ Column {
   spacing: 4
 
   function read() {
-    try {
-      const saved = JSON.parse(file.text() || "").pinned
-      if (Array.isArray(saved))
-        keys = saved.filter(k => typeof k === "string")
-    } catch (e) {
-    }
+    if (Array.isArray(layout.pinned))
+      keys = layout.pinned.filter(k => typeof k === "string")
   }
 
   function write(next) {
     keys = next
-    if (layoutPath !== "")
-      file.setText(JSON.stringify({ pinned: next }, null, 2) + "\n")
+    if (layoutPath === "")
+      return
+    layout.pinned = next
+    file.writeAdapter()
   }
 
   // Moves a tile past the one next to it in the list; keys quick settings does not know keep their place.
@@ -54,6 +52,13 @@ Column {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.read()
+
+    TomlAdapter {
+      id: layout
+      comments: ({ pinned: "The quick settings tiles, in order: wifi, bluetooth, airplaneMode, energySaver, powerMode, nightLight,\naccessibility. A tile left out is not shown until quick settings or Winshell Settings adds it back." })
+      // null until the file has tiles.
+      property var pinned: null
+    }
   }
 
   SettingsCard { key: "quickSettingsTiles" }

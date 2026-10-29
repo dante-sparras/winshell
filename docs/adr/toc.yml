@@ -14,3 +14,5 @@
   href: 0007-windows-first-api.md
 - name: 8. Windows owns the lock screen
   href: 0008-windows-owns-the-lock-screen.md
+- name: 9. User config files are TOML
+  href: 0009-user-config-files-are-toml.md

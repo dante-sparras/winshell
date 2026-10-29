@@ -11,7 +11,7 @@ Winshell runs the default shell when you have no configuration of your own ([get
 | `CalendarFlyout.qml`, `NotificationCenter.qml`, `CalendarView.qml` | The [notification center and calendar](#notification-center-and-calendar) |
 | `OnScreenDisplayHost.qml`, `OnScreenDisplay.qml` | The [on-screen display](#on-screen-display) |
 | `SettingsWindow.qml` and `Settings*.qml` | [Winshell Settings](#winshell-settings) |
-| `Preferences.qml` | The singleton that keeps Winshell Settings' choices in `preferences.json` |
+| `Preferences.qml` | The singleton that keeps Winshell Settings' choices in `preferences.toml` |
 | `TrayArea.qml`, `TrayIcon.qml`, `QuickSettingsButton.qml`, `TaskbarClock.qml` | The right side of the taskbar |
 
 To change a surface, [copy the default shell](../guide/getting-started.md#make-the-default-shell-your-own) and edit your copy.
@@ -38,7 +38,7 @@ Right-click an empty part of the taskbar for **Taskbar settings**. Search opens 
 
 A popup window over the taskbar, opened by the Start button or the Windows key, on the material chosen in Winshell Settings. It has a search box, the pinned apps, and up to six recommended apps: the ones used most recently that aren't pinned. **All apps** lists every app. Typing searches every app Start lists ([`Apps.search`](winshell-apps.md#apps)). The arrow keys move between apps, Enter opens the selected one, and Escape or the Windows key closes Start.
 
-Pins are in `launcher.json` next to the shell's `shell.qml`: for the default shell, `%LOCALAPPDATA%\winshell\default-shell\launcher.json`. Until you pin or unpin something, Start shows its default pins. Winshell Settings' Start page turns recommended apps off and moves or unpins pins.
+Pins are in `launcher.toml` next to the shell's `shell.qml`: for the default shell, `%LOCALAPPDATA%\winshell\default-shell\launcher.toml`. Until you pin or unpin something, Start shows its default pins. Winshell Settings' Start page turns recommended apps off and moves or unpins pins.
 
 ## Quick settings
 
@@ -49,7 +49,7 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 - **Sliders**: the volume of the default playback device, with a page to pick the output, and the brightness of a monitor that reports one.
 - **The battery**, on a PC that has one.
 
-**Edit quick settings** edits the tiles: unpin, add back and reorder them, with the mouse or the keyboard. They are kept in `quick-settings.json` in the shell's state folder.
+**Edit quick settings** edits the tiles: unpin, add back and reorder them, with the mouse or the keyboard. They are kept in `quick-settings.toml` in the shell's state folder.
 
 ## Notification center and calendar
 
@@ -65,15 +65,15 @@ When the volume, a monitor's brightness, the microphone mute or the media playin
 
 A window laid out like Windows 11 Settings, for Winshell's own choices: light or dark, the accent color, the material, the taskbar, Start, quick settings, notifications, hotkeys, running at sign-in, and Winshell's own updates. Open it from the taskbar's right-click menu, its hotkey, or `winshell ipc call settings open <page>`.
 
-[Winshell Settings](../settings.md) lists its pages and the keys of `preferences.json`.
+[Winshell Settings](../settings.md) lists its pages and the keys of `preferences.toml`.
 
 ## Files
 
 | File | Where | What |
 | --- | --- | --- |
-| `preferences.json` | The config folder, `%APPDATA%\winshell` | Winshell Settings' choices |
-| `launcher.json` | Next to `shell.qml`: `%LOCALAPPDATA%\winshell\default-shell` for the default shell | Start pins |
+| `preferences.toml` | The config folder, `%APPDATA%\winshell` | Winshell Settings' choices |
+| `launcher.toml` | Next to `shell.qml`: `%LOCALAPPDATA%\winshell\default-shell` for the default shell | Start pins |
 | `taskbar.json` | The shell's data folder, `%LOCALAPPDATA%\winshell\data\by-shell\winshell-default` | Taskbar pins |
-| `quick-settings.json` | The shell's state folder, `%LOCALAPPDATA%\winshell\state\by-shell\winshell-default` | Quick settings tiles and their order |
+| `quick-settings.toml` | The shell's state folder, `%LOCALAPPDATA%\winshell\state\by-shell\winshell-default` | Quick settings tiles and their order |
 
-The data and state folders follow the shell id, which the default shell sets with `//@ pragma ShellId winshell-default`, so a copy that keeps that line keeps `taskbar.json` and `quick-settings.json`. `launcher.json` doesn't follow the shell id: it is beside each copy's own `shell.qml`, and copying the folder copies it.
+The data and state folders follow the shell id, which the default shell sets with `//@ pragma ShellId winshell-default`, so a copy that keeps that line keeps `taskbar.json` and `quick-settings.toml`. `launcher.toml` doesn't follow the shell id: it is beside each copy's own `shell.qml`, and copying the folder copies it.

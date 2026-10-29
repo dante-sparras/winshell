@@ -1,5 +1,7 @@
 using System.Text.Json;
 using SkiaSharp;
+using Tomlyn;
+using Tomlyn.Model;
 using Winshell.Platform.Windows.Services.Session;
 using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
@@ -25,9 +27,9 @@ public class SettingsTests
           anchors.fill: parent
           showIcons: false
           apps: Apps.apps.values
-          pinsPath: ready ? Shell.shellDir + "/launcher.json" : ""
-          tilesPath: ready ? Shell.shellDir + "/quick-settings.json" : ""
-          onReadyChanged: Preferences.path = Shell.shellDir + "/preferences.json"
+          pinsPath: ready ? Shell.shellDir + "/launcher.toml" : ""
+          tilesPath: ready ? Shell.shellDir + "/quick-settings.toml" : ""
+          onReadyChanged: Preferences.path = Shell.shellDir + "/preferences.toml"
         }
         """;
 
@@ -70,8 +72,8 @@ public class SettingsTests
         shell.Settle();
     }
 
-    private static JsonElement Saved(DefaultShellHarness shell, string file = "preferences.json") =>
-        JsonDocument.Parse(File.ReadAllText(Path.Combine(shell.Directory, file))).RootElement;
+    private static JsonElement Saved(DefaultShellHarness shell, string file = "preferences.toml") =>
+        JsonSerializer.SerializeToElement(TomlSerializer.Deserialize<TomlTable>(File.ReadAllText(Path.Combine(shell.Directory, file))));
 
     private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(e => e.GetString()!).ToArray();
 
@@ -233,7 +235,7 @@ public class SettingsTests
     }
 
     [Fact]
-    public void Choices_are_saved_to_preferences_json_and_a_saved_file_is_read_back()
+    public void Choices_are_saved_to_preferences_toml_and_a_saved_file_is_read_back()
     {
         var saved = Theme.Current;
         try
@@ -260,7 +262,7 @@ public class SettingsTests
             // The shell going away gives the theme back to Windows.
             Assert.False(Theme.Current.IsDark);
 
-            using var again = Open(files: new() { ["preferences.json"] = """{ "colorScheme": "light", "taskbarAppsOn": "where", "startRecommended": false, "unknown": 1 }""" });
+            using var again = Open(files: new() { ["preferences.toml"] = "colorScheme = \"light\"\ntaskbarAppsOn = \"where\"\nstartRecommended = false\nunknown = 1\n" });
             Assert.Equal(1, Control<ComboBox>(again, "colorScheme").ReadProperty("currentIndex"));
             Show(again, "taskbar");
             Assert.Equal(2, Control<ComboBox>(again, "taskbarAppsOn").ReadProperty("currentIndex"));
@@ -280,7 +282,7 @@ public class SettingsTests
         try
         {
             Theme.Current = Theme.Default(true);
-            using var shell = Open(files: new() { ["preferences.json"] = """{ "colorScheme": "sepia", "accentColor": "red" }""" });
+            using var shell = Open(files: new() { ["preferences.toml"] = "colorScheme = \"sepia\"\naccentColor = \"red\"\n" });
             Assert.True(Theme.Current.IsDark);
             Assert.Equal(AccentColors.Default, Theme.Current.Accents);
             Assert.Equal(0, Control<ComboBox>(shell, "colorScheme").ReadProperty("currentIndex"));
@@ -360,7 +362,7 @@ public class SettingsTests
         services.Apps.Add("edge", "Microsoft Edge", "edge");
         services.Apps.Add("explorer", "File Explorer", "explorer");
         services.Apps.Add("notepad", "Notepad", "notepad");
-        using var shell = Open(files: new() { ["launcher.json"] = """{"pins":["edge","gone","explorer","notepad"]}""" }, services: services);
+        using var shell = Open(files: new() { ["launcher.toml"] = """pins = ["edge", "gone", "explorer", "notepad"]""" }, services: services);
         Show(shell, "start", "pins");
 
         Assert.Equal(["Microsoft Edge", "File Explorer", "Notepad"], Titles(shell, "pinList"));
@@ -369,12 +371,12 @@ public class SettingsTests
         shell.Click(RowButton(shell, "pinList", "edge", "down"));
         Assert.Equal(["File Explorer", "Microsoft Edge", "Notepad"], Titles(shell, "pinList"));
         // A pin Start cannot show keeps its place.
-        Assert.Equal(["gone", "explorer", "edge", "notepad"], Strings(Saved(shell, "launcher.json").GetProperty("pins")));
+        Assert.Equal(["gone", "explorer", "edge", "notepad"], Strings(Saved(shell, "launcher.toml").GetProperty("pins")));
         Assert.True(RowButton(shell, "pinList", "edge", "down").ActiveFocus);
 
         shell.Click(RowButton(shell, "pinList", "explorer", "remove"));
         Assert.Equal(["Microsoft Edge", "Notepad"], Titles(shell, "pinList"));
-        Assert.Equal(["gone", "edge", "notepad"], Strings(Saved(shell, "launcher.json").GetProperty("pins")));
+        Assert.Equal(["gone", "edge", "notepad"], Strings(Saved(shell, "launcher.toml").GetProperty("pins")));
         Assert.True(RowButton(shell, "pinList", "edge", "remove").ActiveFocus);
         Assert.Equal("Unpin Microsoft Edge", Node(shell, RowButton(shell, "pinList", "edge", "remove")).Name);
         AssertQuiet(shell);
@@ -390,13 +392,13 @@ public class SettingsTests
         Show(shell, "start", "pins");
 
         Assert.Equal(["Microsoft Edge", "Calculator"], Titles(shell, "pinList"));
-        Assert.False(File.Exists(Path.Combine(shell.Directory, "launcher.json")));
+        Assert.False(File.Exists(Path.Combine(shell.Directory, "launcher.toml")));
     }
 
     [Fact]
     public void Quick_settings_tiles_move_come_off_and_go_back_in_the_file_quick_settings_keeps()
     {
-        using var shell = Open(files: new() { ["quick-settings.json"] = """{ "pinned": ["bluetooth", "wifi", "custom"] }""" });
+        using var shell = Open(files: new() { ["quick-settings.toml"] = """pinned = ["bluetooth", "wifi", "custom"]""" });
         Show(shell, "quickSettings");
 
         string[] Addable() => DefaultShellHarness.FindAll(shell.Root).Where(i => i.ObjectName.StartsWith("add:", StringComparison.Ordinal) && i.Visible)
@@ -407,12 +409,12 @@ public class SettingsTests
         shell.Click(RowButton(shell, "tileList", "wifi", "up"));
         Assert.Equal(["wifi", "bluetooth"], Keys(shell, "tileList"));
         // A tile this Winshell does not know keeps its place.
-        Assert.Equal(["wifi", "bluetooth", "custom"], Strings(Saved(shell, "quick-settings.json").GetProperty("pinned")));
+        Assert.Equal(["wifi", "bluetooth", "custom"], Strings(Saved(shell, "quick-settings.toml").GetProperty("pinned")));
 
         shell.Click(RowButton(shell, "tileList", "bluetooth", "remove"));
         shell.Click(DefaultShellHarness.FindAll(shell.Find("add:nightLight")).Single(i => i.ObjectName == "add"));
         Assert.Equal(["wifi", "nightLight"], Keys(shell, "tileList"));
-        Assert.Equal(["wifi", "custom", "nightLight"], Strings(Saved(shell, "quick-settings.json").GetProperty("pinned")));
+        Assert.Equal(["wifi", "custom", "nightLight"], Strings(Saved(shell, "quick-settings.toml").GetProperty("pinned")));
         Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "accessibility"], Addable());
         Assert.Equal("Add Bluetooth", Node(shell, DefaultShellHarness.FindAll(shell.Find("add:bluetooth")).Single(i => i.ObjectName == "add")).Name);
         AssertQuiet(shell);
@@ -442,7 +444,7 @@ public class SettingsTests
         import QtQuick
         Item {
           property bool ready: false
-          onReadyChanged: Preferences.path = Shell.shellDir + "/preferences.json"
+          onReadyChanged: Preferences.path = Shell.shellDir + "/preferences.toml"
           QtObject { id: chat; property string appId: "Contoso.Chat"; property string appName: "Chat"; property var notifications: [] }
           QtObject { id: mail; property string appId: "Fabrikam.Mail"; property string appName: "Mail"; property var notifications: [] }
           QtObject { id: nameless; property string appId: ""; property string appName: ""; property var notifications: [] }
@@ -509,7 +511,7 @@ public class SettingsTests
             .Replace("values: [chat, mail, nameless]", "values: onlyChat ? [chat] : [chat, mail]")
             .Replace("property bool ready: false", "property bool ready: false; property bool onlyChat: false; property int chatCleared: chat.dismissed; property int mailCleared: mail.dismissed");
         using var shell = Open(qml, width: 1360,
-            files: new() { ["preferences.json"] = """{ "hiddenNotificationApps": [{ "id": "Contoso.Chat", "name": "Chat" }] }""" });
+            files: new() { ["preferences.toml"] = """hiddenNotificationApps = [{ id = "Contoso.Chat", name = "Chat" }]""" });
         var center = shell.Find("center");
         Button ClearAll() => DefaultShellHarness.FindAll(center).OfType<Button>().Single(b => b.Text == "Clear all");
         Text CaughtUp() => DefaultShellHarness.FindAll(center).OfType<Text>().Single(t => t.Text_ == "You're all caught up");
@@ -531,7 +533,7 @@ public class SettingsTests
     public void An_app_turned_off_earlier_stays_listed_by_name_without_notifications()
     {
         using var shell = Open(Notifications.Replace("values: [chat, mail, nameless]", "values: []"), width: 1360,
-            files: new() { ["preferences.json"] = """{ "hiddenNotificationApps": [{ "id": "Contoso.Chat", "name": "Chat" }] }""" });
+            files: new() { ["preferences.toml"] = """hiddenNotificationApps = [{ id = "Contoso.Chat", name = "Chat" }]""" });
 
         Assert.True(shell.Has("app:Contoso.Chat"));
         Assert.False(DefaultShellHarness.FindAll(shell.Find("app:Contoso.Chat")).OfType<Switch>().Single().Checked);
@@ -551,7 +553,7 @@ public class SettingsTests
                 page: "hotkeys"
                 startHotkey: start
                 settingsHotkey: settings
-                Component.onCompleted: Preferences.path = Shell.shellDir + "/preferences.json"
+                Component.onCompleted: Preferences.path = Shell.shellDir + "/preferences.toml"
               }
             }
             """);
@@ -581,7 +583,7 @@ public class SettingsTests
             SettingsView {
               anchors.fill: parent
               page: "hotkeys"
-              Component.onCompleted: Preferences.path = Shell.shellDir + "/preferences.json"
+              Component.onCompleted: Preferences.path = Shell.shellDir + "/preferences.toml"
             }
             """);
         var field = Control<TextField>(shell, "hotkeySettings");

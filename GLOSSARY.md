@@ -83,7 +83,7 @@ The default shell's settings window, laid out like Windows 11 Settings. It chang
 _Avoid_: control panel, config app
 
 **Preferences**:
-The choices made in Winshell Settings, kept in `preferences.json` in the config folder.
+The choices made in Winshell Settings, kept in `preferences.toml` in the config folder.
 _Avoid_: settings (that is Windows Settings), config (that is the QML)
 
 **On-screen display**:

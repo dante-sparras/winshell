@@ -14,7 +14,7 @@ A portable Winshell, the zip from GitHub Releases or the winget package, updates
 
 **Restart to update** starts `winshell.exe` again with no console window. It drops `-d` and `--daemonize`, keeps the other arguments this shell was started with, and adds `--after` with this process's id, then closes this shell. The new process waits up to 30 seconds for this one to exit, so the taskbar, the hotkeys and the tray can come free, and then installs the update as in step 4. While another Winshell runs, the restart could not install the update, so **Restart now** does not restart: the update stays ready and the About page says "Another Winshell is running. Close it, then restart this one."
 
-Winshell checks for itself only while `Updates.automatic` is on: 30 seconds after it is turned on, and once a day after that. The default shell turns it on unless `autoUpdate` is `false` in `preferences.json`, which **Get Winshell updates automatically** on the About page of Winshell Settings changes. **Check for updates** works either way. Winshell must be able to write to its own folder; if it cannot, it says so and downloads nothing.
+Winshell checks for itself only while `Updates.automatic` is on: 30 seconds after it is turned on, and once a day after that. The default shell turns it on unless `autoUpdate` is `false` in `preferences.toml`, which **Get Winshell updates automatically** on the About page of Winshell Settings changes. **Check for updates** works either way. Winshell must be able to write to its own folder; if it cannot, it says so and downloads nothing.
 
 ## The `Updates` singleton
 

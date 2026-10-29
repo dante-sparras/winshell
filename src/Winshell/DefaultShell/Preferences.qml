@@ -4,7 +4,7 @@ import Winshell.Io
 import Winshell.Theme
 import QtQuick
 
-// The choices made in Winshell Settings, kept in preferences.json in the config folder (%APPDATA%\winshell, or
+// The choices made in Winshell Settings, kept in preferences.toml in the config folder (%APPDATA%\winshell, or
 // WINSHELL_CONFIG_DIR). Every surface reads them here and follows a change at once, including one made to the file
 // by hand. A key the file does not have keeps its default when Winshell starts. Surfaces read the values below that
 // fall back to the default when the file has one Winshell cannot use.
@@ -12,7 +12,7 @@ Singleton {
   id: root
 
   // Without a config folder, as in tests, the choices last for this run only.
-  property string path: Shell.configRoot ? Shell.configRoot + "/preferences.json" : ""
+  property string path: Shell.configRoot ? Shell.configRoot + "/preferences.toml" : ""
 
   // "system", "light" or "dark".
   property alias colorScheme: adapter.colorScheme
@@ -92,8 +92,23 @@ Singleton {
     onFileChanged: reload()
     onAdapterUpdated: if (root.path) writeAdapter()
 
-    JsonAdapter {
+    TomlAdapter {
       id: adapter
+      // Written above a key the file does not have yet, so the file explains itself.
+      comments: ({
+        colorScheme: "\"system\" follows Windows; or \"light\" or \"dark\".",
+        accentColor: "\"\" for the accent color picked in Windows, or \"#rrggbb\".",
+        backdrop: "What shows through the taskbar and the flyouts: \"acrylic\" or \"mica\".",
+        taskbarCentered: "true centers the taskbar's apps; false puts them on the left.",
+        taskbarAutoHide: "true hides the taskbar until the pointer reaches it.",
+        taskbarAllScreens: "true shows a taskbar on every display; false on the main display only.",
+        taskbarAppsOn: "With several displays: \"all\" shows every app on every taskbar, \"main\" every app on the main\ntaskbar and each display's own windows on the others, \"where\" each window on its display's taskbar only.",
+        startRecommended: "true shows recommended apps in Start under the pins.",
+        hiddenNotificationApps: "The apps the notification center leaves out, as { id = \"<AppUserModelID>\", name = \"<app name>\" }.",
+        startHotkey: "The hotkey that opens Start, such as \"Win\" or \"Ctrl+Alt+S\"; \"\" turns it off.",
+        settingsHotkey: "The hotkey that opens Winshell Settings; \"\" turns it off.",
+        autoUpdate: "true checks for, downloads and installs Winshell updates. Only a portable Winshell updates itself."
+      })
       property string colorScheme: "system"
       property string accentColor: ""
       property string backdrop: "acrylic"

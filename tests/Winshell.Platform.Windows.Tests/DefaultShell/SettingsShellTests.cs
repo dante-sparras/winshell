@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Tomlyn;
+using Tomlyn.Model;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Quick.Controls;
@@ -16,7 +18,7 @@ public class SettingsShellTests
     [Fact]
     public void The_shell_follows_each_choice_at_once_without_a_reload()
     {
-        using var run = new RunningShell("""{ "taskbarCentered": false }""");
+        using var run = new RunningShell("taskbarCentered = false");
         Assert.Equal(2, run.Taskbars.Length);
         Assert.All(run.Taskbars, t => Assert.False((bool)t.ReadProperty("centered")!));
         var generation = run.Host.Engine;
@@ -53,12 +55,12 @@ public class SettingsShellTests
     [Fact]
     public void A_preferences_file_edited_by_hand_applies_as_it_is_saved()
     {
-        using var run = new RunningShell("""{ "taskbarCentered": true }""");
+        using var run = new RunningShell("taskbarCentered = true");
         Assert.All(run.Taskbars, t => Assert.True((bool)t.ReadProperty("centered")!));
 
         // Past the time FileView takes its own writes to be.
         Thread.Sleep(300);
-        File.WriteAllText(run.PreferencesPath, """{ "taskbarCentered": false, "taskbarAppsOn": "where" }""");
+        File.WriteAllText(run.PreferencesPath, "taskbarCentered = false\ntaskbarAppsOn = \"where\"\n");
         run.Until(() => run.Taskbars.All(t => !(bool)t.ReadProperty("centered")!));
         Assert.All(run.Taskbars, t => Assert.Equal("where", t.ReadProperty("appsOn")));
     }
@@ -74,7 +76,7 @@ public class SettingsShellTests
         Assert.True(run.Saved().GetProperty("taskbarAutoHide").GetBoolean());
 
         Thread.Sleep(300);
-        File.WriteAllText(run.PreferencesPath, """{ "taskbarAutoHide": false, "taskbarCentered": false }""");
+        File.WriteAllText(run.PreferencesPath, "taskbarAutoHide = false\ntaskbarCentered = false\n");
         run.Until(() => run.Taskbars.All(t => !(bool)t.ReadProperty("centered")!));
         Assert.All(run.Taskbars, t => Assert.False((bool)t.ReadProperty("autoHide")!));
     }
@@ -97,7 +99,7 @@ public class SettingsShellTests
     public void One_taskbar_shows_the_apps_of_every_screen()
     {
         // Apps on the taskbar where their window is, then a taskbar on the main screen only.
-        using var run = new RunningShell("""{ "taskbarAllScreens": false, "taskbarAppsOn": "where" }""");
+        using var run = new RunningShell("taskbarAllScreens = false\ntaskbarAppsOn = \"where\"\n");
         Assert.Equal("all", Assert.Single(run.Taskbars).ReadProperty("appsOn"));
         run.Host.Ipc.Call("settings", "open", ["taskbarAppsOn"]);
         run.Settle();
@@ -105,8 +107,8 @@ public class SettingsShellTests
     }
 
     [Theory]
-    [InlineData("""{ "taskbarAppsOn": "sideways", "hiddenNotificationApps": {} }""")]
-    [InlineData("""{ "taskbarAppsOn": 3, "hiddenNotificationApps": [null, 5, "Contoso.Chat", { "name": "No id" }, { "id": 7 }] }""")]
+    [InlineData("taskbarAppsOn = \"sideways\"\nhiddenNotificationApps = {}\n")]
+    [InlineData("taskbarAppsOn = 3\nhiddenNotificationApps = [5, \"Contoso.Chat\", { name = \"No id\" }, { id = 7 }]\n")]
     public void Values_the_shell_cannot_use_fall_back_to_their_defaults(string preferences)
     {
         using var run = new RunningShell(preferences);
@@ -229,7 +231,7 @@ public class SettingsShellTests
                     File.Copy(file, target);
                 }
             }
-            PreferencesPath = Path.Combine(config, "preferences.json");
+            PreferencesPath = Path.Combine(config, "preferences.toml");
             if (preferences is not null)
                 File.WriteAllText(PreferencesPath, preferences);
 
@@ -275,7 +277,7 @@ public class SettingsShellTests
         public T Control<T>(string key) where T : Item =>
             Walk(Walk(Settings.ContentItem).Single(i => i.ObjectName == "setting:" + key && i.Visible)).OfType<T>().Single();
 
-        public JsonElement Saved() => JsonDocument.Parse(File.ReadAllText(PreferencesPath)).RootElement;
+        public JsonElement Saved() => JsonSerializer.SerializeToElement(TomlSerializer.Deserialize<TomlTable>(File.ReadAllText(PreferencesPath)));
 
         public void Settle()
         {

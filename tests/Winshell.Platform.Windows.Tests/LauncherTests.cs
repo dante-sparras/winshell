@@ -228,7 +228,7 @@ public sealed class LauncherTests
         var kept = TempFile();
         try
         {
-            File.WriteAllText(empty, """{ "pins": [] }""");
+            File.WriteAllText(empty, "pins = []");
             using var blank = Open(dir => $$"""
                 LauncherView {
                   pinsPath: "{{empty}}"
@@ -237,9 +237,9 @@ public sealed class LauncherTests
                 """);
             Assert.Empty(Strings(blank.Eval("pinIds")));
             Assert.Empty(Named(blank.Root, "pinTile"));
-            Assert.Equal("{\"pins\":[]}", Compact(File.ReadAllText(empty)));
+            Assert.Equal("pins=[]", Compact(File.ReadAllText(empty)));
 
-            File.WriteAllText(kept, """{ "pins": ["ghost", "note"] }""");
+            File.WriteAllText(kept, """pins = ["ghost", "note"]""");
             using var known = Open(dir => $$"""
                 LauncherView {
                   pinsPath: "{{kept}}"
@@ -316,7 +316,7 @@ public sealed class LauncherTests
         var pins = TempFile();
         try
         {
-            File.WriteAllText(pins, """{ "pins": ["p0", "p1"] }""");
+            File.WriteAllText(pins, """pins = ["p0", "p1"]""");
             using var view = Open(dir => $$"""
                 LauncherView {
                   pinsPath: "{{pins}}"
@@ -327,7 +327,7 @@ public sealed class LauncherTests
 
             // Winshell Settings moves and unpins in the same file. Past the time a FileView takes its own writes to be:
             Thread.Sleep(300);
-            File.WriteAllText(pins, """{ "pins": ["p1"] }""");
+            File.WriteAllText(pins, """pins = ["p1"]""");
             var until = DateTime.UtcNow.AddSeconds(5);
             while (Strings(view.Eval("pinIds")).Count != 1)
             {
@@ -574,7 +574,7 @@ public sealed class LauncherTests
 
     private static string TempFile()
     {
-        var path = Path.Combine(Path.GetTempPath(), "winshell-launcher-tests", Guid.NewGuid().ToString("N") + ".json");
+        var path = Path.Combine(Path.GetTempPath(), "winshell-launcher-tests", Guid.NewGuid().ToString("N") + ".toml");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         return path.Replace('\\', '/');
     }

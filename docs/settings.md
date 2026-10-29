@@ -21,13 +21,13 @@ Closing the window hides it. The next open brings it back on the page it was on.
 | Notifications | Do not disturb as Windows reports it, and per app whether Winshell's notification center shows its notifications. **Clear all** in the notification center leaves an app that is turned off alone. Windows still decides banners and sounds. |
 | Hotkeys | Open Start (`Win` until changed) and Open Winshell Settings (none until set). Empty turns one off. A hotkey starts with Win, Ctrl or Alt, or is `Win` alone, so it never takes a key other apps type with; the two hotkeys cannot be the same. A chord Windows or another app holds says so and is not taken. |
 | Startup | Run Winshell when you sign in, for your account only, off until you turn it on. If Windows' Startup apps page turned it off, the switch shows off and only that page turns it back on. An entry that starts a `winshell.exe` in another folder, or with other options, also shows off; turning it on points it at this one. |
-| About | The version; Winshell's updates, with **Check for updates** or **Restart now** and **Get Winshell updates automatically** (see [Winshell updates](updates.md)); the config folder and this instance's log, each with a button to open it; and **Run diagnostics**, which runs the checks of [winshell doctor](doctor.md) and lists them under the card, a fix under each problem. Opening a config folder that does not exist yet makes it, with a `preferences.json` of defaults. |
+| About | The version; Winshell's updates, with **Check for updates** or **Restart now** and **Get Winshell updates automatically** (see [Winshell updates](updates.md)); the config folder and this instance's log, each with a button to open it; and **Run diagnostics**, which runs the checks of [winshell doctor](doctor.md) and lists them under the card, a fix under each problem. Opening a config folder that does not exist yet makes it, with a `preferences.toml` of defaults, each under a comment saying what it does. |
 
 Search matches every word typed against each setting's title, description and a few keywords. Titles that start with what was typed come first. Enter or a click opens the setting's page with the keyboard on it.
 
 ## Where the choices live
 
-Everything the window chooses applies at once, without a reload, and is kept in `preferences.json` in the config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR`. A change made to that file by hand applies as it is saved, even when the first choice made the folder. A key the file does not have keeps its default when Winshell starts; removing a key by hand while it runs keeps the value in use. A mode, accent, material or taskbar apps value Winshell cannot read falls back to its default, which for mode and accent is following Windows. A hidden app without an `id` is skipped.
+Everything the window chooses applies at once, without a reload, and is kept in `preferences.toml` in the config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR`. A change made to that file by hand applies as it is saved, even when the first choice made the folder. When Winshell changes a value it rewrites only that value: comments, blank lines and keys it does not know stay, and a key it adds goes at the end under a comment saying what it does. A file that is not valid TOML is not read, so the values in use stay. The next choice reads the file again: if that read parses, the choice is written into it and every key that was not changed stays as that read has it; if it does not, or the read fails, nothing is written and a warning is logged. A key the file does not have keeps its default when Winshell starts; removing a key by hand while it runs keeps the value in use. A mode, accent, material or taskbar apps value Winshell cannot read falls back to its default, which for mode and accent is following Windows. A hidden app without an `id` is skipped.
 
 | Key | Default | Values |
 | --- | --- | --- |
@@ -39,14 +39,14 @@ Everything the window chooses applies at once, without a reload, and is kept in 
 | `taskbarAllScreens` | `true` | `false` shows a taskbar on the main display only |
 | `taskbarAppsOn` | `"all"` | `"all"`, `"main"`, `"where"`, as `Taskbar.appsOn` |
 | `startRecommended` | `true` | |
-| `hiddenNotificationApps` | `[]` | `{ "id": "<AppUserModelID>", "name": "<app name>" }` for each app turned off |
+| `hiddenNotificationApps` | `[]` | `{ id = "<AppUserModelID>", name = "<app name>" }` for each app turned off |
 | `startHotkey` | `"Win"` | a sequence as `Hotkey.sequence` takes it, or `""` |
 | `settingsHotkey` | `""` | the same |
 | `autoUpdate` | `true` | `false` stops automatic checks and downloads. Only a portable Winshell updates itself. |
 
-Start pins and quick settings tiles stay in the files those surfaces already keep: `launcher.json` next to the shell and `quick-settings.json` in its state folder. Start and quick settings follow those files as they change. The sign-in entry is the `Winshell` value under the user's `Run` key; see [where files live](development.md#where-files-live).
+Start pins and quick settings tiles stay in the files those surfaces already keep: `launcher.toml` next to the shell, with the app ids in order as `pins = [...]`, and `quick-settings.toml` in its state folder, with the tile keys in order as `pinned = [...]`. Start and quick settings follow those files as they change, and keep their comments the same way. The sign-in entry is the `Winshell` value under the user's `Run` key; see [where files live](development.md#where-files-live).
 
-In QML, `Preferences` is the singleton that reads and writes `preferences.json`. Surfaces bind to it: `centered: Preferences.taskbarCentered`, `WindowEffects.backdrop: Preferences.material`. It sets `Theme.colorScheme`, `Theme.accentColor` and `Updates.automatic`, and `Shell.configRoot`, `Shell.logPath` and `Shell.version` fill the About page.
+In QML, `Preferences` is the singleton that reads and writes `preferences.toml`, through a `TomlAdapter`. Surfaces bind to it: `centered: Preferences.taskbarCentered`, `WindowEffects.backdrop: Preferences.material`. It sets `Theme.colorScheme`, `Theme.accentColor` and `Updates.automatic`, and `Shell.configRoot`, `Shell.logPath` and `Shell.version` fill the About page.
 
 ## Checks only a live session can do
 

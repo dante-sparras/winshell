@@ -62,6 +62,7 @@ public static partial class StandardModules
             .Uncreatable<FileViewAdapter>("FileViewAdapter")
             .Type<JsonAdapter>("JsonAdapter")
             .Type<JsonObject>("JsonObject")
+            .Type<TomlAdapter>("TomlAdapter")
             .Type<IpcHandler>("IpcHandler")
             .Type<SocketObject>("Socket")
             .Type<SocketServer>("SocketServer")
