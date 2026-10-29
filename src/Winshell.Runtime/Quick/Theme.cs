@@ -65,11 +65,15 @@ public readonly record struct Elevation(float Blur, float OffsetY, QColor Color)
 /// The Windows 11 theme: light or dark, whether a contrast theme is on, the accent and the system colors, with the
 /// Fluent design tokens made from them. A token has the name of its WinUI 3 theme resource and the values of the
 /// Windows App SDK 1.8 <c>generic.xaml</c>. Animation effects follow Windows, and a contrast theme does not turn
-/// them off. The platform updates the theme when the user changes their Windows settings, and a shell can choose
+/// them off. <see cref="WheelScrollLines"/> is how many lines a wheel notch scrolls, or <see cref="WheelPageScroll"/>
+/// for a page, as the Windows mouse settings say. The platform updates the theme when the user changes their Windows settings, and a shell can choose
 /// light or dark and its own accent on top (<see cref="Choose"/>).
 /// </summary>
-public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false, bool AnimationsEnabled = true)
+public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false, bool AnimationsEnabled = true, uint WheelScrollLines = 3)
 {
+    /// <summary>The <see cref="WheelScrollLines"/> that scrolls a page a notch, Win32's <c>WHEEL_PAGESCROLL</c>.</summary>
+    public const uint WheelPageScroll = uint.MaxValue;
+
     private static Theme _reported = Default(false);
     private static Theme _current = _reported;
     private static ThemeChoice _choice = ThemeChoice.None;

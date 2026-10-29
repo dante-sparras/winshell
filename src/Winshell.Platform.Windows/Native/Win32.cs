@@ -233,6 +233,7 @@ internal static partial class Win32
     public const uint WM_THEMECHANGED = 0x031A;
 
     public const uint SPI_GETHIGHCONTRAST = 0x0042;
+    public const uint SPI_GETWHEELSCROLLLINES = 0x0068;
     public const uint HCF_HIGHCONTRASTON = 0x0001;
 
     public const int COLOR_WINDOW = 5;

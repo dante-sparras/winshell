@@ -207,7 +207,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         catch (System.Security.SecurityException)
         {
         }
-        var theme = Theme.Default(dark) with { System = ReadSystemColors(), IsHighContrast = HighContrastOn() };
+        var theme = Theme.Default(dark) with { System = ReadSystemColors(), IsHighContrast = HighContrastOn(), WheelScrollLines = WheelScrollLines() };
         var animations = true;
         try
         {
@@ -242,6 +242,12 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     {
         var hc = new HIGHCONTRASTW { cbSize = (uint)sizeof(HIGHCONTRASTW) };
         return Win32.SystemParametersInfoW(Win32.SPI_GETHIGHCONTRAST, hc.cbSize, &hc, 0) && (hc.dwFlags & Win32.HCF_HIGHCONTRASTON) != 0;
+    }
+
+    private static uint WheelScrollLines()
+    {
+        uint lines;
+        return Win32.SystemParametersInfoW(Win32.SPI_GETWHEELSCROLLLINES, 0, &lines, 0) ? lines : 3;
     }
 
     private static SystemColors ReadSystemColors()
