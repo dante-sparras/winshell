@@ -179,6 +179,30 @@ public class QmlParserTests
         Assert.Equal(3, ex.Location.Line);
     }
 
+    [Theory]
+    [InlineData(")", "Unexpected ')'")]
+    [InlineData("]", "Unexpected ']'")]
+    public void A_stray_closer_is_a_syntax_error(string closer, string reason)
+    {
+        var ex = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse($"Item {{\n  a: foo{closer}\n  b: 1\n}}", "shell.qml"));
+        Assert.Equal(reason, ex.Reason);
+        Assert.Equal(2, ex.Location.Line);
+    }
+
+    [Fact]
+    public void Deep_object_and_template_nesting_is_a_syntax_error()
+    {
+        var objects = string.Concat(Enumerable.Repeat("Item { ", 300)) + string.Concat(Enumerable.Repeat("}", 300));
+        var objectsError = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse(objects, "shell.qml"));
+        Assert.Equal("Nesting is too deep", objectsError.Reason);
+
+        var inner = "1";
+        for (var i = 0; i < 300; i++)
+            inner = "`${" + inner + "}`";
+        var templateError = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse("Item { a: " + inner + " }", "shell.qml"));
+        Assert.Equal("Nesting is too deep", templateError.Reason);
+    }
+
     [Fact]
     public void Locations_point_at_the_code()
     {

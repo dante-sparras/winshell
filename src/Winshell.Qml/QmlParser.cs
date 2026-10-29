@@ -17,11 +17,15 @@ public sealed class QmlSyntaxException(string message, SourceLocation location)
 /// </summary>
 public sealed class QmlParser
 {
+    // Objects, groups and template literals recurse. Past this depth a file is an error, not a stack overflow.
+    private const int MaxNesting = 256;
+
     private readonly string _text;
     private readonly string _file;
     private int _pos;
     private int _line = 1;
     private int _lineStart;
+    private int _nesting;
 
     private QmlParser(string text, string file)
     {
@@ -131,6 +135,7 @@ public sealed class QmlParser
     // Object := QualifiedName '{' Member* '}'
     private QmlObjectNode ParseObject(string typeName, SourceLocation loc)
     {
+        EnterNesting();
         SkipTrivia();
         Expect('{');
         var members = new List<QmlMember>();
@@ -146,6 +151,7 @@ public sealed class QmlParser
             }
             members.Add(ParseMember());
         }
+        _nesting--;
         return new QmlObjectNode(typeName, members, loc);
     }
 
@@ -263,6 +269,7 @@ public sealed class QmlParser
 
     private QmlGroupedBlock ParseGroupedBlock(string name, SourceLocation loc)
     {
+        EnterNesting();
         Expect('{');
         var members = new List<QmlMember>();
         while (true)
@@ -292,6 +299,7 @@ public sealed class QmlParser
                 throw Error($"Expected ':' after '{inner}'");
             }
         }
+        _nesting--;
         return new QmlGroupedBlock(name, members, loc);
     }
 
@@ -604,6 +612,8 @@ public sealed class QmlParser
                     depth++;
                     break;
                 case ')' or ']' or '}':
+                    if (depth == 0)
+                        throw Error($"Unexpected '{c}'");
                     depth--;
                     break;
                 case '?' when PeekAt(1) is '.' or '?':
@@ -763,6 +773,7 @@ public sealed class QmlParser
 
     private void SkipTemplate()
     {
+        EnterNesting();
         Advance(); // `
         while (!AtEnd)
         {
@@ -776,6 +787,7 @@ public sealed class QmlParser
             if (c == '`')
             {
                 Advance();
+                _nesting--;
                 return;
             }
             if (c == '$' && PeekAt(1) == '{')
@@ -789,6 +801,13 @@ public sealed class QmlParser
             Advance();
         }
         throw Error("Unterminated template literal");
+    }
+
+    // A syntax error ends the parse, so only a normal exit needs to count back down.
+    private void EnterNesting()
+    {
+        if (++_nesting > MaxNesting)
+            throw Error("Nesting is too deep");
     }
 
     private void SkipRegex()
