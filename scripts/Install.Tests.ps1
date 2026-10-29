@@ -301,6 +301,28 @@ Describe 'install' {
         @($urls | Where-Object { $_ -like '*/download/v0.5.0/*' }).Count | Should -BeGreaterThan 0
     }
 
+    It 'downloads the latest zip from the version named in the checksums' {
+        Enter-WinshellInstallTest | Out-Null
+        $arch = Get-WinshellArchitecture
+        $name = "winshell-0.6.0-win-$arch.zip"
+        $zip = Join-Path $TestDrive $name
+        New-WinshellTestZip -Path $zip -Marker 'latest'
+        $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $sums = "$hash  $name"
+        $urls = [System.Collections.Generic.List[string]]::new()
+        $downloadText = { param($Url) $urls.Add($Url); return $sums }.GetNewClosure()
+        $downloadFile = {
+            param($Url, $Destination)
+            $urls.Add($Url)
+            Copy-Item -LiteralPath $zip -Destination $Destination
+        }.GetNewClosure()
+        Install-Winshell -DownloadText $downloadText -DownloadFile $downloadFile
+        $base = 'https://github.com/dante-sparras/winshell/releases'
+        $urls | Should -Contain "$base/latest/download/SHA256SUMS.txt"
+        $urls | Should -Contain "$base/download/v0.6.0/$name"
+        $urls | Should -Not -Contain "$base/latest/download/$name"
+    }
+
     It 'does not install an archive that has no winshell.exe' {
         $ctx = Enter-WinshellInstallTest
         $arch = Get-WinshellArchitecture
