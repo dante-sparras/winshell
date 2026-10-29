@@ -216,7 +216,7 @@ public sealed class NotificationListener : QObject
         {
             if (!_groups.TryGetValue(group.Key, out var model))
             {
-                model = new NotificationGroup { Engine = Engine };
+                model = new NotificationGroup(this) { Engine = Engine };
                 model.SetOwner(this);
                 model.Notifications.Engine = Engine;
                 _groups.Add(group.Key, model);
@@ -230,24 +230,41 @@ public sealed class NotificationListener : QObject
     }
 
     internal bool Dismiss(ShellNotification notification)
+        => DismissMany([notification]);
+
+    /// <summary>Dismiss only this listener's current snapshot, preserving failures and newly arriving toasts.</summary>
+    [Qml] public bool ClearAll() => DismissMany(_items.Values.ToArray());
+
+    internal bool DismissMany(IEnumerable<ShellNotification> notifications)
     {
-        if (IsDestroyed || notification.IsDestroyed || !_items.ContainsKey(notification.NativeId))
+        if (IsDestroyed)
             return false;
-        try
+        var success = true;
+        string? failure = null;
+        foreach (var notification in notifications.ToArray())
         {
-            _backend.Dismiss(notification.NativeId);
-            Interlocked.Increment(ref _revision);
-            _items.Remove(notification.NativeId);
-            RebuildModels();
-            notification.Destroy();
-            SetField(ref _error, "", nameof(Error));
-            return true;
+            if (notification.IsDestroyed || !_items.ContainsKey(notification.NativeId))
+            {
+                success = false;
+                continue;
+            }
+            try
+            {
+                _backend.Dismiss(notification.NativeId);
+                Interlocked.Increment(ref _revision);
+                _items.Remove(notification.NativeId);
+                RebuildModels();
+                notification.Destroy();
+            }
+            catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+            {
+                success = false;
+                failure = e.Message;
+            }
         }
-        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
-        {
-            Fail(e.Message);
-            return false;
-        }
+        if (failure is not null) Fail(failure);
+        else if (success) SetField(ref _error, "", nameof(Error));
+        return success;
     }
 
     internal void Fail(string message)
@@ -313,12 +330,14 @@ public sealed class ShellNotification : QObject
 
 public sealed class NotificationGroup : QObject
 {
+    private readonly NotificationListener _listener;
     private string _appId = "";
     private string _appName = "";
-    internal NotificationGroup() { Notifications = new ObjectModel(); Notifications.SetOwner(this); }
+    internal NotificationGroup(NotificationListener listener) { _listener = listener; Notifications = new ObjectModel(); Notifications.SetOwner(this); }
     [Qml] public string AppId { get { Track(); return _appId; } }
     [Qml] public string AppName { get { Track(); return _appName; } }
     [Qml] public ObjectModel Notifications { get; }
+    [Qml] public bool Dismiss() => !IsDestroyed && _listener.DismissMany(Notifications.Rows.Cast<ShellNotification>().ToArray());
     internal void Update(ShellNotification[] items)
     {
         SetField(ref _appId, items[0].AppId, nameof(AppId));

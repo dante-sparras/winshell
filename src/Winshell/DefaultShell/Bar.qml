@@ -1,10 +1,12 @@
 import Winshell
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // A bar along the top of the screen in the Windows 11 style: Acrylic behind it, Segoe UI Variable text.
 PanelWindow {
   id: bar
+  property var notificationListener: null
 
   anchors {
     top: true
@@ -20,6 +22,8 @@ PanelWindow {
     id: clock
     precision: SystemClock.Minutes
   }
+
+  CalendarMonth { id: clockFormat; date: clock.date }
 
   RowLayout {
     anchors.fill: parent
@@ -40,9 +44,16 @@ PanelWindow {
       onClicked: quickSettings.visible = !quickSettings.visible
     }
 
-    BarButton {
+    Button {
       id: clockButton
-      label: Qt.formatDateTime(clock.date, "HH:mm") + "\n" + Qt.formatDateTime(clock.date, "d.M.yyyy")
+      text: clockFormat.timeLabel + "\n" + clockFormat.shortDateLabel
+      font.pixelSize: 12
+      padding: 0
+      horizontalPadding: 10
+      implicitHeight: 32
+      flat: true
+      Accessible.name: clockFormat.timeLabel + ", " + clockFormat.dateLabel
+      Accessible.description: "Open notification center and calendar"
       onClicked: calendar.visible = !calendar.visible
     }
   }
@@ -54,6 +65,7 @@ PanelWindow {
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.top: 8
     date: clock.date
+    listener: bar.notificationListener
   }
 
   QuickSettings {

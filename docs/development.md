@@ -83,3 +83,17 @@ Remove-Item Env:WINSHELL_TEST_CAPTURE
 ## Hotkeys
 
 Tests may register an unused chord such as Ctrl+Alt+Shift+F24 and may install a keyboard hook while a Windows-key hotkey is enabled or a key sequence is in progress. Each test removes the registration and the hook before it ends. Tests do not inject keystrokes or change keyboard settings. See [Windows hotkeys](hotkeys.md).
+
+## Notification surface validation
+
+`NotificationSurfaceTests` loads the actual default QML with synthetic notifications, renders it in memory, checks accessibility and keyboard interaction, and tests simulated 100%, 150% and 200% scale. It creates no native windows, requests no permission, dismisses no real notifications and sends no toasts. `CalendarMonthTests` covers regional formats, first weekdays, week-year boundaries, leap days and month navigation. These run in the default check.
+
+To save the synthetic render evidence outside the repo:
+
+```powershell
+$env:WINSHELL_NOTIFICATION_EVIDENCE = Join-Path $env:TEMP 'winshell-notification-evidence'
+dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~NotificationSurfaceTests
+Remove-Item Env:WINSHELL_NOTIFICATION_EVIDENCE
+```
+
+`WINSHELL_NOTIFICATION_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that explicit folder. An optional `BeforeCalendar.qml` there is rendered alongside the new surface. CI extracts that file from the preceding/base commit and attaches the PNGs as the `notification-surface` workflow artifact; no images are committed. A renderer scale is not a change to the PC's display settings. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md).
