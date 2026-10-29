@@ -635,6 +635,7 @@ public sealed class IconLabel : Item
     private SKImage? _icon;
     private (string Source, int W, int H) _iconKey;
     private TextLayout? _layout;
+    private readonly LineLayoutCache _elided = new();
 
     /// <summary>The text color, read each time the label draws.</summary>
     public Func<QColor> ColorSource { get; set; } = () => Theme.Current.TextFillColorPrimary;
@@ -749,12 +750,8 @@ public sealed class IconLabel : Item
         var gap = showIcon && showText ? _spacing : 0;
         var textAvail = under ? boxW : Math.Max(0, boxW - iconW - gap);
         var layout = _layout;
-        TextLayout? elided = null;
         if (showText && layout!.Width > textAvail + 0.5)
-        {
-            elided = TextLayout.Build([new TextSpan(_text, _font)], textAvail, TextLayout.Wrap.NoWrap, TextLayout.Elide.Right, 1, 1, true);
-            layout = elided;
-        }
+            layout = _elided.Get(_text, _font, textAvail, TextLayout.Elide.Right);
         var textW = showText ? Math.Min(layout!.Width, textAvail) : 0;
         var textH = showText ? layout!.Height : 0;
         var contentW = under ? Math.Max(iconW, textW) : iconW + gap + textW;
@@ -782,13 +779,16 @@ public sealed class IconLabel : Item
             layout!.Draw(canvas, textW, QtEnums.AlignLeft, ColorSource(), ty, true, paint: context);
             canvas.Restore();
         }
-        elided?.Dispose();
     }
+
+    /// <summary>How many elided layouts the label has built.</summary>
+    internal int ElidedBuilds => _elided.Builds;
 
     protected override void OnDestroy()
     {
         _layout?.Dispose();
         _layout = null;
+        _elided.Dispose();
         base.OnDestroy();
     }
 }
