@@ -18,7 +18,7 @@ A configuration is a folder of QML files that describes a shell. This guide buil
 
 - **A `.qml` file in the same folder is a type** named after the file: `Bar.qml` is `Bar { }`. Its root object's properties, signals and functions are the type's members.
 - **A subfolder** is imported with `import "widgets"`, or with `import config.widgets`, which always means a folder in the configuration's own folder.
-- **A JavaScript file** is imported with `import "util.js" as Util`, and its functions are `Util.name()`.
+- **A JavaScript file** is imported with `import "util.js" as Util`, and its functions are `Util.name()`. Without `.pragma library`, each component that imports the file gets its own copy, and that copy can use the component's ids and properties. `.pragma library` shares one copy, which cannot see them. A `.import` inside the file names another `.js` file, and a path in quotes may contain a space. Importing a QML module that way fails the load.
 - **A singleton** is a file whose first line is `pragma Singleton` and whose root is a [`Singleton`](../reference/winshell.md#singleton). Every file that uses it shares the one object, by the file's name. The default shell's `Preferences.qml` is one.
 
 Winshell reloads when you save any of these files ([reload](getting-started.md#reload)).
