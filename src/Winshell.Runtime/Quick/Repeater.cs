@@ -286,6 +286,10 @@ public sealed class Loader : Item
     private bool _asynchronous;
     private QObject? _item;
     private int _status;
+    private double _progress;
+    private IDisposable? _itemDestroyed;
+    private bool _inReload;
+    private bool _reloadAgain;
 
     [QmlEnum]
     public enum StatusValue
@@ -329,6 +333,11 @@ public sealed class Loader : Item
         }
     }
 
+    /// <summary>
+    /// Accepted so a Qt document loads. Creation still finishes on this thread before the assignment
+    /// returns; <c>true</c> does not defer it. <c>status</c> passes through <see cref="StatusValue.Loading"/>
+    /// either way.
+    /// </summary>
     [Qml]
     public bool Asynchronous
     {
@@ -349,7 +358,10 @@ public sealed class Loader : Item
     }
 
     [Qml]
-    public double Progress => _item is null ? 0 : 1;
+    public double Progress
+    {
+        get { Track(); return _progress; }
+    }
 
     [Qml]
     public void SetSource(string source, object? properties = null)
@@ -370,12 +382,36 @@ public sealed class Loader : Item
     {
         if (!IsComplete)
             return;
-        var old = _item;
-        _item = null;
-        old?.Destroy();
+        // Status and progress notify in the middle of a load, and a handler can change the source.
+        // Finish this pass, then load whatever those handlers left behind.
+        if (_inReload)
+        {
+            _reloadAgain = true;
+            return;
+        }
+        _inReload = true;
+        try
+        {
+            do
+            {
+                _reloadAgain = false;
+                LoadOnce();
+            }
+            while (_reloadAgain);
+        }
+        finally
+        {
+            _inReload = false;
+        }
+    }
+
+    private void LoadOnce()
+    {
+        ReleaseItem();
         if (!_active)
         {
-            SetStatus(0);
+            SetProgress(0);
+            SetStatus((int)StatusValue.Null);
             NotifyChanged("item");
             return;
         }
@@ -390,10 +426,15 @@ public sealed class Loader : Item
             }
             if (component is null)
             {
-                SetStatus(0);
+                SetProgress(0);
+                SetStatus((int)StatusValue.Null);
                 NotifyChanged("item");
                 return;
             }
+            SetProgress(0);
+            SetStatus((int)StatusValue.Loading);
+            if (_reloadAgain)
+                return;
             IReadOnlyDictionary<string, object?>? props = null;
             if (_pendingProperties is Jint.Native.JsValue js && js.IsObject())
                 props = js.AsObject().GetOwnPropertyKeys().Where(k => k.IsString()).ToDictionary(k => k.AsString(), k => (object?)js.AsObject().Get(k));
@@ -404,12 +445,20 @@ public sealed class Loader : Item
                 if (o is Item item)
                     item.SetParentItem(this);
             });
+            if (_reloadAgain)
+            {
+                ReleaseItem();
+                return;
+            }
+            WatchItem();
         }
         catch (Exception e) when (e is QmlException or QmlCompileException or Winshell.Qml.QmlSyntaxException or IOException or Jint.Runtime.JavaScriptException)
         {
+            ReleaseItem();
             var message = e is FileNotFoundException or DirectoryNotFoundException ? $"{_source}: No such file or directory" : Log.Describe(e, _source);
             Engine?.Log.Warn("scene", message);
-            SetStatus(3);
+            SetProgress(0);
+            SetStatus((int)StatusValue.Error);
             NotifyChanged("item");
             return;
         }
@@ -421,9 +470,43 @@ public sealed class Loader : Item
             child.AddObserver("height", _sizeFollower);
             SyncSize();
         }
-        SetStatus(1);
+        SetProgress(1);
+        SetStatus((int)StatusValue.Ready);
         NotifyChanged("item");
         Emit("loaded");
+    }
+
+    /// <summary>Drops the loaded object without treating our own destroy as someone else's.</summary>
+    private void ReleaseItem()
+    {
+        _itemDestroyed?.Dispose();
+        _itemDestroyed = null;
+        var old = _item;
+        _item = null;
+        old?.Destroy();
+    }
+
+    private void WatchItem()
+    {
+        _itemDestroyed?.Dispose();
+        _itemDestroyed = _item?.GetSignal("destroyed")?.Connect(_ => OnLoadedItemDestroyed());
+    }
+
+    private void OnLoadedItemDestroyed()
+    {
+        _itemDestroyed?.Dispose();
+        _itemDestroyed = null;
+        if (IsDestroying || IsDestroyed)
+        {
+            _item = null;
+            return;
+        }
+        if (_item is null)
+            return;
+        _item = null;
+        SetProgress(0);
+        SetStatus((int)StatusValue.Null);
+        NotifyChanged("item");
     }
 
     private SizeFollower? _sizeFollower;
@@ -450,6 +533,14 @@ public sealed class Loader : Item
             return;
         _status = status;
         NotifyChanged("status");
+    }
+
+    private void SetProgress(double progress)
+    {
+        if (_progress == progress)
+            return;
+        _progress = progress;
+        NotifyChanged("progress");
     }
 
     private sealed class SizeFollower(Loader loader) : IPropertyObserver
