@@ -943,12 +943,43 @@ public sealed class FileView : QObject
 
     private static void WriteText(string path, string text, bool bom)
     {
-        if (!bom)
+        // Flush to disk before a later rename. A power loss after WriteAllText can leave an empty file.
+        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: bom);
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        using (var writer = new StreamWriter(stream, encoding, leaveOpen: true))
         {
-            File.WriteAllText(path, text);
-            return;
+            writer.Write(text);
+            writer.Flush();
         }
-        File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        stream.Flush(flushToDisk: true);
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="path"/> with <paramref name="temp"/>.
+    /// Antivirus and indexers often hold the new file for a moment, so a sharing or lock failure is tried again.
+    /// </summary>
+    private static void MoveReplacing(string temp, string path)
+    {
+        int[] delays = [25, 50, 100, 200];
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, path, overwrite: true);
+                return;
+            }
+            catch (Exception e) when (IsTransientLock(e) && attempt < delays.Length)
+            {
+                Thread.Sleep(delays[attempt]);
+            }
+        }
+    }
+
+    private static bool IsTransientLock(Exception exception)
+    {
+        // Win32: ERROR_ACCESS_DENIED 5, ERROR_SHARING_VIOLATION 32, ERROR_LOCK_VIOLATION 33.
+        var code = exception.HResult & 0xFFFF;
+        return code is 5 or 32 or 33;
     }
 
     private void Apply(int generation, (string? Text, bool Bom, FileViewError Error, string Message) result)
@@ -1027,7 +1058,7 @@ public sealed class FileView : QObject
                         }
                         else
                         {
-                            File.Move(temp, path, overwrite: true);
+                            MoveReplacing(temp, path);
                         }
                     }
                     finally
