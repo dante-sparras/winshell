@@ -18,6 +18,9 @@ public sealed class PaintContext
 
     /// <summary>Text is drawn over a backdrop or a translucent window, so ClearType must not be used.</summary>
     public bool TextOnBackdrop { get; init; }
+
+    /// <summary>Open opacity layers. ClearType reads the root surface and would punch through them.</summary>
+    public int LayerDepth { get; set; }
 }
 
 public static class SkiaExtensions
