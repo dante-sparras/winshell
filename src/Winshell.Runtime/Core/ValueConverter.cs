@@ -83,7 +83,7 @@ public static class ValueConverter
         if (target == typeof(int))
             return ToInt(value, "int");
         if (target == typeof(long))
-            return (long)ToDouble(value, "int");
+            return ToLong(value, "int");
         if (target == typeof(bool))
             return ToBool(value);
         if (target == typeof(string))
@@ -226,10 +226,17 @@ public static class ValueConverter
         int i => i,
         long l => l,
         float f => f,
+        uint u => u,
+        short s => s,
+        ushort u => u,
+        byte b => b,
+        sbyte b => b,
+        ulong u => u,
+        decimal m => (double)m,
         bool b => b ? 1 : 0,
         string s when double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) => d,
         string s when s.Length == 0 => 0,
-        Enum e => System.Convert.ToInt32(e, CultureInfo.InvariantCulture),
+        Enum e => System.Convert.ToDouble(e, CultureInfo.InvariantCulture),
         null => throw new QmlException($"Unable to assign [undefined] to {type}"),
         var other => throw new QmlException($"Unable to assign {Describe(other)} to {type}"),
     };
@@ -242,6 +249,14 @@ public static class ValueConverter
         return (int)Math.Clamp(Math.Truncate(d), int.MinValue, int.MaxValue);
     }
 
+    private static long ToLong(object? value, string type)
+    {
+        var d = ToDouble(value, type);
+        if (double.IsNaN(d) || double.IsInfinity(d))
+            return 0;
+        return (long)Math.Truncate(d);
+    }
+
     public static bool ToBool(object? value) => Unwrap(value) switch
     {
         null => false,
@@ -249,6 +264,7 @@ public static class ValueConverter
         double d => d != 0 && !double.IsNaN(d),
         int i => i != 0,
         string s => s.Length > 0,
+        var n and (float or long or uint or short or ushort or byte or sbyte or ulong or decimal) => ToDouble(n, "bool") is var d && d != 0 && !double.IsNaN(d),
         _ => true,
     };
 
@@ -258,6 +274,7 @@ public static class ValueConverter
         string s => QColor.TryParse(s, out var c) ? c : throw new QmlException($"Invalid color \"{s}\""),
         null => QColor.Invalid,
         double d => QColor.FromArgb((uint)d),
+        int i => QColor.FromArgb(unchecked((uint)i)),
         var other => throw new QmlException($"Unable to assign {Describe(other)} to color"),
     };
 
@@ -273,18 +290,7 @@ public static class ValueConverter
     };
 
     /// <summary>Formats a number like JavaScript does.</summary>
-    public static string FormatNumber(double d)
-    {
-        if (double.IsNaN(d))
-            return "NaN";
-        if (double.IsPositiveInfinity(d))
-            return "Infinity";
-        if (double.IsNegativeInfinity(d))
-            return "-Infinity";
-        if (d == Math.Floor(d) && Math.Abs(d) < 1e21)
-            return ((decimal)d).ToString(CultureInfo.InvariantCulture);
-        return d.ToString("R", CultureInfo.InvariantCulture);
-    }
+    public static string FormatNumber(double d) => Jint.Runtime.TypeConverter.ToString(d);
 
     public static bool AreEqual(object? a, object? b)
     {
