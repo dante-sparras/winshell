@@ -326,4 +326,33 @@ public class QuickTests
         Render(scene, 100, 100).Dispose();
         Assert.True(Convert.ToInt32(root.ReadProperty("paints")) > before);
     }
+
+    [Fact]
+    public void A_default_property_alias_takes_the_children_of_users_and_not_the_component_own()
+    {
+        using var shell = new TestShell(
+            ("Card.qml", """
+                import QtQuick
+                Item {
+                  default property alias content: slot.data
+                  Rectangle { objectName: "background" }
+                  Row {
+                    Text { objectName: "title" }
+                    Row { id: slot; objectName: "slot" }
+                  }
+                }
+                """),
+            ("shell.qml", """
+                import QtQuick
+                Card {
+                  Text { objectName: "control" }
+                }
+                """));
+        var root = (Item)shell.Load();
+
+        Assert.Empty(shell.Messages);
+        Assert.Equal(["background", ""], root.ChildItems.Select(i => i.ObjectName));
+        var slot = root.ChildItems[1].ChildItems.Single(i => i.ObjectName == "slot");
+        Assert.Equal(["control"], slot.ChildItems.Select(i => i.ObjectName));
+    }
 }
