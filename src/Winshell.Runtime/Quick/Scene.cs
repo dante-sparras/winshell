@@ -323,6 +323,20 @@ public sealed class Scene : IItemHost
 
     public void PointerPress(double x, double y, int button, int modifiers = 0, bool doubleClick = false)
     {
+        try
+        {
+            DispatchPress(x, y, button, modifiers, doubleClick);
+        }
+        finally
+        {
+            // A press that closed a popup and then landed on another control must not leave that popup
+            // marked, or the next click on its control is ignored.
+            Controls.PopupOverlay.ClosedByPress.Clear();
+        }
+    }
+
+    private void DispatchPress(double x, double y, int button, int modifiers, bool doubleClick)
+    {
         _buttons |= button;
         SetFocusVisible(false);
         _pressSceneX = x;
