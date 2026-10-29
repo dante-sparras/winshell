@@ -516,7 +516,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
     {
         if (IsDestroyed || Engine is not { } engine)
             return;
-        if (engine.GetService<CrashReports>()?.WriteOnce(SurfaceName + " drawing", error) is { } report)
+        if (engine.GetService<CrashReports>()?.WriteOnce(SurfaceName + " drawing", error, subject: "the panel", recovery: "The panel could not draw. The rest of Winshell is still running.") is { } report)
             engine.Log.Info("window", $"Wrote a crash report to \"{report.Path}\"");
     }
 

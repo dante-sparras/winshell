@@ -454,6 +454,7 @@ namespace Winshell
             // A crash is reported in a crash report that outlives the log, and in the instance's log, where
             // winshell log finds it, before the process ends. Failures the shell survives get a report each too.
             var crashes = new CrashReports(CrashFolder()) { ConfigPath = root, LogPath = logPath, Log = log };
+            var exitState = Path.Combine(ShellLocations.StateRoot, "last-exit.toml");
             void Reported(CrashReport? report)
             {
                 if (report is not null)
@@ -483,11 +484,11 @@ namespace Winshell
             {
                 Quietly(() => log.Error("", $"A background task failed: {e.Exception}"));
                 e.SetObserved();
-                Reported(crashes.WriteOnce("background task", e.Exception));
+                Reported(crashes.WriteOnce("background task", e.Exception, recovery: "A background task failed. Winshell is still running."));
             };
 
             using var loop = new WinEventLoop { Log = log };
-            loop.Failed += e => Reported(crashes.WriteOnce("event loop", e));
+            loop.Failed += e => Reported(crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
             using var updater = Updater.ForRelease(ReleaseRepository, Version, log);
             if (updater is not null)
             {
@@ -549,6 +550,20 @@ namespace Winshell
             {
                 if (!host.Start() && host.Root is null)
                     log.Warn("", "The config failed to load. Winshell keeps running and reloads it when the files change.");
+                if (host.Root is not null)
+                    Quietly(() =>
+                    {
+                        if (CrashFollowUp.Find(crashes.Folder, exitState) is not { } closed)
+                            return;
+                        CrashFollowUp.MarkShown(exitState, closed.Path);
+                        var recovery = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
+                        var previous = new CrashReport(closed.Path, "Winshell", new InvalidOperationException(recovery), true)
+                        {
+                            Subject = "Winshell",
+                            Recovery = recovery,
+                        };
+                        loop.Post(() => notices.Show(ShellNotices.ForCrash(previous)));
+                    });
                 if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
                     loop.Schedule(TimeSpan.FromMilliseconds(300), () => loop.Quit(0));
                 code = loop.Run();
@@ -561,6 +576,8 @@ namespace Winshell
             }
             finally
             {
+                if (fatal is null)
+                    Quietly(() => CrashFollowUp.MarkClean(exitState, DateTimeOffset.Now));
                 host.Dispose();
                 Instances.Remove(id);
                 lock (consoleLock)
