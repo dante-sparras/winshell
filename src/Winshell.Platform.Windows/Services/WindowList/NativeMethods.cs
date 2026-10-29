@@ -35,6 +35,11 @@ internal static unsafe partial class NativeMethods
     public const long WS_EX_APPWINDOW = 0x00040000;
     public const long WS_EX_NOACTIVATE = 0x08000000;
     public const int DWMWA_CLOAKED = 14;
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    public const uint DWM_TNP_RECTDESTINATION = 0x1;
+    public const uint DWM_TNP_RECTSOURCE = 0x2;
+    public const uint DWM_TNP_OPACITY = 0x4;
+    public const uint DWM_TNP_VISIBLE = 0x8;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
     public const int SW_MAXIMIZE = 3;
@@ -161,6 +166,21 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int attribute, out int value, int size);
+
+    [LibraryImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+    public static partial int DwmGetWindowRect(nint hwnd, int attribute, out Native.RECT value, int size);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmRegisterThumbnail(nint destination, nint source, out nint thumbnail);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmUnregisterThumbnail(nint thumbnail);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmUpdateThumbnailProperties(nint thumbnail, in DWM_THUMBNAIL_PROPERTIES properties);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmQueryThumbnailSourceSize(nint thumbnail, out THUMBNAIL_SIZE size);
 
     [DllImport("shell32.dll")]
     public static extern int SHGetPropertyStoreForWindow(nint hwnd, in Guid riid, [MarshalAs(UnmanagedType.Interface)] out IPropertyStore store);
@@ -296,4 +316,22 @@ internal interface IPropertyStore
 
     [PreserveSig]
     int Commit();
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct DWM_THUMBNAIL_PROPERTIES
+{
+    public uint Flags;
+    public Native.RECT Destination;
+    public Native.RECT Source;
+    public byte Opacity;
+    public int Visible;
+    public int SourceClientAreaOnly;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct THUMBNAIL_SIZE
+{
+    public int Width;
+    public int Height;
 }

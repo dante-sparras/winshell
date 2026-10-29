@@ -23,6 +23,7 @@ internal static class WindowManagerModules
         registry.Module("Winshell.Windows")
             .Singleton(e => new WindowListService(e), "WindowList")
             .Uncreatable<AppWindow>("AppWindow")
+            .Type<WindowThumbnail>("WindowThumbnail")
             .Singleton(e => new VirtualDesktopsService(e), "VirtualDesktops")
             .Uncreatable<VirtualDesktop>("VirtualDesktop");
 

@@ -67,6 +67,12 @@ public sealed class Scene : IItemHost
     /// <summary>Raised when something in the scene changed and the window should draw again.</summary>
     public event Action? UpdateRequested;
 
+    /// <summary>
+    /// Raised after each frame is drawn. An item that places something the window shows over the scene, as a DWM
+    /// thumbnail is, puts it where the item was drawn, or hides it when the item was not.
+    /// </summary>
+    public event Action? Painted;
+
     /// <summary>Raised when the cursor shape the pointer is over changes. -1 means the default arrow.</summary>
     public event Action<int>? CursorChanged;
 
@@ -120,6 +126,7 @@ public sealed class Scene : IItemHost
         using (DependencyTracker.Suspend())
             PaintItem(Root, canvas, context);
         canvas.Restore();
+        Painted?.Invoke();
         return context;
     }
 
