@@ -20,6 +20,9 @@ internal sealed class SmtcSessions
     private readonly IEventLoop _loop;
     private readonly List<SmtcSession> _sessions = [];
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
+    private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
+    private Timer? _refresh;
+    private int _syncPosted;
     private int _nextId = 1;
 
     private SmtcSessions(IEventLoop loop, Log log)
@@ -47,18 +50,40 @@ internal sealed class SmtcSessions
     {
         try
         {
-            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-            Post(() =>
-            {
-                _manager = manager;
-                manager.SessionsChanged += (_, _) => Post(Sync);
-                Sync();
-            });
+            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask().ConfigureAwait(false);
+            Post(() => Attach(manager));
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
             Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// Subscribes on the UI thread and keeps reading the list. Windows can omit
+    /// <c>SessionsChanged</c> for a session <c>GetSessions</c> already returns, which left the shell
+    /// waiting on an event that never came.
+    /// </summary>
+    private void Attach(GlobalSystemMediaTransportControlsSessionManager manager)
+    {
+        _manager = manager;
+        // The projection does not root the delegate. A collected handler never hears a later session.
+        _sessionsChanged = (_, _) => RequestSync();
+        manager.SessionsChanged += _sessionsChanged;
+        _refresh ??= new Timer(_ => RequestSync(), null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
+        Sync();
+    }
+
+    /// <summary>Posts one list read. A loop nobody is pumping must not grow a queue of them.</summary>
+    private void RequestSync()
+    {
+        if (Interlocked.Exchange(ref _syncPosted, 1) == 1)
+            return;
+        Post(() =>
+        {
+            Interlocked.Exchange(ref _syncPosted, 0);
+            Sync();
+        });
     }
 
     private void Sync()
@@ -78,6 +103,8 @@ internal sealed class SmtcSessions
         // GetSessions returns a new object for a session that is already held, so reference equality
         // drops it and starts again. That cancels the read of its title and art. Match the app id instead.
         var incoming = current.ToList();
+        if (SameSessions(incoming))
+            return;
         var held = _sessions.ToList();
         var pair = Pair(held.Select(s => s.AppId).ToList(), incoming.Select(SmtcSession.IdOf).ToList());
         var kept = new bool[held.Count];
@@ -127,6 +154,24 @@ internal sealed class SmtcSessions
         }
         return pair;
     }
+
+    /// <summary>The held sessions are already these app ids. A poll must not retarget them.</summary>
+    private bool SameSessions(List<GlobalSystemMediaTransportControlsSession> incoming)
+    {
+        if (incoming.Count != _sessions.Count)
+            return false;
+        var counts = new Dictionary<string, int>();
+        foreach (var session in _sessions)
+            counts[session.AppId] = counts.GetValueOrDefault(session.AppId) + 1;
+        foreach (var session in incoming)
+        {
+            var id = SmtcSession.IdOf(session);
+            if (!counts.TryGetValue(id, out var count) || count == 0)
+                return false;
+            counts[id] = count - 1;
+        }
+        return true;
+    }
 }
 
 /// <summary>What one media session says about itself, kept up to date from the system media controls.</summary>
@@ -140,6 +185,9 @@ internal sealed class SmtcSession
     private bool _released;
     private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
     private double _position;
+    private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>? _mediaChanged;
+    private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs>? _playbackChanged;
+    private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs>? _timelineChanged;
 
     public SmtcSession(SmtcSessions owner, GlobalSystemMediaTransportControlsSession session, int id)
     {
@@ -274,16 +322,24 @@ internal sealed class SmtcSession
 
     private void Hook()
     {
-        Session.MediaPropertiesChanged += OnMediaPropertiesChanged;
-        Session.PlaybackInfoChanged += OnPlaybackInfoChanged;
-        Session.TimelinePropertiesChanged += OnTimelinePropertiesChanged;
+        // Kept on the session. The WinRT projection does not root an event delegate, so a collected
+        // one stops title, art, and timeline updates with no error.
+        _mediaChanged ??= OnMediaPropertiesChanged;
+        _playbackChanged ??= OnPlaybackInfoChanged;
+        _timelineChanged ??= OnTimelinePropertiesChanged;
+        Session.MediaPropertiesChanged += _mediaChanged;
+        Session.PlaybackInfoChanged += _playbackChanged;
+        Session.TimelinePropertiesChanged += _timelineChanged;
     }
 
     private void Unhook()
     {
-        Session.MediaPropertiesChanged -= OnMediaPropertiesChanged;
-        Session.PlaybackInfoChanged -= OnPlaybackInfoChanged;
-        Session.TimelinePropertiesChanged -= OnTimelinePropertiesChanged;
+        if (_mediaChanged is not null)
+            Session.MediaPropertiesChanged -= _mediaChanged;
+        if (_playbackChanged is not null)
+            Session.PlaybackInfoChanged -= _playbackChanged;
+        if (_timelineChanged is not null)
+            Session.TimelinePropertiesChanged -= _timelineChanged;
     }
 
     // Commands. Each is asynchronous; Windows' events bring the result.
@@ -322,7 +378,7 @@ internal sealed class SmtcSession
         {
             try
             {
-                if (!await operation)
+                if (!await operation.AsTask().ConfigureAwait(false))
                     _owner.Post(() => _owner.Log.Warn("media", $"{AppName} did not accept {what}"));
             }
             catch (COMException e)
@@ -343,7 +399,7 @@ internal sealed class SmtcSession
         {
             try
             {
-                var properties = await sender.TryGetMediaPropertiesAsync();
+                var properties = await sender.TryGetMediaPropertiesAsync().AsTask().ConfigureAwait(false);
                 if (properties is not null)
                     _owner.Post(() => ApplyMedia(properties, request));
             }
@@ -396,9 +452,9 @@ internal sealed class SmtcSession
         {
             try
             {
-                using var stream = await thumbnail.OpenReadAsync();
+                using var stream = await thumbnail.OpenReadAsync().AsTask().ConfigureAwait(false);
                 using var input = stream.AsStreamForRead();
-                var url = await ArtCache.StoreAsync(input, stream.ContentType);
+                var url = await ArtCache.StoreAsync(input, stream.ContentType).ConfigureAwait(false);
                 if (url is null)
                     Skip("it is not a picture under the size limit");
                 else
@@ -653,7 +709,7 @@ internal static class ArtCache
         using var bytes = new MemoryStream();
         var buffer = new byte[81920];
         int read;
-        while ((read = await input.ReadAsync(buffer)) > 0)
+        while ((read = await input.ReadAsync(buffer).ConfigureAwait(false)) > 0)
         {
             if (bytes.Length + read > MaxBytes)
                 return null;
