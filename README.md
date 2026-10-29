@@ -57,10 +57,10 @@ You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/
 ```powershell
 git clone https://github.com/dante-sparras/winshell.git
 cd winshell
-dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
+dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
 ```
 
-That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed. [Getting started](docs/guide/getting-started.md) covers the first run.
+That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder the PowerShell installer uses. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed, and it does not update itself. [Getting started](docs/guide/getting-started.md) covers the first run.
 
 ## Documentation
 
