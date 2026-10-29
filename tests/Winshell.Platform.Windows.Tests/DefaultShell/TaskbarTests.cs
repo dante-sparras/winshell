@@ -467,6 +467,55 @@ public class TaskbarTests
         Assert.False((bool)bar.ReadProperty("revealed")!);
     }
 
+    /// <summary>Where the platform puts the panel on a monitor, as Win32Window does for its exclusion mode.</summary>
+    private static Winshell.Platform.Windows.Native.RECT Placed(PanelWindow bar, Winshell.Platform.Windows.Native.RECT monitor, double scale)
+    {
+        Assert.Equal(1, bar.ExclusionMode);
+        var placement = new PanelPlacement(null, bar.Anchors.Edges, bar.Margins.Left, bar.Margins.Top, bar.Margins.Right, bar.Margins.Bottom,
+            bar.ImplicitWidth, bar.ImplicitHeight, bar.ExclusionMode, bar.ComputedExclusiveZone, true, false, "winshell");
+        // Ignore: the whole monitor.
+        return DesktopSpace.Anchor(monitor, placement, scale);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void An_auto_hiding_taskbar_never_reaches_the_screen_below_while_it_slides(double scale)
+    {
+        // This screen, with another directly below it.
+        var upper = new Winshell.Platform.Windows.Native.RECT(0, 0, (int)(1920 * scale), (int)(1080 * scale));
+        var lower = new Winshell.Platform.Windows.Native.RECT(0, upper.Bottom, upper.Right, upper.Bottom + (int)(1080 * scale));
+        var (shell, bar) = Taskbar(new Desk());
+        using var _ = shell;
+        var start = In(bar, "startButton");
+        var heights = new HashSet<int>();
+
+        void Frames()
+        {
+            for (var i = 0; i < 30; i++)
+            {
+                shell.Loop.Advance(TimeSpan.FromMilliseconds(16));
+                var rect = Placed(bar, upper, scale);
+                heights.Add(rect.Height);
+                Assert.True(rect.Top >= upper.Top && rect.Bottom == upper.Bottom, $"{rect.Top}..{rect.Bottom} leaves {upper.Top}..{upper.Bottom}");
+                Assert.True(rect.Bottom <= lower.Top);
+                // The taskbar's items stay where they are in it; the window shows its top part.
+                Assert.Equal(4, start.MapToScene(0, 0).Y);
+            }
+        }
+
+        bar.WriteProperty("autoHide", true);
+        Frames();
+        Assert.Equal((int)Math.Round(2 * scale), Placed(bar, upper, scale).Height);
+
+        bar.Scene.PointerMove(500, 1);
+        Frames();
+        Assert.Equal((int)Math.Round(48 * scale), Placed(bar, upper, scale).Height);
+        // The slide went through the heights in between, both ways.
+        Assert.Contains(heights, h => h > 2 * scale + 1 && h < 48 * scale - 1);
+    }
+
     [Fact]
     public void An_auto_hiding_taskbar_stays_up_while_Start_is_open()
     {
