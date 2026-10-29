@@ -766,6 +766,11 @@ public sealed class FileView : QObject
     // One queue, so a later save cannot finish before an earlier one. Each save also uses its own temp file.
     private readonly object _writeGate = new();
     private Task _writes = Task.CompletedTask;
+    // Link kind of the last destination this view saved. Counting links opens the file, and a burst of saves
+    // would hold that open across the next replace. A hand save forgets it: the file may now be a different link.
+    private string? _linkKindPath;
+    private bool _linkKindHard;
+    private volatile bool _linkKindKnown;
 
     /// <summary>
     /// Tests only. Runs on the writing thread after a temporary file is in place and before it replaces the
@@ -806,6 +811,7 @@ public sealed class FileView : QObject
                 path = Quick.ImageLoader.LocalPath(path, null) ?? path;
             if (!SetField(ref _path, path))
                 return;
+            _linkKindKnown = false;
             _text = null;
             SetLoaded(false);
             Watch();
@@ -986,15 +992,15 @@ public sealed class FileView : QObject
     }
 
     /// <summary>
-    /// The file a save should change. A symbolic link is followed to its final target, so the link stays a link.
-    /// A hard link is the same path, and <paramref name="hardLink"/> is true so the save writes in place.
+    /// The path a watch should use. A symbolic link is followed to its final target.
+    /// A normal file is not opened. Counting hard links happens only when a save chooses how to write.
     /// A path that is not there yet is returned unchanged.
     /// </summary>
-    internal static string SaveTarget(string path, out bool hardLink)
+    internal static string FollowLink(string path)
     {
-        hardLink = false;
         var full = System.IO.Path.GetFullPath(path);
-        if (!EntryExists(full))
+        // FindFirstFile reports the link itself. GetAttributes follows it, so it cannot tell a link from its target.
+        if (TryReparsePoint(full, out var reparse) && !reparse)
             return full;
         try
         {
@@ -1005,22 +1011,41 @@ public sealed class FileView : QObject
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+        return full;
+    }
+
+    /// <summary>
+    /// The file a save should change. A symbolic link is followed to its final target, so the link stays a link.
+    /// A hard link is the same path, and <paramref name="hardLink"/> is true so the save writes in place.
+    /// A path that is not there yet is returned unchanged.
+    /// </summary>
+    internal static string SaveTarget(string path, out bool hardLink)
+    {
+        hardLink = false;
+        var full = FollowLink(path);
         if (File.Exists(full))
             hardLink = LinkCount(full) > 1;
         return full;
     }
 
-    private static bool EntryExists(string path)
+    /// <summary>
+    /// Same destination as <see cref="SaveTarget"/>, remembered for this view so the next save does not open the
+    /// file again just to count links.
+    /// </summary>
+    private string DestinationForSave(string path, out bool hardLink)
     {
-        try
+        var full = FollowLink(path);
+        if (_linkKindKnown && string.Equals(_linkKindPath, full, StringComparison.Ordinal))
         {
-            _ = File.GetAttributes(path);
-            return true;
+            hardLink = _linkKindHard;
+            return full;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
+        // Written before the flag, so a reader that sees the flag also sees this path and kind.
+        hardLink = File.Exists(full) && LinkCount(full) > 1;
+        _linkKindPath = full;
+        _linkKindHard = hardLink;
+        _linkKindKnown = true;
+        return full;
     }
 
 #pragma warning disable CA1416
@@ -1037,6 +1062,53 @@ public sealed class FileView : QObject
         {
             return 1;
         }
+    }
+
+    private const uint FileAttributeReparsePoint = 0x400;
+    private static readonly IntPtr InvalidFindHandle = new(-1);
+
+    /// <summary>
+    /// True when <paramref name="full"/> could be queried. <paramref name="reparse"/> is true for a symbolic link
+    /// and false for a normal file or a hard link. A missing file returns false.
+    /// </summary>
+    private static bool TryReparsePoint(string full, out bool reparse)
+    {
+        reparse = false;
+        var handle = FindFirstFileW(full, out var data);
+        if (handle == InvalidFindHandle)
+            return false;
+        try
+        {
+            reparse = (data.FileAttributes & FileAttributeReparsePoint) != 0;
+            return true;
+        }
+        finally
+        {
+            FindClose(handle);
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr FindFirstFileW(string fileName, out Win32FindData data);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FindClose(IntPtr handle);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct Win32FindData
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint Reserved0;
+        public uint Reserved1;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string FileName;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 14)]
+        public string AlternateFileName;
     }
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
@@ -1117,7 +1189,7 @@ public sealed class FileView : QObject
             var destination = path;
             try
             {
-                destination = SaveTarget(path, out var hardLink);
+                destination = DestinationForSave(path, out var hardLink);
                 var directory = System.IO.Path.GetDirectoryName(destination);
                 if (directory is not null)
                     Directory.CreateDirectory(directory);
@@ -1253,6 +1325,8 @@ public sealed class FileView : QObject
         var read = Read(path);
         if (read.Text is null || read.Text == _text)
             return;
+        // The bytes on disk are not ours. The name may now be a hard link, so the next save has to look again.
+        _linkKindKnown = false;
         Emit("fileChanged");
     }
 
@@ -1263,7 +1337,7 @@ public sealed class FileView : QObject
             StopWatching();
             return;
         }
-        var full = SaveTarget(_path, out _);
+        var full = FollowLink(_path);
         var dir = System.IO.Path.GetDirectoryName(full);
         if (dir is null || !Directory.Exists(dir))
         {

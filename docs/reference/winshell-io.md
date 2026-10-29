@@ -101,7 +101,7 @@ Use a full path, such as one built from `Shell.dataDir`. A relative path is take
 | `blockLoading` | bool | Reads on the UI thread, so the text is there as soon as `path` is set. Default `false`. |
 | `blockWrites` | bool | Writes on the UI thread, so a write is finished when the call returns and two quick writes land in order. Default `false`. |
 | `blockAllReads` | bool | Makes the first read and `reload()` read on the UI thread. Default `false`. A change of `path` still follows `blockLoading`. |
-| `atomicWrites` | bool | Writes a temporary file next to the file, then moves it over the file, so a reader never sees half a write. Default `true`. |
+| `atomicWrites` | bool | Writes a temporary file next to the file, then moves it over the file, so a reader never sees half a write. A symbolic link is followed and the link itself stays. A hard link is written in place, so its other names keep the new text. Default `true`. |
 | `printErrors` | bool | Logs a failed read or write as a warning in the `io` category. A missing file is not logged. Default `true`. |
 | `watchChanges` | bool | Emits `fileChanged` when the file's text on disk differs from the text this view holds. Default `false`. Its own write does not count, and a hand save in the same moment does. The folder must exist; a write that creates it starts the watch. |
 | `loaded` | bool, read-only | Whether the file's text has been read. |

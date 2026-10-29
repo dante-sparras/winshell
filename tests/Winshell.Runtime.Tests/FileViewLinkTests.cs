@@ -68,6 +68,51 @@ public class FileViewLinkTests
         Assert.True(hardLink);
     }
 
+    [Fact]
+    public void A_second_save_through_a_hard_link_updates_both_names()
+    {
+        using var shell = new TestShell(("shell.qml", Qml));
+        var real = Path.Combine(shell.Directory, "real.toml");
+        var link = Path.Combine(shell.Directory, "link.toml");
+        File.WriteAllText(real, "old\n");
+        if (!CreateHardLinkW(link, real, IntPtr.Zero))
+            throw new InvalidOperationException("CreateHardLinkW failed: " + Marshal.GetLastWin32Error());
+        var root = shell.Load();
+
+        shell.Eval(root, "view.setText('one')");
+        shell.Eval(root, "view.setText('two')");
+
+        Assert.Contains("two", File.ReadAllText(real), StringComparison.Ordinal);
+        Assert.Contains("two", File.ReadAllText(link), StringComparison.Ordinal);
+        Assert.True(FileView.SaveTarget(link, out var hardLink).Length > 0);
+        Assert.True(hardLink);
+    }
+
+    [Fact]
+    public void A_second_save_through_a_symbolic_link_keeps_the_link()
+    {
+        using var shell = new TestShell(("shell.qml", Qml));
+        var real = Path.Combine(shell.Directory, "real.toml");
+        var link = Path.Combine(shell.Directory, "link.toml");
+        File.WriteAllText(real, "old\n");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (IOException e) when ((e.HResult & 0xFFFF) == 1314)
+        {
+            return;
+        }
+        var root = shell.Load();
+
+        shell.Eval(root, "view.setText('one')");
+        shell.Eval(root, "view.setText('two')");
+
+        Assert.Contains("two", File.ReadAllText(real), StringComparison.Ordinal);
+        Assert.NotNull(new FileInfo(link).LinkTarget);
+        Assert.Contains("two", File.ReadAllText(link), StringComparison.Ordinal);
+    }
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CreateHardLinkW(string fileName, string existingFileName, IntPtr securityAttributes);
 }
