@@ -1,4 +1,7 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
 using Jint;
 using Jint.Native;
 
@@ -445,7 +448,11 @@ public sealed record ProcessSpec(IReadOnlyList<string> Command, IReadOnlyDiction
     }
 }
 
-/// <summary>Starts processes the way Windows users expect: through PATH, PATHEXT, and the right host for scripts.</summary>
+/// <summary>
+/// Starts processes through PATH and PATHEXT. A captured <c>Process</c> uses <c>CreateProcess</c>.
+/// A detached start uses <c>ShellExecuteEx</c>, so elevation, App Paths and documents work, unless the
+/// caller asked for an environment <c>ShellExecuteEx</c> cannot apply.
+/// </summary>
 public static class ProcessLauncher
 {
     public static ProcessStartInfo CreateStartInfo(ProcessSpec spec, bool redirect)
@@ -481,14 +488,47 @@ public static class ProcessLauncher
 
     public static void StartDetached(ProcessSpec spec, Log log)
     {
+        if (spec.Command.Count == 0)
+            return;
         try
         {
-            using var p = Process.Start(CreateStartInfo(spec, false));
+            var plan = PlanDetached(spec);
+            if (plan.UseShellExecute)
+            {
+                // ShellExecuteEx without SEE_MASK_NO_CONSOLE gives a console program its own console.
+                using var started = Process.Start(new ProcessStartInfo
+                {
+                    FileName = plan.File,
+                    Arguments = plan.Arguments,
+                    UseShellExecute = true,
+                    WorkingDirectory = plan.WorkingDirectory,
+                });
+                return;
+            }
+            var psi = CreateStartInfo(spec, redirect: false);
+            psi.CreateNoWindow = false;
+            psi.WorkingDirectory = plan.WorkingDirectory;
+            if (plan.NewConsole)
+                StartInNewConsole(psi);
+            else
+                Process.Start(psi)?.Dispose();
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
             log.Warn("process", $"Failed to start {string.Join(' ', spec.Command)}: {e.Message}");
         }
+    }
+
+    /// <summary>How a detached command will start. Tests read this and do not launch the program.</summary>
+    internal static DetachedLaunch PlanDetached(ProcessSpec spec)
+    {
+        var (file, args) = Resolve(spec.Command);
+        var directory = spec.WorkingDirectory ?? Profile();
+        // An explicit environment cannot ride along with ShellExecuteEx, so that case stays CreateProcess.
+        var customEnvironment = spec.ClearEnvironment || spec.Environment.Count > 0;
+        if (!customEnvironment)
+            return new DetachedLaunch(true, false, file, Quote(args), directory);
+        return new DetachedLaunch(false, IsConsoleImage(file), file, "", directory);
     }
 
     /// <summary>The program to start and its arguments. Batch files run through cmd and PowerShell scripts through pwsh.</summary>
@@ -503,9 +543,7 @@ public static class ProcessLauncher
             case ".cmd" or ".bat":
                 return (System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", ["/d", "/c", path, .. args]);
             case ".ps1":
-                return (Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. args]);
-            case ".sh":
-                return (Which("bash") ?? Which("sh") ?? "bash", [path, .. args]);
+                return (Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-File", path, .. args]);
         }
         return (path, args);
     }
@@ -536,7 +574,172 @@ public static class ProcessLauncher
         }
         return null;
     }
+
+    private static void StartInNewConsole(ProcessStartInfo psi)
+    {
+        var command = new StringBuilder(32768);
+        command.Append(Quote(psi.FileName));
+        foreach (string arg in psi.ArgumentList)
+        {
+            command.Append(' ');
+            command.Append(Quote(arg));
+        }
+        var environment = EnvironmentBlock(psi);
+        try
+        {
+            var startup = new StartupInfo { cb = Marshal.SizeOf<StartupInfo>() };
+            // A partial name in lpApplicationName is not searched on PATH. Null lets the command line do that.
+            var application = Path.IsPathRooted(psi.FileName) ? psi.FileName : null;
+            // CREATE_NEW_CONSOLE so a console tool does not inherit the hidden sign-in console.
+            if (!CreateProcess(application, command, IntPtr.Zero, IntPtr.Zero, false, 0x00000010 | 0x00000400, environment, psi.WorkingDirectory, ref startup, out var info))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            CloseHandle(info.hThread);
+            CloseHandle(info.hProcess);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(environment);
+        }
+    }
+
+    private static IntPtr EnvironmentBlock(ProcessStartInfo psi)
+    {
+        // CreateProcess wants the block in order, and a Unicode block ends with an extra empty string.
+        var entries = new List<string>(psi.Environment.Count);
+        foreach (var entry in psi.Environment)
+            entries.Add($"{entry.Key}={entry.Value}");
+        entries.Sort(StringComparer.OrdinalIgnoreCase);
+        var block = new StringBuilder();
+        foreach (var entry in entries)
+            block.Append(entry).Append('\0');
+        block.Append('\0');
+        return Marshal.StringToHGlobalUni(block.ToString());
+    }
+
+    private static string Profile()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return profile.Length > 0 ? profile : Environment.CurrentDirectory;
+    }
+
+    /// <summary>True for a Windows console image. Documents and missing files are not.</summary>
+    private static bool IsConsoleImage(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var reader = new BinaryReader(stream);
+            if (stream.Length < 0x40 || reader.ReadUInt16() != 0x5A4D)
+                return false;
+            stream.Position = 0x3C;
+            var pe = reader.ReadInt32();
+            if (pe < 0 || pe > stream.Length - 96)
+                return false;
+            stream.Position = pe;
+            if (reader.ReadUInt32() != 0x4550)
+                return false;
+            stream.Position = pe + 24 + 68;
+            return reader.ReadUInt16() == 3;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or EndOfStreamException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static string Quote(IReadOnlyList<string> args)
+    {
+        var text = new StringBuilder();
+        foreach (var arg in args)
+        {
+            if (text.Length > 0)
+                text.Append(' ');
+            text.Append(Quote(arg));
+        }
+        return text.ToString();
+    }
+
+    private static string Quote(string arg)
+    {
+        if (arg.Length > 0 && arg.IndexOfAny(new char[] { ' ', '\t', '"', '\n' }) < 0)
+            return arg;
+        var text = new StringBuilder().Append('"');
+        var slashes = 0;
+        foreach (var c in arg)
+        {
+            if (c == '\\')
+            {
+                slashes++;
+                continue;
+            }
+            if (c == '"')
+            {
+                text.Append('\\', slashes * 2 + 1);
+                text.Append('"');
+                slashes = 0;
+                continue;
+            }
+            text.Append('\\', slashes);
+            text.Append(c);
+            slashes = 0;
+        }
+        text.Append('\\', slashes * 2);
+        return text.Append('"').ToString();
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct StartupInfo
+    {
+        public int cb;
+        public string? lpReserved;
+        public string? lpDesktop;
+        public string? lpTitle;
+        public int dwX;
+        public int dwY;
+        public int dwXSize;
+        public int dwYSize;
+        public int dwXCountChars;
+        public int dwYCountChars;
+        public int dwFillAttribute;
+        public int dwFlags;
+        public short wShowWindow;
+        public short cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessInformation
+    {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public int dwProcessId;
+        public int dwThreadId;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateProcessW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateProcess(
+        string? applicationName,
+        StringBuilder commandLine,
+        IntPtr processAttributes,
+        IntPtr threadAttributes,
+        [MarshalAs(UnmanagedType.Bool)] bool inheritHandles,
+        uint creationFlags,
+        IntPtr environment,
+        string? currentDirectory,
+        ref StartupInfo startupInfo,
+        out ProcessInformation processInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr handle);
 }
+
+/// <summary>What <see cref="ProcessLauncher.StartDetached"/> will do, without starting it.</summary>
+internal readonly record struct DetachedLaunch(bool UseShellExecute, bool NewConsole, string File, string Arguments, string WorkingDirectory);
 
 /// <summary>The <c>SystemClock</c>. It reads the time from the engine's <see cref="TimeProvider"/> service when it has one.</summary>
 public sealed class SystemClock : QObject
