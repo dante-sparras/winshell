@@ -236,7 +236,7 @@ public static class ValueConverter
         bool b => b ? 1 : 0,
         string s when double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) => d,
         string s when s.Length == 0 => 0,
-        Enum e => System.Convert.ToDouble(e, CultureInfo.InvariantCulture),
+        Enum e => System.Convert.ToInt32(e, CultureInfo.InvariantCulture),
         null => throw new QmlException($"Unable to assign [undefined] to {type}"),
         var other => throw new QmlException($"Unable to assign {Describe(other)} to {type}"),
     };
