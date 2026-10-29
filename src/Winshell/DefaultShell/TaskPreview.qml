@@ -167,7 +167,8 @@ PopupWindow {
       visible: root.running && root.listed
       x: 8
       y: 8
-      width: 320
+      // As wide as the screen allows, up to 320, so a close button is never past the popup's edge.
+      width: Math.max(96, Math.min(320, root.roomWide - 16))
       height: Math.min(contentHeight, root.roomHigh)
       contentWidth: width
       contentHeight: rows.implicitHeight

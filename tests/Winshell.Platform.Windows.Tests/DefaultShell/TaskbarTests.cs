@@ -189,15 +189,6 @@ public class TaskbarTests
         Assert.Equal(1, desk.Store.Launches);
     }
 
-    private static PopupWindow Popup(DefaultShellHarness shell, string name) => (PopupWindow)shell.Root.ReadProperty(name)!;
-
-    private static void Hover(DefaultShellHarness shell, Item item)
-    {
-        var p = item.MapToScene(item.Width / 2, item.Height / 2);
-        shell.Scene.PointerMove(p.X, p.Y);
-        shell.Settle();
-    }
-
     private static void ClickIn(ShellWindow window, Item item)
     {
         var p = item.MapToScene(item.Width / 2, item.Height / 2);
@@ -212,6 +203,8 @@ public class TaskbarTests
     [InlineData(1280, 9, true)]
     [InlineData(960, 9, true)]
     [InlineData(1920, 20, true)]
+    [InlineData(270, 3, true)]
+    [InlineData(270, 9, true)]
     public void A_large_group_fits_its_screen_and_every_window_can_be_reached_activated_and_closed(double workWidth, int count, bool asList)
     {
         // A screen whose work area is this many logical pixels wide: 1920 physical pixels at 100%, 150% and 200%.
@@ -254,6 +247,10 @@ public class TaskbarTests
         preview.Visible = true;
         shell.Settle();
         var close = DefaultShellHarness.FindAll(last).First(i => i.ObjectName == "previewClose");
+        // Every close button is inside the popup, which is inside the work area: a 270 px work area is a 1080 px
+        // wide portrait screen at 400%.
+        Assert.True(preview.ImplicitWidth <= workWidth);
+        Assert.All(items, i => Assert.True(i.MapToScene(i.Width, 0).X <= preview.ImplicitWidth));
         var p = last.MapToScene(last.Width / 2, last.Height / 2);
         preview.Scene.PointerMove(p.X, p.Y);
         shell.Settle();
