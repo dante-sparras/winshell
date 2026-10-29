@@ -317,6 +317,17 @@ public sealed class QmlEngine : IDisposable
                     builder.SetInitialProperties(root, context, initialProperties);
                 beforeCompletion?.Invoke(root);
             }
+#pragma warning disable CA1031 // A failed creation must not leave the objects it already built.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                for (var i = batch.Objects.Count - 1; i >= 0; i--)
+                {
+                    if (!batch.Objects[i].IsDestroyed)
+                        batch.Objects[i].Destroy();
+                }
+                throw;
+            }
             finally
             {
                 _batches.Pop();
