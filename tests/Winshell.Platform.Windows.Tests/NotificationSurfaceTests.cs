@@ -138,11 +138,11 @@ public sealed class NotificationSurfaceTests
     [Fact]
     public void Clock_hook_opens_the_real_flyout_and_escape_dismisses_it()
     {
-        using var surface = new Surface("Bar.qml", 1000, 40);
+        using var surface = new Surface("TaskbarClock.qml", 200, 48);
         var clock = Assert.Single(Nodes(surface.Tree().Root), n => n.Description == "Open notification center and calendar");
         Assert.True(clock.IsKeyboardFocusable);
-        Assert.InRange(clock.Bounds.Y, 0, 40);
-        Assert.InRange(clock.Bounds.Bottom, 1, 40);
+        Assert.InRange(clock.Bounds.Y, 0, 48);
+        Assert.InRange(clock.Bounds.Bottom, 1, 48);
         clock.Invoke();
         surface.Flush();
         var flyout = Assert.IsType<PopupWindow>(surface.Root.CreationContext!.FindId("calendar"));

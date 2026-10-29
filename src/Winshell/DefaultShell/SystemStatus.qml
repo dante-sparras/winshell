@@ -5,7 +5,7 @@ import Winshell.Audio
 import Winshell.Power
 import QtQuick
 
-// What the bar's status icons and quick settings both show: the network, the volume and the battery, with the
+// What the taskbar's status icons and quick settings both show: the network, the volume and the battery, with the
 // Segoe Fluent Icons glyph Windows 11 draws for each.
 Singleton {
   readonly property var wifi: Networking.devices.values.find(d => d.type === DeviceType.Wifi) ?? null

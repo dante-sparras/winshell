@@ -2,7 +2,7 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell;
 
-/// <summary>The shell Winshell runs when there is no config: a Windows 11 style bar, written out as QML.</summary>
+/// <summary>The shell Winshell runs when there is no config: a Windows 11 taskbar on every screen, written out as QML.</summary>
 internal static class DefaultShell
 {
     /// <summary>Writes the default shell's files to a folder of their own and returns its shell.qml.</summary>

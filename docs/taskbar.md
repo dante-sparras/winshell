@@ -1,0 +1,49 @@
+# The taskbar
+
+The default shell puts a Windows 11 taskbar along the bottom of every screen (`Taskbar.qml`). Start, Search and the apps sit in the middle, and the notification area and the clock sit on the right. The taskbar reserves its edge as an app bar, so maximized windows on that screen stop above it. It does not hide or replace Explorer's taskbar: while Explorer runs, the two app bars stack.
+
+## Settings
+
+Set these on `Taskbar` in `shell.qml`. They match Settings > Personalization > Taskbar.
+
+| Property | Default | What it does |
+| --- | --- | --- |
+| `centered` | `true` | Start, Search and the apps in the middle; `false` puts them on the left. |
+| `autoHide` | `false` | The taskbar reserves nothing and slides down to a 2-pixel line at the bottom of the screen. It comes back over other app bars when the pointer touches the line, stays while a preview, a menu or a flyout it opened is open, and slides away a second after the pointer leaves. |
+| `appsOn` | `"all"` | With several screens: `"all"` taskbars show every app; `"main"` shows every app on the primary screen's taskbar and only each screen's own windows on the others; `"where"` shows each window only on the taskbar of the screen it is on. Pinned apps show on the main taskbar, and on every taskbar with `"all"`. |
+
+## Apps
+
+Pinned apps come first, in the order they were pinned, then every other running app in the order it opened. Each app's windows are grouped on one button. Windows are matched to apps through the app index (`Apps.find(window.appId)`). An app the index does not have is grouped by its app id.
+
+- **Click.** Launches a pinned app that is not running. It brings the app's window forward, or minimizes the window when it is already in front. With several windows, it goes to the next window when one is in front, and otherwise to the one used last.
+- **Middle click or Shift+click.** Opens a new window of the app.
+- **Hover.** After 400 ms, live previews (`WindowThumbnail`) of the app's windows appear, each with its title and a close button. For an app that isn't running, only the app's name appears.
+- **Right click.** Opens a menu with the app, Pin to taskbar or Unpin from taskbar, and Close window or Close all windows. Windows has no supported API to read another app's jump list, so recent and pinned files are not shown.
+- **Indicators.** A grey line marks a running app, and a longer accent line marks the app in front. A window that flashes for attention (`AppWindow.attention`) turns its button red until it is activated.
+
+Narrator reads each button the way it reads Explorer's: "File Explorer - 2 running windows", "Microsoft Store pinned". It can invoke them.
+
+Pins live in `taskbar.json` in the shell's data folder (`Shell.dataDir`). Until the user pins or unpins something, there is no file, and the pins are File Explorer, Microsoft Edge and the Microsoft Store. A pin whose app isn't in the app index, or isn't installed, has no button.
+
+## Hooks
+
+Other surfaces plug into the taskbar from `shell.qml`:
+
+| Member | Use |
+| --- | --- |
+| `startRequested(button)` | Start was clicked. The default shell toggles its launcher, centered over a centered taskbar and opening from Start otherwise. |
+| `startOpen` | Set it while the launcher is open, so Start looks pressed and an auto-hiding taskbar stays up. |
+| `searchRequested(button)`, `searchOpen` | The same for Search. The default shell opens Windows search. |
+| `trayArea` | A `Component` for the right side before the clock. The default, `TrayArea.qml`, has the hidden icons chevron, the tray icons Settings shows, and the quick settings button. An item with a `busy` property keeps an auto-hiding taskbar up while it is true. |
+| `clockArea` | A `Component` for the clock. The default, `TaskbarClock.qml`, opens the notification center and calendar. |
+| `startButton`, `searchButton`, `startX` | The buttons, and where Start sits along the taskbar, to anchor popup windows to. |
+
+## Checks only a live session can do
+
+1. Run the default shell. Each screen has a taskbar, and a maximized window stops above it.
+2. Hover an app with several windows. Live previews of each window appear. Click one to bring that window forward.
+3. Minimize a window, then hover its app. Check how its preview looks.
+4. Have an app flash, for example a chat message while another window is in front. Its button turns red until you switch to it.
+5. Turn on Narrator and move through the taskbar. Each app is read with its windows, and Narrator can invoke it.
+6. Set `autoHide: true`. The taskbar slides away, and comes back when the pointer reaches the bottom edge.

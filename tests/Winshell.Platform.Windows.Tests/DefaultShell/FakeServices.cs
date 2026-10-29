@@ -1,8 +1,11 @@
+using Winshell.Platform.Windows.Services.Apps;
 using Winshell.Platform.Windows.Services.Audio;
 using Winshell.Platform.Windows.Services.Bluetooth;
 using Winshell.Platform.Windows.Services.Media;
 using Winshell.Platform.Windows.Services.Network;
 using Winshell.Platform.Windows.Services.Power;
+using Winshell.Platform.Windows.Services.Tray;
+using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -241,6 +244,9 @@ public sealed class FakeServices
     public FakeBrightness Brightness { get; } = new();
     public FakeAudio Audio { get; } = new();
     public FakeMedia Media { get; } = new();
+    public FakeWindowList WindowList { get; } = new();
+    public FakeApps Apps { get; } = new();
+    public FakeSystemTray SystemTray { get; } = new();
 
     /// <summary>The real type each fake stands for, so their QML names can be compared.</summary>
     public static readonly (Type Fake, Type Real)[] Pairs =
@@ -261,6 +267,12 @@ public sealed class FakeServices
         (typeof(FakeAudioVolume), typeof(AudioVolume)),
         (typeof(FakeMedia), typeof(MediaService)),
         (typeof(FakeMediaSession), typeof(MediaSession)),
+        (typeof(FakeWindowList), typeof(WindowListService)),
+        (typeof(FakeAppWindow), typeof(AppWindow)),
+        (typeof(FakeApps), typeof(AppsService)),
+        (typeof(FakeAppEntry), typeof(AppEntry)),
+        (typeof(FakeSystemTray), typeof(SystemTray)),
+        (typeof(FakeTrayItem), typeof(SystemTrayItem)),
     ];
 
     public void Register(ModuleRegistry registry)
@@ -273,5 +285,8 @@ public sealed class FakeServices
             .Singleton(_ => Brightness, "Brightness");
         registry.Module("Winshell.Audio").Singleton(_ => Audio, "Audio");
         registry.Module("Winshell.Media").Singleton(_ => Media, "Media");
+        registry.Module("Winshell.Windows").Singleton(_ => WindowList, "WindowList");
+        registry.Module("Winshell.Apps").Singleton(_ => Apps, "Apps");
+        registry.Module("Winshell.Tray").Singleton(_ => SystemTray, "SystemTray");
     }
 }

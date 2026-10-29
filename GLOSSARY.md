@@ -50,6 +50,18 @@ _Avoid_: popup, flyout
 A control shown in the overlay of the window that holds it. It is not a window of its own.
 _Avoid_: popup window, flyout, dialog
 
+**Taskbar**:
+The default shell's panel along the bottom of each screen: Start, Search, the apps, the notification area and the clock. Explorer's own taskbar is the Windows taskbar.
+_Avoid_: bar, dock, task list
+
+**Pinned app**:
+An app the taskbar keeps a button for while it is not running.
+_Avoid_: favorite, launcher, quick launch
+
+**Preview**:
+The live image of an app window the taskbar shows over its button.
+_Avoid_: thumbnail (that is the DWM API it uses), peek
+
 **Quick settings**:
 The popup window Windows 11 opens from the taskbar's network, volume and battery icons: tiles, the volume and brightness sliders, and the battery.
 _Avoid_: action center, control center
