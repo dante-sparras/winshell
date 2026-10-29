@@ -300,7 +300,7 @@ The `Startup` singleton: whether Winshell runs when the current user signs in. T
 | `available` | bool, read-only | Whether this shell can register itself: false when it does not run as `winshell.exe`. |
 | `runAtSignIn` | bool | Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry, and setting it when the entry starts another `winshell.exe` points the entry here. |
 | `turnedOffInWindows` | bool, read-only | True when the entry is there but Windows' Startup apps page turned it off. Only that page can turn it back on. |
-| `registeredElsewhere` | bool, read-only | True when the entry is there but starts Winshell another way: a `winshell.exe` in another folder, as after an update unzipped somewhere new, or other arguments. `runAtSignIn` is false until it is set. |
+| `registeredElsewhere` | bool, read-only | True when the entry is there but starts Winshell another way: a `winshell.exe` in another folder, as after an update unzipped somewhere new, or other arguments. `winshell.exe` and `winshellw.exe` in the same folder are one install. `runAtSignIn` is false until it is set. |
 | `refresh()` | method | Reads the entry again, after the user may have changed it in Windows. |
 
 ## Diagnostics
