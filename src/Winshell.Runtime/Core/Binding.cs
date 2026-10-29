@@ -240,7 +240,4 @@ public sealed class DynamicProperty
         _value = converted;
         Owner.NotifyChanged(Name);
     }
-
-    /// <summary>Marks an alias as assigned without writing, so its required check passes.</summary>
-    internal void MarkAssigned() => WasAssigned = true;
 }
