@@ -85,6 +85,69 @@ public sealed class InstanceIsolationTests : IDisposable
         Assert.Equal("fixed", Ask(broken));
     }
 
+    /// <summary>
+    /// A killed instance leaves its file, and Windows can give that process id to the next winshell.
+    /// The list then has to name the process that is running, not the file the dead one left.
+    /// </summary>
+    [Fact]
+    public void A_reused_process_id_is_listed_for_the_instance_that_owns_it()
+    {
+        var process = Start(Config("once", "once"));
+        var live = Info(process);
+        var liveId = live.GetProperty("id").GetString()!;
+        var staleId = Instances.NewId();
+        var dir = Instances.DirOf(staleId);
+        Directory.CreateDirectory(dir);
+        // The shape left on disk before processStart was recorded: same pid, earlier launch, no processStart.
+        var legacy = File.ReadAllText(Path.Combine(Instances.DirOf(liveId), "instance.json"));
+        legacy = legacy.Replace($"\"id\": \"{liveId}\"", $"\"id\": \"{staleId}\"", StringComparison.Ordinal);
+        legacy = legacy.Replace($"\"pipe\": \"winshell-{liveId}\"", $"\"pipe\": \"winshell-{staleId}\"", StringComparison.Ordinal);
+        var launched = live.GetProperty("launchTime").GetDateTime().AddHours(-3);
+        legacy = System.Text.RegularExpressions.Regex.Replace(
+            legacy,
+            "\"launchTime\": \"[^\"]+\"",
+            "\"launchTime\": \"" + launched.ToString("o", System.Globalization.CultureInfo.InvariantCulture) + "\"");
+        legacy = System.Text.RegularExpressions.Regex.Replace(legacy, ",\\s*\"processStart\": \\d+", "");
+        File.WriteAllText(Path.Combine(dir, "instance.json"), legacy);
+        var reusedId = Instances.NewId();
+        var reusedDir = Instances.DirOf(reusedId);
+        try
+        {
+            // This process id already belongs to a winshell, but the file records a different process start.
+            Instances.Write(new InstanceInfo(
+                reusedId,
+                process.Id,
+                "reused",
+                live.GetProperty("configPath").GetString()!,
+                DateTime.Now,
+                "winshell-" + reusedId,
+                Path.Combine(reusedDir, "log.txt"),
+                ProcessStart: 1));
+            var rows = Listed().Where(i => i.GetProperty("pid").GetInt32() == process.Id).ToList();
+            Assert.Single(rows);
+            Assert.Equal(liveId, rows[0].GetProperty("id").GetString());
+        }
+        finally
+        {
+            Instances.Remove(staleId);
+            Instances.Remove(reusedId);
+            try
+            {
+                Directory.Delete(dir, true);
+            }
+            catch (IOException)
+            {
+            }
+            try
+            {
+                Directory.Delete(reusedDir, true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
     /// <summary>Starts an instance and waits until it has written itself into the instance list.</summary>
     private Process Start(string configDir)
     {

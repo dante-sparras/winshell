@@ -316,7 +316,8 @@ namespace Winshell
             log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
             log.Info("", $"Saving logs to \"{logPath}\"");
             var pipe = $"winshell-{id}";
-            Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath));
+            var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
+            Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
             using var ipc = new IpcServer(pipe, loop, () => host, () => loop.Quit(0));
             Console.CancelKeyPress += (_, e) =>
             {
