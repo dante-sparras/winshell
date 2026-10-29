@@ -95,7 +95,7 @@ public sealed class QmlEngine : IDisposable
         path = Path.GetFullPath(path);
         if (_documents.TryGetValue(path, out var doc))
             return doc;
-        var text = Preprocessor.Run(File.ReadAllText(path));
+        var text = Preprocess(File.ReadAllText(path));
         doc = QmlParser.Parse(text, path);
         _documents[path] = doc;
         return doc;
@@ -105,7 +105,7 @@ public sealed class QmlEngine : IDisposable
     public QmlDocument LoadDocumentFromText(string text, string path)
     {
         path = Path.GetFullPath(path);
-        var doc = QmlParser.Parse(Preprocessor.Run(text), path);
+        var doc = QmlParser.Parse(Preprocess(text), path);
         _documents[path] = doc;
         return doc;
     }
@@ -120,9 +120,18 @@ public sealed class QmlEngine : IDisposable
         var path = Path.GetFullPath(Path.Combine(directory, "__inline_" + hash + ".qml"));
         if (_inlineDocuments.TryGetValue(path, out var cached))
             return cached;
-        var doc = QmlParser.Parse(Preprocessor.Run(text), path);
+        var doc = QmlParser.Parse(Preprocess(text), path);
         _inlineDocuments[path] = doc;
         return doc;
+    }
+
+    private string Preprocess(string text)
+    {
+        var warnings = new List<string>();
+        var result = Preprocessor.Run(text, warnings);
+        foreach (var warning in warnings)
+            Log.Warn("qml", warning);
+        return result;
     }
 
     public ImportScope ImportsOf(QmlDocument doc)
