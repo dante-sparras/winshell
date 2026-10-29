@@ -959,9 +959,9 @@ public sealed class FileView : QObject
                     return;
                 if (error is null)
                 {
-                    // A folder this write made can be watched now.
-                    if (_watcher is null)
-                        Watch();
+                    // A replace can leave the watch on the file that was moved away, so the next
+                    // hand save is missed. Arm it again on the file that is there now.
+                    Watch();
                     Emit("saved");
                 }
                 else
@@ -994,28 +994,36 @@ public sealed class FileView : QObject
             return;
         var loop = Engine.Loop;
         var watched = full;
-        _watcher = new FileSystemWatcher(dir, System.IO.Path.GetFileName(full))
+        var watcher = new FileSystemWatcher(dir, System.IO.Path.GetFileName(full))
         {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-            EnableRaisingEvents = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
+            InternalBufferSize = 65536,
         };
-        void Changed(object? _, FileSystemEventArgs e)
+        void Consider()
         {
-            // Read on the loop, after the event. Reading here would hold the file during our own replace.
-            loop.Post(() =>
-            {
-                if (IsDestroyed)
-                    return;
-                var read = Read(watched);
-                // Our own write already matches the buffer. A hand save in the same moment does not.
-                if (read.Text is null || read.Text == _text)
-                    return;
-                Emit("fileChanged");
-            });
+            if (IsDestroyed)
+                return;
+            // Our own write already matches the buffer. A hand save in the same moment does not.
+            var read = Read(watched);
+            if (read.Text is null || read.Text == _text)
+                return;
+            Emit("fileChanged");
         }
-        _watcher.Changed += Changed;
-        _watcher.Created += Changed;
-        _watcher.Renamed += (s, e) => Changed(s, e);
+        // Read on the loop, after the event. Reading here would hold the file during our own replace.
+        void Changed(object? _, FileSystemEventArgs e) => loop.Post(Consider);
+        watcher.Changed += Changed;
+        watcher.Created += Changed;
+        watcher.Renamed += (s, e) => Changed(s, e);
+        watcher.Error += (_, _) => loop.Post(() =>
+        {
+            if (IsDestroyed)
+                return;
+            // The watch dropped an event. Arm it again and apply whatever the file says now.
+            Watch();
+            Consider();
+        });
+        watcher.EnableRaisingEvents = true;
+        _watcher = watcher;
     }
 
     protected override void OnDestroy()
