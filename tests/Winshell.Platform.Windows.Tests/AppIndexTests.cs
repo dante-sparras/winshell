@@ -301,6 +301,46 @@ public sealed class AppIndexTests
         }
     }
 
+    [Fact(Timeout = 30_000)]
+    public async Task Packaged_launch_returns_before_activation_and_falls_back_on_the_loop()
+    {
+        using var activating = new ManualResetEventSlim(false);
+        var loop = new ManualEventLoop();
+        var posted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        loop.Woken += () => posted.TrySetResult();
+        var warnings = new List<string>();
+        int? fallbackThread = null;
+        var started = 0;
+
+        // An activation that blocks until the test lets it fail. A launch that waited for it would hang here.
+        AppLaunch.Packaged(
+            () =>
+            {
+                activating.Wait();
+                return "not registered";
+            },
+            () =>
+            {
+                fallbackThread = Environment.CurrentManagedThreadId;
+                return null;
+            },
+            loop,
+            warnings.Add,
+            () => started++);
+        Assert.False(posted.Task.IsCompleted);
+
+        activating.Set();
+        await posted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Empty(warnings);
+        Assert.Null(fallbackThread);
+        Assert.Equal(0, started);
+
+        loop.Process();
+        Assert.Equal(["not registered"], warnings);
+        Assert.Equal(Environment.CurrentManagedThreadId, fallbackThread);
+        Assert.Equal(1, started);
+    }
+
     [Fact]
     public void Icon_is_the_pixel_size_asked_for()
     {

@@ -335,70 +335,73 @@ internal static class AppLaunch
         }
     }
 
-    public static bool Packaged(string appUserModelId, string arguments, Action<string> warn)
-    {
-        var activated = Activate(appUserModelId, arguments, out var error);
-        if (activated == ActivateResult.Started)
-            return true;
-        if (activated == ActivateResult.TimedOut)
-        {
-            warn("The packaged app did not start in time.");
-            return false;
-        }
-        if (error is not null)
-            warn(error);
-        try
-        {
-            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId) { UseShellExecute = true });
-            return true;
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            warn(e.Message);
-            return false;
-        }
-    }
+    public static void Packaged(string appUserModelId, string arguments, IEventLoop loop, Action<string> warn, Action started) =>
+        Packaged(() => Activate(appUserModelId, arguments), () => OpenAppsFolder(appUserModelId), loop, warn, started);
 
-    private static ActivateResult Activate(string appUserModelId, string arguments, out string? error)
+    /// <summary>
+    /// Runs <paramref name="activate"/> on its own STA thread and returns at once: activation returns only after
+    /// the app is up, seconds on a cold start. Its outcome, and the <paramref name="fallback"/> when it failed,
+    /// run on the loop. Each returns an error, or null when the app started.
+    /// </summary>
+    internal static void Packaged(Func<string?> activate, Func<string?> fallback, IEventLoop loop, Action<string> warn, Action started)
     {
-        error = null;
-        var type = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"));
-        if (type is null)
-            return ActivateResult.Failed;
-        Exception? thrown = null;
-        var started = false;
         var thread = new Thread(() =>
         {
-            object? created = null;
-            try
+            var error = activate();
+            loop.Post(() =>
             {
-                created = Activator.CreateInstance(type);
-                if (created is not IApplicationActivationManager manager)
-                    return;
-                manager.ActivateApplication(appUserModelId, arguments ?? "", 0, out _);
-                started = true;
-            }
-            catch (Exception e)
-            {
-                thrown = e;
-            }
-            finally
-            {
-                if (created is not null && Marshal.IsComObject(created))
-                    Marshal.ReleaseComObject(created);
-            }
+                if (error is not null)
+                {
+                    warn(error);
+                    if (fallback() is { } failed)
+                    {
+                        warn(failed);
+                        return;
+                    }
+                }
+                started();
+            });
         });
         thread.IsBackground = true;
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        if (!thread.Join(TimeSpan.FromSeconds(15)))
-            return ActivateResult.TimedOut;
-        if (thrown is not null)
-            error = thrown.Message;
-        return started ? ActivateResult.Started : ActivateResult.Failed;
     }
 
-    private enum ActivateResult { Started, Failed, TimedOut }
+    private static string? Activate(string appUserModelId, string arguments)
+    {
+        object? created = null;
+        try
+        {
+            var type = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"));
+            created = type is null ? null : Activator.CreateInstance(type);
+            if (created is not IApplicationActivationManager manager)
+                return "The activation manager is not available.";
+            manager.ActivateApplication(appUserModelId, arguments ?? "", 0, out _);
+            return null;
+        }
+        catch (Exception e)
+        {
+            return e.Message;
+        }
+        finally
+        {
+            if (created is not null && Marshal.IsComObject(created))
+                Marshal.ReleaseComObject(created);
+        }
+    }
+
+    private static string? OpenAppsFolder(string appUserModelId)
+    {
+        try
+        {
+            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId) { UseShellExecute = true });
+            return null;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return e.Message;
+        }
+    }
 
     [ComImport]
     [Guid("2e941141-7f97-4756-ba1d-9decde894a3d")]
