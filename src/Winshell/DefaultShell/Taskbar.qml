@@ -51,12 +51,15 @@ PanelWindow {
     right: true
   }
 
-  implicitHeight: 48
-  // An auto-hiding taskbar reserves nothing and lays out against the whole screen, so it can slide off its edge.
+  // The taskbar's own height; the window is shorter while an auto-hiding taskbar is down.
+  readonly property real barHeight: 48
+  // An auto-hiding taskbar reserves nothing and lays out against the whole screen.
   exclusionMode: autoHide ? ExclusionMode.Ignore : ExclusionMode.Auto
-  // A hidden taskbar leaves a line of 2 pixels at the edge, which brings it back when the pointer touches it.
-  margins.bottom: -hiddenBy
-  property real hiddenBy: revealed ? 0 : implicitHeight - 2
+  // A hidden taskbar is a line of 2 pixels at the edge, which brings it back when the pointer touches it. It slides
+  // by growing its window from that line, with the top of the taskbar first, so the window never leaves its screen
+  // for the one below.
+  implicitHeight: barHeight - hiddenBy
+  property real hiddenBy: revealed ? 0 : barHeight - 2
   Behavior on hiddenBy { NumberAnimation { duration: Theme.controlNormalAnimationDuration; easing.type: Easing.OutCubic } }
 
   color: "transparent"
@@ -75,7 +78,8 @@ PanelWindow {
 
   Item {
     id: content
-    anchors.fill: parent
+    width: parent.width
+    height: root.barHeight
 
     HoverHandler {
       id: hover
