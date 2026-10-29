@@ -714,7 +714,7 @@ public sealed class FileView : QObject
     private FileViewAdapter? _adapter;
     private FileSystemWatcher? _watcher;
     private int _generation;
-    private DateTime _lastWrite;
+    private bool _bom;
 
     [QmlEnum]
     public enum FileViewError
@@ -842,33 +842,50 @@ public sealed class FileView : QObject
         Task.Run(() => Read(path)).ContinueWith(t => loop.Post(() => Apply(generation, t.Result)), TaskScheduler.Default);
     }
 
-    private static (string? Text, FileViewError Error, string Message) Read(string path)
+    private static (string? Text, bool Bom, FileViewError Error, string Message) Read(string path)
     {
         try
         {
             if (Directory.Exists(path))
-                return (null, FileViewError.NotAFile, "not a file");
-            return (File.ReadAllText(path), FileViewError.Success, "");
+                return (null, false, FileViewError.NotAFile, "not a file");
+            // Share the file so a save can replace it, and a test can delete it, while this read is open.
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            Span<byte> start = stackalloc byte[3];
+            var count = stream.Read(start);
+            var bom = count == 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF;
+            stream.Position = 0;
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return (reader.ReadToEnd(), bom, FileViewError.Success, "");
         }
         catch (FileNotFoundException)
         {
-            return (null, FileViewError.FileNotFound, "file not found");
+            return (null, false, FileViewError.FileNotFound, "file not found");
         }
         catch (DirectoryNotFoundException)
         {
-            return (null, FileViewError.FileNotFound, "file not found");
+            return (null, false, FileViewError.FileNotFound, "file not found");
         }
         catch (UnauthorizedAccessException)
         {
-            return (null, FileViewError.PermissionDenied, "permission denied");
+            return (null, false, FileViewError.PermissionDenied, "permission denied");
         }
         catch (IOException e)
         {
-            return (null, FileViewError.Unknown, e.Message);
+            return (null, false, FileViewError.Unknown, e.Message);
         }
     }
 
-    private void Apply(int generation, (string? Text, FileViewError Error, string Message) result)
+    private static void WriteText(string path, string text, bool bom)
+    {
+        if (!bom)
+        {
+            File.WriteAllText(path, text);
+            return;
+        }
+        File.WriteAllText(path, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+    }
+
+    private void Apply(int generation, (string? Text, bool Bom, FileViewError Error, string Message) result)
     {
         if (generation != _generation || IsDestroyed)
             return;
@@ -877,11 +894,13 @@ public sealed class FileView : QObject
             if (_printErrors && result.Error != FileViewError.FileNotFound)
                 Engine?.Log.Warn("io", $"FileView: failed to read {_path}: {result.Message}");
             _text = null;
+            _bom = false;
             SetLoaded(false);
             Emit("loadFailed", (int)result.Error);
             return;
         }
         var changed = _text != result.Text;
+        _bom = result.Bom;
         _text = result.Text;
         if (changed)
             NotifyChanged("text");
@@ -909,6 +928,7 @@ public sealed class FileView : QObject
             return;
         var path = _path;
         var atomic = _atomicWrites;
+        var bom = _bom;
         var loop = Engine?.Loop;
         _text = text;
         NotifyChanged("text");
@@ -921,14 +941,13 @@ public sealed class FileView : QObject
                 if (atomic)
                 {
                     var temp = path + ".tmp-" + Environment.ProcessId;
-                    File.WriteAllText(temp, text);
+                    WriteText(temp, text, bom);
                     File.Move(temp, path, overwrite: true);
                 }
                 else
                 {
-                    File.WriteAllText(path, text);
+                    WriteText(path, text, bom);
                 }
-                _lastWrite = DateTime.UtcNow;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -974,6 +993,7 @@ public sealed class FileView : QObject
         if (dir is null || !Directory.Exists(dir))
             return;
         var loop = Engine.Loop;
+        var watched = full;
         _watcher = new FileSystemWatcher(dir, System.IO.Path.GetFileName(full))
         {
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
@@ -981,13 +1001,16 @@ public sealed class FileView : QObject
         };
         void Changed(object? _, FileSystemEventArgs e)
         {
-            // Our own writes do not count as changes.
-            if ((DateTime.UtcNow - _lastWrite).TotalMilliseconds < 200)
-                return;
+            // Read on the loop, after the event. Reading here would hold the file during our own replace.
             loop.Post(() =>
             {
-                if (!IsDestroyed)
-                    Emit("fileChanged");
+                if (IsDestroyed)
+                    return;
+                var read = Read(watched);
+                // Our own write already matches the buffer. A hand save in the same moment does not.
+                if (read.Text is null || read.Text == _text)
+                    return;
+                Emit("fileChanged");
             });
         }
         _watcher.Changed += Changed;

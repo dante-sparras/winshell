@@ -172,7 +172,7 @@ dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~Se
 Remove-Item Env:WINSHELL_SETTINGS_EVIDENCE
 ```
 
-`WINSHELL_SETTINGS_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that folder, and CI attaches them as the `settings-surface` workflow artifact; no images are committed. The tests run each shell with no config folder or one of their own, so they never write the user's `preferences.json`, and they never change a Windows setting. The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).
+`WINSHELL_SETTINGS_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that folder, and CI attaches them as the `settings-surface` workflow artifact; no images are committed. The tests run each shell with no config folder or one of their own, so they never write the user's `preferences.toml`, and they never change a Windows setting. The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).
 
 ## Visual snapshots
 
