@@ -35,8 +35,14 @@ internal static class Globals
         Add("debug", LogLevel.Debug);
         Add("warn", LogLevel.Warn);
         Add("error", LogLevel.Error);
-        Add("trace", LogLevel.Info);
         Add("exception", LogLevel.Error);
+        console.Set("trace", Fn(engine, "trace", args =>
+        {
+            var text = Join(runtime, args);
+            var stack = ScriptStack(engine);
+            qml.Log.Info("", stack.Length == 0 ? text : text + Environment.NewLine + stack);
+            return JsValue.Undefined;
+        }));
         console.Set("assert", Fn(engine, "assert", args =>
         {
             if (args.Length == 0 || !TypeConverter.ToBoolean(args[0]))
@@ -64,6 +70,21 @@ internal static class Globals
     private static string Str(JsValue[] args, int i, string fallback) =>
         i < args.Length && !args[i].IsUndefined() ? TypeConverter.ToString(args[i]) : fallback;
 
+    /// <summary>The script stack at the call, as <c>new Error().stack</c> would report it.</summary>
+    private static string ScriptStack(Engine engine)
+    {
+        try
+        {
+            var error = engine.Intrinsics.Error.Construct("trace");
+            var stack = error.Get("stack");
+            return stack.IsString() ? stack.AsString() : "";
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return "";
+        }
+    }
+
     /// <summary>Formats console arguments like QML: objects by their type, arrays by their items.</summary>
     public static string Join(JsRuntime runtime, JsValue[] args) =>
         string.Join(" ", args.Select(a => Describe(runtime, a, 0)));
@@ -83,7 +104,16 @@ internal static class Globals
         if (value.IsObject() && !value.IsCallable() && value.ToObject() is not (QColor or QPoint or QSize or QRect) && !value.IsDate() && !value.IsRegExp())
         {
             if (value.AsObject().Get("toString") is var ts && ts.IsCallable() && ts != runtime.Engine.Intrinsics.Object.PrototypeObject.Get("toString"))
-                return TypeConverter.ToString(runtime.Engine.Call(ts, value, []));
+            {
+                try
+                {
+                    return TypeConverter.ToString(runtime.Engine.Call(ts, value, []));
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                    return "[object Object]";
+                }
+            }
             try
             {
                 return depth > 0 ? "[object Object]" : new Jint.Native.Json.JsonSerializer(runtime.Engine).Serialize(value).ToString();
