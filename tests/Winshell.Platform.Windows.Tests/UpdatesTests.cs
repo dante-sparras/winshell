@@ -65,6 +65,27 @@ public sealed class UpdatesTests : IDisposable
         Assert.Null(UpdateInstall.Staged(UpdatesDir, new Version(0, 5, 0)));
     }
 
+    [Fact]
+    public async Task A_failed_download_leaves_another_shells_download_alone()
+    {
+        // Another shell, downloading the same release at the same time, has unzipped part of it. These are the names
+        // every download of 0.6.0 used before downloads had names of their own.
+        var theirs = Path.Combine(UpdatesDir, "0.6.0.partial");
+        Directory.CreateDirectory(theirs);
+        File.WriteAllText(Path.Combine(theirs, "winshell.exe"), "new");
+        File.WriteAllText(Path.Combine(UpdatesDir, "0.6.0.zip.partial"), "");
+        var zip = Zip(("winshell.exe", "tampered"));
+        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(Zip(("winshell.exe", "new"))))));
+
+        await updater.CheckAsync();
+
+        Assert.Equal(UpdateStatus.Failed, updater.State.Status);
+        Assert.True(File.Exists(Path.Combine(theirs, "winshell.exe")));
+        Assert.True(File.Exists(Path.Combine(UpdatesDir, "0.6.0.zip.partial")));
+        // Neither is an update to install.
+        Assert.Null(UpdateInstall.Staged(UpdatesDir, new Version(0, 5, 0)));
+    }
+
     [Theory]
     [InlineData("v0.5.0")]
     [InlineData("v0.4.9")]

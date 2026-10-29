@@ -250,8 +250,11 @@ public sealed class Updater : IDisposable
     {
         var version = release.Version.ToString(3);
         Directory.CreateDirectory(_updatesDir);
-        var zip = Path.Combine(_updatesDir, version + ".zip.partial");
-        var unzipped = Path.Combine(_updatesDir, version + ".partial");
+        // Names of this download's own: another shell may be downloading the same release, and a failure here must
+        // not delete what that one unzipped. Neither name reads as a version, so nothing installs them.
+        var temp = $"{version}.{Guid.NewGuid():N}";
+        var zip = Path.Combine(_updatesDir, temp + ".zip.partial");
+        var unzipped = Path.Combine(_updatesDir, temp + ".partial");
         var target = Path.Combine(_updatesDir, version);
         try
         {
@@ -273,8 +276,6 @@ public sealed class Updater : IDisposable
             }
             if (!string.Equals(actual, release.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"the file's SHA-256 is {actual}, but the release says {release.Sha256.ToLowerInvariant()}.");
-            if (Directory.Exists(unzipped))
-                Directory.Delete(unzipped, recursive: true);
             // ExtractToDirectory refuses an entry that would land outside the folder.
             ZipFile.ExtractToDirectory(zip, unzipped);
             if (!File.Exists(Path.Combine(unzipped, "winshell.exe")))

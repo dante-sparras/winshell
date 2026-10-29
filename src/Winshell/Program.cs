@@ -276,7 +276,10 @@ namespace Winshell
             // System.Diagnostics.Process is loaded first, from the files this one started with.
             RuntimeHelpers.PrepareMethod(typeof(Cli).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!.MethodHandle);
             using (Process.GetCurrentProcess()) { }
-            var update = Updater.InstallStaged(ReleaseRepository, Version);
+            // A shell still running loads more files from this folder as it needs them, so an update installs only when
+            // no other runs. It stays ready until then.
+            var othersRun = Instances.List(false).Any(i => i.Info.Pid != o.After);
+            var update = othersRun ? null : Updater.InstallStaged(ReleaseRepository, Version);
             if (update is { Error: null })
             {
                 Console.Error.WriteLine($"Updated Winshell to {update.Version}.");
@@ -499,9 +502,21 @@ namespace Winshell
             var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
             foreach (var a in args)
                 psi.ArgumentList.Add(a);
-            using var shell = Process.Start(psi)!;
-            shell.WaitForExit();
-            return shell.ExitCode;
+            Process shell;
+            try
+            {
+                shell = Process.Start(psi)!;
+            }
+            catch (System.ComponentModel.Win32Exception e)
+            {
+                Console.Error.WriteLine($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.");
+                return 1;
+            }
+            using (shell)
+            {
+                shell.WaitForExit();
+                return shell.ExitCode;
+            }
         }
 
         private static (InstanceInfo? Info, string? Error) Select(Options o)
