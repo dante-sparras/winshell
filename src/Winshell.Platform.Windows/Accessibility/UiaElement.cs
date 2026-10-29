@@ -202,13 +202,17 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
     }
 
     // UI Automation focuses the window before it calls this, so only the item's focus moves here.
-    // The item takes focus, and then the window takes the keyboard, as the client asked.
-    int IRawElementProviderFragment.SetFocus() => Call(() =>
+    // The item takes focus, and the window takes the keyboard if Windows lets it; if it does not, the client hears so.
+    int IRawElementProviderFragment.SetFocus()
     {
-        Node.Focus();
-        if (Node.HasKeyboardFocus)
-            Automation.TakeKeyboard();
-    });
+        var taken = true;
+        var hr = Call(() =>
+        {
+            Node.Focus();
+            taken = Node.HasKeyboardFocus && Automation.TryTakeKeyboard();
+        });
+        return hr != Uia.S_OK ? hr : taken ? Uia.S_OK : Uia.InvalidOperation;
+    }
 
     int IRawElementProviderFragment.get_FragmentRoot(out IRawElementProviderFragmentRoot? root)
     {

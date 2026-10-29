@@ -74,8 +74,24 @@ Item {
       action.activate.activate()
   }
 
+  // The button with keyboard focus is scrolled fully into view, as Tab, the arrows or Narrator reach it.
+  function reveal(button) {
+    if (button.x < strip.contentX)
+      strip.contentX = button.x
+    else if (button.x + button.width > strip.contentX + strip.width)
+      strip.contentX = button.x + button.width - strip.width
+  }
+
   Flickable {
     id: strip
+    // A narrower strip keeps the focused button in view.
+    onWidthChanged: {
+      for (let i = 0; i < row.children.length; i++) {
+        const child = row.children[i]
+        if (child.activeFocus)
+          root.reveal(child)
+      }
+    }
     objectName: "taskStrip"
     anchors.fill: parent
     contentWidth: row.implicitWidth
@@ -106,6 +122,8 @@ Item {
             preview.hide()
             menu.open(button, modelData)
           }
+          onPreviewRequested: preview.openFromKeyboard(button, modelData)
+          onActiveFocusChanged: if (activeFocus) root.reveal(button)
           onContainsMouseChanged: {
             if (containsMouse && !menu.visible)
               preview.hoverStarted(button, modelData)
@@ -132,6 +150,7 @@ Item {
       hide()
       window.activate()
     }
+    onDismissed: if (anchor.item) anchor.item.forceActiveFocus(Qt.TabFocusReason)
   }
 
   TaskMenu {
@@ -140,5 +159,6 @@ Item {
     onLaunchRequested: root.launch(task)
     onPinRequested: root.pinRequested(task.pinId)
     onUnpinRequested: root.unpinRequested(task.pin)
+    onDismissed: if (anchor.item) anchor.item.forceActiveFocus(Qt.TabFocusReason)
   }
 }

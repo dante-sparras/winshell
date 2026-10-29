@@ -566,34 +566,24 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     }
 
     /// <summary>
-    /// Takes the keyboard for a UI Automation client that focused an item here, as Narrator does. Windows gives the
-    /// foreground only to the process the last input went to, and the client's request is not input to this one,
-    /// so it joins the foreground thread's input for a moment, which is allowed to hand the foreground on. Only a
-    /// window that takes the keyboard for its focused item does this.
+    /// Takes the keyboard for a UI Automation client that focused an item here, as Narrator does, and returns
+    /// whether the window has it. It asks once and never joins another thread's input to force it: a client that may
+    /// give the foreground (a screen reader the user is driving) has already focused the hosting window, and one that
+    /// may not hears that focusing failed. Only a window that takes the keyboard for its focused item asks.
     /// </summary>
-    internal void TakeKeyboardForAutomation()
+    internal bool TryTakeKeyboardForAutomation()
     {
         if (!_visible || (_kind == WindowKind.Panel && !_focusable) || (_kind == WindowKind.Popup && _popup?.GrabFocus != true))
-            return;
-        if (!Win32.SetForegroundWindow(Handle))
-        {
-            var foreground = Win32.GetForegroundWindow();
-            var current = Win32.GetCurrentThreadId();
-            var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, 0);
-            if (other != 0 && other != current && Win32.AttachThreadInput(current, other, true))
-            {
-                try
-                {
-                    Win32.SetForegroundWindow(Handle);
-                }
-                finally
-                {
-                    Win32.AttachThreadInput(current, other, false);
-                }
-            }
-        }
+            return false;
+        if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))
+            return false;
         Win32.SetFocus(Handle);
+        return Win32.GetForegroundWindow() == Handle;
     }
+
+    internal WindowAutomation Automation => _automation;
+
+    internal IWindowClient Client => _client;
 
     // Frames
 

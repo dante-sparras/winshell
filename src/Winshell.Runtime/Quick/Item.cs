@@ -717,6 +717,10 @@ public class Item : QObject
 
     protected override void OnDestroy()
     {
+        // A destroyed item can't keep focus: the window's focus item becomes none, and the window's
+        // activeFocusItem says so.
+        if (_host?.FocusItem == this)
+            _host.SetFocusItem(null);
         _anchors?.Detach();
         if (_parent is not null)
         {

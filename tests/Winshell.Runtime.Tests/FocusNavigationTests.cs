@@ -352,4 +352,19 @@ public class FocusNavigationTests
         Assert.Equal([0.0, 1, 2, 5, 7], ((IEnumerable<object?>)root.ReadProperty("reasons")!).Select(Convert.ToDouble));
         Assert.NotNull(scene);
     }
+
+    [Fact]
+    public void A_focused_item_that_is_destroyed_leaves_its_window_with_no_focus_item()
+    {
+        var (root, scene, shell) = Show(Stops);
+        using var _ = shell;
+        var one = (Item)root.ReadProperty("one")!;
+        one.ForceActiveFocus(QtEnums.TabFocusReason);
+        Assert.Same(one, scene.FocusItem);
+        one.Destroy();
+        Assert.Null(scene.FocusItem);
+        // Tab starts again from the first stop that is left.
+        Press(scene, Tab);
+        Assert.Equal("two", Focused(scene));
+    }
 }

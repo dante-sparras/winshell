@@ -14,6 +14,9 @@ PopupWindow {
   property string taskKey: ""
 
   signal activateRequested(var window)
+  // Escape closed previews opened from the keyboard, or their last window closed, so the keyboard goes back to
+  // their button.
+  signal dismissed()
 
   readonly property bool running: task !== null && task.windows.length > 0
   readonly property var windows: running ? task.windows : []
@@ -58,7 +61,57 @@ PopupWindow {
     visible = false
   }
 
+  // From the keyboard: the previews open at once and take the keyboard, with the first one focused.
+  function openFromKeyboard(button, key) {
+    openTimer.stop()
+    closeTimer.stop()
+    anchor.item = button
+    taskKey = key
+    if (task === null)
+      return
+    grabFocus = true
+    visible = true
+    focusWindow(null)
+  }
+
+  // The window the keyboard was on, so it stays on it when a group switches between previews and its list.
+  property var focusedWindow: null
+
+  // Focus goes to this window's preview or row, or else the first one.
+  function focusWindow(window) {
+    const repeater = listed ? lines : previews
+    for (let i = 0; i < repeater.count; i++) {
+      const item = repeater.itemAt(i)
+      if (item && item.modelData === window) {
+        item.forceActiveFocus(Qt.TabFocusReason)
+        return
+      }
+    }
+    if (repeater.count > 0)
+      repeater.itemAt(0).forceActiveFocus(Qt.TabFocusReason)
+  }
+
+  // Opened by hovering again, the previews leave the keyboard where it is.
+  onVisibleChanged: if (!visible) grabFocus = false
+
   onTaskChanged: if (task === null) hide()
+
+  // A window that closed, or a group that switched between previews and its list, took focus with it: it goes to
+  // the same window if it is still there, or the first one; with no windows left, back to the app's button.
+  onWindowsChanged: if (grabFocus) Qt.callLater(() => {
+    if (!visible || !grabFocus || activeFocusItem !== null)
+      return
+    if (windows.length === 0) {
+      hide()
+      dismissed()
+    } else {
+      focusWindow(focusedWindow)
+    }
+  })
+  onListedChanged: if (grabFocus) Qt.callLater(() => {
+    if (visible && grabFocus)
+      focusWindow(focusedWindow)
+  })
 
   Timer {
     id: openTimer
@@ -82,6 +135,28 @@ PopupWindow {
       onHoveredChanged: hovered ? closeTimer.stop() : closeTimer.restart()
     }
 
+    // Left and Right move between previews and their close buttons; Up and Down between the rows of the list.
+    Keys.onPressed: event => {
+      event.accepted = false
+      const focused = root.activeFocusItem
+      const forward = event.key === Qt.Key_Right || event.key === Qt.Key_Down
+      const along = root.listed ? event.key === Qt.Key_Up || event.key === Qt.Key_Down : event.key === Qt.Key_Left || event.key === Qt.Key_Right
+      if (event.key === Qt.Key_Escape) {
+        root.hide()
+        root.dismissed()
+      } else if (along && focused) {
+        let next = focused.nextItemInFocusChain(forward)
+        // In the list, Up and Down go from row to row; Tab still reaches each row's close button.
+        while (root.listed && next && next !== focused && next.objectName === "previewClose")
+          next = next.nextItemInFocusChain(forward)
+        if (next)
+          next.forceActiveFocus(Qt.TabFocusReason)
+      } else {
+        return
+      }
+      event.accepted = true
+    }
+
     Text {
       id: name
       visible: !root.running
@@ -99,6 +174,7 @@ PopupWindow {
       spacing: 4
 
       Repeater {
+        id: previews
         model: root.running && !root.listed ? root.windows : []
 
         MouseArea {
@@ -108,7 +184,20 @@ PopupWindow {
           width: root.cardWidth
           height: Math.round(root.cardWidth * 160 / 216)
           hoverEnabled: true
-          Accessible.role: Accessible.Button
+          activeFocusOnTab: true
+          onActiveFocusChanged: if (activeFocus) root.focusedWindow = modelData
+          Keys.onPressed: event => {
+            event.accepted = false
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+              root.activateRequested(modelData)
+              event.accepted = true
+            } else if (event.key === Qt.Key_Delete) {
+              modelData.close()
+              event.accepted = true
+            }
+          }
+          // A list item, not a button, so Narrator also reaches the close button inside it.
+          Accessible.role: Accessible.ListItem
           Accessible.name: modelData.title
           Accessible.onPressAction: root.activateRequested(modelData)
           onClicked: root.activateRequested(modelData)
@@ -116,7 +205,7 @@ PopupWindow {
           Rectangle {
             anchors.fill: parent
             radius: Theme.controlCornerRadius
-            color: card.pressed ? Theme.subtleFillColorTertiary : card.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+            color: card.pressed ? Theme.subtleFillColorTertiary : card.containsMouse || card.activeFocus ? Theme.subtleFillColorSecondary : "transparent"
           }
 
           Image {
@@ -144,7 +233,8 @@ PopupWindow {
           CloseButton {
             id: cardClose
             window: card.modelData
-            visible: card.containsMouse
+            // Shown while the pointer or the keyboard is on the preview.
+            visible: card.containsMouse || card.activeFocus || activeFocus
             x: parent.width - width - 4
             y: 4
           }
@@ -182,6 +272,7 @@ PopupWindow {
         width: list.width
 
         Repeater {
+          id: lines
           model: root.running && root.listed ? root.windows : []
 
           MouseArea {
@@ -191,7 +282,28 @@ PopupWindow {
             width: rows.width
             height: 40
             hoverEnabled: true
-            Accessible.role: Accessible.Button
+            activeFocusOnTab: true
+            // The focused row scrolls into view, and stays the window the keyboard is on.
+            onActiveFocusChanged: {
+              if (!activeFocus)
+                return
+              root.focusedWindow = modelData
+              if (y < list.contentY)
+                list.contentY = y
+              else if (y + height > list.contentY + list.height)
+                list.contentY = y + height - list.height
+            }
+            Keys.onPressed: event => {
+              event.accepted = false
+              if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                root.activateRequested(modelData)
+                event.accepted = true
+              } else if (event.key === Qt.Key_Delete) {
+                modelData.close()
+                event.accepted = true
+              }
+            }
+            Accessible.role: Accessible.ListItem
             Accessible.name: modelData.title
             Accessible.onPressAction: root.activateRequested(modelData)
             onClicked: root.activateRequested(modelData)
@@ -199,7 +311,7 @@ PopupWindow {
             Rectangle {
               anchors.fill: parent
               radius: Theme.controlCornerRadius
-              color: line.pressed ? Theme.subtleFillColorTertiary : line.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+              color: line.pressed ? Theme.subtleFillColorTertiary : line.containsMouse || line.activeFocus ? Theme.subtleFillColorSecondary : "transparent"
             }
 
             Image {
@@ -227,7 +339,7 @@ PopupWindow {
             CloseButton {
               id: lineClose
               window: line.modelData
-              visible: line.containsMouse
+              visible: line.containsMouse || line.activeFocus || activeFocus
               x: parent.width - width - 8
               anchors.verticalCenter: parent.verticalCenter
             }
@@ -244,6 +356,14 @@ PopupWindow {
     width: 24
     height: 24
     hoverEnabled: true
+    activeFocusOnTab: true
+    Keys.onPressed: event => {
+      event.accepted = false
+      if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+        window.close()
+        event.accepted = true
+      }
+    }
     Accessible.role: Accessible.Button
     Accessible.name: "Close " + (window ? window.title : "")
     Accessible.onPressAction: window.close()
