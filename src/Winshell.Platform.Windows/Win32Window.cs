@@ -32,6 +32,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private FloatingPlacement? _floating;
     private bool _floatingPlaced;
     private bool _appBarRegistered;
+    private RECT _appBarRequest;
+    private RECT _appBarRect;
     private uint _appBarEdge;
     private bool _fullscreenAppActive;
     private bool _frameScheduled;
@@ -232,7 +234,17 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 abd.rc.Left = abd.rc.Right - thickness;
                 break;
         }
-        Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
+        // Explorer announces a new work area after each ABM_SETPOS, which places every panel again; asking for the
+        // same rectangle again would never end.
+        if (abd.rc.Equals(_appBarRequest))
+        {
+            abd.rc = _appBarRect;
+        }
+        else
+        {
+            _appBarRequest = abd.rc;
+            Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
+        }
         // The panel lays out within the monitor, starting at the edge the app bar got.
         var rect = monitor;
         switch (_appBarEdge)
@@ -258,7 +270,12 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 rect.Bottom = abd.rc.Bottom;
                 break;
         }
-        _platform.WorkAreaMayHaveChanged();
+        // Explorer moves the work area a moment later; place the panels again then.
+        if (!abd.rc.Equals(_appBarRect))
+        {
+            _appBarRect = abd.rc;
+            _platform.WorkAreaMayHaveChanged();
+        }
         return rect;
     }
 
@@ -269,6 +286,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = Handle };
         Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
         _appBarRegistered = false;
+        _appBarRequest = default;
+        _appBarRect = default;
         _platform.WorkAreaMayHaveChanged();
     }
 
