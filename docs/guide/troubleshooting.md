@@ -9,7 +9,7 @@ winshell list         # running instances and where their logs are
 winshell -v           # run with debug messages too
 ```
 
-Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A stopped instance's log is deleted when a later instance starts, once it is a day old, so copy it before you start Winshell again if you need it.
+Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that exits keeps that folder for a day, so `winshell log` can print it after the shell has stopped. A later start then deletes the folder. Copy the log before that day is up if you need to keep it.
 
 ## Winshell doesn't start
 

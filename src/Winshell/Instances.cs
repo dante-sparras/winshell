@@ -17,7 +17,9 @@ internal sealed record InstanceInfo(
     [property: JsonPropertyName("log")] string Log,
     // UTC ticks of Process.StartTime. Windows reuses process ids, so the pid alone is not this process.
     // Files written before this field existed leave it at 0.
-    [property: JsonPropertyName("processStart")] long ProcessStart = 0);
+    [property: JsonPropertyName("processStart")] long ProcessStart = 0,
+    // Set when the shell exits cleanly. The folder stays so `winshell log` can still find it.
+    [property: JsonPropertyName("exitedAt")] DateTime? ExitedAt = null);
 
 [JsonSerializable(typeof(InstanceInfo))]
 [JsonSerializable(typeof(List<InstanceInfo>))]
@@ -40,24 +42,38 @@ internal static class Instances
         File.WriteAllText(Path.Combine(dir, "instance.json"), JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo));
     }
 
-    public static void Remove(string id)
+    /// <summary>
+    /// A clean exit keeps <c>instance.json</c>, marked with <see cref="InstanceInfo.ExitedAt"/>, so the log
+    /// can still be found. <see cref="Clean"/> deletes the folder once it is a day old.
+    /// </summary>
+    public static void Remove(string id) => MarkExited(RunDir, id);
+
+    internal static void MarkExited(string runDir, string id)
     {
+        var file = Path.Combine(runDir, id, "instance.json");
         try
         {
-            File.Delete(Path.Combine(DirOf(id), "instance.json"));
+            var info = JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo);
+            if (info is null)
+                return;
+            if (info.ExitedAt is not null)
+                return;
+            File.WriteAllText(file, JsonSerializer.Serialize(info with { ExitedAt = DateTime.Now }, InstanceJson.Default.InstanceInfo));
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
         }
     }
 
     /// <summary>Every instance that wrote its file, newest first. Dead ones are skipped unless asked for.</summary>
-    public static List<(InstanceInfo Info, bool Alive)> List(bool includeDead)
+    public static List<(InstanceInfo Info, bool Alive)> List(bool includeDead) => ListIn(RunDir, includeDead);
+
+    internal static List<(InstanceInfo Info, bool Alive)> ListIn(string runDir, bool includeDead)
     {
         var result = new List<(InstanceInfo, bool)>();
-        if (!Directory.Exists(RunDir))
+        if (!Directory.Exists(runDir))
             return result;
-        foreach (var dir in Directory.EnumerateDirectories(RunDir))
+        foreach (var dir in Directory.EnumerateDirectories(runDir))
         {
             var file = Path.Combine(dir, "instance.json");
             if (!File.Exists(file))
@@ -73,7 +89,8 @@ internal static class Instances
             }
             if (info is null)
                 continue;
-            var alive = IsCurrent(info);
+            // A clean exit leaves the file in place, with exitedAt set, so it is not a running instance.
+            var alive = info.ExitedAt is null && IsCurrent(info);
             if (alive || includeDead)
                 result.Add((info, alive));
         }
@@ -210,26 +227,62 @@ internal static class Instances
     };
 
     /// <summary>Removes the folders of instances that are no longer running, keeping their logs a day.</summary>
-    public static void Clean()
+    public static void Clean() => CleanIn(RunDir);
+
+    /// <summary>
+    /// Deletes a stopped instance's folder once it is a day old, measured from when it exited, or from the log's
+    /// last write when it left no exit time. A folder with no <c>instance.json</c> is deleted on the same rule,
+    /// so a clean exit from an older build does not leave a folder forever.
+    /// </summary>
+    internal static void CleanIn(string runDir)
     {
-        foreach (var (info, alive) in List(includeDead: true))
+        if (!Directory.Exists(runDir))
+            return;
+        foreach (var dir in Directory.EnumerateDirectories(runDir))
         {
-            if (alive)
-                continue;
-            var dir = DirOf(info.Id);
-            if (DateTime.Now - info.LaunchTime > TimeSpan.FromDays(1))
+            var file = Path.Combine(dir, "instance.json");
+            if (!File.Exists(file))
             {
-                try
-                {
-                    Directory.Delete(dir, true);
-                }
-                catch (IOException)
-                {
-                }
-                catch (UnauthorizedAccessException)
-                {
-                }
+                var log = Path.Combine(dir, "log.txt");
+                var stamp = File.Exists(log) ? File.GetLastWriteTime(log) : Directory.GetLastWriteTime(dir);
+                if (OlderThanADay(stamp))
+                    TryDelete(dir);
+                continue;
             }
+            InstanceInfo? info;
+            try
+            {
+                info = JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo);
+            }
+            catch (Exception e) when (e is JsonException or IOException)
+            {
+                continue;
+            }
+            if (info is null || (info.ExitedAt is null && IsCurrent(info)))
+                continue;
+            if (OlderThanADay(AgeOf(dir, info)))
+                TryDelete(dir);
+        }
+    }
+
+    private static DateTime AgeOf(string dir, InstanceInfo info)
+    {
+        if (info.ExitedAt is { } exited)
+            return exited;
+        var log = Path.Combine(dir, "log.txt");
+        return File.Exists(log) ? File.GetLastWriteTime(log) : info.LaunchTime;
+    }
+
+    private static bool OlderThanADay(DateTime stamp) => DateTime.Now - stamp > TimeSpan.FromDays(1);
+
+    private static void TryDelete(string dir)
+    {
+        try
+        {
+            Directory.Delete(dir, true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
         }
     }
 }
