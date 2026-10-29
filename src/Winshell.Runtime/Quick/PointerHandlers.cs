@@ -259,7 +259,7 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
             Emit("singleTapped", Point, _pressButton);
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel()
     {
@@ -371,9 +371,7 @@ public sealed class DragHandler : PointerHandler, IPointerTarget
         NotifyChanged("active");
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
-    {
-    }
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => PointerRelease(0, 0, 0, 0, 0);
 }

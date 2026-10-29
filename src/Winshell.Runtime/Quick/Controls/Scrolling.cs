@@ -334,7 +334,7 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers) => SetPressed(false);
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => SetPressed(false);
 

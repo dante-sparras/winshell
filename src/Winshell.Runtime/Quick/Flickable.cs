@@ -423,7 +423,7 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         }
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => PointerRelease(0, 0, 0, 0, 0);
 

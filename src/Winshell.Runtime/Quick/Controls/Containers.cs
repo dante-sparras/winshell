@@ -937,7 +937,7 @@ public sealed class SwipeView : Container, IPointerTarget
             _settle = Engine.Loop.Schedule(AnimationClock.FrameInterval, Settle);
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel()
     {

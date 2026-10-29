@@ -77,7 +77,8 @@ public interface IPointerTarget
 
     void PointerRelease(double x, double y, int button, int buttons, int modifiers);
 
-    void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers);
+    /// <summary>Handles a double-click, which stands in for the second press. Returns whether the item takes it, as <see cref="PointerPress"/> does.</summary>
+    bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers);
 
     /// <summary>Another item took the press, or the window lost it.</summary>
     void PointerCancel();
@@ -360,17 +361,17 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
             SetContainsMouse(false);
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
     {
         if (GetSignal("doubleClicked")?.Count > 0)
         {
             if (!PointerPress(x, y, button, buttons, modifiers))
-                return;
+                return false;
             _doubleClicked = true;
             Emit("doubleClicked", new MouseEvent { X = x, Y = y, Button = button, Buttons = buttons, Modifiers = modifiers, Engine = Engine });
-            return;
+            return true;
         }
-        PointerPress(x, y, button, buttons, modifiers);
+        return PointerPress(x, y, button, buttons, modifiers);
     }
 
     public void PointerCancel()

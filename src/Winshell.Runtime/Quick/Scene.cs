@@ -389,14 +389,7 @@ public sealed class Scene : IItemHost
             }
             if (item is not IPointerTarget target || !target.AcceptsButton(button))
                 continue;
-            if (doubleClick)
-            {
-                target.PointerDoubleClick(lx, ly, button, _buttons, modifiers);
-                _grabber = target;
-                _grabberItem = item;
-                return;
-            }
-            if (target.PointerPress(lx, ly, button, _buttons, modifiers))
+            if (doubleClick ? target.PointerDoubleClick(lx, ly, button, _buttons, modifiers) : target.PointerPress(lx, ly, button, _buttons, modifiers))
             {
                 _grabber = target;
                 _grabberItem = item;
