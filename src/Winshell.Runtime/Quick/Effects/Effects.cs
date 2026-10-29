@@ -642,6 +642,14 @@ public sealed class BrightnessContrast : EffectItem
 public abstract class GradientEffect : EffectItem
 {
     private Gradient? _gradient;
+    private SKShader? _shader;
+    private double _shaderWidth = double.NaN;
+    private double _shaderHeight = double.NaN;
+    private int _shaderVersion = -1;
+    private int _shaderKey;
+
+    /// <summary>How many native shaders this effect has built. A cache hit does not increment it.</summary>
+    internal int ShaderBuilds { get; private set; }
 
     [Qml]
     public Gradient? Gradient
@@ -649,12 +657,52 @@ public abstract class GradientEffect : EffectItem
         get { Track(); return _gradient; }
         set
         {
-            if (SetField(ref _gradient, value))
-            {
-                value?.Changed.Add(Update);
-                Update();
-            }
+            if (_gradient == value)
+                return;
+            // The previous gradient must drop this effect, or a shared gradient keeps every user alive.
+            if (_gradient is not null)
+                _gradient.Changed.Remove(Update);
+            _gradient = value;
+            DropShader();
+            _gradient?.Changed.Add(Update);
+            NotifyChanged("gradient");
+            Update();
         }
+    }
+
+    /// <summary>Inputs besides size and the gradient version. A change rebuilds the cached shader.</summary>
+    protected virtual int ShaderKey() => 0;
+
+    private SKShader ShaderFor(double width, double height)
+    {
+        var version = _gradient?.Version ?? 0;
+        var key = ShaderKey();
+        if (_shader is not null && _shaderWidth == width && _shaderHeight == height && _shaderVersion == version && _shaderKey == key)
+            return _shader;
+        DropShader();
+        _shader = CreateShader(width, height);
+        ShaderBuilds++;
+        _shaderWidth = width;
+        _shaderHeight = height;
+        _shaderVersion = version;
+        _shaderKey = key;
+        return _shader;
+    }
+
+    private void DropShader()
+    {
+        _shader?.Dispose();
+        _shader = null;
+        _shaderVersion = -1;
+    }
+
+    protected override void OnDestroy()
+    {
+        if (_gradient is not null)
+            _gradient.Changed.Remove(Update);
+        _gradient = null;
+        DropShader();
+        base.OnDestroy();
     }
 
     protected override bool NeedsSource => false;
@@ -672,7 +720,7 @@ public abstract class GradientEffect : EffectItem
     protected override void Render(SKCanvas canvas, SKPicture? source, SKMatrix sourceMatrix, double width, double height, PaintContext context)
     {
         var bounds = SKRect.Create(0, 0, (float)width, (float)height);
-        using var shader = CreateShader(width, height);
+        var shader = ShaderFor(width, height);
         using var paint = new SKPaint { Shader = shader, IsAntialias = true };
         if (source is null)
         {
@@ -696,6 +744,9 @@ public sealed class LinearGradient : GradientEffect
     [Qml] public QPoint Start { get { Track(); return _start; } set { if (SetField(ref _start, value)) Update(); } }
 
     [Qml] public QPoint End { get { Track(); return _end ?? new QPoint(0, Height); } set { _end = value; NotifyChanged("end"); Update(); } }
+
+    protected override int ShaderKey() =>
+        HashCode.Combine(_start.X, _start.Y, _end.HasValue, _end.GetValueOrDefault().X, _end.GetValueOrDefault().Y);
 
     protected override SKShader CreateShader(double width, double height)
     {
@@ -721,6 +772,9 @@ public sealed class RadialGradient : GradientEffect
 
     [Qml] public double Angle { get { Track(); return _angle; } set { if (SetField(ref _angle, value)) Update(); } }
 
+    protected override int ShaderKey() =>
+        HashCode.Combine(_h, _v, _angle, _hr.HasValue, _hr.GetValueOrDefault(), _vr.HasValue, _vr.GetValueOrDefault());
+
     protected override SKShader CreateShader(double width, double height)
     {
         var (colors, positions) = Stops();
@@ -744,6 +798,8 @@ public sealed class ConicalGradient : GradientEffect
     [Qml] public double VerticalOffset { get { Track(); return _v; } set { if (SetField(ref _v, value)) Update(); } }
 
     [Qml] public double Angle { get { Track(); return _angle; } set { if (SetField(ref _angle, value)) Update(); } }
+
+    protected override int ShaderKey() => HashCode.Combine(_h, _v, _angle);
 
     protected override SKShader CreateShader(double width, double height)
     {
