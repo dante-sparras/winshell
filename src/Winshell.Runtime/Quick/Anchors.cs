@@ -322,6 +322,11 @@ public sealed class Anchors : QObject, IPropertyObserver
         else if (bottom is not null)
         {
             var b = Position(bottom.Item, bottom.Edge) - bm;
+            if (center is not null)
+            {
+                var c = Position(center.Item, center.Edge) + _verticalCenterOffset;
+                _item.SetLayoutHeight(Math.Max(0, (b - c) * 2));
+            }
             _item.SetLayoutY(b - _item.Height);
         }
         else if (center is not null)
