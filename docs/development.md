@@ -69,6 +69,15 @@ The release workflow then runs the Package workflow (`.github/workflows/package.
 
 With a `WINGET_TOKEN` secret, the release workflow also submits the manifests to [winget-pkgs](https://github.com/microsoft/winget-pkgs) with a pinned `wingetcreate`. The token is a classic personal access token with the `public_repo` scope, from the account whose fork of winget-pkgs opens the PR. Without it, submit them by hand: unzip `winget-manifests.zip` and run `wingetcreate submit --token <token> <folder>`. winget's moderators review every PR, and the first one for `DanteSparras.Winshell` before any other.
 
+A release's own binaries are signed through [SignPath Foundation](https://signpath.org) once its project is set up; see the [Code signing policy](code-signing-policy.md). The Package workflow then uploads the published folders as the `unsigned` artifact, asks SignPath to sign them with the `parameters` version the binaries carry, waits up to 110 minutes for an approver, and packs and checks the signed files (`scripts/package.ps1 -Verify -Signed`). It needs:
+
+- the repository variable `SIGNPATH_ORGANIZATION_ID`, which turns signing on. Without it, releases are not signed.
+- the secret `SIGNPATH_API_TOKEN`, from a SignPath CI user that may submit to the project.
+- `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` when they are not `winshell` and `release-signing`.
+- the project's artifact configuration, [packaging/signpath/artifact-configuration.xml](../packaging/signpath/artifact-configuration.xml), pasted into SignPath, and GitHub set up as its trusted build system.
+
+PRs and pushes to `main` are never signed. Every binary already carries the product name `Winshell` and the release's version, which `-Verify` checks with or without signing.
+
 When a release has no files:
 
 - **Packaging or the upload failed:** open the Release Please run and choose **Re-run failed jobs**. It keeps the release it created and runs only what failed.

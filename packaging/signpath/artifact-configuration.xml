@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The artifact configuration of the SignPath project, which SignPath keeps; paste this into it. The Package workflow
+  uploads artifacts/publish/ as a zip with a folder per runtime. Only the binaries built from this repository are
+  signed: the .NET runtime and the libraries keep their own publishers' signatures.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <!-- The product version the build stamps, such as 1.2.3+<commit>. The Package workflow passes it. -->
+  <parameter name="version" required="true" />
+  <zip-file>
+    <!-- SignPath Foundation requires every signed binary to name the project and the same version. -->
+    <pe-file-set product-name="Winshell" product-version="${version}">
+      <include path="win-x64/winshell.exe" />
+      <include path="win-x64/winshell.dll" />
+      <include path="win-x64/Winshell.Qml.dll" />
+      <include path="win-x64/Winshell.Runtime.dll" />
+      <include path="win-x64/Winshell.Platform.Windows.dll" />
+      <include path="win-arm64/winshell.exe" />
+      <include path="win-arm64/winshell.dll" />
+      <include path="win-arm64/Winshell.Qml.dll" />
+      <include path="win-arm64/Winshell.Runtime.dll" />
+      <include path="win-arm64/Winshell.Platform.Windows.dll" />
+      <for-each>
+        <authenticode-sign />
+      </for-each>
+    </pe-file-set>
+  </zip-file>
+</artifact-configuration>

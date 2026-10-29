@@ -24,6 +24,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 ├── packaging/
 │   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
+│   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
 ├── scripts/
 │   ├── check.ps1                    # Build with warnings as errors, then test
