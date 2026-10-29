@@ -52,5 +52,7 @@ public static class PolishQueue
                 item.UpdatePolish();
             }
         }
+        if (_pending is { Count: > 0 })
+            Log.Default.Warn("layout", "A layout pass did not settle after 50 iterations.");
     }
 }
