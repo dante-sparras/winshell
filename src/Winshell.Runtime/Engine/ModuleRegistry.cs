@@ -67,7 +67,7 @@ public sealed class QmlModule(string name)
         if (typeof(QObject).IsAssignableFrom(typeof(T)))
             MetaType.Of(typeof(T)).QmlName = qmlName;
         var enums = typeof(T).IsEnum
-            ? Enum.GetValues(typeof(T)).Cast<object>().ToDictionary(v => Enum.GetName(typeof(T), v)!, v => Convert.ToInt32(v, System.Globalization.CultureInfo.InvariantCulture))
+            ? Enum.GetValues(typeof(T)).Cast<object>().ToDictionary(v => Enum.GetName(typeof(T), v)!, v => ValueConverter.EnumToInt((Enum)v))
             : typeof(QObject).IsAssignableFrom(typeof(T)) ? MetaType.Of(typeof(T)).Enums : new Dictionary<string, int>();
         return Add(new TypeEntry
         {
