@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Shell;
 
@@ -401,6 +400,5 @@ public sealed class ShellHost : IShellHost, IDisposable
         _engine?.Dispose();
         _settings.Destroy();
         _screens?.Destroy();
-        _ = Theme.Current;
     }
 }

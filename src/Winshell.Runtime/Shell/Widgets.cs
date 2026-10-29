@@ -262,8 +262,6 @@ public class WrapperRectangle : Quick.Rectangle
     public override void ComponentComplete()
     {
         base.ComponentComplete();
-        if (_contentInsideBorder && Border.IsVisible)
-            Margins.ExtraMargin += 0;
         Margins.Update();
     }
 }
