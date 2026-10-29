@@ -304,6 +304,125 @@ public class TaskbarTests
         Assert.Equal("Tool - saved - 1 running window", tree.Find(Button(shell, "window:tool"))!.Name);
     }
 
+    private static PopupWindow Popup(DefaultShellHarness shell, string name) => (PopupWindow)shell.Root.ReadProperty(name)!;
+
+    private static void Hover(DefaultShellHarness shell, Item item)
+    {
+        var p = item.MapToScene(item.Width / 2, item.Height / 2);
+        shell.Scene.PointerMove(p.X, p.Y);
+        shell.Settle();
+    }
+
+    [Fact]
+    public void A_window_that_opens_or_closes_keeps_every_other_apps_button()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        var before = Buttons(shell).ToDictionary(b => b.ObjectName);
+
+        var notes = new FakeAppWindow("Notes", "notes", @"C:\Tools\notes.exe");
+        desk.Services.WindowList.Windows.Add(notes);
+        desk.Services.WindowList.Windows.Add(new FakeAppWindow("Windows PowerShell", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        shell.Settle();
+        desk.Services.WindowList.Windows.Remove(desk.Shell2);
+        shell.Settle();
+
+        var after = Buttons(shell).ToDictionary(b => b.ObjectName);
+        Assert.Contains("task:window:notes", after.Keys);
+        foreach (var (name, button) in before)
+        {
+            Assert.Same(button, after[name]);
+            Assert.False(button.IsDestroyed);
+        }
+    }
+
+    [Fact]
+    public void A_regroup_before_the_preview_opens_still_opens_it_at_the_live_button()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        var terminal = Button(shell, "app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        var preview = Popup(shell, "preview");
+
+        Hover(shell, terminal);
+        desk.Services.WindowList.Windows.Add(new FakeAppWindow("Notes", "notes", @"C:\Tools\notes.exe"));
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+
+        Assert.True(preview.Visible);
+        Assert.Same(terminal, preview.Anchor.Item);
+        Assert.False(terminal.IsDestroyed);
+    }
+
+    [Fact]
+    public void An_open_preview_and_menu_stay_on_their_button_while_other_apps_come_and_go()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        var terminal = Button(shell, "app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        var preview = Popup(shell, "preview");
+        Hover(shell, terminal);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(preview.Visible);
+
+        desk.Services.WindowList.Windows.Add(new FakeAppWindow("Notes", "notes", @"C:\Tools\notes.exe"));
+        shell.Settle();
+        desk.Services.WindowList.Windows.Remove(desk.Tool);
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.Same(terminal, preview.Anchor.Item);
+        Assert.False(terminal.IsDestroyed);
+
+        var menu = Popup(shell, "menu");
+        Press(shell, terminal, QtEnums.RightButton);
+        Assert.True(menu.Visible);
+        desk.Services.WindowList.Windows.Add(new FakeAppWindow("Paint", "paint", @"C:\Tools\paint.exe"));
+        shell.Settle();
+        Assert.True(menu.Visible);
+        Assert.Same(terminal, menu.Anchor.Item);
+        Assert.False(terminal.IsDestroyed);
+    }
+
+    [Fact]
+    public void Closing_windows_from_the_preview_keeps_it_until_the_app_is_gone()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        var tool = Button(shell, "window:tool");
+        var terminal = Button(shell, "app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        var preview = Popup(shell, "preview");
+
+        // One of the terminal's two windows closes: the button and the preview stay, with one window.
+        Hover(shell, terminal);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+        desk.Services.WindowList.Windows.Remove(desk.Shell1);
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.Same(terminal, preview.Anchor.Item);
+        Assert.Equal(["preview:Command Prompt"], DefaultShellHarness.FindAll(preview.Scene.Root).Where(i => i.ObjectName.StartsWith("preview:", StringComparison.Ordinal)).Select(i => i.ObjectName));
+
+        // The tool's only window closes: its button goes, and the preview open on it closes with it.
+        Hover(shell, tool);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.Same(tool, preview.Anchor.Item);
+        desk.Services.WindowList.Windows.Remove(desk.Tool);
+        shell.Settle();
+        Assert.False(preview.Visible);
+        Assert.False(shell.Has("task:window:tool"));
+    }
+
+    [Fact]
+    public void The_menu_closes_when_its_app_goes()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        var menu = Popup(shell, "menu");
+        Press(shell, Button(shell, "window:tool"), QtEnums.RightButton);
+        Assert.True(menu.Visible);
+        desk.Services.WindowList.Windows.Remove(desk.Tool);
+        shell.Settle();
+        Assert.False(menu.Visible);
+    }
+
     [Fact]
     public void A_closed_window_leaves_and_an_unpinned_app_with_no_windows_goes()
     {
