@@ -6,16 +6,17 @@ namespace Winshell.Platform.Windows.Tests.Snapshots;
 /// <summary>
 /// Compares a render with its baseline PNG in <c>Snapshots/Baselines</c>. A pixel differs when one of its channels
 /// moves by more than <see cref="ChannelTolerance"/>, and a render matches while no more than
-/// <see cref="PixelTolerance"/> of its pixels differ. A failure writes the expected, actual and diff images to
-/// <c>WINSHELL_SNAPSHOT_DIFFS</c>, or to a folder under the temp folder. With <c>WINSHELL_UPDATE_SNAPSHOTS=1</c>, or
-/// set to the name of one surface, a render that does not match replaces its baseline instead;
-/// <c>scripts/update-snapshots.ps1</c> sets it.
+/// <see cref="PixelTolerance"/> pixels differ. Both are as tight as the renders allow: CI renders the baselines
+/// pixel for pixel, and a Fluent hairline stroke moves a channel by only about 15. A failure writes the expected,
+/// actual and diff images to <c>WINSHELL_SNAPSHOT_DIFFS</c>, or to a folder under the temp folder. With
+/// <c>WINSHELL_UPDATE_SNAPSHOTS=1</c>, or set to the name of one surface, a render that does not match replaces its
+/// baseline instead; <c>scripts/update-snapshots.ps1</c> sets it. CI never updates a baseline.
 /// </summary>
 internal static class Snapshot
 {
-    public const int ChannelTolerance = 16;
+    public const int ChannelTolerance = 2;
 
-    public const double PixelTolerance = 0.001;
+    public const int PixelTolerance = 0;
 
     public static string Baselines { get; } = Path.Combine(Repo(), "tests", "Winshell.Platform.Windows.Tests", "Snapshots", "Baselines");
 
@@ -24,7 +25,8 @@ internal static class Snapshot
         : Path.Combine(Path.GetTempPath(), "winshell-snapshot-diffs");
 
     private static bool Updating(string name) => Environment.GetEnvironmentVariable("WINSHELL_UPDATE_SNAPSHOTS") is { Length: > 0 } update
-        && (update == "1" || name.StartsWith(update + "-", StringComparison.Ordinal));
+        && Environment.GetEnvironmentVariable("CI") is null
+        && (update == "1" || (SnapshotTests.Surfaces.Contains(update) && name.StartsWith(update + "-", StringComparison.Ordinal)));
 
     /// <summary>Fails unless <paramref name="actual"/>, an RGBA render, matches the baseline called <paramref name="name"/>.</summary>
     public static void Match(string name, SKBitmap actual)
@@ -32,8 +34,7 @@ internal static class Snapshot
         var baseline = Path.Combine(Baselines, name + ".png");
         using var expected = File.Exists(baseline) ? Decode(baseline) : null;
         var differing = expected is null ? -1 : Differing(expected, actual);
-        var allowed = (int)(actual.Width * actual.Height * PixelTolerance);
-        if (differing >= 0 && differing <= allowed)
+        if (differing >= 0 && differing <= PixelTolerance)
             return;
         if (Updating(name))
         {
@@ -50,7 +51,9 @@ internal static class Snapshot
             Assert.Fail($"{name} is {actual.Width}×{actual.Height}; its baseline is {expected.Width}×{expected.Height}. The images are in {Diffs}.");
         using (var diff = Diff(expected, actual))
             Save(diff, Path.Combine(Diffs, name + ".diff.png"));
-        Assert.Fail($"{name}: {differing} pixels differ, more than the {allowed} allowed. The images are in {Diffs}. If the change is intended, run scripts/update-snapshots.ps1.");
+        Assert.Fail($"{name}: {differing} pixels differ, more than the {PixelTolerance} allowed. The images are in {Diffs}. "
+            + "If the change is intended, run scripts/update-snapshots.ps1. If only text differs, check that font smoothing is on "
+            + "and that the ClearType Text Tuner is at its defaults: both change how text is drawn.");
     }
 
     /// <summary>How many pixels differ by more than <see cref="ChannelTolerance"/>, or <see cref="int.MaxValue"/> when the sizes do.</summary>

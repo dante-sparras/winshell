@@ -36,93 +36,103 @@ internal sealed class SnapshotShell : IDisposable
 
     public SnapshotShell(bool dark, double scale)
     {
-        CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = Format;
-        Theme.Current = Theme.Default(dark) with { AnimationsEnabled = false };
-        Platform = new SnapshotPlatform(scale);
-
-        var shell = Path.Combine(_directory, "shell");
-        var data = Path.Combine(_directory, "data");
-        Directory.CreateDirectory(shell);
-        Directory.CreateDirectory(data);
-        foreach (var file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "DefaultShell")))
-            File.Copy(file, Path.Combine(shell, Path.GetFileName(file)));
-        var root = File.ReadAllText(Path.Combine(shell, "shell.qml"));
-        // A shell id and folders of its own, and a listener the test fills instead of Windows.
-        root = Replace(root, "//@ pragma ShellId winshell-default", $"""
-            //@ pragma ShellId winshell-snapshot-{Guid.NewGuid():N}
-            //@ pragma DataDir {data}
-            //@ pragma StateDir {Path.Combine(_directory, "state")}
-            //@ pragma CacheDir {Path.Combine(_directory, "cache")}
-            """);
-        root = Replace(root, "NotificationListener { id: notifications }", "property var notifications: null");
-        File.WriteAllText(Path.Combine(shell, "shell.qml"), root);
-
-        var icons = Path.Combine(_directory, "icons");
-        Directory.CreateDirectory(icons);
-        string Icon(string name, SKColor color) => SnapshotIcons.Write(Path.Combine(icons, name + ".png"), color);
-        var services = new FakeServices();
-        var mail = services.Apps.Add("Contoso.Mail", "Mail", "Contoso.Mail", Icon("mail", new SKColor(0x00, 0x78, 0xD4)));
-        var notes = services.Apps.Add("Contoso.Notes", "Notes", "Contoso.Notes", Icon("notes", new SKColor(0xF7, 0xB5, 0x00)));
-        var photos = services.Apps.Add("Contoso.Photos", "Photos", "Contoso.Photos", Icon("photos", new SKColor(0x8E, 0x56, 0xC2)));
-        var terminal = services.Apps.Add("Contoso.Terminal", "Terminal", "Contoso.Terminal", Icon("terminal", new SKColor(0x30, 0x30, 0x30)));
-        services.Apps.Add("Contoso.Maps", "Maps", "Contoso.Maps", Icon("maps", new SKColor(0x10, 0x89, 0x3E)));
-        var calculator = services.Apps.Add("Contoso.Calculator", "Calculator", "Contoso.Calculator", Icon("calculator", new SKColor(0x5C, 0x2D, 0x91)));
-        var weather = services.Apps.Add("Contoso.Weather", "Weather", "Contoso.Weather", Icon("weather", new SKColor(0x00, 0x99, 0xBC)));
-        // Recommended leaves out what is pinned: Photos is, the other two are not.
-        services.Apps.Recent.Add(photos);
-        services.Apps.Recent.Add(calculator);
-        services.Apps.Recent.Add(weather);
-        File.WriteAllText(Path.Combine(data, "taskbar.json"), """{ "pinned": ["Contoso.Mail", "Contoso.Notes"] }""");
-        File.WriteAllText(Path.Combine(shell, "launcher.json"), """{ "pins": ["Contoso.Mail", "Contoso.Notes", "Contoso.Photos", "Contoso.Terminal", "Contoso.Maps"] }""");
-        var inbox = new FakeAppWindow("Inbox - Mail", "Contoso.Mail", mail.Icon);
-        var shellWindow = new FakeAppWindow("Windows PowerShell", "Contoso.Terminal", terminal.Icon);
-        services.WindowList.Windows.Add(inbox);
-        services.WindowList.Windows.Add(shellWindow);
-        services.WindowList.Activate(inbox);
-
-        var wifi = new FakeNetworkDevice(DeviceType.Wifi, new FakeNetwork("Home") { Connected = true }) { Connected = true };
-        services.Networking.Devices.Add(wifi);
-        services.Networking.WifiEnabled = true;
-        services.Networking.WifiState = WifiRadioState.On;
-        services.Networking.Connectivity = NetworkConnectivity.InternetAccess;
-        services.Bluetooth.DefaultAdapter = new FakeBluetoothAdapter { Enabled = true };
-        services.Bluetooth.Devices.Add(new FakeBluetoothDevice("Headphones") { Connected = true });
-        services.Power.DisplayDevice.IsPresent = true;
-        services.Power.DisplayDevice.Percentage = 0.76;
-        services.Power.DisplayDevice.State = PowerDeviceState.Discharging;
-        services.Brightness.Monitors.Add(new FakeBrightnessMonitor(BrightnessConnection.Internal, 0, 100, "DISPLAY1", "Built-in display") { Brightness = 60 });
-        Speakers = new FakeAudioNode("Speakers");
-        Speakers.Audio.Volume = 0.3;
-        services.Audio.Nodes.Add(Speakers);
-        services.Audio.DefaultPlaybackDevice = Speakers;
-        services.Media.Sessions.Add(new FakeMediaSession("Contoso Music", "Northern Lights", "The Examples") { IsPlaying = true });
-        Services = services;
-
-        // As the shell's process does: icons come from the Windows icon provider, which reads these images as they are.
-        ImageLoader.AddProvider("icon", IconProvider.Instance);
-        var log = new Log { Sink = (_, category, message) => Messages.Add($"{category}: {message}"), MinimumLevel = LogLevel.Warn };
-        Host = new ShellHost(Path.Combine(shell, "shell.qml"), Loop, Platform, log, () =>
+        try
         {
-            var registry = StandardModules.Create();
-            WindowsModules.Register(registry);
-            ServiceModules.Register(registry);
-            services.Register(registry);
-            return registry;
-        }, engine =>
+            CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = Format;
+            Theme.Current = Theme.Default(dark) with { AnimationsEnabled = false };
+            Platform = new SnapshotPlatform(scale);
+
+            var shell = Path.Combine(_directory, "shell");
+            var data = Path.Combine(_directory, "data");
+            Directory.CreateDirectory(shell);
+            Directory.CreateDirectory(data);
+            foreach (var file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "DefaultShell")))
+                File.Copy(file, Path.Combine(shell, Path.GetFileName(file)));
+            var root = File.ReadAllText(Path.Combine(shell, "shell.qml"));
+            // A shell id and folders of its own, and a listener the test fills instead of Windows.
+            root = Replace(root, "//@ pragma ShellId winshell-default", $"""
+                //@ pragma ShellId winshell-snapshot-{Guid.NewGuid():N}
+                //@ pragma DataDir {data}
+                //@ pragma StateDir {Path.Combine(_directory, "state")}
+                //@ pragma CacheDir {Path.Combine(_directory, "cache")}
+                """);
+            root = Replace(root, "NotificationListener { id: notifications }", "property var notifications: null");
+            File.WriteAllText(Path.Combine(shell, "shell.qml"), root);
+
+            var icons = Path.Combine(_directory, "icons");
+            Directory.CreateDirectory(icons);
+            string Icon(string name, SKColor color) => SnapshotIcons.Write(Path.Combine(icons, name + ".png"), color);
+            var services = new FakeServices();
+            var mail = services.Apps.Add("Contoso.Mail", "Mail", "Contoso.Mail", Icon("mail", new SKColor(0x00, 0x78, 0xD4)));
+            var notes = services.Apps.Add("Contoso.Notes", "Notes", "Contoso.Notes", Icon("notes", new SKColor(0xF7, 0xB5, 0x00)));
+            var photos = services.Apps.Add("Contoso.Photos", "Photos", "Contoso.Photos", Icon("photos", new SKColor(0x8E, 0x56, 0xC2)));
+            var terminal = services.Apps.Add("Contoso.Terminal", "Terminal", "Contoso.Terminal", Icon("terminal", new SKColor(0x30, 0x30, 0x30)));
+            services.Apps.Add("Contoso.Maps", "Maps", "Contoso.Maps", Icon("maps", new SKColor(0x10, 0x89, 0x3E)));
+            var calculator = services.Apps.Add("Contoso.Calculator", "Calculator", "Contoso.Calculator", Icon("calculator", new SKColor(0x5C, 0x2D, 0x91)));
+            var weather = services.Apps.Add("Contoso.Weather", "Weather", "Contoso.Weather", Icon("weather", new SKColor(0x00, 0x99, 0xBC)));
+            // Recommended leaves out what is pinned: Photos is, the other two are not.
+            services.Apps.Recent.Add(photos);
+            services.Apps.Recent.Add(calculator);
+            services.Apps.Recent.Add(weather);
+            File.WriteAllText(Path.Combine(data, "taskbar.json"), """{ "pinned": ["Contoso.Mail", "Contoso.Notes"] }""");
+            File.WriteAllText(Path.Combine(shell, "launcher.json"), """{ "pins": ["Contoso.Mail", "Contoso.Notes", "Contoso.Photos", "Contoso.Terminal", "Contoso.Maps"] }""");
+            var inbox = new FakeAppWindow("Inbox - Mail", "Contoso.Mail", mail.Icon);
+            var shellWindow = new FakeAppWindow("Windows PowerShell", "Contoso.Terminal", terminal.Icon);
+            services.WindowList.Windows.Add(inbox);
+            services.WindowList.Windows.Add(shellWindow);
+            services.WindowList.Activate(inbox);
+
+            var wifi = new FakeNetworkDevice(DeviceType.Wifi, new FakeNetwork("Home") { Connected = true }) { Connected = true };
+            services.Networking.Devices.Add(wifi);
+            services.Networking.WifiEnabled = true;
+            services.Networking.WifiState = WifiRadioState.On;
+            services.Networking.Connectivity = NetworkConnectivity.InternetAccess;
+            services.Bluetooth.DefaultAdapter = new FakeBluetoothAdapter { Enabled = true };
+            services.Bluetooth.Devices.Add(new FakeBluetoothDevice("Headphones") { Connected = true });
+            services.Power.DisplayDevice.IsPresent = true;
+            services.Power.DisplayDevice.Percentage = 0.76;
+            services.Power.DisplayDevice.State = PowerDeviceState.Discharging;
+            services.Brightness.Monitors.Add(new FakeBrightnessMonitor(BrightnessConnection.Internal, 0, 100, "DISPLAY1", "Built-in display") { Brightness = 60 });
+            Speakers = new FakeAudioNode("Speakers");
+            Speakers.Audio.Volume = 0.3;
+            services.Audio.Nodes.Add(Speakers);
+            services.Audio.DefaultPlaybackDevice = Speakers;
+            services.Media.Sessions.Add(new FakeMediaSession("Contoso Music", "Northern Lights", "The Examples") { IsPlaying = true });
+            Services = services;
+
+            // As the shell's process does: icons come from the Windows icon provider, which reads these images as they are.
+            ImageLoader.AddProvider("icon", IconProvider.Instance);
+            var log = new Log { Sink = (_, category, message) => Messages.Add($"{category}: {message}"), MinimumLevel = LogLevel.Warn };
+            Host = new ShellHost(Path.Combine(shell, "shell.qml"), Loop, Platform, log, () =>
+            {
+                var registry = StandardModules.Create();
+                WindowsModules.Register(registry);
+                ServiceModules.Register(registry);
+                services.Register(registry);
+                return registry;
+            }, engine =>
+            {
+                engine.AddService<TimeProvider>(new FixedTime(Now));
+                engine.AddService<IIconLookup>(IconProvider.Instance);
+            })
+            { ConfigRoot = Path.Combine(_directory, "config") };
+            Host.WatchFiles = false;
+            Assert.True(Host.Start(), string.Join(Environment.NewLine, Messages));
+            _listener = new NotificationListener(new FakeNotifications()) { Engine = Host.Engine };
+            _listener.Apply(FakeNotifications.Snapshot);
+            Host.Root!.WriteProperty("notifications", _listener);
+            Settle();
+            // The on-screen display starts from what the services report, and only shows what changes after that.
+            Loop.Advance(TimeSpan.FromSeconds(1));
+            Settle();
+        }
+        catch
         {
-            engine.AddService<TimeProvider>(new FixedTime(Now));
-            engine.AddService<IIconLookup>(IconProvider.Instance);
-        })
-        { ConfigRoot = Path.Combine(_directory, "config") };
-        Host.WatchFiles = false;
-        Assert.True(Host.Start(), string.Join(Environment.NewLine, Messages));
-        _listener = new NotificationListener(new FakeNotifications()) { Engine = Host.Engine };
-        _listener.Apply(FakeNotifications.Snapshot);
-        Host.Root!.WriteProperty("notifications", _listener);
-        Settle();
-        // The on-screen display starts from what the services report, and only shows what changes after that.
-        Loop.Advance(TimeSpan.FromSeconds(1));
-        Settle();
+            // A shell that does not start leaves nothing behind for the next test.
+            Host?.Dispose();
+            Restore();
+            throw;
+        }
     }
 
     public SnapshotPlatform Platform { get; }
@@ -219,6 +229,11 @@ internal sealed class SnapshotShell : IDisposable
     {
         _listener.Destroy();
         Host.Dispose();
+        Restore();
+    }
+
+    private void Restore()
+    {
         Theme.Current = _theme;
         CultureInfo.CurrentCulture = _culture;
         CultureInfo.CurrentUICulture = _uiCulture;

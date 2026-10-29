@@ -1,9 +1,10 @@
 # Renders the default shell's surfaces and replaces each baseline its render no longer matches.
 # Review the changed PNGs in tests/Winshell.Platform.Windows.Tests/Snapshots/Baselines before you commit them.
 # -Surface replaces the baselines of one surface only, such as taskbar or quick-settings; the others are still
-# compared. See docs/development.md.
+# compared. CI never updates a baseline. See docs/development.md.
 param(
-    [string]$Surface = ''
+    [ValidateSet('taskbar', 'start', 'quick-settings', 'notification-center', 'osd', 'settings')]
+    [string]$Surface
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest

@@ -43,7 +43,31 @@ public sealed class SnapshotTests
         var window = shell.Open("quick-settings");
         using var render = shell.Backend(window).Render(Theme.Current.SolidBackgroundFillColorBase.ToSk());
         using var baseline = Snapshot.Decode(Path.Combine(Snapshot.Baselines, "quick-settings-light-100.png"));
-        Assert.True(Snapshot.Differing(baseline, render) > render.Width * render.Height * Snapshot.PixelTolerance);
+        Assert.True(Snapshot.Differing(baseline, render) > Snapshot.PixelTolerance);
+    }
+
+    [Fact]
+    public void One_percent_of_battery_does_not_pass_for_the_baseline()
+    {
+        using var shell = new SnapshotShell(dark: false, scale: 1);
+        shell.Services.Power.DisplayDevice.Percentage = 0.75;
+        shell.Settle();
+        var window = shell.Open("quick-settings");
+        using var render = shell.Backend(window).Render(Theme.Current.SolidBackgroundFillColorBase.ToSk());
+        using var baseline = Snapshot.Decode(Path.Combine(Snapshot.Baselines, "quick-settings-light-100.png"));
+        Assert.True(Snapshot.Differing(baseline, render) > Snapshot.PixelTolerance);
+    }
+
+    [Fact]
+    public void A_hairline_stroke_is_a_difference()
+    {
+        // ControlStrokeColorDefault in light, 0x0F000000, over white: the faintest border a control draws.
+        using var expected = Solid(1, 1, SKColors.White);
+        using var actual = Solid(1, 1, SKColors.White);
+        using (var canvas = new SKCanvas(actual))
+        using (var stroke = new SKPaint { Color = new SKColor(0, 0, 0, 0x0F) })
+            canvas.DrawRect(0, 0, 1, 1, stroke);
+        Assert.Equal(1, Snapshot.Differing(expected, actual));
     }
 
     [Fact]
