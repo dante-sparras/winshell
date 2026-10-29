@@ -3,6 +3,7 @@ name: Package
 # Builds and verifies what a release ships with scripts/package.ps1: on PRs that change packaging or the release
 # workflow, and on every push to main, so a broken package shows before a release. release-please.yml calls it for a
 # new release, and it can be run by hand for a release that exists already; both upload to that release.
+# The upload also includes scripts/install.ps1 and scripts/uninstall.ps1, copied from the tagged commit.
 on:
   pull_request:
     paths:
@@ -153,11 +154,15 @@ jobs:
           Write-Output "The winshell alias reports: $reported"
           Remove-AppxPackage -Package $package.PackageFullName
           if ($reported -notmatch '^winshell \d+\.\d+\.\d+') { throw 'The winshell alias did not run' }
+      - name: Stage the PowerShell installer
+        shell: pwsh
+        run: Copy-Item scripts/install.ps1, scripts/uninstall.ps1 "$env:RUNNER_TEMP/artifacts/"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages
           path: |
             ${{ runner.temp }}/artifacts/*.zip
+            ${{ runner.temp }}/artifacts/*.ps1
             ${{ runner.temp }}/artifacts/SHA256SUMS.txt
             ${{ runner.temp }}/artifacts/winget/
           if-no-files-found: error

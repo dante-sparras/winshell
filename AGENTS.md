@@ -8,7 +8,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
 - xUnit for `tests/`.
-- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`.
+- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1.
 
 ## Project Structure
 
@@ -34,7 +34,12 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── check.ps1                    # Build with warnings as errors, build the docs, then test
 │   ├── dev.ps1                      # Prepares a fresh clone
 │   ├── fetch-reference.cs           # Fetches the Quickshell manual as markdown
+│   ├── install.ps1                  # Per-user install from a GitHub release; published on the release
+│   ├── Install.Tests.ps1            # Pester tests for the installer, including a local fake release
+│   ├── Install.TestHelpers.ps1      # Temp profile and fake-release helpers for those tests
 │   ├── package.ps1                  # Builds the portable zips, winget manifests and Store package a release ships
+│   ├── uninstall.ps1                # Removes the per-user install; published on the release
+│   ├── Uninstall.Tests.ps1          # Pester tests for the uninstaller
 │   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs
 │   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
 ├── src/
