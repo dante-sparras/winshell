@@ -6,10 +6,11 @@ public sealed class ColorGroup : QObject
     private readonly bool _disabled;
     private readonly Dictionary<string, QColor> _overrides = new(StringComparer.Ordinal);
 
-    internal ColorGroup(bool disabled)
+    internal ColorGroup(Palette owner, bool disabled)
     {
         _disabled = disabled;
         Theme.Changed += OnTheme;
+        SetOwner(owner);
     }
 
     private void OnTheme()
@@ -87,9 +88,9 @@ public sealed class Palette : QObject
 {
     public Palette()
     {
-        Active = new ColorGroup(false);
-        Inactive = new ColorGroup(false);
-        Disabled = new ColorGroup(true);
+        Active = new ColorGroup(this, false);
+        Inactive = new ColorGroup(this, false);
+        Disabled = new ColorGroup(this, true);
     }
 
     [Qml] public ColorGroup Active { get; }
