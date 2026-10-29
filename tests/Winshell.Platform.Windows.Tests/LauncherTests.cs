@@ -301,6 +301,49 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void Recommended_apps_can_be_turned_off()
+    {
+        using var view = Open(dir => ViewQml(Apps(2), Recent(), PinIds(2)).Replace("LauncherView {", "LauncherView { showRecommended: false;"));
+        Assert.Empty(Strings(view.Eval("recommendedApps.map(a => a.id)")));
+        Assert.Equal(["p0", "p1"], Strings(view.Eval("shown.map(a => a.id)")));
+        Assert.False(One(view.Root, "recommendedHeader").Visible);
+        Assert.Empty(view.Messages);
+    }
+
+    [Fact]
+    public void Start_follows_its_pins_file_as_it_changes()
+    {
+        var pins = TempFile();
+        try
+        {
+            File.WriteAllText(pins, """{ "pins": ["p0", "p1"] }""");
+            using var view = Open(dir => $$"""
+                LauncherView {
+                  pinsPath: "{{pins}}"
+                  apps: [ {{string.Join(", ", Apps(2))}} ]
+                }
+                """);
+            Assert.Equal(["p0", "p1"], Strings(view.Eval("pinIds")));
+
+            // Winshell Settings moves and unpins in the same file. Past the time a FileView takes its own writes to be:
+            Thread.Sleep(300);
+            File.WriteAllText(pins, """{ "pins": ["p1"] }""");
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (Strings(view.Eval("pinIds")).Count != 1)
+            {
+                Assert.True(DateTime.UtcNow < until, "Start did not follow the file.");
+                Thread.Sleep(20);
+                view.Loop.Process();
+            }
+            Assert.Equal(["Pin 1"], Named(view.Root, "pinTile").Select(AppName));
+        }
+        finally
+        {
+            File.Delete(pins);
+        }
+    }
+
+    [Fact]
     public void Menu_key_and_shift_f10_open_the_context_menu()
     {
         using var view = Open(dir => ViewQml(Apps(2), [], PinIds(2)));
@@ -369,7 +412,10 @@ public sealed class LauncherTests
             using var engine = new QmlEngine(registry, loop, new Log(), dir);
             var root = (ShellRoot)engine.CreateRoot(Path.Combine(dir, "shell.qml"));
             loop.Process();
-            var hotkey = Assert.Single(root.Children.OfType<Hotkey>());
+            // Start's hotkey is the Windows key until Preferences says otherwise; Winshell Settings has none and is idle.
+            var hotkeys = root.Children.OfType<Hotkey>().ToArray();
+            var hotkey = Assert.Single(hotkeys, h => h.Sequence != "");
+            Assert.Equal("", Assert.Single(hotkeys, h => h.Sequence == "").Error);
             Assert.Equal("Win", hotkey.Sequence);
             Assert.Equal("Hotkeys are not available.", hotkey.Error);
             Assert.False(hotkey.Active);

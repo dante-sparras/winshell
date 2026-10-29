@@ -102,6 +102,9 @@ Item {
     blockLoading: true
     blockWrites: true
     atomicWrites: true
+    // Winshell Settings changes the tiles in the same file.
+    watchChanges: true
+    onFileChanged: reload()
     onLoaded: root.restore(text())
   }
 

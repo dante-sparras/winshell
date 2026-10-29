@@ -16,6 +16,8 @@ Item {
 
   property var apps: []
   property var recent: []
+  // Recommended apps under the pins; off shows the pins alone.
+  property bool showRecommended: true
   property var searchResults: []
   property var pinIds: []
   property string pinsPath: ""
@@ -33,9 +35,9 @@ Item {
   readonly property string query: searchField.text
   readonly property bool searching: query.length > 0
   readonly property var pinnedApps: Launcher.pinned(apps, pinIds)
-  readonly property var recommendedApps: Launcher.recommended(recent, pinIds, Launcher.recommendedLimit)
+  readonly property var recommendedApps: showRecommended ? Launcher.recommended(recent, pinIds, Launcher.recommendedLimit) : []
   readonly property var allApps: Launcher.visibleApps(apps)
-  readonly property var shown: searching ? Launcher.asArray(searchResults) : page === "all" ? allApps : Launcher.homeEntries(apps, recent, pinIds)
+  readonly property var shown: searching ? Launcher.asArray(searchResults) : page === "all" ? allApps : Launcher.homeEntries(apps, showRecommended ? recent : [], pinIds)
   readonly property int pinnedCount: searching || page === "all" ? 0 : Launcher.asArray(pinnedApps).length
 
   implicitWidth: Launcher.menuWidth
@@ -218,8 +220,10 @@ Item {
     path: root.pinsPath
     blockLoading: true
     blockWrites: true
-    watchChanges: false
+    // Winshell Settings moves and unpins pins in the same file.
+    watchChanges: true
     printErrors: false
+    onFileChanged: reload()
     onLoaded: root.readPins()
   }
 

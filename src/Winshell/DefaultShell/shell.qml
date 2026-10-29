@@ -2,12 +2,14 @@
 import Winshell
 import Winshell.Input
 import Winshell.Notifications
-// Winshell's default shell. Copy this folder to %APPDATA%\winshell to make it your own.
+// Winshell's default shell. Copy this folder to %APPDATA%\winshell to make it your own. Winshell Settings
+// (SettingsWindow.qml) keeps its choices in Preferences, and everything here follows them as they change.
 ShellRoot {
   id: shell
 
-  // One Windows key for the shell. A second Hotkey on the same sequence would be taken.
-  // The tap is the key-up; onPressed is that tap, so onReleased must not toggle as well.
+  // The screen at the desktop's origin, where Windows puts its main display, for a taskbar on that one only.
+  readonly property var mainScreen: Shell.screens.find(s => s.x === 0 && s.y === 0) ?? Shell.screens[0] ?? null
+
   function toggleStart() {
     var list = bars.instances
     for (var i = 0; i < list.length; i++) {
@@ -20,17 +22,33 @@ ShellRoot {
       list[0].openLauncher()
   }
 
+  // One Windows key for the shell. A second Hotkey on the same sequence would be taken.
+  // The tap is the key-up; onPressed is that tap, so onReleased must not toggle as well.
   Hotkey {
-    sequence: "Win"
+    id: startKey
+    sequence: Preferences.startHotkey
     onPressed: shell.toggleStart()
+  }
+
+  Hotkey {
+    id: settingsKey
+    sequence: Preferences.settingsHotkey
+    onPressed: settings.open("")
   }
 
   NotificationListener { id: notifications }
   TaskbarPins { id: taskbarPins }
 
+  SettingsWindow {
+    id: settings
+    notificationListener: notifications
+    startHotkey: startKey
+    settingsHotkey: settingsKey
+  }
+
   Variants {
     id: bars
-    model: Shell.screens
+    model: Preferences.taskbarAllScreens ? Shell.screens : shell.mainScreen ? [shell.mainScreen] : []
 
     // The taskbar's Start and Search hooks open the launcher and Windows search.
     Taskbar {
@@ -39,6 +57,11 @@ ShellRoot {
       screen: modelData
       pins: taskbarPins
       notificationListener: notifications
+      centered: Preferences.taskbarCentered
+      autoHide: Preferences.taskbarAutoHide
+      // With one taskbar, every app is on it.
+      appsOn: Preferences.taskbarAllScreens ? Preferences.appsOn : "all"
+      onSettingsRequested: settings.open("taskbar")
 
       readonly property bool launcherOpen: launcher.visible
       function openLauncher() { launcher.open() }

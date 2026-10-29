@@ -80,7 +80,7 @@ PanelWindow {
   focusable: false
   margins.bottom: bottomGap
   screen: mode === "brightness" && brightnessScreen !== null ? brightnessScreen : (Shell.screens.length > 0 ? Shell.screens[0] : null)
-  WindowEffects.backdrop: contrast ? WindowEffects.None : WindowEffects.Acrylic
+  WindowEffects.backdrop: contrast ? WindowEffects.None : Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
 
   onVolumeChanged: noteVolume()

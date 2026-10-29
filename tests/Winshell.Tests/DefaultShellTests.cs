@@ -14,7 +14,9 @@ public class DefaultShellTests
         Assert.Contains("DefaultShell/launcher.js", names);
 
         var shell = Read(assembly, "DefaultShell/shell.qml");
-        Assert.Contains("sequence: \"Win\"", shell);
+        // The Windows key opens Start until Winshell Settings changes it.
+        Assert.Contains("sequence: Preferences.startHotkey", shell);
+        Assert.Contains("property string startHotkey: \"Win\"", Read(assembly, "DefaultShell/Preferences.qml"));
         Assert.Contains("toggleStart", shell);
 
         // The taskbar's Start hook opens it, and the taskbar shows Start pressed while it is open.
@@ -26,6 +28,18 @@ public class DefaultShellTests
 
         var launcher = Read(assembly, "DefaultShell/Launcher.qml");
         Assert.Contains("showIcons: launcher.visible", launcher);
+    }
+
+    [Fact]
+    public void The_default_shell_embeds_Winshell_Settings()
+    {
+        var assembly = typeof(global::Winshell.DefaultShell).Assembly;
+        var names = assembly.GetManifestResourceNames();
+        foreach (var file in new[] { "SettingsWindow.qml", "SettingsView.qml", "SettingsCard.qml", "Preferences.qml", "settings.js" })
+            Assert.Contains("DefaultShell/" + file, names);
+        var shell = Read(assembly, "DefaultShell/shell.qml");
+        Assert.Contains("SettingsWindow {", shell);
+        Assert.Contains("onSettingsRequested: settings.open(\"taskbar\")", shell);
     }
 
     private static string Read(Assembly assembly, string name)

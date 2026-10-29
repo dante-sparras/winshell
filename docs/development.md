@@ -48,7 +48,8 @@ A running shell reads these. None is needed to build or test.
 | State | `%LOCALAPPDATA%\winshell\state` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data` |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
-| Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens, with the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. |
+| Winshell Settings choices | `preferences.json` in the user configurations folder; see [Winshell Settings](settings.md) |
+| Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens, with the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. An entry that starts another `winshell.exe`, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. |
 
 The first launch that uses the default config folder copies `%USERPROFILE%\.config\winshell` into `%APPDATA%\winshell` when the old folder exists. The copy leaves the old folder in place, and it does not replace a file already in the new folder.
 
@@ -102,3 +103,15 @@ Remove-Item Env:WINSHELL_NOTIFICATION_EVIDENCE
 ```
 
 `WINSHELL_NOTIFICATION_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that explicit folder. An optional `BeforeCalendar.qml` there is rendered alongside the new surface. CI extracts that file from the preceding/base commit and attaches the PNGs as the `notification-surface` workflow artifact; no images are committed. A renderer scale is not a change to the PC's display settings. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md).
+
+## Settings surface validation
+
+To save the synthetic renders of Winshell Settings outside the repo:
+
+```powershell
+$env:WINSHELL_SETTINGS_EVIDENCE = Join-Path $env:TEMP 'winshell-settings-evidence'
+dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~SettingsTests
+Remove-Item Env:WINSHELL_SETTINGS_EVIDENCE
+```
+
+`WINSHELL_SETTINGS_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that folder, and CI attaches them as the `settings-surface` workflow artifact; no images are committed. The tests run each shell with no config folder or one of their own, so they never write the user's `preferences.json`, and they never change a Windows setting. The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).

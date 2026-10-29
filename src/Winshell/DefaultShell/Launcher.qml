@@ -12,7 +12,7 @@ PopupWindow {
   implicitHeight: Launcher.menuHeight
   color: "transparent"
   grabFocus: true
-  WindowEffects.backdrop: WindowEffects.Acrylic
+  WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
 
   function open() {
@@ -39,6 +39,7 @@ PopupWindow {
     anchors.fill: parent
     apps: Apps.apps.values
     recent: Apps.recent.values
+    showRecommended: Preferences.startRecommended
     searchResults: Apps.search(view.query)
     pinsPath: Shell.configPath("launcher.json")
     showIcons: launcher.visible

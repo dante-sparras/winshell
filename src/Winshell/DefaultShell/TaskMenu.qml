@@ -32,7 +32,7 @@ PopupWindow {
   visible: false
   color: "transparent"
   grabFocus: true
-  WindowEffects.backdrop: WindowEffects.Acrylic
+  WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
   anchor.edges: Edges.Top
   anchor.gravity: Edges.Top

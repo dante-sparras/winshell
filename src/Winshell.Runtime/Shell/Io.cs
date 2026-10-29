@@ -633,11 +633,9 @@ public sealed class JsonAdapter : FileViewAdapter, IPropertyObserver
 
     public void OnPropertyChanged(QObject sender, string property)
     {
+        // The view passes it on, so it reaches the view once.
         if (!_loading)
-        {
             Emit("adapterUpdated");
-            View?.Emit("adapterUpdated");
-        }
     }
 
     public override void Deserialize(string text)
@@ -939,6 +937,9 @@ public sealed class FileView : QObject
                     return;
                 if (error is null)
                 {
+                    // A folder this write made can be watched now.
+                    if (_watcher is null)
+                        Watch();
                     Emit("saved");
                 }
                 else

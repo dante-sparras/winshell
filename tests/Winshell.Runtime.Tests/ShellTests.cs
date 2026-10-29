@@ -311,6 +311,56 @@ public class ShellTests
     }
 
     [Fact]
+    public void A_FileView_writes_once_per_change_and_follows_a_folder_its_first_write_made()
+    {
+        using var shell = new Shell(
+            ("shell.qml", """
+                import Winshell
+                import Winshell.Io
+                import QtQuick
+                Scope {
+                  property alias name: adapter.name
+                  property int writes: 0
+                  property int changes: 0
+                  FileView {
+                    path: Shell.shellPath("later/settings.json")
+                    blockLoading: true
+                    blockWrites: true
+                    watchChanges: true
+                    onAdapterUpdated: { writes++; writeAdapter() }
+                    onFileChanged: { changes++; reload() }
+                    JsonAdapter {
+                      id: adapter
+                      property string name: "default"
+                    }
+                  }
+                }
+                """));
+        shell.Start();
+        var root = shell.Host.Root!;
+        var file = Path.Combine(shell.Files.Directory, "later", "settings.json");
+        Assert.False(Directory.Exists(Path.GetDirectoryName(file)));
+
+        // The first write makes the folder.
+        root.WriteProperty("name", "chosen");
+        shell.Files.Loop.Process();
+        Assert.Equal(1, root.ReadProperty("writes"));
+        Assert.True(File.Exists(file));
+
+        // A change made by hand afterwards is followed.
+        Thread.Sleep(300);
+        File.WriteAllText(file, """{ "name": "by hand" }""");
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while ((string?)root.ReadProperty("name") != "by hand")
+        {
+            Assert.True(DateTime.UtcNow < until, "The FileView did not follow the file.");
+            Thread.Sleep(20);
+            shell.Files.Loop.Process();
+        }
+        Assert.Equal(1, root.ReadProperty("writes"));
+    }
+
+    [Fact]
     public void IpcHandler_functions_can_be_called()
     {
         using var shell = new Shell(("shell.qml", """

@@ -10,7 +10,7 @@ namespace Winshell.Platform.Windows.Tests.DefaultShell;
 /// </summary>
 public sealed class DefaultShellHarness : IDisposable
 {
-    public DefaultShellHarness(string testQml, double width = 360, double height = 640, FakeServices? services = null)
+    public DefaultShellHarness(string testQml, double width = 360, double height = 640, FakeServices? services = null, Action<QmlEngine>? configure = null)
     {
         Services = services ?? new FakeServices();
         Directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
@@ -29,6 +29,7 @@ public sealed class DefaultShellHarness : IDisposable
         Services.Register(registry);
         Engine = new QmlEngine(registry, Loop, new Log { Sink = (level, category, message) => Messages.Add($"{level} {category}: {message}") }, Directory);
         Engine.AddService<IPlatformServices>(Urls);
+        configure?.Invoke(Engine);
         Root = (Item)Engine.CreateRoot(Path.Combine(Directory, "test.qml"));
         Scene.Root.SetLayoutWidth(width);
         Scene.Root.SetLayoutHeight(height);

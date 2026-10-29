@@ -39,6 +39,7 @@ public sealed class StartupTests : IDisposable
           property bool available: Startup.available
           property bool runs: Startup.runAtSignIn
           property bool turnedOff: Startup.turnedOffInWindows
+          property bool elsewhere: Startup.registeredElsewhere
           property bool want: false
           property int refreshes: 0
           onWantChanged: Startup.runAtSignIn = want
@@ -132,6 +133,35 @@ public sealed class StartupTests : IDisposable
     }
 
     [Fact]
+    public void An_entry_another_winshell_wrote_points_elsewhere_until_this_one_registers()
+    {
+        var run = _testKey + @"\Run";
+        var registry = new WindowsStartupRegistry("\"C:\\new\\winshell.exe\" --no-duplicate", run, _testKey + @"\StartupApproved");
+        Assert.False(registry.PointsElsewhere());
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+            key.SetValue(WindowsStartupRegistry.ValueName, "\"C:\\old\\winshell.exe\" --no-duplicate", RegistryValueKind.String);
+        Assert.True(registry.IsRegistered());
+        Assert.True(registry.PointsElsewhere());
+        Assert.True(registry.Register());
+        Assert.False(registry.PointsElsewhere());
+    }
+
+    [Fact]
+    public void An_entry_that_starts_another_winshell_is_not_this_one_running_at_sign_in()
+    {
+        var windows = new FakeStartupRegistry { Registered = true, Elsewhere = true };
+        var root = Load(windows);
+        Assert.False((bool)root.ReadProperty("runs")!);
+        Assert.True((bool)root.ReadProperty("elsewhere")!);
+
+        root.WriteProperty("want", true);
+        Assert.True((bool)root.ReadProperty("runs")!);
+        Assert.False((bool)root.ReadProperty("elsewhere")!);
+        Assert.Equal(1, windows.Writes);
+        Assert.Empty(_warnings);
+    }
+
+    [Fact]
     public void The_command_runs_this_winshell_without_a_console_window_and_never_twice()
     {
         var conhost = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "conhost.exe");
@@ -180,7 +210,11 @@ public sealed class StartupTests : IDisposable
 
         public int Writes { get; private set; }
 
+        public bool Elsewhere { get; set; }
+
         public bool IsRegistered() => Registered;
+
+        public bool PointsElsewhere() => Elsewhere;
 
         public bool TurnedOffInWindows() => TurnedOff;
 
@@ -188,7 +222,7 @@ public sealed class StartupTests : IDisposable
         {
             Writes++;
             if (Accepts)
-                Registered = true;
+                (Registered, Elsewhere) = (true, false);
             return Accepts;
         }
 
