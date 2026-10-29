@@ -672,11 +672,15 @@ namespace Winshell
                         };
                         loop.Post(() => notices.Show(ShellNotices.ForCrash(previous)));
                     });
+#if DEBUG
                 if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
                     loop.Schedule(TimeSpan.FromMilliseconds(300), () => loop.Quit(0));
+#endif
                 code = loop.Run();
+#if DEBUG
                 if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
                     throw new InvalidOperationException($"{TestCrashVariable} asked Winshell to crash after its config loaded.");
+#endif
             }
             catch (Exception e) when (ReportFatal(e))
             {
@@ -698,13 +702,20 @@ namespace Winshell
         }
 
         /// <summary>
-        /// Read only by the crash report test: crash reports go to this folder, and the shell crashes once its config
-        /// has loaded and its loop has run, so the test sees the report a real crash writes.
+        /// Read only by the crash report test, and only in a Debug build: crash reports go to this folder, and the
+        /// shell crashes once its config has loaded and its loop has run, so the test sees the report a real crash writes.
+        /// A Release build ignores the variable.
         /// </summary>
         internal const string TestCrashVariable = "WINSHELL_TEST_CRASH";
 
-        private static string CrashFolder() =>
-            Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 } folder ? folder : ShellLocations.CrashRoot;
+        private static string CrashFolder()
+        {
+#if DEBUG
+            if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 } folder)
+                return folder;
+#endif
+            return ShellLocations.CrashRoot;
+        }
 
         /// <summary>Runs what reports a crash; that must not throw a second exception over the first.</summary>
         private static void Quietly(Action action)
