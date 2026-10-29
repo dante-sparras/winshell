@@ -14,5 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Winshell.Qml\Winshell.Qml.csproj" />
     <InternalsVisibleTo Include="Winshell.Runtime.Tests" />
+    <InternalsVisibleTo Include="Winshell.Platform.Windows" />
   </ItemGroup>
 </Project>

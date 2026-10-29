@@ -109,5 +109,16 @@ public sealed class AccessibleAttached(QObject owner) : QObject
     }
 
     // An accessibility change draws a frame, after which the window tells UI Automation what changed.
-    private void Changed() => (owner as Item)?.Update();
+    private void Changed()
+    {
+        if (owner is not Item item)
+            return;
+        item.Update();
+        if (item.Host is Scene scene)
+            scene.Signals.MarkDirty();
+        if (_role == (int)RoleValue.Notification)
+            item.TrackNotification();
+        else
+            item.UntrackNotification();
+    }
 }

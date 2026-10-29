@@ -26,6 +26,9 @@ public sealed class Scene : IItemHost
     /// <summary>The window's content item. Everything in the window is under it.</summary>
     public Item Root { get; }
 
+    /// <summary>Accessible edits and notification items. The platform reads this; QML does not.</summary>
+    internal AccessibleSignals Signals { get; } = new();
+
     public QObject? WindowObject { get; }
 
     /// <summary>Physical pixels per logical pixel. Items that raster at it, as images and canvases do, redraw when it changes.</summary>
