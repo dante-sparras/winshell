@@ -1,0 +1,88 @@
+pragma Singleton
+import Winshell
+import Winshell.Io
+import Winshell.Theme
+import QtQuick
+
+// The choices made in Winshell Settings, kept in preferences.json in the config folder (%APPDATA%\winshell, or
+// WINSHELL_CONFIG_DIR). Every surface reads them here and follows a change at once, including one made to the file
+// by hand. A key the file does not have keeps its default.
+Singleton {
+  id: root
+
+  // Without a config folder, as in tests, the choices last for this run only.
+  property string path: Shell.configRoot ? Shell.configRoot + "/preferences.json" : ""
+
+  // "system", "light" or "dark".
+  property alias colorScheme: adapter.colorScheme
+  // "" for the accent picked in Windows, or "#rrggbb".
+  property alias accentColor: adapter.accentColor
+  // "acrylic" or "mica": what shows through the taskbar and the flyouts.
+  property alias backdrop: adapter.backdrop
+
+  property alias taskbarCentered: adapter.taskbarCentered
+  property alias taskbarAutoHide: adapter.taskbarAutoHide
+  // false shows a taskbar on the main screen only.
+  property alias taskbarAllScreens: adapter.taskbarAllScreens
+  // "all", "main" or "where", as Taskbar.appsOn takes it.
+  property alias taskbarAppsOn: adapter.taskbarAppsOn
+
+  property alias startRecommended: adapter.startRecommended
+
+  // The apps whose notifications the notification center leaves out, as { id, name }.
+  property alias hiddenNotificationApps: adapter.hiddenNotificationApps
+
+  // Hotkey sequences; "" turns one off.
+  property alias startHotkey: adapter.startHotkey
+  property alias settingsHotkey: adapter.settingsHotkey
+
+  readonly property int material: backdrop === "mica" ? WindowEffects.Mica : WindowEffects.Acrylic
+  readonly property bool validAccent: /^#[0-9a-fA-F]{6}$/.test(accentColor)
+
+  function showsNotificationsFrom(appId) {
+    return !(hiddenNotificationApps ?? []).some(app => app.id === appId)
+  }
+
+  function setNotificationsFrom(appId, appName, shown) {
+    const rest = (hiddenNotificationApps ?? []).filter(app => app.id !== appId)
+    hiddenNotificationApps = shown ? rest : rest.concat([{ id: appId, name: appName }])
+  }
+
+  Binding {
+    target: Theme
+    property: "colorScheme"
+    value: ["system", "light", "dark"].includes(root.colorScheme) ? root.colorScheme : "system"
+  }
+
+  Binding {
+    target: Theme
+    property: "accentColor"
+    value: root.validAccent ? root.accentColor : "transparent"
+  }
+
+  FileView {
+    path: root.path
+    blockLoading: true
+    blockWrites: true
+    atomicWrites: true
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onAdapterUpdated: if (root.path) writeAdapter()
+
+    JsonAdapter {
+      id: adapter
+      property string colorScheme: "system"
+      property string accentColor: ""
+      property string backdrop: "acrylic"
+      property bool taskbarCentered: true
+      property bool taskbarAutoHide: false
+      property bool taskbarAllScreens: true
+      property string taskbarAppsOn: "all"
+      property bool startRecommended: true
+      property var hiddenNotificationApps: []
+      property string startHotkey: "Win"
+      property string settingsHotkey: ""
+    }
+  }
+}

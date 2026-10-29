@@ -58,7 +58,8 @@ ColumnLayout {
       width: scroll.availableWidth
       spacing: 12
       Repeater {
-        model: root.listener === null ? [] : root.listener.groups
+        // An app turned off in Winshell Settings is left out.
+        model: root.listener === null ? [] : root.listener.groups.values.filter(g => Preferences.showsNotificationsFrom(g.appId))
         Column {
           id: group
           required property var modelData

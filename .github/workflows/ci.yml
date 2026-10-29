@@ -31,6 +31,7 @@ jobs:
         shell: pwsh
         env:
           WINSHELL_NOTIFICATION_EVIDENCE: ${{ runner.temp }}/notification-evidence
+          WINSHELL_SETTINGS_EVIDENCE: ${{ runner.temp }}/settings-evidence
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
           foreach ($file in (git ls-tree -r --name-only HEAD^1 -- src/Winshell/DefaultShell)) {
@@ -45,4 +46,11 @@ jobs:
         with:
           name: notification-surface
           path: ${{ runner.temp }}/notification-evidence/*.png
+          if-no-files-found: ignore
+      - name: Settings surface evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: settings-surface
+          path: ${{ runner.temp }}/settings-evidence/*.png
           if-no-files-found: ignore

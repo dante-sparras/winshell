@@ -457,6 +457,29 @@ public class QuickSettingsTests
     }
 
     [Fact]
+    public void Quick_settings_follows_its_layout_file_as_Winshell_Settings_changes_it()
+    {
+        using var shell = new DefaultShellHarness(Saved, services: Laptop());
+        File.WriteAllText(Path.Combine(shell.Directory, "layout.json"), """{ "pinned": ["wifi", "bluetooth"] }""");
+        shell.Root.WriteProperty("layoutPath", "");
+        shell.Root.WriteProperty("layoutPath", Path.Combine(shell.Directory, "layout.json"));
+        shell.Settle();
+        Assert.Equal(["wifi", "bluetooth"], Tiles(shell));
+
+        // Past the time a FileView takes its own writes to be.
+        Thread.Sleep(300);
+        File.WriteAllText(Path.Combine(shell.Directory, "layout.json"), """{ "pinned": ["bluetooth", "nightLight"] }""");
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (!Tiles(shell).SequenceEqual(["bluetooth", "nightLight"]))
+        {
+            Assert.True(DateTime.UtcNow < until, "Quick settings did not follow the file.");
+            Thread.Sleep(20);
+            shell.Settle();
+        }
+        Assert.Empty(shell.Messages);
+    }
+
+    [Fact]
     public void A_layout_file_that_is_not_JSON_leaves_the_default_tiles_and_warns()
     {
         using var shell = new DefaultShellHarness(Saved, services: Laptop());

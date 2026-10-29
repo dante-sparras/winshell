@@ -114,6 +114,10 @@ public sealed class ShellHost : IShellHost, IDisposable
 
     public string CacheDir { get; }
 
+    public string ConfigRoot { get; init; } = ShellLocations.ConfigRoot;
+
+    public string LogPath { get; init; } = "";
+
     public bool WatchFiles
     {
         get => _settings.Watching;

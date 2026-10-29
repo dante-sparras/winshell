@@ -9,7 +9,7 @@ PopupWindow {
   implicitHeight: content.implicitHeight
   color: "transparent"
   grabFocus: true
-  WindowEffects.backdrop: WindowEffects.Acrylic
+  WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
 
   onVisibleChanged: {

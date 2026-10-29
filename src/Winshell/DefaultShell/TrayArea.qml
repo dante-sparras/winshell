@@ -52,7 +52,7 @@ Row {
     implicitHeight: grid.implicitHeight + 8
     color: "transparent"
     grabFocus: true
-    WindowEffects.backdrop: WindowEffects.Acrylic
+    WindowEffects.backdrop: Preferences.material
     WindowEffects.corners: WindowEffects.RoundCorners
     anchor.item: chevron
     anchor.edges: Edges.Top

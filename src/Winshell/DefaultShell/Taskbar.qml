@@ -29,6 +29,8 @@ PanelWindow {
   property bool searchOpen: false
   signal startRequested(Item button)
   signal searchRequested(Item button)
+  // Taskbar settings, from the menu a right click on an empty part of the taskbar opens.
+  signal settingsRequested()
   property Component trayArea: Component { TrayArea { window: root } }
   property Component clockArea: Component { TaskbarClock { notificationListener: root.notificationListener } }
 
@@ -40,7 +42,7 @@ PanelWindow {
   readonly property alias taskList: taskList
 
   // Whether something the taskbar opened is up, which keeps an auto-hiding taskbar shown.
-  readonly property bool busy: taskList.busy || startOpen || searchOpen
+  readonly property bool busy: taskList.busy || startOpen || searchOpen || menu.visible
     || (trayLoader.item !== null && trayLoader.item.busy === true)
     || (clockLoader.item !== null && clockLoader.item.busy === true)
   property bool revealed: !autoHide
@@ -63,7 +65,7 @@ PanelWindow {
   Behavior on hiddenBy { NumberAnimation { duration: Theme.controlNormalAnimationDuration; easing.type: Easing.OutCubic } }
 
   color: "transparent"
-  WindowEffects.backdrop: WindowEffects.Acrylic
+  WindowEffects.backdrop: Preferences.material
   // Narrator names Explorer's taskbar this way.
   Accessible.name: "Taskbar"
 
@@ -80,6 +82,14 @@ PanelWindow {
     id: content
     width: parent.width
     height: root.barHeight
+
+    // A right click where there is no button opens Taskbar settings, as on Windows 11.
+    MouseArea {
+      objectName: "taskbarBackground"
+      anchors.fill: parent
+      acceptedButtons: Qt.RightButton
+      onClicked: mouse => menu.openAt(mouse.x)
+    }
 
     HoverHandler {
       id: hover
@@ -165,5 +175,11 @@ PanelWindow {
         sourceComponent: root.clockArea
       }
     }
+  }
+
+  TaskbarMenu {
+    id: menu
+    anchor.window: root
+    onSettingsRequested: root.settingsRequested()
   }
 }

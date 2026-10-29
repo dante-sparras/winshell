@@ -743,6 +743,15 @@ public sealed class FloatingWindow : ShellWindow
     [Qml]
     public ShellWindow? ParentWindow { get { Track(); return _parentWindow; } set => SetField(ref _parentWindow, value); }
 
+    /// <summary>Shows the window, restores it when it is minimized, and brings it to the front with keyboard focus.</summary>
+    [Qml]
+    public void Activate()
+    {
+        Visible = true;
+        Minimized = false;
+        Backend?.SetKeyboardFocus(true);
+    }
+
     [Qml]
     public void StartSystemMove() => Backend?.StartSystemMove();
 

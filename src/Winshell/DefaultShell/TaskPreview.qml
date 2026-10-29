@@ -30,7 +30,7 @@ PopupWindow {
   implicitHeight: content.implicitHeight
   visible: false
   color: "transparent"
-  WindowEffects.backdrop: WindowEffects.Acrylic
+  WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
   anchor.edges: Edges.Top
   anchor.gravity: Edges.Top

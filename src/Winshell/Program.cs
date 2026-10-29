@@ -303,7 +303,7 @@ namespace Winshell
             using var loop = new WinEventLoop { Log = log };
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);
-            var host = new ShellHost(root, loop, platform, log);
+            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath };
             host.Services.Add(engine =>
             {
                 engine.AddService<IClipboard>(platform);

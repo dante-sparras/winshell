@@ -14,7 +14,7 @@ PopupWindow {
   implicitHeight: Math.min(780, screen ? screen.workArea.height - 16 : 780)
   color: Theme.isHighContrast ? Theme.solidBackgroundFillColorBase : "transparent"
   grabFocus: true
-  WindowEffects.backdrop: WindowEffects.Acrylic
+  WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
   Accessible.name: "Notification center and calendar"
 

@@ -70,6 +70,14 @@ _Avoid_: action center, control center
 A button in quick settings for one setting, such as Wi-Fi. It shows whether the setting is on, and opens Settings when Winshell cannot change it.
 _Avoid_: quick action, toggle
 
+**Winshell Settings**:
+The default shell's settings window, laid out like Windows 11 Settings. It changes Winshell's own choices only. "Settings" alone means Windows Settings.
+_Avoid_: control panel, config app
+
+**Preferences**:
+The choices made in Winshell Settings, kept in `preferences.json` in the config folder.
+_Avoid_: settings (that is Windows Settings), config (that is the QML)
+
 **On-screen display**:
 The panel Windows 11 shows when volume, brightness, media or the microphone mute changes. It sits above the taskbar and does not reserve space.
 _Avoid_: volume flyout, indicator, toast

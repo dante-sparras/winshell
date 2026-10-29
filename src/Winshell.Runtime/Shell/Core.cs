@@ -194,6 +194,12 @@ public interface IShellHost
 
     string CacheDir { get; }
 
+    /// <summary>The folder configurations are loaded from: <c>%APPDATA%\winshell</c>, or what <c>WINSHELL_CONFIG_DIR</c> names.</summary>
+    string ConfigRoot => ShellLocations.ConfigRoot;
+
+    /// <summary>This instance's log file, or empty when nothing writes one.</summary>
+    string LogPath => "";
+
     bool WatchFiles { get; set; }
 
     void Reload(bool hard);
@@ -283,6 +289,15 @@ public sealed class ShellGlobal : QObject
         Directory.CreateDirectory(dir);
         return dir;
     }
+
+    /// <summary>The folder configurations are loaded from, where a shell keeps the user's own choices.</summary>
+    [Qml] public string ConfigRoot => Host?.ConfigRoot ?? "";
+
+    /// <summary>This instance's log file, which <c>winshell log</c> prints. Empty when nothing writes one.</summary>
+    [Qml] public string LogPath => Host?.LogPath ?? "";
+
+    /// <summary>The Winshell release, as <c>winshell --version</c> prints it.</summary>
+    [Qml] public string Version => ProductVersion.Current.Text;
 
     [Qml] public int ProcessId => Environment.ProcessId;
 
