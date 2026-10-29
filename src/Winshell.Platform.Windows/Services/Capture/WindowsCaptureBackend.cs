@@ -26,6 +26,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
     private ID3D11Texture2D? _staging;
     private SizeInt32 _size;
     private bool _readbackPending;
+    private int _poolGeneration;
     private Action? _closed;
 
     public void Start(CaptureTarget target, bool includeCursor, Action closed)
@@ -63,6 +64,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
     {
         if (_pool is null)
             return null;
+        var generation = Volatile.Read(ref _poolGeneration);
         var ready = _readbackPending ? Readback() : null;
         if (_readbackPending)
             return null; // GPU work is still in flight; never stall the shell's scene thread.
@@ -70,13 +72,22 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         try
         {
             // At most the pool's two buffers. Never wait for a producer or drain an unbounded queue.
-            for (var i = 0; i < 2; i++)
+            for (var i = 0; i < 2 && generation == Volatile.Read(ref _poolGeneration); i++)
             {
-                var frame = _pool.TryGetNextFrame();
+                var pool = _pool;
+                if (pool is null)
+                    break;
+                var frame = pool.TryGetNextFrame();
                 if (frame is null)
                     break;
                 latest?.Dispose();
                 latest = frame;
+            }
+            if (generation != Volatile.Read(ref _poolGeneration))
+            {
+                latest?.Dispose();
+                latest = null;
+                return ready;
             }
             if (latest is null)
                 return ready;
@@ -91,14 +102,10 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 _size = size;
                 _staging?.Dispose();
                 _staging = null;
-                // A static source may not invalidate after Recreate. Replace the pool/session to request a full frame.
+                // A static source may not invalidate after Recreate. Stop the old session and
+                // release its frames before the pool goes away, then start a new pair.
                 var cursor = _session!.IsCursorCaptureEnabled;
-                _session.Dispose();
-                _pool.Dispose();
-                _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice!, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, size);
-                _session = _pool.CreateCaptureSession(_item!);
-                _session.IsCursorCaptureEnabled = cursor;
-                _session.StartCapture();
+                RecreatePool(size, cursor);
                 return ready;
             }
             using var texture = CaptureInterop.GetTexture(latest.Surface);
@@ -159,11 +166,70 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             Buffer.MemoryCopy((byte*)source + (long)row * sourcePitch, (byte*)destination + (long)row * destinationPitch, destinationPitch, bytes);
     }
 
+    private void RecreatePool(SizeInt32 size, bool cursor)
+    {
+        var session = _session;
+        var pool = _pool;
+        _session = null;
+        _pool = null;
+        Interlocked.Increment(ref _poolGeneration);
+        ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame());
+        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice!, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, size);
+        _session = _pool.CreateCaptureSession(_item!);
+        _session.IsCursorCaptureEnabled = cursor;
+        _session.StartCapture();
+    }
+
+    /// <summary>
+    /// Stops capture, releases frames the pool still holds, then disposes the pool.
+    /// A free-threaded pool can still be producing a buffer after the UI thread decides to drop it.
+    /// </summary>
+    internal static void ReleaseSessionAndPool(IDisposable? session, IDisposable? pool, Func<IDisposable?>? nextFrame)
+    {
+        try
+        {
+            try
+            {
+                session?.Dispose();
+            }
+            catch (Exception e) when (IsTeardown(e))
+            {
+                Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
+            }
+            if (nextFrame is not null)
+            {
+                for (var i = 0; i < 2; i++)
+                {
+                    var frame = nextFrame();
+                    if (frame is null)
+                        break;
+                    frame.Dispose();
+                }
+            }
+        }
+        finally
+        {
+            try
+            {
+                pool?.Dispose();
+            }
+            catch (Exception e) when (IsTeardown(e))
+            {
+                Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
+            }
+        }
+    }
+
+    private static bool IsTeardown(Exception e) => e is COMException or SharpGen.Runtime.SharpGenException;
+
     public void Dispose()
     {
         Interlocked.Exchange(ref _closed, null);
+        Interlocked.Increment(ref _poolGeneration);
         var item = _item;
-        IDisposable?[] resources = [_session, _pool, _staging, _winrtDevice, _context, _device];
+        var session = _session;
+        var pool = _pool;
+        IDisposable?[] resources = [_staging, _winrtDevice, _context, _device];
         _session = null;
         _pool = null;
         _staging = null;
@@ -180,10 +246,11 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         finally
         {
             // A lost device must not prevent the rest of the session's resources from being released.
+            ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame());
             foreach (var resource in resources)
             {
                 try { resource?.Dispose(); }
-                catch (Exception e) when (e is COMException or SharpGen.Runtime.SharpGenException)
+                catch (Exception e) when (IsTeardown(e))
                 {
                     Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
                 }
