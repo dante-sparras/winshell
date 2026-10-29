@@ -1,3 +1,4 @@
+using Jint.Native;
 using SkiaSharp;
 using Winshell.Platform.Windows.Accessibility;
 using Winshell.Runtime;
@@ -163,6 +164,26 @@ public class TaskbarTests
         Assert.Equal(["activate", "activate"], desk.Shell2.Calls);
         Assert.Empty(desk.Shell1.Calls);
     }
+
+    [Fact]
+    public void A_window_that_closes_is_no_longer_kept_as_the_one_its_app_used_last()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        desk.Services.WindowList.Activate(desk.Shell2);
+        shell.Settle();
+        desk.Services.WindowList.Activate(desk.Documents);
+        shell.Settle();
+        Assert.Contains(desk.Shell2, UsedLast(shell));
+
+        desk.Services.WindowList.Windows.Remove(desk.Shell2);
+        shell.Settle();
+        Assert.DoesNotContain(desk.Shell2, UsedLast(shell));
+        Assert.Contains(desk.Documents, UsedLast(shell));
+    }
+
+    private static object?[] UsedLast(DefaultShellHarness shell) =>
+        [.. ((JsObject)shell.Root.ReadProperty("lastUsed")!).GetOwnProperties().Select(p => p.Value.Value.ToObject())];
 
     [Fact]
     public void A_middle_or_shift_click_opens_a_new_window_of_the_app()
