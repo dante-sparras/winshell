@@ -12,11 +12,15 @@ PopupWindow {
   WindowEffects.backdrop: WindowEffects.Acrylic
   WindowEffects.corners: WindowEffects.RoundCorners
 
-  onVisibleChanged: if (visible) content.page = ""
+  onVisibleChanged: {
+    content.page = ""
+    content.editing = false
+  }
 
   QuickSettingsContent {
     id: content
     anchors.fill: parent
+    layoutPath: Shell.statePath("quick-settings.json")
     onCloseRequested: root.visible = false
   }
 }
