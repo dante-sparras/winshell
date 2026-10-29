@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Pipes;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Winshell;
@@ -610,9 +611,29 @@ namespace Winshell
             log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
             log.Info("", $"Saving logs to \"{logPath}\"");
             var pipe = $"winshell-{id}";
+            NamedPipeServerStream listening;
+            try
+            {
+                listening = IpcServer.OpenAvailable(ref pipe);
+            }
+            catch (IOException)
+            {
+                log.Error("", "The control pipe is already taken.");
+                logFile.Dispose();
+                try
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+                catch (Exception deleteError) when (deleteError is IOException or UnauthorizedAccessException)
+                {
+                }
+                return 1;
+            }
+            if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
+                log.Warn("", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
+            using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0));
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
-            using var ipc = new IpcServer(pipe, loop, () => host, () => loop.Quit(0));
             Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
