@@ -515,7 +515,19 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         }
         if (changed)
             PostSync();
-        return result.Swallow;
+        return Consume(result);
+    }
+
+    /// <summary>
+    /// A handled Windows-key tap is not eaten. The masking key is injected while the Windows key is still down,
+    /// and the real key-up is passed on so the async key state clears.
+    /// </summary>
+    internal static bool Consume(BookResult result, Action? mask = null)
+    {
+        if (!result.MaskWin)
+            return result.Swallow;
+        (mask ?? KeyMask.Tap).Invoke();
+        return false;
     }
 
     private void PostSync()
@@ -562,6 +574,8 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private static nint KeyboardProc(int code, nint wParam, nint lParam)
     {
         var swallow = false;
+        if (code >= 0 && IsOwnInjection(lParam))
+            return Win32.CallNextHookEx(0, code, wParam, lParam);
         if (code >= 0)
         {
             try
@@ -587,6 +601,13 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         if (swallow)
             return 1;
         return Win32.CallNextHookEx(0, code, wParam, lParam);
+    }
+
+    private static bool IsOwnInjection(nint lParam)
+    {
+        if (lParam == 0)
+            return false;
+        return ((KbdLlHookStruct*)lParam)->dwExtraInfo == KeyMask.ExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]

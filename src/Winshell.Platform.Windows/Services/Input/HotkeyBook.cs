@@ -10,7 +10,14 @@ internal sealed class BookResult
 
     public List<ArmNotice> Armed { get; } = [];
 
+    /// <summary>Eat the event. A handled Windows-key tap sets this and <see cref="MaskWin"/>; the hook masks instead of eating the key-up.</summary>
     public bool Swallow { get; set; }
+
+    /// <summary>
+    /// The Windows key came up and this shell handled the tap. Inject a masking key, then let the real key-up through.
+    /// Eating that key-up leaves the key logically down, because the key-down already reached the system.
+    /// </summary>
+    public bool MaskWin { get; set; }
 }
 
 /// <summary>
@@ -144,7 +151,11 @@ internal sealed class HotkeyBook
         var skip = AdvanceWin(side, nowMs, result);
         FireWin(side, nowMs, result, skip);
         FireWin(WinKeySide.Either, nowMs, result, skip);
-        result.Swallow = result.Pressed.Count > 0 || result.Armed.Count > 0;
+        var handled = result.Pressed.Count > 0 || result.Armed.Count > 0;
+        result.Swallow = handled;
+        // The key-down was not eaten, so the key-up must reach Windows or the key stays held.
+        // MaskWin tells the hook to inject an unused key first, which uses the press so Start stays closed.
+        result.MaskWin = handled;
     }
 
     private HashSet<IHotkeyListener> AdvanceWin(WinKeySide side, long nowMs, BookResult result)
