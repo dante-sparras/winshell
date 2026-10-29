@@ -27,6 +27,8 @@ public class ThemeTests
         var light = Theme.Default(false);
         var dark = Theme.Default(true);
 
+        Assert.True(light.AnimationsEnabled);
+        Assert.True(dark.AnimationsEnabled);
         Assert.Equal(QColor.Parse("#e4000000"), light.TextFillColorPrimary);
         Assert.Equal(QColor.Parse("#ffffff"), dark.TextFillColorPrimary);
         Assert.Equal(QColor.Parse("#b3ffffff"), light.ControlFillColorDefault);

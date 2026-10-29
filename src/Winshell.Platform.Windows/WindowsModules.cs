@@ -69,7 +69,7 @@ public sealed class WindowsTheme : QObject
         .Select(p => (Names.ToQml(p.Name), (Func<Theme, QColor>)p.GetMethod!.CreateDelegate(typeof(Func<Theme, QColor>))))
         .ToArray();
 
-    private static readonly string[] ThemeProps = ["dark", "highContrast", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
+    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
 
     public WindowsTheme()
     {
@@ -91,6 +91,9 @@ public sealed class WindowsTheme : QObject
 
     /// <summary>Whether a contrast theme is on. Every color token is then one of the system colors.</summary>
     [Qml] public bool HighContrast { get { Track(); return Theme.Current.IsHighContrast; } }
+
+    /// <summary>Whether Windows animation effects are on. Shells skip motion when this is false.</summary>
+    [Qml] public bool AnimationsEnabled { get { Track(); return Theme.Current.AnimationsEnabled; } }
 
     [Qml] public string FontFamily => FontSpec.DefaultFamily;
 
