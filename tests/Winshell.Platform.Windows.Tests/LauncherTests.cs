@@ -154,6 +154,44 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void Tab_reaches_all_apps_and_back_and_numpad_enter_launches()
+    {
+        const int Tab = 0x01000001, Space = 0x20, Enter = 0x01000005;
+        using var view = Open(dir => ViewQml(Apps(30), Recent(), PinIds(2)));
+        Press(view, Tab);
+        Assert.True(One(view.Root, "allAppsButton").ActiveFocus);
+        Press(view, Return);
+        Assert.Equal("all", view.Eval("page"));
+        Assert.True(One(view.Root, "searchField").ActiveFocus);
+
+        Press(view, Tab);
+        Assert.True(One(view.Root, "allBack").ActiveFocus);
+        Press(view, Space);
+        Assert.Equal("home", view.Eval("page"));
+        Assert.True(One(view.Root, "searchField").ActiveFocus);
+
+        Press(view, Right);
+        Press(view, Enter);
+        Assert.Equal("Pin 1", view.Eval("lastLaunched.name"));
+    }
+
+    [Fact]
+    public void Narrator_hears_the_app_the_arrow_keys_select()
+    {
+        using var view = Open(dir => ViewQml(Apps(8), Recent(), PinIds(8)));
+        var announcement = One(view.Root, "selectionAnnouncement");
+        Assert.Equal("", Name(announcement));
+        Press(view, Right);
+        Assert.Equal("Pin 1", Name(announcement));
+        Press(view, Down);
+        Press(view, Down);
+        Assert.Equal("Recent One", Name(announcement));
+        Assert.True(One(view.Root, "searchField").ActiveFocus);
+
+        static string Name(Item item) => ((AccessibleAttached)item.FindAttached(typeof(AccessibleAttached))!).Name;
+    }
+
+    [Fact]
     public void All_apps_is_one_column_and_escape_returns_home()
     {
         using var view = Open(dir => ViewQml(Apps(30), Recent(), PinIds(2)));
