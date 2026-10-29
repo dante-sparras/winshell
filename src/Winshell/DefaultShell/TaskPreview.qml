@@ -45,6 +45,10 @@ PopupWindow {
   // A preview opens after the pointer rests on a button, moves at once to the next button, and closes a moment
   // after the pointer leaves both the button and the preview.
   function hoverStarted(button, key) {
+    // The keyboard holds these previews. Crossing another button must not move them onto that app, or
+    // Escape would return to a button that was never chosen.
+    if (visible && grabFocus)
+      return
     closeTimer.stop()
     anchor.item = button
     taskKey = key

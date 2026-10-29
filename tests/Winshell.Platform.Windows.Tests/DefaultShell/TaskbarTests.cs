@@ -1319,6 +1319,39 @@ public class TaskbarTests
         Assert.Same(terminal, bar.Scene.FocusItem);
     }
 
+    [Fact]
+    public void Hovering_another_button_does_not_retarget_previews_the_keyboard_has_open()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        Assert.NotNull(desk);
+        var terminal = In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        terminal.ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("PowerShell", FocusedName(preview));
+        Assert.Equal("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", preview.ReadProperty("taskKey"));
+
+        // Onto another app, then off the bar. The hover that would have moved the previews there does not.
+        var tool = In(bar, "task:window:tool");
+        var at = tool.MapToScene(tool.Width / 2, tool.Height / 2);
+        MovePointer(bar, at.X, at.Y);
+        shell.Settle();
+        MovePointer(bar, 1, 1);
+        shell.Loop.Advance(TimeSpan.FromSeconds(1));
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("PowerShell", FocusedName(preview));
+        Assert.Equal("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", preview.ReadProperty("taskKey"));
+
+        Key(shell, preview, KeyEscape);
+        Assert.False(preview.Visible);
+        Assert.Same(terminal, bar.Scene.FocusItem);
+    }
+
     /// <summary>The taskbar's focused item is on screen and Narrator can read it.</summary>
     private static void AssertKeyboardTarget(PanelWindow bar)
     {
