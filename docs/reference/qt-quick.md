@@ -6,7 +6,7 @@ Winshell draws Windows 11 controls whichever Qt style a configuration imports. `
 
 ## QtQml
 
-`import QtQml`, also in `QtQml.Models`: `Binding`, `Component`, `Connections`, `QtObject`, `Timer`. `QtQml.Models` adds `ListModel` and `ListElement`.
+`import QtQml`: `Binding`, `Component`, `Connections`, `QtObject`, `Timer`. `import QtQml.Models`: `ListModel` and `ListElement`.
 
 ## QtQuick
 

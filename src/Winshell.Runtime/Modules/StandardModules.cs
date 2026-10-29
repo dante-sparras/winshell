@@ -12,7 +12,7 @@ public static partial class StandardModules
     {
         var registry = new ModuleRegistry();
         RegisterQtQml(registry.Module("QtQml"));
-        RegisterQtQml(registry.Module("QtQml.Models"));
+        // QtQml.Models is only the model types. QtObject and the other QtQml types stay in QtQml.
         RegisterQuick(registry);
         RegisterShell(registry);
         Registering?.Invoke(registry);
