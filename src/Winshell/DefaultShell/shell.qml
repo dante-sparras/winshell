@@ -61,7 +61,7 @@ ShellRoot {
     id: bars
     model: Preferences.taskbarAllScreens ? Shell.screens : shell.mainScreen ? [shell.mainScreen] : []
 
-    // The taskbar's Start and Search hooks open the launcher and Windows search.
+    // The taskbar's Start hook opens the launcher. Search starts explorer.exe with search-ms:.
     Taskbar {
       id: taskbar
       required property var modelData
