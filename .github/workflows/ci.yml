@@ -99,7 +99,10 @@ jobs:
               )
           }
           '@ | Set-Content -LiteralPath $settings -Encoding utf8
-          $findings = @(Invoke-ScriptAnalyzer -Path scripts/install.ps1, scripts/uninstall.ps1 -Settings $settings -Severity Warning, Error)
+          $findings = @()
+          foreach ($script in @('scripts/install.ps1', 'scripts/uninstall.ps1')) {
+            $findings += @(Invoke-ScriptAnalyzer -Path $script -Settings $settings -Severity Warning, Error)
+          }
           if ($findings.Count -gt 0) {
               $findings | Format-Table -AutoSize | Out-String | Write-Output
               exit 1
