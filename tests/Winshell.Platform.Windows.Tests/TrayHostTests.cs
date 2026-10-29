@@ -135,6 +135,77 @@ public sealed class TrayHostTests : IDisposable
         Assert.True(Above(host.Window, explorer.Window));
     }
 
+    [Fact]
+    public void A_system_message_is_never_an_icons_callback()
+    {
+        var host = Start(HostNames, out _);
+        Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_MESSAGE, callback: 0x8001));
+        var icon = Assert.Single(host.Icons);
+        Assert.Equal(0x8001u, icon.CallbackMessage);
+
+        // WM_CLOSE: any app could name it for any window, and a click would close that window.
+        Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, TrayProtocol.NIF_MESSAGE, callback: 0x0010));
+        Assert.Equal(0u, icon.CallbackMessage);
+        host.Click(icon, TrayClick.Left, null);
+        Assert.True(IsWindow(_app));
+    }
+
+    [Fact]
+    public void An_elevated_shell_clicks_no_app_above_medium_integrity()
+    {
+        const uint low = 0x1000, high = 0x3000, system = 0x4000, unknown = uint.MaxValue;
+        Assert.False(TrayHost.MayClick(high, high));
+        Assert.False(TrayHost.MayClick(high, system));
+        Assert.False(TrayHost.MayClick(high, unknown));
+        Assert.True(TrayHost.MayClick(high, TrayHost.MediumIntegrity));
+        Assert.True(TrayHost.MayClick(high, low));
+        // Unelevated, Windows keeps the shell out of elevated apps itself, as it does Explorer.
+        Assert.True(TrayHost.MayClick(TrayHost.MediumIntegrity, high));
+        Assert.True(TrayHost.MayClick(TrayHost.MediumIntegrity, TrayHost.MediumIntegrity));
+
+        Assert.InRange(TrayHost.IntegrityLevel((uint)Environment.ProcessId), low, system);
+        // The System Idle Process has no token to read.
+        Assert.Equal(unknown, TrayHost.IntegrityLevel(0));
+    }
+
+    [Fact]
+    public void A_click_reaches_the_app_only_when_this_process_may_click_it()
+    {
+        var host = Start(HostNames, out _);
+        Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_MESSAGE, callback: 0x8001));
+        var icon = Assert.Single(host.Icons);
+        var callbacks = 0;
+        WindowProc record = (hwnd, msg, wParam, lParam) =>
+        {
+            if (msg == 0x8001)
+                callbacks++;
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
+        };
+        var previous = SetWindowLongPtrW(_app, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(record));
+        try
+        {
+            host.Click(icon, TrayClick.Left, null);
+        }
+        finally
+        {
+            SetWindowLongPtrW(_app, GWLP_WNDPROC, previous);
+            GC.KeepAlive(record);
+        }
+        // The app is this test process: medium on a developer's desktop, elevated on CI.
+        var own = TrayHost.IntegrityLevel((uint)Environment.ProcessId);
+        Assert.Equal(TrayHost.MayClick(own, own), callbacks > 0);
+    }
+
+    private delegate nint WindowProc(nint hwnd, uint msg, nint wParam, nint lParam);
+
+    private const int GWLP_WNDPROC = -4;
+
+    [DllImport("user32.dll")]
+    private static extern nint SetWindowLongPtrW(nint hwnd, int index, nint value);
+
+    [DllImport("user32.dll")]
+    private static extern nint DefWindowProcW(nint hwnd, uint msg, nint wParam, nint lParam);
+
     /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>
     private static bool Above(nint upper, nint lower)
     {

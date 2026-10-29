@@ -62,7 +62,10 @@ internal sealed record TrayNames(string Window, string Explorer, string Owner)
 internal sealed unsafe partial class TrayHost : IDisposable
 {
     private const uint WM_COPYDATA = 0x004A;
+    private const uint WM_USER = 0x0400;
+    internal const uint MediumIntegrity = 0x2000;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
+    private static readonly uint ShellIntegrity = IntegrityLevel((uint)Environment.ProcessId);
     private static readonly Dictionary<nint, TrayHost> Hosts = [];
     private static readonly HashSet<string> Registered = [];
 
@@ -362,8 +365,9 @@ internal sealed unsafe partial class TrayHost : IDisposable
                 }
                 if (hasGuid)
                     icon.Guid = call.Guid;
+                // A system message such as WM_CLOSE is no app's callback, and is never sent.
                 if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
-                    icon.CallbackMessage = call.CallbackMessage;
+                    icon.CallbackMessage = call.CallbackMessage >= WM_USER ? call.CallbackMessage : 0;
                 if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
                     icon.Tip = call.Tip;
                 if ((call.Flags & TrayProtocol.NIF_STATE) != 0 && (call.StateMask & TrayProtocol.NIS_HIDDEN) != 0)
@@ -462,23 +466,34 @@ internal sealed unsafe partial class TrayHost : IDisposable
     {
         if (!IsWindow(icon.Window) || icon.CallbackMessage == 0)
             return;
+        GetWindowThreadProcessId(icon.Window, out var pid);
+        if (!MayClick(ShellIntegrity, IntegrityLevel(pid)))
+            return;
         var point = at ?? CursorPosition();
         // Apps read the cursor when they open a menu, and many ignore the point in the message.
         if (at is { } target)
             PlaceCursor(target);
-        LetAppTakeForeground(icon);
+        LetAppTakeForeground(icon, pid);
         foreach (var message in TrayProtocol.ClickMessages(click, icon.Version))
             Send(icon, message, point);
     }
 
     /// <summary>
+    /// Whether a click may reach an app at this integrity level. Any app may add an icon here, naming any window and
+    /// callback, and nothing says which app sent it. Explorer clicks icons with an unelevated user's rights, so
+    /// Windows keeps its clicks from an elevated app unless that app lets them in. An elevated shell would not be
+    /// kept out, so it clicks no app above medium integrity, nor one whose level it cannot read.
+    /// </summary>
+    internal static bool MayClick(uint shell, uint app) => shell <= MediumIntegrity || app <= MediumIntegrity;
+
+    /// <summary>
     /// Lets the app take the foreground for its menu or window. Nothing is activated for it, so the window the user
     /// works in keeps the keyboard when the app shows nothing.
     /// </summary>
-    private static void LetAppTakeForeground(TrayIcon icon)
+    private static void LetAppTakeForeground(TrayIcon icon, uint pid)
     {
         // A click on a shell window is input this process just received, which lets it pass the right on.
-        if (AllowSetForegroundWindow((uint)icon.ProcessId))
+        if (AllowSetForegroundWindow(pid))
             return;
         // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
         var foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
@@ -487,7 +502,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
         try
         {
             SetForegroundWindow(icon.Window);
-            AllowSetForegroundWindow((uint)icon.ProcessId);
+            AllowSetForegroundWindow(pid);
         }
         finally
         {
@@ -527,6 +542,36 @@ internal sealed unsafe partial class TrayHost : IDisposable
             var buffer = new char[1024];
             var length = buffer.Length;
             return QueryFullProcessImageNameW(process, 0, buffer, ref length) ? new string(buffer, 0, length) : "";
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
+    /// <summary>A process's mandatory integrity level, or <see cref="uint.MaxValue"/> when it cannot be read.</summary>
+    internal static uint IntegrityLevel(uint pid)
+    {
+        var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (process == 0)
+            return uint.MaxValue;
+        try
+        {
+            if (!OpenProcessToken(process, TOKEN_QUERY, out var token))
+                return uint.MaxValue;
+            try
+            {
+                // A TOKEN_MANDATORY_LABEL, followed by the label's SID, S-1-16-level.
+                var label = stackalloc byte[64];
+                if (!GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
+                    return uint.MaxValue;
+                var sid = *(nint*)label;
+                return *GetSidSubAuthority(sid, (uint)(*GetSidSubAuthorityCount(sid) - 1));
+            }
+            finally
+            {
+                CloseHandle(token);
+            }
         }
         finally
         {
@@ -645,6 +690,8 @@ internal sealed unsafe partial class TrayHost : IDisposable
     private static readonly nint HWND_BROADCAST = 0xffff;
     private const uint SMTO_ABORTIFHUNG = 0x2;
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    private const uint TOKEN_QUERY = 0x0008;
+    private const int TokenIntegrityLevel = 25;
     private const uint DI_MASK = 0x1, DI_NORMAL = 0x3;
     private const uint LwaAlpha = 0x2;
     private const uint LOAD_LIBRARY_AS_DATAFILE = 0x2, LOAD_LIBRARY_AS_IMAGE_RESOURCE = 0x20;
@@ -780,6 +827,20 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     [LibraryImport("kernel32.dll")]
     private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
+
+    [LibraryImport("advapi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool OpenProcessToken(nint process, uint access, out nint token);
+
+    [LibraryImport("advapi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetTokenInformation(nint token, int infoClass, void* info, int length, out int returned);
+
+    [LibraryImport("advapi32.dll")]
+    private static partial byte* GetSidSubAuthorityCount(nint sid);
+
+    [LibraryImport("advapi32.dll")]
+    private static partial uint* GetSidSubAuthority(nint sid, uint index);
 
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
