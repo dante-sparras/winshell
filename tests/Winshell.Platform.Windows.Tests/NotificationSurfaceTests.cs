@@ -244,10 +244,11 @@ public sealed class NotificationSurfaceTests
         public Scene Scene { get; }
         public Surface(string file, double width, double height)
         {
-            var folder = Path.Combine(AppContext.BaseDirectory, "NotificationSurface");
+            var folder = Path.Combine(AppContext.BaseDirectory, "DefaultShell");
             var modules = StandardModules.Create();
             WindowsModules.Register(modules);
             ServiceModules.Register(modules);
+            new DefaultShell.FakeServices().Register(modules);
             _engine = new QmlEngine(modules, Loop, new Log { Sink = (level, category, message) => { if (level >= LogLevel.Warn) Warnings.Add($"{category}: {message}"); } }, folder);
             Listener = new NotificationListener(Backend) { Engine = _engine };
             Root = _engine.CreateRoot(Path.Combine(folder, file));
