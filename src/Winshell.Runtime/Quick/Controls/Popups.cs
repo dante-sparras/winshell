@@ -1286,14 +1286,22 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         {
             _model = value is Jint.Native.JsValue js ? ValueConverter.KeepJs(js) : value;
             if (_observed is not null)
+            {
                 _observed.ModelChanged -= ReadModel;
+                _observed.RowChanged -= ReadRow;
+            }
             _observed = _model as IObservableModel;
             if (_observed is not null)
+            {
                 _observed.ModelChanged += ReadModel;
+                _observed.RowChanged += ReadRow;
+            }
             NotifyChanged("model");
             ReadModel();
         }
     }
+
+    private void ReadRow(int index) => ReadModel();
 
     private void ReadModel()
     {
@@ -1869,7 +1877,10 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
     protected override void OnDestroy()
     {
         if (_observed is not null)
+        {
             _observed.ModelChanged -= ReadModel;
+            _observed.RowChanged -= ReadRow;
+        }
         foreach (var w in _rowWatches)
             w.Dispose();
         base.OnDestroy();

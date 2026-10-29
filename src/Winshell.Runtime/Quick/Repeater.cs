@@ -26,37 +26,46 @@ public sealed class DelegateSet
 
     public QObject? At(int index) => index >= 0 && index < _instances.Count ? _instances[index].Instance : null;
 
-    /// <summary>Brings the instances in line with the rows. Returns whether anything changed.</summary>
-    public bool Sync(IReadOnlyList<ModelEntry> rows, bool keepMatching = true)
+    /// <summary>
+    /// Brings the instances in line with the rows. Returns whether anything changed. A kept row is updated only when
+    /// its index moved; a row changed in place comes through <see cref="Refresh"/>.
+    /// </summary>
+    public bool Sync(IReadOnlyList<ModelEntry> rows)
     {
         var changed = false;
         var old = _instances.ToList();
         _instances.Clear();
         var used = new bool[old.Count];
-        for (var i = 0; i < rows.Count; i++)
+        // Rows that kept their place, as after an append, match without a lookup.
+        var same = 0;
+        while (same < rows.Count && same < old.Count && ModelReader.SameRow(old[same].Entry, rows[same]))
+        {
+            used[same] = true;
+            _instances.Add((rows[same], old[same].Instance));
+            same++;
+        }
+        // The rest match the first unused old row that is the same row.
+        var places = new Dictionary<ModelEntry, Queue<int>>(RowComparer.Instance);
+        for (var j = same; j < old.Count; j++)
+        {
+            if (!places.TryGetValue(old[j].Entry, out var queue))
+                places[old[j].Entry] = queue = new Queue<int>();
+            queue.Enqueue(j);
+        }
+        for (var i = same; i < rows.Count; i++)
         {
             var row = rows[i];
-            var match = -1;
-            if (keepMatching)
-            {
-                for (var j = 0; j < old.Count; j++)
-                {
-                    if (!used[j] && ModelReader.SameRow(old[j].Entry, row))
-                    {
-                        match = j;
-                        break;
-                    }
-                }
-            }
-            if (match >= 0)
+            if (places.TryGetValue(row, out var queue) && queue.TryDequeue(out var match))
             {
                 used[match] = true;
                 var instance = old[match].Instance;
-                if (instance is { IsDestroyed: false })
-                    Update(instance, row, i);
-                _instances.Add((row, instance));
                 if (match != i)
+                {
+                    if (instance is { IsDestroyed: false })
+                        Update(instance, row, i);
                     changed = true;
+                }
+                _instances.Add((row, instance));
             }
             else
             {
@@ -84,10 +93,14 @@ public sealed class DelegateSet
         return changed;
     }
 
-    /// <summary>
-    /// Gives a kept instance its row's current index and roles: a row's roles can change in place, as
-    /// <c>ListModel.setProperty</c> does.
-    /// </summary>
+    /// <summary>Gives the instance for a row whose roles changed in place, as <c>ListModel.setProperty</c> does, its new roles.</summary>
+    public void Refresh(int index)
+    {
+        if (index >= 0 && index < _instances.Count && _instances[index].Instance is { IsDestroyed: false } instance)
+            Update(instance, _instances[index].Entry, index);
+    }
+
+    /// <summary>Gives a kept instance its row's current index and roles.</summary>
     private static void Update(QObject instance, ModelEntry row, int index)
     {
         var context = ModelReader.ContextFor(row, index);
@@ -111,6 +124,15 @@ public sealed class DelegateSet
                     instance.WriteProperty(k, v);
             }
         }
+    }
+
+    private sealed class RowComparer : IEqualityComparer<ModelEntry>
+    {
+        public static readonly RowComparer Instance = new();
+
+        public bool Equals(ModelEntry? a, ModelEntry? b) => ModelReader.SameRow(a!, b!);
+
+        public int GetHashCode(ModelEntry row) => ModelReader.RowHash(row);
     }
 
     public void Clear()
@@ -183,10 +205,16 @@ public sealed class Repeater : Item
     private void Observe()
     {
         if (_observed is not null)
+        {
             _observed.ModelChanged -= Regenerate;
+            _observed.RowChanged -= _set.Refresh;
+        }
         _observed = _model as IObservableModel;
         if (_observed is not null)
+        {
             _observed.ModelChanged += Regenerate;
+            _observed.RowChanged += _set.Refresh;
+        }
     }
 
     public override void ComponentComplete()
@@ -211,27 +239,27 @@ public sealed class Repeater : Item
         var rows = _delegate is null || ParentItem is null ? [] : ModelReader.Read(_model);
         var before = _set.Count;
         _set.Sync(rows);
-        // Delegates sit after the repeater among its parent's children, in model order.
         if (ParentItem is { } parent)
-        {
-            var at = parent.Children.IndexOf(this) + 1;
-            foreach (var instance in _set.Instances)
-            {
-                if (instance is Item item && item.ParentItem == parent)
-                {
-                    var current = parent.Children.IndexOf(item);
-                    if (current != at)
-                    {
-                        parent.Children.Move(current, current < at ? at - 1 : at);
-                        if (current < at)
-                            at--;
-                    }
-                    at++;
-                }
-            }
-        }
+            Place(parent);
         if (before != _set.Count)
             NotifyChanged("count");
+    }
+
+    /// <summary>Puts the delegates right after the repeater among its parent's children, in model order, as one change.</summary>
+    private void Place(Item parent)
+    {
+        var delegates = _set.Instances.OfType<Item>().Where(i => i.ParentItem == parent).ToList();
+        var children = parent.Children.Snapshot;
+        var at = parent.Children.IndexOf(this) + 1;
+        var placed = at + delegates.Count <= children.Count;
+        for (var k = 0; placed && k < delegates.Count; k++)
+            placed = ReferenceEquals(children[at + k], delegates[k]);
+        if (placed)
+            return;
+        var moving = delegates.ToHashSet();
+        var order = children.Where(c => !moving.Contains(c)).ToList();
+        order.InsertRange(order.IndexOf(this) + 1, delegates);
+        parent.Children.Reorder(order);
     }
 
     private QObject? Create(ModelEntry entry, int index)
@@ -269,7 +297,10 @@ public sealed class Repeater : Item
     protected override void OnDestroy()
     {
         if (_observed is not null)
+        {
             _observed.ModelChanged -= Regenerate;
+            _observed.RowChanged -= _set.Refresh;
+        }
         _destroying = true;
         _set.Clear();
         base.OnDestroy();

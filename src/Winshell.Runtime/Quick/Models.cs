@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Jint;
 using Jint.Native;
 
@@ -7,6 +8,9 @@ namespace Winshell.Runtime.Quick;
 public interface IObservableModel
 {
     event Action? ModelChanged;
+
+    /// <summary>The roles of the row at this index changed in place; the rows are otherwise the same.</summary>
+    event Action<int>? RowChanged { add { } remove { } }
 
     IReadOnlyList<object?> Rows { get; }
 
@@ -88,6 +92,18 @@ public static class ModelReader
             _ => Equals(a.ModelData, b.ModelData),
         };
     }
+
+    /// <summary>A hash that agrees with <see cref="SameRow"/>.</summary>
+    public static int RowHash(ModelEntry row)
+    {
+        if (row.Roles is not null)
+            return RuntimeHelpers.GetHashCode(row.Roles);
+        return row.ModelData switch
+        {
+            QObject or JsValue => RuntimeHelpers.GetHashCode(row.ModelData),
+            _ => row.ModelData?.GetHashCode() ?? 0,
+        };
+    }
 }
 
 /// <summary>QtQml.Models' <c>ListElement</c>.</summary>
@@ -114,6 +130,8 @@ public sealed class ListModel : QObject, IObservableModel
     private readonly List<(ListElement Element, Dictionary<string, object?> Row)> _pendingElements = [];
 
     public event Action? ModelChanged;
+
+    public event Action<int>? RowChanged;
 
     [Qml]
     public QmlList<ListElement> Elements => _elements;
@@ -225,7 +243,7 @@ public sealed class ListModel : QObject, IObservableModel
             return;
         foreach (var (k, v) in RowFrom(value))
             _rows[index][k] = v;
-        Changed();
+        RowChanged?.Invoke(index);
     }
 
     [Qml]
@@ -234,7 +252,7 @@ public sealed class ListModel : QObject, IObservableModel
         if (index < 0 || index >= _rows.Count)
             return;
         _rows[index][property] = ValueConverter.KeepJs(value);
-        Changed();
+        RowChanged?.Invoke(index);
     }
 
     [Qml]

@@ -546,10 +546,16 @@ public sealed class ListView : Flickable, IPolishable
         {
             _model = value is Jint.Native.JsValue js ? ValueConverter.KeepJs(js) : value;
             if (_observed is not null)
+            {
                 _observed.ModelChanged -= Regenerate;
+                _observed.RowChanged -= _set.Refresh;
+            }
             _observed = _model as IObservableModel;
             if (_observed is not null)
+            {
                 _observed.ModelChanged += Regenerate;
+                _observed.RowChanged += _set.Refresh;
+            }
             NotifyChanged("model");
             Regenerate();
         }
@@ -858,7 +864,10 @@ public sealed class ListView : Flickable, IPolishable
     protected override void OnDestroy()
     {
         if (_observed is not null)
+        {
             _observed.ModelChanged -= Regenerate;
+            _observed.RowChanged -= _set.Refresh;
+        }
         _set.Clear();
         base.OnDestroy();
     }
