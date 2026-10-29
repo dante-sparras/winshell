@@ -2,17 +2,21 @@ import Winshell.Theme
 import Winshell.Network
 import Winshell.Bluetooth
 import Winshell.Power
+import Winshell.Audio
+import Winshell.Media
 import QtQuick
 import QtQuick.Controls
 
-// What quick settings shows: the tiles, the volume and brightness sliders, and a footer with the battery.
-// A tile whose setting Winshell cannot change opens its page in Settings instead; values only change when the user
-// moves a slider or picks a power mode.
+// What quick settings shows: the media playing, the tiles, the volume and brightness sliders, and a footer with the
+// battery. A tile whose setting Winshell cannot change opens its page in Settings instead; values only change when
+// the user moves a slider or picks a power mode or an output.
 Item {
   id: root
 
-  // The page shown instead of the tiles, such as "powerMode", or "" for the tiles.
+  // The page shown instead of the tiles, "powerMode" or "output", or "" for the tiles.
   property string page: ""
+  readonly property var mediaSession: Media.sessions.values.find(s => s.isPlaying) ?? Media.sessions.values[0] ?? null
+  readonly property var outputs: Audio.nodes.values.filter(n => n.isPlayback && !n.isSession)
   readonly property var tiles: [wifiTile, bluetoothTile, airplaneTile, energySaverTile, powerModeTile, nightLightTile, accessibilityTile]
   readonly property var brightnessMonitor: Brightness.monitors.values.find(m => m.connection === BrightnessConnection.Internal) ?? null
 
@@ -138,6 +142,12 @@ Item {
       bottomPadding: 20
       spacing: 20
 
+      MediaCard {
+        objectName: "media"
+        session: root.mediaSession
+        visible: session !== null
+      }
+
       Grid {
         id: grid
         objectName: "tiles"
@@ -175,6 +185,8 @@ Item {
           value: SystemStatus.volume
           onMoved: value => SystemStatus.output.audio.volume = value
           onGlyphClicked: SystemStatus.output.audio.muted = !SystemStatus.muted
+          pageLabel: "Select a sound output"
+          onPageClicked: root.page = "output"
         }
 
         SliderRow {
@@ -212,6 +224,55 @@ Item {
           onClicked: PowerMode.mode = index
         }
       }
+    }
+  }
+
+  Column {
+    objectName: "outputPage"
+    visible: root.page === "output"
+    x: 12
+    width: parent.width - 24
+    height: body.height
+    topPadding: 12
+    spacing: 4
+
+    PageHeader { id: outputHeader; title: "Sound output" }
+
+    Flickable {
+      width: parent.width
+      height: parent.height - parent.topPadding - outputHeader.height - moreVolume.height - 2 * parent.spacing - 12
+      contentHeight: outputList.height
+      clip: true
+      ScrollBar.vertical: ScrollBar {}
+
+      Column {
+        id: outputList
+        width: parent.width
+
+        Repeater {
+          model: root.outputs
+
+          RadioButton {
+            required property var modelData
+            required property int index
+            objectName: "output:" + index
+            x: 12
+            width: parent.width - 24
+            text: modelData.description
+            checked: modelData === Audio.defaultPlaybackDevice
+            onClicked: Audio.defaultPlaybackDevice = modelData
+          }
+        }
+      }
+    }
+
+    Button {
+      id: moreVolume
+      objectName: "moreVolume"
+      x: 4
+      flat: true
+      text: "More volume settings"
+      onClicked: root.openSettings("ms-settings:apps-volume")
     }
   }
 
@@ -293,19 +354,22 @@ Item {
     }
   }
 
-  // A glyph, which may be a button, and a slider, as in the volume and brightness rows.
+  // A glyph, which may be a button, a slider, and a chevron to a page, as in the volume and brightness rows.
   component SliderRow: Item {
     id: row
     property string glyph
     property string label
     property string glyphLabel
+    property string pageLabel
     property real value
     signal moved(real value)
     signal glyphClicked()
+    signal pageClicked()
     width: parent.width
     height: 40
 
     GlyphButton {
+      objectName: "glyph"
       visible: row.glyphLabel !== ""
       anchors.verticalCenter: parent.verticalCenter
       glyph: row.glyph
@@ -328,7 +392,7 @@ Item {
     Slider {
       objectName: "slider"
       x: 44
-      width: parent.width - 44
+      width: parent.width - 44 - (row.pageLabel !== "" ? 44 : 0)
       anchors.verticalCenter: parent.verticalCenter
       from: 0
       to: 1
@@ -336,6 +400,110 @@ Item {
       value: row.value
       Accessible.name: row.label
       onMoved: row.moved(value)
+    }
+
+    GlyphButton {
+      objectName: "page"
+      visible: row.pageLabel !== ""
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      glyph: ""
+      label: row.pageLabel
+      onClicked: row.pageClicked()
+    }
+  }
+
+  // The media session on a card, as Windows 11 shows it above quick settings: the app, the track, its art, and the
+  // previous, play or pause, and next buttons.
+  component MediaCard: Rectangle {
+    id: card
+    property var session
+    width: parent.width
+    height: 132
+    radius: 8
+    color: Theme.cardBackgroundFillColorDefault
+    border.width: 1
+    border.color: Theme.cardStrokeColorDefault
+
+    Column {
+      x: 16
+      y: 12
+      width: parent.width - 32 - (art.visible ? art.width + 12 : 0)
+      spacing: 2
+
+      Text {
+        width: parent.width
+        elide: Text.ElideRight
+        text: card.session ? card.session.appName : ""
+        font.pixelSize: 12
+        color: Theme.textFillColorSecondary
+      }
+
+      Text {
+        objectName: "mediaTitle"
+        width: parent.width
+        topPadding: 4
+        elide: Text.ElideRight
+        text: card.session ? card.session.trackTitle : ""
+        font.pixelSize: 14
+        font.weight: Font.DemiBold
+        color: Theme.textFillColorPrimary
+      }
+
+      Text {
+        objectName: "mediaArtist"
+        width: parent.width
+        elide: Text.ElideRight
+        text: card.session ? card.session.trackArtist : ""
+        font.pixelSize: 12
+        color: Theme.textFillColorSecondary
+      }
+    }
+
+    Image {
+      id: art
+      objectName: "mediaArt"
+      visible: source !== ""
+      x: parent.width - width - 16
+      y: 16
+      width: 56
+      height: 56
+      sourceSize: Qt.size(56, 56)
+      fillMode: Image.PreserveAspectCrop
+      source: card.session ? card.session.trackArtUrl : ""
+      Accessible.ignored: true
+    }
+
+    Row {
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 8
+      spacing: 8
+
+      GlyphButton {
+        objectName: "previous"
+        enabled: card.session ? card.session.canGoPrevious : false
+        glyph: ""
+        label: "Previous"
+        onClicked: card.session.previous()
+      }
+
+      GlyphButton {
+        objectName: "playPause"
+        readonly property bool playing: card.session ? card.session.isPlaying : false
+        enabled: card.session ? card.session.canTogglePlaying : false
+        glyph: playing ? "" : ""
+        label: playing ? "Pause" : "Play"
+        onClicked: card.session.togglePlaying()
+      }
+
+      GlyphButton {
+        objectName: "next"
+        enabled: card.session ? card.session.canGoNext : false
+        glyph: ""
+        label: "Next"
+        onClicked: card.session.next()
+      }
     }
   }
 
@@ -352,7 +520,8 @@ Item {
     }
 
     Text {
-      anchors.verticalCenter: parent.verticalCenter
+      height: 40
+      verticalAlignment: Text.AlignVCenter
       text: parent.title
       font.pixelSize: 14
       font.weight: Font.DemiBold

@@ -1,5 +1,6 @@
 using Winshell.Platform.Windows.Services.Audio;
 using Winshell.Platform.Windows.Services.Bluetooth;
+using Winshell.Platform.Windows.Services.Media;
 using Winshell.Platform.Windows.Services.Network;
 using Winshell.Platform.Windows.Services.Power;
 using Winshell.Runtime;
@@ -142,15 +143,17 @@ public sealed class FakeAudio : QObject
 
 public sealed class FakeAudioNode : QObject
 {
-    public FakeAudioNode(string description)
+    public FakeAudioNode(string description, bool isPlayback = true, bool isSession = false)
     {
         Description = description;
+        IsPlayback = isPlayback;
+        IsSession = isSession;
         Audio.SetOwner(this);
     }
 
     [Qml] public string Description { get; }
-    [Qml] public bool IsPlayback => true;
-    [Qml] public bool IsSession => false;
+    [Qml] public bool IsPlayback { get; }
+    [Qml] public bool IsSession { get; }
     [Qml] public FakeAudioVolume Audio { get; } = new();
 }
 
@@ -161,6 +164,42 @@ public sealed class FakeAudioVolume : QObject
 
     [Qml] public double Volume { get { Track(); return _volume; } set => SetField(ref _volume, value); }
     [Qml] public bool Muted { get { Track(); return _muted; } set => SetField(ref _muted, value); }
+}
+
+public sealed class FakeMedia : QObject
+{
+    public FakeMedia() => Sessions = FakeModel.Of(this);
+
+    [Qml] public ObjectModel Sessions { get; }
+}
+
+/// <summary>A media session that records the controls pressed.</summary>
+public sealed class FakeMediaSession(string appName, string title, string artist) : QObject
+{
+    private bool _isPlaying;
+    private string _trackArtUrl = "";
+
+    public List<string> Calls { get; } = [];
+
+    [Qml] public string AppName => appName;
+    [Qml] public string TrackTitle => title;
+    [Qml] public string TrackArtist => artist;
+    [Qml] public string TrackArtUrl { get { Track(); return _trackArtUrl; } internal set => SetField(ref _trackArtUrl, value); }
+    [Qml] public bool IsPlaying { get { Track(); return _isPlaying; } set => SetField(ref _isPlaying, value); }
+    [Qml] public bool CanTogglePlaying => true;
+    [Qml] public bool CanGoNext => true;
+    [Qml] public bool CanGoPrevious => false;
+
+    [Qml]
+    public void TogglePlaying()
+    {
+        Calls.Add("togglePlaying");
+        IsPlaying = !IsPlaying;
+    }
+
+    [Qml] public void Next() => Calls.Add("next");
+
+    [Qml] public void Previous() => Calls.Add("previous");
 }
 
 /// <summary>Records the URLs scripts open, instead of opening them.</summary>
@@ -184,6 +223,7 @@ public sealed class FakeServices
     public FakePowerMode PowerMode { get; } = new();
     public FakeBrightness Brightness { get; } = new();
     public FakeAudio Audio { get; } = new();
+    public FakeMedia Media { get; } = new();
 
     /// <summary>The real type each fake stands for, so their QML names can be compared.</summary>
     public static readonly (Type Fake, Type Real)[] Pairs =
@@ -202,6 +242,8 @@ public sealed class FakeServices
         (typeof(FakeAudio), typeof(AudioService)),
         (typeof(FakeAudioNode), typeof(AudioNode)),
         (typeof(FakeAudioVolume), typeof(AudioVolume)),
+        (typeof(FakeMedia), typeof(MediaService)),
+        (typeof(FakeMediaSession), typeof(MediaSession)),
     ];
 
     public void Register(ModuleRegistry registry)
@@ -213,5 +255,6 @@ public sealed class FakeServices
             .Singleton(_ => PowerMode, "PowerMode")
             .Singleton(_ => Brightness, "Brightness");
         registry.Module("Winshell.Audio").Singleton(_ => Audio, "Audio");
+        registry.Module("Winshell.Media").Singleton(_ => Media, "Media");
     }
 }
