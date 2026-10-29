@@ -76,7 +76,7 @@ A release's own binaries are signed through [SignPath Foundation](https://signpa
 - the secret `SIGNPATH_API_TOKEN`, from a SignPath CI user that may submit to the project.
 - `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` when they are not `winshell` and `release-signing`.
 - the signing policy's allowed refs to include `refs/heads/main` and `refs/tags/v*`, since a repair runs from the tag.
-- the project's artifact configuration, [packaging/signpath/artifact-configuration.xml](../packaging/signpath/artifact-configuration.xml), pasted into SignPath, and GitHub set up as its trusted build system.
+- the project's artifact configuration, [packaging/signpath/artifact-configuration.xml](https://github.com/dante-sparras/winshell/blob/main/packaging/signpath/artifact-configuration.xml), pasted into SignPath, and GitHub set up as its trusted build system.
 
 PRs and pushes to `main` are never signed. Every binary already carries the product name `Winshell` and the release's version, which `-Verify` checks with or without signing.
 
