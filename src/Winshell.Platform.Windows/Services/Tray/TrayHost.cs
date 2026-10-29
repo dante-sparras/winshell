@@ -197,6 +197,36 @@ internal sealed unsafe partial class TrayHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Puts Explorer's taskbar in front of this process's hosts until disposed, so an app bar request this process
+    /// sends reaches Explorer itself. When the first <c>Shell_TrayWnd</c> belongs to the calling process,
+    /// <c>SHAppBarMessage</c> passes the rectangle by an address in that process, which Explorer cannot use once a host
+    /// passes the message on: <c>ABM_QUERYPOS</c> and <c>ABM_SETPOS</c> then do nothing, and the work area stays as it was.
+    /// </summary>
+    public static IDisposable ExplorerFirst()
+    {
+        var moved = new List<TrayHost>();
+        foreach (var host in Hosts.Values)
+        {
+            var explorer = host.ExplorerTray();
+            if (explorer != 0 && Win32.SetWindowPos(host._hwnd, explorer, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE))
+                moved.Add(host);
+        }
+        return new Restore(moved);
+    }
+
+    private sealed class Restore(List<TrayHost> hosts) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var host in hosts)
+            {
+                if (host._hwnd != 0)
+                    host.Raise();
+            }
+        }
+    }
+
     /// <summary>Asks every app to register its icons with whichever taskbar window is first.</summary>
     public static void BroadcastTaskbarCreated() => Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
 
