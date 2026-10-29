@@ -337,6 +337,16 @@ public sealed class ScrollBar : Control, IPointerTarget, IKeepsPointerGrab
     public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => SetPressed(false);
+
+    /// <summary>How many objects still listen for policy changes. Rebinding must not stack listeners.</summary>
+    internal int PolicyListenerCount => PolicyChanged?.GetInvocationList().Length ?? 0;
+
+    protected override void OnDestroy()
+    {
+        _wake?.Dispose();
+        _wake = null;
+        base.OnDestroy();
+    }
 }
 
 /// <summary>
@@ -394,7 +404,10 @@ public sealed class ScrollBarAttached : QObject
 
     private void Detach(ScrollBar? bar)
     {
-        if (bar is not null && bar.ParentItem == HostItem && _owner is not ScrollView)
+        if (bar is null)
+            return;
+        bar.PolicyChanged -= Place;
+        if (bar.ParentItem == HostItem && _owner is not ScrollView)
             bar.SetParentItem(null);
     }
 
@@ -404,6 +417,9 @@ public sealed class ScrollBarAttached : QObject
         foreach (var w in _watches)
             w.Dispose();
         _watches.Clear();
+        // Rebind runs again as the view is built. Drop the previous policy listeners before adding them.
+        _vertical?.PolicyChanged -= Place;
+        _horizontal?.PolicyChanged -= Place;
         _flickable = _owner as Flickable ?? (_owner as ScrollView)?.Flickable;
         var host = HostItem;
         if (host is null)
@@ -510,6 +526,16 @@ public sealed class ScrollBarAttached : QObject
         {
             _syncing = false;
         }
+    }
+
+    protected override void OnDestroy()
+    {
+        _vertical?.PolicyChanged -= Place;
+        _horizontal?.PolicyChanged -= Place;
+        foreach (var w in _watches)
+            w.Dispose();
+        _watches.Clear();
+        base.OnDestroy();
     }
 }
 
