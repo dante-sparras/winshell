@@ -7,9 +7,19 @@ public static class ShellLocations
     public static string ConfigRoot =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "winshell");
 
-    /// <summary>Machine-local files: <c>%LOCALAPPDATA%\winshell</c>. Cache, logs, state, and per-shell data stay on this PC.</summary>
-    public static string LocalRoot =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "winshell");
+    /// <summary>
+    /// Machine-local files: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> when it is set.
+    /// Cache, logs, state, and per-shell data stay on this PC.
+    /// </summary>
+    public static string LocalRoot => LocalRootFrom(Environment.GetEnvironmentVariable("WINSHELL_LOCAL_DIR"));
+
+    /// <summary>The local root for an override value. A blank value uses <c>%LOCALAPPDATA%\winshell</c>.</summary>
+    internal static string LocalRootFrom(string? overrideValue)
+    {
+        if (!string.IsNullOrWhiteSpace(overrideValue))
+            return Path.GetFullPath(overrideValue.Trim());
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "winshell");
+    }
 
     public static string DataRoot => Path.Combine(LocalRoot, "data");
 
