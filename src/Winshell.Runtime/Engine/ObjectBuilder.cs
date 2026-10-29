@@ -385,8 +385,6 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
         // The forwarder has to leave with the alias. A long-lived target would otherwise keep one observer per instance.
         var watch = new AliasWatch(owner, property.Name, parts, context);
         batch.AfterBindings.Add(watch.Attach);
-        if (declaration.Value is not null)
-            property.MarkAssigned();
     }
 
     public void SetInitialProperties(QObject root, ComponentContext context, IReadOnlyDictionary<string, object?> properties)
