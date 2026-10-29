@@ -93,6 +93,9 @@ public abstract class LayoutBase : Item, IPolishable, IPropertyObserver
     private int _layoutDirection;
     private bool _uniformCellSizes;
 
+    // Children are laid out in their order, which a Repeater changes when its model moves a row.
+    protected LayoutBase() => Children.Changed += Invalidate;
+
     public static LayoutAttached? Attached(Item item) => item.FindAttached(typeof(LayoutAttached)) as LayoutAttached;
 
     [Qml]

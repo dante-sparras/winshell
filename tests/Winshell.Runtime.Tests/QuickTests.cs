@@ -171,6 +171,35 @@ public class QuickTests
         Assert.Equal(["0a", "1c"], root.ChildItems.OfType<Text>().Select(t => t.Text_));
     }
 
+    [Theory]
+    [InlineData("Column")]
+    [InlineData("Grid { columns: 1 }")]
+    [InlineData("ColumnLayout { spacing: 0 }")]
+    public void Positioners_and_layouts_follow_a_repeater_that_reorders_its_rows(string container)
+    {
+        var open = container.Contains('{', StringComparison.Ordinal) ? container[..^1] : container + " {";
+        var (root, _, shell) = Show($$"""
+            import QtQuick
+            import QtQuick.Layouts
+            {{open}}
+              property var names: ["a", "b", "c"]
+              Repeater {
+                model: names
+                Rectangle { required property string modelData; objectName: modelData; implicitWidth: 10; implicitHeight: 10 }
+              }
+            }
+            """);
+        using var _ = shell;
+        Assert.Equal([0.0, 10.0, 20.0], new[] { "a", "b", "c" }.Select(n => Find(root, n).Y));
+        var kept = Find(root, "a");
+        shell.Eval(root, "names = ['c', 'a', 'b']");
+        shell.Loop.Process();
+        PolishQueue.Flush();
+        // The same delegates, moved to their new rows.
+        Assert.Same(kept, Find(root, "a"));
+        Assert.Equal([0.0, 10.0, 20.0], new[] { "c", "a", "b" }.Select(n => Find(root, n).Y));
+    }
+
     [Fact]
     public void Text_measures_its_content()
     {
