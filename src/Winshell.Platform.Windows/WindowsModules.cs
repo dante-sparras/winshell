@@ -91,8 +91,9 @@ public sealed class WindowsTheme : QObject
     [Qml] public bool Dark { get { Track(); return Theme.Current.IsDark; } }
 
     /// <summary>
-    /// <c>"system"</c> follows Windows' app mode; <c>"light"</c> and <c>"dark"</c> are the shell's own. Windows'
-    /// window frames follow it too. A contrast theme still wins.
+    /// <c>"system"</c> follows Windows' app mode; <c>"light"</c> and <c>"dark"</c> are the shell's own choice for
+    /// Winshell's windows, including that window's title-bar frame. Other programs keep the Windows app mode. A
+    /// contrast theme still wins.
     /// </summary>
     [Qml]
     public string ColorScheme
