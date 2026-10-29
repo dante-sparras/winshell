@@ -274,6 +274,7 @@ namespace Winshell
             var logFile = new StreamWriter(logPath, append: true) { AutoFlush = true };
             var log = new Log { MinimumLevel = o.Verbose ? LogLevel.Debug : LogLevel.Info };
             var consoleLock = new object();
+            var logClosed = false;
             log.Sink = (level, category, message) =>
             {
                 var label = level switch
@@ -287,23 +288,60 @@ namespace Winshell
                 var line = string.IsNullOrEmpty(category) ? $"{label}: {message}" : $"{label} {category}: {message}";
                 lock (consoleLock)
                 {
-                    logFile.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {line}");
+                    // A crash can still be reported after the log file is closed; then it goes to the console only.
+                    try
+                    {
+                        if (!logClosed)
+                            logFile.WriteLine($"{DateTime.Now:HH:mm:ss.fff} {line}");
+                    }
+                    catch (Exception e) when (e is IOException or ObjectDisposedException)
+                    {
+                    }
                     Console.Error.WriteLine(line);
                 }
             };
 
-            // A crash is reported in the instance's log, where winshell log finds it, before the process ends.
-            AppDomain.CurrentDomain.UnhandledException += (_, e) => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {e.ExceptionObject}");
+            // A crash is reported in a crash report that outlives the log, and in the instance's log, where
+            // winshell log finds it, before the process ends. Failures the shell survives get a report each too.
+            var crashes = new CrashReports(CrashFolder()) { ConfigPath = root, LogPath = logPath };
+            void Reported(CrashReport? report)
+            {
+                if (report is not null)
+                    Quietly(() => log.Info("", $"Wrote a crash report to \"{report.Path}\""));
+            }
+            Exception? fatal = null;
+            // Writes the report first, since logging can fail as the process ends. Returns false, so it can be an
+            // exception filter: that runs before the finally blocks below close the log.
+            bool ReportFatal(Exception error)
+            {
+                if (ReferenceEquals(fatal, error))
+                    return false;
+                fatal = error;
+                var report = crashes.Write("Winshell", error, fatal: true);
+                Quietly(() => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {error}"));
+                Reported(report);
+                return false;
+            }
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                if (e.ExceptionObject is Exception error)
+                    ReportFatal(error);
+                else
+                    Quietly(() => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {e.ExceptionObject}"));
+            };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
-                log.Error("", $"A background task failed: {e.Exception}");
+                Quietly(() => log.Error("", $"A background task failed: {e.Exception}"));
                 e.SetObserved();
+                Reported(crashes.WriteOnce("background task", e.Exception));
             };
 
             using var loop = new WinEventLoop { Log = log };
+            loop.Failed += e => Reported(crashes.WriteOnce("event loop", e));
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);
-            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath };
+            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath, Crashes = crashes };
+            crashes.ShellId = host.ShellId;
             host.Services.Add(engine =>
             {
                 engine.AddService<IClipboard>(platform);
@@ -329,15 +367,48 @@ namespace Winshell
             {
                 if (!host.Start() && host.Root is null)
                     log.Warn("", "The config failed to load. Winshell keeps running and reloads it when the files change.");
+                if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
+                    loop.Schedule(TimeSpan.FromMilliseconds(300), () => loop.Quit(0));
                 code = loop.Run();
+                if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
+                    throw new InvalidOperationException($"{TestCrashVariable} asked Winshell to crash after its config loaded.");
+            }
+            catch (Exception e) when (ReportFatal(e))
+            {
+                throw;
             }
             finally
             {
                 host.Dispose();
                 Instances.Remove(id);
-                logFile.Dispose();
+                lock (consoleLock)
+                {
+                    logClosed = true;
+                    logFile.Dispose();
+                }
             }
             return code;
+        }
+
+        /// <summary>
+        /// Read only by the crash report test: crash reports go to this folder, and the shell crashes once its config
+        /// has loaded and its loop has run, so the test sees the report a real crash writes.
+        /// </summary>
+        internal const string TestCrashVariable = "WINSHELL_TEST_CRASH";
+
+        private static string CrashFolder() =>
+            Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 } folder ? folder : ShellLocations.CrashRoot;
+
+        /// <summary>Runs what reports a crash; that must not throw a second exception over the first.</summary>
+        private static void Quietly(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+            }
         }
 
         private static (InstanceInfo? Info, string? Error) Select(Options o)

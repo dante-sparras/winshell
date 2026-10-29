@@ -40,6 +40,8 @@ A running shell reads these. None is needed to build or test.
 | `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
 | `WINSHELL_NO_RELOAD_POPUP` | `1` hides the popup that reports a reload. |
 
+`WINSHELL_TEST_CRASH` is read only for `FatalCrashTests`: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. Never set it otherwise.
+
 ## Where files live
 
 | What | Where |
@@ -49,6 +51,7 @@ A running shell reads these. None is needed to build or test.
 | State | `%LOCALAPPDATA%\winshell\state` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data` |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
+| Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. Reports leave out what scripts printed to the log and take out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
 | Winshell Settings choices | `preferences.json` in the user configurations folder; see [Winshell Settings](settings.md) |
 | Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens, with the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. An entry that starts another `winshell.exe`, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. |
 

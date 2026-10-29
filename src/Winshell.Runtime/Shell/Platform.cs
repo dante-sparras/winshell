@@ -142,6 +142,18 @@ public interface IWindowClient
     void OnDismissed();
 
     void OnStateChanged(bool maximized, bool minimized, bool fullscreen);
+
+    /// <summary>
+    /// The native window threw while drawing or handling a message, and stopped doing either. Called on the loop,
+    /// once per backend; the window disposes that backend and makes another.
+    /// </summary>
+    void OnFailed(Exception error);
+
+    /// <summary>
+    /// The graphics device could not draw a frame, and the frame was skipped. Making the window again would not help,
+    /// since every window draws with the same device, so it stays; this is for the crash report. Called on the loop.
+    /// </summary>
+    void OnDrawFailed(Exception error);
 }
 
 /// <summary>The platform: screens and windows.</summary>

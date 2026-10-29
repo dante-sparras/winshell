@@ -32,6 +32,10 @@ _Avoid_: logon session, user session
 Replacing the running generation with a new load of the same configuration.
 _Avoid_: restart, refresh
 
+**Crash report**:
+A text file Winshell writes on this PC when the runtime itself fails: where, the exception, and the end of the log. A mistake in the configuration is a config error, not a crash.
+_Avoid_: dump, telemetry
+
 ## What it shows
 
 **Window**:

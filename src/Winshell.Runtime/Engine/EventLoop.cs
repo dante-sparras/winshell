@@ -37,6 +37,9 @@ public class EventQueue : IEventLoop
 
     public Log Log { get; set; } = Log.Default;
 
+    /// <summary>Raised with what posted work, a timer or a frame threw, after it is logged. The loop goes on.</summary>
+    public event Action<Exception>? Failed;
+
     public void Post(Action action)
     {
         _posted.Enqueue(action);
@@ -144,6 +147,7 @@ public class EventQueue : IEventLoop
         catch (Exception e)
         {
             Log.Error("loop", e.ToString());
+            Failed?.Invoke(e);
         }
     }
 
