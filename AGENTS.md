@@ -28,7 +28,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── index.md                     # The docs site's home page
 │   └── migrating-from-quickshell.md # Quickshell names and their Winshell names
 ├── packaging/
-│   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs
+│   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs and winshell.ico
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
 │   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
@@ -44,7 +44,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── PublishRelease.Tests.ps1     # Pester tests for that publisher, with a mocked gh
 │   ├── uninstall.ps1                # Removes the per-user install; published on the release
 │   ├── Uninstall.Tests.ps1          # Pester tests for the uninstaller
-│   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs
+│   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs and winshell.ico
 │   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
 ├── src/
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
