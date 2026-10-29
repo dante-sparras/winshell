@@ -135,6 +135,8 @@ public sealed class Transition : QObject
             a.Stop();
             if (a is PropertyAnimation pa)
                 pa.TransitionTracks.Clear();
+            else if (a is PropertyAction action)
+                action.TransitionTracks.Clear();
             else if (a is AnimationGroup g)
                 Reset(g.Animations.Snapshot);
         }
@@ -150,6 +152,12 @@ public sealed class Transition : QObject
                 pa.TransitionTracks.Add((target, property, to));
                 animated = true;
             }
+            else if (a is PropertyAction action && action.Animates(target, property))
+            {
+                // The action writes the state's value when the sequence reaches it, so the change is not applied now.
+                action.TransitionTracks.Add((target, property, to));
+                animated = true;
+            }
             else if (a is AnimationGroup g && Animate(g.Animations.Snapshot, target, property, to))
             {
                 animated = true;
@@ -161,6 +169,8 @@ public sealed class Transition : QObject
     private static bool HasChanges(AnimationBase a) => a switch
     {
         PropertyAnimation pa => pa.TransitionTracks.Count > 0,
+        PropertyAction action => action.TransitionTracks.Count > 0 || action.Value is not null,
+        ScriptAction => true,
         AnimationGroup g => g.Animations.Snapshot.Any(HasChanges),
         _ => false,
     };
