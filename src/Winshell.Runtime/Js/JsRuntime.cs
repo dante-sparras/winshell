@@ -27,7 +27,10 @@ public sealed class JsRuntime
         Engine = new Engine(options =>
         {
             options.Strict(false);
-            options.CatchClrExceptions(e => e is QmlException or InvalidOperationException or ArgumentException or FormatException);
+            // Syntax and compile failures, and a file the account cannot read, have to reach a script's try/catch.
+            // QmlSyntaxException and QmlCompileException do not derive from QmlException.
+            options.CatchClrExceptions(e => e is QmlException or global::Winshell.Qml.QmlSyntaxException or QmlCompileException
+                or UnauthorizedAccessException or InvalidOperationException or ArgumentException or FormatException);
             options.SetTypeResolver(new TypeResolver { MemberNameComparer = StringComparer.OrdinalIgnoreCase });
             options.Interop.AllowGetType = false;
             options.Interop.AllowSystemReflection = false;
