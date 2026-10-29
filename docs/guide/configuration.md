@@ -196,9 +196,9 @@ ShellRoot {
 ## Keeping data
 
 - **Across reloads:** [`PersistentProperties`](../reference/winshell.md#persistentproperties) keeps its properties' values when the configuration reloads. They are lost when Winshell exits.
-- **Across runs:** a [`FileView`](../reference/winshell-io.md#fileview) with a [`JsonAdapter`](../reference/winshell-io.md#jsonadapter) keeps properties in a JSON file. Put it in the shell's own folders: `Shell.dataPath("pins.json")`, `Shell.statePath(...)` or `Shell.cachePath(...)`, which are per shell under `%LOCALAPPDATA%\winshell`. Give `FileView.path` a full path like these, since a relative one depends on the working directory.
+- **Across runs:** a [`FileView`](../reference/winshell-io.md#fileview) with a [`TomlAdapter`](../reference/winshell-io.md#tomladapter) keeps properties in a TOML file a person can edit by hand. Put it in the shell's own folders: `Shell.dataPath("choices.toml")`, `Shell.statePath(...)` or `Shell.cachePath(...)`, which are per shell under `%LOCALAPPDATA%\winshell`. Give `FileView.path` a full path like these, since a relative one depends on the working directory. [`JsonAdapter`](../reference/winshell-io.md#jsonadapter) stays for app state nobody edits by hand.
 
-The default shell keeps its taskbar pins this way. A change to `choices.compact` writes the file, and a change made to the file by hand updates `choices.compact`:
+A change to `choices.compact` writes the file, and a change made to the file by hand updates `choices.compact`:
 
 ```qml
 import QtQuick
@@ -207,13 +207,13 @@ import Winshell.Io
 
 ShellRoot {
     FileView {
-        path: Shell.dataPath("choices.json")
+        path: Shell.dataPath("choices.toml")
         blockLoading: true
         watchChanges: true
         onFileChanged: reload()
         onAdapterUpdated: writeAdapter()
 
-        JsonAdapter {
+        TomlAdapter {
             id: choices
             property bool compact: false
         }
