@@ -716,8 +716,27 @@ public sealed class FileView : QObject
     private string? _text;
     private FileViewAdapter? _adapter;
     private FileSystemWatcher? _watcher;
+    private string? _watchedPath;
     private int _generation;
     private bool _bom;
+
+    /// <summary>
+    /// Tests only. Runs on the writing thread after a temporary file is in place and before it replaces the
+    /// destination, so a test can land a hand save in that window. A write on another thread does not see it.
+    /// </summary>
+    [ThreadStatic]
+    private static Action<string>? _beforeReplace;
+
+    internal static void SetBeforeReplaceForTests(Action<string>? probe) => _beforeReplace = probe;
+
+    /// <summary>
+    /// A hand save landed during this write when the destination changed after the write started and is not the
+    /// text about to be put down. <paramref name="diskAtStart"/> null means the file was missing.
+    /// </summary>
+    internal static bool HandSaveWins(string? onDisk, string? diskAtStart, string incoming)
+        => onDisk is not null
+            && !string.Equals(onDisk, diskAtStart, StringComparison.Ordinal)
+            && !string.Equals(onDisk, incoming, StringComparison.Ordinal);
 
     [QmlEnum]
     public enum FileViewError
@@ -942,14 +961,46 @@ public sealed class FileView : QObject
         void DoWrite()
         {
             string? error = null;
+            var handSaveWon = false;
             try
             {
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
+                // Captured before the temporary file exists. A hand save during that write changes the destination
+                // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
+                // recovers from it and the text above already includes it.
+                var diskAtStart = Read(path).Text;
                 if (atomic)
                 {
                     var temp = path + ".tmp-" + Environment.ProcessId;
                     WriteText(temp, text, bom);
-                    File.Move(temp, path, overwrite: true);
+                    try
+                    {
+                        // A slow scan of the temporary file is when a hand save usually lands.
+                        _beforeReplace?.Invoke(path);
+                        if (HandSaveWins(Read(path).Text, diskAtStart, text))
+                        {
+                            handSaveWon = true;
+                        }
+                        else
+                        {
+                            File.Move(temp, path, overwrite: true);
+                        }
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            if (handSaveWon && File.Exists(temp))
+                                File.Delete(temp);
+                        }
+                        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                        {
+                        }
+                    }
+                }
+                else if (HandSaveWins(Read(path).Text, diskAtStart, text))
+                {
+                    handSaveWon = true;
                 }
                 else
                 {
@@ -966,10 +1017,13 @@ public sealed class FileView : QObject
                     return;
                 if (error is null)
                 {
-                    // A replace can leave the watch on the file that was moved away, so the next
-                    // hand save is missed. Arm it again on the file that is there now.
+                    // ReadDirectoryChangesW watches the directory, so a rename-replace does not detach it.
+                    // Arm only when the directory has just appeared, then read once: a hand save that landed
+                    // while this write ran is already on disk and will not produce a later event.
                     Watch();
-                    Emit("saved");
+                    AcceptHandSave(path);
+                    if (!handSaveWon)
+                        Emit("saved");
                 }
                 else
                 {
@@ -989,16 +1043,36 @@ public sealed class FileView : QObject
             Task.Run(DoWrite);
     }
 
+    private void AcceptHandSave(string path)
+    {
+        if (IsDestroyed)
+            return;
+        // Our own write already matches the buffer. A hand save in the same moment does not.
+        var read = Read(path);
+        if (read.Text is null || read.Text == _text)
+            return;
+        Emit("fileChanged");
+    }
+
     private void Watch()
     {
-        _watcher?.Dispose();
-        _watcher = null;
         if (!_watchChanges || _path.Length == 0 || Engine is null)
+        {
+            StopWatching();
             return;
+        }
         var full = System.IO.Path.GetFullPath(_path);
         var dir = System.IO.Path.GetDirectoryName(full);
         if (dir is null || !Directory.Exists(dir))
+        {
+            StopWatching();
             return;
+        }
+        // Replacing the file does not detach a directory watch. Disposing it here drops a hand save that
+        // already happened, and the new watch never sees that event.
+        if (_watcher is not null && _watchedPath == full)
+            return;
+        StopWatching();
         var loop = Engine.Loop;
         var watched = full;
         var watcher = new FileSystemWatcher(dir, System.IO.Path.GetFileName(full))
@@ -1006,36 +1080,35 @@ public sealed class FileView : QObject
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
             InternalBufferSize = 65536,
         };
-        void Consider()
-        {
-            if (IsDestroyed)
-                return;
-            // Our own write already matches the buffer. A hand save in the same moment does not.
-            var read = Read(watched);
-            if (read.Text is null || read.Text == _text)
-                return;
-            Emit("fileChanged");
-        }
         // Read on the loop, after the event. Reading here would hold the file during our own replace.
-        void Changed(object? _, FileSystemEventArgs e) => loop.Post(Consider);
+        void Changed(object? _, FileSystemEventArgs e) => loop.Post(() => AcceptHandSave(watched));
         watcher.Changed += Changed;
         watcher.Created += Changed;
         watcher.Renamed += (s, e) => Changed(s, e);
         watcher.Error += (_, _) => loop.Post(() =>
         {
-            if (IsDestroyed)
+            if (IsDestroyed || !ReferenceEquals(_watcher, watcher))
                 return;
             // The watch dropped an event. Arm it again and apply whatever the file says now.
+            StopWatching();
             Watch();
-            Consider();
+            AcceptHandSave(watched);
         });
         watcher.EnableRaisingEvents = true;
+        _watchedPath = full;
         _watcher = watcher;
+    }
+
+    private void StopWatching()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _watchedPath = null;
     }
 
     protected override void OnDestroy()
     {
         _generation++;
-        _watcher?.Dispose();
+        StopWatching();
     }
 }
