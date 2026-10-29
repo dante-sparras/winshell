@@ -373,6 +373,15 @@ public class QObject
             old.Dispose();
     }
 
+    /// <summary>Removes the binding and parks it, so a state can put the same binding back later.</summary>
+    public Binding? TakeBinding(string name)
+    {
+        if (_bindings is null || !_bindings.Remove(name, out var old))
+            return null;
+        old.Park();
+        return old;
+    }
+
     public void SetInterceptor(string name, IPropertyInterceptor interceptor)
     {
         _interceptors ??= [];
