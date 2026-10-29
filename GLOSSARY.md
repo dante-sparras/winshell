@@ -99,7 +99,7 @@ An item with the behavior of a standard control, drawn in the Windows 11 style.
 _Avoid_: widget
 
 **Theme**:
-Light or dark, whether a contrast theme is on, the accent color and the system colors, as Windows reports them.
+Light or dark, whether a contrast theme is on, the accent color and the system colors, as Windows reports them. A shell can choose light or dark and its own accent on top; a contrast theme still wins.
 _Avoid_: skin, style, palette
 
 **Token**:

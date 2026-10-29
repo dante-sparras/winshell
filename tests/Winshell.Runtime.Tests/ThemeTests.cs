@@ -141,4 +141,79 @@ public class ThemeTests
         Assert.Equal(600, root.ReadProperty("weight"));
         Assert.Equal("Cascadia Mono", root.ReadProperty("family"));
     }
+
+    [Fact]
+    public void A_chosen_accent_keeps_its_hue_and_gets_shades_as_far_apart_as_Windows_makes_them()
+    {
+        var windows = AccentColors.Default;
+        var made = AccentColors.From(windows.Accent);
+
+        Assert.Equal(windows.Accent, made.Accent);
+        var shades = new[] { made.Dark3, made.Dark2, made.Dark1, made.Accent, made.Light1, made.Light2, made.Light3 };
+        var expected = new[] { windows.Dark3, windows.Dark2, windows.Dark1, windows.Accent, windows.Light1, windows.Light2, windows.Light3 };
+        for (var i = 0; i < shades.Length; i++)
+        {
+            Assert.Equal(expected[i].HslLightness, shades[i].HslLightness, 0.01);
+            Assert.Equal(made.Accent.HslHue, shades[i].HslHue, 0.001);
+            if (i > 0)
+                Assert.True(shades[i].HslLightness > shades[i - 1].HslLightness);
+        }
+
+        // A light accent still has room for three lighter shades, and a dark one for three darker shades.
+        foreach (var accent in new[] { QColor.Parse("#ffb900"), QColor.Parse("#4c4a48") })
+        {
+            var a = AccentColors.From(accent);
+            Assert.True(a.Light3.HslLightness < 1 && a.Light3.HslLightness > a.Light2.HslLightness);
+            Assert.True(a.Dark3.HslLightness > 0 && a.Dark3.HslLightness < a.Dark2.HslLightness);
+        }
+    }
+
+    [Fact]
+    public void The_shell_choice_applies_on_top_of_what_Windows_reports_until_its_owner_takes_it_back()
+    {
+        var saved = Theme.Current;
+        object first = new(), second = new();
+        var changes = 0;
+        void Count() => changes++;
+        Theme.Changed += Count;
+        try
+        {
+            Theme.Current = Theme.Default(false);
+            Theme.Choose(first, new ThemeChoice(Dark: true));
+            Assert.True(Theme.Current.IsDark);
+            Assert.False(Theme.Reported.IsDark);
+            Assert.Equal(1, changes);
+
+            // Windows changes underneath; the choice stays on top.
+            Theme.Current = Theme.Default(false) with { Accents = Teal, IsHighContrast = true };
+            Assert.True(Theme.Current.IsDark);
+            Assert.Equal(Teal, Theme.Current.Accents);
+            Assert.True(Theme.Current.IsHighContrast);
+
+            // A choice that draws the same theme is still a change of the choice.
+            Theme.Current = Theme.Default(true);
+            changes = 0;
+            Theme.Choose(first, ThemeChoice.None);
+            Assert.Equal(1, changes);
+            Theme.Choose(first, new ThemeChoice(Dark: true));
+
+            // A reload's new generation chooses before the old one goes away; the old one cannot take it back.
+            Theme.Choose(second, new ThemeChoice(Accent: QColor.Parse("#e81123")));
+            Theme.Release(first);
+            Assert.Equal(QColor.Parse("#e81123"), Theme.Current.Accents.Accent);
+            Assert.True(Theme.Current.IsDark);
+
+            Theme.Current = Theme.Default(false);
+            Theme.Release(second);
+            Assert.Equal(Theme.Default(false), Theme.Current);
+            Assert.Equal(ThemeChoice.None, Theme.Choice);
+        }
+        finally
+        {
+            Theme.Changed -= Count;
+            Theme.Release(first);
+            Theme.Release(second);
+            Theme.Current = saved;
+        }
+    }
 }
