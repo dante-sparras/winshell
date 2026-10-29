@@ -270,4 +270,139 @@ public class QmlParserTests
     {
         Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse(source));
     }
+
+    [Theory]
+    [InlineData("", "Expected a root object")]
+    [InlineData("import QtQuick\n", "Expected a root object")]
+    [InlineData("Item {} Item {}", "after the root object")]
+    [InlineData("Item {\n  width: 5\n", "Unterminated object 'Item'")]
+    [InlineData("Item { anchors { fill: parent }", "Unterminated object 'Item'")]
+    [InlineData("Item { anchors { fill: parent ", "Unterminated group 'anchors'")]
+    [InlineData("Item { anchors { fill } }", "Expected ':' after 'fill'")]
+    [InlineData("Item { width: }", "Expected a value")]
+    [InlineData("Item { width: 5 /* open", "Unterminated comment")]
+    [InlineData("Item { a: `open ${x}", "Unterminated template literal")]
+    [InlineData("Item { a: \"open\nb: 1 }", "Unterminated string")]
+    [InlineData("Item { a: { f(] } }", "Mismatched ']'")]
+    [InlineData("Item { a: { f( }", "Mismatched '}'")]
+    [InlineData("Item { function f() { return 1 }", "Unterminated object 'Item'")]
+    [InlineData("Item { function f() { return 1 ", "Expected '}'")]
+    [InlineData("Item { readonly default x: 1 }", "Expected 'property'")]
+    [InlineData("Item { property int }", "Expected an identifier, found '}'")]
+    [InlineData("Item { property list<int x }", "Expected '>'")]
+    [InlineData("Item { enum E { 1 } }", "Expected an identifier, found '1'")]
+    [InlineData("Item { component C Text {} }", "Expected ':'")]
+    [InlineData("Item { Text }", "Unexpected '}' after 'Text'")]
+    [InlineData("Item { width", "Unexpected 'end of file' after 'width'")]
+    [InlineData("import \"x.js\"\nItem {}", "requires a qualifier")]
+    [InlineData("import QtQuick as qq\nItem {}", "must start with an uppercase letter")]
+    [InlineData("Item", "Expected '{' before the end of file")]
+    public void A_syntax_error_says_what_is_wrong(string source, string reason)
+    {
+        var ex = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse(source, "shell.qml"));
+        Assert.Contains(reason, ex.Reason, StringComparison.Ordinal);
+        Assert.StartsWith("shell.qml[", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_syntax_error_points_at_its_line_and_column()
+    {
+        var ex = Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse("Item {\n  Text {\n    text: \"a\n  }\n}"));
+        Assert.Equal((3, 13), (ex.Location.Line, ex.Location.Column));
+    }
+
+    private static readonly string[] FuzzSeeds =
+    [
+        """
+        pragma Singleton
+        pragma ComponentBehavior: Bound
+        import QtQuick 6.0
+        import "util.js" as Util
+        import "./widgets"
+
+        Item {
+          id: root
+          required property var modelData
+          readonly property string label: "a\"b" + 'c\'d'
+          default property list<Item> things
+          property alias text: inner.text
+          signal moved(x: real, y: real)
+          signal old(int a, string b)
+          signal bare
+          enum Mode { Off, On = 5, Auto = 0x10, Down = -1 }
+          anchors { top: parent.top; margins: 4 }
+          Layout.fillWidth: true
+          Behavior on width { NumberAnimation { duration: 100 } }
+          component Label: Text { color: "red" }
+          children: [ Rectangle {}, Rectangle { width: 2 } ]
+          Text { id: inner; text: `n = ${Util.count(root, { a: [1, 2] })}` }
+        }
+        """,
+        """
+        import QtQuick
+        Item {
+          property var items: [{ a: 1 }, { b: [2, 3] }]
+          property bool matches: /[/}]+\/x/g.test(label) && a < b || !c
+          property int n: x ? y
+            : z ?? 0
+          property int sum: 1 +
+            2
+          onClicked: (mouse) => { count++; if (mouse.x > 0) { go(/* } */ 1) } }
+          onPressed: count--
+          property real chained: foo
+            .bar(1, `${`nested ${x}`}`)
+          function f(a: int, b = { k: [1] }): int {
+            // a comment with a } brace
+            const re = /\)/
+            return a / 2 + b.k[0]
+          }
+          Component.onCompleted: { console.log("done"); }
+        }
+        """,
+    ];
+
+    [Fact]
+    public void Broken_documents_fail_only_with_syntax_errors()
+    {
+        var random = new Random(20261029);
+        foreach (var seed in FuzzSeeds)
+        {
+            QmlParser.Parse(seed);
+            for (var i = 0; i <= seed.Length; i++)
+                ParsesOrFailsCleanly(seed[..i]);
+            for (var i = 0; i < seed.Length; i++)
+            {
+                ParsesOrFailsCleanly(seed.Remove(i, 1));
+                ParsesOrFailsCleanly(seed.Insert(i, seed[i].ToString()));
+            }
+            const string interesting = "{}[]()\"'`/\\*:;,.?+-=<>\n x0A";
+            for (var n = 0; n < 2000; n++)
+            {
+                var chars = seed.ToCharArray();
+                for (var k = random.Next(1, 4); k > 0; k--)
+                    chars[random.Next(chars.Length)] = interesting[random.Next(interesting.Length)];
+                ParsesOrFailsCleanly(new string(chars));
+            }
+        }
+    }
+
+    private static void ParsesOrFailsCleanly(string source)
+    {
+        try
+        {
+            QmlParser.Parse(source, "fuzz.qml");
+        }
+        catch (QmlSyntaxException e)
+        {
+            // A location inside the text: a reader that ran past the end would point past its last line.
+            var lines = source.Split('\n');
+            Assert.True(e.Location.Line >= 1 && e.Location.Line <= lines.Length
+                && e.Location.Column >= 1 && e.Location.Column <= lines[e.Location.Line - 1].Length + 1,
+                $"{e.Message} points outside this source:\n{source}");
+        }
+        catch (Exception e)
+        {
+            Assert.Fail($"{e.GetType().Name}: {e.Message}\n{source}");
+        }
+    }
 }
