@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.1](https://github.com/dante-sparras/winshell/compare/v0.6.0...v0.6.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* attach release assets before publishing drafts ([#179](https://github.com/dante-sparras/winshell/issues/179)) ([75b2c05](https://github.com/dante-sparras/winshell/commit/75b2c05d6a1056d054e15f88015b48f4cce4c7e7))
+* **cli:** a bad --pid or --tail exits 2 ([c3041af](https://github.com/dante-sparras/winshell/commit/c3041afa77cb820d5372105de4658382335c2f97))
+* keep media cache cleanup inside real directories ([#178](https://github.com/dante-sparras/winshell/issues/178)) ([2fe982a](https://github.com/dante-sparras/winshell/commit/2fe982a699e829b937716f2c6f7759de219c769b))
+* keep window resources alive until its frame returns ([#177](https://github.com/dante-sparras/winshell/issues/177)) ([1400438](https://github.com/dante-sparras/winshell/commit/14004386d449b43ebd1843cb546188bce572da23))
+
 ## [0.6.0](https://github.com/dante-sparras/winshell/compare/v0.5.0...v0.6.0) (2026-10-29)
 
 
