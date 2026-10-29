@@ -651,6 +651,102 @@ public class TaskbarTests
         Assert.False((bool)bar.ReadProperty("revealed")!);
     }
 
+    [Theory]
+    [InlineData(1280)]
+    [InlineData(800)]
+    public void Apps_that_do_not_fit_stop_before_the_tray_and_scroll_into_view(double width)
+    {
+        var desk = new Desk();
+        for (var i = 0; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"App {i}", $"app{i}", $@"C:\Apps\app{i}.exe"));
+        desk.Services.SystemTray.Items.Add(new FakeTrayItem("Sync", "Sync", false));
+        var (shell, bar) = Taskbar(desk, width);
+        using var _ = shell;
+
+        var strip = In(bar, "taskStrip");
+        var stripLeft = strip.MapToScene(0, 0).X;
+        var stripRight = stripLeft + strip.Width;
+        var trayLeft = In(bar, "taskbarRight").MapToScene(0, 0).X;
+        Assert.True(stripLeft >= 12);
+        Assert.True(stripRight <= trayLeft - 12, $"the apps end at {stripRight}, the tray starts at {trayLeft}");
+
+        var buttons = DefaultShellHarness.FindAll(bar.Scene.Root).Where(i => i.ObjectName.StartsWith("task:", StringComparison.Ordinal)).ToList();
+        // File Explorer (pinned and open), the terminal, the tool, and the 30 apps.
+        Assert.Equal(33, buttons.Count);
+        // Narrator reaches every app, shown or scrolled away.
+        var tree = new AccessibleTree(bar.Scene);
+        tree.Refresh();
+        Assert.All(buttons, b => Assert.NotNull(tree.Find(b)));
+
+        // The wheel scrolls through them; each is shown whole at some point.
+        var seen = new HashSet<string>();
+        for (var step = 0; step < 60; step++)
+        {
+            foreach (var b in buttons)
+            {
+                var left = b.MapToScene(0, 0).X;
+                if (left >= stripLeft - 0.5 && left + b.Width <= stripRight + 0.5)
+                    seen.Add(b.ObjectName);
+            }
+            bar.Scene.Wheel(stripLeft + 20, 24, 0, -120);
+            shell.Loop.Advance(TimeSpan.FromMilliseconds(300));
+        }
+        Assert.Equal(buttons.Select(b => b.ObjectName).ToHashSet(), seen);
+    }
+
+    [Fact]
+    public void While_the_centered_group_slides_after_apps_or_tray_icons_arrive_the_apps_never_reach_the_tray()
+    {
+        var desk = new Desk();
+        desk.Services.SystemTray.Items.Add(new FakeTrayItem("Sync", "Sync", false));
+        var (shell, bar) = Taskbar(desk, 1280);
+        using var _ = shell;
+        var strip = In(bar, "taskStrip");
+        var right = In(bar, "taskbarRight");
+        var frames = 0;
+
+        void Frames()
+        {
+            for (var i = 0; i < 40; i++)
+            {
+                shell.Loop.Advance(TimeSpan.FromMilliseconds(16));
+                var stripRight = strip.MapToScene(strip.Width, 0).X;
+                var trayLeft = right.MapToScene(0, 0).X;
+                Assert.True(stripRight <= trayLeft - 12 + 0.5, $"frame {frames}: the apps end at {stripRight}, the tray starts at {trayLeft}");
+                Assert.True(strip.MapToScene(0, 0).X >= 12 + 88 - 0.5);
+                frames++;
+            }
+        }
+
+        // 30 apps arrive at once while the group sits in the middle.
+        for (var i = 0; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"App {i}", $"app{i}", $@"C:\Appspp{i}.exe"));
+        Frames();
+        // The tray grows while the apps are crowded, and shrinks again.
+        for (var i = 0; i < 6; i++)
+            desk.Services.SystemTray.Items.Add(new FakeTrayItem($"Tray {i}", $"Tray {i}", false));
+        Frames();
+        foreach (var item in desk.Services.SystemTray.Items.Values.Skip(1).ToList())
+            desk.Services.SystemTray.Items.Remove((QObject)item!);
+        Frames();
+        // Most apps leave: the group slides back to the middle.
+        foreach (var window in desk.Services.WindowList.Windows.Values.OfType<FakeAppWindow>().Where(w => w.AppId.StartsWith("app", StringComparison.Ordinal)).ToList())
+            desk.Services.WindowList.Windows.Remove(window);
+        Frames();
+        Assert.DoesNotContain(shell.Messages, m => m.Contains("loop", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_few_apps_take_only_their_own_width_and_do_not_scroll()
+    {
+        var (shell, bar) = Taskbar(new Desk());
+        using var _ = shell;
+        var strip = In(bar, "taskStrip");
+        // File Explorer, the terminal and the tool.
+        Assert.Equal(3 * 44 - 4, strip.Width);
+        Assert.False((bool)strip.ReadProperty("interactive")!);
+    }
+
     [Fact]
     public void Only_the_primary_screens_taskbar_is_the_main_one()
     {

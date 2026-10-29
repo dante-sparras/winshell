@@ -101,8 +101,10 @@ PanelWindow {
     Row {
       id: middle
       objectName: "taskbarApps"
+      // Start, Search and as many apps as fit before the tray area, wherever the group is while it slides.
+      readonly property real fullWidth: taskList.x + Math.min(taskList.naturalWidth, right.x - 12 - 12 - taskList.x)
       // Centered apps move left rather than run under the tray area.
-      x: root.centered ? Math.max(12, Math.min(Math.round((parent.width - width) / 2), right.x - width - 12)) : 12
+      x: root.centered ? Math.max(12, Math.min(Math.round((parent.width - fullWidth) / 2), right.x - fullWidth - 12)) : 12
       anchors.verticalCenter: parent.verticalCenter
       spacing: 4
 
@@ -137,11 +139,15 @@ PanelWindow {
         showPins: root.appsOn === "all" || root.isMainScreen
         onPinRequested: id => root.pins.pin(id)
         onUnpinRequested: id => root.pins.unpin(id)
+        // Up to the tray area, after the margins and Start and Search.
+        // Up to the tray area from where the group is now, so the apps never reach it, even while the group slides.
+        maxWidth: right.x - 12 - middle.x - x
       }
     }
 
     Row {
       id: right
+      objectName: "taskbarRight"
       anchors.right: parent.right
       anchors.rightMargin: 12
       anchors.verticalCenter: parent.verticalCenter
