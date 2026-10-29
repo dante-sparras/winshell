@@ -18,6 +18,13 @@ PanelWindow {
   color: "transparent"
   WindowEffects.backdrop: WindowEffects.Acrylic
 
+  // A bottom taskbar calls the same open, close, and toggle. The flyout flips when this bar is on the bottom edge.
+  property bool launcherOpen: launcher.visible
+
+  function openLauncher() { launcher.open() }
+  function closeLauncher() { launcher.close() }
+  function toggleLauncher() { launcher.toggle() }
+
   SystemClock {
     id: clock
     precision: SystemClock.Minutes
@@ -30,6 +37,15 @@ PanelWindow {
     anchors.leftMargin: 8
     anchors.rightMargin: 8
     spacing: 4
+
+    BarButton {
+      id: startButton
+      objectName: "startButton"
+      icon: "\uE782"
+      Accessible.role: Accessible.Button
+      Accessible.name: "Start"
+      onClicked: bar.toggleLauncher()
+    }
 
     BarButton {
       icon: ""
@@ -74,5 +90,14 @@ PanelWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.top: 8
+  }
+
+  Launcher {
+    id: launcher
+    anchor.item: startButton
+    anchor.edges: bar.anchors.bottom ? (Edges.Top | Edges.Left) : (Edges.Bottom | Edges.Left)
+    anchor.gravity: bar.anchors.bottom ? (Edges.Top | Edges.Left) : (Edges.Bottom | Edges.Left)
+    anchor.margins.top: bar.anchors.bottom ? 0 : 8
+    anchor.margins.bottom: bar.anchors.bottom ? 8 : 0
   }
 }
