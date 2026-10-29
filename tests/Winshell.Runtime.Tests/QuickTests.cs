@@ -355,4 +355,43 @@ public class QuickTests
         var slot = root.ChildItems[1].ChildItems.Single(i => i.ObjectName == "slot");
         Assert.Equal(["control"], slot.ChildItems.Select(i => i.ObjectName));
     }
+
+    [Fact]
+    public void A_value_a_document_assigns_replaces_the_binding_its_component_declared()
+    {
+        using var shell = new TestShell(
+            ("Card.qml", """
+                import QtQuick
+                Item {
+                  property string key
+                  property bool opens: key !== ""
+                  property string label: key + "!"
+                  property var target: key === "" ? null : this
+                  property list<QtObject> extras: key === "" ? [] : [this]
+                }
+                """),
+            ("shell.qml", """
+                import QtQuick
+                Item {
+                  property alias card: card
+                  QtObject { id: other; objectName: "other" }
+                  Card { id: card; key: "a"; opens: false; label: ""; target: QtObject { objectName: "mine" }; extras: [QtObject { objectName: "x" }] }
+                }
+                """));
+        var root = shell.Load();
+        var card = (QObject)root.ReadProperty("card")!;
+
+        Assert.Empty(shell.Messages);
+        Assert.False((bool)card.ReadProperty("opens")!);
+        Assert.Equal("", card.ReadProperty("label"));
+        Assert.Equal("mine", ((QObject)card.ReadProperty("target")!).ObjectName);
+        Assert.Equal(["x"], ValueConverter.ToList(card.ReadProperty("extras")).Cast<QObject>().Select(o => o.ObjectName));
+
+        // What the binding read changes later, and the assigned values stay.
+        card.WriteProperty("key", "b");
+        shell.Loop.Process();
+        Assert.False((bool)card.ReadProperty("opens")!);
+        Assert.Equal("", card.ReadProperty("label"));
+        Assert.Equal("mine", ((QObject)card.ReadProperty("target")!).ObjectName);
+    }
 }

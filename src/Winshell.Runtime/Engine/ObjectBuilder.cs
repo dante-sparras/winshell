@@ -232,6 +232,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             case QmlObjectValue ov:
                 if (IsComponentProperty(target, name))
                 {
+                    target.RemoveBinding(name);
                     target.WritePropertyDirect(name, MakeComponent(ov.Object, context, doc, target));
                 }
                 else
@@ -265,8 +266,13 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
         }
     }
 
+    /// <summary>
+    /// Writes a value a document gives a property. It replaces a binding the property's component declared, as in Qt:
+    /// <c>Card { opens: false }</c> keeps <c>false</c> even when Card.qml binds <c>opens</c> to something that changes.
+    /// </summary>
     private void Write(QObject target, string name, object? value, SourceLocation location)
     {
+        target.RemoveBinding(name);
         try
         {
             target.WriteProperty(name, value);
