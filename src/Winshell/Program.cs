@@ -886,21 +886,25 @@ namespace Winshell
                 Console.Error.WriteLine(error);
                 return 1;
             }
-            string? unreachable = null;
+            // Null once the instance has accepted the kill. No answer is a failure too.
+            string? failure = $"Instance {info.Id} closed the control pipe without answering.";
             try
             {
-                await foreach (var _ in IpcServer.Request(info.Pipe, new IpcRequest("kill")))
+                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("kill")))
+                {
+                    failure = response.Ok ? null : $"Instance {info.Id} refused: {response.Error}";
                     break;
+                }
             }
-            catch (Exception e) when (e is TimeoutException or IOException)
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
             {
-                unreachable = e.Message;
+                failure = $"Could not reach instance {info.Id}: {e.Message}";
             }
             // The quit is only posted. Wait so the next start does not overlap the AppBar, hotkeys and tray.
             if (!WaitForShellExit(info, TimeSpan.FromSeconds(5)) && !(o.Force && EndProcess(info)))
             {
-                if (unreachable is not null)
-                    Console.Error.WriteLine($"Could not reach instance {info.Id}: {unreachable}");
+                if (failure is not null)
+                    Console.Error.WriteLine(failure);
                 Console.Error.WriteLine(o.Force
                     ? $"Could not end instance {info.Id}."
                     : $"Instance {info.Id} is still running. Use --force to end it.");
@@ -1032,10 +1036,12 @@ namespace Winshell
                 Console.Error.WriteLine("Usage: winshell ipc call <target> <function> [args...] | prop get <target> <property> | wait|listen <target> <signal> | show");
                 return 2;
             }
+            var answered = false;
             try
             {
                 await foreach (var response in IpcServer.Request(info.Pipe, request))
                 {
+                    answered = true;
                     if (!response.Ok)
                     {
                         Console.Error.WriteLine(response.Error);
@@ -1047,9 +1053,15 @@ namespace Winshell
                         break;
                 }
             }
-            catch (Exception e) when (e is TimeoutException or IOException)
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
             {
                 Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+                return 1;
+            }
+            // A listen ends without a value when the shell quits. Any other request always gets an answer.
+            if (!answered && request.Op != "listen")
+            {
+                Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
                 return 1;
             }
             return 0;

@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Win32.SafeHandles;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -29,18 +30,21 @@ internal sealed class IpcServer : IDisposable
     private readonly IEventLoop _loop;
     private readonly Func<ShellHost> _host;
     private readonly Action _kill;
+    private readonly Func<SafePipeHandle, string?> _refusal;
     private readonly CancellationTokenSource _cancel = new();
 
     private readonly object _firstGate = new();
     private NamedPipeServerStream? _first;
 
-    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, Func<ShellHost> host, Action kill)
+    /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
+    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, Func<ShellHost> host, Action kill, Func<SafePipeHandle, string?>? refusal = null)
     {
         _pipe = pipe;
         _first = first;
         _loop = loop;
         _host = host;
         _kill = kill;
+        _refusal = refusal ?? PipeTrust.ClientRefusal;
         _ = Task.Run(AcceptLoop);
     }
 
@@ -80,42 +84,68 @@ internal sealed class IpcServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Keeps an instance open at all times. A name with no instance can be created again by anyone, and this
+    /// shell's next instance would then join that pipe. So the next instance opens before the last one can close.
+    /// </summary>
     private async Task AcceptLoop()
     {
-        NamedPipeServerStream? ready;
+        NamedPipeServerStream? listening;
         lock (_firstGate)
         {
-            ready = _first;
+            listening = _first;
             _first = null;
         }
-        while (!_cancel.IsCancellationRequested)
+        try
         {
-            NamedPipeServerStream? server = null;
-            try
+            while (!_cancel.IsCancellationRequested)
             {
-                server = ready ?? Create(_pipe, first: false);
-                ready = null;
-                await server.WaitForConnectionAsync(_cancel.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                server?.Dispose();
-                return;
-            }
-            catch (IOException)
-            {
-                server?.Dispose();
                 try
                 {
-                    await Task.Delay(100, _cancel.Token).ConfigureAwait(false);
+                    listening ??= Create(_pipe, first: false);
+                    await listening.WaitForConnectionAsync(_cancel.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
                     return;
                 }
-                continue;
+                catch (IOException)
+                {
+                    var failed = listening;
+                    listening = OpenNextOrNull();
+                    failed?.Dispose();
+                    try
+                    {
+                        await Task.Delay(100, _cancel.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    continue;
+                }
+                var connected = listening;
+                // A refused or quick client closes its instance at once, so the next one opens first.
+                listening = OpenNextOrNull();
+                _ = Task.Run(() => Serve(connected));
             }
-            _ = Task.Run(() => Serve(server));
+        }
+        finally
+        {
+            listening?.Dispose();
+        }
+    }
+
+    private NamedPipeServerStream? OpenNextOrNull()
+    {
+        try
+        {
+            return Create(_pipe, first: false);
+        }
+        catch (IOException e)
+        {
+            Log.Default.Warn("ipc", $"Could not open the next control pipe instance: {e.Message}");
+            return null;
         }
     }
 
@@ -124,13 +154,20 @@ internal sealed class IpcServer : IDisposable
         try
         {
             await using var _ = stream;
-            if (!PipeTrust.ClientMayUseShell(stream.SafePipeHandle))
-                return;
+            var refusal = _refusal(stream.SafePipeHandle);
+            if (refusal is not null)
+                Log.Default.Warn("ipc", $"Refused a control pipe client: {refusal}");
             using var reader = new StreamReader(stream, Encoding.UTF8);
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
             var line = await reader.ReadLineAsync().ConfigureAwait(false);
             if (line is null)
                 return;
+            // Answered after the request is read, so the client has finished writing and reads the reason.
+            if (refusal is not null)
+            {
+                await Send(writer, new IpcResponse(false, Error: refusal)).ConfigureAwait(false);
+                return;
+            }
             IpcRequest? request;
             try
             {
@@ -279,10 +316,12 @@ internal sealed class IpcServer : IDisposable
     /// <summary>Sends one request to an instance and returns its responses, one per line.</summary>
     public static async IAsyncEnumerable<IpcResponse> Request(string pipe, IpcRequest request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancel = default)
     {
-        await using var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        // Not CurrentUserOnly: that compares the pipe's owner with the token's default owner, which differs when
+        // one side is elevated. ServerRefusal checks the owner against the user instead.
+        await using var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.Asynchronous);
         await client.ConnectAsync(3000, cancel).ConfigureAwait(false);
-        if (!PipeTrust.ServerIsTrusted(client.SafePipeHandle))
-            throw new IOException("The control pipe is not owned by Winshell.");
+        if (PipeTrust.ServerRefusal(client) is { } refusal)
+            throw new IOException(refusal);
         using var reader = new StreamReader(client, Encoding.UTF8);
         await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
         await writer.WriteLineAsync(JsonSerializer.Serialize(request, IpcJson.Default.IpcRequest)).ConfigureAwait(false);

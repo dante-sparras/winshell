@@ -1,3 +1,4 @@
+using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
@@ -6,8 +7,10 @@ namespace Winshell;
 
 /// <summary>
 /// The control pipe is current-user only, and that DACL does not stop a lower-integrity process of the same user.
-/// The server labels the pipe medium and drops a client below its own integrity. The client accepts only
-/// winshell.exe or winshellw.exe at its own integrity or higher.
+/// The server labels the pipe medium and refuses a client below its own integrity. The client accepts only a pipe
+/// owned by its user and served by winshell.exe or winshellw.exe at its own integrity or higher.
+/// The owner is the user, not the token's default owner, which is Administrators when elevated. Then a shell and a
+/// CLI at different elevations still connect, and the side that refuses can say why.
 /// </summary>
 internal static partial class PipeTrust
 {
@@ -42,13 +45,13 @@ internal static partial class PipeTrust
     {
         var sid = WindowsIdentity.GetCurrent().User?.Value
             ?? throw new IOException("The control pipe could not be labeled.");
-        var labeled = TryCreate(pipe, first, $"D:(A;;GA;;;{sid})S:(ML;;NW;;;ME)", out var error);
+        var labeled = TryCreate(pipe, first, $"O:{sid}D:(A;;GA;;;{sid})S:(ML;;NW;;;ME)", out var error);
         if (labeled is not null && IsMedium(labeled))
             return labeled;
         labeled?.Dispose();
         if (first && error == ErrorAccessDenied)
             throw new IOException("The control pipe is already taken.");
-        var handle = TryCreate(pipe, first, $"D:(A;;GA;;;{sid})", out error);
+        var handle = TryCreate(pipe, first, $"O:{sid}D:(A;;GA;;;{sid})", out error);
         if (handle is null)
             throw new IOException(error == ErrorAccessDenied
                 ? "The control pipe is already taken."
@@ -158,26 +161,33 @@ internal static partial class PipeTrust
         }
     }
 
-    internal static bool ServerIsTrusted(SafePipeHandle pipe)
+    /// <summary>Null when the client may talk to the pipe's server. Otherwise the reason, for the user.</summary>
+    internal static string? ServerRefusal(PipeStream pipe)
     {
-        if (!GetNamedPipeServerProcessId(pipe.DangerousGetHandle(), out var pid))
-            return false;
-        if (!IsWinshellImage(ImagePath((int)pid)))
-            return false;
-        return AtLeast(IntegrityRid((int)pid), IntegrityRid(Environment.ProcessId));
+        var user = WindowsIdentity.GetCurrent().User;
+        if (user is null || !user.Equals(pipe.GetAccessControl().GetOwner(typeof(SecurityIdentifier))))
+            return "The control pipe belongs to another user.";
+        if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid)
+            || !IsWinshellImage(ImagePath((int)pid)))
+            return "The control pipe is not owned by Winshell.";
+        if (!AtLeast(IntegrityRid((int)pid), IntegrityRid(Environment.ProcessId)))
+            return "The shell runs at a lower integrity level than this command. Run the command without elevation.";
+        return null;
     }
 
     internal static bool ClientMayUseShell(SafePipeHandle pipe) => ClientRefusal(pipe) is null;
 
-    /// <summary>Null when the connected client may use the shell. Otherwise a reason, for the log and for tests.</summary>
+    /// <summary>Null when the connected client may use the shell. Otherwise the reason, for the log and the client.</summary>
     internal static string? ClientRefusal(SafePipeHandle pipe)
     {
         if (!GetNamedPipeClientProcessId(pipe.DangerousGetHandle(), out var pid))
-            return $"client pid unreadable ({Marshal.GetLastWin32Error()})";
+            return $"The shell could not identify the command's process ({Marshal.GetLastWin32Error()}).";
         var client = IntegrityRid((int)pid);
         var floor = IntegrityRid(Environment.ProcessId);
+        if (client == 0 || floor == 0)
+            return $"The shell could not read the integrity level of process {pid}.";
         if (!AtLeast(client, floor))
-            return $"client {pid} integrity {client} is below {floor} (open {Marshal.GetLastWin32Error()})";
+            return $"The shell runs at a higher integrity level (0x{floor:X}) than process {pid} (0x{client:X}). Run the command elevated.";
         return null;
     }
 

@@ -1,4 +1,7 @@
 using System.IO.Pipes;
+using System.Security.Principal;
+using System.Text;
+using Winshell.Runtime;
 
 namespace Winshell.Tests;
 
@@ -53,6 +56,15 @@ public class PipeTrustTests
     }
 
     [Fact]
+    public void The_pipe_is_owned_by_the_user_even_when_elevated()
+    {
+        var name = "winshell-test-" + Guid.NewGuid().ToString("N");
+        using var first = IpcServer.OpenFirst(name);
+        var owner = first.GetAccessControl().GetOwner(typeof(SecurityIdentifier));
+        Assert.Equal(WindowsIdentity.GetCurrent().User, owner);
+    }
+
+    [Fact]
     public void A_taken_name_listens_on_a_new_id()
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
@@ -70,7 +82,7 @@ public class PipeTrustTests
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         await using var first = IpcServer.OpenFirst(name);
         var firstWait = first.WaitForConnectionAsync();
-        await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
         await client.ConnectAsync(3000);
         await firstWait;
         await using var second = IpcServer.OpenNext(name);
@@ -78,7 +90,7 @@ public class PipeTrustTests
         Assert.Contains("ME", label, StringComparison.Ordinal);
         Assert.Contains("NW", label, StringComparison.Ordinal);
         var secondWait = second.WaitForConnectionAsync();
-        await using var next = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var next = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
         await next.ConnectAsync(3000);
         await secondWait;
         Assert.True(PipeTrust.ClientMayUseShell(second.SafePipeHandle));
@@ -90,7 +102,7 @@ public class PipeTrustTests
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         await using var server = IpcServer.OpenFirst(name);
         var waiting = server.WaitForConnectionAsync();
-        await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
         await client.ConnectAsync(3000);
         await waiting;
         Assert.True(PipeTrust.ClientMayUseShell(server.SafePipeHandle));
@@ -109,5 +121,51 @@ public class PipeTrustTests
         });
         Assert.Contains("not owned by Winshell", error.Message, StringComparison.Ordinal);
         await waiting;
+    }
+
+    [Fact]
+    public async Task A_refused_client_is_told_why_and_nothing_runs()
+    {
+        var name = "winshell-test-" + Guid.NewGuid().ToString("N");
+        var loop = new EventQueue();
+        var killed = false;
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, () => null!, () => killed = true, _ => "refused for the test");
+
+        var line = await Ask(name, """{"op":"kill"}""");
+
+        var response = System.Text.Json.JsonSerializer.Deserialize(line!, IpcJson.Default.IpcResponse)!;
+        Assert.False(response.Ok);
+        Assert.Equal("refused for the test", response.Error);
+        loop.RunDue();
+        Assert.False(killed);
+    }
+
+    [Fact]
+    public async Task The_name_keeps_an_instance_after_clients_come_and_go()
+    {
+        var name = "winshell-test-" + Guid.NewGuid().ToString("N");
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), () => null!, () => { }, _ => "refused for the test");
+        for (var i = 0; i < 20; i++)
+        {
+            // A refused client and one that hangs up at once both close their instance quickly.
+            if (i % 2 == 0)
+                await Ask(name, """{"op":"show"}""");
+            else
+            {
+                await using var quick = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+                await quick.ConnectAsync(3000);
+            }
+            Assert.Throws<IOException>(() => IpcServer.OpenFirst(name).Dispose());
+        }
+    }
+
+    private static async Task<string?> Ask(string name, string request)
+    {
+        await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await client.ConnectAsync(3000);
+        using var reader = new StreamReader(client, Encoding.UTF8);
+        await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
+        await writer.WriteLineAsync(request);
+        return await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
     }
 }
