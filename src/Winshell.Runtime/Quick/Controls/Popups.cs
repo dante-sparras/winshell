@@ -1790,7 +1790,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 
     public bool Wheel(double x, double y, double angleX, double angleY, double pixelX, double pixelY, int buttons, int modifiers, bool inverted)
     {
-        if (!WheelEnabled)
+        if (!WheelEnabled || Math.Abs(angleY) <= Math.Abs(angleX))
             return false;
         if (angleY > 0)
             DecrementCurrentIndex();
