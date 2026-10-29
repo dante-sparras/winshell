@@ -388,7 +388,8 @@ public sealed class SocketServer : QObject
         var loop = Engine.Loop;
         var path = _path;
         var token = cancel.Token;
-        _listen = Task.Run(() => Listen(path, token, generation, loop));
+        // Create the listening instance now; only subsequent I/O needs a background continuation.
+        _listen = Listen(path, token, generation, loop);
     }
 
     private void StopListening()
