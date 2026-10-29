@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using global::Windows.ApplicationModel;
 using global::Windows.Management.Deployment;
+using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Apps;
 
@@ -64,6 +65,7 @@ internal sealed class AppCatalog : IDisposable
     private readonly Func<IReadOnlyDictionary<string, AppUsage>> _usage;
     private readonly bool _watchPackages;
     private readonly bool _registerIcons;
+    private readonly Log _log;
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly Timer _debounce;
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -77,13 +79,15 @@ internal sealed class AppCatalog : IDisposable
         Func<IReadOnlyDictionary<string, AppUsage>> usage,
         TimeSpan debounce,
         bool watchPackages,
-        bool registerIcons)
+        bool registerIcons,
+        Log? log = null)
     {
         _folders = folders;
         _packaged = packaged;
         _usage = usage;
         _watchPackages = watchPackages;
         _registerIcons = registerIcons;
+        _log = log ?? Log.Default;
         _debounce = new Timer(_ => Rescan(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         Debounce = debounce;
     }
@@ -229,11 +233,17 @@ internal sealed class AppCatalog : IDisposable
                     }
                 }
             }
+#pragma warning disable CA1031 // A failed scan is a finished empty result. The next file event tries again.
             catch (Exception e)
+#pragma warning restore CA1031
             {
-                Debug.WriteLine(e);
+                _log.Warn("apps", e.Message);
                 lock (_gate)
+                {
                     _scanning = false;
+                    _queued = false;
+                }
+                _ready.TrySetResult();
             }
         });
     }
