@@ -653,7 +653,11 @@ public sealed class RotationAnimation : PropertyAnimation
     {
         var a = ValueConverter.ToDouble(from ?? 0.0, "real");
         var b = ValueConverter.ToDouble(to ?? 0.0, "real");
-        if (_direction == (int)RotationDirection.Shortest)
+        if (_direction == (int)RotationDirection.Clockwise && b < a)
+            b += Math.Ceiling((a - b) / 360) * 360;
+        else if (_direction == (int)RotationDirection.Counterclockwise && a < b)
+            a += Math.Ceiling((b - a) / 360) * 360;
+        else if (_direction == (int)RotationDirection.Shortest)
         {
             var d = ((b - a) % 360 + 540) % 360 - 180;
             b = a + d;
@@ -847,6 +851,16 @@ public abstract class AnimationGroup : AnimationBase
     [Qml]
     public QmlList<AnimationBase> Animations { get; }
 
+    /// <summary>Progress inside the loop that <paramref name="elapsed"/> falls in. After the last loop it stays at 1.</summary>
+    internal static double LoopProgress(AnimationBase animation, double elapsed)
+    {
+        var one = Math.Max(0, animation.DurationMs);
+        var loops = Math.Max(1, animation.Loops);
+        if (one <= 0 || elapsed >= one * loops)
+            return 1;
+        return (elapsed % one) / one;
+    }
+
     /// <summary>Gives each member the value a Behavior or Transition asks for.</summary>
     internal void Override(QObject target, string property, object? to, object? from)
     {
@@ -903,7 +917,7 @@ public sealed class SequentialAnimation : AnimationGroup
             if (elapsed < t + d || (d == 0 && elapsed >= t && i == _current))
             {
                 if (i == _current)
-                    a.Apply(d <= 0 ? 1 : (elapsed - t) / d % 1.0000001);
+                    a.Apply(LoopProgress(a, elapsed - t));
                 if (elapsed < t + d)
                     return;
             }
@@ -929,10 +943,7 @@ public sealed class ParallelAnimation : AnimationGroup
         var total = DurationMs;
         var elapsed = progress * total;
         foreach (var a in Animations.Snapshot)
-        {
-            var d = Math.Max(0, a.DurationMs);
-            a.Apply(d <= 0 ? 1 : Math.Min(1, elapsed / d));
-        }
+            a.Apply(LoopProgress(a, elapsed));
     }
 }
 
