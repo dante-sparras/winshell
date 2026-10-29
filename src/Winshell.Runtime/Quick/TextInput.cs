@@ -33,6 +33,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private string _composition = "";
     private TextLayout? _visual;
     private bool _visualDirty = true;
+    private (FontSpec Font, double Height)? _lineHeight;
 
     public TextInput()
     {
@@ -412,14 +413,23 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private FontSpec Spec => Font.Spec;
 
+    // The height of one line in the font, measured once per font.
     private double LineHeight
     {
         get
         {
-            using var layout = TextLayout.Build([new TextSpan("Ag", Spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+            var spec = Spec;
+            if (_lineHeight is { } cached && cached.Font == spec)
+                return cached.Height;
+            using var layout = TextLayout.Build([new TextSpan("Ag", spec)], double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, 1, true);
+            LineHeightBuilds++;
+            _lineHeight = (spec, layout.Height);
             return layout.Height;
         }
     }
+
+    /// <summary>How many layouts this input has built to measure its line height.</summary>
+    internal int LineHeightBuilds { get; private set; }
 
     private bool Masked => _echoMode is 2 or 3;
 

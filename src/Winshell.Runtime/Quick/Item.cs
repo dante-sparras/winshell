@@ -114,7 +114,7 @@ public class Item : QObject
     [Qml]
     public double Width
     {
-        get { Track(); return _width; }
+        get { Track(); SettleSize(); return _width; }
         set
         {
             _declaredWidth = Math.Max(0, double.IsNaN(value) ? 0 : value);
@@ -126,7 +126,7 @@ public class Item : QObject
     [Qml]
     public double Height
     {
-        get { Track(); return _height; }
+        get { Track(); SettleSize(); return _height; }
         set
         {
             _declaredHeight = Math.Max(0, double.IsNaN(value) ? 0 : value);
@@ -138,7 +138,7 @@ public class Item : QObject
     [Qml]
     public double ImplicitWidth
     {
-        get { Track(); return _implicitWidth; }
+        get { Track(); SettleSize(); return _implicitWidth; }
         set
         {
             if (!SetField(ref _implicitWidth, Math.Max(0, value)))
@@ -152,7 +152,7 @@ public class Item : QObject
     [Qml]
     public double ImplicitHeight
     {
-        get { Track(); return _implicitHeight; }
+        get { Track(); SettleSize(); return _implicitHeight; }
         set
         {
             if (!SetField(ref _implicitHeight, Math.Max(0, value)))
@@ -209,6 +209,14 @@ public class Item : QObject
     }
 
     protected virtual void OnGeometryChanged()
+    {
+    }
+
+    /// <summary>
+    /// Brings a size that waits for the polish pass up to date, so reading it right after a change gives the new
+    /// value. Text measures itself here.
+    /// </summary>
+    protected virtual void SettleSize()
     {
     }
 
