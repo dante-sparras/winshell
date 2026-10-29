@@ -579,8 +579,29 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             return;
         if (_kind == WindowKind.Panel && !_focusable)
             return;
-        Win32.SetForegroundWindow(Handle);
+        // A Windows-key chord arrives through a low-level hook, which does not grant foreground rights, so
+        // SetForegroundWindow can fail. Join the foreground thread long enough to take the keyboard, then leave it.
+        // A UI Automation client uses TryTakeKeyboardForAutomation instead, which never attaches.
+        if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))
+            JoinForegroundAndTakeIt();
         Win32.SetFocus(Handle);
+    }
+
+    private void JoinForegroundAndTakeIt()
+    {
+        var foreground = Win32.GetForegroundWindow();
+        var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, out _);
+        var current = Win32.GetCurrentThreadId();
+        if (other == 0 || other == current || !Win32.AttachThreadInput(current, other, true))
+            return;
+        try
+        {
+            Win32.SetForegroundWindow(Handle);
+        }
+        finally
+        {
+            Win32.AttachThreadInput(current, other, false);
+        }
     }
 
     /// <summary>
