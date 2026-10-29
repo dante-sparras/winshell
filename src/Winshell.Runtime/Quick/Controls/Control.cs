@@ -452,7 +452,14 @@ public class Control : Item, IHoverTarget
     protected void SetHovered(bool value)
     {
         if (SetField(ref _hovered, value, nameof(Hovered)))
+        {
+            OnHoveredChanged();
             StateChanged();
+        }
+    }
+
+    protected virtual void OnHoveredChanged()
+    {
     }
 
     public virtual bool AcceptsHover => _hoverEnabled && Enabled && Visible;

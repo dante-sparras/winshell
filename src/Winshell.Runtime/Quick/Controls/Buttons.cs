@@ -99,6 +99,8 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
         OnCheckedChanged();
         if (value)
             UncheckOthers();
+        else
+            _group?.OnButtonUnchecked(this);
         StateChanged();
         if (fromUser)
             Emit("toggled");
@@ -1102,6 +1104,8 @@ public sealed class ButtonGroup : QObject
 
     internal void OnButtonChecked(AbstractButton button)
     {
+        // The new button first, so unchecking the old one doesn't pass through null.
+        SetCheckedButton(button);
         if (_exclusive)
         {
             foreach (var other in _buttons)
@@ -1110,7 +1114,12 @@ public sealed class ButtonGroup : QObject
                     other.SetCheckedFromGroup(false);
             }
         }
-        SetCheckedButton(button);
+    }
+
+    internal void OnButtonUnchecked(AbstractButton button)
+    {
+        if (_checkedButton == button)
+            SetCheckedButton(null);
     }
 
     internal void OnButtonClicked(AbstractButton button) => Emit("clicked", button);
