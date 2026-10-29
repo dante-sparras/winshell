@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using SkiaSharp;
 using Winshell.Platform.Windows.Services.Media;
 
 namespace Winshell.Platform.Windows.Tests;
@@ -79,5 +81,61 @@ public class ArtCacheTests
         Assert.True(File.Exists(path));
         ArtCache.Release(url);
         Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task Art_over_the_size_limit_is_dropped_without_a_file()
+    {
+        var art = new byte[ArtCache.MaxBytes + 1];
+        Png(2, 2).CopyTo(art, 0);
+
+        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
+        Assert.False(Stored(art));
+    }
+
+    [Fact]
+    public async Task Svg_art_is_dropped_without_a_file()
+    {
+        var art = System.Text.Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>");
+
+        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
+        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/svg+xml"));
+        Assert.False(Stored(art));
+    }
+
+    [Fact]
+    public async Task Art_that_decodes_to_too_many_pixels_is_dropped_without_a_file()
+    {
+        var art = Png(8193, 2049);
+
+        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
+        Assert.False(Stored(art));
+    }
+
+    [Fact]
+    public async Task A_png_within_the_limits_is_stored()
+    {
+        var art = Png(3, 2);
+
+        var url = await ArtCache.StoreAsync(new MemoryStream(art), "image/png");
+
+        Assert.False(string.IsNullOrEmpty(url));
+        Assert.True(Stored(art));
+        ArtCache.Release(url);
+    }
+
+    private static byte[] Png(int width, int height)
+    {
+        using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque));
+        bitmap.Erase(SKColors.Black);
+        using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private static bool Stored(byte[] art)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "winshell", "media-art", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        var name = Convert.ToHexString(SHA256.HashData(art))[..32].ToLowerInvariant();
+        return Directory.Exists(folder) && Directory.EnumerateFiles(folder, name + ".*").Any();
     }
 }
