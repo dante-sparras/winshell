@@ -620,7 +620,11 @@ namespace Winshell
             catch (IOException)
             {
                 log.Error("", "The control pipe is already taken.");
-                logFile.Dispose();
+                lock (consoleLock)
+                {
+                    logClosed = true;
+                    instanceLog.Dispose();
+                }
                 try
                 {
                     Directory.Delete(dir, recursive: true);
