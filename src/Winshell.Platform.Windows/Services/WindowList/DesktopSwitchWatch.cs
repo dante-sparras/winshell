@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using static Winshell.Platform.Windows.Services.WindowList.NativeMethods;
 
@@ -25,13 +26,14 @@ internal static unsafe class DesktopSwitchWatch
     }
 
     [UnmanagedCallersOnly]
-    private static void OnEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
-    {
-        if (_posted || _loop is null)
-            return;
-        _posted = true;
-        _loop.Post(Flush);
-    }
+    private static void OnEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time) =>
+        NativeCallback.Guard(Log.Default, "desktops", () =>
+        {
+            if (_posted || _loop is null)
+                return;
+            _posted = true;
+            _loop.Post(Flush);
+        });
 
     private static void Flush()
     {

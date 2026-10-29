@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Winshell.Platform.Windows.Native;
+using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Network;
 
@@ -111,7 +113,8 @@ internal static unsafe partial class NetworkNative
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
-    private static void OnNotification(nint data, nint context) => _changed?.Invoke();
+    private static void OnNotification(nint data, nint context) =>
+        NativeCallback.Guard(Log.Default, "network", () => _changed?.Invoke());
 
     /// <summary>The state of each WLAN interface by its GUID.</summary>
     public static Dictionary<Guid, WlanInterfaceState> InterfaceStates()
