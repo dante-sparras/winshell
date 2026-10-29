@@ -228,7 +228,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public bool OverwriteMode { get; set; }
 
-    [Qml] public bool CanUndo => _undo.Count > 0;
+    [Qml] public bool CanUndo { get { Track(); return _undo.Count > 0; } }
 
     [Qml] public bool CanPaste => true;
 
@@ -322,14 +322,18 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public void Undo()
     {
-        if (_undo.Count == 0)
+        if (_readOnly || _undo.Count == 0)
             return;
         var (text, cursor) = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
+        _composition = "";
         _text = text;
         NotifyChanged("text");
         NotifyChanged("displayText");
-        CursorPosition = cursor;
+        NotifyChanged("length");
+        NotifyChanged("canUndo");
+        CursorPosition = Math.Clamp(cursor, 0, _text.Length);
+        Deselect();
         UpdateImplicit();
         Emit("textEdited");
     }
