@@ -153,13 +153,16 @@ public sealed class BluetoothDevice : QObject
 public sealed class BluetoothService : QObject
 {
     private readonly IEventLoop _loop;
-    private readonly CancellationTokenSource _stop = new();
+    private readonly object _monitorGate = new();
     private readonly Dictionary<string, BluetoothDevice> _devices = new(StringComparer.Ordinal);
     private readonly bool _monitor;
+    private CancellationTokenSource _stop = new();
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
     private BluetoothAdapter? _adapter;
     private string _error = "";
     private int _refreshing;
+    private int _monitoring;
+    private int _monitorHolders;
     private bool _started;
     private long _revision;
 
@@ -191,8 +194,65 @@ public sealed class BluetoothService : QObject
     {
         if (!_monitor || _started || IsDestroyed) return;
         _started = true;
-        var cancellation = _stop.Token;
-        _ = Task.Run(() => MonitorAsync(cancellation));
+        StartMonitoring();
+    }
+
+    /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>.</summary>
+    [Qml]
+    public void StartMonitoring()
+    {
+        if (IsDestroyed)
+            return;
+        CancellationToken cancellation;
+        CancellationTokenSource stop;
+        lock (_monitorGate)
+        {
+            if (_monitoring != 0)
+                return;
+            if (_stop.IsCancellationRequested)
+            {
+                var retired = _stop;
+                _stop = new CancellationTokenSource();
+                // The previous loop disposes its source when it exits. Dispose here only when that loop is gone.
+                if (_monitorHolders == 0)
+                    retired.Dispose();
+            }
+            _monitoring = 1;
+            _monitorHolders++;
+            stop = _stop;
+            cancellation = stop.Token;
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await MonitorAsync(cancellation).ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_monitorGate)
+                {
+                    _monitorHolders--;
+                    if (!ReferenceEquals(_stop, stop))
+                        stop.Dispose();
+                }
+            }
+        });
+    }
+
+    /// <summary>Stops the three-second read. A later <see cref="StartMonitoring"/> starts it again.</summary>
+    [Qml]
+    public void StopMonitoring()
+    {
+        CancellationTokenSource stop;
+        lock (_monitorGate)
+        {
+            if (_monitoring == 0)
+                return;
+            _monitoring = 0;
+            stop = _stop;
+        }
+        stop.Cancel();
     }
     private async Task MonitorAsync(CancellationToken cancellation)
     {
@@ -251,6 +311,8 @@ public sealed class BluetoothService : QObject
     internal void Apply(BluetoothSnapshot snapshot)
     {
         if (IsDestroyed) return;
+        if (SameSnapshot(_snapshot, snapshot))
+            return;
         _snapshot = snapshot;
         NotifyChanged("ready");
         NotifyChanged("discovering");
@@ -287,9 +349,22 @@ public sealed class BluetoothService : QObject
         PairedDevices.Set(incoming.Where(d => d.Paired).Select(d => _devices[d.Key]).ToArray());
         NearbyDevices.Set(incoming.Where(d => !d.Paired && d.Present).Select(d => _devices[d.Key]).ToArray());
     }
+
+    private static bool SameSnapshot(BluetoothSnapshot left, BluetoothSnapshot right)
+    {
+        if (left.Ready != right.Ready || left.Discovering != right.Discovering || left.Adapter != right.Adapter
+            || !string.Equals(left.Error, right.Error, StringComparison.Ordinal) || left.Devices.Count != right.Devices.Count)
+            return false;
+        for (var i = 0; i < left.Devices.Count; i++)
+        {
+            if (left.Devices[i] != right.Devices[i])
+                return false;
+        }
+        return true;
+    }
     protected override void OnDestroy()
     {
-        _stop.Cancel();
+        StopMonitoring();
         foreach (var device in _devices.Values) device.CancelPairing();
         Backend.Dispose();
     }
