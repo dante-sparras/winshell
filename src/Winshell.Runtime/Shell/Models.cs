@@ -12,13 +12,20 @@ namespace Winshell.Runtime.Shell;
 public class ObjectModel : QObject, IObservableModel
 {
     private readonly List<object?> _values = [];
+    private List<object?>? _published;
+    private int _silence;
+    private bool _pendingChange;
 
     public event Action? ModelChanged;
 
     [Qml]
     public IReadOnlyList<object?> Values
     {
-        get { Track(); return _values.ToList(); }
+        get
+        {
+            Track();
+            return _published ??= _values.ToList();
+        }
     }
 
     public IReadOnlyList<object?> Rows => _values;
@@ -59,31 +66,84 @@ public class ObjectModel : QObject, IObservableModel
     /// <summary>Replaces the contents, keeping objects that stay so delegates for them stay too.</summary>
     public void Set(IReadOnlyList<object?> values)
     {
-        for (var i = _values.Count - 1; i >= 0; i--)
+        var present = new HashSet<object?>(values.Count, EqualityComparer<object?>.Default);
+        foreach (var value in values)
+            present.Add(value);
+        var index = IndexOfAll();
+        _silence++;
+        try
         {
-            if (!values.Contains(_values[i]))
-                RemoveAt(i);
+            for (var i = _values.Count - 1; i >= 0; i--)
+            {
+                if (!present.Contains(_values[i]))
+                    RemoveAt(i);
+            }
+            if (_pendingChange)
+                index = IndexOfAll();
+            for (var i = 0; i < values.Count; i++)
+            {
+                var current = Locate(index, values[i]);
+                if (current == i)
+                    continue;
+                if (current >= 0)
+                {
+                    _values.RemoveAt(current);
+                    // A repeated reference used to ask for an index past the list. Unique rows still land at i,
+                    // because the row being moved is at or after i.
+                    _values.Insert(Math.Clamp(i, 0, _values.Count), values[i]);
+                    Changed();
+                }
+                else
+                {
+                    Insert(i, values[i]);
+                }
+                index = IndexOfAll();
+            }
         }
-        for (var i = 0; i < values.Count; i++)
+        finally
         {
-            var current = _values.IndexOf(values[i]);
-            if (current == i)
+            _silence--;
+        }
+        if (_pendingChange)
+        {
+            _pendingChange = false;
+            NotifyChanged("values");
+            ModelChanged?.Invoke();
+        }
+    }
+
+    private Dictionary<object, List<int>> IndexOfAll()
+    {
+        var index = new Dictionary<object, List<int>>(EqualityComparer<object>.Default);
+        for (var i = 0; i < _values.Count; i++)
+        {
+            if (_values[i] is not { } key)
                 continue;
-            if (current >= 0)
+            if (!index.TryGetValue(key, out var at))
             {
-                _values.RemoveAt(current);
-                _values.Insert(i, values[i]);
-                Changed();
+                at = [];
+                index.Add(key, at);
             }
-            else
-            {
-                Insert(i, values[i]);
-            }
+            at.Add(i);
         }
+        return index;
+    }
+
+    private int Locate(Dictionary<object, List<int>> index, object? value)
+    {
+        if (value is null)
+            return _values.IndexOf(null);
+        return index.TryGetValue(value, out var at) && at.Count > 0 ? at[0] : -1;
     }
 
     private void Changed()
     {
+        _published = null;
+        if (_silence > 0)
+        {
+            _pendingChange = true;
+            return;
+        }
         NotifyChanged("values");
         ModelChanged?.Invoke();
     }
