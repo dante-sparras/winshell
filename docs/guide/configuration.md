@@ -259,7 +259,7 @@ Lines at the very top of `shell.qml`, before any `import`, set up the shell:
 | `//@ pragma DataDir <path>`, `StateDir`, `CacheDir` | Other folders for `Shell.dataDir`, `stateDir` and `cacheDir`. `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
 | `//@ pragma Env NAME=value` | Sets an environment variable for this process, such as for the programs it starts. One per line. |
 
-`//@ if hasVersion(0, 6)` … `//@ elif` … `//@ else` … `//@ endif` keeps lines only for a Winshell release, so one configuration can run on several. `hasQtVersion(6, 10)` checks the Qt Quick language level instead.
+`//@ if hasVersion(0, 6)` … `//@ elif` … `//@ else` … `//@ endif` keeps lines only for a Winshell release, so one configuration can run on several. `hasQtVersion(6, 10)` checks the Qt Quick language level instead. An `//@ if` or `//@ elif` expression may only use `hasVersion`, `hasQtVersion`, `true`, `false`, `!`, `&&`, `||` and parentheses. It is not script. Any other expression counts as false, and the log names its file and line.
 
 ## Reloads
 

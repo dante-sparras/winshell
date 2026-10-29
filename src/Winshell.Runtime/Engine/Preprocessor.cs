@@ -19,11 +19,16 @@ public static class Preprocessor
     /// <summary>The Qt version Winshell behaves as.</summary>
     public static readonly (int Major, int Minor) QtVersion = (6, 10);
 
-    public static string Run(string text) => Run(text, null);
+    public static string Run(string text) => Run(text, "", null);
 
-    /// <summary>Runs the preprocessor. <paramref name="warnings"/> receives one line per problem, including its line number.</summary>
-    public static string Run(string text, ICollection<string>? warnings)
+    /// <summary>
+    /// Runs the preprocessor. <paramref name="warnings"/> receives one line per problem, as
+    /// <c>file[line:1]: message</c>, the way QML errors read.
+    /// </summary>
+    public static string Run(string text, string file, ICollection<string>? warnings)
     {
+        void Warn(int line, string message) => warnings?.Add($"{file}[{line}:1]: {message}");
+
         if (!text.Contains("//@", StringComparison.Ordinal))
             return text;
         var lines = text.Split('\n');
@@ -41,18 +46,18 @@ public static class Preprocessor
                 var directive = trimmed[3..].Trim();
                 if (directive.StartsWith("if ", StringComparison.Ordinal))
                 {
-                    var on = active && Evaluate(directive[3..], lineNumber, warnings);
+                    var on = active && Evaluate(directive[3..], lineNumber, Warn);
                     stack.Push((on, on, active, lineNumber));
                     active = on;
                 }
                 else if (directive.StartsWith("elif ", StringComparison.Ordinal))
                 {
                     if (stack.Count == 0)
-                        warnings?.Add($"line {lineNumber}: elif without a matching if");
+                        Warn(lineNumber, "elif without a matching if");
                     else
                     {
                         var (_, taken, parent, ifLine) = stack.Pop();
-                        var on = parent && !taken && Evaluate(directive[5..], lineNumber, warnings);
+                        var on = parent && !taken && Evaluate(directive[5..], lineNumber, Warn);
                         stack.Push((on, taken || on, parent, ifLine));
                         active = on;
                     }
@@ -60,7 +65,7 @@ public static class Preprocessor
                 else if (directive == "else")
                 {
                     if (stack.Count == 0)
-                        warnings?.Add($"line {lineNumber}: else without a matching if");
+                        Warn(lineNumber, "else without a matching if");
                     else
                     {
                         var (_, taken, parent, ifLine) = stack.Pop();
@@ -72,19 +77,19 @@ public static class Preprocessor
                 else if (directive == "endif")
                 {
                     if (stack.Count == 0)
-                        warnings?.Add($"line {lineNumber}: endif without a matching if");
+                        Warn(lineNumber, "endif without a matching if");
                     else
                         active = stack.Pop().ParentActive;
                 }
                 else if (!IsPragma(directive))
-                    warnings?.Add($"line {lineNumber}: unknown preprocessor directive '{directive}'");
+                    Warn(lineNumber, $"unknown preprocessor directive '{directive}'");
                 output.Append(line).Append('\n');
                 continue;
             }
             output.Append(active ? line : "").Append('\n');
         }
         while (stack.Count > 0)
-            warnings?.Add($"line {stack.Pop().Line}: if was not closed");
+            Warn(stack.Pop().Line, "if was not closed");
         if (output.Length > 0 && !text.EndsWith('\n'))
             output.Length--;
         return output.ToString();
@@ -98,13 +103,13 @@ public static class Preprocessor
         return word == "pragma";
     }
 
-    private static bool Evaluate(string expression, int line, ICollection<string>? warnings)
+    private static bool Evaluate(string expression, int line, Action<int, string> warn)
     {
         var parser = new Expression(expression);
         var value = parser.Parse();
         if (!parser.Failed)
             return value;
-        warnings?.Add($"line {line}: preprocessor expression is not valid: {expression.Trim()}");
+        warn(line, $"preprocessor expression is not valid: {expression.Trim()}");
         return false;
     }
 
