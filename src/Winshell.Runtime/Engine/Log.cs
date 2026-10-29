@@ -56,8 +56,19 @@ public sealed partial class Log
 
     public void Error(string category, string message) => Write(LogLevel.Error, category, message);
 
+    /// <summary>The first script error since <see cref="ClearFirstScriptError"/>, so a load can show it.</summary>
+    public string? FirstScriptError { get; private set; }
+
+    /// <summary>Forgets <see cref="FirstScriptError"/> at the start of a load.</summary>
+    public void ClearFirstScriptError() => FirstScriptError = null;
+
     /// <summary>Reports an exception thrown by script code, as QML reports it.</summary>
-    public void ScriptError(Exception e, string where) => Warn("scene", Describe(e, where));
+    public void ScriptError(Exception e, string where)
+    {
+        var text = Describe(e, where);
+        FirstScriptError ??= text;
+        Warn("scene", text);
+    }
 
     /// <summary>
     /// An exception as QML reports it: where it happened, then the error. A script error names the file and line of
