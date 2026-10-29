@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Winshell;
 using Winshell.Platform.Windows;
+using Winshell.Platform.Windows.Diagnostics;
 using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -40,6 +41,8 @@ namespace Winshell
             public bool All { get; set; }
 
             public bool Follow { get; set; }
+
+            public bool NoColor { get; set; }
 
             public int? Tail { get; set; }
 
@@ -93,6 +96,8 @@ namespace Winshell
                     return await PrintLog(options);
                 case "ipc":
                     return await Ipc(options);
+                case "doctor":
+                    return Doctor(options);
                 case "msg":
                     Console.Error.WriteLine("winshell msg is deprecated; use winshell ipc call.");
                     options.Positional.Insert(0, "call");
@@ -147,7 +152,10 @@ namespace Winshell
                     case "-t" or "--tail":
                         o.Tail = int.Parse(Next(), CultureInfo.InvariantCulture);
                         break;
-                    case "-V" or "--version" or "-h" or "--help" or "--no-color" or "--log-times" or "--any-display" or "--newest":
+                    case "--no-color":
+                        o.NoColor = true;
+                        break;
+                    case "-V" or "--version" or "-h" or "--help" or "--log-times" or "--any-display" or "--newest":
                         break;
                     case "--log-rules" or "-m" or "--manifest" or "--debug":
                         Next();
@@ -188,6 +196,7 @@ namespace Winshell
                        winshell ipc prop get <target> <property>
                        winshell ipc wait <target> <signal>
                        winshell ipc listen <target> <signal>
+                       winshell doctor [-j]                check this PC's setup for Winshell
 
                 Config selection:
                   -p, --path <path>      a shell.qml, or the folder it is in
@@ -200,12 +209,27 @@ namespace Winshell
                   -d, --daemonize        run in the background
                   -n, --no-duplicate     do nothing if the shell is already running
                   -v, --verbose          log debug messages
+                  -j, --json             print list or doctor as JSON
+                      --no-color         print doctor without color
                   -V, --version          print the version
                 """);
         }
 
         /// <summary>The root file of the shell to run, or null with a message when there is none.</summary>
         private static string? ResolveConfig(Options o, out string? error)
+        {
+            if (o.Path is null)
+                CopyLegacyConfig();
+            var found = FindConfig(o, out error);
+            // No config yet: run the Windows 11 shell Winshell ships with.
+            return found ?? (error is null ? DefaultShell.Install() : null);
+        }
+
+        /// <summary>
+        /// The config <see cref="ResolveConfig"/> picks, without copying an old config or writing the default shell:
+        /// null with no error when Winshell would run its default shell, and null with the reason when it cannot pick.
+        /// </summary>
+        private static string? FindConfig(Options o, out string? error)
         {
             error = null;
             if (o.Path is { } path)
@@ -219,7 +243,6 @@ namespace Winshell
                 error = $"No shell.qml at {full}";
                 return null;
             }
-            CopyLegacyConfig();
             var baseDir = ConfigPaths.Root();
             if (o.Config is { } name)
             {
@@ -246,8 +269,7 @@ namespace Winshell
                     return null;
                 }
             }
-            // No config yet: run the Windows 11 shell Winshell ships with.
-            return DefaultShell.Install();
+            return null;
         }
 
         /// <summary>Copies <c>%USERPROFILE%\.config\winshell</c> into the default config root once. A set override skips it.</summary>
@@ -423,6 +445,8 @@ namespace Winshell
                 WindowsModules.AddStartup(engine, Environment.ProcessPath!, originalArgs);
                 if (updater is not null)
                     WindowsModules.AddUpdates(engine, updater);
+                // Winshell Settings' About page runs the same checks as winshell doctor, for this shell's config.
+                engine.AddService<IDoctor>(new CliDoctor(() => DoctorContextFor(root, null)));
             });
             log.Info("", $"Launching config: \"{root}\"");
             log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
@@ -551,6 +575,37 @@ namespace Winshell
                 shell.WaitForExit();
                 return shell.ExitCode;
             }
+        }
+
+        /// <summary>winshell doctor: checks this PC's setup, prints a line each, and fails when a check fails.</summary>
+        private static int Doctor(Options o)
+        {
+            var file = FindConfig(o, out var problem);
+            var checks = Platform.Windows.Diagnostics.Doctor.Run(DoctorContextFor(file, problem));
+            if (o.Json)
+            {
+                Console.WriteLine(Platform.Windows.Diagnostics.Doctor.ToJson(checks, Version));
+            }
+            else
+            {
+                var color = !o.NoColor && !Console.IsOutputRedirected && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
+                Console.Write(Platform.Windows.Diagnostics.Doctor.Format(checks, Version, color));
+            }
+            return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;
+        }
+
+        private static DoctorContext DoctorContextFor(string? configFile, string? problem) => new(
+            Environment.ProcessPath!,
+            ConfigPaths.Root(),
+            configFile,
+            problem,
+            Instances.List(false).Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList(),
+            ShellLocations.LocalRoot,
+            ShellLocations.CrashRoot);
+
+        private sealed class CliDoctor(Func<DoctorContext> context) : IDoctor
+        {
+            public IReadOnlyList<DoctorCheck> Run() => Platform.Windows.Diagnostics.Doctor.Run(context());
         }
 
         private static (InstanceInfo? Info, string? Error) Select(Options o)

@@ -1,9 +1,11 @@
 import Winshell
 import Winshell.Theme
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls
 
-// About: the version and Winshell's updates, the config folder and this instance's log, each a click away.
+// About: the version and Winshell's updates, the config folder and this instance's log, each a click away, and
+// the checks winshell doctor runs. They only read, and list what they found under the card, a fix under each problem.
 Column {
   id: root
 
@@ -104,6 +106,107 @@ Column {
       Accessible.name: "Open the log"
       onClicked: Qt.openUrlExternally(Shell.logPath)
       onActiveFocusChanged: if (activeFocus) log.reveal()
+    }
+  }
+
+  SettingsCard {
+    id: diagnostics
+    key: "diagnostics"
+    description: !Diagnostics.available ? "Only a shell started by winshell.exe can check its setup"
+      : Diagnostics.running ? "Checking…"
+      : Diagnostics.summary !== "" ? Diagnostics.summary
+      : setting.description
+    focusTarget: runDiagnostics
+
+    Button {
+      id: runDiagnostics
+      objectName: "runDiagnostics"
+      text: "Run diagnostics"
+      enabled: Diagnostics.available && !Diagnostics.running
+      Accessible.name: "Run diagnostics"
+      onClicked: Diagnostics.run()
+      onActiveFocusChanged: if (activeFocus) diagnostics.reveal()
+    }
+  }
+
+  // What the last run found: a row a check, as the Windows Settings troubleshooters list theirs.
+  Rectangle {
+    objectName: "diagnosticsResults"
+    width: parent.width
+    visible: results.count > 0
+    implicitHeight: list.implicitHeight + 16
+    radius: Theme.controlCornerRadius
+    color: Theme.cardBackgroundFillColorDefault
+    border.width: 1
+    border.color: Theme.cardStrokeColorDefault
+
+    Column {
+      id: list
+      x: 16
+      y: 8
+      width: parent.width - 32
+
+      Repeater {
+        id: results
+        model: Diagnostics.checks
+
+        RowLayout {
+          id: row
+          required property var modelData
+          readonly property string word: modelData.status === "pass" ? "Passed" : modelData.status === "warn" ? "Warning" : "Failed"
+          objectName: "check:" + modelData.id
+          width: list.width
+          spacing: 12
+          Accessible.role: Accessible.StaticText
+          Accessible.name: word + ": " + modelData.title + ". " + modelData.message + (modelData.fix !== "" ? " Fix: " + modelData.fix : "")
+
+          Text {
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: 10
+            text: row.modelData.status === "pass" ? "\uE73E" : row.modelData.status === "warn" ? "\uE7BA" : "\uEA39"
+            font.family: Theme.iconFontFamily
+            font.pixelSize: 16
+            color: row.modelData.status === "pass" ? Theme.systemFillColorSuccess
+              : row.modelData.status === "warn" ? Theme.systemFillColorCaution
+              : Theme.systemFillColorCritical
+            Accessible.ignored: true
+          }
+
+          Column {
+            Layout.fillWidth: true
+            Layout.topMargin: 8
+            Layout.bottomMargin: 8
+            spacing: 2
+            Accessible.ignored: true
+
+            Text {
+              width: parent.width
+              text: row.modelData.title
+              font: Theme.typography.bodyStrong
+              color: Theme.textFillColorPrimary
+              Accessible.ignored: true
+            }
+            Text {
+              width: parent.width
+              text: row.modelData.message
+              font: Theme.typography.body
+              wrapMode: Text.Wrap
+              color: Theme.textFillColorSecondary
+              Accessible.ignored: true
+            }
+            Text {
+              objectName: "fix:" + row.modelData.id
+              width: parent.width
+              visible: row.modelData.fix !== ""
+              text: "Fix: " + row.modelData.fix
+              font: Theme.typography.body
+              wrapMode: Text.Wrap
+              color: Theme.textFillColorPrimary
+              Accessible.ignored: true
+            }
+          }
+        }
+      }
     }
   }
 }
