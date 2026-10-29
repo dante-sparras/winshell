@@ -44,7 +44,8 @@ public static partial class CrashRedaction
     // suffix ("auth" only a prefix, so "Author:" is not a key), but no dot, so a stack frame's "Signals.cs:line 78"
     // or "TokenReader.cs:line 9" is not a key. A flag, --password hunter2 or /token abc, takes the next word as its
     // value, unless an earlier pattern already masked it; a bare word does not, so "the token expired" is left alone.
-    [GeneratedRegex(@"(?<key>(?<flag>(?<![\w\-/])(?:--?|/))?[A-Za-z0-9_\-]*(?:passw(?:or)?d|passphrase|pwd|secret|token|api[_\-.]?key|access[_\-.]?key|private[_\-.]?key|credential|cookie|session[_\-]?id|signature|auth(?=[""']?\s*[:=]|\s))[A-Za-z0-9_\-]*[""']?)(?<sep>\s*[:=]\s*|(?(flag)\s+|(?!)))(?!\[redacted\])(?:""(?:[^""\\\r\n]|\\.)*""|'(?:[^'\\\r\n]|\\.)*'|[^\s,;&""'}\])]+)", RegexOptions.IgnoreCase)]
+    // Bound the key's prefix and suffix: trying an unbounded prefix at each character makes long log lines quadratic.
+    [GeneratedRegex(@"(?<key>(?<flag>(?<![\w\-/])(?:--?|/))?[A-Za-z0-9_\-]{0,64}(?:passw(?:or)?d|passphrase|pwd|secret|token|api[_\-.]?key|access[_\-.]?key|private[_\-.]?key|credential|cookie|session[_\-]?id|signature|auth(?=[""']?\s*[:=]|\s))[A-Za-z0-9_\-]{0,64}[""']?)(?<sep>\s*[:=]\s*|(?(flag)\s+|(?!)))(?!\[redacted\])(?:""(?:[^""\\\r\n]|\\.)*""|'(?:[^'\\\r\n]|\\.)*'|[^\s,;&""'}\])]+)", RegexOptions.IgnoreCase)]
     private static partial Regex Assignment();
 
     // Keys whose prefix gives them away: GitHub, Slack, OpenAI-style and AWS access keys.
