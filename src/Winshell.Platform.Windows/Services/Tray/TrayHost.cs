@@ -536,22 +536,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
         return (p.X, p.Y);
     }
 
-    private static string ProgramPath(uint pid)
-    {
-        var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (process == 0)
-            return "";
-        try
-        {
-            var buffer = new char[1024];
-            var length = buffer.Length;
-            return QueryFullProcessImageNameW(process, 0, buffer, ref length) ? new string(buffer, 0, length) : "";
-        }
-        finally
-        {
-            CloseHandle(process);
-        }
-    }
+    private static string ProgramPath(uint pid) => ProcessImage.TryRead(pid) ?? "";
 
     /// <summary>A process's mandatory integrity level, or <see cref="uint.MaxValue"/> when it cannot be read.</summary>
     internal static uint IntegrityLevel(uint pid)
@@ -846,10 +831,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
 
     [LibraryImport("advapi32.dll")]
     private static partial uint* GetSidSubAuthority(nint sid, uint index);
-
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool QueryFullProcessImageNameW(nint process, uint flags, [Out] char[] name, ref int size);
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
