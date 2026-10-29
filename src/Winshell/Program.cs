@@ -61,6 +61,12 @@ namespace Winshell
         public static async Task<int> Run(string[] args)
         {
             args = WithoutAfter(args, out var after);
+            // Help is checked before any command runs. `winshell kill --help` must not kill the shell.
+            if (args.Any(static a => a is "-h" or "--help" or "/?"))
+            {
+                PrintHelp(FirstCommand(args));
+                return 0;
+            }
             var command = args.Length > 0 && !args[0].StartsWith('-') ? args[0] : null;
             var rest = command is null ? args : args[1..];
             Options options;
@@ -82,11 +88,6 @@ namespace Winshell
                         Console.WriteLine($"winshell {Version}");
                         return 0;
                     }
-                    if (args.Contains("-h") || args.Contains("--help"))
-                    {
-                        PrintHelp();
-                        return 0;
-                    }
                     return RunShell(options, args);
                 case "list":
                     return List(options);
@@ -103,7 +104,7 @@ namespace Winshell
                     options.Positional.Insert(0, "call");
                     return await Ipc(options);
                 case "help":
-                    PrintHelp();
+                    PrintHelp(null);
                     return 0;
                 default:
                     Console.Error.WriteLine($"Unknown command \"{command}\". Run winshell --help.");
@@ -194,15 +195,79 @@ namespace Winshell
             return [.. args[..i], .. args[(i + 2)..]];
         }
 
-        private static void PrintHelp()
+        /// <summary>The first word that is a command, skipping options and help.</summary>
+        private static string? FirstCommand(string[] args)
         {
-            Console.WriteLine($"""
+            foreach (var arg in args)
+            {
+                if (arg is "-h" or "--help" or "/?" or "-V" or "--version")
+                    continue;
+                if (arg.StartsWith('-'))
+                    continue;
+                return arg;
+            }
+            return null;
+        }
+
+        private static void PrintHelp(string? command)
+        {
+            switch (command)
+            {
+                case "list":
+                    WriteHelp("""
+                        winshell list [-j]
+                          Lists running instances. -j, --json prints them as JSON.
+                          Stopped instances are not listed.
+                        """);
+                    return;
+                case "kill":
+                    WriteHelp("""
+                        winshell kill [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                          Asks one running instance to exit.
+                          With no selector, the newest running instance is used.
+                        """);
+                    return;
+                case "log":
+                    WriteHelp("""
+                        winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
+                          Prints an instance's log. -t, --tail <n> prints the last n lines.
+                          -f, --follow keeps printing new lines. winshell log <file> prints that file.
+                          With nothing running and no selector, the log of a stopped instance is printed.
+                        """);
+                    return;
+                case "ipc":
+                    WriteHelp("""
+                        winshell ipc [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
+                          show                                  list IPC targets
+                          call <target> <function> [args...]    call a function and print the result
+                          prop get <target> <property>          print a property
+                          wait <target> <signal>                wait for one signal
+                          listen <target> <signal>              print each signal until Ctrl+C
+                        """);
+                    return;
+                case "doctor":
+                    WriteHelp($"""
+                        winshell doctor [-c <name> | -p <path>] [-j] [--no-color]
+                          Checks this PC's setup for Winshell and changes nothing.
+                          -c, --config <name>    a named config in {ConfigPaths.Root()}
+                          -j, --json             print the checks as JSON
+                              --no-color         print without color
+                        """);
+                    return;
+                case "msg":
+                    WriteHelp("""
+                        winshell msg is the old name of winshell ipc call.
+                        """);
+                    return;
+            }
+            WriteHelp($"""
                 winshell {Version}: a desktop shell for Windows 11
 
                 Usage: winshell [options]                  run a shell
-                       winshell list [-a] [-j]             list running instances
+                       winshell <command> --help           help for that command, which does not run
+                       winshell list [-j]                  list running instances
                        winshell kill [instance options]    stop an instance
-                       winshell log [-f] [-t N]            print an instance's log
+                       winshell log [-f] [-t N] [file]     print an instance's log
                        winshell ipc show                   list IPC targets
                        winshell ipc call <target> <function> [args...]
                        winshell ipc prop get <target> <property>
@@ -210,12 +275,13 @@ namespace Winshell
                        winshell ipc listen <target> <signal>
                        winshell doctor [config options] [-j] [--no-color]
                                                            check this PC's setup for Winshell
+                       winshell help                       print this summary
 
                 Config selection:
                   -p, --path <path>      a shell.qml, or the folder it is in
                   -c, --config <name>    a named config in {ConfigPaths.Root()}
                                          ({ConfigPaths.OverrideVariable} overrides that folder)
-                Instance selection:
+                Instance selection (kill, log, ipc):
                   -i, --id <id>          an instance id, or the start of one
                       --pid <pid>        an instance's process id
                 Other:
@@ -224,9 +290,14 @@ namespace Winshell
                   -v, --verbose          log debug messages
                   -j, --json             print list or doctor as JSON
                       --no-color         print doctor without color
+                  -h, --help, /?         print help and exit
                   -V, --version          print the version
+
+                Exit codes: 0 done, 1 the command failed, 2 the command line was wrong.
                 """);
         }
+
+        private static void WriteHelp(string text) => Console.WriteLine(text.Replace("\r\n", "\n").TrimEnd());
 
         /// <summary>The root file of the shell to run, or null with a message when there is none.</summary>
         private static string? ResolveConfig(Options o, out string? error)

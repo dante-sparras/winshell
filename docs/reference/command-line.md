@@ -1,6 +1,6 @@
 # Command line
 
-`winshell` runs a shell, talks to the instances that are running, and checks this PC's setup. `winshell --help` prints this summary.
+`winshell` runs a shell, talks to the instances that are running, and checks this PC's setup. `winshell --help` prints this summary. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command.
 
 ```text
 winshell [options]                  run a shell
