@@ -169,7 +169,7 @@ dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~No
 Remove-Item Env:WINSHELL_NOTIFICATION_EVIDENCE
 ```
 
-`WINSHELL_NOTIFICATION_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that explicit folder. An optional `BeforeCalendar.qml` there is rendered alongside the new surface. CI extracts that file from the preceding/base commit and attaches the PNGs as the `notification-surface` workflow artifact; no images are committed. A renderer scale is not a change to the PC's display settings. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md).
+`WINSHELL_NOTIFICATION_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that explicit folder. CI attaches those PNGs as the `notification-surface` workflow artifact; no images are committed. A renderer scale is not a change to the PC's display settings. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md).
 
 ## Settings surface validation
 

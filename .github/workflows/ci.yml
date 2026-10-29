@@ -35,11 +35,6 @@ jobs:
           WINSHELL_SNAPSHOT_DIFFS: ${{ runner.temp }}/snapshot-diffs
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
-          foreach ($file in (git ls-tree -r --name-only HEAD^1 -- src/Winshell/DefaultShell)) {
-            if (!$file.EndsWith('.qml')) { continue }
-            $name = if ($file.EndsWith('/CalendarFlyout.qml')) { 'BeforeCalendar.qml' } else { Split-Path $file -Leaf }
-            git show "HEAD^1:$file" | Set-Content (Join-Path $env:WINSHELL_NOTIFICATION_EVIDENCE $name)
-          }
           pwsh scripts/check.ps1
       - name: Notification surface evidence
         if: always()
