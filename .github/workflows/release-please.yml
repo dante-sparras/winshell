@@ -36,7 +36,7 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # A new release gets its portable zips, SHA256SUMS.txt, winget manifests, install.ps1 and uninstall.ps1.
+  # A new draft gets its files before Package publishes it, so immutable releases include every asset.
   # See docs/development.md#releasing.
   package:
     needs: release-please
