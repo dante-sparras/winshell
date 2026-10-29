@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Winshell.Platform.Windows.Diagnostics;
 
@@ -42,7 +43,9 @@ public interface IDoctor
 /// <summary>
 /// Checks this PC's setup for Winshell. Each check reads what it needs through <see cref="DoctorProbe"/> and judges
 /// it here, so the judging is tested without the PC. Nothing is changed: no prompt, no registry or settings write,
-/// no instance started or stopped. Telling whether a folder can be written makes and removes one empty file.
+/// no instance started or stopped. Telling whether a folder can be written makes and removes one empty file. The
+/// user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so what it
+/// prints can go into a bug report without the Windows user name.
 /// </summary>
 public static class Doctor
 {
@@ -54,21 +57,42 @@ public static class Doctor
         var instance = context.ConfigFile is { } file
             ? context.Instances.FirstOrDefault(i => string.Equals(i.ConfigPath, file, StringComparison.OrdinalIgnoreCase))
             : null;
-        return
+        var configFolder = Path.GetDirectoryName(context.ConfigFile) is { Length: > 0 } own ? own : context.ConfigRoot;
+        DoctorCheck[] checks =
         [
             Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
             Guard("config", "Config", () => Config(context.ConfigFile, context.ConfigProblem, DoctorProbe.ParseConfig(context.ConfigFile), instance is null ? null : DoctorProbe.LastLoadError(instance.LogPath))),
             Guard("folders", "Folders", () => Folders(
-                [("the config folder", context.ConfigRoot, DoctorProbe.CanWrite(context.ConfigRoot)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
-                context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList())),
+                [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
+                context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
+                Environment.IsPrivilegedProcess)),
             Guard("appBars", "App bars", () => AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
             Guard("dpi", "DPI", () => Dpi(DoctorProbe.PerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath), DoctorProbe.Monitors())),
-            Guard("signIn", "Sign-in", () => SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists)),
+            Guard("signIn", "Sign-in", () => SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(DoctorProbe.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes", () => Crashes(DoctorProbe.CrashReports(context.CrashRoot), now)),
         ];
+        return WithoutUserFolders(checks,
+        [
+            (Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "%LOCALAPPDATA%"),
+            (Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "%APPDATA%"),
+            (Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%"),
+        ]);
+    }
+
+    /// <summary>
+    /// Writes each of the user's folders as its variable in every message and fix, the longest folder first. A
+    /// folder only matches whole: <c>C:\Users\ann</c> leaves <c>C:\Users\anna</c> alone.
+    /// </summary>
+    internal static IReadOnlyList<DoctorCheck> WithoutUserFolders(IReadOnlyList<DoctorCheck> checks, IReadOnlyList<(string Path, string Name)> folders)
+    {
+        var patterns = folders.Where(f => f.Path.Length > 0).OrderByDescending(f => f.Path.Length)
+            .Select(f => (Pattern: new Regex(Regex.Escape(f.Path.TrimEnd('\\')) + @"(?![\w\-]|\.\w)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), f.Name))
+            .ToList();
+        string Replace(string text) => patterns.Aggregate(text, (t, p) => p.Pattern.Replace(t, _ => p.Name));
+        return checks.Select(c => c with { Message = Replace(c.Message), Fix = c.Fix is null ? null : Replace(c.Fix) }).ToList();
     }
 
     /// <summary>A check that could not run says so, rather than ending the whole run.</summary>
@@ -110,13 +134,21 @@ public static class Doctor
 
     // Config
 
-    /// <summary>What reading every QML file of a config found.</summary>
-    public sealed record ConfigScan(int Files, IReadOnlyList<string> Errors);
+    /// <summary>What reading the QML files of a config found.</summary>
+    /// <param name="Errors">What does not parse in the root file's own folder, whose files Winshell loads.</param>
+    public sealed record ConfigScan(int Files, IReadOnlyList<string> Errors)
+    {
+        /// <summary>What does not parse in a folder under it, which only matters if the config imports it.</summary>
+        public IReadOnlyList<string> SubfolderErrors { get; init; } = [];
+
+        /// <summary>Whether reading stopped at <see cref="DoctorProbe.MaxFolders"/> folders, leaving the rest unread.</summary>
+        public bool Stopped { get; init; }
+    }
 
     internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError)
     {
         if (problem is not null)
-            return new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p.");
+            return new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
         if (file is null)
             return new("config", "Config", CheckStatus.Pass, "No config of your own: Winshell runs its default shell. Copy that shell to your config folder to change it.");
         if (scan.Errors.Count > 0)
@@ -127,22 +159,30 @@ public static class Doctor
         var files = scan.Files == 1 ? "1 QML file" : $"{scan.Files} QML files";
         if (loadError is not null)
             return new("config", "Config", CheckStatus.Fail, $"{file}: {files} read, but the running instance could not load it: {loadError}", "Correct that line and save. Winshell keeps the last version that loaded until then.");
-        return new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors");
+        var stopped = scan.Stopped ? $" Stopped after {DoctorProbe.MaxFolders} folders; the rest were not read." : "";
+        if (scan.SubfolderErrors.Count > 0)
+        {
+            var more = scan.SubfolderErrors.Count > 1 ? $" ({scan.SubfolderErrors.Count - 1} more)" : "";
+            return new("config", "Config", CheckStatus.Warn, $"{scan.SubfolderErrors[0]}{more}. It does not parse; Winshell only fails if the config imports it.{stopped}", "Correct that line, or delete the file if nothing uses it.");
+        }
+        return new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors{(stopped.Length > 0 ? "." + stopped : "")}");
     }
 
     // Folders
 
-    internal static DoctorCheck Folders(IReadOnlyList<(string Name, string Path, bool Writable)> folders, IReadOnlyList<string> elevatedInstances)
+    /// <param name="asAdministrator">Whether the doctor itself runs as administrator, and so says what an administrator can write.</param>
+    internal static DoctorCheck Folders(IReadOnlyList<(string Name, string Path, bool Writable)> folders, IReadOnlyList<string> elevatedInstances, bool asAdministrator = false)
     {
+        var who = asAdministrator ? " This ran as administrator, so it says what an administrator can write. Run it without Run as administrator to check your account." : "";
         var locked = folders.Where(f => !f.Writable).ToList();
         if (locked.Count > 0)
         {
             var list = string.Join("; ", locked.Select(f => $"{f.Name}, {f.Path}"));
-            return new("folders", "Folders", CheckStatus.Fail, $"Winshell cannot write {list}.", "Give your account write access to it in the folder's Properties > Security, or move it with WINSHELL_CONFIG_DIR.");
+            return new("folders", "Folders", CheckStatus.Fail, $"Winshell cannot write {list}.{who}", "Give your account write access to it in the folder's Properties > Security, or move it with WINSHELL_CONFIG_DIR.");
         }
         if (elevatedInstances.Count > 0)
-            return new("folders", "Folders", CheckStatus.Warn, $"Instance {string.Join(", ", elevatedInstances)} runs as administrator. Apps it starts run as administrator too, and other apps cannot drag onto it.", "Close it and start Winshell without Run as administrator.");
-        return new("folders", "Folders", CheckStatus.Pass, $"Winshell can write {string.Join(" and ", folders.Select(f => f.Name))}");
+            return new("folders", "Folders", CheckStatus.Warn, $"Instance {string.Join(", ", elevatedInstances)} runs as administrator. Apps it starts run as administrator too, and other apps cannot drag onto it.{who}", "Close it and start Winshell without Run as administrator.");
+        return new("folders", "Folders", CheckStatus.Pass, $"Winshell can write {string.Join(" and ", folders.Select(f => f.Name))}{(who.Length > 0 ? "." + who : "")}");
     }
 
     // App bars
@@ -157,27 +197,43 @@ public static class Doctor
     internal const string SecondaryTaskbarClass = "Shell_SecondaryTrayWnd";
     internal const string WinshellClass = "WinshellWindow";
 
+    /// <summary>How thick a window must be to be named as an app bar beside a Winshell panel; thinner ones are borders and edge helpers.</summary>
+    private const int MinAppBar = 8;
+
     internal static DoctorCheck AppBars(IReadOnlyList<MonitorFacts> monitors, IReadOnlyList<WindowFacts> windows)
     {
         var problems = new List<string>();
         var both = new List<string>();
         foreach (var m in monitors)
         {
+            var onScreen = windows.Where(w => w.Right > m.Left && w.Left < m.Right && w.Bottom > m.Top && w.Top < m.Bottom).ToList();
             foreach (var (edge, reserved) in new[] { ("top", m.WorkTop - m.Top), ("bottom", m.Bottom - m.WorkBottom), ("left", m.WorkLeft - m.Left), ("right", m.Right - m.WorkRight) })
             {
                 if (reserved <= 0)
                     continue;
-                var along = windows.Where(w => Along(m, w, edge)).ToList();
-                var taskbar = along.Where(w => w.ClassName is TaskbarClass or SecondaryTaskbarClass).Sum(w => Thickness(w, edge));
-                var winshell = along.Where(w => w.ClassName == WinshellClass).Sum(w => Thickness(w, edge));
-                if (taskbar > 0 && winshell > 0 && reserved >= taskbar + winshell - 2)
+                var taskbars = onScreen.Where(w => w.ClassName is TaskbarClass or SecondaryTaskbarClass && Within(Depth(m, w, edge), reserved)).ToList();
+                // A Winshell panel also reserves its margins, which its window does not cover, and its zone can differ
+                // from its size. So a Winshell window that starts in the strip explains whatever else is there,
+                // unless another app's window there can be named.
+                var winshell = onScreen.Where(w => w.ClassName == WinshellClass && Starts(m, Depth(m, w, edge), edge, reserved)).ToList();
+                var taskbar = Covered(taskbars.Select(w => Depth(m, w, edge)), reserved);
+                var unexplained = reserved - Covered(taskbars.Concat(winshell).Select(w => Depth(m, w, edge)), reserved);
+                if (taskbar > 0 && winshell.Count > 0 && reserved > taskbar + 2)
                     both.Add($"the {edge} of {m.Name}");
-                var unexplained = reserved - taskbar - winshell;
                 if (unexplained <= 2)
                     continue;
-                var others = along.Where(w => w.ClassName is not (TaskbarClass or SecondaryTaskbarClass or WinshellClass)
-                        && Math.Abs(Thickness(w, edge) - unexplained) <= 4)
-                    .Select(w => w.Program).Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var others = onScreen.Where(w => w.ClassName is not (TaskbarClass or SecondaryTaskbarClass or WinshellClass) && w.Program.Length > 0)
+                    .Select(w => (w.Program, Depth: Depth(m, w, edge)))
+                    .Where(w => Within(w.Depth, reserved))
+                    .Select(w => (w.Program, Thickness: w.Depth.End - w.Depth.Start))
+                    .Where(w => winshell.Count > 0 ? w.Thickness >= MinAppBar && w.Thickness <= unexplained + 4 : Math.Abs(w.Thickness - unexplained) <= 4)
+                    .Select(w => w.Program).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (winshell.Count > 0)
+                {
+                    if (others.Count > 0)
+                        problems.Add($"{string.Join(" or ", others)} reserves space at the {edge} of {m.Name}");
+                    continue;
+                }
                 var who = others.Count > 0 ? string.Join(" or ", others) : "Another app";
                 problems.Add(string.Create(CultureInfo.InvariantCulture, $"{who} reserves {unexplained} pixels at the {edge} of {m.Name}"));
             }
@@ -189,23 +245,37 @@ public static class Doctor
         return new("appBars", "App bars", CheckStatus.Pass, "No other app reserves an edge of a screen");
     }
 
-    /// <summary>
-    /// Whether a window lies in the strip a screen's edge reserves, between the edge and the work area, as app bars
-    /// stacked on one edge each do.
-    /// </summary>
-    private static bool Along(MonitorFacts m, WindowFacts w, string edge)
+    /// <summary>How far into the screen from an edge a window starts and ends.</summary>
+    private static (int Start, int End) Depth(MonitorFacts m, WindowFacts w, string edge) => edge switch
     {
-        var overlaps = w.Right > m.Left && w.Left < m.Right && w.Bottom > m.Top && w.Top < m.Bottom;
-        return overlaps && edge switch
-        {
-            "top" => w.Top >= m.Top - 2 && w.Bottom <= m.WorkTop + 2,
-            "bottom" => w.Top >= m.WorkBottom - 2 && w.Bottom <= m.Bottom + 2,
-            "left" => w.Left >= m.Left - 2 && w.Right <= m.WorkLeft + 2,
-            _ => w.Left >= m.WorkRight - 2 && w.Right <= m.Right + 2,
-        };
-    }
+        "top" => (w.Top - m.Top, w.Bottom - m.Top),
+        "bottom" => (m.Bottom - w.Bottom, m.Bottom - w.Top),
+        "left" => (w.Left - m.Left, w.Right - m.Left),
+        _ => (m.Right - w.Right, m.Right - w.Left),
+    };
 
-    private static int Thickness(WindowFacts w, string edge) => edge is "top" or "bottom" ? w.Bottom - w.Top : w.Right - w.Left;
+    /// <summary>Whether a window lies in the strip an edge reserves, as app bars stacked on one edge each do.</summary>
+    private static bool Within((int Start, int End) depth, int reserved) => depth.Start >= -2 && depth.End <= reserved + 2;
+
+    /// <summary>Whether a window starts in the strip an edge reserves and reaches less than halfway across the screen, as a panel does.</summary>
+    private static bool Starts(MonitorFacts m, (int Start, int End) depth, string edge, int reserved) =>
+        depth.Start >= -2 && depth.Start < reserved && depth.End <= (edge is "top" or "bottom" ? m.Bottom - m.Top : m.Right - m.Left) / 2;
+
+    /// <summary>How much of the strip the windows cover together: windows side by side on one edge count once.</summary>
+    private static int Covered(IEnumerable<(int Start, int End)> depths, int reserved)
+    {
+        var covered = 0;
+        var reach = 0;
+        foreach (var (start, end) in depths.Select(d => (Start: Math.Max(0, d.Start), End: Math.Min(reserved, d.End))).Where(d => d.End > d.Start).OrderBy(d => d.Start))
+        {
+            var from = Math.Max(start, reach);
+            if (end <= from)
+                continue;
+            covered += end - from;
+            reach = end;
+        }
+        return covered;
+    }
 
     // DPI
 
@@ -213,28 +283,55 @@ public static class Doctor
     {
         var scales = string.Join(", ", monitors.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Name} at {Math.Round(m.Scale * 100)}%")));
         var flags = layers.SelectMany(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Where(f => f != "~").ToList();
-        var dpiFlags = flags.Where(f => f is "HIGHDPIAWARE" or "DPIUNAWARE" or "GDIDPISCALING").ToList();
-        const string Fix = "Right-click winshell.exe, choose Properties > Compatibility > Change high DPI settings, and clear Override high DPI scaling behavior.";
-        if (dpiFlags.Count > 0)
-            return new("dpi", "DPI", CheckStatus.Fail, $"Windows overrides how Winshell scales ({string.Join(", ", dpiFlags)}), so it draws blurry or the wrong size. {scales}", Fix);
-        if (!perMonitorV2)
-            return new("dpi", "DPI", CheckStatus.Fail, $"Winshell is not per-monitor DPI aware, so it draws blurry on some screens. {scales}", Fix);
-        var other = flags.Where(f => f != "RUNASADMIN").ToList();
+        const string HighDpi = "Right-click winshell.exe, choose Properties > Compatibility > Change high DPI settings, and clear";
+        var unaware = flags.Where(f => f is "DPIUNAWARE" or "GDIDPISCALING").ToList();
+        if (!perMonitorV2 || unaware.Count > 0)
+        {
+            var cause = unaware.Count > 0 ? $"Windows overrides how Winshell scales ({string.Join(", ", unaware)})" : "Winshell is not per-monitor DPI aware";
+            return new("dpi", "DPI", CheckStatus.Fail, $"{cause}, so it draws blurry or the wrong size. {scales}", $"{HighDpi} Override high DPI scaling behavior.");
+        }
+        var messages = new List<string>();
+        var fixes = new List<string>();
+        // "Scaling performed by: Application" and "Program DPI": Winshell already scales itself on each screen.
+        var highDpi = flags.Where(f => f is "HIGHDPIAWARE" or "PERPROCESSSYSTEMDPIFORCEON" or "PERPROCESSSYSTEMDPIFORCEOFF").ToList();
+        if (highDpi.Count > 0)
+        {
+            messages.Add($"Windows keeps high DPI settings for winshell.exe ({string.Join(", ", highDpi)}). Winshell scales itself on each screen, so they can only get in its way.");
+            var boxes = new List<string>();
+            if (highDpi.Contains("HIGHDPIAWARE"))
+                boxes.Add("Override high DPI scaling behavior");
+            if (highDpi.Any(f => f.StartsWith("PERPROCESSSYSTEMDPI", StringComparison.Ordinal)))
+                boxes.Add("Use this setting to fix scaling problems for this program instead of the one in Settings");
+            fixes.Add($"{HighDpi} {string.Join(" and ", boxes)}.");
+        }
+        if (flags.Contains("RUNASADMIN"))
+        {
+            messages.Add("Windows always starts winshell.exe as administrator, so it asks first, and skips it when you sign in.");
+            fixes.Add("Right-click winshell.exe, choose Properties > Compatibility, and clear Run this program as an administrator.");
+        }
+        var other = flags.Except(highDpi).Where(f => f != "RUNASADMIN").ToList();
         if (other.Count > 0)
-            return new("dpi", "DPI", CheckStatus.Warn, $"Winshell runs in compatibility mode ({string.Join(", ", other)}). {scales}", "Right-click winshell.exe, choose Properties > Compatibility, and clear Run this program in compatibility mode.");
+        {
+            messages.Add($"Winshell runs in compatibility mode ({string.Join(", ", other)}).");
+            fixes.Add("Right-click winshell.exe, choose Properties > Compatibility, and clear Run this program in compatibility mode.");
+        }
+        if (messages.Count > 0)
+            return new("dpi", "DPI", CheckStatus.Warn, $"{string.Join(" ", messages)} {scales}", string.Join(" ", fixes));
         return new("dpi", "DPI", CheckStatus.Pass, $"Per-monitor aware. {scales}");
     }
 
     // Sign-in
 
-    internal static DoctorCheck SignIn(string? command, bool turnedOff, string thisExe, Func<string, bool> exists)
+    /// <param name="resolve">The file a path names in the end, past links: a winget install starts through one.</param>
+    internal static DoctorCheck SignIn(string? command, bool turnedOff, string thisExe, Func<string, bool> exists, Func<string, string>? resolve = null)
     {
+        resolve ??= path => path;
         if (command is null)
             return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on.");
         var exe = DoctorProbe.ExeOf(command);
         if (exe is null || !exists(exe))
             return new("signIn", "Sign-in", CheckStatus.Fail, $"The sign-in entry starts {exe ?? command}, which is not there.", "Turn Run Winshell when I sign in off and on again in Winshell Settings > Startup.");
-        if (!string.Equals(Path.GetFullPath(exe), Path.GetFullPath(thisExe), StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(resolve(Path.GetFullPath(exe)), resolve(Path.GetFullPath(thisExe)), StringComparison.OrdinalIgnoreCase))
             return new("signIn", "Sign-in", CheckStatus.Warn, $"The sign-in entry starts another winshell.exe: {exe}.", "Turn Run Winshell when I sign in on in Winshell Settings > Startup, from the Winshell you use.");
         if (turnedOff)
             return new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup.");

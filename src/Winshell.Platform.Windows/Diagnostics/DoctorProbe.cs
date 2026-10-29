@@ -40,63 +40,84 @@ internal static unsafe partial class DoctorProbe
 
     // Config
 
-    /// <summary>Reads every QML file in the config's folder and the folders under it, as the parser does when they load.</summary>
+    /// <summary>How many folders reading a config walks at most, so a config in a big folder ends quickly.</summary>
+    public const int MaxFolders = 500;
+
+    /// <summary>
+    /// Reads every QML file in the config's folder and the folders under it, as the parser does when they load. An
+    /// error in the config's own folder is in <see cref="Doctor.ConfigScan.Errors"/>; one further down, which only
+    /// matters if the config imports it, in <see cref="Doctor.ConfigScan.SubfolderErrors"/>. Hidden folders,
+    /// installed packages, links and folders with a <c>shell.qml</c> of their own, which are other configs, are left out.
+    /// </summary>
     public static Doctor.ConfigScan ParseConfig(string? rootFile)
     {
         if (rootFile is null || Path.GetDirectoryName(rootFile) is not { } dir || !Directory.Exists(dir))
             return new(0, []);
         var errors = new List<string>();
+        var elsewhere = new List<string>();
         var files = 0;
-        foreach (var file in QmlFiles(dir).Take(2000))
+        var walked = 0;
+        var stopped = false;
+        var folders = new Queue<string>([dir]);
+        while (folders.TryDequeue(out var folder))
         {
-            files++;
-            try
+            if (walked++ == MaxFolders)
             {
-                QmlParser.Parse(Preprocessor.Run(File.ReadAllText(file)), file);
+                stopped = true;
+                break;
             }
-            catch (QmlSyntaxException e)
+            var sink = folder == dir ? errors : elsewhere;
+            foreach (var file in List(folder, f => Directory.EnumerateFiles(f, "*.qml"), sink))
             {
-                errors.Add(e.Message);
+                files++;
+                try
+                {
+                    QmlParser.Parse(Preprocessor.Run(File.ReadAllText(file)), file);
+                }
+                catch (QmlSyntaxException e)
+                {
+                    sink.Add(e.Message);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    sink.Add($"{file}: could not be read: {e.Message}");
+                }
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            foreach (var sub in List(folder, Directory.EnumerateDirectories, sink))
             {
-                errors.Add($"{file}: could not be read: {e.Message}");
+                if (!LeftOut(sub))
+                    folders.Enqueue(sub);
             }
         }
-        return new(files, errors);
+        return new(files, errors) { SubfolderErrors = elsewhere, Stopped = stopped };
     }
 
-    /// <summary>A config's QML files, leaving out hidden folders and installed packages.</summary>
-    private static IEnumerable<string> QmlFiles(string dir)
+    /// <summary>A folder's entries in name order, or none with the reason added to the errors when it cannot be listed.</summary>
+    private static List<string> List(string folder, Func<string, IEnumerable<string>> entries, List<string> errors)
     {
-        IEnumerable<string> found;
         try
         {
-            found = Directory.EnumerateFiles(dir, "*.qml").Order(StringComparer.OrdinalIgnoreCase).ToList();
+            return entries(folder).Order(StringComparer.OrdinalIgnoreCase).ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            yield break;
+            errors.Add($"{folder}: could not be read: {e.Message}");
+            return [];
         }
-        foreach (var file in found)
-            yield return file;
-        string[] subfolders;
+    }
+
+    private static bool LeftOut(string folder)
+    {
+        var name = Path.GetFileName(folder);
+        if (name.StartsWith('.') || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase))
+            return true;
         try
         {
-            subfolders = Directory.GetDirectories(dir);
+            return new DirectoryInfo(folder).Attributes.HasFlag(FileAttributes.ReparsePoint) || File.Exists(Path.Combine(folder, "shell.qml"));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            yield break;
-        }
-        foreach (var sub in subfolders.Order(StringComparer.OrdinalIgnoreCase))
-        {
-            var name = Path.GetFileName(sub);
-            if (name.StartsWith('.') || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
-                || new DirectoryInfo(sub).Attributes.HasFlag(FileAttributes.ReparsePoint))
-                continue;
-            foreach (var file in QmlFiles(sub))
-                yield return file;
+            return true;
         }
     }
 
@@ -209,7 +230,10 @@ internal static unsafe partial class DoctorProbe
         return 1;
     }
 
-    /// <summary>The visible top-level windows that are not minimized: where an app bar would be.</summary>
+    /// <summary>
+    /// The visible top-level windows that are not minimized or cloaked: where an app bar would be. Explorer keeps
+    /// cloaked windows along the edges for touch input, which are not drawn and reserve nothing.
+    /// </summary>
     public static IReadOnlyList<Doctor.WindowFacts> EdgeWindows()
     {
         _windows = [];
@@ -220,7 +244,7 @@ internal static unsafe partial class DoctorProbe
         var name = stackalloc char[256];
         foreach (var hwnd in handles)
         {
-            if (!NativeMethods.IsWindowVisible(hwnd) || NativeMethods.IsIconic(hwnd) || !NativeMethods.GetWindowRect(hwnd, out var rect))
+            if (!NativeMethods.IsWindowVisible(hwnd) || NativeMethods.IsIconic(hwnd) || NativeMethods.IsCloaked(hwnd) || !NativeMethods.GetWindowRect(hwnd, out var rect))
                 continue;
             var length = NativeMethods.GetClassName(hwnd, name, 256);
             NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
@@ -279,6 +303,19 @@ internal static unsafe partial class DoctorProbe
     {
         using var key = Registry.CurrentUser.OpenSubKey(WindowsStartupRegistry.ApprovedKey);
         return key?.GetValue(WindowsStartupRegistry.ValueName) is byte[] { Length: > 0 } state && (state[0] & 1) == 1;
+    }
+
+    /// <summary>The file a path names in the end, past symbolic links, or the path itself when it is no link or cannot be read.</summary>
+    public static string ResolveLinks(string path)
+    {
+        try
+        {
+            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return path;
+        }
     }
 
     /// <summary>The <c>winshell.exe</c> a sign-in command starts: after <c>conhost.exe --headless</c>, as Winshell writes it, or first.</summary>

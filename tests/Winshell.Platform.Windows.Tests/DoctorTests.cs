@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
 using Winshell.Platform.Windows.Diagnostics;
 using static Winshell.Platform.Windows.Diagnostics.Doctor;
@@ -73,9 +76,70 @@ public sealed class DoctorTests : IDisposable
         var scan = DoctorProbe.ParseConfig(Path.Combine(_dir, "shell.qml"));
 
         Assert.Equal(2, scan.Files);
-        var error = Assert.Single(scan.Errors);
+        Assert.Empty(scan.Errors);
+        var error = Assert.Single(scan.SubfolderErrors);
         Assert.StartsWith(Path.Combine(_dir, "bars", "Bar.qml") + "[", error, StringComparison.Ordinal);
+        Assert.False(scan.Stopped);
         Assert.Equal(new ConfigScan(0, []), DoctorProbe.ParseConfig(null));
+    }
+
+    [Fact]
+    public void An_error_beside_shell_qml_fails_one_further_down_warns_and_other_configs_are_left_out()
+    {
+        File.WriteAllText(Path.Combine(_dir, "shell.qml"), "import Winshell\nShellRoot {}\n");
+        File.WriteAllText(Path.Combine(_dir, "Bar.qml"), "import QtQuick\nItem {\n");
+        Directory.CreateDirectory(Path.Combine(_dir, "default"));
+        File.WriteAllText(Path.Combine(_dir, "default", "shell.qml"), "{{{");
+
+        var scan = DoctorProbe.ParseConfig(Path.Combine(_dir, "shell.qml"));
+
+        Assert.Equal(2, scan.Files);
+        Assert.StartsWith(Path.Combine(_dir, "Bar.qml") + "[", Assert.Single(scan.Errors), StringComparison.Ordinal);
+        Assert.Empty(scan.SubfolderErrors);
+
+        var warned = Config(@"C:\c\shell.qml", null, new ConfigScan(4, []) { SubfolderErrors = [@"C:\c\sub\Bad.qml[2:1]: Unterminated object 'Item'", "x"] }, null);
+        Assert.Equal(CheckStatus.Warn, warned.Status);
+        Assert.Equal(@"C:\c\sub\Bad.qml[2:1]: Unterminated object 'Item' (1 more). It does not parse; Winshell only fails if the config imports it.", warned.Message);
+        var stopped = Config(@"C:\c\shell.qml", null, new ConfigScan(4, []) { Stopped = true }, null);
+        Assert.Equal(CheckStatus.Pass, stopped.Status);
+        Assert.EndsWith($"4 QML files read without errors. Stopped after {DoctorProbe.MaxFolders} folders; the rest were not read.", stopped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_junction_back_to_the_config_is_not_followed()
+    {
+        File.WriteAllText(Path.Combine(_dir, "shell.qml"), "import Winshell\nShellRoot {}\n");
+        Directory.CreateDirectory(Path.Combine(_dir, "bars"));
+        File.WriteAllText(Path.Combine(_dir, "bars", "Bar.qml"), "import QtQuick\nItem {}\n");
+        var loop = Path.Combine(_dir, "bars", "loop");
+        Junction(loop, _dir);
+        Doctor.ConfigScan scan;
+        try
+        {
+            scan = DoctorProbe.ParseConfig(Path.Combine(_dir, "shell.qml"));
+        }
+        finally
+        {
+            // Only the link goes; what it points to stays.
+            Directory.Delete(loop);
+        }
+
+        Assert.Equal(2, scan.Files);
+        Assert.Empty(scan.Errors);
+        Assert.Empty(scan.SubfolderErrors);
+    }
+
+    [Fact]
+    public void Reading_a_config_stops_after_so_many_folders()
+    {
+        File.WriteAllText(Path.Combine(_dir, "shell.qml"), "import Winshell\nShellRoot {}\n");
+        for (var i = 0; i < DoctorProbe.MaxFolders; i++)
+            Directory.CreateDirectory(Path.Combine(_dir, $"f{i:D3}"));
+
+        var scan = DoctorProbe.ParseConfig(Path.Combine(_dir, "shell.qml"));
+
+        Assert.Equal(1, scan.Files);
+        Assert.True(scan.Stopped);
     }
 
     [Fact]
@@ -106,6 +170,37 @@ public sealed class DoctorTests : IDisposable
         var elevated = Folders(ok, ["abc123"]);
         Assert.Equal(CheckStatus.Warn, elevated.Status);
         Assert.StartsWith("Instance abc123 runs as administrator.", elevated.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_doctor_run_as_administrator_says_so()
+    {
+        var check = Folders([("the config folder", @"C:\a", true)], [], asAdministrator: true);
+        Assert.Equal(CheckStatus.Pass, check.Status);
+        Assert.Contains("This ran as administrator", check.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("administrator", Folders([("the config folder", @"C:\a", true)], []).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_folder_that_denies_writing_cannot_be_written_and_is_left_as_it_was()
+    {
+        var locked = Path.Combine(_dir, "locked");
+        Directory.CreateDirectory(locked);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.CreateFiles, AccessControlType.Deny);
+        var folder = new DirectoryInfo(locked);
+        var acl = folder.GetAccessControl();
+        acl.AddAccessRule(deny);
+        folder.SetAccessControl(acl);
+        try
+        {
+            Assert.False(DoctorProbe.CanWrite(locked));
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            folder.SetAccessControl(acl);
+        }
+        Assert.Empty(Directory.EnumerateFileSystemEntries(locked));
     }
 
     [Fact]
@@ -148,6 +243,32 @@ public sealed class DoctorTests : IDisposable
     }
 
     [Fact]
+    public void A_winshell_panel_explains_its_margins_and_a_zone_other_than_its_size()
+    {
+        // A floating panel: 8 pixels of margin above and below a 40-pixel window reserve 56.
+        Assert.Equal(CheckStatus.Pass, AppBars([Screen(top: 56)], [Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe")]).Status);
+        // Thin windows along the edge, such as another app's 2-pixel border, are not app bars.
+        Assert.Equal(CheckStatus.Pass, AppBars([Screen(top: 56)], [Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe"), Bar("Border", 0, 0, 1920, 2, "borders.exe"), Bar("EdgeUiInputTopWndClass", 15, 0, 1905, 4)]).Status);
+        // A panel taller than its exclusive zone.
+        Assert.Equal(CheckStatus.Pass, AppBars([Screen(top: 40)], [Bar(WinshellClass, 0, 0, 1920, 60, "winshell.exe")]).Status);
+        // A Winshell window filling the screen is no panel, and explains nothing.
+        Assert.Equal(CheckStatus.Warn, AppBars([Screen(top: 40)], [Bar(WinshellClass, 0, 0, 1920, 1080, "winshell.exe")]).Status);
+    }
+
+    [Fact]
+    public void Panels_side_by_side_count_once_and_an_app_beside_them_is_named()
+    {
+        var check = AppBars(
+            [Screen(top: 80)],
+            [Bar(WinshellClass, 0, 0, 960, 40, "winshell.exe"), Bar(WinshellClass, 960, 0, 960, 40, "winshell.exe"), Bar("YasbBar", 0, 40, 1920, 40, "yasb.exe")]);
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Equal("yasb.exe reserves space at the top of DISPLAY1.", check.Message);
+
+        var taskbars = AppBars([Screen(bottom: 96)], [Bar(TaskbarClass, 0, 1032, 960, 48), Bar(SecondaryTaskbarClass, 960, 1032, 960, 48)]);
+        Assert.Equal("Another app reserves 48 pixels at the bottom of DISPLAY1.", taskbars.Message);
+    }
+
+    [Fact]
     public void The_taskbar_and_a_winshell_panel_on_one_edge_are_reported()
     {
         var both = AppBars([Screen(bottom: 96)], [Bar(TaskbarClass, 0, 1032, 1920, 48), Bar(WinshellClass, 0, 984, 1920, 48, "winshell.exe")]);
@@ -167,7 +288,25 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(CheckStatus.Fail, Dpi(true, ["~ GDIDPISCALING DPIUNAWARE"], screens).Status);
         Assert.Equal(CheckStatus.Fail, Dpi(false, [], screens).Status);
         Assert.Equal(CheckStatus.Warn, Dpi(true, ["WIN8RTM"], screens).Status);
-        Assert.Equal(CheckStatus.Pass, Dpi(true, ["~ RUNASADMIN"], screens).Status);
+        var admin = Dpi(true, ["~ RUNASADMIN"], screens);
+        Assert.Equal(CheckStatus.Warn, admin.Status);
+        Assert.Equal("Right-click winshell.exe, choose Properties > Compatibility, and clear Run this program as an administrator.", admin.Fix);
+    }
+
+    [Fact]
+    public void Scaling_settings_a_per_monitor_winshell_ignores_warn_and_point_at_their_box()
+    {
+        var screens = new[] { Screen() };
+        var application = Dpi(true, ["~ HIGHDPIAWARE"], screens);
+        Assert.Equal(CheckStatus.Warn, application.Status);
+        Assert.EndsWith("clear Override high DPI scaling behavior.", application.Fix, StringComparison.Ordinal);
+        var program = Dpi(true, ["~ PERPROCESSSYSTEMDPIFORCEON"], screens);
+        Assert.Equal(CheckStatus.Warn, program.Status);
+        Assert.EndsWith("clear Use this setting to fix scaling problems for this program instead of the one in Settings.", program.Fix, StringComparison.Ordinal);
+        Assert.DoesNotContain("compatibility mode", program.Message, StringComparison.Ordinal);
+        var unaware = Dpi(false, ["~ HIGHDPIAWARE"], screens);
+        Assert.Equal(CheckStatus.Fail, unaware.Status);
+        Assert.StartsWith("Winshell is not per-monitor DPI aware", unaware.Message, StringComparison.Ordinal);
     }
 
     // Sign-in
@@ -188,6 +327,21 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(@"The sign-in entry starts C:\Gone\winshell.exe, which is not there.", gone.Message);
         Assert.Equal(Here, DoctorProbe.ExeOf($@"""{Here}"" -p ""C:\my config"""));
         Assert.Null(DoctorProbe.ExeOf("  "));
+    }
+
+    [Fact]
+    public void A_sign_in_entry_through_a_link_to_this_winshell_is_this_winshell()
+    {
+        const string Here = @"C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\Winshell\winshell.exe";
+        const string Link = @"C:\Users\a\AppData\Local\Microsoft\WinGet\Links\winshell.exe";
+        string Resolve(string path) => path == Link ? Here : path;
+
+        Assert.Equal(CheckStatus.Pass, SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true, Resolve).Status);
+        Assert.Equal(CheckStatus.Warn, SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true).Status);
+
+        var target = Path.Combine(_dir, "target.exe");
+        File.WriteAllText(target, "");
+        Assert.Equal(target, DoctorProbe.ResolveLinks(target));
     }
 
     // Notifications, instances, crashes
@@ -211,6 +365,24 @@ public sealed class DoctorTests : IDisposable
         var recent = Crashes([(@"C:\r\old.txt", now.AddDays(-8)), (@"C:\r\a.txt", now.AddDays(-2)), (@"C:\r\b.txt", now.AddHours(-1))], now);
         Assert.Equal(CheckStatus.Warn, recent.Status);
         Assert.Equal(@"2 crash reports in the last 7 days. The newest is C:\r\b.txt.", recent.Message);
+    }
+
+    [Fact]
+    public void The_user_folders_are_written_as_their_variables()
+    {
+        (string, string)[] folders = [(@"C:\Users\Ann", "%USERPROFILE%"), (@"C:\Users\Ann\AppData\Local", "%LOCALAPPDATA%"), (@"C:\Users\Ann\AppData\Roaming\", "%APPDATA%")];
+        DoctorCheck[] checks =
+        [
+            new("crashes", "Crashes", CheckStatus.Warn, @"The newest is C:\Users\Ann\AppData\Local\winshell\crashes\a.txt.", @"Open c:\users\ann\appdata\roaming\winshell or C:\Users\Ann."),
+            new("x", "X", CheckStatus.Pass, @"C:\Users\Anna\x and C:\Users\Ann.old stay"),
+        ];
+
+        var shown = WithoutUserFolders(checks, folders);
+
+        Assert.Equal(@"The newest is %LOCALAPPDATA%\winshell\crashes\a.txt.", shown[0].Message);
+        Assert.Equal(@"Open %APPDATA%\winshell or %USERPROFILE%.", shown[0].Fix);
+        Assert.Equal(@"C:\Users\Anna\x and C:\Users\Ann.old stay", shown[1].Message);
+        Assert.Null(shown[1].Fix);
     }
 
     [Fact]
@@ -283,5 +455,18 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(CheckStatus.Pass, checks.Single(c => c.Id == "crashes").Status);
         Assert.All(checks.Where(c => c.Status != CheckStatus.Pass), c => Assert.False(string.IsNullOrEmpty(c.Fix)));
         Assert.Equal(before, Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList());
+        Assert.DoesNotContain(checks, c => c.Message.Contains(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Makes a junction, which needs no administrator, as <c>mklink /J</c> does.</summary>
+    private static void Junction(string link, string target)
+    {
+        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+        foreach (var arg in new[] { "/c", "mklink", "/J", link, target })
+            info.ArgumentList.Add(arg);
+        using var process = Process.Start(info)!;
+        process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
     }
 }

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
 
 namespace Winshell.Tests;
@@ -46,7 +48,56 @@ public sealed class DoctorCommandTests : IDisposable
         Assert.Matches(@"\d+ passed, \d+ warnings?, \d+ failed\.", output);
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args)
+    [Fact]
+    public void Without_a_config_it_checks_the_default_shell_and_writes_nothing()
+    {
+        var empty = Path.Combine(_root, "empty");
+        Directory.CreateDirectory(empty);
+
+        var (_, output, _) = RunIn(empty, "doctor", "--json");
+
+        using var json = JsonDocument.Parse(output);
+        var config = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("id").GetString() == "config");
+        Assert.Equal("pass", config.GetProperty("status").GetString());
+        Assert.Contains("default shell", config.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(empty));
+    }
+
+    [Fact]
+    public void A_config_folder_it_cannot_list_fails_the_config_check_and_the_others_still_run()
+    {
+        var unreadable = Path.Combine(_root, "unreadable");
+        Directory.CreateDirectory(unreadable);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        var folder = new DirectoryInfo(unreadable);
+        var acl = folder.GetAccessControl();
+        acl.AddAccessRule(deny);
+        folder.SetAccessControl(acl);
+        (int Code, string Output, string Error) result;
+        try
+        {
+            result = RunIn(unreadable, "doctor", "--json");
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            folder.SetAccessControl(acl);
+        }
+
+        Assert.Equal(1, result.Code);
+        Assert.Empty(result.Error);
+        using var json = JsonDocument.Parse(result.Output);
+        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
+        Assert.Equal(10, checks.Count);
+        var config = checks.Single(c => c.GetProperty("id").GetString() == "config");
+        Assert.Equal("fail", config.GetProperty("status").GetString());
+        Assert.StartsWith("Winshell cannot read the config folder", config.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    private (int Code, string Output, string Error) Run(params string[] args) => RunIn(_root, args);
+
+    /// <summary>Runs winshell.exe with the config folder overridden to a folder of this class's.</summary>
+    private static (int Code, string Output, string Error) RunIn(string configRoot, params string[] args)
     {
         var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "winshell.exe"))
         {
@@ -55,7 +106,7 @@ public sealed class DoctorCommandTests : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        info.Environment[ConfigPaths.OverrideVariable] = _root;
+        info.Environment[ConfigPaths.OverrideVariable] = configRoot;
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
         using var process = Process.Start(info)!;

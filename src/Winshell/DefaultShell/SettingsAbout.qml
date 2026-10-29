@@ -160,16 +160,32 @@ Column {
           Accessible.role: Accessible.StaticText
           Accessible.name: word + ": " + modelData.title + ". " + modelData.message + (modelData.fix !== "" ? " Fix: " + modelData.fix : "")
 
-          Text {
+          // An InfoBar's status icon: a filled circle in the status color behind its glyph.
+          Item {
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: 10
-            text: row.modelData.status === "pass" ? "\uE73E" : row.modelData.status === "warn" ? "\uE7BA" : "\uEA39"
-            font.family: Theme.iconFontFamily
-            font.pixelSize: 16
-            color: row.modelData.status === "pass" ? Theme.systemFillColorSuccess
-              : row.modelData.status === "warn" ? Theme.systemFillColorCaution
-              : Theme.systemFillColorCritical
+            implicitWidth: 16
+            implicitHeight: 16
             Accessible.ignored: true
+
+            Text {
+              anchors.centerIn: parent
+              text: "\uF136"
+              font.family: Theme.iconFontFamily
+              font.pixelSize: 16
+              color: row.modelData.status === "pass" ? Theme.systemFillColorSuccess
+                : row.modelData.status === "warn" ? Theme.systemFillColorCaution
+                : Theme.systemFillColorCritical
+              Accessible.ignored: true
+            }
+            Text {
+              anchors.centerIn: parent
+              text: row.modelData.status === "pass" ? "\uF13E" : row.modelData.status === "warn" ? "\uF13C" : "\uF13D"
+              font.family: Theme.iconFontFamily
+              font.pixelSize: 16
+              color: Theme.textFillColorInverse
+              Accessible.ignored: true
+            }
           }
 
           Column {
@@ -189,7 +205,7 @@ Column {
             Text {
               width: parent.width
               text: row.modelData.message
-              font: Theme.typography.body
+              font: Theme.typography.caption
               wrapMode: Text.Wrap
               color: Theme.textFillColorSecondary
               Accessible.ignored: true
@@ -199,7 +215,7 @@ Column {
               width: parent.width
               visible: row.modelData.fix !== ""
               text: "Fix: " + row.modelData.fix
-              font: Theme.typography.body
+              font: Theme.typography.caption
               wrapMode: Text.Wrap
               color: Theme.textFillColorPrimary
               Accessible.ignored: true

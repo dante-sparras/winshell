@@ -196,7 +196,8 @@ namespace Winshell
                        winshell ipc prop get <target> <property>
                        winshell ipc wait <target> <signal>
                        winshell ipc listen <target> <signal>
-                       winshell doctor [-j]                check this PC's setup for Winshell
+                       winshell doctor [config options] [-j] [--no-color]
+                                                           check this PC's setup for Winshell
 
                 Config selection:
                   -p, --path <path>      a shell.qml, or the folder it is in
@@ -580,7 +581,18 @@ namespace Winshell
         /// <summary>winshell doctor: checks this PC's setup, prints a line each, and fails when a check fails.</summary>
         private static int Doctor(Options o)
         {
-            var file = FindConfig(o, out var problem);
+            string? file;
+            string? problem;
+            try
+            {
+                file = FindConfig(o, out problem);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // The config folder cannot be listed: that is the Config check's failure, and the others still run.
+                file = null;
+                problem = $"Winshell cannot read the config folder: {e.Message}";
+            }
             var checks = Platform.Windows.Diagnostics.Doctor.Run(DoctorContextFor(file, problem));
             if (o.Json)
             {
@@ -599,9 +611,22 @@ namespace Winshell
             ConfigPaths.Root(),
             configFile,
             problem,
-            Instances.List(false).Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList(),
+            DoctorInstances(),
             ShellLocations.LocalRoot,
             ShellLocations.CrashRoot);
+
+        /// <summary>The running instances, or none when their folder cannot be read: the doctor still runs its checks.</summary>
+        private static List<DoctorInstance> DoctorInstances()
+        {
+            try
+            {
+                return Instances.List(false).Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return [];
+            }
+        }
 
         private sealed class CliDoctor(Func<DoctorContext> context) : IDoctor
         {
