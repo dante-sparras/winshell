@@ -932,7 +932,10 @@ public sealed class SwipeView : Container, IPointerTarget
     private void Settle()
     {
         _settle = null;
-        _offset *= 0.6;
+        if (!Theme.Current.AnimationsEnabled)
+            _offset = 0;
+        else
+            _offset *= 0.6;
         if (Math.Abs(_offset) < 0.5 || Engine is null)
             _offset = 0;
         LayoutChildren();
