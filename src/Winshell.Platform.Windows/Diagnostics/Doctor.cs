@@ -57,12 +57,13 @@ public static class Doctor
         var instance = context.ConfigFile is { } file
             ? context.Instances.FirstOrDefault(i => string.Equals(i.ConfigPath, file, StringComparison.OrdinalIgnoreCase))
             : null;
+        var instanceLog = instance is null ? default : DoctorProbe.ReadInstanceLog(instance.LogPath);
         var configFolder = Path.GetDirectoryName(context.ConfigFile) is { Length: > 0 } own ? own : context.ConfigRoot;
         DoctorCheck[] checks =
         [
             Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
-            Guard("config", "Config", () => Config(context.ConfigFile, context.ConfigProblem, DoctorProbe.ParseConfig(context.ConfigFile), instance is null ? null : DoctorProbe.LastLoadError(instance.LogPath))),
+            Guard("config", "Config", () => Config(context.ConfigFile, context.ConfigProblem, DoctorProbe.ParseConfig(context.ConfigFile), instanceLog.LoadError, instanceLog.Unreadable)),
             Guard("folders", "Folders", () => Folders(
                 [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
                 context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
@@ -72,7 +73,7 @@ public static class Doctor
             Guard("signIn", "Sign-in", () => SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(DoctorProbe.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
-            Guard("crashes", "Crashes", () => Crashes(DoctorProbe.CrashReports(context.CrashRoot), now)),
+            Guard("crashes", "Crashes", () => CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now, DoctorProbe.PeekCrash)),
         ];
         return WithoutUserFolders(checks,
         [
@@ -145,7 +146,7 @@ public static class Doctor
         public bool Stopped { get; init; }
     }
 
-    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError)
+    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError, string? logUnreadable = null)
     {
         if (problem is not null)
             return new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
@@ -165,6 +166,8 @@ public static class Doctor
             var more = scan.SubfolderErrors.Count > 1 ? $" ({scan.SubfolderErrors.Count - 1} more)" : "";
             return new("config", "Config", CheckStatus.Warn, $"{scan.SubfolderErrors[0]}{more}. It does not parse; Winshell only fails if the config imports it.{stopped}", "Correct that line, or delete the file if nothing uses it.");
         }
+        if (logUnreadable is not null)
+            return new("config", "Config", CheckStatus.Warn, $"Could not read the running instance's log: {logUnreadable}", "Make sure your account can read that log, then run winshell doctor again.");
         return new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors{(stopped.Length > 0 ? "." + stopped : "")}");
     }
 
@@ -360,13 +363,76 @@ public static class Doctor
 
     // Crash reports
 
-    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc)
+    internal static DoctorCheck CrashesIn(DoctorProbe.CrashFolderRead folder, DateTime nowUtc, Func<string, DoctorProbe.CrashPeek>? peek = null)
+    {
+        if (folder.Unreadable is not null)
+            return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read the crash folder: {folder.Unreadable}", "Make sure your account can read that folder, then run winshell doctor again.");
+        return Crashes(folder.Reports, nowUtc, peek);
+    }
+
+    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, DoctorProbe.CrashPeek>? peek = null)
     {
         var recent = reports.Where(r => nowUtc - r.WrittenUtc <= TimeSpan.FromDays(7)).OrderByDescending(r => r.WrittenUtc).ToList();
-        if (recent.Count == 0)
+        if (peek is null)
+        {
+            if (recent.Count == 0)
+                return new("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
+            var count = recent.Count == 1 ? "1 crash report" : $"{recent.Count} crash reports";
+            return new("crashes", "Crashes", CheckStatus.Warn, $"{count} in the last 7 days. The newest is {recent[0].Path}.", $"Read it, then attach it to a bug report at {BugReports}.");
+        }
+
+        var opened = new List<(string Path, string Text)>();
+        string? unreadable = null;
+        foreach (var report in recent)
+        {
+            var head = peek(report.Path);
+            if (head.Unreadable is not null)
+            {
+                unreadable ??= head.Unreadable;
+                continue;
+            }
+            if (head.Text is null)
+                continue;
+            opened.Add((report.Path, head.Text));
+        }
+        if (unreadable is not null && opened.Count == 0)
+            return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read a crash report: {unreadable}", $"Read the crash folder, then attach a report to a bug report at {BugReports}.");
+        if (opened.Count == 0)
             return new("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
-        var count = recent.Count == 1 ? "1 crash report" : $"{recent.Count} crash reports";
-        return new("crashes", "Crashes", CheckStatus.Warn, $"{count} in the last 7 days. The newest is {recent[0].Path}.", $"Read it, then attach it to a bug report at {BugReports}.");
+
+        var countText = opened.Count == 1 ? "1 crash report" : $"{opened.Count} crash reports";
+        var message = $"{countText} in the last 7 days. The newest is {opened[0].Path}.";
+        var fatal = opened.FirstOrDefault(r => r.Text.Contains("Winshell closed: yes", StringComparison.Ordinal));
+        if (fatal.Path is not null)
+        {
+            message += " Winshell closed: yes.";
+            var line = ExceptionLine(fatal.Text);
+            if (line is not null)
+                message += " " + line;
+            if (!string.Equals(fatal.Path, opened[0].Path, StringComparison.OrdinalIgnoreCase))
+                message += $" That report is {fatal.Path}.";
+        }
+        else if (ExceptionLine(opened[0].Text) is { } line)
+        {
+            message += " " + line;
+        }
+        if (unreadable is not null)
+            message += $" Could not read a crash report: {unreadable}.";
+        return new("crashes", "Crashes", CheckStatus.Warn, message, $"Read it, then attach it to a bug report at {BugReports}.");
+    }
+
+    private static string? ExceptionLine(string head)
+    {
+        var lines = head.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!string.Equals(lines[i].TrimEnd('\r'), "Exception", StringComparison.Ordinal) || i + 1 >= lines.Length)
+                continue;
+            var line = lines[i + 1].TrimEnd('\r');
+            if (line.Length > 0)
+                return line;
+        }
+        return null;
     }
 
     // Output

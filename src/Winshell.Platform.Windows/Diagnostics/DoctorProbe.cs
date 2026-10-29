@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
 using Winshell.Platform.Windows.Services.Notifications;
@@ -126,10 +127,14 @@ internal static unsafe partial class DoctorProbe
     /// "Failed to load configuration: …" or "Failed to reload configuration: …" for a failure, and "Configuration
     /// Loaded" or "Launching config" for a load that went on.
     /// </summary>
-    public static string? LastLoadError(string logPath)
+    /// <summary>The last load error in an instance log, or why that log could not be read.</summary>
+    public readonly record struct InstanceLogRead(string? LoadError, string? Unreadable);
+
+    /// <summary>Reads the last load error. A missing log is neither an error nor unreadable.</summary>
+    public static InstanceLogRead ReadInstanceLog(string logPath)
     {
         if (!File.Exists(logPath))
-            return null;
+            return default;
         string text;
         try
         {
@@ -139,10 +144,12 @@ internal static unsafe partial class DoctorProbe
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return new(null, $"{logPath}: {e.Message}");
         }
-        return LastLoadErrorIn(text);
+        return new(LastLoadErrorIn(text), null);
     }
+
+    public static string? LastLoadError(string logPath) => ReadInstanceLog(logPath).LoadError;
 
     internal static string? LastLoadErrorIn(string log)
     {
@@ -365,17 +372,54 @@ internal static unsafe partial class DoctorProbe
 
     // Crash reports
 
-    public static IReadOnlyList<(string Path, DateTime WrittenUtc)> CrashReports(string folder)
+    /// <summary>Crash reports in a folder, or why the folder could not be listed.</summary>
+    public readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
+
+    /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
+    public readonly record struct CrashPeek(string? Text, string? Unreadable);
+
+    /// <summary>Lists crash reports. A missing folder has none. A folder that cannot be listed says why.</summary>
+    public static CrashFolderRead ReadCrashReports(string folder)
     {
         if (!Directory.Exists(folder))
-            return [];
+            return new([], null);
         try
         {
-            return new DirectoryInfo(folder).EnumerateFiles("crash-*.txt").Select(f => (f.FullName, f.LastWriteTimeUtc)).ToList();
+            var reports = new DirectoryInfo(folder).EnumerateFiles("crash-*.txt").Select(f => (f.FullName, f.LastWriteTimeUtc)).ToList();
+            return new(reports, null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return [];
+            return new([], $"{folder}: {e.Message}");
+        }
+    }
+
+    public static IReadOnlyList<(string Path, DateTime WrittenUtc)> CrashReports(string folder) =>
+        ReadCrashReports(folder).Reports;
+
+    /// <summary>The first lines of a crash report. A file that does not start with the report heading is ignored.</summary>
+    public static CrashPeek PeekCrash(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            var first = reader.ReadLine();
+            if (first is null || !first.StartsWith("Winshell crash report", StringComparison.Ordinal))
+                return default;
+            var text = new StringBuilder(first.Length + 256);
+            text.Append(first);
+            text.Append('\n');
+            for (var i = 0; i < 40 && reader.ReadLine() is { } line; i++)
+            {
+                text.Append(line);
+                text.Append('\n');
+            }
+            return new(text.ToString(), null);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new(null, $"{path}: {e.Message}");
         }
     }
 
