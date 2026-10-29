@@ -23,7 +23,9 @@ Scope {
 
   FileView {
     path: root.path
-    // A few bytes, written at once: two quick changes cannot then land in the wrong order.
+    // A few bytes, read and written at once. A read still on its way could otherwise land after a pin and undo it,
+    // and two quick changes could be written in the wrong order.
+    blockLoading: true
     blockWrites: true
     watchChanges: true
     onFileChanged: reload()

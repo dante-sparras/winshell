@@ -715,23 +715,55 @@ public class TaskbarTests
         Assert.False(File.Exists(path));
         shell.Root.WriteProperty("unpinNext", "MSEdge");
         shell.Root.WriteProperty("pinNext", @"C:\Tools\tool.exe");
-        shell.Settle();
-        // The file is written off the UI thread.
-        for (var i = 0; i < 100 && !(File.Exists(path) && File.ReadAllText(path).Contains("tool.exe", StringComparison.Ordinal)); i++)
-            Thread.Sleep(20);
         Assert.Contains("tool.exe", File.ReadAllText(path));
         Assert.DoesNotContain("MSEdge", File.ReadAllText(path));
 
         using var again = new DefaultShellHarness(Pins, services: new FakeServices());
         var read = (QObject)again.Root.ReadProperty("pins")!;
         read.WriteProperty("path", path);
-        // The file is read off the UI thread too.
-        for (var i = 0; i < 100 && Ids(read).Contains("MSEdge"); i++)
-        {
-            Thread.Sleep(20);
-            again.Settle();
-        }
         Assert.Equal(["Microsoft.Windows.Explorer", "Microsoft.WindowsStore_8wekyb3d8bbwe!App", @"C:\Tools\tool.exe"], Ids(read));
+    }
+
+    [Fact]
+    public void A_pin_made_as_the_saved_pins_are_read_keeps_both()
+    {
+        using var shell = new DefaultShellHarness(Pins, services: new FakeServices());
+        var path = Path.Combine(shell.Directory, "data", "taskbar.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{ "pinned": ["Saved.App"] }""");
+        var pins = (QObject)shell.Root.ReadProperty("pins")!;
+
+        // No turn of the loop between finding the file and the pin.
+        pins.WriteProperty("path", path);
+        shell.Root.WriteProperty("pinNext", "New.App");
+        Assert.Equal(["Saved.App", "New.App"], Ids(pins));
+        Assert.Contains("Saved.App", File.ReadAllText(path));
+        Assert.Contains("New.App", File.ReadAllText(path));
+
+        shell.Settle();
+        Assert.Equal(["Saved.App", "New.App"], Ids(pins));
+    }
+
+    [Fact]
+    public void A_pin_made_while_a_change_to_the_file_waits_to_be_read_is_not_undone()
+    {
+        using var shell = new DefaultShellHarness(Pins, services: new FakeServices());
+        var path = Path.Combine(shell.Directory, "data", "taskbar.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """{ "pinned": ["Saved.App"] }""");
+        var pins = (QObject)shell.Root.ReadProperty("pins")!;
+        pins.WriteProperty("path", path);
+        shell.Settle();
+
+        // Another copy of the shell changes the file; the watcher's news is still queued when this one pins.
+        File.WriteAllText(path, """{ "pinned": ["Saved.App", "Other.App"] }""");
+        shell.Root.WriteProperty("pinNext", "New.App");
+        Thread.Sleep(200);
+        shell.Settle();
+
+        // The last write wins, and what is shown is what is in the file.
+        Assert.Equal(["Saved.App", "New.App"], Ids(pins));
+        Assert.Contains("New.App", File.ReadAllText(path));
     }
 
     [Fact]
