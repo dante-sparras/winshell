@@ -59,6 +59,11 @@ Column {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.read()
+    // A deleted file brings Start's default pins back, as the next Start does.
+    onLoadFailed: {
+      pinData.pins = null
+      root.read()
+    }
 
     TomlAdapter {
       id: pinData
