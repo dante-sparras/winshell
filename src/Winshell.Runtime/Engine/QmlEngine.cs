@@ -157,18 +157,25 @@ public sealed class QmlEngine : IDisposable
 
     private void ReadQmldir(string qmldir, string directory, Dictionary<string, string> types)
     {
-        foreach (var raw in File.ReadAllLines(qmldir))
+        var lines = File.ReadAllLines(qmldir);
+        for (var i = 0; i < lines.Length; i++)
         {
-            var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var parts = lines[i].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0 || parts[0].StartsWith('#'))
                 continue;
-            if (parts[0] == "singleton" && parts.Length >= 3)
-                types[parts[1]] = Path.Combine(directory, parts[^1]);
-            else if (parts.Length >= 2 && char.IsUpper(parts[0][0]) && parts[^1].EndsWith(".qml", StringComparison.Ordinal))
-                types[parts[0]] = Path.Combine(directory, parts[^1]);
+            // "singleton Name 1.0 File.qml", "internal Name File.qml" and "Name 1.0 File.qml" declare types.
+            var named = parts[0] is "singleton" or "internal" ? parts[1..] : parts;
+            if (named.Length >= 2 && char.IsUpper(named[0][0]) && named[^1].EndsWith(".qml", StringComparison.Ordinal))
+                types[named[0]] = Path.Combine(directory, named[^1]);
+            else if (!IsQmldirCommand(parts[0]))
+                Log.Warn("scene", $"{qmldir}:{i + 1}: qmldir line is not understood and is ignored: {lines[i].Trim()}");
         }
-        _ = Log;
     }
+
+    /// <summary>qmldir commands that say nothing about the types in a folder.</summary>
+    private static bool IsQmldirCommand(string word) => word is "module" or "depends" or "import" or "optional"
+        or "default" or "plugin" or "classname" or "typeinfo" or "designersupported" or "static" or "system"
+        or "prefer" or "linktarget";
 
     public string? ResolveModuleDirectory(string uri)
     {
