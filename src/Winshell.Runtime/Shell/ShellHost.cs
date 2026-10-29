@@ -201,7 +201,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         {
             var message = Log.Describe(e, _rootFile);
             Log.Error("scene", (initial ? "Failed to load configuration: " : "Failed to reload configuration: ") + message);
-            Log.Error("scene", e.ToString());
+            Log.Debug("scene", e.ToString());
             DisposeFailed(engine);
             WatchFilesOf(oldEngine ?? engine);
             if (oldEngine?.FindNativeSingleton<ShellGlobal>() is { } oldShell)
