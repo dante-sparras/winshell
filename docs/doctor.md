@@ -39,7 +39,7 @@ Nothing. It shows no prompts, writes no registry values or settings, and starts 
 
 ```json
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "checks": [
     { "id": "windows", "title": "Windows", "status": "pass", "message": "Windows 11 25H2, build 26200.1", "fix": null }
   ],

@@ -1,6 +1,6 @@
 # Winshell updates
 
-A portable Winshell, the zip from GitHub Releases or the winget package, updates itself from that repository's releases. The release build names the repository: `scripts/package.ps1` stamps it into `winshell.exe`. Two kinds of Winshell never update themselves:
+A portable Winshell, the zip from GitHub Releases, updates itself from that repository's releases. winget, once the package is accepted, installs that same build, and it updates the same way. The Microsoft Store package is not published yet; once it is, the Store updates it and Winshell does not. The release build names the repository: `scripts/package.ps1` stamps it into `winshell.exe`. Two kinds of Winshell never update themselves:
 
 - A build from source has no repository stamped in it.
 - A packaged Winshell, such as the Microsoft Store's, is updated by whatever installed it.
@@ -35,4 +35,4 @@ The default shell shows the status on the About page. While an update is `Ready`
 
 ## Not checked by the automated tests
 
-The tests download from a fake GitHub into temporary folders. They never contact GitHub or replace an installed Winshell. A real release has not been downloaded yet: the first will be the release after this feature ships. Installing on start, running the new `winshell.exe` and waiting for the old process were checked by hand, with two published builds of different versions in a temporary folder.
+The tests download from a fake GitHub into temporary folders. They never contact GitHub or replace an installed Winshell. No published release has included the zip yet. Installing on start, running the new `winshell.exe` and waiting for the old process were checked by hand, with two published builds of different versions in a temporary folder.

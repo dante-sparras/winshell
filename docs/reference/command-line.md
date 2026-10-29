@@ -27,7 +27,7 @@ winshell doctor [config options] [-j] [--no-color]
 | `-d`, `--daemonize` | Starts the shell in the background, with no console window, and returns at once. |
 | `-n`, `--no-duplicate` | Does nothing when an instance of this configuration is already running. |
 | `-v`, `--verbose` | Also logs debug messages. |
-| `-V`, `--version` | Prints the version, such as `winshell 0.5.0+e8d05d1…` for a build from source, and exits. |
+| `-V`, `--version` | Prints the version, such as `winshell 0.6.0+e8d05d1…` for a build from source, and exits. |
 | `-h`, `--help` | Prints the summary and exits. |
 
 The log goes to the console and to the instance's log file. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.

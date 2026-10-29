@@ -2,6 +2,8 @@
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
+This signing is not active yet. It starts once the SignPath Foundation project for Winshell is approved. Until then, release zips are not signed with this certificate. The steps below are the policy for when that project is set up.
+
 ## What is signed
 
 The Windows binaries built from this repository, in the portable zips on [GitHub Releases](https://github.com/dante-sparras/winshell/releases) and the winget package made from them: `winshell.exe`, `winshellw.exe` (the same program without a console window), `winshell.dll`, `Winshell.Qml.dll`, `Winshell.Runtime.dll` and `Winshell.Platform.Windows.dll`, for x64 and arm64. Each one is named Winshell and carries the release's version.

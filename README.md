@@ -4,22 +4,19 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Install
 
-Winshell runs on Windows 11. Build it from source. You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
+Winshell runs on Windows 11. [Getting started](docs/guide/getting-started.md) describes the same options. winget and the Microsoft Store are not available yet. v0.6.0's release page has no zip, so the portable download and the PowerShell command do not work for that release either. Building from source is the install that works today.
 
-```powershell
-git clone https://github.com/dante-sparras/winshell.git
-cd winshell
-dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
-```
+### Portable zip
 
-That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed. [Getting started](docs/guide/getting-started.md) covers the first run.
+A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
 
-> [!NOTE]
-> 0.5.0, the current release, has no download. The release after it will carry a self-contained build, which needs no .NET install, on its [GitHub release page](https://github.com/dante-sparras/winshell/releases): `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. A winget package, `winget install DanteSparras.Winshell`, follows once winget has accepted it. Those builds update themselves from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md). Releases will be signed through SignPath Foundation once its project for Winshell is approved; see the [Code signing policy](docs/code-signing-policy.md).
+v0.6.0, the current release, was published with none of those files. GitHub marked the release immutable, and the upload was rejected ([#166](https://github.com/dante-sparras/winshell/issues/166)). Until a release page has the zip, build from source.
+
+Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](docs/code-signing-policy.md).
 
 ### Install with PowerShell
 
-No administrator account. Once that release exists, this downloads its portable build for the current user.
+No administrator account. This downloads the portable build for the current user. It needs `install.ps1` and the zip on the release, which v0.6.0 does not have.
 
 ```powershell
 irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
@@ -46,6 +43,26 @@ irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall
 ```
 
 That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`.
+
+### winget, coming
+
+`winget install DanteSparras.Winshell` once winget has accepted the package. It is not available yet. It will install the same portable build.
+
+### Microsoft Store, coming
+
+The Store package is built for Partner Center and is not published. Publishing waits on that setup, so there is nothing to install from the Store. The Store would sign that package and update it.
+
+### Build from source
+
+You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
+
+```powershell
+git clone https://github.com/dante-sparras/winshell.git
+cd winshell
+dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
+```
+
+That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed. [Getting started](docs/guide/getting-started.md) covers the first run.
 
 ## Documentation
 

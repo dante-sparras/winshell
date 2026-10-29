@@ -4,7 +4,59 @@ Winshell runs on Windows 11. This page installs it, runs the default shell, and 
 
 ## Install
 
-Build Winshell from source. You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
+Winshell runs on Windows 11. The portable zip and the PowerShell command install the same self-contained build. winget and the Microsoft Store are not available yet. v0.6.0's release page has no files, so building from source is the install that works today.
+
+### Portable zip
+
+A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip needs no .NET install. Unzip one into a folder of its own and run `winshell.exe`.
+
+v0.6.0, the current release, was published with none of those files. GitHub marked the release immutable, and the upload was rejected ([#166](https://github.com/dante-sparras/winshell/issues/166)). Until a release page has the zip, build from source.
+
+The portable build updates itself from GitHub Releases, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
+
+Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](../code-signing-policy.md).
+
+### Install with PowerShell
+
+No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running.
+
+It needs `install.ps1` and the zip on the release. v0.6.0 has neither, so this fails until a release includes them.
+
+```powershell
+irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
+```
+
+`iex` cannot take parameters. Set these first, or run the downloaded script as a script block:
+
+```powershell
+$env:WINSHELL_VERSION = '0.6.0'  # optional. x.y.z. Omit it for the latest release.
+$env:WINSHELL_AUTOSTART = '1'    # optional. Run Winshell at sign-in.
+irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version 0.6.0 -AutoStart
+```
+
+Remove that install with:
+
+```powershell
+irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
+```
+
+That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`.
+
+### winget, coming
+
+`winget install DanteSparras.Winshell` once winget has accepted the package. It is not available yet. It will install the same portable build, which then updates itself.
+
+### Microsoft Store, coming
+
+The Store package is built for Partner Center and is not published. Publishing waits on that setup. The Store would sign that package and update it. It is not an install option today.
+
+### Build from source
+
+You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
 
 ```powershell
 git clone https://github.com/dante-sparras/winshell.git
@@ -14,12 +66,9 @@ dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\Programs\winshell"
 
 That puts `winshell.exe` in `%LOCALAPPDATA%\Programs\winshell`. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed.
 
-> [!NOTE]
-> 0.5.0, the current release, has no download. The release after it will carry a self-contained build, which needs no .NET install, on its [GitHub release page](https://github.com/dante-sparras/winshell/releases): `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. A winget package, `winget install DanteSparras.Winshell`, follows once winget has accepted it.
+To update a source build, close Winshell, pull the newer source and publish it over the same folder. A build from source never updates itself.
 
-To update, close Winshell, pull the newer source and publish it over the same folder. A build from source never updates itself; the release zips and the winget package will, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A copy you made your own doesn't, as [making it your own](#make-the-default-shell-your-own) explains.
-
-To uninstall, turn off **Run Winshell when I sign in** in Winshell Settings if you turned it on, close Winshell, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
+To uninstall a source build, turn off **Run Winshell when I sign in** in Winshell Settings if you turned it on, close Winshell, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
 
 ## First run
 
