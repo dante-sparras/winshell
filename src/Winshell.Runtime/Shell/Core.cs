@@ -487,7 +487,7 @@ public static class ProcessLauncher
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            log.Warn("process", $"Failed to start {string.Join(' ', spec.Command)}: {e.Message}");
+            log.Warn("process", $"Failed to start {spec.Command[0]}: {e.Message}");
         }
     }
 

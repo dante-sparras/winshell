@@ -3,11 +3,12 @@ using System.Text.RegularExpressions;
 namespace Winshell.Runtime.Shell;
 
 /// <summary>
-/// Takes secrets out of text that goes into a crash report: authorization headers, bearer tokens, credentials
-/// assigned to a key that names one, the user and password and the query of a URL, and long opaque tokens.
-/// It recognizes shapes, not meaning, so a report says that it was cleaned this way rather than that it is safe.
+/// Takes secrets out of text that goes into a crash report or the instance log: authorization headers, bearer
+/// tokens, credentials assigned to a key or given to a flag that names one, the user and password and the query of
+/// a URL, and long opaque tokens. It recognizes shapes, not meaning, so a report says that it was cleaned this way
+/// rather than that it is safe.
 /// </summary>
-internal static partial class CrashRedaction
+public static partial class CrashRedaction
 {
     public const string Mask = "[redacted]";
 
@@ -41,8 +42,9 @@ internal static partial class CrashRedaction
 
     // password=..., "apiKey": "...", client_secret: ..., Cookie: ..., basic_auth=... The key may have a prefix or
     // suffix ("auth" only a prefix, so "Author:" is not a key), but no dot, so a stack frame's "Signals.cs:line 78"
-    // or "TokenReader.cs:line 9" is not a key.
-    [GeneratedRegex(@"(?<key>[A-Za-z0-9_\-]*(?:passw(?:or)?d|passphrase|pwd|secret|token|api[_\-.]?key|access[_\-.]?key|private[_\-.]?key|credential|cookie|session[_\-]?id|signature|auth(?=[""']?\s*[:=]))[A-Za-z0-9_\-]*[""']?)(?<sep>\s*[:=]\s*)(?:""(?:[^""\\\r\n]|\\.)*""|'(?:[^'\\\r\n]|\\.)*'|[^\s,;&""'}\])]+)", RegexOptions.IgnoreCase)]
+    // or "TokenReader.cs:line 9" is not a key. A flag, --password hunter2 or /token abc, takes the next word as its
+    // value, unless an earlier pattern already masked it; a bare word does not, so "the token expired" is left alone.
+    [GeneratedRegex(@"(?<key>(?<flag>(?<![\w\-/])(?:--?|/))?[A-Za-z0-9_\-]*(?:passw(?:or)?d|passphrase|pwd|secret|token|api[_\-.]?key|access[_\-.]?key|private[_\-.]?key|credential|cookie|session[_\-]?id|signature|auth(?=[""']?\s*[:=]|\s))[A-Za-z0-9_\-]*[""']?)(?<sep>\s*[:=]\s*|(?(flag)\s+|(?!)))(?!\[redacted\])(?:""(?:[^""\\\r\n]|\\.)*""|'(?:[^'\\\r\n]|\\.)*'|[^\s,;&""'}\])]+)", RegexOptions.IgnoreCase)]
     private static partial Regex Assignment();
 
     // Keys whose prefix gives them away: GitHub, Slack, OpenAI-style and AWS access keys.

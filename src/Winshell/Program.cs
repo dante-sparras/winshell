@@ -522,10 +522,11 @@ namespace Winshell
                 lock (consoleLock)
                 {
                     // A crash can still be reported after the log file is closed; then it goes to the console only.
+                    // The file outlives the run and goes into crash reports, so secrets are taken out of it.
                     try
                     {
                         if (!logClosed)
-                            instanceLog.Write(level, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {line}");
+                            instanceLog.Write(level, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
                     }
                     catch (Exception e) when (e is IOException or ObjectDisposedException)
                     {
