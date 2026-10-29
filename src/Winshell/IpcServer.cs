@@ -65,33 +65,43 @@ internal sealed class IpcServer : IDisposable
 
     private async Task Serve(NamedPipeServerStream stream)
     {
-        await using var _ = stream;
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
-        var line = await reader.ReadLineAsync().ConfigureAwait(false);
-        if (line is null)
-            return;
-        IpcRequest? request;
         try
         {
-            request = JsonSerializer.Deserialize(line, IpcJson.Default.IpcRequest);
+            await using var _ = stream;
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
+            var line = await reader.ReadLineAsync().ConfigureAwait(false);
+            if (line is null)
+                return;
+            IpcRequest? request;
+            try
+            {
+                request = JsonSerializer.Deserialize(line, IpcJson.Default.IpcRequest);
+            }
+            catch (JsonException)
+            {
+                request = null;
+            }
+            if (request is null)
+            {
+                await Send(writer, new IpcResponse(false, Error: "Malformed request")).ConfigureAwait(false);
+                return;
+            }
+            if (request.Op is "listen" or "wait")
+            {
+                await Listen(request, writer, once: request.Op == "wait").ConfigureAwait(false);
+                return;
+            }
+            var response = await OnUiThread(() => Handle(request)).ConfigureAwait(false);
+            await Send(writer, response).ConfigureAwait(false);
         }
-        catch (JsonException)
+        catch (IOException)
         {
-            request = null;
+            // The client closed the pipe (Ctrl+C, or it exited). That is not a crash.
         }
-        if (request is null)
+        catch (ObjectDisposedException)
         {
-            await Send(writer, new IpcResponse(false, Error: "Malformed request")).ConfigureAwait(false);
-            return;
         }
-        if (request.Op is "listen" or "wait")
-        {
-            await Listen(request, writer, once: request.Op == "wait").ConfigureAwait(false);
-            return;
-        }
-        var response = await OnUiThread(() => Handle(request)).ConfigureAwait(false);
-        await Send(writer, response).ConfigureAwait(false);
     }
 
     private IpcResponse Handle(IpcRequest request)
@@ -112,6 +122,11 @@ internal sealed class IpcServer : IDisposable
         catch (IpcException e)
         {
             return new IpcResponse(false, Error: e.Message);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // A script error is a failed call, not a crash report from an unobserved task.
+            return new IpcResponse(false, Error: Log.Describe(e, "ipc"));
         }
     }
 
@@ -141,6 +156,10 @@ internal sealed class IpcServer : IDisposable
             catch (IpcException e)
             {
                 return e.Message;
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                return Log.Describe(e, "ipc");
             }
         }).ConfigureAwait(false);
         if (error is not null)
