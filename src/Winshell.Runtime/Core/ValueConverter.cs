@@ -45,7 +45,7 @@ public static class ValueConverter
                 return value is null ? "" : ToQmlString(value);
             case "color":
                 return ToColor(value);
-            case "var" or "variant" or "alias":
+            case "alias":
                 return value;
             case "date":
                 return Convert(value, typeof(DateTime), engine);
@@ -56,10 +56,6 @@ public static class ValueConverter
             case "rect":
                 return Convert(value, typeof(QRect), engine);
             default:
-                if (value is null or QObject)
-                    return value;
-                if (value is QmlComponent)
-                    return value;
                 return value;
         }
     }

@@ -86,8 +86,6 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             {
                 case QmlIdMember id:
                     context.SetId(id.Id, obj);
-                    if (obj.ObjectName.Length == 0)
-                        obj.ObjectName = "";
                     break;
                 case QmlPropertyDeclaration p:
                     var dynamicProperty = obj.AddDynamicProperty(new DynamicProperty(obj, p.Name, p.Type)
@@ -161,7 +159,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
 
     private void ApplyGroup(QObject scopeObject, QObject target, QmlGroupedBlock group, ComponentContext context, QmlDocument doc)
     {
-        var groupObject = ResolveSegment(scopeObject, target, group.Name, context, group.Location);
+        var groupObject = ResolveSegment(target, group.Name, context, group.Location);
         foreach (var member in group.Members)
         {
             switch (member)
@@ -177,7 +175,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
     }
 
     /// <summary>The grouped property object or attached object a path segment refers to.</summary>
-    private QObject ResolveSegment(QObject scopeObject, QObject target, string path, ComponentContext context, SourceLocation location)
+    private QObject ResolveSegment(QObject target, string path, ComponentContext context, SourceLocation location)
     {
         var current = target;
         foreach (var segment in path.Split('.'))
@@ -198,7 +196,6 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
             current = value as QObject
                 ?? throw new QmlCompileException($"Property \"{segment}\" is not a grouped property", location);
         }
-        _ = scopeObject;
         return current;
     }
 
@@ -215,7 +212,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
         }
         if (dot > 0)
         {
-            target = ResolveSegment(scopeObject, target, path[..dot], context, location);
+            target = ResolveSegment(target, path[..dot], context, location);
             name = path[(dot + 1)..];
         }
 
@@ -376,7 +373,7 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
     private void ApplyOn(QObject obj, QmlOnAssignment on, ComponentContext context, QmlDocument doc)
     {
         var dot = on.Property.LastIndexOf('.');
-        var target = dot > 0 ? ResolveSegment(obj, obj, on.Property[..dot], context, on.Location) : obj;
+        var target = dot > 0 ? ResolveSegment(obj, on.Property[..dot], context, on.Location) : obj;
         var name = dot > 0 ? on.Property[(dot + 1)..] : on.Property;
         var source = Build(on.Object, context, doc, obj);
         if (source is IPropertyValueSource valueSource)
