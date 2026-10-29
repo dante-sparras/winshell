@@ -172,7 +172,7 @@ internal static class Globals
             {
                 return runtime.Wrap(new QmlComponent(qml, qml.LoadDocument(path)));
             }
-            catch (Exception e) when (e is IOException or Qml.QmlSyntaxException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or Qml.QmlSyntaxException or QmlCompileException)
             {
                 return runtime.Wrap(new QmlComponent(qml, e.Message));
             }
