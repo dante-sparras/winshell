@@ -118,6 +118,12 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
 
         foreach (var member in node.Members)
         {
+            if (member is QmlRequiredMember required)
+                MarkRequired(obj, required.Name, required.Location);
+        }
+
+        foreach (var member in node.Members)
+        {
             switch (member)
             {
                 case QmlPropertyDeclaration { Value: { } value, IsAlias: false } p:
@@ -137,6 +143,20 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                     break;
             }
         }
+    }
+
+    private void MarkRequired(QObject obj, string name, SourceLocation location)
+    {
+        if (obj.GetDynamicProperty(name) is { } property)
+        {
+            property.IsRequired = true;
+            if (!batch.Required.Contains(property))
+                batch.Required.Add(property);
+            return;
+        }
+        // A built-in property has no assignment flag. Unknown names are the typo this syntax used to hide.
+        if (!obj.HasProperty(name))
+            throw new QmlCompileException($"Required property {name} was not found", location);
     }
 
     private void ApplyGroup(QObject scopeObject, QObject target, QmlGroupedBlock group, ComponentContext context, QmlDocument doc)

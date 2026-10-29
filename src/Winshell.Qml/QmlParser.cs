@@ -165,8 +165,9 @@ public sealed class QmlParser
                 required = true;
                 if (PeekKeyword("property") || PeekKeyword("readonly") || PeekKeyword("default"))
                     continue;
-                // "required name": marks an existing property required.
-                if (char.IsLetter(Peek()) || Peek() == '_')
+                // "required name" marks an existing property required. TryKeyword leaves the space after the keyword.
+                SkipTrivia();
+                if (char.IsLetter(Peek()) || Peek() == '_' || Peek() == '$')
                 {
                     var name = ReadIdentifier();
                     if (!IsAssignmentAhead())
