@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Winshell.Runtime.Tests;
 
 /// <summary>One <see cref="EventQueue.RunDue"/> pass must return even when the work it runs queues more.</summary>
@@ -83,5 +85,45 @@ public class EventLoopTests
         Assert.Equal(1, root.ReadProperty("hits"));
         shell.Loop.Process();
         Assert.Equal(5, root.ReadProperty("hits"));
+    }
+
+    [Fact]
+    public void A_cancelled_timer_does_not_hold_its_action_until_its_due_time()
+    {
+        var loop = new ManualEventLoop();
+        var action = ScheduleAndCancel(loop);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.False(action.IsAlive);
+        GC.KeepAlive(loop);
+    }
+
+    [Fact]
+    public void Timers_keep_their_order_when_cancelled_ones_are_dropped()
+    {
+        var loop = new ManualEventLoop();
+        var fired = new List<int>();
+        var first = loop.Schedule(TimeSpan.FromMilliseconds(10), () => fired.Add(1));
+        loop.Schedule(TimeSpan.FromMilliseconds(20), () => fired.Add(2));
+        loop.Schedule(TimeSpan.FromMilliseconds(20), () => fired.Add(3));
+        for (var i = 0; i < 10; i++)
+            loop.Schedule(TimeSpan.FromMilliseconds(5), () => fired.Add(0)).Dispose();
+        first.Dispose();
+
+        loop.Advance(TimeSpan.FromMilliseconds(30));
+
+        Assert.Equal([2, 3], fired);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference ScheduleAndCancel(EventQueue loop)
+    {
+        var payload = new object();
+        Action action = () => GC.KeepAlive(payload);
+        loop.Schedule(TimeSpan.FromHours(1), action).Dispose();
+        return new WeakReference(action);
     }
 }

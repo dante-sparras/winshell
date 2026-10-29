@@ -30,6 +30,7 @@ public class EventQueue : IEventLoop
     private readonly List<Action> _frameCallbacks = [];
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private long _sequence;
+    private int _cancelled;
 
     public event Action? Woken;
 
@@ -51,7 +52,7 @@ public class EventQueue : IEventLoop
 
     public IDisposable Schedule(TimeSpan delay, Action action)
     {
-        var entry = new TimerEntry(action);
+        var entry = new TimerEntry(this, action);
         lock (_timers)
             _timers.Enqueue(entry, (Now + delay, _sequence++));
         Woken?.Invoke();
@@ -89,6 +90,7 @@ public class EventQueue : IEventLoop
                     if (!entry.Cancelled)
                         return due.Item1;
                     _timers.Dequeue();
+                    _cancelled--;
                 }
                 return null;
             }
@@ -119,13 +121,17 @@ public class EventQueue : IEventLoop
             while (_timers.TryPeek(out var entry, out var due) && due.Item1 <= now)
             {
                 _timers.Dequeue();
-                if (!entry.Cancelled)
-                    dueNow.Add(entry);
+                if (entry.Cancelled)
+                {
+                    _cancelled--;
+                    continue;
+                }
+                entry.Cancelled = true;
+                dueNow.Add(entry);
             }
         }
         foreach (var next in dueNow)
         {
-            next.Cancelled = true;
             Run(next.Action);
             ran = true;
         }
@@ -147,9 +153,30 @@ public class EventQueue : IEventLoop
                 if (!entry.Cancelled)
                     return due.Item1 <= now;
                 _timers.Dequeue();
+                _cancelled--;
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Cancels a timer that has not fired. It leaves the heap when it reaches the top, or sooner when cancelled
+    /// timers pass half the heap, so a timer restarted on every keystroke does not pile up until its due time.
+    /// </summary>
+    private void Cancel(TimerEntry entry)
+    {
+        lock (_timers)
+        {
+            if (entry.Cancelled)
+                return;
+            entry.Cancelled = true;
+            if (++_cancelled <= _timers.Count / 2)
+                return;
+            var live = _timers.UnorderedItems.Where(item => !item.Element.Cancelled).ToList();
+            _timers.Clear();
+            _timers.EnqueueRange(live);
+            _cancelled = 0;
+        }
     }
 
     /// <summary>Runs the frame callbacks requested so far.</summary>
@@ -190,13 +217,14 @@ public class EventQueue : IEventLoop
         return false;
     }
 
-    private sealed class TimerEntry(Action action) : IDisposable
+    private sealed class TimerEntry(EventQueue queue, Action action) : IDisposable
     {
         public Action Action { get; } = action;
 
+        /// <summary>Set under the timer lock when the timer is cancelled or taken off the heap to fire.</summary>
         public bool Cancelled { get; set; }
 
-        public void Dispose() => Cancelled = true;
+        public void Dispose() => queue.Cancel(this);
     }
 }
 
