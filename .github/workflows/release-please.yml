@@ -42,7 +42,7 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
       contents: write # uploads to the release
-    uses: ./.github/workflows/package.yml
+    uses: $/.github/workflows/package.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets:
