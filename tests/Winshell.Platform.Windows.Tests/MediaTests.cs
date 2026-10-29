@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Windows.Media;
 using Windows.Media.Playback;
 using Windows.Storage.Streams;
@@ -12,7 +13,7 @@ namespace Winshell.Platform.Windows.Tests;
 /// </summary>
 public sealed class MediaTests : IDisposable
 {
-    private const string Title = "Winshell probe";
+    private readonly string _title = "Winshell probe " + Guid.NewGuid().ToString("N");
 
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
@@ -82,13 +83,28 @@ public sealed class MediaTests : IDisposable
             };
             var updater = controls.DisplayUpdater;
             updater.Type = MediaPlaybackType.Music;
-            updater.MusicProperties.Title = Title;
+            updater.Update();
+            // Session registration is independent of its property events. Let the real consumer subscribe before
+            // publishing the one metadata/art update, just as the timeline below is published after discovery.
+            var appId = Path.GetFileName(Environment.ProcessPath);
+            Assert.True(await WaitUntil(() => media.Sessions.Values.OfType<MediaSession>()
+                .Any(s => string.Equals(s.AppId, appId, StringComparison.OrdinalIgnoreCase))),
+                "Windows did not register this process's probe session.");
+            updater.MusicProperties.Title = _title;
             updater.MusicProperties.Artist = "Winshell";
             updater.MusicProperties.AlbumTitle = "Live";
             updater.MusicProperties.AlbumArtist = "Winshell";
             updater.MusicProperties.TrackNumber = 3;
             updater.Thumbnail = RandomAccessStreamReference.CreateFromStream(art);
             updater.Update();
+
+            var session = await WaitForSession(media);
+            Assert.NotNull(session);
+            Assert.True(await WaitUntil(() => session.TrackArtUrl.Length > 0),
+                "The probe's metadata arrived without its artwork.");
+            // Windows publishes metadata/art and the timeline independently. Publish the timeline only after
+            // discovery so this test always exercises the later timeline event instead of depending on a race.
+            Assert.False(session.LengthSupported);
             controls.UpdateTimelineProperties(new SystemMediaTransportControlsTimelineProperties
             {
                 StartTime = TimeSpan.Zero,
@@ -97,17 +113,16 @@ public sealed class MediaTests : IDisposable
                 MaxSeekTime = TimeSpan.FromSeconds(125),
                 Position = TimeSpan.FromSeconds(5),
             });
-
-            var session = await WaitForSession(media);
-            Assert.NotNull(session);
+            Assert.True(await WaitUntil(() => session.LengthSupported && session.PlaybackState == 1),
+                "The discovered session did not receive its timeline and playing state.");
             _output.WriteLine($"session: {session.AppName} ({session.AppId}) state {session.PlaybackState} art {session.TrackArtUrl}");
-            Assert.Equal(Title, session.TrackTitle);
+            Assert.Equal(_title, session.TrackTitle);
             Assert.Equal("Winshell", session.TrackArtist);
             Assert.Equal("Live", session.TrackAlbum);
             Assert.Equal("Winshell", session.TrackAlbumArtist);
             Assert.False(string.IsNullOrWhiteSpace(session.AppName));
             var metadata = session.Metadata;
-            Assert.Equal(Title, metadata["title"] as string);
+            Assert.Equal(_title, metadata["title"] as string);
             Assert.Equal("Winshell", metadata["artist"] as string);
             Assert.Equal("Live", metadata["album"] as string);
             Assert.Equal(125d, metadata["duration"]);
@@ -137,27 +152,32 @@ public sealed class MediaTests : IDisposable
 
     private async Task<MediaSession?> WaitForSession(MediaService media)
     {
-        for (var i = 0; i < 80; i++)
+        MediaSession? session = null;
+        await WaitUntil(() =>
         {
-            _loop.Process();
-            var session = media.Sessions.Values.OfType<MediaSession>().FirstOrDefault(s => s.TrackTitle == Title && s.TrackArtUrl.Length > 0);
-            if (session is not null)
-                return session;
-            await Task.Delay(100);
-        }
-        return null;
+            session = media.Sessions.Values.OfType<MediaSession>().FirstOrDefault(s => s.TrackTitle == _title);
+            return session is not null;
+        });
+        return session;
     }
 
-    private async Task<bool> WaitForState(MediaSession session, int state)
+    private Task<bool> WaitForState(MediaSession session, int state) =>
+        WaitUntil(() => session.PlaybackState == state);
+
+    private async Task<bool> WaitUntil(Func<bool> ready)
     {
-        for (var i = 0; i < 30; i++)
+        // GSMTC publication/commands cross processes. Use an elapsed-time deadline and keep pumping the engine,
+        // including when a shared runner delays a continuation. No fixed sleep stands in for readiness.
+        var elapsed = Stopwatch.StartNew();
+        while (true)
         {
             _loop.Process();
-            if (session.PlaybackState == state)
+            if (ready())
                 return true;
-            await Task.Delay(100);
+            if (elapsed.Elapsed >= TimeSpan.FromSeconds(30))
+                return false;
+            await Task.Delay(50);
         }
-        return false;
     }
 
     public void Dispose()
