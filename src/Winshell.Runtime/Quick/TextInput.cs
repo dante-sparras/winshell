@@ -246,7 +246,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public double BottomPadding { get { Track(); return _bottomPadding; } set { _bottomPadding = value; NotifyChanged("bottomPadding"); UpdateImplicit(); } }
 
-    public bool FocusOnPress => !_readOnly || _selectByMouse;
+    public bool FocusOnPress => ActiveFocusOnPress && (!_readOnly || _selectByMouse);
 
     [Qml]
     public bool ActiveFocusOnPress { get; set; } = true;
@@ -814,7 +814,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public virtual bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
-        ForceActiveFocus();
+        if (ActiveFocusOnPress)
+            ForceActiveFocus();
         var pos = PositionAt(x, y);
         _dragAnchor = pos;
         MoveCursor(pos, (modifiers & QtEnums.ShiftModifier) != 0);
