@@ -42,6 +42,9 @@ namespace Winshell
 
             public bool Follow { get; set; }
 
+            /// <summary>End the process when the instance does not exit after it is asked.</summary>
+            public bool Force { get; set; }
+
             public bool NoColor { get; set; }
 
             public int? Tail { get; set; }
@@ -222,6 +225,9 @@ namespace Winshell
                     case "-f" or "--follow":
                         o.Follow = true;
                         break;
+                    case "--force":
+                        o.Force = true;
+                        break;
                     case "-t" or "--tail":
                         o.Tail = WholeNumber(args[i], Next());
                         break;
@@ -280,8 +286,9 @@ namespace Winshell
                     return;
                 case "kill":
                     WriteHelp("""
-                        winshell kill [-i <id> | --pid <pid> | -c <name> | -p <path>]
-                          Asks one running instance to exit.
+                        winshell kill [--force] [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                          Asks one running instance to exit, then waits until that process has exited.
+                          --force ends the process when it does not exit.
                           With no selector, the newest running instance is used.
                         """);
                     return;
@@ -325,7 +332,8 @@ namespace Winshell
                        winshell                            print this help
                        winshell <command> --help           help for that command, which does not run
                        winshell list [-j]                  list running instances
-                       winshell kill [instance options]    stop an instance
+                       winshell kill [--force] [instance options]
+                                                           stop an instance and wait until it exits
                        winshell log [-f] [-t N] [file]     print an instance's log
                        winshell ipc show                   list IPC targets
                        winshell ipc call <target> <function> [args...]
@@ -855,10 +863,78 @@ namespace Winshell
                 Console.Error.WriteLine(error);
                 return 1;
             }
-            await foreach (var _ in IpcServer.Request(info.Pipe, new IpcRequest("kill")))
-                break;
+            string? unreachable = null;
+            try
+            {
+                await foreach (var _ in IpcServer.Request(info.Pipe, new IpcRequest("kill")))
+                    break;
+            }
+            catch (Exception e) when (e is TimeoutException or IOException)
+            {
+                unreachable = e.Message;
+            }
+            // The quit is only posted. Wait so the next start does not overlap the AppBar, hotkeys and tray.
+            if (!WaitForShellExit(info, TimeSpan.FromSeconds(5)) && !(o.Force && EndProcess(info)))
+            {
+                if (unreachable is not null)
+                    Console.Error.WriteLine($"Could not reach instance {info.Id}: {unreachable}");
+                Console.Error.WriteLine(o.Force
+                    ? $"Could not end instance {info.Id}."
+                    : $"Instance {info.Id} is still running. Use --force to end it.");
+                return 1;
+            }
             Console.WriteLine($"Killed {info.Id}");
             return 0;
+        }
+
+        /// <summary>True when this instance's process has exited, or the process id now belongs to something else.</summary>
+        private static bool WaitForShellExit(InstanceInfo info, TimeSpan timeout)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(info.Pid);
+                if (process.HasExited || !IsThisInstance(info, process))
+                    return true;
+                return process.WaitForExit(timeout);
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return true;
+            }
+        }
+
+        private static bool EndProcess(InstanceInfo info)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(info.Pid);
+                // A different process now owns this id. The instance we asked is already gone.
+                if (process.HasExited || !IsThisInstance(info, process))
+                    return true;
+                process.Kill(entireProcessTree: true);
+                return process.WaitForExit(5000);
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return e is ArgumentException;
+            }
+        }
+
+        private static bool IsThisInstance(InstanceInfo info, Process process)
+        {
+            if (!process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (info.ProcessStart == 0)
+                return true;
+            try
+            {
+                var started = process.StartTime.ToUniversalTime().Ticks;
+                return started == 0 || started == info.ProcessStart;
+            }
+            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or ArgumentException)
+            {
+                return true;
+            }
         }
 
         private static async Task<int> PrintLog(Options o)
