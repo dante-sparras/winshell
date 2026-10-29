@@ -832,7 +832,7 @@ public sealed class ProgressBar : Control
 /// <summary>QtQuick.Controls' <c>BusyIndicator</c>, drawn as a Windows 11 progress ring.</summary>
 public sealed class BusyIndicator : Control
 {
-    private bool _running = true;
+    private bool _running;
 
     public BusyIndicator()
     {

@@ -158,6 +158,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Binding.delayed` | Ignored, as is `restoreMode`. |
 | `Text.font` | `font.styleName`, `font.kerning`, `font.wordSpacing`, `font.hintingPreference`, `font.preferShaping`, `font.features` and `font.variableAxes` are ignored, and `Font.SmallCaps` leaves the text as it is, here and on every item and control with a `font`. |
 | `Loader.asynchronous` | Ignored. The component is still created on this thread before the property assignment returns. |
+| `BusyIndicator.running` | Defaults to false, so an indicator turns only once a document sets it. Qt's defaults to true. |
 
 ## The Qt object
 
