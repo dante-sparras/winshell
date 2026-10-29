@@ -32,7 +32,7 @@ winshell doctor [config options] [-j] [--no-color]
 | `-V`, `--version` | Prints the version, such as `winshell 0.6.0+e8d05d1…` for a build from source, and exits. |
 | `-h`, `--help` | Prints the summary and exits. |
 
-The log goes to the console and to the instance's log file. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.
+The log goes to the console and to the instance's log file. The file is kept to about 4 MB, and the previous part is `log.1.txt` beside it. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.
 
 `--no-color`, `--log-times`, `--any-display`, `--newest`, `--log-rules <rules>`, `--manifest <path>` and `--debug <port>` are accepted for Quickshell's command lines and do nothing.
 
