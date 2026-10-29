@@ -21,13 +21,21 @@ FloatingWindow {
   WindowEffects.backdrop: WindowEffects.Mica
 
   // Opens a page, or the page of a setting with the keyboard on it; "" keeps the page it was on.
+  // Startup reads the registry. The page's own visible flag does not follow this window, so a reopen or
+  // a return to the foreground would otherwise keep the sign-in switch from the last time the page appeared.
   function open(key) {
     if (key)
       view.open(key)
+    var showing = visible
     activate()
+    if (showing)
+      Startup.refresh()
     if (!key)
       view.focusSearch()
   }
+
+  onVisibleChanged: if (visible) Startup.refresh()
+  onActiveChanged: if (active) Startup.refresh()
 
   SettingsView {
     id: view

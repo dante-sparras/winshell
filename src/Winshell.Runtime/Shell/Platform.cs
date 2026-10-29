@@ -134,6 +134,9 @@ public interface IWindowClient
 
     void OnClosed();
 
+    /// <summary>The native window became the foreground window, or stopped being it. The default does nothing.</summary>
+    void OnActiveChanged(bool active) { }
+
     void OnScreenChanged(string screenId);
 
     Quick.Scene Scene { get; }
