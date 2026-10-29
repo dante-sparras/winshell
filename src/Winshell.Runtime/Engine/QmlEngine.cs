@@ -16,6 +16,8 @@ public sealed class QmlEngine : IDisposable
     private readonly Dictionary<TypeEntry, QObject> _nativeSingletons = [];
     private readonly Dictionary<string, JsValue> _scripts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _scriptSources = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loadingScripts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _scriptImportChain = [];
     private readonly HashSet<string> _creatingSingletons = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<QObject> _roots = [];
     private readonly Stack<CreationBatch> _batches = new();
@@ -199,6 +201,7 @@ public sealed class QmlEngine : IDisposable
     /// </summary>
     public JsValue LoadScript(string path, ComponentContext? context = null)
     {
+        path = Path.GetFullPath(path);
         if (_scripts.TryGetValue(path, out var module))
             return module;
         var instance = context;
@@ -206,14 +209,30 @@ public sealed class QmlEngine : IDisposable
             instance = parent;
         if (instance?.Scripts is { } own && own.TryGetValue(path, out module))
             return module;
-        if (!_scriptSources.TryGetValue(path, out var code))
-            _scriptSources[path] = code = File.ReadAllText(path);
-        module = ScriptModule.Load(this, code, path);
-        if (instance is null || ScriptModule.IsLibrary(code))
-            _scripts[path] = module;
-        else
-            (instance.Scripts ??= new(StringComparer.OrdinalIgnoreCase))[path] = module;
-        return module;
+        // The module is stored only after its imports load. A file that imports itself, directly or through
+        // another file, would otherwise recurse here until the process dies with a stack overflow.
+        if (!_loadingScripts.Add(path))
+        {
+            var chain = string.Join(" -> ", _scriptImportChain.Append(path));
+            throw new QmlException($"{path} imports itself through {chain}");
+        }
+        _scriptImportChain.Add(path);
+        try
+        {
+            if (!_scriptSources.TryGetValue(path, out var code))
+                _scriptSources[path] = code = File.ReadAllText(path);
+            module = ScriptModule.Load(this, code, path);
+            if (instance is null || ScriptModule.IsLibrary(code))
+                _scripts[path] = module;
+            else
+                (instance.Scripts ??= new(StringComparer.OrdinalIgnoreCase))[path] = module;
+            return module;
+        }
+        finally
+        {
+            _loadingScripts.Remove(path);
+            _scriptImportChain.RemoveAt(_scriptImportChain.Count - 1);
+        }
     }
 
     /// <summary>Remembers a signal this engine's scripts connected to, to disconnect them when it is disposed.</summary>
