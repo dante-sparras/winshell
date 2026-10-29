@@ -763,6 +763,7 @@ public sealed class FileView : QObject
     private Thread? _watchThread;
     private volatile int _watchGeneration;
     private string? _watchedPath;
+    private bool _watchingParent;
     private int _generation;
     private bool _bom;
     // One save at a time, on a thread of its own, so a later save cannot finish before an earlier one and a burst
@@ -1410,14 +1411,24 @@ public sealed class FileView : QObject
         }
         var full = FollowLink(_path);
         var dir = System.IO.Path.GetDirectoryName(full);
-        if (dir is null || !Directory.Exists(dir))
+        var name = System.IO.Path.GetFileName(full);
+        var parent = false;
+        // A folder that does not exist yet is watched from the nearest one that does. Each folder created
+        // under it moves the watch one step closer to the file.
+        while (dir is not null && !Directory.Exists(dir))
+        {
+            parent = true;
+            name = System.IO.Path.GetFileName(dir);
+            dir = System.IO.Path.GetDirectoryName(dir);
+        }
+        if (dir is null)
         {
             StopWatching();
             return;
         }
         // Replacing the file does not detach a directory watch. Restarting it here drops a hand save that
         // already happened, and the new watch never sees that event.
-        if (_watchThread is { IsAlive: true } && _watchedPath == full)
+        if (_watchThread is { IsAlive: true } && _watchedPath == full && !_watchingParent && !parent)
             return;
         StopWatching();
         var generation = _watchGeneration;
@@ -1430,11 +1441,11 @@ public sealed class FileView : QObject
             return;
         }
         var loop = Engine.Loop;
-        var watched = full;
-        var fileName = System.IO.Path.GetFileName(full);
+        Action changed = parent ? () => FolderCreated(generation, full) : () => AcceptHandSave(full);
         _watchHandle = handle;
         _watchedPath = full;
-        var thread = new Thread(() => WatchLoop(handle, generation, fileName, loop, watched))
+        _watchingParent = parent;
+        var thread = new Thread(() => WatchLoop(handle, generation, name, loop, changed))
         {
             IsBackground = true,
             Name = "FileView watch",
@@ -1447,7 +1458,7 @@ public sealed class FileView : QObject
     /// Blocks in the kernel until the directory changes. FileSystemWatcher delivers that on a thread pool worker,
     /// and a busy pool holds the hand-save notification until the test has already given up.
     /// </summary>
-    private void WatchLoop(Microsoft.Win32.SafeHandles.SafeFileHandle handle, int generation, string fileName, IEventLoop loop, string watched)
+    private void WatchLoop(Microsoft.Win32.SafeHandles.SafeFileHandle handle, int generation, string fileName, IEventLoop loop, Action changed)
     {
         var buffer = new byte[16 * 1024];
         while (generation == _watchGeneration)
@@ -1463,7 +1474,7 @@ public sealed class FileView : QObject
                     return;
                 if (error == 1022)
                 {
-                    loop.Post(() => AcceptHandSave(watched));
+                    loop.Post(changed);
                     continue;
                 }
                 return;
@@ -1472,8 +1483,18 @@ public sealed class FileView : QObject
                 return;
             // Read on the loop, after the event. Reading here would hold the file during our own replace.
             if (returned == 0 || MentionsFile(buffer, returned, fileName))
-                loop.Post(() => AcceptHandSave(watched));
+                loop.Post(changed);
         }
+    }
+
+    private void FolderCreated(int generation, string full)
+    {
+        if (IsDestroyed || generation != _watchGeneration)
+            return;
+        StopWatching();
+        Watch();
+        // The file may have been written before this reached the loop, so the new watch would not see it.
+        AcceptHandSave(full);
     }
 
     private static bool MentionsFile(byte[] buffer, int count, string fileName)
@@ -1501,6 +1522,7 @@ public sealed class FileView : QObject
         var handle = _watchHandle;
         _watchHandle = null;
         _watchedPath = null;
+        _watchingParent = false;
         if (handle is not null)
         {
 #pragma warning disable CA1416
