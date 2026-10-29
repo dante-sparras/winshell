@@ -118,6 +118,9 @@ public sealed class ShellHost : IShellHost, IDisposable
 
     public string LogPath { get; init; } = "";
 
+    /// <summary>Where a window that fails writes its crash report. Null writes none, as in tests.</summary>
+    public CrashReports? Crashes { get; init; }
+
     public bool WatchFiles
     {
         get => _settings.Watching;
@@ -176,6 +179,8 @@ public sealed class ShellHost : IShellHost, IDisposable
         engine.AddService(_screens ?? new ScreenRegistry(_platform));
         var ipc = new IpcRegistry();
         engine.AddService(ipc);
+        if (Crashes is not null)
+            engine.AddService(Crashes);
         foreach (var service in Services)
             service(engine);
         _configure?.Invoke(engine);

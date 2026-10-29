@@ -27,6 +27,8 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
     private bool _opaqueSet;
     private bool _opaque;
     private IWindowBackend? _backend;
+    private SurfaceRestarts? _restarts;
+    private IDisposable? _restartTimer;
     private readonly QObject _windowTransform = new();
     private WindowBackdrop _backdrop;
     private WindowCorners _corners;
@@ -472,15 +474,99 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
     {
     }
 
+    /// <summary>
+    /// The native window failed: report it, close it, and make another after a backoff, so one broken window does
+    /// not take the shell down or stay broken. A window that keeps failing stays closed until the next reload.
+    /// </summary>
+    public void OnFailed(Exception error)
+    {
+        if (IsDestroyed || Engine is not { } engine)
+            return;
+        var where = SurfaceName;
+        var report = engine.GetService<CrashReports>()?.Write(where, error);
+        _backend?.Dispose();
+        _backend = null;
+        NotifyChanged("backingWindowVisible");
+        WindowRegistry.Changed(this);
+        var delay = (_restarts ??= new SurfaceRestarts()).Fail(engine.Loop.Now);
+        if (delay is { } wait)
+            engine.Log.Error("window", $"{where} failed and opens again in {wait.TotalSeconds:0} s: {error.GetType().Name}: {error.Message}");
+        else
+            engine.Log.Error("window", $"{where} failed {SurfaceRestarts.MaxFailures} times in {SurfaceRestarts.Period.TotalMinutes:0} minutes and stays closed until the configuration reloads: {error.GetType().Name}: {error.Message}");
+        engine.Log.Debug("window", error.ToString());
+        if (report is not null)
+            engine.Log.Info("window", $"Wrote a crash report to \"{report.Path}\"");
+        if (delay is not null)
+            _restartTimer = engine.Loop.Schedule(delay.Value, Restart);
+    }
+
+    private void Restart()
+    {
+        _restartTimer = null;
+        if (IsDestroyed || _backend is not null)
+            return;
+        try
+        {
+            CreateBackend();
+            OnBackendCreated();
+            Emit("windowConnected");
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            OnFailed(e);
+        }
+    }
+
+    /// <summary>The window as a crash report names it: its type, the file it is declared in, and its screen.</summary>
+    internal string SurfaceName
+    {
+        get
+        {
+            var name = TypeName;
+            if (ObjectName.Length > 0)
+                name += $" \"{ObjectName}\"";
+            if (CreationContext?.Imports?.Document.File is { Length: > 0 } file)
+                name += $" in {Path.GetFileName(file)}";
+            if (ShownOn is { } screen)
+                name += $" on {screen.Name}";
+            return name;
+        }
+    }
+
     protected override void OnDestroy()
     {
         Theme.Changed -= OnThemeChanged;
+        _restartTimer?.Dispose();
         _maskConnection?.Dispose();
         WindowRegistry.Remove(this);
         Scene.Root.Destroy();
         _backend?.Dispose();
         _backend = null;
         base.OnDestroy();
+    }
+}
+
+/// <summary>
+/// When a failed window opens again: after 1, 2, 4, 8 and 16 seconds. The sixth failure within five minutes
+/// leaves it closed.
+/// </summary>
+internal sealed class SurfaceRestarts
+{
+    public const int MaxFailures = 6;
+
+    public static readonly TimeSpan Period = TimeSpan.FromMinutes(5);
+
+    private readonly Queue<TimeSpan> _failures = new();
+
+    /// <summary>Counts a failure at <paramref name="now"/>. Returns how long to wait before opening again, or null to stay closed.</summary>
+    public TimeSpan? Fail(TimeSpan now)
+    {
+        while (_failures.TryPeek(out var first) && now - first >= Period)
+            _failures.Dequeue();
+        _failures.Enqueue(now);
+        if (_failures.Count >= MaxFailures)
+            return null;
+        return TimeSpan.FromSeconds(1 << (_failures.Count - 1));
     }
 }
 

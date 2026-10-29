@@ -20,6 +20,9 @@ public static class ShellLocations
     /// <summary>One folder per running instance. <c>log.txt</c> in that folder is the instance's log.</summary>
     public static string RunRoot => Path.Combine(LocalRoot, "run");
 
+    /// <summary>Crash reports, one text file each. They stay on this PC.</summary>
+    public static string CrashRoot => Path.Combine(LocalRoot, "crashes");
+
     /// <summary>The shell written out when the user has no configuration yet.</summary>
     public static string DefaultShellRoot => Path.Combine(LocalRoot, "default-shell");
 }

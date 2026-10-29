@@ -142,6 +142,12 @@ public interface IWindowClient
     void OnDismissed();
 
     void OnStateChanged(bool maximized, bool minimized, bool fullscreen);
+
+    /// <summary>
+    /// The native window threw while drawing or handling a message, and stopped doing either. Called on the loop,
+    /// once per backend; the window disposes that backend and makes another.
+    /// </summary>
+    void OnFailed(Exception error);
 }
 
 /// <summary>The platform: screens and windows.</summary>

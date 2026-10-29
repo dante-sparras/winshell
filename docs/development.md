@@ -49,6 +49,7 @@ A running shell reads these. None is needed to build or test.
 | State | `%LOCALAPPDATA%\winshell\state` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data` |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
+| Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one text file each, the newest 50 kept. Nothing is sent anywhere. A window whose native window throws while drawing or handling input writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. Work on the event loop that throws writes one per place it throws from, and a crash that ends the process writes one before it ends. |
 | Winshell Settings choices | `preferences.json` in the user configurations folder; see [Winshell Settings](settings.md) |
 | Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens, with the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. An entry that starts another `winshell.exe`, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. |
 

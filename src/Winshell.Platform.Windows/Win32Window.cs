@@ -44,6 +44,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private QPoint _origin;
     private string _screenId = "";
     private bool _placing;
+    private bool _failed;
 
     public Win32Window(WindowsPlatform platform, WindowKind kind, IWindowClient client)
     {
@@ -127,14 +128,18 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         var data = Win32.GetWindowLongPtr(hwnd, Win32.GWLP_USERDATA);
         if (data != 0 && GCHandle.FromIntPtr(data).Target is Win32Window window)
         {
-            try
+            // A window that threw handles nothing more; its client is making another.
+            if (!window._failed)
             {
-                if (window.OnMessage(msg, wParam, lParam) is { } result)
-                    return result;
-            }
-            catch (Exception e)
-            {
-                window._platform.Log.Error("window", e.ToString());
+                try
+                {
+                    if (window.OnMessage(msg, wParam, lParam) is { } result)
+                        return result;
+                }
+                catch (Exception e)
+                {
+                    window.Fail(e);
+                }
             }
         }
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -608,7 +613,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     private void RenderNow()
     {
-        if (_surface is null || Handle == 0)
+        if (_surface is null || Handle == 0 || _failed)
             return;
         _lastFrame = _platform.Loop.Now;
         try
@@ -619,7 +624,28 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         {
             _platform.Log.Error("render", $"Could not draw a frame: {e.Message}");
         }
+        catch (Exception e)
+        {
+            Fail(e);
+            return;
+        }
         _automation.AfterFrame();
+    }
+
+    /// <summary>
+    /// The window threw while drawing or handling a message. It stops doing both, and its client is told on the
+    /// loop, outside this message, to dispose it and make another.
+    /// </summary>
+    private void Fail(Exception error)
+    {
+        if (_failed)
+            return;
+        _failed = true;
+        _platform.Loop.Post(() =>
+        {
+            if (Handle != 0)
+                _client.OnFailed(error);
+        });
     }
 
     // Messages

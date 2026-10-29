@@ -292,18 +292,33 @@ namespace Winshell
                 }
             };
 
-            // A crash is reported in the instance's log, where winshell log finds it, before the process ends.
-            AppDomain.CurrentDomain.UnhandledException += (_, e) => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {e.ExceptionObject}");
+            // A crash is reported in the instance's log, where winshell log finds it, and in a crash report that
+            // outlives the log, before the process ends. Failures the shell survives get a report each too.
+            var crashes = new CrashReports(ShellLocations.CrashRoot) { ConfigPath = root, LogPath = logPath };
+            void Reported(CrashReport? report)
+            {
+                if (report is not null)
+                    log.Info("", $"Wrote a crash report to \"{report.Path}\"");
+            }
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                log.Write(LogLevel.Fatal, "", $"Winshell crashed: {e.ExceptionObject}");
+                if (e.ExceptionObject is Exception error)
+                    Reported(crashes.Write("Winshell", error, fatal: true));
+            };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
                 log.Error("", $"A background task failed: {e.Exception}");
                 e.SetObserved();
+                Reported(crashes.WriteOnce("background task", e.Exception));
             };
 
             using var loop = new WinEventLoop { Log = log };
+            loop.Failed += e => Reported(crashes.WriteOnce("event loop", e));
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);
-            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath };
+            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath, Crashes = crashes };
+            crashes.ShellId = host.ShellId;
             host.Services.Add(engine =>
             {
                 engine.AddService<IClipboard>(platform);
