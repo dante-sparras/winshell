@@ -7,7 +7,9 @@
 #
 # Publishing is a self-contained build of src/Winshell for each runtime, so no .NET install is needed.
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
-# and, zipped, in winget-manifests.zip. The same files pack to the same bytes: entries are in a fixed order and dated
+# and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
+# from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
+# makeappx.exe from the Windows SDK. The same files pack to the same bytes: entries are in a fixed order and dated
 # the day of the commit, which is also the manifests' ReleaseDate.
 # Verifying checks the checksums, that each zip's binaries are for its architecture, that the x64 winshell.exe runs
 # and reports the version, and that the manifests pass the validator wingetcreate runs before it submits them.
@@ -23,7 +25,11 @@ param(
     # A release tag, such as v1.2.3: the script stops unless the checked-out version is that release.
     [string] $Tag,
     # The GitHub repository the release, and so the winget installer URLs, belong to.
-    [string] $Repository = 'dante-sparras/winshell'
+    [string] $Repository = 'dante-sparras/winshell',
+    # The package identity Partner Center reserved for the Store. Empty is a test identity.
+    [string] $IdentityName,
+    [string] $Publisher,
+    [string] $PublisherDisplayName
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +41,9 @@ if (-not $Version) {
 }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must be major.minor.patch, not '$Version'" }
 if ($Tag -and $Tag -cne "v$Version") { throw "The checkout is version $Version, not the release $Tag." }
+if (-not $IdentityName) { $IdentityName = 'Winshell.Test' }
+if (-not $Publisher) { $Publisher = 'CN=Winshell Test' }
+if (-not $PublisherDisplayName) { $PublisherDisplayName = 'Dante Sparrås' }
 $Out = [IO.Path]::GetFullPath($Out, $root)
 $publishRoot = Join-Path $Out 'publish'
 $id = 'DanteSparras.Winshell'
@@ -79,6 +88,25 @@ function New-Zip([string] $dir, [string] $zip) {
     } finally { $stream.Dispose() }
 }
 
+# The Store package version of this release. The first part is one more than Winshell's, because the Store takes no 0
+# there and always installs the highest version. The fourth part is the Store's.
+function Get-PackageVersion {
+    $parts = $Version.Split('.')
+    "$([int] $parts[0] + 1).$($parts[1]).$($parts[2]).0"
+}
+
+# makeappx.exe from the newest Windows SDK.
+function Get-MakeAppx {
+    $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+    $found = Get-ChildItem -LiteralPath $kits -Directory -Filter '10.*' -ErrorAction SilentlyContinue |
+        Sort-Object { [version] $_.Name } -Descending |
+        ForEach-Object { Join-Path $_.FullName 'x64/makeappx.exe' } |
+        Where-Object { Test-Path -LiteralPath $_ } |
+        Select-Object -First 1
+    if (-not $found) { throw "makeappx.exe is not in $kits. Install the Windows SDK." }
+    $found
+}
+
 function Get-Sha256([string] $path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
 if ($Publish) {
@@ -90,6 +118,14 @@ if ($Publish) {
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
         # SkiaSharp and HarfBuzz ship their native symbols, over 100 MB. Winshell's own symbols stay, for stack traces in logs.
         Get-ChildItem -LiteralPath $dir -Filter 'lib*.pdb' | Remove-Item -Force
+        # winshellw.exe: the same apphost, marked as a Windows app so it opens no console, as the Store package's Start
+        # entry runs it. It runs winshell.dll as winshell.exe does; the SDK makes a WinExe's apphost the same way. It is
+        # made here, before anything signs the folder: the subsystem is inside a signature's hash.
+        $gui = [IO.File]::ReadAllBytes((Join-Path $dir 'winshell.exe'))
+        $subsystem = [BitConverter]::ToInt32($gui, 0x3C) + 4 + 20 + 68
+        if ([BitConverter]::ToUInt16($gui, $subsystem) -ne 3) { throw 'winshell.exe is not a console app' }
+        $gui[$subsystem] = 2
+        [IO.File]::WriteAllBytes((Join-Path $dir 'winshellw.exe'), $gui)
     }
 }
 
@@ -183,6 +219,31 @@ ManifestType: defaultLocale
 ManifestVersion: $schema
 "@ | Set-Content -LiteralPath (Join-Path $wingetDir "$id.locale.en-US.yaml")
     New-Zip $wingetDir (Join-Path $Out 'winget-manifests.zip')
+
+    # The Microsoft Store package: one .msix per architecture, bundled. The Store signs it.
+    $makeappx = Get-MakeAppx
+    $packages = Assert-Inside (Join-Path $Out 'msix') $Out
+    if (Test-Path -LiteralPath $packages) { Remove-Item -LiteralPath $packages -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $packages | Out-Null
+    $template = Get-Content -LiteralPath (Join-Path $root 'packaging/msix/AppxManifest.xml') -Raw
+    foreach ($rid in $Runtime) {
+        $layout = Assert-Inside (Join-Path $Out "msix-layout/$rid") $Out
+        if (Test-Path -LiteralPath $layout) { Remove-Item -LiteralPath $layout -Recurse -Force }
+        Copy-Item -LiteralPath (Join-Path $publishRoot $rid) -Destination $layout -Recurse
+        Copy-Item -LiteralPath (Join-Path $root 'packaging/msix/Assets') -Destination (Join-Path $layout 'Assets') -Recurse
+        $manifest = $template.Replace('$(IdentityName)', [Security.SecurityElement]::Escape($IdentityName)).
+            Replace('$(Publisher)', [Security.SecurityElement]::Escape($Publisher)).
+            Replace('$(PublisherDisplayName)', [Security.SecurityElement]::Escape($PublisherDisplayName)).
+            Replace('$(PackageVersion)', (Get-PackageVersion)).
+            Replace('$(Architecture)', ($rid -replace '^win-', ''))
+        Set-Content -LiteralPath (Join-Path $layout 'AppxManifest.xml') -Value $manifest -NoNewline
+        & $makeappx pack /o /h SHA256 /d $layout /p (Join-Path $packages "winshell-$Version-$rid.msix") | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "makeappx pack for $rid failed with $LASTEXITCODE" }
+        Remove-Item -LiteralPath $layout -Recurse -Force
+    }
+    Remove-Item -LiteralPath (Join-Path $Out 'msix-layout') -Recurse -Force
+    & $makeappx bundle /o /bv (Get-PackageVersion) /d $packages /p (Join-Path $Out "winshell-$Version.msixbundle") | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "makeappx bundle failed with $LASTEXITCODE" }
 }
 
 if ($Verify) {
@@ -262,5 +323,27 @@ public static extern IntPtr WinGetValidateManifest(string manifestPath, [Marshal
     [WinshellPackage.WinGetUtil]::WinGetValidateManifest($wingetDir, [ref] $ok, [ref] $message) | Out-Null
     if (-not $ok) { throw "The winget manifests do not validate: $message" }
     if ($message) { Write-Warning "winget manifest validation: $message" }
-    Write-Output "Verified $($Runtime -join ' and ') $Version and its winget manifests."
+
+    # The Store package: each architecture's has this identity and version, Start's winshellw.exe opens no console and
+    # the winshell command is a console app.
+    $makeappx = Get-MakeAppx
+    if (-not (Test-Path -LiteralPath (Join-Path $Out "winshell-$Version.msixbundle"))) { throw "No winshell-$Version.msixbundle in $Out" }
+    foreach ($rid in $Runtime) {
+        $dir = Assert-Inside (Join-Path $verifyRoot "msix-$rid") $Out
+        if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+        & $makeappx unpack /o /p (Join-Path $Out "msix/winshell-$Version-$rid.msix") /d $dir | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "makeappx unpack for $rid failed with $LASTEXITCODE" }
+        $identity = ([xml] (Get-Content -LiteralPath (Join-Path $dir 'AppxManifest.xml') -Raw)).Package.Identity
+        $expected = "$IdentityName|$Publisher|$(Get-PackageVersion)|$($rid -replace '^win-', '')"
+        $actual = "$($identity.Name)|$($identity.Publisher)|$($identity.Version)|$($identity.ProcessorArchitecture)"
+        if ($actual -cne $expected) { throw "The $rid package's identity is $actual, not $expected" }
+        foreach ($pair in @(@('winshell.exe', 3), @('winshellw.exe', 2))) {
+            $bytes = [IO.File]::ReadAllBytes((Join-Path $dir $pair[0]))
+            $subsystem = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4 + 20 + 68)
+            if ($subsystem -ne $pair[1]) { throw "$($pair[0]) in the $rid package has subsystem $subsystem, not $($pair[1])" }
+        }
+        Remove-Item -LiteralPath $dir -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $verifyRoot) { Remove-Item -LiteralPath $verifyRoot -Recurse -Force }
+    Write-Output "Verified $($Runtime -join ' and ') $Version, its winget manifests and its Store package $(Get-PackageVersion)."
 }
