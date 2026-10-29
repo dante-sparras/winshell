@@ -210,6 +210,20 @@ public sealed class UpdatesTests : IDisposable
     public void Versions_read_as_major_minor_patch(string text, string? expected) =>
         Assert.Equal(expected, Updater.ParseVersion(text)?.ToString(3));
 
+    [Fact]
+    public void A_winget_packages_or_links_folder_is_not_a_copy_Winshell_updates()
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var packages = Path.Combine(local, "Microsoft", "WinGet", "Packages", "DanteSparras.Winshell");
+        var links = Path.Combine(local, "Microsoft", "WinGet", "Links");
+        var portable = Path.Combine(local, "Programs", "winshell", "bin");
+        var lookalike = Path.Combine(local, "Microsoft", "WinGet2", "Packages", "DanteSparras.Winshell");
+        Assert.True(Updater.IsWingetManaged(packages));
+        Assert.True(Updater.IsWingetManaged(links));
+        Assert.False(Updater.IsWingetManaged(portable));
+        Assert.False(Updater.IsWingetManaged(lookalike));
+    }
+
     private const string Qml = """
         import QtQuick
         import Winshell

@@ -74,11 +74,12 @@ public sealed class Updater : IDisposable
 
     /// <summary>
     /// The updater for this process, or null when Winshell does not update itself: a build from source, which names
-    /// no release repository, or a packaged Winshell, which its installer (the Microsoft Store) updates.
+    /// no release repository; a packaged Winshell, which its installer (the Microsoft Store) updates; or a winget
+    /// install, which winget updates. A self-update would rewrite files winget has hashed.
     /// </summary>
     public static Updater? ForRelease(string? repository, string currentVersion, Log log)
     {
-        if (string.IsNullOrEmpty(repository) || Packaging.IsPackaged)
+        if (string.IsNullOrEmpty(repository) || Packaging.IsPackaged || IsWingetManaged(AppContext.BaseDirectory))
             return null;
         return new Updater(repository, AppContext.BaseDirectory, UpdatesDir, currentVersion, RuntimeName, log);
     }
@@ -90,7 +91,7 @@ public sealed class Updater : IDisposable
     /// </summary>
     public static InstalledUpdate? InstallStaged(string? repository, string currentVersion)
     {
-        if (string.IsNullOrEmpty(repository) || Packaging.IsPackaged)
+        if (string.IsNullOrEmpty(repository) || Packaging.IsPackaged || IsWingetManaged(AppContext.BaseDirectory))
             return null;
         var current = ParseVersion(currentVersion) ?? new Version(0, 0, 0);
         var installDir = AppContext.BaseDirectory;
@@ -105,6 +106,25 @@ public sealed class Updater : IDisposable
 
     /// <summary>The runtime a release zip is built for: <c>win-x64</c> or <c>win-arm64</c>.</summary>
     internal static string RuntimeName => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64";
+
+    /// <summary>
+    /// True when <paramref name="installDir"/> is winget's portable package folder or its Links alias.
+    /// winget records a hash of that copy, so Winshell must not replace the files.
+    /// </summary>
+    internal static bool IsWingetManaged(string installDir)
+    {
+        var winget = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet");
+        return IsUnder(installDir, Path.Combine(winget, "Packages")) || IsUnder(installDir, Path.Combine(winget, "Links"));
+    }
+
+    /// <summary><paramref name="path"/> is <paramref name="root"/> or a directory inside it.</summary>
+    internal static bool IsUnder(string path, string root)
+    {
+        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var baseDir = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return full.Equals(baseDir, StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Raised on a background thread when <see cref="State"/> changes.</summary>
     internal event Action<UpdateState>? Changed;

@@ -4,8 +4,8 @@ namespace Winshell.Platform.Windows.Services.Updates;
 
 /// <summary>
 /// The <c>Updates</c> singleton: Winshell's own updates. A portable Winshell from GitHub Releases checks its releases,
-/// downloads a newer one and applies it when it next starts. A build from source and a packaged Winshell never update
-/// themselves; <see cref="Available"/> is false for them.
+/// downloads a newer one and applies it when it next starts. A build from source, a packaged Winshell and a winget
+/// install never update themselves; <see cref="Available"/> is false for them.
 /// </summary>
 public sealed class UpdatesService : QObject
 {
@@ -28,6 +28,11 @@ public sealed class UpdatesService : QObject
     /// True when Winshell runs from an MSIX package, such as the Microsoft Store's. The package's installer updates it.
     /// </summary>
     [Qml] public bool Packaged { get { Track(); return Packaging.IsPackaged; } }
+
+    /// <summary>
+    /// True when this copy lives under winget's Packages or Links folder. winget updates it, and Winshell does not.
+    /// </summary>
+    [Qml] public bool Winget { get { Track(); return Updater.IsWingetManaged(AppContext.BaseDirectory); } }
 
     /// <summary>
     /// Whether Winshell checks by itself, shortly after it starts and once a day, and downloads what it finds. Off

@@ -46,7 +46,7 @@ That removes the install folder, the PATH entry, the shortcut, and the sign-in e
 
 ### winget, coming
 
-`winget install DanteSparras.Winshell` once winget has accepted the package. It is not available yet. It will install the same portable build, which then updates itself.
+`winget install DanteSparras.Winshell` once winget has accepted the package. It is not available yet. It will install the same portable build. winget updates that copy; Winshell does not.
 
 ### Microsoft Store, coming
 

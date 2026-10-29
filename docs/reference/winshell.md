@@ -317,12 +317,13 @@ The `Diagnostics` singleton: the checks `winshell doctor` prints, for the About 
 
 ## Updates
 
-The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip from GitHub Releases, checks that repository's releases, downloads a newer one and installs it when a start finds no other Winshell running. winget, once the package is accepted, installs that same build. While one Winshell is running, the downloaded update stays ready. A build from source never updates itself. A packaged Winshell, such as the Microsoft Store package once it is published, is updated by whatever installed it. Winshell Settings shows it on the About page; see [Winshell updates](../updates.md).
+The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip from GitHub Releases, checks that repository's releases, downloads a newer one and installs it when a start finds no other Winshell running. winget, once the package is accepted, installs that same portable build and is the only updater for that copy. While one Winshell is running, the downloaded update stays ready. A build from source never updates itself. A packaged Winshell, such as the Microsoft Store package once it is published, is updated by whatever installed it. Winshell Settings shows it on the About page; see [Winshell updates](../updates.md).
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `available` | bool, read-only | Whether this Winshell updates itself. |
 | `packaged` | bool, read-only | Whether Winshell runs from an MSIX package, which its installer updates. |
+| `winget` | bool, read-only | Whether this copy lives under winget's Packages or Links folder. winget updates it, and Winshell does not. |
 | `automatic` | bool | Check by itself, 30 seconds after it is turned on and once a day after that, and download what it finds. Off until the shell turns it on. |
 | `status` | [UpdateStatus](#updatestatus), read-only | Where the update is. An update downloaded before this run started is `Ready` from the start. |
 | `version` | string, read-only | The release found: the latest one when up to date, or the one downloading or ready. Empty before a check, unless an update is already downloaded: that one is `Ready` at startup, and `version` is its release. |

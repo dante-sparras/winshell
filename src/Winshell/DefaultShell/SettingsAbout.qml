@@ -32,9 +32,11 @@ Column {
     id: updates
     key: "winshellUpdates"
     readonly property bool busy: Updates.status === UpdateStatus.Checking || Updates.status === UpdateStatus.Downloading
-    description: !Updates.available ? (Updates.packaged
-        ? "Updates come from where you installed Winshell, such as the Microsoft Store"
-        : "This build of Winshell does not update itself")
+    description: !Updates.available ? (Updates.winget
+        ? "Updated by winget"
+        : Updates.packaged
+          ? "Updates come from where you installed Winshell, such as the Microsoft Store"
+          : "This build of Winshell does not update itself")
       : Updates.status === UpdateStatus.Checking ? "Checking for updates…"
       : Updates.status === UpdateStatus.UpToDate ? "You're up to date"
       : Updates.status === UpdateStatus.Downloading ? "Downloading Winshell " + Updates.version + "…"
