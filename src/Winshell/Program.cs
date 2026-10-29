@@ -453,7 +453,7 @@ namespace Winshell
 
             // A crash is reported in a crash report that outlives the log, and in the instance's log, where
             // winshell log finds it, before the process ends. Failures the shell survives get a report each too.
-            var crashes = new CrashReports(CrashFolder()) { ConfigPath = root, LogPath = logPath };
+            var crashes = new CrashReports(CrashFolder()) { ConfigPath = root, LogPath = logPath, Log = log };
             void Reported(CrashReport? report)
             {
                 if (report is not null)

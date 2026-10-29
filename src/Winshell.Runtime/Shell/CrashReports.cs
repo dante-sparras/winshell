@@ -49,6 +49,12 @@ public sealed partial class CrashReports(string folder)
     /// <summary>The instance's log, whose last lines go into each report. Empty when there is none.</summary>
     public string LogPath { get; set; } = "";
 
+    /// <summary>
+    /// Where a report that could not be written, or a handler that threw, is recorded. Unset when the caller
+    /// only needs the null return.
+    /// </summary>
+    public Log? Log { get; set; }
+
     /// <summary>The time a report is written at. Tests set it.</summary>
     internal Func<DateTimeOffset> Clock { get; init; } = () => DateTimeOffset.Now;
 
@@ -99,6 +105,7 @@ public sealed partial class CrashReports(string folder)
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
+            Log?.Error("shell", $"Could not write a crash report: {e.Message}");
         }
     }
 
@@ -157,6 +164,7 @@ public sealed partial class CrashReports(string folder)
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
+            Log?.Error("shell", $"Could not write a crash report: {e.Message}");
             return null;
         }
     }
