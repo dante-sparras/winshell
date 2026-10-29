@@ -17,9 +17,9 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     private bool _interactive = true;
     private int _boundsBehavior = 3;
     private int _flickableDirection;
-    private bool _moving;
+    private bool _movingX, _movingY;
     private double _pressX, _pressY, _pressContentX, _pressContentY;
-    private bool _dragging;
+    private bool _draggingX, _draggingY;
     private double _topMargin, _bottomMargin, _leftMargin, _rightMargin;
     private double _flickDeceleration = 1500;
     private double _maximumFlickVelocity = 2500;
@@ -143,19 +143,19 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     [Qml]
     public int PressDelay { get; set; }
 
-    [Qml] public bool Moving { get { Track(); return _moving; } }
+    [Qml] public bool Moving { get { Track(); return _movingX || _movingY; } }
 
-    [Qml] public bool MovingVertically => _moving;
+    [Qml] public bool MovingVertically { get { Track(); return _movingY; } }
 
-    [Qml] public bool MovingHorizontally => _moving;
+    [Qml] public bool MovingHorizontally { get { Track(); return _movingX; } }
 
     [Qml] public bool Flicking => false;
 
-    [Qml] public bool Dragging { get { Track(); return _dragging; } }
+    [Qml] public bool Dragging { get { Track(); return IsDragging; } }
 
-    [Qml] public bool DraggingVertically => _dragging;
+    [Qml] public bool DraggingVertically { get { Track(); return _draggingY; } }
 
-    [Qml] public bool DraggingHorizontally => _dragging;
+    [Qml] public bool DraggingHorizontally { get { Track(); return _draggingX; } }
 
     [Qml] public double HorizontalVelocity => 0;
 
@@ -257,7 +257,7 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
 
     private void Clamp()
     {
-        if (_dragging)
+        if (IsDragging)
             return;
         SetContentX(Math.Clamp(_contentX, MinX, MaxX));
         SetContentY(Math.Clamp(_contentY, MinY, MaxY));
@@ -292,13 +292,34 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         ContentHeight = height;
     }
 
-    private void SetMoving(bool moving)
+    private bool IsDragging => _draggingX || _draggingY;
+
+    private void SetMoving(bool x, bool y)
     {
-        if (_moving == moving)
+        var was = _movingX || _movingY;
+        SetAxis(ref _movingX, x, "movingHorizontally");
+        SetAxis(ref _movingY, y, "movingVertically");
+        if (was == (x || y))
             return;
-        _moving = moving;
         NotifyChanged("moving");
-        Emit(moving ? "movementStarted" : "movementEnded");
+        Emit(x || y ? "movementStarted" : "movementEnded");
+    }
+
+    private void SetDragging(bool x, bool y)
+    {
+        var was = IsDragging;
+        SetAxis(ref _draggingX, x, "draggingHorizontally");
+        SetAxis(ref _draggingY, y, "draggingVertically");
+        if (was != IsDragging)
+            NotifyChanged("dragging");
+    }
+
+    private void SetAxis(ref bool field, bool value, string property)
+    {
+        if (field == value)
+            return;
+        field = value;
+        NotifyChanged(property);
     }
 
     /// <summary>Scrolls by an amount, smoothly the way a Windows list scrolls by the wheel.</summary>
@@ -317,7 +338,7 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         }
         _targetX = Math.Clamp(_targetX + dx, MinX, MaxX);
         _targetY = Math.Clamp(_targetY + dy, MinY, MaxY);
-        SetMoving(true);
+        SetMoving(_movingX || dx != 0, _movingY || dy != 0);
         if (_scrollAnimation is null)
             StepScroll();
     }
@@ -330,13 +351,16 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         var again = true;
         try
         {
+            // The content can shrink while it scrolls, so the target is clamped again on every step.
+            _targetX = Math.Clamp(_targetX, MinX, MaxX);
+            _targetY = Math.Clamp(_targetY, MinY, MaxY);
             var nx = _contentX + (_targetX - _contentX) * 0.3;
             var ny = _contentY + (_targetY - _contentY) * 0.3;
             if (Math.Abs(_targetX - nx) < 0.5 && Math.Abs(_targetY - ny) < 0.5)
             {
                 SetContentX(_targetX);
                 SetContentY(_targetY);
-                SetMoving(false);
+                SetMoving(false, false);
                 again = false;
                 return;
             }
@@ -377,13 +401,12 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         var scene = MapToScene(x, y);
         var dx = scene.X - _pressX;
         var dy = scene.Y - _pressY;
-        if (!_dragging && Math.Sqrt(dx * dx + dy * dy) < 4)
+        if (!IsDragging && Math.Sqrt(dx * dx + dy * dy) < 4)
             return;
-        if (!_dragging)
+        if (!IsDragging)
         {
-            _dragging = true;
-            NotifyChanged("dragging");
-            SetMoving(true);
+            SetDragging(CanScrollX, CanScrollY);
+            SetMoving(CanScrollX, CanScrollY);
         }
         if (CanScrollX)
             SetContentX(Math.Clamp(_pressContentX - dx, MinX, MaxX));
@@ -393,11 +416,10 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
     {
-        if (_dragging)
+        if (IsDragging)
         {
-            _dragging = false;
-            NotifyChanged("dragging");
-            SetMoving(false);
+            SetDragging(false, false);
+            SetMoving(false, false);
         }
     }
 
@@ -407,17 +429,19 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
 
     public bool Wheel(double x, double y, double angleX, double angleY, double pixelX, double pixelY, int buttons, int modifiers, bool inverted)
     {
-        if (!_interactive)
+        // Ctrl+wheel zooms in Windows, so it is left for whatever handles that.
+        if (!_interactive || (modifiers & QtEnums.ControlModifier) != 0)
             return false;
-        // One wheel notch scrolls three lines, as Windows does by default.
-        var dy = pixelY != 0 ? -pixelY : -angleY / 120 * 48;
-        var dx = pixelX != 0 ? -pixelX : -angleX / 120 * 48;
-        if ((modifiers & QtEnums.ShiftModifier) != 0 && dx == 0)
-            (dx, dy) = (dy, 0);
         var canY = CanScrollY && ContentHeightValue > Height;
         var canX = CanScrollX && ContentWidthValue > Width;
-        if (!canY && canX && dx == 0)
-            (dx, dy) = (dy, 0);
+        // Shift+wheel, or the wheel over content that only scrolls sideways, scrolls sideways.
+        if (angleX == 0 && pixelX == 0 && ((modifiers & QtEnums.ShiftModifier) != 0 || (!canY && canX)))
+        {
+            (angleX, angleY) = (angleY, 0);
+            (pixelX, pixelY) = (pixelY, 0);
+        }
+        var dy = pixelY != 0 ? -pixelY : -angleY / 120 * WheelStep(Height);
+        var dx = pixelX != 0 ? -pixelX : -angleX / 120 * WheelStep(Width);
         if ((dy != 0 && canY && ((dy < 0 && _contentY > MinY) || (dy > 0 && _contentY < MaxY)))
             || (dx != 0 && canX && ((dx < 0 && _contentX > MinX) || (dx > 0 && _contentX < MaxX))))
         {
@@ -425,6 +449,16 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// How far a wheel notch scrolls a viewport this long: the lines Windows sets, 16 px each so the default three
+    /// lines are 48 px, or the whole viewport when Windows scrolls a page.
+    /// </summary>
+    private static double WheelStep(double viewport)
+    {
+        var lines = Theme.Current.WheelScrollLines;
+        return lines == Theme.WheelPageScroll ? viewport : lines * 16.0;
     }
 
     protected override void OnDestroy()
