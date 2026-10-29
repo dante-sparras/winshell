@@ -87,6 +87,13 @@ internal static class CoreAudio
         return (T)Activator.CreateInstance(type)!;
     }
 
+    /// <summary>Releases a COM object's callable wrapper now, not when the GC finds it. Does nothing for null.</summary>
+    public static void Release(object? comObject)
+    {
+        if (comObject is not null)
+            Marshal.FinalReleaseComObject(comObject);
+    }
+
     public static T Activate<T>(IMMDevice device, Guid iid)
     {
         device.Activate(ref iid, ClsctxAll, 0, out var obj);

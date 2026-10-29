@@ -97,7 +97,7 @@ The peak level of a node's channels, read from the Windows peak meter about 30 t
 | `peaks` | list of real, read-only | The peak of each channel since the last read, from 0 to 1. |
 | `channels` | list of [AudioChannel](#audiochannel), read-only | The speaker position of each entry of `peaks`. |
 
-Windows meters a device after its volume is applied. A recording device only meters while something records from it, so the monitor keeps a recording stream open on it while it is enabled.
+Windows meters a device after its volume is applied. A recording device only meters while something records from it, so the monitor keeps a recording stream open on it while it is enabled. Windows shows its microphone privacy indicator while that stream is open, so enable the monitor only while the level is on screen. The stream is Winshell's own session on the device, and `Audio.nodes` does not list it.
 
 ## AudioObjectTracker
 
