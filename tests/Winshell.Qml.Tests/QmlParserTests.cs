@@ -244,4 +244,30 @@ public class QmlParserTests
         Assert.Equal(3, doc.Root.Location.Column);
         Assert.Equal("shell.qml", doc.Root.Location.File);
     }
+
+    [Fact]
+    public void Function_parameters_keep_their_javascript()
+    {
+        var doc = QmlParser.Parse("""
+            Item {
+              function f(a, b = g(1, 2), ...rest) {}
+              function g({ x, y: [z] }, [p, q] = [1, 2]) {}
+              function h(n: int = 1, ...more: list) {}
+            }
+            """);
+
+        var functions = doc.Root.Members.Cast<QmlFunctionDeclaration>().ToList();
+        Assert.Equal(["a", "b = g(1, 2)", "...rest"], functions[0].Parameters.Select(p => p.Name));
+        Assert.Equal(["{ x, y: [z] }", "[p, q] = [1, 2]"], functions[1].Parameters.Select(p => p.Name));
+        Assert.Equal([new("n = 1", "int"), new QmlParameter("...more", "list")], functions[2].Parameters);
+    }
+
+    [Theory]
+    [InlineData("Item { function f(...) {} }")]
+    [InlineData("Item { function f({ a, b) {} }")]
+    [InlineData("Item { function f(a: ) {} }")]
+    public void A_bad_function_parameter_is_a_syntax_error(string source)
+    {
+        Assert.Throws<QmlSyntaxException>(() => QmlParser.Parse(source));
+    }
 }

@@ -250,4 +250,23 @@ public class EngineTests
         Assert.Equal(1, root.ReadProperty("pear"));
         Assert.Equal("A pear", root.ReadProperty("name"));
     }
+
+    [Fact]
+    public void Functions_take_defaults_rest_and_destructured_parameters()
+    {
+        var root = TestShell.Run("""
+            import QtQml
+            QtObject {
+              property string joined: join(1)
+              property int sum: add({ a: 2, b: 3 }, [4])
+              function join(a, b = 2, ...rest): string { return [a, b, rest.length].join() }
+              function add({ a, b }, [c]) { return a + b + c }
+            }
+            """, out var shell);
+        using var _ = shell;
+        Assert.Equal("1,2,0", root.ReadProperty("joined"));
+        Assert.Equal(9, root.ReadProperty("sum"));
+        Assert.Equal("5,6,2", shell.Eval(root, "join(5, 6, 7, 8)"));
+        Assert.Empty(shell.Messages);
+    }
 }

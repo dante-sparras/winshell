@@ -385,39 +385,64 @@ public sealed class QmlParser
                 _pos++;
                 break;
             }
-            var first = ReadTypeName();
-            SkipTrivia();
-            string name;
-            string? type = null;
-            if (Peek() == ':')
-            {
-                _pos++;
-                name = first;
-                type = ReadTypeName();
-            }
-            else if (allowOldStyle && (char.IsLetter(Peek()) || Peek() == '_'))
-            {
-                // Old signal syntax: signal foo(int bar)
-                type = first;
-                name = ReadIdentifier();
-            }
-            else if (Peek() == '=')
-            {
-                // A default value: function f(a = 1). Keep the raw text in the name for the JS side.
-                var start = _pos;
-                ScanExpression(stopAtComma: true);
-                name = first + _text[start.._pos];
-            }
-            else
-            {
-                name = first;
-            }
-            list.Add(new QmlParameter(name, type));
+            list.Add(allowOldStyle ? ParseSignalParameter() : ParseFunctionParameter());
             SkipTrivia();
             if (Peek() == ',')
                 _pos++;
         }
         return list;
+    }
+
+    private QmlParameter ParseSignalParameter()
+    {
+        var first = ReadTypeName();
+        SkipTrivia();
+        if (Peek() == ':')
+        {
+            _pos++;
+            return new QmlParameter(first, ReadTypeName());
+        }
+        // Old signal syntax: signal foo(int bar)
+        if (char.IsLetter(Peek()) || Peek() == '_')
+            return new QmlParameter(ReadIdentifier(), first);
+        return new QmlParameter(first, null);
+    }
+
+    // A name, "...rest" or a destructuring pattern, then an optional type annotation and an optional default.
+    // The name keeps the parameter's JavaScript without the annotation, which is what Jint gets.
+    private QmlParameter ParseFunctionParameter()
+    {
+        var start = _pos;
+        if (Peek() == '.' && PeekAt(1) == '.' && PeekAt(2) == '.')
+            _pos += 3;
+        SkipTrivia();
+        if (Peek() is '{' or '[')
+        {
+            var close = Peek() == '{' ? '}' : ']';
+            _pos++;
+            ScanBalanced(close);
+            _pos++;
+        }
+        else
+        {
+            ReadIdentifier();
+        }
+        var name = _text[start.._pos];
+        SkipTrivia();
+        string? type = null;
+        if (Peek() == ':')
+        {
+            _pos++;
+            type = ReadTypeName();
+            SkipTrivia();
+        }
+        if (Peek() == '=')
+        {
+            var defaultStart = _pos;
+            ScanExpression(stopAtComma: true);
+            name += " " + _text[defaultStart.._pos].TrimEnd();
+        }
+        return new QmlParameter(name, type);
     }
 
     private QmlEnumDeclaration ParseEnum(SourceLocation loc)
