@@ -39,13 +39,15 @@ Item {
   implicitWidth: Settings.windowWidth
   implicitHeight: Settings.windowHeight
 
-  // Opens a page, or the page a setting is on with the keyboard on that setting.
+  // Opens a page, or the page a setting is on with the keyboard on that setting. Anything else stays where it was.
   function open(key) {
     const setting = Settings.settings.find(s => s.key === key)
     if (setting)
       goTo(setting)
+    else if (Settings.pages.some(p => p.key === key))
+      show(key)
     else
-      show(Settings.pages.some(p => p.key === key) ? key : page)
+      console.warn("Winshell Settings has no page or setting named \"" + key + "\"")
   }
 
   function show(key, sub) {
