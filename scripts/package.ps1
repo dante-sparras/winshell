@@ -10,7 +10,7 @@
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
 # and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
 # from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
-# makeappx.exe from the Windows SDK. The same files pack to the same bytes: entries are in a fixed order and dated
+# makeappx.exe from the Windows SDK. The same files pack to the same bytes: entries are in ordinal path order and dated
 # the day of the commit, which is also the manifests' ReleaseDate.
 # Verifying checks the checksums, that each zip's binaries are for its architecture, that the x64 winshell.exe runs
 # and reports the version, and that the manifests pass the validator wingetcreate runs before it submits them.
@@ -34,6 +34,38 @@ param(
     [string] $Publisher,
     [string] $PublisherDisplayName
 )
+
+# A script block passed to Array.Sort writes to the pipeline instead of returning the comparison.
+if (-not ('Winshell.Package.ZipNameComparer' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections;
+using System.Management.Automation;
+namespace Winshell.Package {
+    public sealed class ZipNameComparer : IComparer {
+        public int Compare(object left, object right) {
+            var a = (string)PSObject.AsPSObject(left).Properties["Name"].Value;
+            var b = (string)PSObject.AsPSObject(right).Properties["Name"].Value;
+            return StringComparer.Ordinal.Compare(a, b);
+        }
+    }
+}
+'@
+}
+
+# Ordinal, not the current culture. Sort-Object -CaseSensitive still uses the culture, and lt-LT orders "y" after "į".
+function Sort-WinshellZipEntry {
+    param($Files)
+    $incoming = @($Files)
+    if ($incoming.Count -eq 1 -and $incoming[0] -is [System.Array]) { $incoming = @($incoming[0]) }
+    $items = New-Object object[] $incoming.Count
+    for ($i = 0; $i -lt $incoming.Count; $i++) { $items[$i] = $incoming[$i] }
+    if ($items.Length -gt 1) { [Array]::Sort($items, [Winshell.Package.ZipNameComparer]::new()) }
+    return ,$items
+}
+
+# Tests dot-source this file to call Sort-WinshellZipEntry, then stop before any build.
+if ($env:WINSHELL_PACKAGE_TEST -eq '1') { return }
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -71,9 +103,8 @@ function Assert-Inside([string] $path, [string] $parent) {
 # A zip of a folder whose bytes depend only on the files: entries sorted by path, each dated the release day.
 function New-Zip([string] $dir, [string] $zip) {
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-    $files = Get-ChildItem -LiteralPath $dir -File -Recurse |
-        ForEach-Object { [pscustomobject]@{ Path = $_.FullName; Name = [IO.Path]::GetRelativePath($dir, $_.FullName).Replace('\', '/') } } |
-        Sort-Object -Property Name -CaseSensitive
+    $files = Sort-WinshellZipEntry @(Get-ChildItem -LiteralPath $dir -File -Recurse |
+        ForEach-Object { [pscustomobject]@{ Path = $_.FullName; Name = [IO.Path]::GetRelativePath($dir, $_.FullName).Replace('\', '/') } })
     $stream = [IO.File]::Open($zip, [IO.FileMode]::CreateNew)
     try {
         $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create)
