@@ -142,6 +142,7 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
     private int _pressAndHoldInterval = 800;
     private IDisposable? _holdTimer;
     private bool _held;
+    private bool _doubleClicked;
     private double _pressX, _pressY;
     private bool _containsPress;
 
@@ -292,6 +293,7 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
 
     public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
+        _doubleClicked = false;
         SetPosition(x, y);
         _pressX = x;
         _pressY = y;
@@ -347,10 +349,12 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
         _holdTimer?.Dispose();
         var inside = HitTest(x, y);
         var dragged = Drag.End();
+        var suppressClick = _doubleClicked;
+        _doubleClicked = false;
         SetPressed(buttons != 0, buttons);
-        var e = new MouseEvent { X = x, Y = y, Button = button, Buttons = buttons, Modifiers = modifiers, WasHeld = _held, IsClick = inside && !dragged, Engine = Engine };
+        var e = new MouseEvent { X = x, Y = y, Button = button, Buttons = buttons, Modifiers = modifiers, WasHeld = _held, IsClick = inside && !dragged && !suppressClick, Engine = Engine };
         Emit("released", e);
-        if (inside && !_held && !dragged)
+        if (inside && !_held && !dragged && !suppressClick)
             Emit("clicked", new MouseEvent { X = x, Y = y, Button = button, Buttons = buttons, Modifiers = modifiers, Engine = Engine });
         if (!_hoverEnabled || !inside)
             SetContainsMouse(false);
@@ -358,15 +362,20 @@ public class MouseArea : Item, IPointerTarget, IHoverTarget, IWheelTarget
 
     public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
     {
-        var e = new MouseEvent { X = x, Y = y, Button = button, Buttons = buttons, Modifiers = modifiers, Engine = Engine };
         if (GetSignal("doubleClicked")?.Count > 0)
-            Emit("doubleClicked", e);
-        else
-            PointerPress(x, y, button, buttons, modifiers);
+        {
+            if (!PointerPress(x, y, button, buttons, modifiers))
+                return;
+            _doubleClicked = true;
+            Emit("doubleClicked", new MouseEvent { X = x, Y = y, Button = button, Buttons = buttons, Modifiers = modifiers, Engine = Engine });
+            return;
+        }
+        PointerPress(x, y, button, buttons, modifiers);
     }
 
     public void PointerCancel()
     {
+        _doubleClicked = false;
         _holdTimer?.Dispose();
         Drag.End();
         if (_pressed)
