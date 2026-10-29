@@ -79,7 +79,7 @@ public sealed partial class CrashReports(string folder)
     /// same place, so work that fails each time it runs, such as a timer, writes one report rather than filling
     /// the disk. A report that could not be written is tried again the next time.
     /// </summary>
-    public CrashReport? WriteOnce(string where, Exception error)
+    public CrashReport? WriteOnce(string where, Exception error, string subject = "", string recovery = "")
     {
         CrashReport? report;
         lock (_lock)
@@ -87,7 +87,7 @@ public sealed partial class CrashReports(string folder)
             var fingerprint = Fingerprint(where, error);
             if (_reported.Contains(fingerprint))
                 return null;
-            report = WriteLocked(where, error, fatal: false, subject: "", recovery: "");
+            report = WriteLocked(where, error, fatal: false, subject, recovery);
             if (report is not null)
                 _reported.Add(fingerprint);
         }

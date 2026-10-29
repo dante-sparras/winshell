@@ -344,6 +344,20 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.Equal(TimeSpan.Zero, notice.Timeout);
     }
 
+    [Fact]
+    public void A_frame_that_could_not_be_drawn_shows_a_notice_and_leaves_the_window_up()
+    {
+        var (_, notices) = Start(Good, crashes: true);
+        var bar = _host!.Root!.OwnedObjects.OfType<ShellWindow>().Single();
+        _platform.Windows.Single(w => w.Client == bar).Client.OnDrawFailed(new InvalidOperationException("device lost"));
+        _loop.Process();
+
+        Assert.Contains(bar, _platform.Windows.Select(w => w.Client));
+        Assert.True(NoticeShown);
+        Assert.Equal("The panel stopped working", Text(notices.Window!, "title"));
+        Assert.Equal("The panel could not draw. The rest of Winshell is still running.", Text(notices.Window!, "body"));
+    }
+
     public void Dispose()
     {
         _notices?.Dispose();

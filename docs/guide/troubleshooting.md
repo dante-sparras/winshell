@@ -86,7 +86,7 @@ The entry runs Winshell with the options it was started with. `WINSHELL_CONFIG_D
 
 When Winshell itself fails, as opposed to a mistake in the configuration, it writes a crash report to `%LOCALAPPDATA%\winshell\crashes`, and the log says where. Nothing is sent anywhere; reports leave out what scripts printed and the passwords, tokens and keys Winshell recognizes.
 
-A notice in the bottom right corner says which window stopped working and what Winshell did about it, and **Open report** opens the crash report. It goes away after 25 seconds. A window that fails while drawing or handling input closes and opens again after 1, 2, 4, 8 and 16 seconds. If it fails a sixth time within five minutes, it stays closed until the configuration reloads; save a file or run `Shell.reload()` to bring it back. The rest of the shell keeps running throughout.
+A notice in the bottom right corner says which window stopped working and what Winshell did about it, and **Open report** opens the crash report. It goes away after 25 seconds. A window that fails while handling input closes and opens again after 1, 2, 4, 8 and 16 seconds. If it fails a sixth time within five minutes, it stays closed until the configuration reloads; save a file or run `Shell.reload()` to bring it back. A window that fails while drawing stays up, and the notice says the panel could not draw. If Winshell itself closed, the next start shows that notice once. The rest of the shell keeps running throughout.
 
 A crash is a bug in Winshell. Please report it.
 
