@@ -216,17 +216,28 @@ public sealed class AppEntry : QObject
     /// <summary>When the app was last used, in Unix milliseconds, or 0 when Windows has no record.</summary>
     [Qml] public double LastUsed { get { Track(); return _lastUsed; } }
 
-    /// <summary>Opens the app as the Start menu does, through its shortcut or its AppUserModelID.</summary>
+    /// <summary>
+    /// Opens the app as the Start menu does, through its shortcut or its AppUserModelID. A packaged app starts in
+    /// the background, so this returns before it is up.
+    /// </summary>
     [Qml]
     public void Launch()
     {
-        if (_entry is not { } entry)
+        if (_entry is not { } entry || Engine is not { } engine)
             return;
-        var ok = entry.Packaged
-            ? AppLaunch.Packaged(entry.Id, entry.Arguments, message => _log.Warn("apps", $"Failed to launch {entry.Name}: {message}"))
-            : AppLaunch.Shortcut(entry.LaunchPath, entry.StartIn, message => _log.Warn("apps", $"Failed to launch {entry.Name}: {message}"));
-        if (ok)
+        void Warn(string message) => _log.Warn("apps", $"Failed to launch {entry.Name}: {message}");
+        if (entry.Packaged)
+        {
+            AppLaunch.Packaged(entry.Id, entry.Arguments, engine.Loop, Warn, () =>
+            {
+                if (!IsDestroyed)
+                    Launched?.Invoke(entry);
+            });
+        }
+        else if (AppLaunch.Shortcut(entry.LaunchPath, entry.StartIn, Warn))
+        {
             Launched?.Invoke(entry);
+        }
     }
 
     internal void Update(AppRecord entry, AppUsage usage)

@@ -39,7 +39,7 @@ One app of Start: a shortcut or a packaged app. You get entries from `Apps`; QML
 | `packaged` | bool, read-only | True for a packaged app, such as a Microsoft Store app. |
 | `runCount` | int, read-only | How many times Windows, or `launch()`, has run the app. |
 | `lastUsed` | real, read-only | When the app was last used, in Unix milliseconds, or 0 when Windows has no record. |
-| `launch()` | method | Opens the app as Start does, through its shortcut or its AppUserModelID. A launch counts as a use right away, in `runCount`, `lastUsed`, `recent` and `frequent`. When it fails, a warning goes to the log. |
+| `launch()` | method | Opens the app as Start does, through its shortcut or its AppUserModelID. A launch counts as a use once the app has started, in `runCount`, `lastUsed`, `recent` and `frequent`. A packaged app starts in the background, so `launch()` returns before it is up. When it fails, a warning goes to the log. |
 
 ## Examples
 
