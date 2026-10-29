@@ -40,6 +40,8 @@ Singleton {
   property alias taskbarAppsOn: adapter.taskbarAppsOn
 
   property alias startRecommended: adapter.startRecommended
+  // Show the ISO week number beside each calendar row.
+  property alias calendarWeekNumbers: adapter.calendarWeekNumbers
 
   // The apps whose notifications the notification center leaves out, as { id, name }.
   property alias hiddenNotificationApps: adapter.hiddenNotificationApps
@@ -115,6 +117,7 @@ Singleton {
         taskbarAllScreens: "true shows a taskbar on every display; false on the main display only.",
         taskbarAppsOn: "With several displays: \"all\" shows every app on every taskbar, \"main\" every app on the main\ntaskbar and each display's own windows on the others, \"where\" each window on its display's taskbar only.",
         startRecommended: "true shows recommended apps in Start under the pins.",
+        calendarWeekNumbers: "true shows week numbers beside the calendar.",
         hiddenNotificationApps: "The apps the notification center leaves out, as { id = \"<AppUserModelID>\", name = \"<app name>\" }.",
         startHotkey: "The hotkey that opens Start, such as \"Win\" or \"Ctrl+Alt+S\"; \"\" turns it off.",
         settingsHotkey: "The hotkey that opens Winshell Settings; \"\" turns it off.",
@@ -128,6 +131,7 @@ Singleton {
       property bool taskbarAllScreens: true
       property string taskbarAppsOn: "all"
       property bool startRecommended: true
+      property bool calendarWeekNumbers: false
       property var hiddenNotificationApps: []
       property string startHotkey: "Win"
       property string settingsHotkey: ""

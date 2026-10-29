@@ -8,7 +8,7 @@ import QtQuick.Layouts
 ColumnLayout {
   id: root
   property date date: new Date()
-  property bool showWeekNumbers: false
+  property bool showWeekNumbers: Preferences.calendarWeekNumbers
   property string localeName: ""
   property var scrollView: null
   property alias month: month
@@ -108,5 +108,13 @@ ColumnLayout {
     }
   }
 
-  CheckBox { text: "Week numbers"; checked: root.showWeekNumbers; onToggled: root.showWeekNumbers = checked; onActiveFocusChanged: if (activeFocus && root.scrollView) root.scrollView.reveal(this) }
+  CheckBox {
+    text: "Week numbers"
+    checked: root.showWeekNumbers
+    onToggled: {
+      root.showWeekNumbers = checked
+      Preferences.calendarWeekNumbers = checked
+    }
+    onActiveFocusChanged: if (activeFocus && root.scrollView) root.scrollView.reveal(this)
+  }
 }
