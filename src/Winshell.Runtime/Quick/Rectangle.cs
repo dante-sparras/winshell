@@ -205,10 +205,10 @@ public sealed class BorderGroup(Item owner) : QObject
         get { Track(); return _width; }
         set
         {
+            var first = !_widthSet;
             _widthSet = true;
-            if (SetField(ref _width, value))
+            if (SetField(ref _width, value) || first)
                 owner.Update();
-            owner.Update();
         }
     }
 
@@ -218,10 +218,10 @@ public sealed class BorderGroup(Item owner) : QObject
         get { Track(); return _color; }
         set
         {
+            var first = !_colorSet;
             _colorSet = true;
-            if (SetField(ref _color, value))
+            if (SetField(ref _color, value) || first)
                 owner.Update();
-            owner.Update();
         }
     }
 
