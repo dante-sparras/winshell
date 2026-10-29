@@ -208,11 +208,12 @@ public sealed class ShellHost : IShellHost, IDisposable
             Reloaded?.Invoke(message);
             return false;
         }
+        var previousIpc = Ipc;
         _engine = engine;
         _root = root;
         Ipc = ipc;
-        // Hand the old objects to the new ones, then end the reload stage. The new generation exists by now, so a
-        // failure here is reported and the shell goes on with it.
+        // Hand the old objects to the new ones, then end the reload stage. A throw here is a failed load: the new
+        // generation is discarded and, on a reload, the generation that was running stays.
         try
         {
             if (root is Reloadable reloadable)
@@ -223,8 +224,19 @@ public sealed class ShellHost : IShellHost, IDisposable
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            Log.Error("scene", "Failed to hand the old configuration's objects to the new one: " + Log.Describe(e, _rootFile));
-            Log.Debug("scene", e.ToString());
+            var message = Log.Describe(e, _rootFile);
+            Log.Error("scene", (initial ? "Failed to load configuration: " : "Failed to reload configuration: ") + message);
+            Log.Error("scene", e.ToString());
+            _engine = oldEngine;
+            _root = oldRoot;
+            Ipc = previousIpc;
+            _settings.Engine = oldEngine;
+            DisposeFailed(engine);
+            WatchFilesOf(oldEngine ?? engine);
+            if (oldEngine?.FindNativeSingleton<ShellGlobal>() is { } failedShell)
+                failedShell.Emit("reloadFailed", message);
+            Reloaded?.Invoke(message);
+            return false;
         }
         oldEngine?.Dispose();
         WatchFilesOf(engine);
