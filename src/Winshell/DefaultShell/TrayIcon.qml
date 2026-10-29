@@ -15,6 +15,23 @@ MouseArea {
   implicitHeight: 40
   hoverEnabled: true
   acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+  activeFocusOnTab: true
+
+  function showMenu() {
+    const point = mapToItem(null, width / 2, 0)
+    item.display(window, point.x, point.y)
+  }
+
+  Keys.onPressed: event => {
+    event.accepted = false
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space)
+      item.click()
+    else if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)))
+      showMenu()
+    else
+      return
+    event.accepted = true
+  }
 
   Accessible.role: Accessible.Button
   Accessible.name: item ? (item.tooltip || item.appName).split("\n")[0] : ""
@@ -22,8 +39,7 @@ MouseArea {
 
   onClicked: mouse => {
     if (mouse.button === Qt.RightButton) {
-      const point = mapToItem(null, width / 2, 0)
-      item.display(window, point.x, point.y)
+      showMenu()
     } else if (mouse.button === Qt.MiddleButton) {
       item.middleClick()
     } else {

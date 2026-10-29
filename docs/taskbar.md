@@ -22,6 +22,16 @@ Pinned apps come first, in the order they were pinned, then every other running 
 - **Right click.** Opens a menu with the app, Pin to taskbar or Unpin from taskbar, and Close window or Close all windows. Windows has no supported API to read another app's jump list, so recent and pinned files are not shown.
 - **Indicators.** A grey line marks a running app, and a longer accent line marks the app in front. A window that flashes for attention (`AppWindow.attention`) turns its button red until it is activated.
 
+## Keyboard
+
+- **Win+T** puts the keyboard on the first app of the main taskbar, with a focus rectangle. While Explorer runs, Windows keeps Win+T for its own taskbar, so the hotkey reports that it is `taken`.
+- **Narrator** can move focus to any taskbar button; the taskbar then takes the keyboard if Windows lets it, and otherwise tells Narrator that focusing failed. The shell never forces its way to the foreground.
+- **Tab** and **Shift+Tab**, or **Left** and **Right**, move through Start, Search, the apps, the tray icons, quick settings and the clock. An app scrolled out of view scrolls back when it gets focus.
+- **Enter** or **Space** does what a click does. **Shift+Enter** opens a new window of an app. The **menu key** or **Shift+F10** opens an app's menu, or asks a tray app for its own.
+- **Up** on a running app shows its previews with the keyboard in them: **Left** and **Right** move between previews and their close buttons, **Enter** brings that window forward, **Delete** closes it. In a group large enough to be listed by title, **Up** and **Down** move between rows and scroll to them, and **Tab** reaches each row's close button. When a window closes, or the group switches between previews and its list, the keyboard stays on the same window, or moves to the first one.
+- In an app's menu, **Up** and **Down** move focus between the items, and Narrator reads each one.
+- **Escape** closes a menu or previews and goes back to their button. On the taskbar, it gives the keyboard back to the window that had it. When another window becomes active, the taskbar lets go of the keyboard.
+
 Narrator reads each button the way it reads Explorer's: "File Explorer - 2 running windows", "Microsoft Store pinned". It can invoke them.
 
 Pins live in `taskbar.json` in the shell's data folder (`Shell.dataDir`). Until the user pins or unpins something, there is no file, and the pins are File Explorer, Microsoft Edge and the Microsoft Store. A pin whose app isn't in the app index, or isn't installed, has no button.

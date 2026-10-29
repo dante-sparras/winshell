@@ -97,8 +97,13 @@ public sealed class FakeWindow(WindowKind kind, IWindowClient client, FakePlatfo
     {
     }
 
+    /// <summary>How many times the window asked for the keyboard.</summary>
+    public int KeyboardRequests { get; private set; }
+
     public void SetKeyboardFocus(bool focus)
     {
+        if (focus)
+            KeyboardRequests++;
     }
 
     public SKBitmap Render()
@@ -145,6 +150,48 @@ public class ShellTests
             Host.Dispose();
             Files.Dispose();
         }
+    }
+
+    [Fact]
+    public void A_panel_takes_the_keyboard_when_it_becomes_focusable_while_an_item_in_it_has_focus()
+    {
+        using var shell = new Shell(("shell.qml", """
+            import Winshell
+            import QtQuick
+            PanelWindow {
+              property Item first: one
+              property Item focused: activeFocusItem
+              anchors.bottom: true
+              implicitWidth: 200
+              implicitHeight: 40
+              MouseArea { id: one; objectName: "one"; width: 40; height: 40; activeFocusOnTab: true }
+              MouseArea { objectName: "two"; x: 40; width: 40; height: 40; activeFocusOnTab: true }
+            }
+            """));
+        shell.Start();
+        var window = shell.Platform.Windows.Single();
+        var panel = (PanelWindow)window.Client;
+        var one = (Winshell.Runtime.Quick.Item)panel.ReadProperty("first")!;
+
+        // Not focusable: focus moves inside the panel, but the panel leaves the keyboard where it is.
+        one.ForceActiveFocus();
+        shell.Files.Loop.Process();
+        Assert.Same(one, panel.ReadProperty("focused"));
+        Assert.Equal(0, window.KeyboardRequests);
+
+        panel.Focusable = true;
+        Assert.Equal(1, window.KeyboardRequests);
+
+        // Focusable, it asks again when focus moves.
+        one.NextItemInFocusChain()!.ForceActiveFocus(QtEnums.TabFocusReason);
+        Assert.Equal("two", ((Winshell.Runtime.Quick.Item)panel.ReadProperty("focused")!).ObjectName);
+        Assert.Equal(2, window.KeyboardRequests);
+
+        // Without a focused item, becoming focusable asks for nothing.
+        panel.Focusable = false;
+        panel.Scene.SetFocusItem(null);
+        panel.Focusable = true;
+        Assert.Equal(2, window.KeyboardRequests);
     }
 
     [Fact]

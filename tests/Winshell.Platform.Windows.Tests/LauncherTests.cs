@@ -412,12 +412,12 @@ public sealed class LauncherTests
             using var engine = new QmlEngine(registry, loop, new Log(), dir);
             var root = (ShellRoot)engine.CreateRoot(Path.Combine(dir, "shell.qml"));
             loop.Process();
-            // Start's hotkey is the Windows key until Preferences says otherwise; Winshell Settings has none and is idle.
+            // Start's hotkey is the Windows key until Preferences says otherwise. Win+T is the taskbar's.
+            // Winshell Settings has none and is idle. All of them go through RegisterHotKey, not the hook.
             var hotkeys = root.Children.OfType<Hotkey>().ToArray();
-            var hotkey = Assert.Single(hotkeys, h => h.Sequence != "");
+            var hotkey = Assert.Single(hotkeys, h => h.Sequence == "Win");
+            Assert.Equal("Hotkeys are not available.", Assert.Single(hotkeys, h => h.Sequence == "Win+T").Error);
             Assert.Equal("", Assert.Single(hotkeys, h => h.Sequence == "").Error);
-            Assert.Equal("Win", hotkey.Sequence);
-            Assert.Equal("Hotkeys are not available.", hotkey.Error);
             Assert.False(hotkey.Active);
             Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
         }

@@ -17,7 +17,16 @@ MouseArea {
   implicitWidth: 40
   implicitHeight: 40
   hoverEnabled: true
+  activeFocusOnTab: true
   onClicked: root.invoked()
+
+  Keys.onPressed: event => {
+    event.accepted = false
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+      root.invoked()
+      event.accepted = true
+    }
+  }
 
   Accessible.role: Accessible.Button
   Accessible.name: label

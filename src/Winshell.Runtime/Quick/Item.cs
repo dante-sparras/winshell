@@ -419,13 +419,25 @@ public class Item : QObject
     {
     }
 
+    /// <summary>
+    /// Gives this item keyboard focus. As in Qt, a keyboard reason (Tab, Backtab, a shortcut) shows the focus
+    /// rectangle, as moving focus with Tab does; any other reason leaves it as it is.
+    /// </summary>
     [Qml]
-    public void ForceActiveFocus()
+    public void ForceActiveFocus(int reason = QtEnums.OtherFocusReason)
     {
         _focus = true;
         NotifyChanged("focus");
-        Host?.SetFocusItem(this);
+        if (reason is QtEnums.TabFocusReason or QtEnums.BacktabFocusReason or QtEnums.ShortcutFocusReason && Host is Scene scene)
+            scene.MoveFocus(this);
+        else
+            Host?.SetFocusItem(this);
     }
+
+    /// <summary>The tab stop after this item, or before it, in its window, wrapping around; null when there is none.</summary>
+    [Qml]
+    public Item? NextItemInFocusChain(bool forward = true) =>
+        Host is Scene scene ? FocusNavigation.Next(scene.Root, this, forward) : null;
 
     [Qml]
     public bool ActiveFocusOnTab
@@ -705,6 +717,10 @@ public class Item : QObject
 
     protected override void OnDestroy()
     {
+        // A destroyed item can't keep focus: the window's focus item becomes none, and the window's
+        // activeFocusItem says so.
+        if (_host?.FocusItem == this)
+            _host.SetFocusItem(null);
         _anchors?.Detach();
         if (_parent is not null)
         {

@@ -288,4 +288,83 @@ public class FocusNavigationTests
         Press(scene, Tab);
         Assert.Equal("pane", Focused(scene));
     }
+
+    private const string Stops = """
+        import QtQuick
+        Row {
+          property Item one: a
+          property Item three: c
+          MouseArea { id: a; objectName: "one"; width: 40; height: 40; activeFocusOnTab: true }
+          MouseArea { objectName: "two"; width: 40; height: 40; activeFocusOnTab: true }
+          MouseArea { id: c; objectName: "three"; width: 40; height: 40; activeFocusOnTab: true }
+          Item { objectName: "not a stop"; width: 40; height: 40 }
+        }
+        """;
+
+    [Fact]
+    public void The_next_item_in_the_focus_chain_follows_the_tab_order_both_ways_and_wraps()
+    {
+        var (root, scene, shell) = Show(Stops);
+        using var _ = shell;
+        var one = (Item)root.ReadProperty("one")!;
+        var three = (Item)root.ReadProperty("three")!;
+        Assert.Equal("two", one.NextItemInFocusChain()!.ObjectName);
+        Assert.Equal("three", one.NextItemInFocusChain(false)!.ObjectName);
+        Assert.Equal("one", three.NextItemInFocusChain()!.ObjectName);
+        Assert.NotNull(scene);
+    }
+
+    [Fact]
+    public void Focus_given_for_a_keyboard_reason_shows_the_focus_rectangle_and_any_other_does_not()
+    {
+        var (root, scene, shell) = Show(Stops);
+        using var _ = shell;
+        var one = (Item)root.ReadProperty("one")!;
+        var three = (Item)root.ReadProperty("three")!;
+
+        one.ForceActiveFocus();
+        Assert.Equal("one", Focused(scene));
+        Assert.False(scene.FocusVisible);
+
+        three.ForceActiveFocus(QtEnums.ShortcutFocusReason);
+        Assert.Equal("three", Focused(scene));
+        Assert.True(scene.FocusVisible);
+
+        // A press of the pointer hides it again, and a mouse reason does not bring it back.
+        scene.PointerPress(1, 1, QtEnums.LeftButton);
+        scene.PointerRelease(1, 1, QtEnums.LeftButton);
+        one.ForceActiveFocus(QtEnums.MouseFocusReason);
+        Assert.False(scene.FocusVisible);
+        one.ForceActiveFocus(QtEnums.TabFocusReason);
+        Assert.True(scene.FocusVisible);
+    }
+
+    [Fact]
+    public void Scripts_can_name_the_focus_reasons()
+    {
+        var (root, scene, shell) = Show("""
+            import QtQuick
+            Item {
+              property var reasons: [Qt.MouseFocusReason, Qt.TabFocusReason, Qt.BacktabFocusReason, Qt.ShortcutFocusReason, Qt.OtherFocusReason]
+            }
+            """);
+        using var _ = shell;
+        Assert.Equal([0.0, 1, 2, 5, 7], ((IEnumerable<object?>)root.ReadProperty("reasons")!).Select(Convert.ToDouble));
+        Assert.NotNull(scene);
+    }
+
+    [Fact]
+    public void A_focused_item_that_is_destroyed_leaves_its_window_with_no_focus_item()
+    {
+        var (root, scene, shell) = Show(Stops);
+        using var _ = shell;
+        var one = (Item)root.ReadProperty("one")!;
+        one.ForceActiveFocus(QtEnums.TabFocusReason);
+        Assert.Same(one, scene.FocusItem);
+        one.Destroy();
+        Assert.Null(scene.FocusItem);
+        // Tab starts again from the first stop that is left.
+        Press(scene, Tab);
+        Assert.Equal("two", Focused(scene));
+    }
 }

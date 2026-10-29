@@ -36,6 +36,17 @@ ShellRoot {
     onPressed: settings.open("")
   }
 
+  // Win+T puts the keyboard in the main taskbar, as in Windows. While Explorer runs, it keeps Win+T for its own.
+  Hotkey {
+    sequence: "Win+T"
+    onPressed: {
+      var list = bars.instances
+      var main = list.find(t => t.isMainScreen) || list[0]
+      if (main)
+        main.focusApps()
+    }
+  }
+
   NotificationListener { id: notifications }
   TaskbarPins { id: taskbarPins }
 

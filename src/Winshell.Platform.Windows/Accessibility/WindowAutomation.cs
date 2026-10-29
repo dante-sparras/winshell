@@ -37,6 +37,12 @@ internal sealed class WindowAutomation : IDisposable
 
     public nint Handle => _window.Handle;
 
+    /// <summary>The provider a client gets for an item, or null when the item is not exposed.</summary>
+    internal UiaElement? ElementFor(Item item) => Tree.Find(item) is { } node ? For(node) : null;
+
+    /// <summary>The window takes the keyboard for an item a client focused; false when Windows did not let it.</summary>
+    internal bool TryTakeKeyboard() => _window.TryTakeKeyboardForAutomation();
+
     /// <summary>Whether the window has the keyboard, so focus inside it is focus on the desktop.</summary>
     public bool HasFocus => Handle != 0 && Win32.GetFocus() == Handle;
 
@@ -270,7 +276,8 @@ internal sealed class WindowAutomation : IDisposable
         // Tell clients the window's elements are gone, so they let go of them.
         if (Handle != 0)
             Uia.UiaReturnRawElementProvider(Handle, 0, 0, null);
-        foreach (var element in _elements.Values)
+        // Disconnecting can call back into a provider, which can look up more elements: go through a copy.
+        foreach (var element in _elements.Values.ToArray())
         {
             Uia.UiaDisconnectProvider(element);
             element.Detach();

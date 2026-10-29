@@ -10,18 +10,22 @@ PopupWindow {
 
   property var task: null
   property string taskKey: ""
-  property int current: 0
 
   signal launchRequested()
   signal pinRequested()
   signal unpinRequested()
+  // Escape closed the menu, so the keyboard goes back to the button it opened from.
+  signal dismissed()
+  // The app this menu was for is gone while the keyboard was in it. Its button is going too.
+  signal anchorGone()
 
   readonly property var items: {
     if (!task)
       return []
     const count = task.windows.length
     const list = [{ id: "launch", label: Tasks.name(task), icon: task.icon }]
-    list.push(task.pinned ? { id: "unpin", label: "Unpin from taskbar", glyph: "" } : { id: "pin", label: "Pin to taskbar", glyph: "" })
+    // One slot for pinning, whichever way it goes, so its row and its focus stay while the app is pinned or unpinned.
+    list.push({ id: "pin", label: task.pinned ? "Unpin from taskbar" : "Pin to taskbar", glyph: task.pinned ? "" : "" })
     if (count > 0)
       list.push({ id: "close", label: count === 1 ? "Close window" : "Close all windows", glyph: "" })
     return list
@@ -38,12 +42,17 @@ PopupWindow {
   anchor.gravity: Edges.Top
   anchor.margins.top: 8
 
+  // The first item takes focus, so Narrator reads it and the arrow keys move from it.
   function open(button, key) {
     anchor.item = button
     taskKey = key
-    current = 0
     visible = true
-    keys.forceActiveFocus()
+    if (rows.count > 0)
+      rows.itemAt(0).forceActiveFocus(Qt.ShortcutFocusReason)
+  }
+
+  function itemFor(id) {
+    return items.find(i => i.id === id) ?? null
   }
 
   function trigger(id) {
@@ -53,34 +62,47 @@ PopupWindow {
       return
     if (id === "launch")
       launchRequested()
+    else if (id === "pin" && task.pinned)
+      unpinRequested()
     else if (id === "pin")
       pinRequested()
-    else if (id === "unpin")
-      unpinRequested()
     else if (id === "close")
       task.windows.slice().forEach(w => w.close())
   }
 
-  onTaskChanged: if (task === null) visible = false
+  onTaskChanged: if (task === null) {
+    const keyboard = visible
+    visible = false
+    if (keyboard)
+      anchorGone()
+  }
+
+  // An item that went away, as Close when the app's last window closes, took focus with it: the first item gets it.
+  onItemsChanged: if (visible) Qt.callLater(() => {
+    if (visible && activeFocusItem === null && rows.count > 0)
+      rows.itemAt(0).forceActiveFocus(Qt.TabFocusReason)
+  })
 
   Item {
     id: keys
     anchors.fill: parent
-    focus: true
     Accessible.role: Accessible.PopupMenu
     Accessible.name: root.task ? Tasks.name(root.task) : ""
 
+    // Focus itself moves between the items, wrapping around, so Narrator announces each one.
     Keys.onPressed: event => {
-      if (event.key === Qt.Key_Escape)
+      event.accepted = false
+      const focused = root.activeFocusItem
+      if (event.key === Qt.Key_Escape) {
         root.visible = false
-      else if (event.key === Qt.Key_Down)
-        root.current = (root.current + 1) % root.items.length
-      else if (event.key === Qt.Key_Up)
-        root.current = (root.current + root.items.length - 1) % root.items.length
-      else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space)
-        root.trigger(root.items[root.current].id)
-      else
+        root.dismissed()
+      } else if ((event.key === Qt.Key_Down || event.key === Qt.Key_Up) && focused) {
+        const next = focused.nextItemInFocusChain(event.key === Qt.Key_Down)
+        if (next)
+          next.forceActiveFocus(Qt.TabFocusReason)
+      } else {
         return
+      }
       event.accepted = true
     }
 
@@ -90,46 +112,57 @@ PopupWindow {
       y: 4
       width: parent.width - 8
 
+      // Rows are kept by their slot, so the app's windows coming and going doesn't replace the focused row.
       Repeater {
-        model: root.items
+        id: rows
+        model: root.items.map(i => i.id)
 
         MouseArea {
           id: item
-          required property var modelData
-          required property int index
-          objectName: "menu:" + modelData.id
+          required property string modelData
+          readonly property var entry: root.itemFor(modelData) ?? { id: modelData, label: "" }
+          objectName: "menu:" + modelData
           width: column.width
           height: 36
           hoverEnabled: true
-          onContainsMouseChanged: if (containsMouse) root.current = index
-          onClicked: root.trigger(modelData.id)
+          activeFocusOnTab: true
+          // The pointer and the keyboard share one current item: the one with focus.
+          onContainsMouseChanged: if (containsMouse) forceActiveFocus()
+          onClicked: root.trigger(modelData)
+          Keys.onPressed: event => {
+            event.accepted = false
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+              root.trigger(modelData)
+              event.accepted = true
+            }
+          }
           Accessible.role: Accessible.MenuItem
-          Accessible.name: modelData.label
-          Accessible.onPressAction: root.trigger(modelData.id)
+          Accessible.name: entry.label
+          Accessible.onPressAction: root.trigger(modelData)
 
           Rectangle {
             anchors.fill: parent
             radius: Theme.controlCornerRadius
-            color: item.pressed ? Theme.subtleFillColorTertiary : root.current === item.index ? Theme.subtleFillColorSecondary : "transparent"
+            color: item.pressed ? Theme.subtleFillColorTertiary : item.activeFocus ? Theme.subtleFillColorSecondary : "transparent"
           }
 
           Image {
-            visible: item.modelData.icon !== undefined
+            visible: item.entry.icon !== undefined
             x: 12
             anchors.verticalCenter: parent.verticalCenter
             width: 16
             height: 16
             sourceSize: Qt.size(16, 16)
-            source: item.modelData.icon ? Shell.iconPath(item.modelData.icon) : ""
+            source: item.entry.icon ? Shell.iconPath(item.entry.icon) : ""
           }
 
           Text {
-            visible: item.modelData.glyph !== undefined
+            visible: item.entry.glyph !== undefined
             x: 12
             anchors.verticalCenter: parent.verticalCenter
             width: 16
             horizontalAlignment: Text.AlignHCenter
-            text: item.modelData.glyph ?? ""
+            text: item.entry.glyph ?? ""
             font.family: Theme.iconFontFamily
             font.pixelSize: 16
             color: Theme.textFillColorPrimary
@@ -139,7 +172,7 @@ PopupWindow {
             x: 40
             width: parent.width - 52
             anchors.verticalCenter: parent.verticalCenter
-            text: item.modelData.label
+            text: item.entry.label
             elide: Text.ElideRight
             font: Theme.typography.body
             color: Theme.textFillColorPrimary

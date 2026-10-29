@@ -297,7 +297,8 @@ public class TaskbarTests
         }
 
         Choose("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", "pin");
-        Choose("app:file explorer", "unpin");
+        // One slot pins or unpins, whichever the app is.
+        Choose("app:file explorer", "pin");
         Choose("window:tool", "pin");
         Choose("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", "close");
         Choose("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", "launch");
@@ -546,6 +547,9 @@ public class TaskbarTests
             onSearchRequested: searched++
           }
           Component.onCompleted: bar.pins = pins
+          // Win+T, as shell.qml calls it.
+          property int winT: 0
+          onWinTChanged: bar.focusApps()
         }
         """;
 
@@ -854,6 +858,630 @@ public class TaskbarTests
         desk.Services.SystemTray.Items.Remove(hidden);
         shell.Settle();
         Assert.DoesNotContain(DefaultShellHarness.FindAll(bar.Scene.Root), i => i.ObjectName == "trayChevron" && i.Visible);
+    }
+
+    // Keyboard
+
+    private const int KeyReturn = 0x01000004, KeySpace = 0x20, KeyEscape = 0x01000000, KeyLeft = 0x01000012, KeyRight = 0x01000014;
+    private const int KeyUp = 0x01000013, KeyDown = 0x01000015, KeyMenu = 0x01000055, KeyF10 = 0x01000039, KeyTab = 0x01000001;
+
+    private static void Key(DefaultShellHarness shell, ShellWindow window, int key, int modifiers = 0)
+    {
+        window.Scene.KeyPress(new KeyEvent { Key = key, Modifiers = modifiers });
+        window.Scene.KeyRelease(new KeyEvent { Key = key, Modifiers = modifiers });
+        shell.Settle();
+    }
+
+    private static string? Focused(ShellWindow window) => window.Scene.FocusItem?.ObjectName;
+
+    private static (DefaultShellHarness Shell, PanelWindow Bar) KeyboardDesk(out Desk desk)
+    {
+        desk = new Desk();
+        desk.Services.SystemTray.Items.Add(new FakeTrayItem("Sync", "Sync", false));
+        return Taskbar(desk);
+    }
+
+    [Fact]
+    public void Every_taskbar_button_is_a_keyboard_stop_Narrator_can_focus()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        Assert.NotNull(desk);
+        var tree = new AccessibleTree(bar.Scene);
+        tree.Refresh();
+        var buttons = new[] { "startButton", "searchButton", "task:app:file explorer", "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app", "task:window:tool", "trayIcon" }
+            .Select(name => In(bar, name)).ToList();
+        Assert.All(buttons, b => Assert.True(tree.Find(b)!.IsKeyboardFocusable, b.ObjectName));
+
+        // Tab goes through them in the order they are drawn, then the quick settings button and the clock.
+        var order = new List<string?>();
+        In(bar, "startButton").ForceActiveFocus(QtEnums.TabFocusReason);
+        for (var i = 0; i < 8; i++)
+        {
+            order.Add(Focused(bar));
+            Key(shell, bar, KeyTab);
+        }
+        Assert.Equal(["startButton", "searchButton", "task:app:file explorer", "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app", "task:window:tool", "trayIcon"], order.Take(6));
+    }
+
+    [Fact]
+    public void Win_T_puts_the_keyboard_on_the_first_app_with_a_focus_rectangle_and_Escape_gives_it_back()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        Assert.False(bar.Focusable);
+
+        shell.Root.WriteProperty("winT", 1);
+        shell.Settle();
+        Assert.Equal("task:app:file explorer", Focused(bar));
+        Assert.True(bar.Scene.FocusVisible);
+        Assert.True((bool)bar.ReadProperty("keyboardActive")!);
+        Assert.True(bar.Focusable);
+
+        Key(shell, bar, KeyRight);
+        Assert.Equal("task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app", Focused(bar));
+        Key(shell, bar, KeyLeft);
+        Key(shell, bar, KeyLeft);
+        Assert.Equal("searchButton", Focused(bar));
+
+        // Escape: the keyboard goes back to the window that had it, PowerShell.
+        Key(shell, bar, KeyEscape);
+        Assert.False((bool)bar.ReadProperty("keyboardActive")!);
+        Assert.False(bar.Focusable);
+        Assert.Equal(["activate"], desk.Shell1.Calls);
+    }
+
+    [Fact]
+    public void Narrator_focusing_a_button_puts_the_keyboard_in_the_taskbar_until_another_window_takes_it()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        var tree = new AccessibleTree(bar.Scene);
+        tree.Refresh();
+        tree.Find(In(bar, "task:window:tool"))!.Focus();
+        shell.Settle();
+        Assert.Equal("task:window:tool", Focused(bar));
+        Assert.True((bool)bar.ReadProperty("keyboardActive")!);
+        Assert.True(bar.Focusable);
+
+        desk.Services.WindowList.Activate(desk.Documents);
+        shell.Settle();
+        Assert.False((bool)bar.ReadProperty("keyboardActive")!);
+        Assert.False(bar.Focusable);
+        Assert.Empty(desk.Shell1.Calls);
+    }
+
+    [Fact]
+    public void Enter_Space_Shift_Enter_and_the_menu_key_do_what_clicks_do()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        shell.Root.WriteProperty("winT", 1);
+        shell.Settle();
+
+        // Start and Search.
+        In(bar, "startButton").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeySpace);
+        Assert.Equal(["startButton"], ((IEnumerable<object?>)shell.Root.ReadProperty("started")!).Select(o => o?.ToString()));
+        In(bar, "searchButton").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyReturn);
+        Assert.Equal(1, Convert.ToInt32(shell.Root.ReadProperty("searched")));
+
+        // An app: Enter brings its window forward, Shift+Enter opens a new one.
+        In(bar, "task:window:tool").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyReturn);
+        Assert.Equal(["activate"], desk.Tool.Calls);
+        In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyReturn, QtEnums.ShiftModifier);
+        Assert.Equal(1, desk.Terminal.Launches);
+
+        // The menu key and Shift+F10 open its menu, with the keyboard on the first item.
+        var menu = (PopupWindow)((QObject)bar.ReadProperty("taskList")!).ReadProperty("menu")!;
+        Key(shell, bar, KeyMenu);
+        Assert.True(menu.Visible);
+        Assert.Equal("menu:launch", Focused(menu));
+        Key(shell, menu, KeyEscape);
+        Assert.False(menu.Visible);
+        Assert.Equal("task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app", Focused(bar));
+        Key(shell, bar, KeyF10, QtEnums.ShiftModifier);
+        Assert.True(menu.Visible);
+
+        // A tray icon: Enter clicks it, the menu key asks the app for its menu.
+        var sync = (FakeTrayItem)desk.Services.SystemTray.Items.Values.Single()!;
+        In(bar, "trayIcon").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyReturn);
+        Key(shell, bar, KeyMenu);
+        Assert.Equal(["click", "display"], sync.Calls);
+    }
+
+    [Fact]
+    public void The_arrow_keys_move_focus_through_the_menu_so_Narrator_reads_each_item()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        In(bar, "task:app:file explorer").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyMenu);
+        var menu = (PopupWindow)((QObject)bar.ReadProperty("taskList")!).ReadProperty("menu")!;
+        var tree = new AccessibleTree(menu.Scene);
+
+        string Read()
+        {
+            tree.Refresh();
+            var node = tree.Find(menu.Scene.FocusItem!)!;
+            Assert.Equal(AccessibleAttached.RoleValue.MenuItem, node.Role);
+            Assert.True(node.HasKeyboardFocus);
+            return node.Name;
+        }
+
+        Assert.Equal("File Explorer", Read());
+        Key(shell, menu, KeyDown);
+        Assert.Equal("Unpin from taskbar", Read());
+        Key(shell, menu, KeyDown);
+        Assert.Equal("Close window", Read());
+        Key(shell, menu, KeyDown);
+        Assert.Equal("File Explorer", Read());
+        Key(shell, menu, KeyUp);
+        Assert.Equal("Close window", Read());
+
+        Key(shell, menu, KeyReturn);
+        Assert.False(menu.Visible);
+        Assert.Equal(["close"], desk.Documents.Calls);
+    }
+
+    [Fact]
+    public void Up_opens_an_apps_previews_with_the_keyboard_in_them_and_Escape_goes_back_to_its_button()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        var terminal = In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        terminal.ForceActiveFocus(QtEnums.TabFocusReason);
+        var preview = (PopupWindow)((QObject)bar.ReadProperty("taskList")!).ReadProperty("preview")!;
+
+        Key(shell, bar, KeyUp);
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("preview:PowerShell", Focused(preview));
+        Assert.True(preview.Scene.FocusVisible);
+
+        // Right moves to the preview's close button, then to the next preview.
+        Key(shell, preview, KeyRight);
+        Assert.Equal("previewClose", Focused(preview));
+        Key(shell, preview, KeyRight);
+        Assert.Equal("preview:Command Prompt", Focused(preview));
+        var tree = new AccessibleTree(preview.Scene);
+        tree.Refresh();
+        Assert.Equal("Command Prompt", tree.Find(preview.Scene.FocusItem!)!.Name);
+
+        Key(shell, preview, KeyEscape);
+        Assert.False(preview.Visible);
+        Assert.False(preview.GrabFocus);
+        Assert.Same(terminal, bar.Scene.FocusItem);
+
+        // Enter on a preview brings that window forward.
+        Key(shell, bar, KeyUp);
+        Key(shell, preview, KeyRight);
+        Key(shell, preview, KeyRight);
+        Key(shell, preview, KeyReturn);
+        Assert.Equal(["activate"], desk.Shell2.Calls);
+        Assert.False(preview.Visible);
+    }
+
+    private static PopupWindow TaskPopup(PanelWindow bar, string name) => (PopupWindow)((QObject)bar.ReadProperty("taskList")!).ReadProperty(name)!;
+
+    /// <summary>The focused item of a window, as Narrator would read it; never a destroyed one.</summary>
+    private static string FocusedName(ShellWindow window)
+    {
+        var item = window.Scene.FocusItem;
+        Assert.NotNull(item);
+        Assert.False(item.IsDestroyed);
+        var tree = new AccessibleTree(window.Scene);
+        tree.Refresh();
+        var node = tree.Find(item)!;
+        Assert.True(node.HasKeyboardFocus, $"{item.ObjectName} is read as {node.Item.ObjectName} ({node.Role} '{node.Name}')");
+        return node.Name;
+    }
+
+    [Fact]
+    public void An_open_menu_keeps_its_focused_item_while_another_app_comes_and_moves_focus_when_its_item_goes()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        In(bar, "task:app:file explorer").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyMenu);
+        var menu = TaskPopup(bar, "menu");
+        Key(shell, menu, KeyDown);
+        Key(shell, menu, KeyDown);
+        var row = menu.Scene.FocusItem;
+        Assert.Equal("Close window", FocusedName(menu));
+
+        // Another app arrives: the same row keeps focus.
+        desk.Services.WindowList.Windows.Add(new FakeAppWindow("Notes", "notes", @"C:\Tools\notes.exe"));
+        shell.Settle();
+        Assert.Same(row, menu.Scene.FocusItem);
+        Assert.Equal("Close window", FocusedName(menu));
+
+        // File Explorer's window closes: Close goes, and focus moves to the first item, where the arrows go on.
+        desk.Services.WindowList.Windows.Remove(desk.Documents);
+        shell.Settle();
+        Assert.True(menu.Visible);
+        Assert.Equal("File Explorer", FocusedName(menu));
+        Key(shell, menu, KeyDown);
+        Assert.Equal("Unpin from taskbar", FocusedName(menu));
+        Key(shell, menu, KeyEscape);
+        Assert.False(menu.Visible);
+        Assert.Equal("task:app:file explorer", Focused(bar));
+    }
+
+    [Fact]
+    public void Closing_the_focused_preview_moves_focus_to_the_next_and_the_last_one_back_to_the_button()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        var terminal = In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        terminal.ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.Equal("PowerShell", FocusedName(preview));
+
+        // Delete closes it; the window goes from the list, and focus moves to the one left.
+        Key(shell, preview, 0x01000007);
+        Assert.Equal(["close"], desk.Shell1.Calls);
+        desk.Services.WindowList.Windows.Remove(desk.Shell1);
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.Equal("Command Prompt", FocusedName(preview));
+        Key(shell, preview, KeyReturn);
+        Assert.Equal(["activate"], desk.Shell2.Calls);
+
+        // The last window closes while its preview has the keyboard: the button gets it back.
+        Key(shell, bar, KeyUp);
+        desk.Services.WindowList.Windows.Remove(desk.Shell2);
+        shell.Settle();
+        Assert.False(preview.Visible);
+    }
+
+    [Fact]
+    public void A_large_group_from_the_keyboard_is_a_list_whose_focused_row_scrolls_into_view_and_can_be_activated_and_closed()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        for (var i = 2; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"Window {i}", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        shell.Settle();
+        In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.Equal("PowerShell", FocusedName(preview));
+        Assert.StartsWith("previewRow:", preview.Scene.FocusItem!.ObjectName, StringComparison.Ordinal);
+        var list = DefaultShellHarness.FindAll(preview.Scene.Root).First(i => i.ObjectName == "previewList");
+
+        // Down goes row by row, past the close buttons, and each row it reaches is shown whole.
+        for (var i = 0; i < 29; i++)
+        {
+            Key(shell, preview, KeyDown);
+            var row = preview.Scene.FocusItem!;
+            Assert.StartsWith("previewRow:", row.ObjectName, StringComparison.Ordinal);
+            var top = row.MapToScene(0, 0).Y - list.MapToScene(0, 0).Y;
+            Assert.True(top >= -0.5 && top + row.Height <= list.Height + 0.5, $"{row.ObjectName} at {top} in a list {list.Height} high");
+        }
+        Assert.Equal("Window 29", FocusedName(preview));
+
+        // Tab reaches its close button; Enter on it closes the window.
+        Key(shell, preview, KeyTab);
+        Assert.Equal("Close Window 29", FocusedName(preview));
+        Key(shell, preview, KeyReturn);
+        var last = (FakeAppWindow)desk.Services.WindowList.Windows.Values.Last()!;
+        Assert.Equal(["close"], last.Calls);
+
+        // Up goes back to the row, then to the one above; Enter brings its window forward.
+        Key(shell, preview, KeyUp);
+        Assert.Equal("Window 29", FocusedName(preview));
+        Key(shell, preview, KeyUp);
+        Assert.Equal("Window 28", FocusedName(preview));
+        Key(shell, preview, KeyReturn);
+        Assert.Equal(["activate"], ((FakeAppWindow)desk.Services.WindowList.Windows.Values[^2]!).Calls);
+    }
+
+    [Fact]
+    public void A_group_that_becomes_a_list_keeps_the_keyboard_on_the_same_window()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        // A 1280 px screen: three windows are previews, nine are a list.
+        bar.Screen = new ShellScreen(new ScreenInfo("DISPLAY1", "DISPLAY1", "", "", "", new QRect(0, 0, 1280, 1080), new QRect(0, 0, 1280, 1032), 1, 0, 0, 60, true));
+        desk.Services.WindowList.Windows.Add(new FakeAppWindow("Window 2", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        shell.Settle();
+        In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Key(shell, preview, KeyRight);
+        Key(shell, preview, KeyRight);
+        Assert.Equal("Command Prompt", FocusedName(preview));
+        Assert.StartsWith("preview:", preview.Scene.FocusItem!.ObjectName, StringComparison.Ordinal);
+
+        for (var i = 3; i < 9; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"Window {i}", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        shell.Settle();
+        Assert.Equal("Command Prompt", FocusedName(preview));
+        Assert.StartsWith("previewRow:", preview.Scene.FocusItem!.ObjectName, StringComparison.Ordinal);
+
+        // And back to previews when the group shrinks.
+        foreach (var window in desk.Services.WindowList.Windows.Values.OfType<FakeAppWindow>().Where(w => w.Title.StartsWith("Window ", StringComparison.Ordinal)).ToList())
+            desk.Services.WindowList.Windows.Remove(window);
+        shell.Settle();
+        Assert.Equal("Command Prompt", FocusedName(preview));
+        Assert.StartsWith("preview:", preview.Scene.FocusItem!.ObjectName, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(800)]
+    [InlineData(1280)]
+    public void The_app_with_keyboard_or_Narrator_focus_scrolls_into_view(double width)
+    {
+        var desk = new Desk();
+        for (var i = 0; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"App {i}", $"app{i}", $@"C:\Apps\app{i}.exe"));
+        var (shell, bar) = Taskbar(desk, width);
+        using var _ = shell;
+        var strip = In(bar, "taskStrip");
+
+        void Shown(Item button)
+        {
+            shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+            var left = button.MapToScene(0, 0).X - strip.MapToScene(0, 0).X;
+            Assert.True(left >= -0.5 && left + button.Width <= strip.Width + 0.5, $"{button.ObjectName} at {left} in a strip {strip.Width} wide");
+        }
+
+        var buttons = DefaultShellHarness.FindAll(bar.Scene.Root).Where(i => i.ObjectName.StartsWith("task:", StringComparison.Ordinal)).OrderBy(i => i.X).ToList();
+        // The last app, by Tab; the first again, by Right around the end; then the last again, by Narrator.
+        buttons[^1].ForceActiveFocus(QtEnums.TabFocusReason);
+        Shown(buttons[^1]);
+        buttons[0].ForceActiveFocus(QtEnums.TabFocusReason);
+        Shown(buttons[0]);
+        Key(shell, bar, KeyRight);
+        Shown(buttons[1]);
+        var tree = new AccessibleTree(bar.Scene);
+        tree.Refresh();
+        tree.Find(buttons[^1])!.Focus();
+        Shown(buttons[^1]);
+
+        // A narrower taskbar keeps it in view.
+        bar.OnResized(width - 200, 48, 1);
+        Shown(buttons[^1]);
+    }
+
+    private static void MovePointer(ShellWindow window, double x, double y)
+    {
+        window.Scene.PointerMove(x, y);
+    }
+
+    [Fact]
+    public void The_pointer_leaving_does_not_close_previews_the_keyboard_has_open()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        var terminal = In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        var at = terminal.MapToScene(terminal.Width / 2, terminal.Height / 2);
+        MovePointer(bar, at.X, at.Y);
+        shell.Settle();
+        terminal.ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("PowerShell", FocusedName(preview));
+
+        // Off the button, and not into the popup. The hover timer would have closed it.
+        MovePointer(bar, 1, 1);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(400));
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("PowerShell", FocusedName(preview));
+
+        // Onto a card, then off the popup, while Right is moving between the cards.
+        var card = preview.Scene.FocusItem!;
+        var onCard = card.MapToScene(card.Width / 2, card.Height / 2);
+        MovePointer(preview, onCard.X, onCard.Y);
+        shell.Settle();
+        Key(shell, preview, KeyRight);
+        Key(shell, preview, KeyRight);
+        Assert.Equal("Command Prompt", FocusedName(preview));
+        MovePointer(preview, -30, -30);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(400));
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.Equal("Command Prompt", FocusedName(preview));
+
+        // A list, the same way: the pointer leaves the button and the rows, and Down still moves.
+        for (var i = 2; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"Window {i}", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        shell.Settle();
+        Assert.StartsWith("previewRow:", preview.Scene.FocusItem!.ObjectName, StringComparison.Ordinal);
+        MovePointer(bar, 1, 1);
+        var row = preview.Scene.FocusItem!;
+        var onRow = row.MapToScene(row.Width / 2, row.Height / 2);
+        MovePointer(preview, onRow.X, onRow.Y);
+        shell.Settle();
+        MovePointer(preview, -30, -30);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(400));
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Key(shell, preview, KeyDown);
+        Assert.StartsWith("previewRow:", preview.Scene.FocusItem!.ObjectName, StringComparison.Ordinal);
+        Assert.False(preview.Scene.FocusItem!.IsDestroyed);
+
+        // Escape still comes back to the button. The pointer never dismissed it.
+        Key(shell, preview, KeyEscape);
+        Assert.False(preview.Visible);
+        Assert.False(preview.GrabFocus);
+        Assert.Same(terminal, bar.Scene.FocusItem);
+    }
+
+    [Fact]
+    public void Hovering_another_button_does_not_retarget_previews_the_keyboard_has_open()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        Assert.NotNull(desk);
+        var terminal = In(bar, "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app");
+        terminal.ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("PowerShell", FocusedName(preview));
+        Assert.Equal("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", preview.ReadProperty("taskKey"));
+
+        // Onto another app, then off the bar. The hover that would have moved the previews there does not.
+        var tool = In(bar, "task:window:tool");
+        var at = tool.MapToScene(tool.Width / 2, tool.Height / 2);
+        MovePointer(bar, at.X, at.Y);
+        shell.Settle();
+        MovePointer(bar, 1, 1);
+        shell.Loop.Advance(TimeSpan.FromSeconds(1));
+        shell.Settle();
+        Assert.True(preview.Visible);
+        Assert.True(preview.GrabFocus);
+        Assert.Equal("PowerShell", FocusedName(preview));
+        Assert.Equal("app:microsoft.windowsterminal_8wekyb3d8bbwe!app", preview.ReadProperty("taskKey"));
+
+        Key(shell, preview, KeyEscape);
+        Assert.False(preview.Visible);
+        Assert.Same(terminal, bar.Scene.FocusItem);
+    }
+
+    /// <summary>The taskbar's focused item is on screen and Narrator can read it.</summary>
+    private static void AssertKeyboardTarget(PanelWindow bar)
+    {
+        var item = bar.Scene.FocusItem;
+        Assert.NotNull(item);
+        Assert.False(item.IsDestroyed);
+        Assert.True(item.Visible);
+        var tree = new AccessibleTree(bar.Scene);
+        tree.Refresh();
+        var node = tree.Find(item);
+        Assert.NotNull(node);
+        Assert.True(node.HasKeyboardFocus, item.ObjectName);
+        Assert.True(node.IsKeyboardFocusable);
+    }
+
+    [Fact]
+    public void Closing_the_last_window_of_an_unpinned_app_moves_the_keyboard_to_a_button_that_stays()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        var tool = In(bar, "task:window:tool");
+        tool.ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.Equal("Tool - untitled", FocusedName(preview));
+
+        desk.Services.WindowList.Windows.Remove(desk.Tool);
+        shell.Settle();
+        Assert.False(preview.Visible);
+        Assert.False(preview.GrabFocus);
+        Assert.True((bool)bar.ReadProperty("keyboardActive")!);
+        AssertKeyboardTarget(bar);
+        Assert.NotEqual("task:window:tool", bar.Scene.FocusItem!.ObjectName);
+        var landed = bar.Scene.FocusItem;
+        Key(shell, bar, KeyRight);
+        Assert.NotSame(landed, bar.Scene.FocusItem);
+        AssertKeyboardTarget(bar);
+        Key(shell, bar, KeyEscape);
+        Assert.False((bool)bar.ReadProperty("keyboardActive")!);
+
+        // The menu, the same way. The tool is open again, and it is still not pinned.
+        desk.Services.WindowList.Windows.Add(desk.Tool);
+        shell.Settle();
+        tool = In(bar, "task:window:tool");
+        tool.ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyMenu);
+        var menu = TaskPopup(bar, "menu");
+        Assert.Equal("Tool - untitled", FocusedName(menu));
+        desk.Services.WindowList.Windows.Remove(desk.Tool);
+        shell.Settle();
+        Assert.False(menu.Visible);
+        Assert.True((bool)bar.ReadProperty("keyboardActive")!);
+        AssertKeyboardTarget(bar);
+        Assert.NotEqual("task:window:tool", bar.Scene.FocusItem!.ObjectName);
+        landed = bar.Scene.FocusItem;
+        Key(shell, bar, KeyRight);
+        Assert.NotSame(landed, bar.Scene.FocusItem);
+        Key(shell, bar, KeyEscape);
+        Assert.False((bool)bar.ReadProperty("keyboardActive")!);
+    }
+
+    [Fact]
+    public void Closing_the_only_app_from_the_keyboard_leaves_Escape_a_live_target()
+    {
+        var (shell, bar) = KeyboardDesk(out var desk);
+        using var _ = shell;
+        foreach (var window in desk.Services.WindowList.Windows.Values.ToList())
+        {
+            if (!ReferenceEquals(window, desk.Tool))
+                desk.Services.WindowList.Windows.Remove(window);
+        }
+        var pins = (QObject)shell.Root.ReadProperty("pins")!;
+        shell.Engine.Js.CallFunction(pins.GetFunction("unpin")!, shell.Engine.Js.Wrap(pins), ["Microsoft.Windows.Explorer"]);
+        shell.Settle();
+        Assert.Equal(["task:window:tool"], DefaultShellHarness.FindAll(bar.Scene.Root).Where(i => i.ObjectName.StartsWith("task:", StringComparison.Ordinal) && i.Visible).Select(i => i.ObjectName));
+
+        In(bar, "task:window:tool").ForceActiveFocus(QtEnums.TabFocusReason);
+        Key(shell, bar, KeyUp);
+        var preview = TaskPopup(bar, "preview");
+        Assert.True(preview.GrabFocus);
+        desk.Services.WindowList.Windows.Remove(desk.Tool);
+        shell.Settle();
+        Assert.False(preview.Visible);
+        Assert.True((bool)bar.ReadProperty("keyboardActive")!);
+        AssertKeyboardTarget(bar);
+        Assert.False(bar.Scene.FocusItem!.ObjectName.StartsWith("task:", StringComparison.Ordinal));
+        Key(shell, bar, KeyEscape);
+        Assert.False((bool)bar.ReadProperty("keyboardActive")!);
+        Assert.False(bar.Focusable);
+    }
+
+    [Fact]
+    public void Pinning_unpinning_or_reordering_a_focused_app_keeps_its_button_in_view()
+    {
+        var desk = new Desk();
+        for (var i = 0; i < 30; i++)
+            desk.Services.WindowList.Windows.Add(new FakeAppWindow($"App {i}", $"app{i}", $@"C:\Apps\app{i}.exe"));
+        var (shell, bar) = Taskbar(desk, 800);
+        using var _ = shell;
+        var strip = In(bar, "taskStrip");
+        var list = (Item)bar.ReadProperty("taskList")!;
+
+        void Shown(Item button)
+        {
+            shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.False(button.IsDestroyed);
+            Assert.Same(button, bar.Scene.FocusItem);
+            var left = button.MapToScene(0, 0).X - strip.MapToScene(0, 0).X;
+            Assert.True(left >= -0.5 && left + button.Width <= strip.Width + 0.5, $"{button.ObjectName} at {left} in a strip {strip.Width} wide");
+        }
+
+        var last = DefaultShellHarness.FindAll(bar.Scene.Root).First(i => i.ObjectName == "task:window:app29");
+        last.ForceActiveFocus(QtEnums.TabFocusReason);
+        Shown(last);
+
+        list.Emit("pinRequested", "app29");
+        shell.Settle();
+        Shown(last);
+
+        list.Emit("unpinRequested", "app29");
+        shell.Settle();
+        Shown(last);
+
+        // Pinning the apps in front of it rebuilds the order around the same button.
+        for (var i = 0; i < 20; i++)
+            list.Emit("pinRequested", $"app{i}");
+        shell.Settle();
+        list.Emit("pinRequested", "app29");
+        shell.Settle();
+        Shown(last);
     }
 
     private const string Pins = """

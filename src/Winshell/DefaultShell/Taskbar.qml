@@ -41,8 +41,49 @@ PanelWindow {
   readonly property alias searchButton: search
   readonly property alias taskList: taskList
 
+  // The keyboard is in the taskbar: after Win+T (focusApps), or Narrator moving focus to one of its buttons. It
+  // stays until Escape, which goes back to the window that had it, or until another window takes it.
+  property bool keyboardActive: false
+  property var keyboardReturn: null
+  focusable: keyboardActive
+
+  // The first app, or Start when there is none.
+  function focusApps() {
+    const first = search.nextItemInFocusChain(true)
+    const target = first && first !== start ? first : start
+    target.forceActiveFocus(Qt.ShortcutFocusReason)
+  }
+
+  function leaveKeyboard() {
+    const back = keyboardReturn
+    keyboardActive = false
+    keyboardReturn = null
+    // Focus parks on an item that is not a button, so the next Win+T or Narrator focus is a change again.
+    parked.forceActiveFocus()
+    if (back)
+      back.activate()
+  }
+
+  onActiveFocusItemChanged: {
+    if (activeFocusItem && activeFocusItem !== parked && !keyboardActive) {
+      keyboardReturn = WindowList.activeWindow
+      keyboardActive = true
+    }
+  }
+
+  Connections {
+    target: WindowList
+    function onActiveWindowChanged() {
+      if (root.keyboardActive && WindowList.activeWindow !== null) {
+        root.keyboardActive = false
+        root.keyboardReturn = null
+        parked.forceActiveFocus()
+      }
+    }
+  }
+
   // Whether something the taskbar opened is up, which keeps an auto-hiding taskbar shown.
-  readonly property bool busy: taskList.busy || startOpen || searchOpen || menu.visible
+  readonly property bool busy: keyboardActive || taskList.busy || startOpen || searchOpen || menu.visible
     || (trayLoader.item !== null && trayLoader.item.busy === true)
     || (clockLoader.item !== null && clockLoader.item.busy === true)
   property bool revealed: !autoHide
@@ -70,6 +111,7 @@ PanelWindow {
   Accessible.name: "Taskbar"
 
   onAutoHideChanged: revealed = !autoHide
+  onKeyboardActiveChanged: if (keyboardActive) revealed = true
   onBusyChanged: if (!busy) hideTimer.restart()
 
   Timer {
@@ -89,6 +131,27 @@ PanelWindow {
       anchors.fill: parent
       acceptedButtons: Qt.RightButton
       onClicked: mouse => menu.openAt(mouse.x)
+    }
+
+    // Tab and Shift+Tab move through Start, Search, the apps, the tray and the clock; so do Left and Right.
+    Keys.onPressed: event => {
+      // A Keys handler takes every key unless it says otherwise.
+      event.accepted = false
+      const focused = root.activeFocusItem
+      if (event.key === Qt.Key_Escape && root.keyboardActive) {
+        root.leaveKeyboard()
+      } else if ((event.key === Qt.Key_Left || event.key === Qt.Key_Right) && focused && focused !== parked) {
+        const next = focused.nextItemInFocusChain(event.key === Qt.Key_Right)
+        if (next)
+          next.forceActiveFocus(Qt.TabFocusReason)
+      } else {
+        return
+      }
+      event.accepted = true
+    }
+
+    Item {
+      id: parked
     }
 
     HoverHandler {
@@ -149,6 +212,8 @@ PanelWindow {
         showPins: root.appsOn === "all" || root.isMainScreen
         onPinRequested: id => root.pins.pin(id)
         onUnpinRequested: id => root.pins.unpin(id)
+        // The focused app left. Start, or whichever app is first, is still there; the one that left is not.
+        onKeyboardDisplaced: if (root.keyboardActive) root.focusApps()
         // Up to the tray area, after the margins and Start and Search.
         // Up to the tray area from where the group is now, so the apps never reach it, even while the group slides.
         maxWidth: right.x - 12 - middle.x - x

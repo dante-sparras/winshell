@@ -565,6 +565,26 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         Win32.SetFocus(Handle);
     }
 
+    /// <summary>
+    /// Takes the keyboard for a UI Automation client that focused an item here, as Narrator does, and returns
+    /// whether the window has it. It asks once and never joins another thread's input to force it: a client that may
+    /// give the foreground (a screen reader the user is driving) has already focused the hosting window, and one that
+    /// may not hears that focusing failed. Only a window that takes the keyboard for its focused item asks.
+    /// </summary>
+    internal bool TryTakeKeyboardForAutomation()
+    {
+        if (!_visible || (_kind == WindowKind.Panel && !_focusable) || (_kind == WindowKind.Popup && _popup?.GrabFocus != true))
+            return false;
+        if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))
+            return false;
+        Win32.SetFocus(Handle);
+        return Win32.GetForegroundWindow() == Handle;
+    }
+
+    internal WindowAutomation Automation => _automation;
+
+    internal IWindowClient Client => _client;
+
     // Frames
 
     public void RequestFrame()
