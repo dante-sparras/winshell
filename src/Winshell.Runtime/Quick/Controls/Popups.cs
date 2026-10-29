@@ -929,6 +929,7 @@ internal sealed class MenuColumn : Item
             item.Menu = _menu;
         _watches[child] = new PropertyWatch(child, Arrange, "implicitWidth", "implicitHeight", "visible");
         Arrange();
+        _menu.NotifyChanged("count");
     }
 
     protected override void OnChildRemoved(Item child)
@@ -939,6 +940,7 @@ internal sealed class MenuColumn : Item
         if (_watches.Remove(child, out var w))
             w.Dispose();
         Arrange();
+        _menu.NotifyChanged("count");
     }
 
     protected override void OnGeometryChanged()
@@ -1004,7 +1006,7 @@ public sealed class Menu : Popup
 
     [Qml] public string Title { get { Track(); return _title; } set => SetField(ref _title, value ?? ""); }
 
-    [Qml] public int Count { get { Track("contentChildren"); return Items.Count; } }
+    [Qml] public int Count { get { Track(); return Items.Count; } }
 
     [Qml] public bool Cascade { get; set; }
 
@@ -1125,6 +1127,12 @@ public sealed class MenuItem : AbstractButton
     }
 
     [Qml] public bool Highlighted { get { Track(); return _highlighted || Hovered; } set { if (SetField(ref _highlighted, value)) StateChanged(); } }
+
+    protected override void OnHoveredChanged()
+    {
+        if (!_highlighted)
+            NotifyChanged("highlighted");
+    }
 
     [Qml] public Menu? Menu { get { Track(); return _menu; } internal set => SetField(ref _menu, value); }
 
@@ -1340,9 +1348,9 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
         Update();
     }
 
-    [Qml] public string CurrentText { get { Track("currentIndex"); Track("model"); return TextAt(_currentIndex); } }
+    [Qml] public string CurrentText { get { Track(); return TextAt(_currentIndex); } }
 
-    [Qml] public object? CurrentValue { get { Track("currentIndex"); Track("model"); return ValueAt(_currentIndex); } }
+    [Qml] public object? CurrentValue { get { Track(); return ValueAt(_currentIndex); } }
 
     [Qml]
     public string DisplayText
