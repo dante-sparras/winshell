@@ -504,6 +504,12 @@ public class QObject
             _observers.Clear();
         }
         _observerIndexes?.Clear();
+        // The wrapper points back at the runtime. Drop it so a destroyed object does not keep that runtime alive.
+        if (Wrapper is QObjectWrapper wrapper)
+        {
+            wrapper.Runtime.ForgetWrapped(this);
+            Wrapper = null;
+        }
     }
 
     /// <summary>Releases what the object holds: timers, processes, windows.</summary>

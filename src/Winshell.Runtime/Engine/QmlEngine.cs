@@ -379,6 +379,8 @@ public sealed class QmlEngine : IDisposable
         foreach (var (slot, _) in _connectedSlots)
             slot.DisconnectRuntime(Js);
         _connectedSlots.Clear();
+        // A long-lived object, such as a screen, must not keep this generation's runtime after it is gone.
+        Js.ReleaseWrappers();
     }
 }
 

@@ -20,6 +20,7 @@ public sealed class JsRuntime
 {
     private readonly QmlEngine _qml;
     private readonly ConcurrentDictionary<string, JsValue> _factories = new(StringComparer.Ordinal);
+    private readonly HashSet<QObject> _wrapped = [];
 
     /// <summary>How long one script entry may run before it is stopped. A test can pass a shorter budget.</summary>
     internal static readonly TimeSpan DefaultScriptBudget = TimeSpan.FromSeconds(2);
@@ -108,8 +109,25 @@ public sealed class JsRuntime
             return existing;
         var wrapper = new QObjectWrapper(this, o);
         o.Wrapper = wrapper;
+        _wrapped.Add(o);
         return wrapper;
     }
+
+    /// <summary>
+    /// Drops wrappers this runtime installed. A screen the next generation never wraps must not keep this engine alive.
+    /// </summary>
+    internal void ReleaseWrappers()
+    {
+        foreach (var o in _wrapped)
+        {
+            if (o.Wrapper is QObjectWrapper wrapper && wrapper.Runtime == this)
+                o.Wrapper = null;
+        }
+        _wrapped.Clear();
+    }
+
+    /// <summary>Stops tracking an object whose wrapper was already dropped, so a destroyed delegate can be collected.</summary>
+    internal void ForgetWrapped(QObject o) => _wrapped.Remove(o);
 
     [ThreadStatic]
     private static Stack<QObject?>? _scopeStack;
