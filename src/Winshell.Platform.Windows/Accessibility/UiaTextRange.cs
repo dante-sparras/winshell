@@ -18,13 +18,19 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
 
     private string Text => Input.DisplayText;
 
+    /// <summary>Pulls the endpoints back into the text. The field may have shrunk since the range was made.</summary>
+    private void Clamp()
+    {
+        var length = Text.Length;
+        _start = Math.Clamp(_start, 0, length);
+        _end = Math.Clamp(_end, _start, length);
+    }
+
     private int Run(Action action) => owner.IsAvailable ? owner.Automation.Run(() =>
     {
         if (!owner.IsAvailable)
             return Uia.ElementNotAvailable;
-        // The text may have changed since the range was made.
-        _start = Math.Clamp(_start, 0, Text.Length);
-        _end = Math.Clamp(_end, _start, Text.Length);
+        Clamp();
         action();
         return Uia.S_OK;
     }) : Uia.ElementNotAvailable;
@@ -55,23 +61,50 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
 
     int ITextRangeProvider.Clone(out ITextRangeProvider? clone)
     {
-        clone = new UiaTextRange(owner, _start, _end);
-        return Uia.S_OK;
+        ITextRangeProvider? created = null;
+        var hr = Run(() => created = new UiaTextRange(owner, _start, _end));
+        clone = created;
+        return hr;
     }
 
     int ITextRangeProvider.Compare(ITextRangeProvider range, out int same)
     {
-        same = range is UiaTextRange other && other.Owner == owner && other._start == _start && other._end == _end ? 1 : 0;
-        return Uia.S_OK;
+        var match = 0;
+        var hr = Run(() =>
+        {
+            if (range is UiaTextRange other && other.Owner.IsAvailable && other.Owner == owner)
+            {
+                other.Clamp();
+                match = other._start == _start && other._end == _end ? 1 : 0;
+            }
+        });
+        same = match;
+        return hr;
     }
 
     int ITextRangeProvider.CompareEndpoints(int endpoint, ITextRangeProvider target, int targetEndpoint, out int compare)
     {
         compare = 0;
-        if (target is not UiaTextRange other || other.Owner != owner)
+        if (target is not UiaTextRange other)
             return Uia.E_INVALIDARG;
-        compare = Endpoint(endpoint) - other.Endpoint(targetEndpoint);
-        return Uia.S_OK;
+        var delta = 0;
+        var code = Uia.S_OK;
+        var hr = Run(() =>
+        {
+            if (!other.Owner.IsAvailable)
+                code = Uia.ElementNotAvailable;
+            else if (other.Owner != owner)
+                code = Uia.E_INVALIDARG;
+            else
+            {
+                other.Clamp();
+                delta = Endpoint(endpoint) - other.Endpoint(targetEndpoint);
+            }
+        });
+        if (hr != Uia.S_OK)
+            return hr;
+        compare = code == Uia.S_OK ? delta : 0;
+        return code;
     }
 
     int ITextRangeProvider.ExpandToEnclosingUnit(int unit) => Run(() => (_start, _end) = TextUnits.Enclose(Text, _start, unit));
