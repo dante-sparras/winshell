@@ -345,14 +345,15 @@ Item {
             Rectangle {
               objectName: "pinFill"
               anchors.fill: parent
-              radius: 4
-              color: tile.chosen ? Theme.subtleFillColorSecondary : tile.containsMouse ? Theme.subtleFillColorTertiary : "transparent"
-              Behavior on color { ColorAnimation { duration: 83 } }
+              radius: Theme.controlCornerRadius
+              color: tile.pressed ? Theme.subtleFillColorTertiary : tile.chosen || tile.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+              Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
             }
 
             Image {
               visible: (modelData.icon || "") !== ""
               source: root.iconSource(modelData.icon)
+              sourceSize: Qt.size(Launcher.pinnedIcon, Launcher.pinnedIcon)
               x: (Launcher.tileWidth - Launcher.pinnedIcon) / 2
               y: 8
               width: Launcher.pinnedIcon
@@ -422,15 +423,16 @@ Item {
         Rectangle {
           objectName: "rowFill"
           anchors.fill: parent
-          radius: 4
-          color: row.chosen ? Theme.subtleFillColorSecondary : row.containsMouse ? Theme.subtleFillColorTertiary : "transparent"
-          Behavior on color { ColorAnimation { duration: 83 } }
+          radius: Theme.controlCornerRadius
+          color: row.pressed ? Theme.subtleFillColorTertiary : row.chosen || row.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+          Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
         }
 
         Image {
           objectName: "rowIcon"
           visible: (modelData.icon || "") !== ""
           source: root.iconSource(modelData.icon)
+          sourceSize: Qt.size(Launcher.rowIcon, Launcher.rowIcon)
           x: 8
           y: (Launcher.recommendedRow - Launcher.rowIcon) / 2
           width: Launcher.rowIcon
@@ -461,9 +463,9 @@ Item {
 
       Rectangle {
         anchors.fill: parent
-        radius: 4
-        color: parent.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
-        Behavior on color { ColorAnimation { duration: 83 } }
+        radius: Theme.controlCornerRadius
+        color: parent.pressed ? Theme.subtleFillColorTertiary : parent.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
       }
 
       Text {
@@ -501,8 +503,9 @@ Item {
 
         Rectangle {
           anchors.fill: parent
-          radius: 4
-          color: backButton.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+          radius: Theme.controlCornerRadius
+          color: backButton.pressed ? Theme.subtleFillColorTertiary : backButton.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+          Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
         }
 
         Text {
@@ -562,14 +565,15 @@ Item {
 
         Rectangle {
           anchors.fill: parent
-          radius: 4
-          color: allRow.chosen ? Theme.subtleFillColorSecondary : allRow.containsMouse ? Theme.subtleFillColorTertiary : "transparent"
-          Behavior on color { ColorAnimation { duration: 83 } }
+          radius: Theme.controlCornerRadius
+          color: allRow.pressed ? Theme.subtleFillColorTertiary : allRow.chosen || allRow.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+          Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
         }
 
         Image {
           visible: (modelData.icon || "") !== ""
           source: root.iconSource(modelData.icon)
+          sourceSize: Qt.size(Launcher.allIcon, Launcher.allIcon)
           x: 8
           y: (Launcher.allRow - Launcher.allIcon) / 2
           width: Launcher.allIcon
@@ -639,14 +643,15 @@ Item {
       Rectangle {
         objectName: "searchFill"
         anchors.fill: parent
-        radius: 4
-        color: hit.chosen ? Theme.subtleFillColorSecondary : hit.containsMouse ? Theme.subtleFillColorTertiary : "transparent"
-        Behavior on color { ColorAnimation { duration: 83 } }
+        radius: Theme.controlCornerRadius
+        color: hit.pressed ? Theme.subtleFillColorTertiary : hit.chosen || hit.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
       }
 
       Image {
         visible: (modelData.icon || "") !== ""
         source: root.iconSource(modelData.icon)
+        sourceSize: Qt.size(Launcher.rowIcon, Launcher.rowIcon)
         x: 8
         y: (Launcher.recommendedRow - Launcher.rowIcon) / 2
         width: Launcher.rowIcon
