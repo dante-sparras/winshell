@@ -144,13 +144,19 @@ function ConvertTo-WinshellProcessArgument([string[]] $Argument) {
 
 function Invoke-WinshellScriptFile {
     param(
-        [Parameter(Mandatory)][string] $File,
+        [string] $File,
         [string[]] $Argument = @(),
-        [hashtable] $Environment = @{}
+        [hashtable] $Environment = @{},
+        [string] $Command
     )
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = (Get-Process -Id $PID).Path
-    $all = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $File) + $Argument
+    if (-not [string]::IsNullOrEmpty($Command)) {
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
+        $all = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded)
+    } else {
+        $all = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $File) + $Argument
+    }
     $psi.Arguments = ConvertTo-WinshellProcessArgument $all
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true

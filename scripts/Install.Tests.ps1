@@ -446,4 +446,39 @@ Describe 'end to end' {
         }
     }
 }
+
+Describe 'unreadable process path' {
+    It 'reads this process image path' {
+        Get-WinshellImagePath $PID | Should -Be (Get-Process -Id $PID).MainModule.FileName
+    }
+
+    It 'refuses to replace an install when a Winshell process has no readable path' {
+        $ctx = Enter-WinshellInstallTest
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        $marker = Join-Path $ctx.Bin 'keep.txt'
+        [IO.File]::WriteAllText($marker, 'keep', $script:Utf8)
+        Mock Get-Process {
+            if ($Name -eq 'winshell') { return [pscustomobject]@{ Id = 2147483647 } }
+            return @()
+        }
+        { Install-Winshell -Version '0.6.0' -DownloadText { throw 'downloaded' } -DownloadFile { throw 'downloaded' } } |
+            Should -Throw '*running*'
+        [IO.File]::ReadAllText($marker) | Should -Be 'keep'
+    }
+}
+
+Describe 'failed invocation' {
+    It 'returns from a failed script block and exits 1 when started as a file' {
+        $quoted = $script:InstallFile.Replace("'", "''")
+        $inline = "& ([scriptblock]::Create([IO.File]::ReadAllText('$quoted'))) -Version 'not-a-version'; Write-Output 'STILL-HERE'; exit 0"
+        $block = Invoke-WinshellScriptFile -Command $inline
+        $block.ExitCode | Should -Be 0
+        $block.Output | Should -Match 'STILL-HERE'
+        $block.Error | Should -Match 'Version must be'
+
+        $file = Invoke-WinshellScriptFile -File $script:InstallFile -Argument @('-Version', 'not-a-version')
+        $file.ExitCode | Should -Be 1
+        $file.Error | Should -Match 'Version must be'
+    }
+}
 }

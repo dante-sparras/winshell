@@ -245,6 +245,32 @@ function Receive-WinshellWeb([string] $Uri, [string] $OutFile) {
     }
 }
 
+function Get-WinshellImagePath([int] $ProcessId) {
+    # MainModule.FileName is empty from a 32-bit host and does not throw. Limited query works across that boundary.
+    if (-not ('Winshell.Install.Process' -as [type])) {
+        Add-Type -Namespace Winshell.Install -Name Process -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+public static extern System.IntPtr OpenProcess(uint access, bool inherit, int processId);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern bool QueryFullProcessImageNameW(System.IntPtr process, int flags, System.Text.StringBuilder name, ref int size);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool CloseHandle(System.IntPtr handle);
+'@
+    }
+    $handle = [Winshell.Install.Process]::OpenProcess(0x1000, $false, $ProcessId)
+    if ($handle -eq [IntPtr]::Zero) { return $null }
+    try {
+        $capacity = 32768
+        $builder = New-Object System.Text.StringBuilder $capacity
+        $size = $capacity
+        $ok = [Winshell.Install.Process]::QueryFullProcessImageNameW($handle, 0, $builder, [ref]$size)
+        if (-not $ok -or $builder.Length -eq 0) { return $null }
+        return $builder.ToString()
+    } finally {
+        [void][Winshell.Install.Process]::CloseHandle($handle)
+    }
+}
+
 function Get-WinshellProcessIdUnder([string] $Directory) {
     $root = [IO.Path]::GetFullPath($Directory)
     if (-not $root.EndsWith('\')) { $root = $root + '\' }
@@ -252,9 +278,11 @@ function Get-WinshellProcessIdUnder([string] $Directory) {
     foreach ($name in @('winshell', 'winshellw')) {
         $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
         foreach ($proc in $procs) {
-            $path = $null
-            try { $path = $proc.MainModule.FileName } catch { $path = $null }
-            if ($path -and $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+            $path = Get-WinshellImagePath ([int]$proc.Id)
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                throw "Winshell is running (pid $($proc.Id)). Close it, then run the installer again.`nNothing was changed."
+            }
+            if ($path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
                 $ids += [int]$proc.Id
             }
         }
@@ -577,6 +605,8 @@ if ($MyInvocation.InvocationName -ne '.') {
         $message = $_.Exception.Message
         if ([string]::IsNullOrWhiteSpace($message)) { $message = $_.ToString() }
         [Console]::Error.WriteLine($message)
+        # iex leaves PSCommandPath empty. exit would close that session.
+        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
         exit 1
     }
 }
