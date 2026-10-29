@@ -216,14 +216,15 @@ jobs:
       - name: Submit to winget
         shell: pwsh
         env:
+          # wingetcreate reads this name. An argument would put the secret on the process command line.
           # A classic token with public_repo, from the account that forks microsoft/winget-pkgs. Without it, the
           # manifests stay on the release for a manual wingetcreate submit.
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
           # scripts/package.ps1 validates the manifests with the WinGetUtil.dll this version is built with.
           WINGETCREATE_URL: https://github.com/microsoft/winget-create/releases/download/v1.12.13.0/wingetcreate.exe
           WINGETCREATE_SHA256: 24042BD37915805615E6CF969AC57C6439124C3FE85823327F5F3FB24BD9FFEA
         run: |
-          if (-not $env:WINGET_TOKEN) {
+          if (-not $env:WINGET_CREATE_GITHUB_TOKEN) {
             Write-Output 'No WINGET_TOKEN secret: the manifests are on the release, not submitted.'
             exit 0
           }
@@ -231,7 +232,7 @@ jobs:
           Invoke-WebRequest $env:WINGETCREATE_URL -OutFile $exe
           if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne $env:WINGETCREATE_SHA256) { throw 'wingetcreate.exe does not have the pinned hash' }
           $manifests = Get-ChildItem packages/winget -Directory | Select-Object -First 1
-          & $exe submit --token $env:WINGET_TOKEN --prtitle "New version: DanteSparras.Winshell $($manifests.Name)" $manifests.FullName
+          & $exe submit --prtitle "New version: DanteSparras.Winshell $($manifests.Name)" $manifests.FullName
           exit $LASTEXITCODE
 
   # The package job checks arm64 headers on x64. This runs the executable.
