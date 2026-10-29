@@ -265,7 +265,7 @@ internal static class Globals
             {
                 1 => date.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture),
                 9 => date.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture),
-                8 => date.ToString("dd MMM yyyy HH:mm:ss zzz", CultureInfo.InvariantCulture),
+                8 => date.ToString("dd MMM yyyy HH:mm:ss ", CultureInfo.InvariantCulture) + QtDateFormat.Rfc2822Offset(date),
                 // Qt.SystemLocaleShortDate, Qt.DefaultLocaleShortDate, and the deprecated locale aliases.
                 // The same patterns as CalendarMonth.timeLabel: the process regional format.
                 2 or 3 or 4 or 6 => Regional(date, part, longFormat: false),
@@ -410,9 +410,10 @@ public static class QtDateFormat
                     break;
                 case 'A' or 'a':
                     {
-                        var upper = c == 'A';
-                        var text = date.Hour < 12 ? "AM" : "PM";
-                        sb.Append(upper ? text : text.ToLowerInvariant());
+                        var marker = date.Hour < 12 ? culture.DateTimeFormat.AMDesignator : culture.DateTimeFormat.PMDesignator;
+                        if (string.IsNullOrEmpty(marker))
+                            marker = date.Hour < 12 ? "AM" : "PM";
+                        sb.Append(c == 'A' ? marker.ToUpper(culture) : marker.ToLower(culture));
                         // "AP" and "ap" are one token.
                         if (i + 1 < format.Length && (format[i + 1] == 'P' || format[i + 1] == 'p'))
                             run = 2;
@@ -421,7 +422,7 @@ public static class QtDateFormat
                         break;
                     }
                 case 't':
-                    sb.Append(TimeZoneInfo.Local.IsDaylightSavingTime(date) ? TimeZoneInfo.Local.DaylightName : TimeZoneInfo.Local.StandardName);
+                    sb.Append(ZoneAbbreviation(date));
                     break;
                 default:
                     sb.Append(c, run);
@@ -430,6 +431,37 @@ public static class QtDateFormat
             i += run;
         }
         return sb.ToString();
+    }
+
+    /// <summary>RFC 2822 offset, <c>+0100</c>, with no colon.</summary>
+    internal static string Rfc2822Offset(DateTime date)
+    {
+        var offset = TimeZoneInfo.Local.GetUtcOffset(date);
+        var sign = offset < TimeSpan.Zero ? "-" : "+";
+        offset = offset.Duration();
+        return string.Create(CultureInfo.InvariantCulture, $"{sign}{offset.Hours:00}{offset.Minutes:00}");
+    }
+
+    /// <summary>A short zone name, such as <c>PST</c>. The long Windows name is not what Qt prints.</summary>
+    private static string ZoneAbbreviation(DateTime date)
+    {
+        var zone = TimeZoneInfo.Local;
+        var name = zone.IsDaylightSavingTime(date) ? zone.DaylightName : zone.StandardName;
+        if (name.Length > 0 && name.Length <= 5 && !name.Contains(' '))
+            return name;
+        var initials = new StringBuilder();
+        foreach (var word in name.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            foreach (var letter in word)
+            {
+                if (char.IsLetter(letter))
+                {
+                    initials.Append(char.ToUpperInvariant(letter));
+                    break;
+                }
+            }
+        }
+        return initials.Length > 0 ? initials.ToString() : Rfc2822Offset(date);
     }
 
     /// <summary>An <c>a</c> or <c>A</c> outside quotes selects 12-hour time. Quoted text, such as <c>'at'</c>, does not.</summary>
