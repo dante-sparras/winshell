@@ -29,6 +29,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private bool _blinkOn = true;
     private long _blinkElapsed;
     private readonly List<(string Text, int Cursor)> _undo = [];
+    private readonly List<(string Text, int Cursor)> _redo = [];
     private double _padding, _leftPadding, _rightPadding, _topPadding, _bottomPadding;
     private int _dragAnchor = -1;
     private string _composition = "";
@@ -70,26 +71,40 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     public string Text_
     {
         get { Track("text"); return _text; }
-        set => SetText(value ?? "", fromUser: false);
+        set => SetText(value ?? "", fromUser: false, clearHistory: true);
     }
 
-    protected void SetText(string value, bool fromUser)
+    protected void SetText(string value, bool fromUser) => SetText(value, fromUser, clearHistory: false);
+
+    /// <summary>Sets the text. A user edit is an undo step; any other change clears redo, and setting <c>text</c> clears undo too, as in Qt.</summary>
+    private void SetText(string value, bool fromUser, bool clearHistory)
     {
         if (value.Length > _maximumLength)
             value = TextClusters.Limit(value, _maximumLength);
         if (_text == value)
             return;
         _composition = "";
-        if (fromUser)
+        var couldUndo = _undo.Count > 0;
+        var couldRedo = _redo.Count > 0;
+        if (clearHistory)
+        {
+            _undo.Clear();
+        }
+        else if (fromUser)
         {
             _undo.Add((_text, _cursorPosition));
             if (_undo.Count > 100)
                 _undo.RemoveAt(0);
         }
+        _redo.Clear();
         _text = value;
         NotifyChanged("text");
         NotifyChanged("displayText");
         NotifyChanged("length");
+        if (couldUndo != _undo.Count > 0)
+            NotifyChanged("canUndo");
+        if (couldRedo)
+            NotifyChanged("canRedo");
         if (_cursorPosition > _text.Length)
             CursorPosition = _text.Length;
         ClampSelection();
@@ -243,6 +258,8 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public bool CanUndo { get { Track(); return _undo.Count > 0; } }
 
+    [Qml] public bool CanRedo { get { Track(); return _redo.Count > 0; } }
+
     [Qml] public bool CanPaste => true;
 
     [Qml] public double ContentWidth { get { Track("text"); return OffsetOf(_text.Length); } }
@@ -339,27 +356,30 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     }
 
     [Qml]
-    public void Undo()
+    public void Undo() => Step(_undo, _redo);
+
+    [Qml]
+    public void Redo() => Step(_redo, _undo);
+
+    /// <summary>Restores the last state in <paramref name="from"/>, and keeps the current one in <paramref name="to"/>.</summary>
+    private void Step(List<(string Text, int Cursor)> from, List<(string Text, int Cursor)> to)
     {
-        if (_readOnly || _undo.Count == 0)
+        if (_readOnly || from.Count == 0)
             return;
-        var (text, cursor) = _undo[^1];
-        _undo.RemoveAt(_undo.Count - 1);
+        var (text, cursor) = from[^1];
+        from.RemoveAt(from.Count - 1);
+        to.Add((_text, _cursorPosition));
         _composition = "";
         _text = text;
         NotifyChanged("text");
         NotifyChanged("displayText");
         NotifyChanged("length");
         NotifyChanged("canUndo");
+        NotifyChanged("canRedo");
         CursorPosition = Math.Clamp(cursor, 0, _text.Length);
         Deselect();
         UpdateImplicit();
         Emit("textEdited");
-    }
-
-    [Qml]
-    public void Redo()
-    {
     }
 
     [Qml]
@@ -789,16 +809,21 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                     MoveCursor(from, false);
                 }
                 return true;
-            case 0x01000006 when shift && !ctrl: // Shift+Insert
-                Paste();
-                return true;
-            case 0x01000006 when ctrl && !shift: // Ctrl+Insert
-                Copy();
-                return true;
-            case 0x01000007 when shift && !ctrl: // Shift+Delete
-                Cut();
+            case 0x01000006: // Insert
+                if (ctrl && !alt && !shift)
+                    Copy();
+                else if (shift && !ctrl && !alt)
+                    Paste();
+                else
+                    return false;
                 return true;
             case 0x01000007: // Delete
+                // Shift+Delete cuts a selection; with none it deletes, as in Qt.
+                if (shift && !ctrl && !alt && SelectionEnd > SelectionStart)
+                {
+                    Cut();
+                    return true;
+                }
                 if (_readOnly)
                     return true;
                 if (!DeleteSelection(true) && _cursorPosition < _text.Length)
@@ -832,7 +857,13 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                     Paste();
                     return true;
                 case 'Z':
-                    Undo();
+                    if (shift)
+                        Redo();
+                    else
+                        Undo();
+                    return true;
+                case 'Y':
+                    Redo();
                     return true;
             }
         }

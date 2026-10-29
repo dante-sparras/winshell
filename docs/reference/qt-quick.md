@@ -109,7 +109,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Text.renderType` | Ignored. |
 | `TextInput.validator` | Ignored; `acceptableInput` is always true. |
 | `TextInput.inputMask` | Ignored. |
-| `TextInput.redo()` | Does nothing. |
+| `TextInput.undo()` | Each typed character is its own undo step. Qt undoes a run of typing at once. |
 | `TextInput.cursorDelegate` | Ignored; the built-in caret is drawn. |
 | `TextInput.overwriteMode` | Ignored, as is `wrapMode`. |
 | `TextInput.echoMode` | `TextInput.PasswordEchoOnEdit` masks the text while it's edited too, as `TextInput.Password` does. |
