@@ -270,32 +270,143 @@ public sealed class ShellHost : IShellHost, IDisposable
         foreach (var w in _watchers)
             w.Dispose();
         _watchers.Clear();
-        var dirs = engine.LoadedFiles.Append(_rootFile)
-            .Select(f => Path.GetDirectoryName(Path.GetFullPath(f))!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(Directory.Exists);
-        foreach (var dir in dirs)
+        if (_disposed)
+            return;
+        foreach (var dir in WatchedDirectories(engine))
         {
-            var watcher = new FileSystemWatcher(dir)
+            if (Directory.Exists(dir))
+                ArmDirectory(engine, dir);
+            else
+                ArmParent(engine, dir);
+        }
+    }
+
+    /// <summary>Directories of the loaded QML, including ones that are not there yet.</summary>
+    private List<string> WatchedDirectories(QmlEngine engine) =>
+        engine.LoadedFiles.Append(_rootFile)
+            .Select(f => Path.GetDirectoryName(Path.GetFullPath(f))!)
+            .Where(dir => !string.IsNullOrEmpty(dir))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private void ArmDirectory(QmlEngine engine, string dir)
+    {
+        FileSystemWatcher watcher;
+        try
+        {
+            watcher = new FileSystemWatcher(dir)
             {
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
                 IncludeSubdirectories = false,
-                EnableRaisingEvents = true,
             };
-            void OnChange(object? sender, FileSystemEventArgs e)
-            {
-                var ext = Path.GetExtension(e.FullPath);
-                if (!ext.Equals(".qml", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".js", StringComparison.OrdinalIgnoreCase)
-                    && !Path.GetFileName(e.FullPath).Equals("qmldir", StringComparison.OrdinalIgnoreCase))
-                    return;
-                _loop.Post(ScheduleReload);
-            }
-            watcher.Changed += OnChange;
-            watcher.Created += OnChange;
-            watcher.Deleted += OnChange;
-            watcher.Renamed += (s, e) => OnChange(s, e);
-            _watchers.Add(watcher);
         }
+        catch (Exception e) when (e is IOException or ArgumentException)
+        {
+            ArmParent(engine, dir);
+            return;
+        }
+        void OnChange(object? sender, FileSystemEventArgs e)
+        {
+            var ext = Path.GetExtension(e.FullPath);
+            if (!ext.Equals(".qml", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".js", StringComparison.OrdinalIgnoreCase)
+                && !Path.GetFileName(e.FullPath).Equals("qmldir", StringComparison.OrdinalIgnoreCase))
+                return;
+            _loop.Post(ScheduleReload);
+        }
+        watcher.Changed += OnChange;
+        watcher.Created += OnChange;
+        watcher.Renamed += (s, e) => OnChange(s, e);
+        // Deleting the folder itself does not arrive as a file event. When the folder is already gone, arm its parent.
+        watcher.Deleted += (s, e) =>
+        {
+            OnChange(s, e);
+            if (!Directory.Exists(dir))
+                _loop.Post(() => RecoverWatch(engine, watcher));
+        };
+        watcher.Error += (_, _) => _loop.Post(() => RecoverWatch(engine, watcher));
+        try
+        {
+            watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception e) when (e is IOException or ArgumentException)
+        {
+            watcher.Dispose();
+            ArmParent(engine, dir);
+            return;
+        }
+        _watchers.Add(watcher);
+    }
+
+    /// <summary>
+    /// Watches the nearest folder that still exists. A git checkout deletes the shell folder and creates it again;
+    /// the old watcher is dead, and this one sees the folder return.
+    /// </summary>
+    private void ArmParent(QmlEngine engine, string dir)
+    {
+        var parent = NearestExistingParent(dir);
+        if (parent is null)
+            return;
+        FileSystemWatcher watcher;
+        try
+        {
+            watcher = new FileSystemWatcher(parent)
+            {
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                IncludeSubdirectories = false,
+            };
+        }
+        catch (Exception e) when (e is IOException or ArgumentException)
+        {
+            return;
+        }
+        void Appeared(object? _, FileSystemEventArgs e)
+        {
+            if (Directory.Exists(dir))
+                _loop.Post(() => RecoverWatch(engine, watcher));
+        }
+        watcher.Created += Appeared;
+        watcher.Renamed += (s, e) => Appeared(s, e);
+        watcher.Error += (_, _) => _loop.Post(() => RecoverWatch(engine, watcher));
+        try
+        {
+            watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception e) when (e is IOException or ArgumentException)
+        {
+            watcher.Dispose();
+            return;
+        }
+        _watchers.Add(watcher);
+    }
+
+    /// <summary>
+    /// Builds the watchers again after one dies. A folder that came back schedules a reload. A folder that is still
+    /// missing keeps the parent watch and waits.
+    /// </summary>
+    private void RecoverWatch(QmlEngine engine, FileSystemWatcher source)
+    {
+        if (_disposed || !_watchers.Contains(source))
+            return;
+        var missingBefore = WatchedDirectories(engine).Any(dir => !Directory.Exists(dir));
+        WatchFilesOf(engine);
+        var stillMissing = WatchedDirectories(engine).Any(dir => !Directory.Exists(dir));
+        if (!missingBefore || !stillMissing)
+            ScheduleReload();
+    }
+
+    private static string? NearestExistingParent(string dir)
+    {
+        var current = Path.GetDirectoryName(dir);
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (Directory.Exists(current))
+                return current;
+            var next = Path.GetDirectoryName(current);
+            if (next == current)
+                return null;
+            current = next;
+        }
+        return null;
     }
 
     private void ScheduleReload()
