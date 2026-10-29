@@ -42,7 +42,9 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
       contents: write # uploads to the release
-    uses: $/.github/workflows/package.yml
+    # The pinned actionlint does not read the $/ self-repository form yet. The ./ form only loads files from this
+    # commit here: nothing is checked out before a reusable workflow call.
+    uses: ./.github/workflows/package.yml # zizmor: ignore[self-repository]
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets:
