@@ -48,6 +48,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _drawFailureReported;
     private bool _rendering;
     private bool _renderAgain;
+    private bool _disposePending;
 
     public Win32Window(WindowsPlatform platform, WindowKind kind, IWindowClient client)
     {
@@ -625,7 +626,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     private void RenderNow()
     {
-        if (_surface is null || Handle == 0 || _failed)
+        if (_surface is null || Handle == 0 || _failed || _disposePending)
             return;
         // Drawing lays items out, and a window sized to its content then resizes; Windows answers with WM_SIZE
         // inside this frame. A frame started there would replace the buffer this one is drawing into, so the window
@@ -640,7 +641,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         try
         {
             RenderFrame(_surface);
-            if (_renderAgain && _surface is { } surface && Handle != 0 && !_failed)
+            if (_renderAgain && _surface is { } surface && Handle != 0 && !_failed && !_disposePending)
             {
                 _renderAgain = false;
                 RenderFrame(surface);
@@ -649,6 +650,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         finally
         {
             _rendering = false;
+            if (_disposePending)
+                Dispose();
         }
         if (_renderAgain)
         {
@@ -683,7 +686,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             Fail(e);
             return;
         }
-        _automation.AfterFrame();
+        if (!_disposePending)
+            _automation.AfterFrame();
     }
 
     /// <summary>
@@ -1008,6 +1012,14 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     {
         if (Handle == 0)
             return;
+        // QML can destroy its window during layout or paint. The surface still owns the active canvas, and Render
+        // still has to flush and present it, so keep the native resources until the outer frame returns.
+        if (_rendering)
+        {
+            _disposePending = true;
+            _renderAgain = false;
+            return;
+        }
         _platform.UpdatePopupGrab(this, false);
         RemoveAppBar();
         _automation.Dispose();
