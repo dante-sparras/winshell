@@ -1,0 +1,40 @@
+- name: Overview
+  href: index.md
+- name: Qt Quick
+  href: qt-quick.md
+- name: Shell
+  items:
+  - name: Winshell
+    href: winshell.md
+  - name: Winshell.Io
+    href: winshell-io.md
+  - name: Winshell.Widgets
+    href: winshell-widgets.md
+  - name: Winshell.Theme
+    href: winshell-theme.md
+  - name: Winshell.Input
+    href: winshell-input.md
+- name: Windows services
+  items:
+  - name: Winshell.Apps
+    href: winshell-apps.md
+  - name: Winshell.Audio
+    href: winshell-audio.md
+  - name: Winshell.Media
+    href: winshell-media.md
+  - name: Winshell.Power
+    href: winshell-power.md
+  - name: Winshell.Windows
+    href: winshell-windows.md
+  - name: Winshell.Network
+    href: winshell-network.md
+  - name: Winshell.Bluetooth
+    href: winshell-bluetooth.md
+  - name: Winshell.Notifications
+    href: winshell-notifications.md
+  - name: Winshell.Tray
+    href: winshell-tray.md
+  - name: Winshell.Capture
+    href: winshell-capture.md
+  - name: Winshell.Winland
+    href: winshell-winland.md

@@ -10,6 +10,7 @@ Winshell is not at 1.0 yet, and a release can still break a configuration. The [
 
 - **[Migrating from Quickshell](migrating-from-quickshell.md)**: Quickshell's modules and types, and their Winshell names.
 - **[The taskbar](taskbar.md)** and **[Winshell Settings](settings.md)**: the default shell.
+- **[Reference](reference/index.md)**: every module, type and member a configuration can use.
 - **Windows services**: [notifications](notifications.md), [networking](network.md), [Bluetooth](bluetooth.md), [capture](capture.md), [hotkeys](hotkeys.md) and the [notification area](tray.md).
 - **[Decisions](adr/0001-own-qml-parser-and-jint-runtime.md)**: why Winshell is built the way it is.
 - **[Development](development.md)**: build Winshell from source and run its checks.

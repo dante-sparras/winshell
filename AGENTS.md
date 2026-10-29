@@ -20,6 +20,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── agents/                      # How the engineering skills use this repo
 │   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
 │   ├── guide/                       # The docs site's guide section
+│   ├── reference/                   # A page per module, checked against the code by DocsTests
 │   ├── development.md               # Setup, environment, and every command
 │   ├── docfx.json                   # Builds docs/ into the docs site
 │   ├── index.md                     # The docs site's home page
