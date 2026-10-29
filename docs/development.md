@@ -47,8 +47,8 @@ Before opening a PR, run `pwsh scripts/check.ps1`. That is the required `ci` job
 | `quarantine` | Every pull request and push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Quarantined`, which runs the tests in `tests/quarantine.txt`, or nothing when the list is empty. A failure shows in the log and blocks nothing. |
 | `flaky-report` | After `ci`, when a test passed only on its rerun | `pwsh scripts/report-flaky.ps1 -ReportPath <file> -RunUrl <url>` files or updates a `flaky` issue, so run it only on a real report. It needs `gh` signed in. |
 | `links` | Every pull request, in `docs.yml` | lychee 0.24.2 over `docs/**/*.md` and `README.md`, excluding `docs/agents` and `https://about.signpath.io`. |
-| `actionlint` | Pull requests and pushes to `main` that change `.github/` | actionlint on `.github/workflows`. |
-| `zizmor` | The same `.github/` changes | zizmor on `.github`. |
+| `actionlint` | Every pull request and every push to `main` | actionlint on `.github/workflows`. |
+| `zizmor` | Every pull request and every push to `main` | zizmor on `.github`. |
 | `package` | Pushes to `main`, and pull requests that change packaging or the package workflow | `pwsh scripts/package.ps1`. It publishes both architectures and needs the Windows SDK for the MSIX check. |
 
 The docs `build` job is DocFX with warnings as errors, which `check.ps1` already runs. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
