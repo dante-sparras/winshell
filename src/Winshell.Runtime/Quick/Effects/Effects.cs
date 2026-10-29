@@ -380,9 +380,8 @@ public sealed class RectangularShadow : EffectItem
         var rect = SKRect.Create((float)_offset.X, (float)_offset.Y, (float)width, (float)height);
         rect.Inflate((float)_spread, (float)_spread);
         var radius = (float)Math.Min(_radius + _spread, Math.Min(rect.Width, rect.Height) / 2);
-        using var paint = new SKPaint { Color = _color.ToSk(), IsAntialias = true };
-        if (_blur > 0)
-            paint.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, (float)_blur / 2);
+        using var blur = _blur > 0 ? SKMaskFilter.CreateBlur(SKBlurStyle.Normal, (float)_blur / 2) : null;
+        using var paint = new SKPaint { Color = _color.ToSk(), IsAntialias = true, MaskFilter = blur };
         canvas.DrawRoundRect(rect, radius, radius, paint);
     }
 }
@@ -411,7 +410,8 @@ public sealed class DropShadow : EffectItem
 
     protected override void Render(SKCanvas canvas, SKPicture? source, SKMatrix sourceMatrix, double width, double height, PaintContext context)
     {
-        using (var shadow = Shadow.Paint(_color, Deviation(_radius), _spread))
+        using (var filter = Shadow.Filter(_color, Deviation(_radius), _spread))
+        using (var shadow = new SKPaint { ImageFilter = filter })
             DrawPicture(canvas, source, SKMatrix.CreateTranslation((float)_h, (float)_v).PreConcat(sourceMatrix), shadow);
         DrawPicture(canvas, source, sourceMatrix, null);
     }
@@ -435,16 +435,17 @@ public sealed class Glow : EffectItem
 
     protected override void Render(SKCanvas canvas, SKPicture? source, SKMatrix sourceMatrix, double width, double height, PaintContext context)
     {
-        using (var glow = Shadow.Paint(_color, Deviation(_radius), _spread))
+        using (var filter = Shadow.Filter(_color, Deviation(_radius), _spread))
+        using (var glow = new SKPaint { ImageFilter = filter })
             DrawPicture(canvas, source, sourceMatrix, glow);
         DrawPicture(canvas, source, sourceMatrix, null);
     }
 }
 
-/// <summary>A shadow or glow paint: the source's alpha, blurred, strengthened by a spread, in one color.</summary>
+/// <summary>A shadow or glow filter: the source's alpha, blurred, strengthened by a spread, in one color.</summary>
 internal static class Shadow
 {
-    public static SKPaint Paint(QColor color, float sigma, double spread)
+    public static SKImageFilter Filter(QColor color, float sigma, double spread)
     {
         using var tint = SKColorFilter.CreateBlendMode(color.ToSk(), SKBlendMode.SrcIn);
         using var blur = sigma > 0 ? SKImageFilter.CreateBlur(sigma, sigma) : null;
@@ -463,7 +464,7 @@ internal static class Shadow
         {
             filter = SKImageFilter.CreateColorFilter(tint, blur);
         }
-        return new SKPaint { ImageFilter = filter };
+        return filter;
     }
 }
 
@@ -492,10 +493,9 @@ public sealed class RectangularGlow : EffectItem
         var inflate = (float)(g / 2 + s * g / 2);
         rect.Inflate(inflate, inflate);
         var radius = (float)Math.Min(CornerRadius + inflate, Math.Min(rect.Width, rect.Height) / 2);
-        using var paint = new SKPaint { Color = _color.ToSk(), IsAntialias = true };
         var sigma = (float)((1 - s) * g / 4);
-        if (sigma > 0)
-            paint.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, sigma);
+        using var blur = sigma > 0 ? SKMaskFilter.CreateBlur(SKBlurStyle.Normal, sigma) : null;
+        using var paint = new SKPaint { Color = _color.ToSk(), IsAntialias = true, MaskFilter = blur };
         canvas.DrawRoundRect(rect, radius, radius, paint);
     }
 }
@@ -514,7 +514,8 @@ public sealed class ColorOverlay : EffectItem
             DrawPicture(canvas, source, sourceMatrix, null);
             return;
         }
-        using var paint = new SKPaint { ColorFilter = SKColorFilter.CreateBlendMode(_color.ToSk(), SKBlendMode.SrcIn) };
+        using var tint = SKColorFilter.CreateBlendMode(_color.ToSk(), SKBlendMode.SrcIn);
+        using var paint = new SKPaint { ColorFilter = tint };
         DrawPicture(canvas, source, sourceMatrix, paint);
     }
 }
@@ -594,7 +595,9 @@ internal static class Blurs
         }
         else
         {
-            using var picture = SKImageFilter.CreatePicture(source, bounds);
+            // The picture is in the source's coordinates, so it keeps the part of the source the matrix places in bounds.
+            var sourceBounds = matrix.TryInvert(out var inverse) ? inverse.MapRect(bounds) : bounds;
+            using var picture = SKImageFilter.CreatePicture(source, sourceBounds);
             using var placed = SKImageFilter.CreateMatrix(in matrix, new SKSamplingOptions(SKFilterMode.Linear), picture);
             using var crop = SKImageFilter.CreateCrop(bounds, SKShaderTileMode.Clamp, placed);
             paint.ImageFilter = SKImageFilter.CreateBlur(sigma, sigma, SKShaderTileMode.Clamp, crop, bounds);
@@ -616,7 +619,8 @@ public sealed class Desaturate : EffectItem
 
     protected override void Render(SKCanvas canvas, SKPicture? source, SKMatrix sourceMatrix, double width, double height, PaintContext context)
     {
-        using var paint = new SKPaint { ColorFilter = SKColorFilter.CreateColorMatrix(ColorMatrix.Saturation(1 - Math.Clamp(_desaturation, 0, 1))) };
+        using var filter = SKColorFilter.CreateColorMatrix(ColorMatrix.Saturation(1 - Math.Clamp(_desaturation, 0, 1)));
+        using var paint = new SKPaint { ColorFilter = filter };
         DrawPicture(canvas, source, sourceMatrix, paint);
     }
 }
@@ -633,7 +637,8 @@ public sealed class BrightnessContrast : EffectItem
     protected override void Render(SKCanvas canvas, SKPicture? source, SKMatrix sourceMatrix, double width, double height, PaintContext context)
     {
         var m = ColorMatrix.Then(ColorMatrix.Brightness(_brightness), ColorMatrix.Contrast(_contrast));
-        using var paint = new SKPaint { ColorFilter = SKColorFilter.CreateColorMatrix(m) };
+        using var filter = SKColorFilter.CreateColorMatrix(m);
+        using var paint = new SKPaint { ColorFilter = filter };
         DrawPicture(canvas, source, sourceMatrix, paint);
     }
 }

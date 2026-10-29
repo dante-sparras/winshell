@@ -106,6 +106,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `AnimatedImage.frameCount` | Always 1: only the first frame is shown, and `playing`, `paused`, `currentFrame` and `speed` aren't used. |
 | `Image.mirrorVertically` | Ignored. |
 | `Image.sourceClipRect` | Ignored. |
+| `GaussianBlur.cached` | Ignored, on every effect: the source is drawn and filtered again on each paint. |
 | `Keys.forwardTo` | Ignored. A key event's `matches()` is always false. |
 | `MouseArea.propagateComposedEvents` | Ignored. |
 | `TapHandler.gesturePolicy` | Ignored: a release inside the item is a tap. |
