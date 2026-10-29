@@ -596,7 +596,19 @@ internal sealed class EndpointNode : AudioGraphNode
     {
         public int OnSessionCreated(IAudioSessionControl2 session)
         {
-            node._graph.Post(() => node.AddSession(session));
+            // The callback's object belongs to the audio engine's thread. Marshal it before the
+            // UI thread reads it, including after that thread is a single-threaded apartment.
+            nint stream;
+            try
+            {
+                stream = ComApartment.Capture(session);
+            }
+            catch (Exception e) when (e is COMException or InvalidCastException or InvalidOperationException)
+            {
+                node._graph.Log.Warn("audio", e.Message);
+                return 0;
+            }
+            node._graph.Post(() => node.AddSession((IAudioSessionControl2)ComApartment.Restore(stream)));
             return 0;
         }
     }
