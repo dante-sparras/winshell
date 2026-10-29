@@ -103,7 +103,7 @@ Use a full path, such as one built from `Shell.dataDir`. A relative path is take
 | `blockAllReads` | bool | Makes the first read and `reload()` read on the UI thread. Default `false`. A change of `path` still follows `blockLoading`. |
 | `atomicWrites` | bool | Writes a temporary file next to the file, then moves it over the file, so a reader never sees half a write. A symbolic link is followed and the link itself stays. A hard link is written in place, so its other names keep the new text. Default `true`. |
 | `printErrors` | bool | Logs a failed read or write as a warning in the `io` category. A missing file is not logged. Default `true`. |
-| `watchChanges` | bool | Emits `fileChanged` when the file's text on disk differs from the text this view holds. Default `false`. Its own write does not count, and a hand save in the same moment does. The folder must exist; a write that creates it starts the watch. |
+| `watchChanges` | bool | Emits `fileChanged` when the file's text on disk differs from the text this view holds. Default `false`. Its own write does not count, and a hand save in the same moment does. A folder that does not exist yet is watched from the nearest folder that does, so a file made by hand in a new folder is seen too. |
 | `loaded` | bool, read-only | Whether the file's text has been read. |
 | `adapter` | [FileViewAdapter](#fileviewadapter) | Turns the file's text into properties and back. It reads the text each time the file is read. |
 | `text()` | method, returns string | The file's text. If it was not read yet, reads it now. Returns an empty string when the file cannot be read. |
