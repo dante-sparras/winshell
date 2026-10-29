@@ -423,7 +423,19 @@ public class Item : QObject
     public List<PointerHandler> PointerHandlers { get; } = [];
 
     [Qml]
-    public Palette Palette => _palette ??= new Palette { Engine = Engine };
+    public Palette Palette
+    {
+        get
+        {
+            if (_palette is not null)
+                return _palette;
+            // The palette owns its color groups, and the item owns the palette, so destroying the item
+            // unsubscribes the groups from the static theme event.
+            _palette = new Palette { Engine = Engine };
+            _palette.SetOwner(this);
+            return _palette;
+        }
+    }
 
     private Palette? _palette;
 
