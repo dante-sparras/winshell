@@ -506,6 +506,7 @@ public sealed class ShapePath : QObject
     private double _startX, _startY;
     private int _pathHints;
     private QSize _scale = new(1, 1);
+    private SKPath? _path;
 
     [QmlEnum]
     public enum FillRuleValue
@@ -554,12 +555,12 @@ public sealed class ShapePath : QObject
         PathElements = new QmlList<PathElement>(this, "pathElements", added: e =>
         {
             e.SetOwner(this);
-            e.Changed += Raise;
-            Raise();
+            e.Changed += InvalidatePath;
+            InvalidatePath();
         }, removed: e =>
         {
-            e.Changed -= Raise;
-            Raise();
+            e.Changed -= InvalidatePath;
+            InvalidatePath();
         });
     }
 
@@ -576,6 +577,20 @@ public sealed class ShapePath : QObject
     {
         if (SetField(ref field, value, property))
             Raise();
+    }
+
+    /// <summary>Sets a field the path is built from, so the path is built again.</summary>
+    private void SetPath<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string property = "")
+    {
+        if (SetField(ref field, value, property))
+            InvalidatePath();
+    }
+
+    private void InvalidatePath()
+    {
+        _path?.Dispose();
+        _path = null;
+        Raise();
     }
 
     [Qml] public QmlList<PathElement> PathElements { get; }
@@ -604,7 +619,7 @@ public sealed class ShapePath : QObject
         }
     }
 
-    [Qml] public int FillRule { get { Track(); return _fillRule; } set => Set(ref _fillRule, value); }
+    [Qml] public int FillRule { get { Track(); return _fillRule; } set => SetPath(ref _fillRule, value); }
 
     [Qml] public int JoinStyle { get { Track(); return _joinStyle; } set => Set(ref _joinStyle, value); }
 
@@ -628,21 +643,26 @@ public sealed class ShapePath : QObject
         }
     }
 
-    [Qml] public double StartX { get { Track(); return _startX; } set => Set(ref _startX, value); }
+    [Qml] public double StartX { get { Track(); return _startX; } set => SetPath(ref _startX, value); }
 
-    [Qml] public double StartY { get { Track(); return _startY; } set => Set(ref _startY, value); }
+    [Qml] public double StartY { get { Track(); return _startY; } set => SetPath(ref _startY, value); }
 
     [Qml] public int PathHints { get { Track(); return _pathHints; } set => Set(ref _pathHints, value); }
 
-    [Qml] public QSize Scale { get { Track(); return _scale; } set => Set(ref _scale, value); }
+    [Qml] public QSize Scale { get { Track(); return _scale; } set => SetPath(ref _scale, value); }
 
     [Qml] public Item? FillItem { get; set; }
 
     [Qml] public object? FillTransform { get; set; }
 
-    /// <summary>The path its elements make, from the start point.</summary>
-    public SKPath BuildPath()
+    /// <summary>The path its elements make, from the start point. Built once per change; callers don't dispose it.</summary>
+    internal SKPath Path => _path ??= BuildPath();
+
+    internal int PathBuilds { get; private set; }
+
+    private SKPath BuildPath()
     {
+        PathBuilds++;
         using var builder = new SKPathBuilder();
         builder.FillType = _fillRule == (int)FillRuleValue.WindingFill ? SKPathFillType.Winding : SKPathFillType.EvenOdd;
         var cursor = new PathCursor(builder);
@@ -660,7 +680,7 @@ public sealed class ShapePath : QObject
 
     public void Draw(SKCanvas canvas, bool antialias)
     {
-        using var path = BuildPath();
+        var path = Path;
         if (_fillGradient is not null || _fillColor.A > 0)
         {
             using var fill = new SKPaint { IsAntialias = antialias, Style = SKPaintStyle.Fill };
@@ -706,6 +726,12 @@ public sealed class ShapePath : QObject
             canvas.DrawPath(path, stroke);
             stroke.PathEffect?.Dispose();
         }
+    }
+
+    protected override void OnDestroy()
+    {
+        _path?.Dispose();
+        _path = null;
     }
 }
 
@@ -788,8 +814,7 @@ public sealed class Shape : Item
         var bounds = SKRect.Empty;
         foreach (var p in Paths)
         {
-            using var path = p.BuildPath();
-            var b = path.Bounds;
+            var b = p.Path.Bounds;
             var half = (float)Math.Max(0, p.StrokeWidth) / 2;
             if (p.StrokeColor.A > 0 && p.StrokeWidth > 0)
                 b.Inflate(half, half);
@@ -824,13 +849,32 @@ public sealed class Shape : Item
     {
         if (_containsMode != (int)ContainsModeValue.FillContains)
             return base.HitTest(x, y);
+        if (!FillMatrix().TryInvert(out var inverse))
+            return false;
+        var point = inverse.MapPoint((float)x, (float)y);
         foreach (var p in Paths)
         {
-            using var path = p.BuildPath();
-            if (path.Contains((float)x, (float)y))
+            if (p.Path.Contains(point.X, point.Y))
                 return true;
         }
         return false;
+    }
+
+    /// <summary>How <c>fillMode</c> scales the paths into the item.</summary>
+    private SKMatrix FillMatrix()
+    {
+        if (_fillMode == (int)FillModeValue.NoResize)
+            return SKMatrix.Identity;
+        var b = Bounds();
+        if (b.Width <= 0 || b.Height <= 0 || Width <= 0 || Height <= 0)
+            return SKMatrix.Identity;
+        var sx = (float)(Width / b.Width);
+        var sy = (float)(Height / b.Height);
+        if (_fillMode == (int)FillModeValue.PreserveAspectFit)
+            sx = sy = Math.Min(sx, sy);
+        else if (_fillMode == (int)FillModeValue.PreserveAspectCrop)
+            sx = sy = Math.Max(sx, sy);
+        return SKMatrix.CreateScale(sx, sy).PreConcat(SKMatrix.CreateTranslation(-b.Left, -b.Top));
     }
 
     public override void Paint(SKCanvas canvas, PaintContext context)
@@ -839,21 +883,8 @@ public sealed class Shape : Item
         if (paths.Count == 0)
             return;
         canvas.Save();
-        if (_fillMode != (int)FillModeValue.NoResize)
-        {
-            var b = Bounds();
-            if (b.Width > 0 && b.Height > 0 && Width > 0 && Height > 0)
-            {
-                var sx = (float)(Width / b.Width);
-                var sy = (float)(Height / b.Height);
-                if (_fillMode == (int)FillModeValue.PreserveAspectFit)
-                    sx = sy = Math.Min(sx, sy);
-                else if (_fillMode == (int)FillModeValue.PreserveAspectCrop)
-                    sx = sy = Math.Max(sx, sy);
-                canvas.Scale(sx, sy);
-                canvas.Translate(-b.Left, -b.Top);
-            }
-        }
+        var m = FillMatrix();
+        canvas.Concat(in m);
         foreach (var p in paths)
             p.Draw(canvas, Antialiasing);
         canvas.Restore();
