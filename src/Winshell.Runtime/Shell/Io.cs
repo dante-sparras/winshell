@@ -1431,7 +1431,9 @@ public sealed class FileView : QObject
             return;
         // Our own write already matches the buffer. A hand save in the same moment does not.
         var read = Read(path);
-        if (read.Text is null || read.Text == _text)
+        // A deleted file differs from the text this view holds. Any other failed read says nothing about the file.
+        var deleted = read.Error == FileViewError.FileNotFound && _text is not null;
+        if (!deleted && (read.Text is null || read.Text == _text))
             return;
         // The bytes on disk are not ours. The name may now be a hard link, so the next save has to look again.
         _linkKindKnown = false;

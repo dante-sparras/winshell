@@ -445,6 +445,30 @@ public class SettingsTests
     }
 
     [Fact]
+    public void A_deleted_pins_file_brings_back_the_pins_Start_starts_with()
+    {
+        var services = new FakeServices();
+        services.Apps.Add("calc", "Calculator", "calc");
+        services.Apps.Add("edge", "Microsoft Edge", "edge");
+        services.Apps.Add("notepad", "Notepad", "notepad");
+        using var shell = Open(files: new() { ["launcher.toml"] = """pins = ["notepad"]""" }, services: services);
+        Show(shell, "start", "pins");
+        Assert.Equal(["Notepad"], Titles(shell, "pinList"));
+
+        // Past the time a FileView takes its own writes to be.
+        Thread.Sleep(300);
+        File.Delete(Path.Combine(shell.Directory, "launcher.toml"));
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (!Titles(shell, "pinList").SequenceEqual(["Microsoft Edge", "Notepad", "Calculator"]))
+        {
+            Assert.True(DateTime.UtcNow < until, "The page kept the pins of the deleted file.");
+            Thread.Sleep(20);
+            shell.Settle();
+        }
+        AssertQuiet(shell);
+    }
+
+    [Fact]
     public void Quick_settings_tiles_move_come_off_and_go_back_in_the_file_quick_settings_keeps()
     {
         using var shell = Open(files: new() { ["quick-settings.toml"] = """pinned = ["bluetooth", "wifi", "custom"]""" });
