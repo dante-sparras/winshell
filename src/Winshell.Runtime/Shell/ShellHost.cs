@@ -79,6 +79,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         var appFromEnv = Environment.GetEnvironmentVariable("WINSHELL_APP_ID");
         var pragmas = ShellPragmas.Read(_rootFile);
         Pragmas = pragmas;
+        _declared = pragmas;
         ShellId = pragmas.ShellId ?? Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(_rootFile.ToLowerInvariant())));
         AppId = string.IsNullOrEmpty(pragmas.AppId) ? (string.IsNullOrEmpty(appFromEnv) ? "winshell" : appFromEnv) : pragmas.AppId;
         LaunchTime = DateTime.Now;
@@ -90,8 +91,46 @@ public sealed class ShellHost : IShellHost, IDisposable
             Environment.SetEnvironmentVariable(k, v);
     }
 
-    private static string? Expand(string? pragma, string baseDir) =>
-        pragma is null ? null : Path.GetFullPath(pragma.Replace("$BASE", baseDir, StringComparison.Ordinal));
+    private ShellPragmas _declared = new(null, null, null, null, null, null, new Dictionary<string, string>());
+
+    /// <summary>
+    /// A pragma path is relative to the shell file, and <c>%NAME%</c> is expanded.
+    /// <c>$BASE</c> is the folder Winshell would have used for that kind of data.
+    /// </summary>
+    private string? Expand(string? pragma, string baseDir)
+    {
+        if (pragma is null)
+            return null;
+        var text = Environment.ExpandEnvironmentVariables(pragma.Replace("$BASE", baseDir, StringComparison.Ordinal));
+        // An empty pragma used to fail in GetFullPath. Keep that, instead of treating it as the shell folder.
+        if (text.Length == 0)
+            return Path.GetFullPath(text);
+        if (!Path.IsPathRooted(text))
+            text = Path.Combine(ShellDir, text);
+        return Path.GetFullPath(text);
+    }
+
+    /// <summary>
+    /// ShellId, the data folders and Env are fixed at launch. A reload can see that they changed, and says so,
+    /// without applying them to the running instance.
+    /// </summary>
+    private void WarnIfPragmasNeedARestart()
+    {
+        var next = ShellPragmas.Read(_rootFile);
+        if (SamePragmas(next, _declared))
+            return;
+        _declared = next;
+        Log.Warn("scene", "Pragmas changed. Restart Winshell to apply ShellId, AppId, data folders and Env.");
+    }
+
+    private static bool SamePragmas(ShellPragmas left, ShellPragmas right) =>
+        left.ShellId == right.ShellId
+        && left.AppId == right.AppId
+        && left.DataDir == right.DataDir
+        && left.StateDir == right.StateDir
+        && left.CacheDir == right.CacheDir
+        && left.Env.Count == right.Env.Count
+        && left.Env.All(pair => right.Env.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
     public Log Log { get; }
 
@@ -172,6 +211,8 @@ public sealed class ShellHost : IShellHost, IDisposable
     {
         if (_disposed)
             return false;
+        if (!initial)
+            WarnIfPragmasNeedARestart();
         // Each load starts with the popup allowed; the old generation's reloadFailed handler can inhibit it.
         _inhibitPopup = false;
         Log.ClearFirstScriptError();
