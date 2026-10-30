@@ -266,7 +266,11 @@ public abstract class LayoutBase : Item, IPolishable, IPropertyObserver
     }
 
     /// <summary>Places an item in a cell, inside its margins, aligned as it asks.</summary>
-    internal static void Place(Item item, double x, double y, double cellWidth, double cellHeight, bool horizontalLayout)
+    /// <param name="horizontalLayout">
+    /// True fills the width, as a row does. False fills the height, as a column does.
+    /// Null sizes both axes from the item, as a grid cell does.
+    /// </param>
+    internal static void Place(Item item, double x, double y, double cellWidth, double cellHeight, bool? horizontalLayout)
     {
         var a = Attached(item);
         var lm = a?.LeftMargin ?? 0;
@@ -277,8 +281,8 @@ public abstract class LayoutBase : Item, IPolishable, IPropertyObserver
         var (minH, prefH, maxH, fillH) = Hints(item, false);
         var innerW = cellWidth - lm - rm;
         var innerH = cellHeight - tm - bm;
-        var w = horizontalLayout ? innerW : fillW ? Math.Min(innerW, maxW - lm - rm) : Math.Min(prefW - lm - rm, innerW);
-        var h = horizontalLayout ? (fillH ? Math.Min(innerH, maxH - tm - bm) : Math.Min(prefH - tm - bm, innerH)) : innerH;
+        var w = horizontalLayout == true ? innerW : fillW ? Math.Min(innerW, maxW - lm - rm) : Math.Min(prefW - lm - rm, innerW);
+        var h = horizontalLayout == false ? innerH : fillH ? Math.Min(innerH, maxH - tm - bm) : Math.Min(prefH - tm - bm, innerH);
         w = Math.Max(Math.Max(0, minW - lm - rm), w);
         h = Math.Max(Math.Max(0, minH - tm - bm), h);
         var align = a?.Alignment ?? 0;
@@ -300,7 +304,7 @@ public abstract class LayoutBase : Item, IPolishable, IPropertyObserver
             // Qt Quick Layouts center vertically by default.
             iy += (innerH - h) / 2;
         }
-        if (!horizontalLayout && (align & (QtEnums.AlignLeft | QtEnums.AlignHCenter | QtEnums.AlignRight)) == 0)
+        if (horizontalLayout != true && (align & (QtEnums.AlignLeft | QtEnums.AlignHCenter | QtEnums.AlignRight)) == 0)
             ix = x + lm;
         item.SetLayoutX(Math.Round(ix));
         item.SetLayoutY(Math.Round(iy));
@@ -443,57 +447,138 @@ public sealed class GridLayout : LayoutBase
         }
         var colCount = cells.Count == 0 ? 0 : cells.Max(x => x.Col + x.ColSpan);
         var rowCount = cells.Count == 0 ? 0 : cells.Max(x => x.Row + x.RowSpan);
-        var colHints = Enumerable.Range(0, colCount).Select(_ => (Min: 0.0, Pref: 0.0, Max: 0.0, Fill: false)).ToArray();
-        var rowHints = Enumerable.Range(0, rowCount).Select(_ => (Min: 0.0, Pref: 0.0, Max: 0.0, Fill: false)).ToArray();
+        var colTracks = new SizeTrack[colCount];
+        var rowTracks = new SizeTrack[rowCount];
         foreach (var (item, row, col, rs, cs) in cells)
         {
+            var a = Attached(item);
+            NoteStretch(colTracks, col, cs, a?.HorizontalStretchFactor ?? -1);
+            NoteStretch(rowTracks, row, rs, a?.VerticalStretchFactor ?? -1);
+            // Spacing sits between the cells a span covers, so it is not part of the track sizes.
             var h = Hints(item, true);
             var v = Hints(item, false);
-            if (cs == 1)
-                colHints[col] = (Math.Max(colHints[col].Min, h.Min), Math.Max(colHints[col].Pref, h.Pref), Math.Max(colHints[col].Max, h.Max), colHints[col].Fill || h.Fill);
-            if (rs == 1)
-                rowHints[row] = (Math.Max(rowHints[row].Min, v.Min), Math.Max(rowHints[row].Pref, v.Pref), Math.Max(rowHints[row].Max, v.Max), rowHints[row].Fill || v.Fill);
+            Cover(colTracks, col, cs, Gap(h, _columnSpacing * Math.Max(0, cs - 1)), h.Fill);
+            Cover(rowTracks, row, rs, Gap(v, _rowSpacing * Math.Max(0, rs - 1)), v.Fill);
         }
         var colSpacing = _columnSpacing * Math.Max(0, colCount - 1);
         var rowSpacing = _rowSpacing * Math.Max(0, rowCount - 1);
+        var colHints = colTracks.Select(t => (t.Min, t.Pref, t.Max, t.Fill)).ToArray();
+        var rowHints = rowTracks.Select(t => (t.Min, t.Pref, t.Max, t.Fill)).ToArray();
         ImplicitWidth = colHints.Sum(h => h.Pref) + colSpacing;
         ImplicitHeight = rowHints.Sum(h => h.Pref) + rowSpacing;
-        var widths = Distribute(colHints, Width - colSpacing, colHints.Select(_ => -1).ToList());
-        var heights = Distribute(rowHints, Height - rowSpacing, rowHints.Select(_ => -1).ToList());
+        var widths = Distribute(colHints, Width - colSpacing, colTracks.Select(t => t.Stretch).ToArray());
+        var heights = Distribute(rowHints, Height - rowSpacing, rowTracks.Select(t => t.Stretch).ToArray());
+        var rtl = LayoutDirection == 1;
         foreach (var (item, row, col, rs, cs) in cells)
         {
             var x = widths.Take(col).Sum() + _columnSpacing * col;
             var y = heights.Take(row).Sum() + _rowSpacing * row;
-            var w = widths.Skip(col).Take(cs).Sum() + _columnSpacing * (cs - 1);
-            var h = heights.Skip(row).Take(rs).Sum() + _rowSpacing * (rs - 1);
-            PlaceInCell(item, x, y, w, h);
+            var w = widths.Skip(col).Take(cs).Sum() + _columnSpacing * Math.Max(0, cs - 1);
+            var h = heights.Skip(row).Take(rs).Sum() + _rowSpacing * Math.Max(0, rs - 1);
+            if (rtl)
+                x = Width - x - w;
+            Place(item, x, y, w, h, null);
         }
     }
 
-    private static void PlaceInCell(Item item, double x, double y, double w, double h)
+    private struct SizeTrack
     {
-        var a = Attached(item);
-        var (_, prefW, maxW, fillW) = Hints(item, true);
-        var (_, prefH, maxH, fillH) = Hints(item, false);
-        var lm = a?.LeftMargin ?? 0;
-        var tm = a?.TopMargin ?? 0;
-        var iw = fillW ? Math.Min(w, maxW) : Math.Min(prefW, w);
-        var ih = fillH ? Math.Min(h, maxH) : Math.Min(prefH, h);
-        var align = a?.Alignment ?? 0;
-        var ix = x + lm;
-        var iy = y + tm + (h - ih) / 2;
-        if ((align & QtEnums.AlignHCenter) != 0)
-            ix = x + (w - iw) / 2;
-        else if ((align & QtEnums.AlignRight) != 0)
-            ix = x + w - iw;
-        if ((align & QtEnums.AlignTop) != 0)
-            iy = y + tm;
-        else if ((align & QtEnums.AlignBottom) != 0)
-            iy = y + h - ih;
-        item.SetLayoutX(Math.Round(ix));
-        item.SetLayoutY(Math.Round(iy));
-        item.SetLayoutWidth(iw - lm - (a?.RightMargin ?? 0));
-        item.SetLayoutHeight(ih - tm - (a?.BottomMargin ?? 0));
+        public double Min;
+        public double Pref;
+        public double Max;
+        public bool Fill;
+        public int Stretch;
+    }
+
+    private static void NoteStretch(SizeTrack[] tracks, int start, int span, int factor)
+    {
+        if (factor <= 0)
+            return;
+        for (var i = 0; i < span; i++)
+            tracks[start + i].Stretch = Math.Max(tracks[start + i].Stretch, factor);
+    }
+
+    private static (double Min, double Pref, double Max) Gap((double Min, double Pref, double Max, bool Fill) hint, double gap)
+    {
+        if (gap <= 0)
+            return (hint.Min, hint.Pref, hint.Max);
+        return (
+            Math.Max(0, hint.Min - gap),
+            Math.Max(0, hint.Pref - gap),
+            double.IsPositiveInfinity(hint.Max) ? hint.Max : Math.Max(0, hint.Max - gap));
+    }
+
+    /// <summary>Makes the spanned tracks large enough for one item. A single cell takes the max; a span shares the deficit.</summary>
+    private static void Cover(SizeTrack[] tracks, int start, int span, (double Min, double Pref, double Max) hint, bool fill)
+    {
+        if (span <= 1)
+        {
+            tracks[start].Min = Math.Max(tracks[start].Min, hint.Min);
+            tracks[start].Pref = Math.Max(tracks[start].Pref, hint.Pref);
+            tracks[start].Max = Math.Max(tracks[start].Max, hint.Max);
+            tracks[start].Fill |= fill;
+            Clamp(tracks, start);
+            return;
+        }
+
+        Add(tracks, start, span, hint.Min - Sum(tracks, start, span, static t => t.Min), static (ref SizeTrack t, double share) => t.Min += share);
+        Add(tracks, start, span, hint.Pref - Sum(tracks, start, span, static t => t.Pref), static (ref SizeTrack t, double share) => t.Pref += share);
+        if (double.IsPositiveInfinity(hint.Max))
+        {
+            for (var i = 0; i < span; i++)
+                tracks[start + i].Max = double.PositiveInfinity;
+        }
+        else
+        {
+            Add(tracks, start, span, hint.Max - Sum(tracks, start, span, static t => t.Max), static (ref SizeTrack t, double share) => t.Max += share);
+        }
+        if (fill)
+        {
+            for (var i = 0; i < span; i++)
+                tracks[start + i].Fill = true;
+        }
+        for (var i = 0; i < span; i++)
+            Clamp(tracks, start + i);
+    }
+
+    private static double Sum(SizeTrack[] tracks, int start, int span, Func<SizeTrack, double> pick)
+    {
+        var sum = 0.0;
+        for (var i = 0; i < span; i++)
+            sum += pick(tracks[start + i]);
+        return sum;
+    }
+
+    private delegate void AddShare(ref SizeTrack size, double share);
+
+    private static void Add(SizeTrack[] tracks, int start, int span, double extra, AddShare add)
+    {
+        if (extra <= 0.001 || span <= 0 || double.IsNaN(extra))
+            return;
+        var weights = new double[span];
+        var weightSum = 0.0;
+        for (var i = 0; i < span; i++)
+        {
+            var stretch = tracks[start + i].Stretch;
+            weights[i] = stretch > 0 ? stretch : 0;
+            weightSum += weights[i];
+        }
+        if (weightSum <= 0)
+        {
+            for (var i = 0; i < span; i++)
+                weights[i] = 1;
+            weightSum = span;
+        }
+        for (var i = 0; i < span; i++)
+            add(ref tracks[start + i], extra * weights[i] / weightSum);
+    }
+
+    private static void Clamp(SizeTrack[] tracks, int index)
+    {
+        if (tracks[index].Pref < tracks[index].Min)
+            tracks[index].Pref = tracks[index].Min;
+        if (tracks[index].Max < tracks[index].Pref)
+            tracks[index].Max = tracks[index].Pref;
     }
 }
 
