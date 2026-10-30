@@ -115,7 +115,7 @@ Use a full path, such as one built from `Shell.dataDir`. A relative path is take
 | `writeAdapter()` | method | Writes what the adapter's properties hold to the file. |
 | `loaded()` | signal | The file was read. It fires after each successful read, including `reload()`. |
 | `loadFailed(error)` | signal | The file could not be read. `error` is a [FileViewError](#fileviewerror) value, such as `FileView.FileNotFound`. |
-| `fileChanged()` | signal | The file changed on disk, with `watchChanges` on. The view does not read it again by itself. |
+| `fileChanged()` | signal | The file changed on disk or was deleted, with `watchChanges` on. The view does not read it again by itself. |
 | `saved()` | signal | A write finished. |
 | `saveFailed(error)` | signal | A write failed. `error` is always `FileView.Unknown`. |
 | `adapterUpdated()` | signal | A property of the adapter changed, other than by reading the file. Call `writeAdapter()` here to save each change. |

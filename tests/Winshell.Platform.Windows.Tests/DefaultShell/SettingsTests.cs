@@ -459,7 +459,7 @@ public class SettingsTests
         Thread.Sleep(300);
         File.Delete(Path.Combine(shell.Directory, "launcher.toml"));
         var until = DateTime.UtcNow.AddSeconds(5);
-        while (!Titles(shell, "pinList").SequenceEqual(["Microsoft Edge", "Calculator"]))
+        while (!Titles(shell, "pinList").SequenceEqual(["Microsoft Edge", "Notepad", "Calculator"]))
         {
             Assert.True(DateTime.UtcNow < until, "The page kept the pins of the deleted file.");
             Thread.Sleep(20);
