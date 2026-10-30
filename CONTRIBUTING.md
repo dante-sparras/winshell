@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the required `ci` job. The [commands](docs/development.md#commands) list the other jobs (`installer`, `links`, `actionlint`, `zizmor`, `package`) and how to run each one locally. Run the ones your change can break.
+**Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the required `ci` job. The ruleset also requires `installer` and `pr-title`. The [commands](docs/development.md#commands) list `installer`, `links`, `actionlint`, `zizmor`, and `package`, and how to run each one locally. Run the ones your change can break.
 
 ## Write tests that don't flake
 
@@ -86,7 +86,7 @@ If an AI agent did the work, end the description with the model and the tool you
 
 ## Review and merge
 
-- Every change reaches `main` through a PR, and the required checks (`ci` and the PR title) must pass first.
+- Every change reaches `main` through a PR, and the required checks (`ci`, `installer`, and the PR title) must pass first.
 - PRs are squash-merged. Your PR title becomes the commit message on `main`, so make it readable on its own.
 - Releases are cut from those commits, so your PR title is also your line in the changelog.
 - A PR that doesn't follow this guide may be closed with a note saying what's missing. Fix it and ask for another look, or open a new PR.

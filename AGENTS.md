@@ -72,7 +72,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1` and `StressTests.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`.
+- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1` and `StressTests.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`. The ruleset also requires the `installer` job and `pr-title`.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.

@@ -37,7 +37,7 @@ pwsh scripts/dev.ps1
 | `dotnet tool restore`, then `dotnet docfx docs/docfx.json --serve` | Builds the docs site into `docs/_site/` and serves it at `http://localhost:8080`. See [Docs](#docs). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
-Before opening a PR, run `pwsh scripts/check.ps1`. That is the required `ci` job.
+Before opening a PR, run `pwsh scripts/check.ps1`. That is the required `ci` job. The ruleset also requires `installer` and `pr-title`.
 
 `check.ps1` runs the PowerShell 7 Pester suites when Pester 5.6.1 is installed. These jobs still have to pass. The installer job also runs the Windows PowerShell 5.1 pass and PSScriptAnalyzer, which `check.ps1` does not:
 
