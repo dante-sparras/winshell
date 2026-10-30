@@ -1,14 +1,11 @@
 name: Workflows
 
+# No path filter. A skipped job cannot be a required check, because GitHub waits for a check that never starts.
 on:
   pull_request:
-    paths:
-      - ".github/**"
   push:
     branches:
       - main
-    paths:
-      - ".github/**"
 
 permissions:
   contents: read
