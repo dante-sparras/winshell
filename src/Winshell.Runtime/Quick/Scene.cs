@@ -132,7 +132,8 @@ public sealed class Scene : IItemHost
     {
         PolishQueue.Flush();
         IsDirty = false;
-        var ring = FocusVisible && _focusItem is { } focused && focused is not Quick.TextInput && focused.Visible ? focused : null;
+        // A text box shows focus with its accent line, not a rectangle: a text input, and a spin box drawn as one.
+        var ring = FocusVisible && _focusItem is { } focused && focused is not (Quick.TextInput or Controls.SpinBox { HasDefaultBackground: true }) && focused.Visible ? focused : null;
         var context = new PaintContext { DevicePixelRatio = DevicePixelRatio, Time = time, TextOnBackdrop = TextOnBackdrop, FocusRing = ring };
         canvas.Save();
         canvas.Scale((float)DevicePixelRatio);

@@ -1179,23 +1179,25 @@ public sealed class SpinBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 
     private SKRect DownRect => SKRect.Create((float)Width - 40, 4, 36, (float)Height - 8);
 
+    /// <summary>WinUI's number box with its spin buttons inline: a text box with two subtle buttons inside it at the right.</summary>
     protected override Item? CreateDefaultBackground() => Part(new PaintedItem((c, i, _) =>
     {
         var t = Theme.Current;
-        var r = i.Bounds;
-        var fill = !Enabled ? t.ControlFillColorDisabled : Hovered ? t.ControlFillColorSecondary : t.ControlFillColorDefault;
-        Fluent.ElevatedRect(c, r, Fluent.ControlCornerRadius, fill, t.ControlStrokeColorDefault, t.ControlStrongStrokeColorDefault);
+        TextField.PaintTextBox(c, i.Bounds, Enabled, ActiveFocus, Hovered);
         foreach (var (rect, button, glyph) in new[] { (UpRect, Up, Fluent.ChevronUp), (DownRect, Down, Fluent.ChevronDown) })
         {
             var rr = rect;
             rr.Offset(-(float)i.X, -(float)i.Y);
-            if (button.Pressed)
-                Fluent.FillRound(c, rr, Fluent.ControlCornerRadius, t.SubtleFillColorTertiary);
-            else if (button.Hovered)
-                Fluent.FillRound(c, rr, Fluent.ControlCornerRadius, t.SubtleFillColorSecondary);
-            Fluent.DrawChevron(c, glyph, rr.MidX, rr.MidY, 12, Enabled ? (button.Pressed ? t.TextFillColorTertiary : t.TextFillColorSecondary) : t.TextFillColorDisabled);
+            Fluent.FillRound(c, rr, Fluent.ControlCornerRadius, FluentResources.TextControlButtonBackground(t).For(Enabled, button.Pressed, button.Hovered));
+            Fluent.DrawChevron(c, glyph, rr.MidX, rr.MidY, 12, FluentResources.TextControlButtonForeground(t).For(Enabled, button.Pressed, button.Hovered));
         }
     }, 160, Fluent.ControlHeight));
+
+    protected override void OnActiveFocusChanged(bool focused)
+    {
+        base.OnActiveFocusChanged(focused);
+        Update();
+    }
 
     private SpinButton? ButtonAt(double x, double y)
     {
