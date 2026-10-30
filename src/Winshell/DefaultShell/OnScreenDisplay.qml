@@ -7,8 +7,8 @@ import QtQuick.Controls
 // The Windows 11 on-screen display: a short panel centered on the bottom of the work area, 8 logical pixels
 // above the taskbar. Volume, brightness and microphone mute stay for 3 seconds; a media change stays for 5.
 // The pointer holding it keeps it open. It never writes volume, brightness or mute. Media buttons call the session.
-// With animation effects off the fade is skipped. A contrast theme uses the system window color, a 2px border and
-// no Acrylic. The first reading after startup is the baseline and does not show it.
+// With animation effects off the fade is skipped. A contrast theme uses a 2px border; the window drops its
+// material on its own. The first reading after startup is the baseline and does not show it.
 PanelWindow {
   id: root
 
@@ -80,7 +80,7 @@ PanelWindow {
   focusable: false
   margins.bottom: bottomGap
   screen: mode === "brightness" && brightnessScreen !== null ? brightnessScreen : (Shell.screens.length > 0 ? Shell.screens[0] : null)
-  WindowEffects.backdrop: contrast ? WindowEffects.None : Preferences.material
+  WindowEffects.backdrop: Preferences.material
   WindowEffects.corners: WindowEffects.RoundCorners
 
   onVolumeChanged: noteVolume()
@@ -332,9 +332,9 @@ PanelWindow {
     radius: Theme.overlayCornerRadius
     clip: true
     opacity: 0
-    color: root.contrast ? Theme.systemColorWindowColor : "transparent"
+    color: "transparent"
     border.width: root.contrast ? 2 : 1
-    border.color: root.contrast ? Theme.systemColorWindowTextColor : Theme.surfaceStrokeColorFlyout
+    border.color: Theme.surfaceStrokeColorFlyout
     Accessible.role: Accessible.Notification
     Accessible.name: root.announcement
 

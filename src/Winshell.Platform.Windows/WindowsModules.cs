@@ -9,8 +9,16 @@ namespace Winshell.Platform.Windows;
 /// The <c>WindowEffects</c> attached object of a window: the Windows 11 material behind it and the
 /// shape of its corners.
 /// </summary>
-public sealed class WindowEffectsAttached(QObject owner) : QObject
+public sealed class WindowEffectsAttached : QObject
 {
+    private readonly QObject _owner;
+
+    public WindowEffectsAttached(QObject owner)
+    {
+        _owner = owner;
+        Theme.Changed += OnTheme;
+    }
+
     [QmlEnum]
     public enum Material
     {
@@ -29,7 +37,19 @@ public sealed class WindowEffectsAttached(QObject owner) : QObject
         SmallRoundCorners = 3,
     }
 
-    private ShellWindow? Window => owner as ShellWindow;
+    private ShellWindow? Window => _owner as ShellWindow;
+
+    protected override void OnDestroy()
+    {
+        Theme.Changed -= OnTheme;
+        base.OnDestroy();
+    }
+
+    private void OnTheme()
+    {
+        if (!IsDestroyed)
+            NotifyChanged("backdrop");
+    }
 
     [Qml]
     public int Backdrop
