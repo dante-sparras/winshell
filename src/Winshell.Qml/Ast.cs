@@ -66,6 +66,10 @@ public sealed record QmlPropertyDeclaration(
 /// <summary><c>required name</c>: marks an inherited property as required.</summary>
 public sealed record QmlRequiredMember(string Name, SourceLocation Location) : QmlMember(Location);
 
+/// <summary>
+/// A signal or function parameter. A function parameter's <see cref="Name"/> is its JavaScript without the type
+/// annotation: <c>a</c>, <c>a = 1</c>, <c>...rest</c> or <c>{ a, b }</c>.
+/// </summary>
 public sealed record QmlParameter(string Name, string? Type);
 
 public sealed record QmlSignalDeclaration(string Name, IReadOnlyList<QmlParameter> Parameters, SourceLocation Location) : QmlMember(Location);
