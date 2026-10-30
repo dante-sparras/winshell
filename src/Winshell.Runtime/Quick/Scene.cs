@@ -237,27 +237,32 @@ public sealed class Scene : IItemHost
         chain.Reverse();
         double x = sceneX, y = sceneY;
         foreach (var i in chain.Skip(1))
+            (x, y) = FromParent(i, x, y);
+        return (x, y);
+    }
+
+    /// <summary>Converts a point in an item's parent's coordinates into the item's own, undoing its scale and rotation.</summary>
+    private static (double X, double Y) FromParent(Item item, double x, double y)
+    {
+        x -= item.X;
+        y -= item.Y;
+        if (item.Scale != 1 || item.Rotation != 0)
         {
-            x -= i.X;
-            y -= i.Y;
-            if (i.Scale != 1 || i.Rotation != 0)
+            var (ox, oy) = Origin(item);
+            x -= ox;
+            y -= oy;
+            if (item.Rotation != 0)
             {
-                var (ox, oy) = Origin(i);
-                x -= ox;
-                y -= oy;
-                if (i.Rotation != 0)
-                {
-                    var r = -i.Rotation * Math.PI / 180;
-                    (x, y) = (x * Math.Cos(r) - y * Math.Sin(r), x * Math.Sin(r) + y * Math.Cos(r));
-                }
-                if (i.Scale != 0)
-                {
-                    x /= i.Scale;
-                    y /= i.Scale;
-                }
-                x += ox;
-                y += oy;
+                var r = -item.Rotation * Math.PI / 180;
+                (x, y) = (x * Math.Cos(r) - y * Math.Sin(r), x * Math.Sin(r) + y * Math.Cos(r));
             }
+            if (item.Scale != 0)
+            {
+                x /= item.Scale;
+                y /= item.Scale;
+            }
+            x += ox;
+            y += oy;
         }
         return (x, y);
     }
@@ -267,26 +272,7 @@ public sealed class Scene : IItemHost
     {
         if (!item.IsVisibleFlag || item.Opacity <= 0 || !item.Enabled)
             return;
-        var lx = x - item.X;
-        var ly = y - item.Y;
-        if (item.Scale != 1 || item.Rotation != 0)
-        {
-            var (ox, oy) = Origin(item);
-            lx -= ox;
-            ly -= oy;
-            if (item.Rotation != 0)
-            {
-                var r = -item.Rotation * Math.PI / 180;
-                (lx, ly) = (lx * Math.Cos(r) - ly * Math.Sin(r), lx * Math.Sin(r) + ly * Math.Cos(r));
-            }
-            if (item.Scale != 0)
-            {
-                lx /= item.Scale;
-                ly /= item.Scale;
-            }
-            lx += ox;
-            ly += oy;
-        }
+        var (lx, ly) = FromParent(item, x, y);
         if (item.Clip && !(lx >= 0 && ly >= 0 && lx < item.Width && ly < item.Height))
             return;
         foreach (var child in item.PaintOrder.Reverse())
@@ -616,14 +602,7 @@ public sealed class Scene : IItemHost
     {
         if (!item.IsVisibleFlag || !item.Enabled)
             return false;
-        var lx = isRoot ? x : x - item.X;
-        var ly = isRoot ? y : y - item.Y;
-        if (!isRoot && (item.Scale != 1 || item.Rotation != 0))
-        {
-            var (ox, oy) = Origin(item);
-            lx = (lx - ox) / (item.Scale == 0 ? 1 : item.Scale) + ox;
-            ly = (ly - oy) / (item.Scale == 0 ? 1 : item.Scale) + oy;
-        }
+        var (lx, ly) = isRoot ? (x, y) : FromParent(item, x, y);
         if (item.Clip && !(lx >= 0 && ly >= 0 && lx < item.Width && ly < item.Height))
             return false;
         var accepted = false;
