@@ -80,6 +80,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Popup.closePolicy` | `Popup.CloseOnReleaseOutside` and `Popup.CloseOnReleaseOutsideParent` are ignored: only a press outside closes a popup. |
 | `Popup.popupType` | Ignored: a popup is always an item in its window, as with `Popup.Item`. |
 | `Menu.delegate` | Ignored. |
+| `ToolTip.delay` | Defaults to 500 ms, not 0, as Windows tool tips wait. The attached `ToolTip.delay` does too. |
 | `StackView.busy` | Always false. |
 | `StackView.pushEnter` | Ignored, as are `pushExit`, `popEnter`, `popExit`, `replaceEnter` and `replaceExit`: pages switch at once. |
 | `StackView.activating` | Never emitted, nor is `deactivating`: `StackView.status` goes straight between inactive and active. |
