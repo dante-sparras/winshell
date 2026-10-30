@@ -103,7 +103,7 @@ The first time Winshell uses `%APPDATA%\winshell`, it copies an old `%USERPROFIL
 
 ## Make the default shell your own
 
-Winshell writes the default shell to `%LOCALAPPDATA%\winshell\default-shell` each time it runs it, so changes made there are overwritten. To change it, copy it into your configuration folder and edit the copy:
+Winshell writes the default shell to `%LOCALAPPDATA%\winshell\default-shell` when it runs it and no other instance is running it, so changes made there are overwritten. A `.qml` or `.js` file the current build does not ship is removed. Other files, such as `launcher.toml`, stay. To change the shell, copy it into your configuration folder and edit the copy:
 
 ```powershell
 New-Item -ItemType Directory -Force "$env:APPDATA\winshell" | Out-Null

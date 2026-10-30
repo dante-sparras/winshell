@@ -88,7 +88,7 @@ A running shell reads these. None is needed to build or test.
 | Cache | `%LOCALAPPDATA%\winshell\cache\by-shell\<shell id>` |
 | State | `%LOCALAPPDATA%\winshell\state\by-shell\<shell id>` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>` |
-| The default shell | `%LOCALAPPDATA%\winshell\default-shell`, written again each time Winshell starts without a config |
+| The default shell | `%LOCALAPPDATA%\winshell\default-shell`, written when Winshell runs it and no other instance is running that shell. A `.qml` or `.js` file this build does not ship is removed. |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
 | Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. Reports leave out what scripts printed to the log and take out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
 | Downloaded updates | `%LOCALAPPDATA%\winshell\updates\<version>`, until the next start installs them. See [Winshell updates](updates.md) |
