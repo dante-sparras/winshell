@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Jint;
 using Jint.Native;
 using Jint.Native.Object;
@@ -21,6 +22,11 @@ public sealed class ImportScope
     private readonly QmlEngine _engine;
     private readonly List<Entry> _entries = [];
     private readonly Dictionary<string, QmlInlineComponent> _inline = new(StringComparer.Ordinal);
+
+    // A binding reads a type name each time it runs, so the object for a name is made once. A namespace, or a type
+    // with an attached object, reaches its scope object's attached objects, so those are kept per scope object.
+    private readonly Dictionary<string, JsValue> _values = new(StringComparer.Ordinal);
+    private readonly ConditionalWeakTable<QObject, Dictionary<string, JsValue>> _scopedValues = [];
 
     private abstract record Entry(string? Qualifier);
 
@@ -153,14 +159,21 @@ public sealed class ImportScope
     /// </summary>
     public bool TryResolveName(string name, QObject? scopeObject, ComponentContext? context, out JsValue value)
     {
-        var js = _engine.Js;
+        if (_values.TryGetValue(name, out value!))
+            return true;
+        if (scopeObject is not null && _scopedValues.TryGetValue(scopeObject, out var scoped) && scoped.TryGetValue(name, out value!))
+            return true;
         foreach (var entry in _entries)
         {
             if (entry.Qualifier != name)
                 continue;
-            value = entry is ScriptEntry script
-                ? _engine.LoadScript(script.Path, context)
-                : new NamespaceObject(js, this, name, scopeObject);
+            if (entry is ScriptEntry script)
+            {
+                value = _engine.LoadScript(script.Path, context);
+                return true;
+            }
+            value = new NamespaceObject(_engine.Js, this, name, scopeObject);
+            Remember(name, scopeObject, value, perScopeObject: true);
             return true;
         }
         var type = ResolveType(name);
@@ -169,8 +182,18 @@ public sealed class ImportScope
             value = JsValue.Undefined;
             return false;
         }
-        value = TypeValue(type, scopeObject);
+        var perScopeObject = type is NativeTypeRef { Entry: { Singleton: null, Attached: not null } };
+        value = TypeValue(type, perScopeObject ? scopeObject : null);
+        Remember(name, scopeObject, value, perScopeObject);
         return true;
+    }
+
+    private void Remember(string name, QObject? scopeObject, JsValue value, bool perScopeObject)
+    {
+        if (!perScopeObject)
+            _values[name] = value;
+        else if (scopeObject is not null)
+            _scopedValues.GetValue(scopeObject, static _ => new Dictionary<string, JsValue>(StringComparer.Ordinal))[name] = value;
     }
 
     /// <summary>
@@ -307,6 +330,7 @@ public sealed class NamespaceObject : ObjectInstance
     private readonly ImportScope _scope;
     private readonly string _qualifier;
     private readonly QObject? _scopeObject;
+    private readonly Dictionary<string, JsValue> _types = new(StringComparer.Ordinal);
 
     internal NamespaceObject(JsRuntime runtime, ImportScope scope, string qualifier, QObject? scopeObject)
         : base(runtime.Engine)
@@ -318,8 +342,13 @@ public sealed class NamespaceObject : ObjectInstance
 
     public override JsValue Get(JsValue property, JsValue receiver)
     {
-        if (property.IsString() && _scope.ResolveType(_qualifier + "." + property.AsString()) is { } type)
-            return _scope.TypeValue(type, _scopeObject);
+        if (!property.IsString())
+            return base.Get(property, receiver);
+        var name = property.AsString();
+        if (_types.TryGetValue(name, out var value))
+            return value;
+        if (_scope.ResolveType(_qualifier + "." + name) is { } type)
+            return _types[name] = _scope.TypeValue(type, _scopeObject);
         return base.Get(property, receiver);
     }
 }
