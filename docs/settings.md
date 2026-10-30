@@ -39,6 +39,7 @@ Everything the window chooses applies at once, without a reload, and is kept in 
 | `taskbarAllScreens` | `true` | `false` shows a taskbar on the main display only |
 | `taskbarAppsOn` | `"all"` | `"all"`, `"main"`, `"where"`, as `Taskbar.appsOn` |
 | `startRecommended` | `true` | |
+| `calendarWeekNumbers` | `false` | `true` shows week numbers beside the calendar |
 | `hiddenNotificationApps` | `[]` | `{ id = "<AppUserModelID>", name = "<app name>" }` for each app turned off |
 | `startHotkey` | `"Win"` | a sequence as `Hotkey.sequence` takes it, or `""` |
 | `settingsHotkey` | `""` | the same |
