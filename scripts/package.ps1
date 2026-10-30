@@ -207,6 +207,7 @@ PackageIdentifier: $id
 PackageVersion: $Version
 MinimumOSVersion: 10.0.22000.0
 InstallerType: zip
+Scope: user
 NestedInstallerType: portable
 NestedInstallerFiles:
   - RelativeFilePath: winshell.exe

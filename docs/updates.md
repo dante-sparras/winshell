@@ -4,7 +4,7 @@ A portable Winshell, the zip from GitHub Releases, updates itself from that repo
 
 - A build from source has no repository stamped in it.
 - A packaged Winshell, such as the Microsoft Store's, is updated by whatever installed it.
-- A winget install, under `%LOCALAPPDATA%\Microsoft\WinGet\Packages` or the Links alias next to it, is updated by winget.
+- A winget install, under `%LOCALAPPDATA%\Microsoft\WinGet\Packages` or the Links alias next to it, is updated by winget. The package installs per user. A copy that winget put somewhere else, with `--location` or a custom portable root, isn't detected and still updates itself.
 
 ## How an update arrives
 
