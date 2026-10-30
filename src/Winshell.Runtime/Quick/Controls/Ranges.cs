@@ -357,7 +357,7 @@ public sealed class Slider : Control, IPointerTarget, IKeyTarget, IWheelTarget, 
             Emit("moved");
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => SetPressed(false);
 
@@ -692,7 +692,7 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeyTarget, IKeepsPoi
         StateChanged();
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel()
     {
@@ -1009,7 +1009,7 @@ public sealed class Dial : Control, IPointerTarget, IKeyTarget, IKeepsPointerGra
         StateChanged();
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => SetField(ref _pressed, false, "pressed");
 }
@@ -1237,7 +1237,7 @@ public sealed class SpinBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers) => PointerCancel();
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel()
     {

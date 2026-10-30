@@ -445,7 +445,7 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
         _doubleClick = false;
     }
 
-    public virtual void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
+    public virtual bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
     {
         if (GetSignal("doubleClicked")?.Count > 0)
         {
@@ -453,9 +453,9 @@ public class AbstractButton : Control, IPointerTarget, IKeyTarget
             Emit("pressed");
             _doubleClick = true;
             Emit("doubleClicked");
-            return;
+            return true;
         }
-        PointerPress(x, y, button, buttons, modifiers);
+        return PointerPress(x, y, button, buttons, modifiers);
     }
 
     public virtual void PointerCancel()

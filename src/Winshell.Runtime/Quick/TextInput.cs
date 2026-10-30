@@ -844,10 +844,11 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     public virtual void PointerRelease(double x, double y, int button, int buttons, int modifiers) => _dragAnchor = -1;
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
     {
         _cursorPosition = PositionAt(x, y);
         SelectWord();
+        return true;
     }
 
     public void PointerCancel() => _dragAnchor = -1;

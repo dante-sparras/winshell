@@ -120,7 +120,7 @@ public sealed class PopupOverlay : Item, IPointerTarget, IWheelTarget
     {
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel()
     {
@@ -211,9 +211,7 @@ public sealed class PopupItem : Pane, IPointerTarget, IWheelTarget, IKeyTarget
     {
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers)
-    {
-    }
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => true;
 
     public void PointerCancel()
     {
@@ -1785,7 +1783,7 @@ public sealed class ComboBox : Control, IPointerTarget, IKeyTarget, IWheelTarget
             OpenPopup();
     }
 
-    public void PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
+    public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
 
     public void PointerCancel() => SetPressed(false);
 
