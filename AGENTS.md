@@ -8,7 +8,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
 - xUnit for `tests/`.
-- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`.
+- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`. `scripts/run-tests.ps1` and `scripts/report-flaky.ps1` run on PowerShell 7, and `scripts/FlakyTests.Tests.ps1` tests them with mocks.
 
 ## Project Structure
 
@@ -45,6 +45,9 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── uninstall.ps1                # Removes the per-user install; published on the release
 │   ├── Uninstall.Tests.ps1          # Pester tests for the uninstaller
 │   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs and winshell.ico
+│   ├── report-flaky.ps1             # Files or updates a flaky issue for each test in a report
+│   ├── run-tests.ps1                # The main test stage: quarantine list, then one rerun of failed tests
+│   ├── FlakyTests.Tests.ps1         # Pester tests for those two scripts
 │   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
 ├── src/
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
@@ -56,7 +59,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell.Runtime.Tests/
 │   ├── Winshell.Platform.Windows.Tests/
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
-│   └── TestSupport/                 # Source files the test projects link instead of copying
+│   ├── TestSupport/                 # Source files the test projects link instead of copying
+│   └── quarantine.txt               # Flaky tests ci leaves out and the quarantine job runs
 ├── winshell.slnx                    # The solution the check builds
 ├── dotnet-tools.json                # DocFX, pinned
 ├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
@@ -66,7 +70,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1` and `PublishRelease.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`.
+- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1` and `FlakyTests.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.
