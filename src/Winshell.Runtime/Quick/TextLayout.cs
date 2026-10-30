@@ -31,29 +31,8 @@ public sealed partial class TextLayout : IDisposable
         None = 3,
     }
 
-    public sealed class Run
-    {
-        public required SKTypeface Typeface { get; init; }
-
-        public required float Size { get; init; }
-
-        public required ushort[] Glyphs { get; init; }
-
-        public required SKPoint[] Positions { get; init; }
-
-        public required float Width { get; init; }
-
-        public required string Text { get; init; }
-
-        public required TextSpan Span { get; init; }
-
-        public float X { get; set; }
-    }
-
     public sealed class Line
     {
-        public List<Run> Runs { get; } = [];
-
         public double Width { get; set; }
 
         public double Ascent { get; set; }
@@ -105,31 +84,6 @@ public sealed partial class TextLayout : IDisposable
 
     /// <summary>Underlines a range. Used for the IME preedit, which is not a separate text style.</summary>
     public void UnderlineRange(int start, int length) => _native?.UnderlineRange(start, length);
-
-    /// <summary>Measures one string. Callers that only need a width use this.</summary>
-    public static List<Run> Shape(string text, TextSpan span)
-    {
-        if (text.Length == 0)
-            return [];
-        var font = span.Font with { Capitalization = 0 };
-        using var layout = DirectWriteLayout.Create([new TextSpan(text, font)], double.NaN, Wrap.NoWrap, Elide.None, 0, 1, true);
-        var size = font.PixelSize;
-        if (double.IsNaN(size) || size < 1)
-            size = FontSpec.DefaultPixelSize;
-        return
-        [
-            new Run
-            {
-                Typeface = FontCache.Get(font.Family, font.Weight, font.Italic),
-                Size = (float)size,
-                Glyphs = [],
-                Positions = [],
-                Width = (float)layout.Width,
-                Text = text,
-                Span = span,
-            },
-        ];
-    }
 
     /// <summary>
     /// Draws the lines in a box of the given width, aligned as asked.

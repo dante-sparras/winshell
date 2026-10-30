@@ -7,15 +7,13 @@ namespace Winshell.Runtime.Quick;
 /// </summary>
 public sealed class DelegateSet
 {
-    private readonly QObject _owner;
     private readonly Func<ModelEntry, int, QObject?> _create;
     private readonly Action<QObject, int> _destroy;
     private readonly List<(ModelEntry Entry, QObject? Instance)> _instances = [];
 
     /// <param name="destroy">Destroys an instance that was at the given index.</param>
-    public DelegateSet(QObject owner, Func<ModelEntry, int, QObject?> create, Action<QObject, int> destroy)
+    public DelegateSet(Func<ModelEntry, int, QObject?> create, Action<QObject, int> destroy)
     {
-        _owner = owner;
         _create = create;
         _destroy = destroy;
     }
@@ -89,7 +87,6 @@ public sealed class DelegateSet
                 _instances[i] = (_instances[i].Entry, instance);
             }
         }
-        _ = _owner;
         return changed;
     }
 
@@ -159,7 +156,7 @@ public sealed class Repeater : Item
 
     public Repeater()
     {
-        _set = new DelegateSet(this, Create, Remove);
+        _set = new DelegateSet(Create, Remove);
     }
 
     [Qml]
@@ -266,7 +263,6 @@ public sealed class Repeater : Item
     {
         if (_delegate is null || ParentItem is not { } parent)
             return null;
-        var props = new Dictionary<string, object?>(StringComparer.Ordinal);
         var context = ModelReader.ContextFor(entry, index);
         var obj = _delegate.Create(null, null, context, o =>
         {
@@ -281,7 +277,6 @@ public sealed class Repeater : Item
             o.SetOwner(this);
         });
         Emit("itemAdded", index, obj);
-        _ = props;
         return obj;
     }
 

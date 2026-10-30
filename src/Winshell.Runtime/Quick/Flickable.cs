@@ -543,7 +543,7 @@ public sealed class ListView : Flickable, IPolishable
 
     public ListView()
     {
-        _set = new DelegateSet(this, Create, (o, _) => o.Destroy());
+        _set = new DelegateSet(Create,(o, _) => o.Destroy());
         _watcher = new ItemWatcher(this);
     }
 

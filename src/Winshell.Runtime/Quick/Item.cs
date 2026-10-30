@@ -417,8 +417,6 @@ public class Item : QObject
         }
     }
 
-    private readonly QmlList<QObject>? _states = null;
-
     [Qml("states")]
     public QmlList<QObject> StatesList => _statesList ??= new QmlList<QObject>(this, "states", added: s => s.SetOwner(this));
 
@@ -847,7 +845,6 @@ public class Item : QObject
         foreach (var child in _children.Snapshot.ToArray())
             child.Destroy();
         base.OnDestroy();
-        _ = _states;
     }
 }
 
