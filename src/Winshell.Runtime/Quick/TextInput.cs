@@ -767,6 +767,15 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
                     MoveCursor(from, false);
                 }
                 return true;
+            case 0x01000006 when shift && !ctrl: // Shift+Insert
+                Paste();
+                return true;
+            case 0x01000006 when ctrl && !shift: // Ctrl+Insert
+                Copy();
+                return true;
+            case 0x01000007 when shift && !ctrl: // Shift+Delete
+                Cut();
+                return true;
             case 0x01000007: // Delete
                 if (_readOnly)
                     return true;
