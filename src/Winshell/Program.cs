@@ -93,6 +93,10 @@ namespace Winshell
                 Console.Error.WriteLine(e.Message);
                 return 2;
             }
+            // list, kill, log, ipc and doctor can fail on the files and pipes around them. That is a sentence
+            // and exit 1. RunShell reports a crash itself, so it is not caught here.
+            try
+            {
             switch (command)
             {
                 case null:
@@ -136,6 +140,12 @@ namespace Winshell
                 default:
                     Console.Error.WriteLine($"Unknown command \"{command}\". Run winshell --help.");
                     return 2;
+            }
+            }
+            catch (Exception e) when (e is not OutOfMemoryException && command is not (null or "run"))
+            {
+                Console.Error.WriteLine(options.Verbose ? $"winshell {command}: {e}" : $"winshell {command}: {e.Message}");
+                return 1;
             }
         }
 
