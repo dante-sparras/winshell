@@ -198,6 +198,28 @@ public class SettingsShellTests
         Assert.True(((Item)RunningShell.Walk(run.Settings.ContentItem).Single(i => i.ObjectName == "search")).ActiveFocus);
     }
 
+    [Fact]
+    public void Settings_is_built_on_its_first_open_and_kept_after_it_closes()
+    {
+        using var run = new RunningShell(null);
+        Assert.Empty(run.Platform.Windows.Select(w => w.Client).OfType<FloatingWindow>());
+
+        // The first open, from the command line, still lands on the page asked for.
+        Assert.Equal("", run.Host.Ipc.Call("settings", "open", ["taskbarAutoHide"]));
+        run.Settle();
+        var window = run.Settings;
+        Assert.True(window.Visible);
+        Assert.Equal("taskbar", run.View.ReadProperty("page"));
+
+        window.OnClosed();
+        run.Settle();
+        run.Host.Ipc.Call("settings", "open", ["about"]);
+        run.Settle();
+        Assert.Same(window, run.Settings);
+        Assert.Equal("about", run.View.ReadProperty("page"));
+        Assert.DoesNotContain(run.Messages, m => !m.StartsWith("hotkey:", StringComparison.Ordinal));
+    }
+
     /// <summary>The default shell under a <see cref="ShellHost"/>, with its folders in a temporary folder of its own.</summary>
     private sealed class RunningShell : IDisposable
     {
