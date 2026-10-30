@@ -24,14 +24,14 @@ ColumnLayout {
 
   RowLayout {
     Layout.fillWidth: true
-    Text { Layout.fillWidth: true; text: "Notifications"; font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.textFillColorPrimary }
+    Text { Layout.fillWidth: true; text: "Notifications"; font: Theme.typography.subtitle; color: Theme.textFillColorPrimary }
     Button { text: "Clear all"; flat: true; enabled: root.visibleGroups.length > 0; onClicked: root.visibleGroups.forEach(g => g.dismiss()) }
   }
 
   Text {
     Layout.fillWidth: true
     text: root.listener === null ? "Notification access unavailable" : "Do not disturb: " + (root.listener.doNotDisturbState === NotificationState.On ? "On" : root.listener.doNotDisturbState === NotificationState.Off ? "Off" : "Unknown") + " · Focus: " + (root.listener.focusState === NotificationState.On ? "On" : root.listener.focusState === NotificationState.Off ? "Off" : "Unknown")
-    font.pixelSize: 12
+    font: Theme.typography.caption
     wrapMode: Text.Wrap
     color: Theme.textFillColorSecondary
   }
@@ -103,7 +103,7 @@ ColumnLayout {
                   Button { text: ""; font.family: Theme.iconFontFamily; padding: 0; implicitWidth: 32; flat: true; Accessible.name: "Dismiss " + card.modelData.title; onClicked: card.modelData.dismiss(); onActiveFocusChanged: if (activeFocus) scroll.reveal(this) }
                 }
                 Text { Layout.fillWidth: true; text: card.modelData.body; wrapMode: Text.Wrap; color: Theme.textFillColorPrimary }
-                Text { text: root.notificationTime(card.modelData.createdAt); font.pixelSize: 12; color: Theme.textFillColorSecondary }
+                Text { text: root.notificationTime(card.modelData.createdAt); font: Theme.typography.caption; color: Theme.textFillColorSecondary }
               }
             }
           }

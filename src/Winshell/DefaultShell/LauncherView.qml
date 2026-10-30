@@ -244,7 +244,7 @@ Item {
     height: Launcher.searchHeight
     leftPadding: 36
     placeholderText: "Search apps"
-    font.pixelSize: 14
+    font: Theme.typography.body
     Accessible.name: "Search apps"
     Keys.priority: 0
     Keys.onUpPressed: root.moveSelection("up")
@@ -289,8 +289,7 @@ Item {
       objectName: "pinnedHeader"
       width: Launcher.contentWidth
       text: "Pinned"
-      font.pixelSize: 14
-      font.weight: Font.DemiBold
+      font: Theme.typography.bodyStrong
       color: Theme.textFillColorPrimary
       Accessible.role: Accessible.Heading
       Accessible.name: "Pinned"
@@ -301,7 +300,7 @@ Item {
       visible: Launcher.asArray(root.pinnedApps).length === 0
       width: Launcher.contentWidth
       text: "Nothing pinned"
-      font.pixelSize: 12
+      font: Theme.typography.caption
       color: Theme.textFillColorSecondary
     }
 
@@ -374,7 +373,7 @@ Item {
               text: modelData.name
               horizontalAlignment: Text.AlignHCenter
               elide: Text.ElideRight
-              font.pixelSize: 12
+              font: Theme.typography.caption
               color: Theme.textFillColorPrimary
             }
           }
@@ -387,8 +386,7 @@ Item {
       visible: Launcher.asArray(root.recommendedApps).length > 0
       width: Launcher.contentWidth
       text: "Recommended"
-      font.pixelSize: 14
-      font.weight: Font.DemiBold
+      font: Theme.typography.bodyStrong
       color: Theme.textFillColorPrimary
       Accessible.role: Accessible.Heading
       Accessible.name: "Recommended"
@@ -453,7 +451,7 @@ Item {
           verticalAlignment: Text.AlignVCenter
           text: modelData.name
           elide: Text.ElideRight
-          font.pixelSize: 14
+          font: Theme.typography.body
           color: Theme.textFillColorPrimary
         }
       }
@@ -489,7 +487,7 @@ Item {
         leftPadding: 12
         verticalAlignment: Text.AlignVCenter
         text: "All apps"
-        font.pixelSize: 14
+        font: Theme.typography.body
         color: Theme.textFillColorPrimary
       }
     }
@@ -547,8 +545,7 @@ Item {
         height: 32
         verticalAlignment: Text.AlignVCenter
         text: "All apps"
-        font.pixelSize: 14
-        font.weight: Font.DemiBold
+        font: Theme.typography.bodyStrong
         color: Theme.textFillColorPrimary
         Accessible.role: Accessible.Heading
         Accessible.name: "All apps"
@@ -611,7 +608,7 @@ Item {
           verticalAlignment: Text.AlignVCenter
           text: modelData.name
           elide: Text.ElideRight
-          font.pixelSize: 14
+          font: Theme.typography.body
           color: Theme.textFillColorPrimary
         }
       }
@@ -625,7 +622,7 @@ Item {
     width: Launcher.contentWidth
     visible: root.searching && Launcher.asArray(root.searchResults).length === 0
     text: "No results"
-    font.pixelSize: 14
+    font: Theme.typography.body
     color: Theme.textFillColorSecondary
   }
 
@@ -689,7 +686,7 @@ Item {
         verticalAlignment: Text.AlignVCenter
         text: modelData.name
         elide: Text.ElideRight
-        font.pixelSize: 14
+        font: Theme.typography.body
         color: Theme.textFillColorPrimary
       }
     }

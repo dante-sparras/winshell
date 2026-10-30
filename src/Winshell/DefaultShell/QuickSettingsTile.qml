@@ -143,7 +143,7 @@ Item {
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
     text: tile.label
-    font.pixelSize: 12
+    font: Theme.typography.caption
     color: Theme.textFillColorPrimary
     // The button already carries the name.
     Accessible.ignored: true
