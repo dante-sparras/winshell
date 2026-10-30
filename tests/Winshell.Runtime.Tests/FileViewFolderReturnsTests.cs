@@ -21,11 +21,12 @@ public class FileViewFolderReturnsTests
               }
             }
             """;
+        // Declared first, so it is disposed last. A watch can post until the shell is disposed.
+        using var woken = new AutoResetEvent(false);
         using var shell = new TestShell(("shell.qml", Qml), ("config/settings.toml", "name = \"first\""));
         var root = shell.Load();
         Assert.Equal("first", shell.Eval(root, "settings.name"));
         var directory = Path.Combine(shell.Directory, "config");
-        using var woken = new AutoResetEvent(false);
         shell.Loop.Woken += () => woken.Set();
 
         // The view hears about the deletion when this watch does, so it is handled before the folder returns.
