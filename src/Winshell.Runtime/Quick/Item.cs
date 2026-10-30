@@ -841,7 +841,14 @@ public sealed class ItemData(Item owner) : IQmlList
 {
     public int Count => owner.Children.Count + owner.Resources.Count;
 
-    public object? this[int index] => All[index];
+    public object? this[int index]
+    {
+        get
+        {
+            var children = owner.Children.Snapshot;
+            return index < children.Count ? children[index] : owner.Resources.Snapshot[index - children.Count];
+        }
+    }
 
     private List<object?> All => owner.Children.Snapshot.Cast<object?>().Concat(owner.Resources.Snapshot).ToList();
 
