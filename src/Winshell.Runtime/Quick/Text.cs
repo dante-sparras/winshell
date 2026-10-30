@@ -5,7 +5,7 @@ namespace Winshell.Runtime.Quick;
 /// <summary>QtQuick's <c>Text</c>.</summary>
 [QmlSignal("linkActivated", "link")]
 [QmlSignal("linkHovered", "link")]
-public class Text : Item
+public class Text : Item, IPolishable
 {
     private string _text = "";
     private QColor _color = Theme.Current.TextFillColorPrimary;
@@ -25,7 +25,9 @@ public class Text : Item
     private double _padding;
     private bool _topSet, _bottomSet, _leftSet, _rightSet;
     private TextLayout? _layout;
-    private bool _dirty = true;
+    private double _layoutWidth = double.NaN;
+    private bool _layoutDirty = true;
+    private bool _sizeDirty, _naturalDirty;
     private int _renderType;
     private int _fontSizeMode;
     private double _minimumPixelSize = 12;
@@ -345,25 +347,25 @@ public class Text : Item
     [Qml]
     public double ContentWidth
     {
-        get { Track(); EnsureLayout(); return _layout?.Width ?? 0; }
+        get { Track(); SettleSize(); EnsureLayout(); return _layout?.Width ?? 0; }
     }
 
     [Qml]
     public double ContentHeight
     {
-        get { Track(); EnsureLayout(); return _layout?.Height ?? 0; }
+        get { Track(); SettleSize(); EnsureLayout(); return _layout?.Height ?? 0; }
     }
 
     [Qml]
     public int LineCount
     {
-        get { Track(); EnsureLayout(); return _layout?.Lines.Count ?? 0; }
+        get { Track(); SettleSize(); EnsureLayout(); return _layout?.Lines.Count ?? 0; }
     }
 
     [Qml]
     public bool Truncated
     {
-        get { Track(); EnsureLayout(); return _layout?.Truncated ?? false; }
+        get { Track(); SettleSize(); EnsureLayout(); return _layout?.Truncated ?? false; }
     }
 
     [Qml]
@@ -373,13 +375,14 @@ public class Text : Item
     public string LinkAt(double x, double y) => "";
 
     [Qml]
-    public void ForceLayout() => EnsureLayout();
+    public void ForceLayout() => Settle();
 
     protected override void OnGeometryChanged()
     {
         base.OnGeometryChanged();
-        if ((_wrapMode != 0 || _elide != (int)TextLayout.Elide.None) && HasExplicitOrAnchoredWidth)
-            Relayout(keepImplicit: true);
+        // Moving the text doesn't move its lines. Only a new width to wrap or elide to does.
+        if (!_sizeDirty && !LayoutWidth.Equals(_layoutWidth))
+            RequestSize();
     }
 
     private bool HasExplicitOrAnchoredWidth => HasExplicitWidth || (HasAnchors && Anchors.ControlsWidth) || LayoutControlsWidth;
@@ -387,44 +390,79 @@ public class Text : Item
     /// <summary>Set by a layout that gives this item its width, so the text wraps to it.</summary>
     public bool LayoutControlsWidth { get; set; }
 
+    /// <summary>How many DirectWrite layouts this text has built.</summary>
+    internal int LayoutBuilds { get; private set; }
 
-    private void Relayout() => Relayout(false);
+    // The width the text wraps or elides to. NaN when it has none, or when it doesn't wrap or elide, which
+    // lays it out the same at any width.
+    private double LayoutWidth => HasExplicitOrAnchoredWidth && (_wrapMode != 0 || _elide != (int)TextLayout.Elide.None)
+        ? Width - _leftPadding - _rightPadding
+        : double.NaN;
 
-    private void Relayout(bool keepImplicit)
+    // A change marks the text and measures it in the polish pass, so several changes in one turn measure it
+    // once. Reading a size before then, outside a binding, measures it at once.
+    private void Relayout()
     {
-        _dirty = true;
-        if (!keepImplicit)
-            UpdateImplicitSize();
-        else
-            UpdateImplicitHeightOnly();
+        _layoutDirty = true;
+        _naturalDirty = true;
+        RequestSize();
+    }
+
+    private void RequestSize()
+    {
+        _sizeDirty = true;
+        PolishQueue.Request(this, Engine?.Loop);
         Update();
     }
 
-    private void UpdateImplicitHeightOnly()
+    void IPolishable.UpdatePolish() => Settle();
+
+    public override void ComponentComplete()
     {
-        EnsureLayout();
-        if (_layout is null)
-            return;
-        ImplicitHeight = Math.Ceiling(_layout.Height) + _topPadding + _bottomPadding;
-        NotifyChanged("contentWidth");
-        NotifyChanged("contentHeight");
-        NotifyChanged("lineCount");
-        NotifyChanged("truncated");
+        base.ComponentComplete();
+        // Measure once every binding has set the text, so onCompleted sees the size.
+        Settle();
     }
 
-    private void UpdateImplicitSize()
+    protected override void SettleSize()
     {
-        // The implicit width is the width of the text without wrapping, like Qt's.
-        var spans = Spans();
-        using var natural = TextLayout.Build(spans, double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, LineHeightValue, ProportionalLineHeight);
-        _dirty = true;
-        ImplicitWidth = Math.Ceiling(natural.Width) + _leftPadding + _rightPadding;
+        // A binding that reads the size gets the new one when the polish pass notifies it. Measuring here
+        // would notify the binding while it is still evaluating, which reads as a binding loop.
+        if (!DependencyTracker.IsTracking)
+            Settle();
+    }
+
+    private void Settle()
+    {
+        if (!_sizeDirty)
+            return;
+        _sizeDirty = false;
+        using var _ = DependencyTracker.Suspend();
+        if (_naturalDirty)
+        {
+            _naturalDirty = false;
+            ImplicitWidth = Math.Ceiling(NaturalWidth()) + _leftPadding + _rightPadding;
+        }
         EnsureLayout();
         ImplicitHeight = Math.Ceiling(_layout!.Height) + _topPadding + _bottomPadding;
         NotifyChanged("contentWidth");
         NotifyChanged("contentHeight");
         NotifyChanged("lineCount");
         NotifyChanged("truncated");
+    }
+
+    // The implicit width is the width of the text without wrapping, like Qt's.
+    private double NaturalWidth()
+    {
+        if (_wrapMode == 0 && _maximumLineCount == int.MaxValue && double.IsNaN(LayoutWidth))
+        {
+            // The drawn layout is this one.
+            EnsureLayout();
+            return _layout!.Width;
+        }
+        using var natural = TextLayout.Build(Spans(), double.NaN, TextLayout.Wrap.NoWrap, TextLayout.Elide.None, 0, LineHeightValue, ProportionalLineHeight);
+        LayoutBuilds++;
+        return natural.Width;
     }
 
     private double LineHeightValue => _lineHeight;
@@ -448,22 +486,26 @@ public class Text : Item
 
     private void EnsureLayout()
     {
-        if (!_dirty && _layout is not null)
-            return;
-        _dirty = false;
         using var _ = DependencyTracker.Suspend();
-        var available = HasExplicitOrAnchoredWidth ? Width - _leftPadding - _rightPadding : double.NaN;
+        var available = LayoutWidth;
+        // Equals, not ==, so a NaN width matches itself.
+        if (!_layoutDirty && _layout is not null && available.Equals(_layoutWidth))
+            return;
+        _layoutDirty = false;
+        _layoutWidth = available;
         var wrap = (TextLayout.Wrap)(_wrapMode == 2 ? 1 : _wrapMode);
         var elide = (TextLayout.Elide)_elide;
         var maxLines = _maximumLineCount == int.MaxValue ? 0 : _maximumLineCount;
         _layout?.Dispose();
         _layout = TextLayout.Build(Spans(), available, wrap, elide, maxLines, LineHeightValue, ProportionalLineHeight);
+        LayoutBuilds++;
     }
 
     public TextLayout? CurrentLayout
     {
         get
         {
+            SettleSize();
             EnsureLayout();
             return _layout;
         }
@@ -471,6 +513,7 @@ public class Text : Item
 
     public override void Paint(SKCanvas canvas, PaintContext context)
     {
+        SettleSize();
         EnsureLayout();
         if (_layout is null || _text.Length == 0)
             return;
