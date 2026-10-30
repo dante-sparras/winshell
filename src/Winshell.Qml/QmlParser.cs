@@ -85,7 +85,9 @@ public sealed class QmlParser
 
         if (AtEnd)
             throw Error("Expected a root object");
-        var root = ParseObject(ReadQualifiedName(), Location);
+        SkipTrivia();
+        var rootLoc = Location;
+        var root = ParseObject(ReadQualifiedName(), rootLoc);
         SkipTrivia();
         if (!AtEnd)
             throw Error($"Unexpected '{Peek()}' after the root object");
