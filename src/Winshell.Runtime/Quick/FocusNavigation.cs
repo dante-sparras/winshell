@@ -5,7 +5,7 @@ namespace Winshell.Runtime.Quick;
 /// <summary>
 /// Where the keyboard moves focus, as Windows does: Tab and Shift+Tab through the tab stops in item order, and the
 /// arrow keys within a group. A group is one tab stop: radio buttons or tabs that exclude each other, the items of a
-/// menu, the rows of a combo box's list, or the delegates of a list view.
+/// menu, the rows of a combo box's list, or the delegates of a list view, which moves between them itself.
 /// </summary>
 public static class FocusNavigation
 {
@@ -126,19 +126,8 @@ public static class FocusNavigation
         {
             var delegates = Enumerable.Range(0, list.Count).Select(list.ItemAtIndex).OfType<Item>().Where(IsTabStop).ToList();
             var current = list.ItemAtIndex(list.CurrentIndex) is { } c && delegates.Contains(c) ? c : delegates.FirstOrDefault();
-            var vertical = list.Orientation == (int)ListView.OrientationValue.Vertical;
-            return new Group(list, delegates, current, vertical, !vertical, list.KeyNavigationWraps, member =>
-            {
-                for (var i = 0; i < list.Count; i++)
-                {
-                    if (list.ItemAtIndex(i) == member)
-                    {
-                        list.CurrentIndex = i;
-                        list.PositionViewAtIndex(i, (int)ListView.PositionMode.Contain);
-                        return;
-                    }
-                }
-            });
+            // The list view takes the arrow keys itself (ListView.KeyPress), so its group only says where Tab enters.
+            return new Group(list, delegates, current, false, false, false, null);
         }
         return null;
     }
