@@ -27,6 +27,8 @@ Item {
   property var lastLaunched: null
   property var lastLocation: null
   property int dismissCount: 0
+  // The app the arrow keys selected last, which Narrator hears while the keyboard stays in the search box.
+  property string selectionName: ""
   property bool pinsKnown: false
   property bool pinsReady: false
   // A shortcut path is not an image file. Draw it only while Start is open, through the icon provider.
@@ -62,11 +64,13 @@ Item {
   function showAll() {
     page = "all"
     selected = 0
+    searchField.forceActiveFocus()
   }
 
   function showHome() {
     page = "home"
     selected = 0
+    searchField.forceActiveFocus()
   }
 
   function readPins() {
@@ -114,6 +118,8 @@ Item {
   function moveSelection(key) {
     selected = Launcher.move(selected, key, Launcher.asArray(shown).length, pinnedCount, Launcher.columns)
     reveal(selected)
+    const app = currentApp()
+    selectionName = app ? app.name : ""
   }
 
   function reveal(index) {
@@ -246,6 +252,7 @@ Item {
     Keys.onLeftPressed: root.moveSelection("left")
     Keys.onRightPressed: root.moveSelection("right")
     Keys.onReturnPressed: root.activateSelection()
+    Keys.onEnterPressed: root.activateSelection()
     Keys.onEscapePressed: root.escape()
     Keys.onPressed: event => {
       var menuKey = event.key === Qt.Key_Menu
@@ -453,13 +460,22 @@ Item {
     }
 
     MouseArea {
+      id: allAppsButton
       objectName: "allAppsButton"
       width: Launcher.contentWidth
       height: 40
       hoverEnabled: true
+      activeFocusOnTab: true
       Accessible.role: Accessible.Button
       Accessible.name: "All apps"
+      Accessible.onPressAction: root.showAll()
       onClicked: root.showAll()
+      Keys.onReturnPressed: root.showAll()
+      Keys.onEnterPressed: root.showAll()
+      Keys.onSpacePressed: root.showAll()
+      Keys.onEscapePressed: root.escape()
+
+      FocusRing { visible: allAppsButton.activeFocus }
 
       Rectangle {
         anchors.fill: parent
@@ -497,9 +513,17 @@ Item {
         width: 32
         height: 32
         hoverEnabled: true
+        activeFocusOnTab: true
         Accessible.role: Accessible.Button
         Accessible.name: "Back"
+        Accessible.onPressAction: root.showHome()
         onClicked: root.showHome()
+        Keys.onReturnPressed: root.showHome()
+        Keys.onEnterPressed: root.showHome()
+        Keys.onSpacePressed: root.showHome()
+        Keys.onEscapePressed: root.escape()
+
+        FocusRing { visible: backButton.activeFocus }
 
         Rectangle {
           anchors.fill: parent
@@ -686,5 +710,21 @@ Item {
       text: "Open file location"
       onTriggered: root.openLocation(root.menuApp)
     }
+  }
+
+  Item {
+    objectName: "selectionAnnouncement"
+    Accessible.role: Accessible.Notification
+    Accessible.name: root.selectionName
+  }
+
+  // The focus rectangle Windows draws around a focused button.
+  component FocusRing: Rectangle {
+    anchors.fill: parent
+    anchors.margins: -3
+    radius: Theme.controlCornerRadius + 3
+    color: "transparent"
+    border.width: 2
+    border.color: Theme.focusStrokeColorOuter
   }
 }
