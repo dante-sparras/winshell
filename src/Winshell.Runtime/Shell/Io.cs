@@ -590,10 +590,24 @@ public sealed class ProcessObject : QObject
 [QmlSignal("adapterUpdated")]
 public abstract class FileViewAdapter : QObject
 {
+    private string _error = "";
+
     internal FileView? View { get; set; }
 
     /// <summary>Set by <see cref="Serialize"/> when the bytes on disk must be left as they are.</summary>
     internal bool PreserveFile { get; set; }
+
+    /// <summary>Why the file could not be parsed, as <c>path[line:column]: message</c>, or empty when the last read parsed. Read-only in QML.</summary>
+    [Qml]
+    public string Error
+    {
+        get { Track(); return _error; }
+        internal set
+        {
+            if (SetField(ref _error, value ?? ""))
+                View?.NoteAdapterError();
+        }
+    }
 
     public abstract void Deserialize(string text);
 
@@ -818,6 +832,7 @@ public sealed class FileView : QObject
             if (!SetField(ref _path, path))
                 return;
             _linkKindKnown = false;
+            ClearReportedError();
             _text = null;
             SetLoaded(false);
             Watch();
@@ -1227,7 +1242,11 @@ public sealed class FileView : QObject
             return;
         var text = _adapter.Serialize();
         if (_adapter.PreserveFile)
+        {
+            // The file on disk does not parse, so the write was dropped. Say so; the log line is not enough.
+            Emit("saveFailed", (int)FileViewError.Unknown);
             return;
+        }
         Write(text);
     }
 
@@ -1507,9 +1526,17 @@ public sealed class FileView : QObject
         _watchingParent = false;
     }
 
+    internal void NoteAdapterError()
+    {
+        Engine?.GetService<IShellHost>()?.ReportFileError(this, _adapter?.Error);
+    }
+
+    private void ClearReportedError() => Engine?.GetService<IShellHost>()?.ReportFileError(this, null);
+
     protected override void OnDestroy()
     {
         _generation++;
+        ClearReportedError();
         StopWatching();
     }
 }

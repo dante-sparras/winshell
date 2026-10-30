@@ -334,6 +334,36 @@ public sealed class LauncherTests
     }
 
     [Fact]
+    public void A_pins_file_that_does_not_parse_shows_the_defaults_and_is_not_written()
+    {
+        var broken = TempFile();
+        File.WriteAllText(broken, "pins = [");
+        var before = File.ReadAllBytes(broken);
+        try
+        {
+            using var view = Open(dir => $$"""
+                LauncherView {
+                  pinsPath: "{{broken}}"
+                  apps: [
+                    {{App("clock", "Clock")}},
+                    {{App("edge", "Microsoft Edge")}},
+                    {{App("calc", "Calculator")}},
+                    {{App("note", "Notepad")}}
+                  ]
+                }
+                """);
+            Assert.Equal(["edge", "note", "calc", "clock"], Strings(view.Eval("pinIds")));
+            Assert.Equal(before, File.ReadAllBytes(broken));
+            Assert.Contains(view.Messages, m => m.Contains("toml[1:", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (File.Exists(broken))
+                File.Delete(broken);
+        }
+    }
+
+    [Fact]
     public void The_context_menu_pins_and_open_file_location_builds_a_command()
     {
         using var view = Open(dir => ViewQml(

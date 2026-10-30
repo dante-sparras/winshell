@@ -42,6 +42,7 @@ public sealed partial class ShellNotices : IDisposable
     private QmlEngine? _engine;
     private ScreenRegistry? _screens;
     private bool _disposed;
+    private bool _fileNotice;
 
     /// <param name="open">Opens a file: the configuration file that has the error, or a crash report.</param>
     /// <param name="modules">The modules the notice is made with; it needs <c>Winshell.Theme</c> and <c>WindowEffects</c>.</param>
@@ -54,6 +55,7 @@ public sealed partial class ShellNotices : IDisposable
         _open = open;
         _modules = modules ?? StandardModules.Create;
         host.Reloaded += OnReloaded;
+        host.FileError += OnFileError;
         if (host.Crashes is { } crashes)
             crashes.Written += OnReport;
     }
@@ -69,15 +71,39 @@ public sealed partial class ShellNotices : IDisposable
     {
         if (error is not null && _host.ShowReloadPopup)
         {
+            _fileNotice = false;
             var notice = ForConfigError(error, _host.RootFile, running: _host.Root is not null);
             _loop.Post(() => Show(notice));
             return;
         }
         // Fixed, or a failure the shell hid: an older error no longer says what is wrong.
+        // A config file that still does not parse keeps its own notice.
         _loop.Post(() =>
         {
-            if (Current?.Kind == NoticeKind.ConfigError)
+            if (!_fileNotice && Current?.Kind == NoticeKind.ConfigError)
                 Hide();
+        });
+    }
+
+    private void OnFileError(string? error)
+    {
+        if (error is not null && _host.ShowReloadPopup)
+        {
+            var notice = ForConfigError(error, _host.RootFile, running: _host.Root is not null);
+            _loop.Post(() =>
+            {
+                _fileNotice = true;
+                Show(notice);
+            });
+            return;
+        }
+        _loop.Post(() =>
+        {
+            if (_fileNotice && Current?.Kind == NoticeKind.ConfigError)
+            {
+                _fileNotice = false;
+                Hide();
+            }
         });
     }
 
@@ -95,7 +121,7 @@ public sealed partial class ShellNotices : IDisposable
     }
 
     // "C:\config\Bar.qml[7:5]: Cannot assign …", as Log.Describe writes an error, or "C:\config\shell.qml: …".
-    [GeneratedRegex(@"^(?<file>.+?\.(?:qml|js|mjs))(?:\[(?<line>\d+):(?<column>\d+)\])?: (?<message>.*)$", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?<file>.+?\.(?:qml|js|mjs|toml))(?:\[(?<line>\d+):(?<column>\d+)\])?: (?<message>.*)$", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex ErrorAt();
 
     /// <summary>The notice for a configuration that failed to load: where the error is, what it is, and what runs meanwhile.</summary>
@@ -186,7 +212,8 @@ public sealed partial class ShellNotices : IDisposable
         var extension = Path.GetExtension(target);
         var configFile = extension.Equals(".qml", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".js", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".mjs", StringComparison.OrdinalIgnoreCase);
+            || extension.Equals(".mjs", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".toml", StringComparison.OrdinalIgnoreCase);
         return configFile && Path.IsPathFullyQualified(target) && File.Exists(target) ? target : rootFile;
     }
 
@@ -263,6 +290,7 @@ public sealed partial class ShellNotices : IDisposable
             return;
         _disposed = true;
         _host.Reloaded -= OnReloaded;
+        _host.FileError -= OnFileError;
         if (_host.Crashes is { } crashes)
             crashes.Written -= OnReport;
         Hide();

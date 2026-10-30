@@ -74,6 +74,11 @@ Item {
   }
 
   function readPins() {
+    // A file that does not parse is the same as a missing one: show the defaults, and do not write them over it.
+    if (pinData.error) {
+      pinsKnown = false
+      return
+    }
     pinsKnown = true
     if (Array.isArray(pinData.pins))
       pinIds = pinData.pins.slice()
@@ -81,13 +86,16 @@ Item {
 
   function ensureSeed() {
     // The pin file loads during completion. Seeding earlier would replace a file that is already there.
-    if (!pinsReady || pinsPath === "" || pinsKnown || pinFile.loaded)
+    if (!pinsReady || pinsPath === "" || pinsKnown)
+      return
+    if (pinFile.loaded && !pinData.error)
       return
     if (Launcher.visibleApps(apps).length === 0)
       return
     pinsKnown = true
     pinIds = Launcher.defaultPins(apps)
-    writePins()
+    if (!pinData.error)
+      writePins()
   }
 
   function writePins() {

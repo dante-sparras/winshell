@@ -50,18 +50,20 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
 
     public override void Deserialize(string text)
     {
-        if (Engine is null || string.IsNullOrWhiteSpace(text))
+        if (Engine is null)
             return;
-        TomlTable table;
-        try
+        if (string.IsNullOrWhiteSpace(text))
         {
-            table = TomlSerializer.Deserialize<TomlTable>(text) ?? [];
-        }
-        catch (TomlException e)
-        {
-            Warn($"failed to parse {Where}: {e.Message}");
+            Error = "";
             return;
         }
+        if (!TryParse(text, out var table, out var error))
+        {
+            Error = error;
+            Warn($"failed to parse {error}");
+            return;
+        }
+        Error = "";
         Apply(table, skipDirty: false);
         _dirty.Clear();
     }
@@ -186,7 +188,7 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     {
         if (!document.HasErrors)
             return true;
-        var detail = document.Diagnostics.Count > 0 ? document.Diagnostics[0].Message : "invalid TOML";
+        var detail = document.Diagnostics.Count > 0 ? Locate(document.Diagnostics[0]) : $"{Where}: invalid TOML";
         var path = View?.Path;
         if (!string.IsNullOrEmpty(path))
         {
@@ -196,18 +198,53 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
                 if (!again.HasErrors && LoadClean(again))
                 {
                     document = again;
+                    Error = "";
                     return true;
                 }
                 if (again.HasErrors && again.Diagnostics.Count > 0)
-                    detail = again.Diagnostics[0].Message;
+                    detail = Locate(again.Diagnostics[0]);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                detail = e.Message;
+                detail = $"{Where}: {e.Message}";
             }
         }
-        Warn($"failed to parse {Where}: {detail}; the file was left unchanged");
+        Error = detail;
+        Warn($"failed to parse {detail}; the file was left unchanged");
         return false;
+    }
+
+    /// <summary><c>path[line:column]: message</c>. Tomlyn's <c>Message</c> drops the span; the span's line is 0-based.</summary>
+    private string Locate(DiagnosticMessage diagnostic)
+    {
+        var line = diagnostic.Span.Start.Line + 1;
+        var column = diagnostic.Span.Start.Column + 1;
+        return string.Create(CultureInfo.InvariantCulture, $"{Where}[{line}:{column}]: {diagnostic.Message}");
+    }
+
+    private bool TryParse(string text, out TomlTable table, out string error)
+    {
+        var document = SyntaxParser.Parse(text);
+        if (document.HasErrors)
+        {
+            table = [];
+            error = document.Diagnostics.Count > 0 ? Locate(document.Diagnostics[0]) : $"{Where}: invalid TOML";
+            return false;
+        }
+        try
+        {
+            table = TomlSerializer.Deserialize<TomlTable>(text) ?? [];
+            error = "";
+            return true;
+        }
+        catch (TomlException e)
+        {
+            table = [];
+            error = e.Line > 0
+                ? string.Create(CultureInfo.InvariantCulture, $"{Where}[{e.Line}:{e.Column}]: {e.Message}")
+                : $"{Where}: {e.Message}";
+            return false;
+        }
     }
 
     /// <summary>Loads a document that parses into the properties that have not been assigned since the last good read.</summary>

@@ -112,12 +112,12 @@ Use a full path, such as one built from `Shell.dataDir`. A relative path is take
 | `waitForJob()` | method, returns bool | Returns `true` at once. It does not wait for a read or write in progress. |
 | `setText(text)` | method | Replaces the file's contents with `text`. Creates missing folders. |
 | `setData(data)` | method | Replaces the file's contents with `data`, as text. |
-| `writeAdapter()` | method | Writes what the adapter's properties hold to the file. |
+| `writeAdapter()` | method | Writes what the adapter's properties hold to the file. When the file on disk does not parse, nothing is written and `saveFailed` is raised. |
 | `loaded()` | signal | The file was read. It fires after each successful read, including `reload()`. |
 | `loadFailed(error)` | signal | The file could not be read. `error` is a [FileViewError](#fileviewerror) value, such as `FileView.FileNotFound`. |
 | `fileChanged()` | signal | The file changed on disk or was deleted, with `watchChanges` on. The view does not read it again by itself. |
 | `saved()` | signal | A write finished. |
-| `saveFailed(error)` | signal | A write failed. `error` is always `FileView.Unknown`. |
+| `saveFailed(error)` | signal | A write failed, or it was skipped because the file on disk does not parse. `error` is always `FileView.Unknown`. |
 | `adapterUpdated()` | signal | A property of the adapter changed, other than by reading the file. Call `writeAdapter()` here to save each change. |
 
 Enum values: `Success`, `Unknown`, `FileNotFound`, `PermissionDenied`, `NotAFile`
@@ -299,6 +299,7 @@ The base of [JsonAdapter](#jsonadapter) and [TomlAdapter](#tomladapter), which t
 
 | Member | Type | Description |
 | --- | --- | --- |
+| `error` | string, read-only | Why the file could not be parsed, as `path[line:column]: message`, or empty when the last read parsed. A `TomlAdapter` sets it. |
 | `adapterUpdated()` | signal | A property of the adapter changed, other than by reading the file. The `FileView` passes it on as its own `adapterUpdated`. |
 
 ## FileViewError

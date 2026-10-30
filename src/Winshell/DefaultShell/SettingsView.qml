@@ -307,6 +307,37 @@ Item {
           x: 40
           width: Math.min(Settings.contentMaxWidth, parent.width - 80)
 
+          // The file is open in an editor and does not parse. The choices on the page stay as they were.
+          Rectangle {
+            objectName: "preferencesError"
+            visible: Preferences.error !== ""
+            width: parent.width
+            implicitHeight: 64
+            height: visible ? implicitHeight : 0
+            radius: Theme.controlCornerRadius
+            color: Theme.cardBackgroundFillColorDefault
+            border.width: visible ? 1 : 0
+            border.color: Theme.systemFillColorCaution
+
+            Text {
+              x: 16
+              anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - 32
+              wrapMode: Text.Wrap
+              text: "Your preferences.toml has an error. Changes won't be saved until it's fixed."
+              font: Theme.typography.body
+              color: Theme.textFillColorPrimary
+              Accessible.role: Accessible.StaticText
+              Accessible.name: text
+            }
+          }
+
+          Item {
+            visible: Preferences.error !== ""
+            width: 1
+            height: visible ? 12 : 0
+          }
+
           // What search found, one card each, that opens the setting.
           Column {
             id: resultList
