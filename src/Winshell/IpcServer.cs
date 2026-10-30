@@ -33,6 +33,9 @@ internal sealed class IpcServer : IDisposable
     private readonly Func<SafePipeHandle, string?> _refusal;
     private readonly CancellationTokenSource _cancel = new();
 
+    private const int WaitingInstances = 2;
+    private const int OpenAttempts = 3;
+
     private readonly object _firstGate = new();
     private NamedPipeServerStream? _first;
 
@@ -85,67 +88,80 @@ internal sealed class IpcServer : IDisposable
     }
 
     /// <summary>
-    /// Keeps an instance open at all times. A name with no instance can be created again by anyone, and this
-    /// shell's next instance would then join that pipe. So the next instance opens before the last one can close.
+    /// Keeps two instances waiting. One client taking an instance then leaves another free, even while this loop
+    /// waits for a thread and has not seen that connection yet. A name with no instance can be created again by
+    /// anyone, and this shell's next instance would then join that pipe. So a replacement waits before a connected
+    /// instance is handed off, and the loop stops rather than open an instance after it has none left.
     /// </summary>
     private async Task AcceptLoop()
     {
-        NamedPipeServerStream? listening;
+        var waiting = new Dictionary<Task, NamedPipeServerStream>();
+        NamedPipeServerStream? first;
         lock (_firstGate)
         {
-            listening = _first;
+            first = _first;
             _first = null;
         }
         try
         {
-            while (!_cancel.IsCancellationRequested)
+            if (first is null || !StartWaiting(first, waiting))
+                return;
+            OpenInstances(waiting);
+            while (waiting.Count > 0)
             {
-                try
+                var finished = await Task.WhenAny(waiting.Keys).ConfigureAwait(false);
+                waiting.Remove(finished, out var stream);
+                if (_cancel.IsCancellationRequested)
                 {
-                    listening ??= Create(_pipe, first: false);
-                    await listening.WaitForConnectionAsync(_cancel.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
+                    stream!.Dispose();
                     return;
                 }
-                catch (IOException)
-                {
-                    var failed = listening;
-                    listening = OpenNextOrNull();
-                    failed?.Dispose();
-                    try
-                    {
-                        await Task.Delay(100, _cancel.Token).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
-                    }
-                    continue;
-                }
-                var connected = listening;
-                // A refused or quick client closes its instance at once, so the next one opens first.
-                listening = OpenNextOrNull();
-                _ = Task.Run(() => Serve(connected));
+                OpenInstances(waiting);
+                if (finished.IsCompletedSuccessfully)
+                    _ = Task.Run(() => Serve(stream!));
+                else
+                    stream!.Dispose();
             }
+            Log.Default.Error("ipc", "The control pipe has no instance left, so commands can't reach this shell.");
         }
         finally
         {
-            listening?.Dispose();
+            foreach (var stream in waiting.Values)
+                stream.Dispose();
         }
     }
 
-    private NamedPipeServerStream? OpenNextOrNull()
+    /// <summary>Opens instances until two wait. What still fails here is tried again after the next connection.</summary>
+    private void OpenInstances(Dictionary<Task, NamedPipeServerStream> waiting)
+    {
+        var failures = 0;
+        while (waiting.Count < WaitingInstances && failures < OpenAttempts)
+        {
+            try
+            {
+                if (!StartWaiting(Create(_pipe, first: false), waiting))
+                    failures++;
+            }
+            catch (IOException e)
+            {
+                failures++;
+                Log.Default.Warn("ipc", $"Could not open the next control pipe instance: {e.Message}");
+            }
+        }
+    }
+
+    private bool StartWaiting(NamedPipeServerStream stream, Dictionary<Task, NamedPipeServerStream> waiting)
     {
         try
         {
-            return Create(_pipe, first: false);
+            waiting.Add(stream.WaitForConnectionAsync(_cancel.Token), stream);
+            return true;
         }
         catch (IOException e)
         {
-            Log.Default.Warn("ipc", $"Could not open the next control pipe instance: {e.Message}");
-            return null;
+            Log.Default.Warn("ipc", $"Could not wait on a control pipe instance: {e.Message}");
+            stream.Dispose();
+            return false;
         }
     }
 
