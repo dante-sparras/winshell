@@ -52,9 +52,16 @@ Item {
     return (tasks || []).find(t => t.key === key) ?? null
   }
 
-  // The window of each app used last, so a click on an app in the background brings back the one you had.
+  // The window of each app used last, so a click on an app in the background brings back the one you had. A window
+  // that closes is dropped, so the map never keeps it.
   property var lastUsed: ({})
   onActiveWindowChanged: if (activeWindow) lastUsed[Tasks.windowKey(activeWindow, find)] = activeWindow
+  onWindowsChanged: {
+    for (const key of Object.keys(lastUsed)) {
+      if (windows.indexOf(lastUsed[key]) < 0)
+        delete lastUsed[key]
+    }
+  }
 
   function launch(task) {
     if (task.entry)
