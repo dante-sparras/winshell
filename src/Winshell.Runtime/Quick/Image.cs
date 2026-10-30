@@ -26,12 +26,7 @@ public static class ImageLoader
     public static string? LocalPath(string source, string? baseDirectory)
     {
         if (source.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-        {
-            var path = Uri.UnescapeDataString(source[7..]);
-            if (path.Length >= 3 && path[0] == '/' && path[2] == ':')
-                path = path[1..];
-            return path;
-        }
+            return Uri.TryCreate(source, UriKind.Absolute, out var uri) ? uri.LocalPath : null;
         if (source.Contains("://", StringComparison.Ordinal) || source.StartsWith("data:", StringComparison.Ordinal))
             return null;
         if (source.StartsWith("qrc:", StringComparison.Ordinal))
