@@ -75,17 +75,21 @@ Scope {
         width: 0
         height: 0
 
-        function publish() {
-          osd.brightnessScreenId = host.screenIdFor(modelData)
-          osd.brightnessMinimum = modelData.minimum
-          osd.brightnessMaximum = modelData.maximum
-          // The level is written before the source is known, so the first reading is the baseline.
-          osd.brightness = level
-          osd.brightnessKnown = true
+        // A monitor's first reading is its baseline; each change after that shows on its screen. The binding fills in
+        // level before the delegate completes, and that is not a change.
+        property bool baselined: false
+        function publish(changed) {
+          osd.publishBrightness(host.screenIdFor(modelData), modelData.minimum, modelData.maximum, level, changed)
         }
 
-        Component.onCompleted: publish()
-        onLevelChanged: publish()
+        Component.onCompleted: {
+          publish(false)
+          baselined = true
+        }
+        onLevelChanged: {
+          if (baselined)
+            publish(true)
+        }
       }
     }
   }

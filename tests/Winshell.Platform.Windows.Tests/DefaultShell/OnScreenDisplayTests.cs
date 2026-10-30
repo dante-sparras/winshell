@@ -310,6 +310,37 @@ public class OnScreenDisplayTests
     }
 
     [Fact]
+    public void Each_monitor_shows_its_own_change_even_at_the_level_another_one_has()
+    {
+        var services = new FakeServices();
+        var first = new FakeBrightnessMonitor(BrightnessConnection.External, 0, 100, "DISPLAY1", "Monitor A") { Brightness = 30 };
+        var second = new FakeBrightnessMonitor(BrightnessConnection.Internal, 0, 100, "DISPLAY2", "Monitor B") { Brightness = 70 };
+        services.Brightness.Monitors.Add(first);
+        services.Brightness.Monitors.Add(second);
+        using var shell = Flyout.Services(services);
+        shell.SettleBaseline();
+        Assert.False(shell.Window.Visible);
+
+        second.Brightness = 55;
+        shell.Layout();
+        Assert.Equal("Brightness 55 percent", shell.Text("announcement"));
+        Assert.Equal("2", shell.Panel.Screen!.Id);
+
+        shell.Hide();
+        first.Brightness = 55;
+        shell.Layout();
+        Assert.True(shell.Window.Visible);
+        Assert.Equal("Brightness 55 percent", shell.Text("announcement"));
+        Assert.Equal("1", shell.Panel.Screen!.Id);
+
+        // A third monitor that appears is a baseline, not a change.
+        shell.Hide();
+        services.Brightness.Monitors.Add(new FakeBrightnessMonitor(BrightnessConnection.External, 0, 100, "DISPLAY2", "Monitor C") { Brightness = 10 });
+        shell.Layout();
+        Assert.False(shell.Window.Visible);
+    }
+
+    [Fact]
     public void A_playing_session_shows_the_track_and_its_controls_call_the_session()
     {
         var services = new FakeServices();
