@@ -594,6 +594,12 @@ internal static partial class Win32
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmFlush();
 
+    [LibraryImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+    public static partial uint TimeBeginPeriod(uint period);
+
+    [LibraryImport("winmm.dll", EntryPoint = "timeEndPeriod")]
+    public static partial uint TimeEndPeriod(uint period);
+
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint GetModuleHandleW(string? name);
 

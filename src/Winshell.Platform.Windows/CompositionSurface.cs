@@ -61,6 +61,7 @@ internal sealed class CompositionSurface : IDisposable
     private readonly IDCompositionVisual _visual;
     private IDXGISwapChain1? _swapChain;
     private SKBitmap? _bitmap;
+    private SKSurface? _canvas;
     private int _width;
     private int _height;
 
@@ -101,20 +102,23 @@ internal sealed class CompositionSurface : IDisposable
             _width = width;
             _height = height;
         }
-        if (_bitmap is null || _bitmap.Width != width || _bitmap.Height != height)
+        if (_bitmap is null || _canvas is null || _bitmap.Width != width || _bitmap.Height != height)
         {
+            _canvas?.Dispose();
+            _canvas = null;
             _bitmap?.Dispose();
             _bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            _canvas = SKSurface.Create(_bitmap.Info, _bitmap.GetPixels(), _bitmap.RowBytes)
+                ?? throw new InvalidOperationException("Skia could not draw into the window bitmap.");
         }
-        using (var pixmap = new SKPixmap(_bitmap.Info, _bitmap.GetPixels(), _bitmap.RowBytes))
-        using (var surface = SKSurface.Create(pixmap))
-        {
-            var canvas = surface.Canvas;
-            canvas.Clear(SKColors.Transparent);
-            paint(canvas);
-            canvas.Flush();
-        }
+        var canvas = _canvas.Canvas;
+        canvas.Clear(SKColors.Transparent);
+        paint(canvas);
+        canvas.Flush();
         using var buffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
+        // The scene reports no dirty rectangle, so each frame uploads the whole bitmap.
+        // Present(0) does not wait on vblank: an occluded or hidden window still draws, and Present(1) would stall it.
+        // The loop paces a requested frame with DwmFlush instead.
         _gpu.Context.UpdateSubresource(buffer, 0, null, _bitmap.GetPixels(), (uint)_bitmap.RowBytes, 0);
         _swapChain.Present(0, PresentFlags.None);
         if (created)
@@ -134,12 +138,16 @@ internal sealed class CompositionSurface : IDisposable
         _gpu.Composition.Commit();
         _swapChain.Dispose();
         _swapChain = null;
+        // The surface draws into the bitmap's pixels, so it goes first.
+        _canvas?.Dispose();
+        _canvas = null;
         _bitmap?.Dispose();
         _bitmap = null;
     }
 
     public void Dispose()
     {
+        _canvas?.Dispose();
         _bitmap?.Dispose();
         _swapChain?.Dispose();
         _visual.Dispose();
