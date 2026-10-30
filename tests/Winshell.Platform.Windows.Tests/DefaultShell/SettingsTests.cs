@@ -235,6 +235,15 @@ public class SettingsTests
     }
 
     [Fact]
+    public void Open_warns_about_a_name_that_is_no_page_or_setting()
+    {
+        using var shell = Open();
+        shell.Engine.Js.CallFunction(shell.Root.GetFunction("open")!, shell.Engine.Js.Wrap(shell.Root), ["taskbr"]);
+        shell.Settle();
+        Assert.Contains(shell.Messages, m => m.StartsWith("Warn", StringComparison.Ordinal) && m.Contains("no page or setting named \"taskbr\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Choices_are_saved_to_preferences_toml_and_a_saved_file_is_read_back()
     {
         var saved = Theme.Current;
