@@ -75,13 +75,21 @@ Scope {
         width: 0
         height: 0
 
-        // A monitor's first reading is its baseline; each change after that shows on its screen.
+        // A monitor's first reading is its baseline; each change after that shows on its screen. The binding fills in
+        // level before the delegate completes, and that is not a change.
+        property bool baselined: false
         function publish(changed) {
           osd.publishBrightness(host.screenIdFor(modelData), modelData.minimum, modelData.maximum, level, changed)
         }
 
-        Component.onCompleted: publish(false)
-        onLevelChanged: publish(true)
+        Component.onCompleted: {
+          publish(false)
+          baselined = true
+        }
+        onLevelChanged: {
+          if (baselined)
+            publish(true)
+        }
       }
     }
   }
