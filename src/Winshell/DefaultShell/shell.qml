@@ -8,8 +8,8 @@ import QtQuick
 ShellRoot {
   id: shell
 
-  // The screen at the desktop's origin, where Windows puts its main display, for a taskbar on that one only.
-  readonly property var mainScreen: Shell.screens.find(s => s.x === 0 && s.y === 0) ?? Shell.screens[0] ?? null
+  // The primary screen, which Shell.screens lists first, for a taskbar on that one only.
+  readonly property var mainScreen: Shell.screens[0] ?? null
 
   function toggleStart() {
     var list = bars.instances
@@ -19,8 +19,7 @@ ShellRoot {
         return
       }
     }
-    if (list.length > 0)
-      list[0].openLauncher()
+    mainTaskbar()?.openLauncher()
   }
 
   // One Windows key for the shell. A second Hotkey on the same sequence would be taken.

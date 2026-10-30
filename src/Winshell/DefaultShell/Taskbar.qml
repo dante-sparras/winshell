@@ -36,6 +36,7 @@ PanelWindow {
   property Component trayArea: Component { TrayArea { window: root } }
   property Component clockArea: Component { TaskbarClock { notificationListener: root.notificationListener } }
 
+  // Windows puts the primary screen, the first of Shell.screens, at the desktop's origin.
   readonly property bool isMainScreen: screen !== null && screen.x === 0 && screen.y === 0
   readonly property alias startButton: start
   // Where Start sits along the taskbar, for a popup window that opens from it.
