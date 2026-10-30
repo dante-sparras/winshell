@@ -58,6 +58,24 @@ jobs:
           path: ${{ runner.temp }}/snapshot-diffs/*.png
           if-no-files-found: ignore
 
+  media:
+    # Runners often don't publish Windows media sessions. A failed test shows in this job's log and blocks nothing.
+    # continue-on-error is on the step, so the failure doesn't put a red check on every pull request.
+    name: media
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Media session test
+        continue-on-error: true
+        shell: pwsh
+        run: dotnet test .\tests\Winshell.Platform.Windows.Tests --nologo --filter 'Category=Media'
+
   installer:
     name: installer
     runs-on: windows-2025

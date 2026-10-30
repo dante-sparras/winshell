@@ -10,7 +10,9 @@ namespace Winshell.Platform.Windows.Tests;
 
 /// <summary>
 /// Creates one system media session in this process, reads its metadata, artwork, and controls, then closes it.
+/// CI runners often don't publish media sessions, so this runs in the media job, which can't block a merge.
 /// </summary>
+[Trait("Category", "Media")]
 public sealed class MediaTests : IDisposable
 {
     private readonly string _title = "Winshell probe " + Guid.NewGuid().ToString("N");

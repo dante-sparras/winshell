@@ -4,6 +4,8 @@
 # The QML parser corpus parses every prefix of the shipped files, so it runs alone. Next to the UI tests it
 # starves them.
 # The performance budgets run last and alone, so no other test competes with them for the CPU.
+# The media session test needs Windows to publish a session, which CI runners often don't, so the media job in ci.yml
+# runs it instead.
 # This is the check CI runs. When Pester 5.6.1 is installed it also runs the three Pester suites.
 # See docs/development.md.
 $ErrorActionPreference = 'Stop'
@@ -17,7 +19,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     dotnet docfx .\docs\docfx.json --warningsAsErrors --logLevel warning
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    dotnet test .\winshell.slnx --no-build --nologo --filter 'Category!=Performance&Category!=Leak&Category!=Corpus'
+    dotnet test .\winshell.slnx --no-build --nologo --filter 'Category!=Performance&Category!=Leak&Category!=Corpus&Category!=Media'
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     dotnet test .\winshell.slnx --no-build --nologo --filter 'Category=Leak'
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
