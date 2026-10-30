@@ -21,6 +21,19 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the required `ci` job. The [commands](docs/development.md#commands) list the other jobs (`installer`, `links`, `actionlint`, `zizmor`, `package`) and how to run each one locally. Run the ones your change can break.
 
+## Flaky tests
+
+The `ci` job runs a failed test once more. A failed test that passes on that rerun is flaky:
+
+- The job passes, and shows a warning naming the test.
+- The `flaky-report` job files an issue labeled `flaky`, or comments on the one already open for that test.
+
+A test that fails twice fails the job. So does a test run that crashed, and more than 10 failed tests, which are not rerun.
+
+To quarantine a flaky test while its cause is found, add its fully qualified name to [`tests/quarantine.txt`](tests/quarantine.txt) in a PR, and link the `flaky` issue. `ci` then leaves it out, and the `quarantine` job runs it without blocking a merge. Remove the line in the PR that fixes the test. Quarantine covers the main test stage, not the leak, corpus or performance tests.
+
+Don't skip or delete a flaky test to get a PR green.
+
 ## Open a PR
 
 ### Branch name

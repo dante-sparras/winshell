@@ -19,6 +19,8 @@ jobs:
     name: ci
     runs-on: windows-2025
     timeout-minutes: 30
+    outputs:
+      flaky: ${{ steps.flaky.outputs.flaky }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,12 +32,28 @@ jobs:
       - name: Check
         shell: pwsh
         env:
+          WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
           WINSHELL_NOTIFICATION_EVIDENCE: ${{ runner.temp }}/notification-evidence
           WINSHELL_SETTINGS_EVIDENCE: ${{ runner.temp }}/settings-evidence
           WINSHELL_SNAPSHOT_DIFFS: ${{ runner.temp }}/snapshot-diffs
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
           pwsh scripts/check.ps1
+      - name: Flaky tests
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flaky-tests
+          path: ${{ runner.temp }}/flaky-tests.txt
+          if-no-files-found: ignore
+      - name: Flag flaky tests
+        id: flaky
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
+            'flaky=true' >> $env:GITHUB_OUTPUT
+          }
       - name: Notification surface evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -57,6 +75,52 @@ jobs:
           name: snapshot-diffs
           path: ${{ runner.temp }}/snapshot-diffs/*.png
           if-no-files-found: ignore
+
+  flaky-report:
+    # Files or updates an issue for each test that passed only on its rerun. It is a separate job so that ci, which
+    # runs the code under test, gets no write token. A fork's token can't write, so a failure here blocks nothing.
+    name: flaky-report
+    needs: ci
+    if: always() && needs.ci.outputs.flaky == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+      issues: write # files and comments on the flaky issues
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: flaky-tests
+          path: ${{ runner.temp }}/flaky-tests
+      - name: Report
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: pwsh scripts/report-flaky.ps1 -ReportPath (Join-Path $env:RUNNER_TEMP 'flaky-tests/flaky-tests.txt') -RunUrl $env:RUN_URL
+
+  quarantine:
+    # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing. As in the media job,
+    # continue-on-error is on the step.
+    name: quarantine
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Quarantined tests
+        continue-on-error: true
+        shell: pwsh
+        run: pwsh scripts/run-tests.ps1 -Quarantined
 
   media:
     # Runners often don't publish Windows media sessions. A failed test shows in this job's log and blocks nothing.
@@ -130,6 +194,8 @@ jobs:
           Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/FlakyTests.Tests.ps1 -CI
           exit $LASTEXITCODE
       - name: Installer tests (Windows PowerShell 5.1)
         shell: powershell
