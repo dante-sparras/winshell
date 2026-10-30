@@ -160,14 +160,23 @@ public sealed class Scene : IItemHost
                 canvas.Scale((float)item.Scale);
             canvas.Translate(-ox, -oy);
         }
+        // Qt makes no delegate for a row out of sight, so a delegate wholly outside its clipping view draws nothing.
+        // An empty delegate still has a place, so it counts as one pixel there.
+        if (item.IsListDelegate && context.FocusRing != item && item.ParentItem?.ParentItem is ListView { Clip: true }
+            && canvas.QuickReject(SKRect.Create((float)Math.Max(item.Width, 1), (float)Math.Max(item.Height, 1))))
+        {
+            canvas.Restore();
+            return;
+        }
         var layered = item.Opacity < 1;
         if (layered)
         {
+            // The layer has no bounds: children, effects and focus rings draw outside the item. Skia keeps it to the clip.
             using var paint = new SKPaint { Color = new SKColor(255, 255, 255, (byte)Math.Round(item.Opacity * 255)) };
             canvas.SaveLayer(paint);
             context.LayerDepth++;
         }
-        if (item.Layer.Enabled && item.Layer.Effect is IItemEffect layerEffect)
+        if (item.CreatedLayer is { Enabled: true, Effect: IItemEffect layerEffect })
         {
             layerEffect.PaintWithEffect(item, canvas, context, () => PaintContent(item, canvas, context));
         }
@@ -202,8 +211,9 @@ public sealed class Scene : IItemHost
                 canvas.ClipRect(SKRect.Create(0, 0, (float)item.Width, (float)item.Height));
             }
         }
-        foreach (var child in item.PaintOrder)
-            PaintItem(child, canvas, context);
+        var order = item.PaintOrder;
+        for (var i = 0; i < order.Count; i++)
+            PaintItem(order[i], canvas, context);
         if (item is IPaintOverChildren over)
             over.PaintOver(canvas, context);
         if (clipped)
@@ -277,8 +287,9 @@ public sealed class Scene : IItemHost
         var (lx, ly) = FromParent(item, x, y);
         if (item.Clip && !(lx >= 0 && ly >= 0 && lx < item.Width && ly < item.Height))
             return;
-        foreach (var child in item.PaintOrder.Reverse())
-            ItemsAt(child, lx, ly, result);
+        var order = item.PaintOrder;
+        for (var i = order.Count - 1; i >= 0; i--)
+            ItemsAt(order[i], lx, ly, result);
         if (item.HitTest(lx, ly))
             result.Add((item, lx, ly));
     }
@@ -289,8 +300,9 @@ public sealed class Scene : IItemHost
         using (DependencyTracker.Suspend())
         {
             // The root is the window itself; its own coordinates are the scene's.
-            foreach (var child in Root.PaintOrder.Reverse())
-                ItemsAt(child, x, y, list);
+            var order = Root.PaintOrder;
+            for (var i = order.Count - 1; i >= 0; i--)
+                ItemsAt(order[i], x, y, list);
             if (Root.Enabled && Root.HitTest(x, y))
                 list.Add((Root, x, y));
         }
@@ -602,9 +614,10 @@ public sealed class Scene : IItemHost
         if (item.Clip && !(lx >= 0 && ly >= 0 && lx < item.Width && ly < item.Height))
             return false;
         var accepted = false;
-        foreach (var child in item.PaintOrder.Reverse())
+        var order = item.PaintOrder;
+        for (var i = order.Count - 1; i >= 0; i--)
         {
-            if (CollectHover(child, lx, ly, result))
+            if (CollectHover(order[i], lx, ly, result))
             {
                 accepted = true;
                 break;

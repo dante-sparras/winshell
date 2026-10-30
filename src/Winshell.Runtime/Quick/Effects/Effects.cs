@@ -43,8 +43,9 @@ public static class EffectSource
                 canvas.ClipRect(SKRect.Create(0, 0, (float)item.Width, (float)item.Height));
             }
         }
-        foreach (var child in item.PaintOrder)
-            Scene.PaintItem(child, canvas, context);
+        var order = item.PaintOrder;
+        for (var i = 0; i < order.Count; i++)
+            Scene.PaintItem(order[i], canvas, context);
         if (item is IPaintOverChildren over)
             over.PaintOver(canvas, context);
         if (clipped)
@@ -156,7 +157,7 @@ public abstract class EffectItem : Item, IItemEffect
         if (Width <= 0 || Height <= 0)
             return;
         // A source that has this effect as its layer effect would draw itself twice.
-        if (_source is { } s && s.Layer.Enabled && s.Layer.Effect == this)
+        if (_source?.CreatedLayer is { Enabled: true } layer && layer.Effect == this)
             return;
         using var picture = EffectSource.Record(_source, context);
         if (picture is null && NeedsSource)

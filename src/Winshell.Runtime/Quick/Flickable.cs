@@ -792,6 +792,7 @@ public sealed class ListView : Flickable, IPolishable
             o.SetOwner(this);
             if (o is Item item)
             {
+                item.IsListDelegate = true;
                 item.SetParentItem(ContentItem);
                 item.AddObserver("width", _watcher);
                 item.AddObserver("height", _watcher);
