@@ -362,6 +362,55 @@ public class TaskbarTests
     }
 
     [Fact]
+    public void A_preview_close_button_turns_Windows_close_red_with_a_white_glyph_under_the_pointer()
+    {
+        var saved = Theme.Current;
+        try
+        {
+            foreach (var dark in new[] { false, true })
+            {
+                Theme.Current = Theme.Default(dark);
+                var (fill, glyph) = HoveredClose();
+                Assert.Equal(QColor.Parse("#c42b1c"), fill);
+                Assert.Equal(QColor.Parse("#ffffff"), glyph);
+            }
+
+            // A contrast theme marks it with the highlight, as it does every other control.
+            var colors = Theme.Default(false).System with { Highlight = QColor.Parse("#903909"), HighlightText = QColor.Parse("#fff5e3") };
+            Theme.Current = Theme.Default(false) with { System = colors, IsHighContrast = true };
+            Assert.Equal((colors.Highlight, colors.HighlightText), HoveredClose());
+        }
+        finally
+        {
+            Theme.Current = saved;
+        }
+    }
+
+    private static (object? Fill, object? Glyph) HoveredClose()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Tasks, width: 600, height: 48, services: desk.Services);
+        var preview = Popup(shell, "preview");
+        Hover(shell, Button(shell, "window:tool"));
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(preview.Visible);
+        preview.OnResized(preview.ImplicitWidth, preview.ImplicitHeight, 1);
+        shell.Settle();
+        var card = DefaultShellHarness.FindAll(preview.Scene.Root).Single(i => i.ObjectName == "preview:Tool - untitled");
+        var p = card.MapToScene(card.Width / 2, card.Height / 2);
+        preview.Scene.PointerMove(p.X, p.Y);
+        shell.Settle();
+        var close = DefaultShellHarness.FindAll(card).Single(i => i.ObjectName == "previewClose");
+        var fill = DefaultShellHarness.FindAll(close).Single(i => i.ObjectName == "previewCloseFill");
+        var glyph = DefaultShellHarness.FindAll(close).Single(i => i.ObjectName == "previewCloseGlyph");
+        Assert.Equal(0, ((QColor)fill.ReadProperty("color")!).A);
+        p = close.MapToScene(close.Width / 2, close.Height / 2);
+        preview.Scene.PointerMove(p.X, p.Y);
+        shell.Settle();
+        return (fill.ReadProperty("color"), glyph.ReadProperty("color"));
+    }
+
+    [Fact]
     public void A_window_that_wants_attention_marks_its_button_until_it_is_activated()
     {
         var desk = new Desk();
