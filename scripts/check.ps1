@@ -7,7 +7,7 @@
 # The media session test needs Windows to publish a session, which CI runners often don't, so the media job in ci.yml
 # runs it instead.
 # run-tests.ps1 runs the main stage: it leaves out tests/quarantine.txt and reruns a failed test once.
-# This is the check CI runs. When Pester 5.6.1 is installed it also runs the four Pester suites.
+# This is the check CI runs. When Pester 5.6.1 is installed it also runs the five Pester suites.
 # See docs/development.md.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -30,12 +30,12 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $pester = @(Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -eq [version]'5.6.1' })
     if ($pester.Count -eq 0) {
-        Write-Host 'Pester 5.6.1 is not installed, so Install.Tests.ps1, Uninstall.Tests.ps1, PublishRelease.Tests.ps1 and FlakyTests.Tests.ps1 were skipped.'
+        Write-Host 'Pester 5.6.1 is not installed, so Install.Tests.ps1, Uninstall.Tests.ps1, PublishRelease.Tests.ps1, FlakyTests.Tests.ps1 and StressTests.Tests.ps1 were skipped.'
         exit 0
     }
     Import-Module Pester -RequiredVersion 5.6.1
     # -CI would write testResults.xml into the checkout, so the result is checked here instead.
-    $result = Invoke-Pester -Path 'scripts\Install.Tests.ps1', 'scripts\Uninstall.Tests.ps1', 'scripts\PublishRelease.Tests.ps1', 'scripts\FlakyTests.Tests.ps1' -PassThru
+    $result = Invoke-Pester -Path 'scripts\Install.Tests.ps1', 'scripts\Uninstall.Tests.ps1', 'scripts\PublishRelease.Tests.ps1', 'scripts\FlakyTests.Tests.ps1', 'scripts\StressTests.Tests.ps1' -PassThru
     if ($result.Result -ne 'Passed') { exit 1 }
 }
 finally {

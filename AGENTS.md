@@ -8,7 +8,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
 - xUnit for `tests/`.
-- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`. `scripts/run-tests.ps1` and `scripts/report-flaky.ps1` run on PowerShell 7, and `scripts/FlakyTests.Tests.ps1` tests them with mocks.
+- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`. `scripts/run-tests.ps1` and `scripts/report-flaky.ps1` run on PowerShell 7, and `scripts/FlakyTests.Tests.ps1` tests them with mocks. `scripts/stress-tests.ps1` runs on PowerShell 7, and `scripts/StressTests.Tests.ps1` tests it.
 
 ## Project Structure
 
@@ -48,6 +48,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── report-flaky.ps1             # Files or updates a flaky issue for each test in a report
 │   ├── run-tests.ps1                # The main test stage: quarantine list, then one rerun of failed tests
 │   ├── FlakyTests.Tests.ps1         # Pester tests for those two scripts
+│   ├── stress-tests.ps1             # Runs the tests a pull request adds or changes 30 times under load
+│   ├── StressTests.Tests.ps1        # Pester tests for that script
 │   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
 ├── src/
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
@@ -70,7 +72,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1` and `FlakyTests.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`.
+- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1` and `StressTests.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.

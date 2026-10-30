@@ -21,6 +21,15 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the required `ci` job. The [commands](docs/development.md#commands) list the other jobs (`installer`, `links`, `actionlint`, `zizmor`, `package`) and how to run each one locally. Run the ones your change can break.
 
+## Write tests that don't flake
+
+A test waits on a real signal: an event, a task's completion, or a fake clock.
+
+- **No sleeps or fixed timeouts as a way to wait.** A timeout can stop a test that hung, but a passing test must never depend on how long something took.
+- **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
+
+On a pull request, the `ci` job runs each test you added or changed 30 times with every core busy, and one failure fails the job. It looks at the test's own lines, so a change to a helper, or to the code under test, doesn't stress the tests that use it. `pwsh scripts/stress-tests.ps1 -Base origin/main` does the same [locally](docs/development.md#commands).
+
 ## Flaky tests
 
 The `ci` job runs a failed test once more. A failed test that passes on that rerun is flaky:
