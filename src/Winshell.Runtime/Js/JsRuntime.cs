@@ -129,6 +129,20 @@ public sealed class JsRuntime
     /// <summary>Stops tracking an object whose wrapper was already dropped, so a destroyed delegate can be collected.</summary>
     internal void ForgetWrapped(QObject o) => _wrapped.Remove(o);
 
+    private readonly Dictionary<string, JsValue> _documentQt = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The <c>Qt</c> that code written in the context's file sees, so a relative URL resolves next to that file.</summary>
+    internal JsValue QtFor(ComponentContext context)
+    {
+        var qt = Engine.Global.Get("Qt");
+        var file = context.Imports?.Document.File;
+        if (string.IsNullOrEmpty(file) || qt is not ObjectInstance global)
+            return qt;
+        if (!_documentQt.TryGetValue(file, out var documentQt))
+            _documentQt[file] = documentQt = Globals.MakeDocumentQt(this, _qml, global, file);
+        return documentQt;
+    }
+
     [ThreadStatic]
     private static Stack<QObject?>? _scopeStack;
 
