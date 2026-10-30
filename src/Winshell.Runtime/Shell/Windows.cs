@@ -11,7 +11,7 @@ namespace Winshell.Runtime.Shell;
 [QmlSignal("closed")]
 [QmlSignal("resourcesLost")]
 [QmlSignal("windowConnected")]
-public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, IPropertyObserver
+public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 {
     private double _implicitWidth = 100;
     private double _implicitHeight = 100;
@@ -251,17 +251,6 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition, 
     }
 
     // Lifetime
-
-    public override void ComponentComplete()
-    {
-        base.ComponentComplete();
-        foreach (var p in new[] { "implicitWidth", "implicitHeight" })
-            Scene.Root.AddObserver(p, this);
-    }
-
-    public void OnPropertyChanged(QObject sender, string property)
-    {
-    }
 
     protected override void OnReload(QObject? oldInstance)
     {
