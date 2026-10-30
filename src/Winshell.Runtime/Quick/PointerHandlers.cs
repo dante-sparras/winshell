@@ -164,6 +164,7 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
     private bool _pressed;
     private int _tapCount;
     private TimeSpan _lastTap;
+    private QPoint _lastTapPosition;
     private int _gesturePolicy;
     private double _longPressThreshold = 0.8;
     private IDisposable? _longPress;
@@ -248,9 +249,14 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
         if (item is null || _longPressed || !Contains(item, x, y))
             return;
         var now = Engine?.Loop.Now ?? TimeSpan.Zero;
-        var interval = TimeSpan.FromMilliseconds(500);
-        _tapCount = now - _lastTap < interval ? _tapCount + 1 : 1;
+        var position = item.MapToScene(x, y);
+        var theme = Theme.Current;
+        var again = now - _lastTap < TimeSpan.FromMilliseconds(theme.DoubleClickTime)
+            && Math.Abs(position.X - _lastTapPosition.X) <= theme.DoubleClickWidth / 2
+            && Math.Abs(position.Y - _lastTapPosition.Y) <= theme.DoubleClickHeight / 2;
+        _tapCount = again ? _tapCount + 1 : 1;
         _lastTap = now;
+        _lastTapPosition = position;
         NotifyChanged("tapCount");
         Emit("tapped", Point, _pressButton);
         if (_tapCount == 2)
@@ -328,7 +334,7 @@ public sealed class DragHandler : PointerHandler, IPointerTarget
 
     [Qml] public int YAxis { get; set; }
 
-    [Qml] public double DragThreshold { get; set; } = 4;
+    [Qml] public double DragThreshold { get; set; } = Theme.Current.DragThreshold;
 
     [Qml] public QPoint Translation => new(0, 0);
 

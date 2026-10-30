@@ -66,13 +66,29 @@ public readonly record struct Elevation(float Blur, float OffsetY, QColor Color)
 /// Fluent design tokens made from them. A token has the name of its WinUI 3 theme resource and the values of the
 /// Windows App SDK 1.8 <c>generic.xaml</c>. Animation effects follow Windows, and a contrast theme does not turn
 /// them off. <see cref="WheelScrollLines"/> is how many lines a wheel notch scrolls, or <see cref="WheelPageScroll"/>
-/// for a page, as the Windows mouse settings say. The text caret blinks every <see cref="CaretBlinkTime"/> milliseconds,
+/// for a page, as the Windows mouse settings say. <see cref="DragThreshold"/> is how far a press moves before it drags,
+/// and a second tap within <see cref="DoubleClickTime"/> milliseconds and inside a <see cref="DoubleClickWidth"/> by
+/// <see cref="DoubleClickHeight"/> rectangle centered on the first is a double tap, in logical pixels.
+/// The text caret blinks every <see cref="CaretBlinkTime"/> milliseconds,
 /// or not at all when it is <see cref="CaretNoBlink"/>, stops blinking after <see cref="CaretTimeout"/> milliseconds
 /// without input, and is <see cref="CaretWidth"/> logical pixels wide, as the Windows keyboard and text cursor settings say.
 /// The platform updates the theme when the user changes their Windows settings, and a shell can choose
 /// light or dark and its own accent on top (<see cref="Choose"/>).
 /// </summary>
-public sealed record Theme(bool IsDark, AccentColors Accents, SystemColors System, bool IsHighContrast = false, bool AnimationsEnabled = true, uint WheelScrollLines = 3, uint CaretBlinkTime = 530, uint CaretTimeout = 5000, double CaretWidth = 1)
+public sealed record Theme(
+    bool IsDark,
+    AccentColors Accents,
+    SystemColors System,
+    bool IsHighContrast = false,
+    bool AnimationsEnabled = true,
+    uint WheelScrollLines = 3,
+    uint CaretBlinkTime = 530,
+    uint CaretTimeout = 5000,
+    double CaretWidth = 1,
+    double DragThreshold = 4,
+    uint DoubleClickTime = 500,
+    double DoubleClickWidth = 4,
+    double DoubleClickHeight = 4)
 {
     /// <summary>The <see cref="WheelScrollLines"/> that scrolls a page a notch, Win32's <c>WHEEL_PAGESCROLL</c>.</summary>
     public const uint WheelPageScroll = uint.MaxValue;

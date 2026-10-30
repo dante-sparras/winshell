@@ -391,7 +391,7 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     {
         if (!_interactive)
             return false;
-        const double threshold = 10;
+        var threshold = Theme.Current.DragThreshold;
         return (CanScrollY && Math.Abs(sceneDy) > threshold && ContentHeightValue > Height)
             || (CanScrollX && Math.Abs(sceneDx) > threshold && ContentWidthValue > Width);
     }

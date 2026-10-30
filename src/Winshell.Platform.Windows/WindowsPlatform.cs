@@ -207,12 +207,18 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         catch (System.Security.SecurityException)
         {
         }
-        var theme = Theme.Default(dark) with { System = ReadSystemColors(), IsHighContrast = HighContrastOn(), WheelScrollLines = WheelScrollLines() };
-        theme = theme with
+        var theme = Theme.Default(dark) with
         {
+            System = ReadSystemColors(),
+            IsHighContrast = HighContrastOn(),
+            WheelScrollLines = WheelScrollLines(),
             CaretBlinkTime = Win32.GetCaretBlinkTime() is > 0 and var blink ? blink : 530,
             CaretTimeout = SystemParameter(Win32.SPI_GETCARETTIMEOUT, 5000),
             CaretWidth = SystemParameter(Win32.SPI_GETCARETWIDTH, 1),
+            DragThreshold = Math.Max(Metric(Win32.SM_CXDRAG, 4), Metric(Win32.SM_CYDRAG, 4)),
+            DoubleClickTime = Win32.GetDoubleClickTime() is > 0 and var time ? time : 500,
+            DoubleClickWidth = Metric(Win32.SM_CXDOUBLECLK, 4),
+            DoubleClickHeight = Metric(Win32.SM_CYDOUBLECLK, 4),
         };
         var animations = true;
         try
@@ -262,6 +268,10 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         uint value;
         return Win32.SystemParametersInfoW(action, 0, &value, 0) ? value : fallback;
     }
+
+    /// <summary>A system metric in logical pixels, or <paramref name="fallback"/> when Windows has none.</summary>
+    private static double Metric(int index, double fallback) =>
+        Win32.GetSystemMetricsForDpi(index, 96) is > 0 and var value ? value : fallback;
 
     private static SystemColors ReadSystemColors()
     {
