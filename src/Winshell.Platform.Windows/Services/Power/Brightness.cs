@@ -286,11 +286,8 @@ internal sealed class BrightnessWriter(Func<string, int, uint> write)
             if (!_running.Add(deviceName))
                 return;
         }
-        ServiceSupport.Run("power", () =>
-        {
-            Drain(deviceName);
-            return Task.CompletedTask;
-        });
+        // A thread of its own: a write blocks for hundreds of milliseconds, and it must not wait behind a busy pool.
+        new Thread(() => Drain(deviceName)) { IsBackground = true, Name = "Brightness write" }.Start();
     }
 
     private void Drain(string deviceName)
@@ -317,11 +314,13 @@ internal sealed class BrightnessWriter(Func<string, int, uint> write)
                     next.Failed(error);
             }
         }
-        catch
+#pragma warning disable CA1031 // A write that fails is reported. On this thread it would end the shell.
+        catch (Exception e)
+#pragma warning restore CA1031
         {
             lock (_lock)
                 _running.Remove(deviceName);
-            throw;
+            Log.Default.Warn("power", e.Message);
         }
     }
 }

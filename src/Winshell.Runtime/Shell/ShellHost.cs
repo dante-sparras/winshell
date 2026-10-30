@@ -58,7 +58,7 @@ public sealed class ShellHost : IShellHost, IDisposable
     private readonly Func<ModuleRegistry> _modules;
     private readonly Action<QmlEngine>? _configure;
     private readonly ShellSettings _settings = new();
-    private readonly List<FileSystemWatcher> _watchers = [];
+    private readonly List<DirectoryWatch> _watchers = [];
     private ScreenRegistry? _screens;
     private QmlEngine? _engine;
     private QObject? _root;
@@ -308,50 +308,26 @@ public sealed class ShellHost : IShellHost, IDisposable
 
     private void ArmDirectory(QmlEngine engine, string dir)
     {
-        FileSystemWatcher watcher;
-        try
+        DirectoryWatch? watch = null;
+        watch = DirectoryWatch.Start(dir, DirectoryWatch.FileChanges, name =>
         {
-            watcher = new FileSystemWatcher(dir)
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-                IncludeSubdirectories = false,
-            };
-        }
-        catch (Exception e) when (e is IOException or ArgumentException)
-        {
-            ArmParent(engine, dir);
-            return;
-        }
-        void OnChange(object? sender, FileSystemEventArgs e)
-        {
-            var ext = Path.GetExtension(e.FullPath);
-            if (!ext.Equals(".qml", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".js", StringComparison.OrdinalIgnoreCase)
-                && !Path.GetFileName(e.FullPath).Equals("qmldir", StringComparison.OrdinalIgnoreCase))
-                return;
-            _loop.Post(ScheduleReload);
-        }
-        watcher.Changed += OnChange;
-        watcher.Created += OnChange;
-        watcher.Renamed += (s, e) => OnChange(s, e);
-        // Deleting the folder itself does not arrive as a file event. When the folder is already gone, arm its parent.
-        watcher.Deleted += (s, e) =>
-        {
-            OnChange(s, e);
+            if (IsShellFile(name))
+                _loop.Post(ScheduleReload);
+            // Deleting the folder itself does not arrive as a file event. When the folder is already gone, arm its parent.
             if (!Directory.Exists(dir))
-                _loop.Post(() => RecoverWatch(engine, watcher));
-        };
-        watcher.Error += (_, _) => _loop.Post(() => RecoverWatch(engine, watcher));
-        try
-        {
-            watcher.EnableRaisingEvents = true;
-        }
-        catch (Exception e) when (e is IOException or ArgumentException)
-        {
-            watcher.Dispose();
+                _loop.Post(() => RecoverWatch(engine, watch!));
+        }, () => _loop.Post(() => RecoverWatch(engine, watch!)));
+        if (watch is null)
             ArmParent(engine, dir);
-            return;
-        }
-        _watchers.Add(watcher);
+        else
+            _watchers.Add(watch);
+    }
+
+    private static bool IsShellFile(string name)
+    {
+        var ext = Path.GetExtension(name);
+        return ext.Equals(".qml", StringComparison.OrdinalIgnoreCase) || ext.Equals(".js", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(name).Equals("qmldir", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -363,46 +339,23 @@ public sealed class ShellHost : IShellHost, IDisposable
         var parent = NearestExistingParent(dir);
         if (parent is null)
             return;
-        FileSystemWatcher watcher;
-        try
+        DirectoryWatch? watch = null;
+        watch = DirectoryWatch.Start(parent, DirectoryWatch.NameChanges, name =>
         {
-            watcher = new FileSystemWatcher(parent)
-            {
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                IncludeSubdirectories = false,
-            };
-        }
-        catch (Exception e) when (e is IOException or ArgumentException)
-        {
-            return;
-        }
-        void Appeared(object? _, FileSystemEventArgs e)
-        {
-            var changed = Path.GetFullPath(e.FullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var changed = Path.GetFullPath(Path.Combine(parent, name)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (dir.Equals(changed, StringComparison.OrdinalIgnoreCase)
                 || dir.StartsWith(changed + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                _loop.Post(() => RecoverWatch(engine, watcher));
-        }
-        watcher.Created += Appeared;
-        watcher.Renamed += (s, e) => Appeared(s, e);
-        watcher.Error += (_, _) => _loop.Post(() => RecoverWatch(engine, watcher));
-        try
-        {
-            watcher.EnableRaisingEvents = true;
-        }
-        catch (Exception e) when (e is IOException or ArgumentException)
-        {
-            watcher.Dispose();
-            return;
-        }
-        _watchers.Add(watcher);
+                _loop.Post(() => RecoverWatch(engine, watch!));
+        }, () => _loop.Post(() => RecoverWatch(engine, watch!)));
+        if (watch is not null)
+            _watchers.Add(watch);
     }
 
     /// <summary>
     /// Builds the watchers again after one dies. A folder that came back schedules a reload. A folder that is still
     /// missing keeps the parent watch and waits.
     /// </summary>
-    private void RecoverWatch(QmlEngine engine, FileSystemWatcher source)
+    private void RecoverWatch(QmlEngine engine, DirectoryWatch source)
     {
         if (_disposed || !_watchers.Contains(source))
             return;
