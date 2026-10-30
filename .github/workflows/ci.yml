@@ -250,6 +250,8 @@ jobs:
           Invoke-Pester -Path scripts/FlakyTests.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/StressTests.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE
       - name: Installer tests (Windows PowerShell 5.1)
         shell: powershell
@@ -259,4 +261,6 @@ jobs:
           Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE

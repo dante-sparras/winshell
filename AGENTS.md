@@ -42,6 +42,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── package.ps1                  # Builds the portable zips, winget manifests and Store package a release ships
 │   ├── publish-release.ps1          # Uploads the six release assets to a draft and publishes it after the hashes match
 │   ├── PublishRelease.Tests.ps1     # Pester tests for that publisher, with a mocked gh
+│   ├── ReleaseGate.ps1              # Decides whether a release may publish from the ci result on its commit
+│   ├── ReleaseGate.Tests.ps1        # Pester tests for that gate
 │   ├── uninstall.ps1                # Removes the per-user install; published on the release
 │   ├── Uninstall.Tests.ps1          # Pester tests for the uninstaller
 │   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs and winshell.ico
@@ -72,7 +74,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1` and `StressTests.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`. The ruleset also requires the `installer` job and `pr-title`.
+- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1`, `StressTests.Tests.ps1` and `ReleaseGate.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`. The ruleset also requires the `installer` job and `pr-title`.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.
