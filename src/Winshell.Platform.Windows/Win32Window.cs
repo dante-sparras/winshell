@@ -81,6 +81,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             }
             _surface = new CompositionSurface(Handle);
             _cursor = Win32.LoadCursorW(0, Win32.IDC_ARROW);
+            _client.Scene.FocusChanged += OnImeFocus;
+            UpdateIme(_client.Scene.FocusItem);
         }
         catch
         {
@@ -101,11 +103,27 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     public void Rebind(IWindowClient client)
     {
+        _client.Scene.FocusChanged -= OnImeFocus;
         _client = client;
+        _client.Scene.FocusChanged += OnImeFocus;
+        UpdateIme(_client.Scene.FocusItem);
         // A reload brings a new scene: its items are a new tree.
         _automation.Dispose();
         _automation = new WindowAutomation(this, client.Scene, _platform.Loop, _platform.Log);
         RequestFrame();
+    }
+
+    private void OnImeFocus(Item? item) => UpdateIme(item);
+
+    /// <summary>
+    /// The IME stays on only while an editable field shows what is typed. Anywhere else, keystrokes would become a
+    /// composition with nowhere to show it, and a password field would show the secret in the candidate window.
+    /// </summary>
+    private void UpdateIme(Item? item)
+    {
+        if (Handle == 0)
+            return;
+        ImeNative.SetEnabled(Handle, ImeSession.AcceptsComposition(item));
     }
 
     private (uint Style, uint ExStyle) Styles() => _kind switch
@@ -840,6 +858,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 }
             case Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN:
                 {
+                    // The IME already has this key. Forwarding it would also fire a shortcut.
+                    if ((int)wParam == ImeSession.VkProcessKey)
+                        return 0;
                     _ime.ClearPending();
                     var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers(), IsAutoRepeat = ((long)lParam & (1L << 30)) != 0, NativeScanCode = (int)(((long)lParam >> 16) & 0xff) };
                     if (scene.KeyPress(e))
@@ -853,6 +874,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 }
             case Win32.WM_KEYUP or Win32.WM_SYSKEYUP:
                 {
+                    if ((int)wParam == ImeSession.VkProcessKey)
+                        return 0;
                     var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers() };
                     scene.KeyRelease(e);
                     return msg == Win32.WM_SYSKEYUP ? null : 0;
@@ -1050,6 +1073,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             _renderAgain = false;
             return;
         }
+        _client.Scene.FocusChanged -= OnImeFocus;
         _platform.UpdatePopupGrab(this, false);
         RemoveAppBar();
         _automation.Dispose();

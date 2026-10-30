@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using Winshell.Platform.Windows.Native;
+using Winshell.Runtime.Quick;
 
 namespace Winshell.Platform.Windows;
 
@@ -35,6 +36,16 @@ internal sealed class ImeSession
     public const int ImnChangeCandidate = 3;
     public const int CfsPoint = 2;
     public const int CfsCandidatePos = 0x40;
+
+    /// <summary>The virtual key the IME uses while it is composing. It is not a shortcut.</summary>
+    public const int VkProcessKey = 0xE5;
+
+    /// <summary>
+    /// Whether the focused item should have an input context. A read-only field and a field that hides what is typed
+    /// stay off, so a composition string cannot show a password.
+    /// </summary>
+    public static bool AcceptsComposition(Item? item) =>
+        item is TextInput input && !input.ReadOnly && input.EchoMode == (int)TextInput.EchoModeValue.Normal;
 
     public bool Composing { get; private set; }
 
@@ -109,6 +120,22 @@ internal sealed class ImeSession
 /// <summary>IMM32 calls that place the candidate window and read the composition string.</summary>
 internal static class ImeNative
 {
+    /// <summary>Associates the window with the thread's default input context, or with none.</summary>
+    public static void SetEnabled(nint hwnd, bool enabled) =>
+        ImmAssociateContextEx(hwnd, 0, enabled ? IaceDefault : 0);
+
+    /// <summary>Whether the window has an input context. The context is released.</summary>
+    public static bool HasContext(nint hwnd)
+    {
+        var himc = ImmGetContext(hwnd);
+        if (himc == 0)
+            return false;
+        ImmReleaseContext(hwnd, himc);
+        return true;
+    }
+
+    private const uint IaceDefault = 0x0010;
+
     public static void Place(nint hwnd, int x, int y)
     {
         var himc = ImmGetContext(hwnd);
@@ -150,6 +177,10 @@ internal static class ImeNative
             ImmReleaseContext(hwnd, himc);
         }
     }
+
+    [DllImport("imm32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ImmAssociateContextEx(nint hwnd, nint himc, uint flags);
 
     [DllImport("imm32.dll")]
     private static extern nint ImmGetContext(nint hwnd);
