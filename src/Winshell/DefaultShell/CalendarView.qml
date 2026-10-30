@@ -111,10 +111,7 @@ ColumnLayout {
   CheckBox {
     text: "Week numbers"
     checked: root.showWeekNumbers
-    onToggled: {
-      root.showWeekNumbers = checked
-      Preferences.calendarWeekNumbers = checked
-    }
+    onToggled: Preferences.calendarWeekNumbers = checked
     onActiveFocusChanged: if (activeFocus && root.scrollView) root.scrollView.reveal(this)
   }
 }
