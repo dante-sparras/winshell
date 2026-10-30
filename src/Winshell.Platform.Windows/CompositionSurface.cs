@@ -138,6 +138,9 @@ internal sealed class CompositionSurface : IDisposable
         _gpu.Composition.Commit();
         _swapChain.Dispose();
         _swapChain = null;
+        // The surface draws into the bitmap's pixels, so it goes first.
+        _canvas?.Dispose();
+        _canvas = null;
         _bitmap?.Dispose();
         _bitmap = null;
     }
