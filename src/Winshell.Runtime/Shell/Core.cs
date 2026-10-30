@@ -543,7 +543,9 @@ public static class ProcessLauncher
             case ".cmd" or ".bat":
                 return (System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", ["/d", "/c", path, .. args]);
             case ".ps1":
-                return (Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-File", path, .. args]);
+                return (Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. args]);
+            case ".sh":
+                return (Which("bash") ?? Which("sh") ?? "bash", [path, .. args]);
         }
         return (path, args);
     }

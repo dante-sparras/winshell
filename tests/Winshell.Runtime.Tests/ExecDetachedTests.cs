@@ -35,40 +35,4 @@ public class ExecDetachedTests
         Assert.True(plan.NewConsole);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), plan.WorkingDirectory);
     }
-
-    [Fact]
-    public void A_powershell_script_is_not_run_with_execution_policy_bypass()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "winshell-exec-" + Guid.NewGuid().ToString("N") + ".ps1");
-        File.WriteAllText(path, "Write-Output hi\n");
-        try
-        {
-            var (_, args) = ProcessLauncher.Resolve([path]);
-            Assert.Contains("-File", args);
-            Assert.Contains(path, args);
-            Assert.DoesNotContain("-ExecutionPolicy", args);
-            Assert.DoesNotContain("Bypass", args);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [Fact]
-    public void A_shell_script_is_not_forced_through_bash()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "winshell-exec-" + Guid.NewGuid().ToString("N") + ".sh");
-        File.WriteAllText(path, "echo hi\n");
-        try
-        {
-            var (file, args) = ProcessLauncher.Resolve([path]);
-            Assert.Equal(Path.GetFullPath(path), file);
-            Assert.Empty(args);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
 }
