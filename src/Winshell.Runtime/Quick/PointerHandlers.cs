@@ -46,7 +46,7 @@ public abstract class PointerHandler : QObject
     private bool _enabled = true;
     private Item? _target;
     private int _acceptedButtons = QtEnums.LeftButton;
-    private int _acceptedModifiers = 0x7fffffff;
+    private int _acceptedModifiers;
     private int _cursorShape = -1;
     private double _margin;
 
@@ -106,6 +106,8 @@ public abstract class PointerHandler : QObject
 
     protected bool Contains(Item item, double x, double y) =>
         x >= -_margin && y >= -_margin && x < item.Width + _margin && y < item.Height + _margin;
+
+    internal bool AcceptsModifiers(int modifiers) => AcceptedModifiers == modifiers;
 }
 
 /// <summary>QtQuick's <c>HoverHandler</c>.</summary>
@@ -169,6 +171,8 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
     private double _longPressThreshold = 0.8;
     private IDisposable? _longPress;
     private bool _longPressed;
+    private bool _rejected;
+    private TimeSpan _heldSince;
 
     [QmlEnum]
     public enum GesturePolicyValue
@@ -192,7 +196,7 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
     public double LongPressThreshold { get { Track(); return _longPressThreshold; } set => SetField(ref _longPressThreshold, value); }
 
     [Qml]
-    public double TimeHeld => 0;
+    public double TimeHeld { get { Track(); return _pressed && Engine is not null ? (Engine.Loop.Now - _heldSince).TotalSeconds : 0; } }
 
     [Qml]
     public int ExclusiveSignals { get; set; }
@@ -212,11 +216,14 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
 
     public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
-        if (ParentItem is not { } item)
+        if (!AcceptsModifiers(modifiers) || ParentItem is not { } item)
             return false;
         Point.Set(x, y, item);
         Point.Press(x, y);
+        _rejected = false;
+        _heldSince = Engine?.Loop.Now ?? TimeSpan.Zero;
         SetPressed(true);
+        NotifyChanged("timeHeld");
         _longPressed = false;
         _pressButton = button;
         _longPress?.Dispose();
@@ -237,15 +244,37 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
 
     public void PointerMove(double x, double y, int buttons, int modifiers)
     {
-        if (ParentItem is { } item)
-            Point.Set(x, y, item);
+        if (_rejected || ParentItem is not { } item)
+            return;
+        Point.Set(x, y, item);
+        if (!_pressed)
+            return;
+        var dx = x - Point.PressPosition.X;
+        var dy = y - Point.PressPosition.Y;
+        var outside = !Contains(item, x, y);
+        var dragged = Math.Sqrt(dx * dx + dy * dy) >= Theme.Current.DragThreshold;
+        var reject = _gesturePolicy switch { 1 => outside, 2 => false, 3 => outside || dragged, _ => dragged };
+        if (reject)
+        {
+            _rejected = true;
+            _longPress?.Dispose();
+            SetPressed(false);
+            Emit("canceled", Point);
+        }
+        NotifyChanged("timeHeld");
     }
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
     {
         _longPress?.Dispose();
+        if (_rejected)
+        {
+            _rejected = false;
+            return;
+        }
         var item = ParentItem;
         SetPressed(false);
+        NotifyChanged("timeHeld");
         if (item is null || _longPressed || !Contains(item, x, y))
             return;
         var now = Engine?.Loop.Now ?? TimeSpan.Zero;
@@ -270,7 +299,9 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
     public void PointerCancel()
     {
         _longPress?.Dispose();
+        _rejected = false;
         SetPressed(false);
+        NotifyChanged("timeHeld");
         Emit("canceled", Point);
     }
 }
@@ -303,7 +334,7 @@ public sealed class WheelHandler : PointerHandler, IWheelTarget
 
     public bool Wheel(double x, double y, double angleX, double angleY, double pixelX, double pixelY, int buttons, int modifiers, bool inverted)
     {
-        if (!Enabled)
+        if (!Enabled || !AcceptsModifiers(modifiers))
             return false;
         // A wheel on the other axis is left for whatever is underneath.
         var horizontal = _orientation == 1;
@@ -329,6 +360,7 @@ public sealed class DragHandler : PointerHandler, IPointerTarget
 {
     private double _startX, _startY, _targetX, _targetY;
     private bool _dragging;
+    private QPoint _translation;
 
     [Qml] public int XAxis { get; set; }
 
@@ -336,18 +368,20 @@ public sealed class DragHandler : PointerHandler, IPointerTarget
 
     [Qml] public double DragThreshold { get; set; } = Theme.Current.DragThreshold;
 
-    [Qml] public QPoint Translation => new(0, 0);
+    [Qml] public QPoint Translation { get { Track(); return _translation; } }
 
     public bool AcceptsButton(int button) => Enabled && (AcceptedButtons & button) != 0;
 
     public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
-        if (Target is not { } t || ParentItem is not { } item)
+        if (!AcceptsModifiers(modifiers) || Target is not { } t || ParentItem is not { } item)
             return false;
         var scene = item.MapToScene(x, y);
         (_startX, _startY) = (scene.X, scene.Y);
         (_targetX, _targetY) = (t.X, t.Y);
         _dragging = false;
+        _translation = new QPoint(0, 0);
+        NotifyChanged("translation");
         return true;
     }
 
@@ -368,6 +402,8 @@ public sealed class DragHandler : PointerHandler, IPointerTarget
         }
         t.X = _targetX + dx;
         t.Y = _targetY + dy;
+        _translation = new QPoint(dx, dy);
+        NotifyChanged("translation");
     }
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
