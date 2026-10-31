@@ -26,6 +26,7 @@ public sealed unsafe class WindowThumbnail : Item
     private RECT _insets;
     private DWM_THUMBNAIL_PROPERTIES _applied;
     private QSize _sourceSize;
+    private bool _peek;
 
     /// <summary>The app window to preview, from <c>WindowList.windows</c>. Null shows nothing.</summary>
     [Qml]
@@ -42,8 +43,26 @@ public sealed unsafe class WindowThumbnail : Item
             _closed = value?.Connect("closed", _ => Window = null);
             NotifyChanged("window");
             Update();
+            UpdatePeek();
         }
     }
+
+    /// <summary>
+    /// While true, Windows shows this window at full size and hides the others, as its own peek does. It stays off
+    /// when the user turned peek off, and ends with this item or the window.
+    /// </summary>
+    [Qml]
+    public bool Peek
+    {
+        get { Track(); return _peek; }
+        set
+        {
+            if (SetField(ref _peek, value, nameof(Peek)))
+                UpdatePeek();
+        }
+    }
+
+    internal WindowPeek Peeker { get; init; } = WindowPeek.ForSystem();
 
     /// <summary>The previewed part of the window in physical pixels, or zero before the preview is first shown.</summary>
     [Qml] public QSize SourceSize { get { Track(); return _sourceSize; } }
@@ -61,7 +80,12 @@ public sealed unsafe class WindowThumbnail : Item
                 scene.Painted += OnPainted;
         }
         Update();
+        UpdatePeek();
     }
+
+    private nint HostWindow => ((Host?.WindowObject as ShellWindow)?.Backend as Win32Window)?.Handle ?? 0;
+
+    private void UpdatePeek() => Peeker.Show(_peek && _window is { } window ? window.Hwnd : 0, HostWindow);
 
     public override void Paint(SKCanvas canvas, PaintContext context)
     {
@@ -88,7 +112,7 @@ public sealed unsafe class WindowThumbnail : Item
 
     private void Show()
     {
-        var destination = ((Host?.WindowObject as ShellWindow)?.Backend as Win32Window)?.Handle ?? 0;
+        var destination = HostWindow;
         if (_window is not { } window || destination == 0)
         {
             Release();
@@ -160,6 +184,7 @@ public sealed unsafe class WindowThumbnail : Item
     {
         _closed?.Dispose();
         Release();
+        Peeker.End();
         if (_scene is not null)
             _scene.Painted -= OnPainted;
         _scene = null;
