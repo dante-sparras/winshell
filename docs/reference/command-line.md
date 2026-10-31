@@ -8,6 +8,8 @@ winshell                            print this help
 winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
+winshell reload [--hard] [instance options]
+                                    reload an instance's configuration
 winshell log [-f] [-t N]            print an instance's log
 winshell ipc show [-j]              list IPC targets
 winshell ipc call <target> <function> [args...]
@@ -40,7 +42,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 
 ## Pick an instance
 
-`kill`, `log` and `ipc` act on one running instance:
+`kill`, `reload`, `log` and `ipc` act on one running instance:
 
 | Option | Picks |
 | --- | --- |
@@ -55,6 +57,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | --- | --- |
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. The shape is under [JSON](#json). |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. |
+| `winshell reload` | Reloads an instance's configuration, then prints `Reloaded <id>`. If the configuration does not load, it prints why, exits with code 1, and the instance keeps running what it had. `--hard` does not hand the old objects to the new generation, as `Shell.reload(true)` does. |
 | `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. `-j`, `--json` prints that list as JSON. The shape is under [JSON](#json). |
 | `winshell ipc call <target> <function> [args...]` | Calls a function of an [`IpcHandler`](winshell-io.md#ipchandler) and prints what it returns. |
@@ -63,7 +66,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | `winshell ipc listen <target> <signal>` | Prints the first argument of each signal until you press Ctrl+C. |
 | `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. See [winshell doctor](../doctor.md). |
 
-`winshell msg` is the old name of `winshell ipc call`; it still works and says so. `winshell ipc call notice dismiss` closes Winshell's own notice for a configuration error or a window that failed. That notice is not an `IpcHandler`, so `ipc show` does not list it, and the call still works when the configuration failed to load. It takes no arguments. `winshell msg notice dismiss` is the same call. There is no command that reloads a running shell yet ([#134](https://github.com/dante-sparras/winshell/issues/134)); save a file, or call [`Shell.reload()`](winshell.md#shell) from an `IpcHandler`.
+`winshell msg` is the old name of `winshell ipc call`; it still works and says so. `winshell ipc call notice dismiss` closes Winshell's own notice for a configuration error or a window that failed. That notice is not an `IpcHandler`, so `ipc show` does not list it, and the call still works when the configuration failed to load. It takes no arguments. `winshell msg notice dismiss` is the same call.
 
 The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
 
@@ -134,7 +137,7 @@ A parameter has `name` and `type`. `type` is null when the signal's parameter wa
 
 `--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
 
-An unexpected failure of `list`, `kill`, `log`, `ipc` or `doctor` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
+An unexpected failure of `list`, `kill`, `reload`, `log`, `ipc` or `doctor` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
 
 ## Environment variables
 
