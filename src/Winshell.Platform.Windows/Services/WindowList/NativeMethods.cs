@@ -6,6 +6,9 @@ namespace Winshell.Platform.Windows.Services.WindowList;
 /// <summary>The Win32 calls that list, watch and drive other programs' windows.</summary>
 internal static unsafe partial class NativeMethods
 {
+    /// <summary>Whether the handle is a window. The import itself lives in <see cref="Win32"/>.</summary>
+    public static bool IsWindow(nint hwnd) => Win32.IsWindow(hwnd);
+
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint EVENT_SYSTEM_DESKTOPSWITCH = 0x0020;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
