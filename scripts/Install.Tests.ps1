@@ -394,6 +394,22 @@ Describe 'install' {
             $held.Dispose()
         }
     }
+
+    It 'leaves a bin.old link and what it points to alone' {
+        $ctx = Enter-WinshellInstallTest
+        $root = $ctx.Root
+        New-Item -ItemType Directory -Force -Path $root | Out-Null
+        $target = Join-Path $TestDrive 'not-the-install'
+        New-Item -ItemType Directory -Force -Path $target | Out-Null
+        [IO.File]::WriteAllText((Join-Path $target 'keep.txt'), 'keep', $script:Utf8)
+        $link = Join-Path $root 'bin.old-link'
+        New-Item -ItemType Junction -Path $link -Target $target | Out-Null
+
+        Remove-WinshellOldBin $root
+
+        Test-Path -LiteralPath $link | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
+    }
 }
 
 Describe 'script safety' {

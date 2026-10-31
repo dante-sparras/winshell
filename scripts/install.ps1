@@ -485,6 +485,8 @@ function Move-WinshellDirectory([string] $From, [string] $To) {
 
 function Remove-WinshellOldBin([string] $Parent) {
     foreach ($item in @(Get-ChildItem -LiteralPath $Parent -Force -Directory -Filter 'bin.old-*')) {
+        # The installer never leaves a link here, and a recursive delete could follow one out of the install.
+        if (Test-WinshellReparsePoint $item.FullName) { continue }
         try {
             Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
         } catch {
