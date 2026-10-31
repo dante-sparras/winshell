@@ -211,8 +211,6 @@ internal sealed class IpcServer : IDisposable
             var refusal = _refusal(stream.SafePipeHandle);
             if (refusal is not null)
                 Log.Default.Warn("ipc", $"Refused a control pipe client: {refusal}");
-            // One byte at a time: a larger read could take bytes from after the newline, and a listener
-            // uses those bytes to notice that the client has gone.
             var (line, tooLong) = await ReadRequest(stream, _cancel.Token).ConfigureAwait(false);
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
             if (tooLong)
@@ -404,16 +402,18 @@ internal sealed class IpcServer : IDisposable
             var count = 0;
             while (true)
             {
-                var n = await stream.ReadAsync(bytes.AsMemory(count, 1), cancel).ConfigureAwait(false);
+                var n = await stream.ReadAsync(bytes.AsMemory(count, MaxRequestBytes + 1 - count), cancel).ConfigureAwait(false);
                 if (n == 0)
                     return (null, false);
-                if (bytes[count] == (byte)'\n')
+                // A client sends one line, so nothing after the newline is lost. A listener sees a disconnect by a read of 0.
+                var newline = Array.IndexOf(bytes, (byte)'\n', count, n);
+                if (newline >= 0)
                 {
-                    if (count > 0 && bytes[count - 1] == (byte)'\r')
-                        count--;
-                    return (Encoding.UTF8.GetString(bytes, 0, count), false);
+                    if (newline > 0 && bytes[newline - 1] == (byte)'\r')
+                        newline--;
+                    return (Encoding.UTF8.GetString(bytes, 0, newline), false);
                 }
-                count++;
+                count += n;
                 if (count > MaxRequestBytes)
                     return (null, true);
             }

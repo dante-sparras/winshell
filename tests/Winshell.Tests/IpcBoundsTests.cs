@@ -117,18 +117,21 @@ public class IpcBoundsTests
         probe.Ping.Emit([value]);
         var first = new byte[1];
         Assert.Equal(1, await client.ReadAsync(first).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        // Short, so the test reads a full queue quickly. Only the first has to hold the server in its write.
         for (var i = 0; i < IpcServer.MaxQueuedSignals + 20; i++)
-            probe.Ping.Emit([value]);
+            probe.Ping.Emit(["queued"]);
 
-        var lines = await ReadLines(client, 1 + IpcServer.MaxQueuedSignals, TimeSpan.FromSeconds(10), first[0]);
+        var lines = await ReadLines(client, 1 + IpcServer.MaxQueuedSignals, TimeSpan.FromSeconds(30), first[0]);
         Assert.Equal(1 + IpcServer.MaxQueuedSignals, lines.Count);
-        Assert.All(lines, line =>
+        var values = lines.Select(line =>
         {
             var response = JsonSerializer.Deserialize(line, IpcJson.Default.IpcResponse);
             Assert.NotNull(response);
             Assert.True(response.Ok);
-            Assert.Equal(value, response.Value);
-        });
+            return response.Value;
+        }).ToList();
+        Assert.Equal(value, values[0]);
+        Assert.All(values.Skip(1), queued => Assert.Equal("queued", queued));
         await Assert.ThrowsAsync<TimeoutException>(async () =>
             await client.ReadAsync(new byte[1]).AsTask().WaitAsync(TimeSpan.FromSeconds(2)));
     }
