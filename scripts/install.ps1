@@ -398,6 +398,8 @@ function Add-WinshellSessionPathEntry([string] $Entry) {
 }
 
 function Remove-WinshellSessionPathEntry([string] $Entry) {
+    # The stored user PATH is separate. This only edits the current process, so a developer prompt
+    # or a venv entry stays put.
     $parts = @(Split-WinshellPath $env:Path)
     $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
     if ($kept.Count -eq $parts.Count) { return }

@@ -280,15 +280,33 @@ public sealed class PathRectangle : PathElement
         var rect = SKRect.Create((float)_x + a, (float)_y + a, Math.Max(0, (float)_width - 2 * a), Math.Max(0, (float)_height - 2 * a));
         var max = Math.Min(rect.Width, rect.Height) / 2;
         float R(double r) => (float)Math.Clamp(r - a, 0, max);
-        using var rr = new SKRoundRect();
-        rr.SetRectRadii(rect,
-        [
-            new SKPoint(R(TopLeftRadius), R(TopLeftRadius)),
-            new SKPoint(R(TopRightRadius), R(TopRightRadius)),
-            new SKPoint(R(BottomRightRadius), R(BottomRightRadius)),
-            new SKPoint(R(BottomLeftRadius), R(BottomLeftRadius)),
-        ]);
-        cursor.Builder.AddRoundRect(rr, SKPathDirection.Clockwise);
+        var tl = R(TopLeftRadius);
+        var tr = R(TopRightRadius);
+        var br = R(BottomRightRadius);
+        var bl = R(BottomLeftRadius);
+        if (!_bevel)
+        {
+            using var rr = new SKRoundRect();
+            rr.SetRectRadii(rect, [new SKPoint(tl, tl), new SKPoint(tr, tr), new SKPoint(br, br), new SKPoint(bl, bl)]);
+            cursor.Builder.AddRoundRect(rr, SKPathDirection.Clockwise);
+        }
+        else
+        {
+            // A beveled corner is a straight cut of the radius along each side, not an arc.
+            var l = rect.Left;
+            var t = rect.Top;
+            var r = rect.Right;
+            var btm = rect.Bottom;
+            cursor.MoveTo(l + tl, t);
+            cursor.LineTo(r - tr, t);
+            cursor.LineTo(r, t + tr);
+            cursor.LineTo(r, btm - br);
+            cursor.LineTo(r - br, btm);
+            cursor.LineTo(l + bl, btm);
+            cursor.LineTo(l, btm - bl);
+            cursor.LineTo(l, t + tl);
+            cursor.Builder.Close();
+        }
         cursor.X = rect.Left;
         cursor.Y = rect.Top;
     }

@@ -217,6 +217,7 @@ public sealed class BindingElement : QObject
     private QObject? _appliedTarget;
     private string _appliedProperty = "";
     private PropertyOverride.Slot? _slot;
+    private IDisposable? _delay;
 
     [QmlEnum]
     public enum RestorationMode
@@ -276,7 +277,7 @@ public sealed class BindingElement : QObject
     public bool Delayed
     {
         get { Track(); return _delayed; }
-        set => SetField(ref _delayed, value);
+        set { if (SetField(ref _delayed, value)) Apply(); }
     }
 
     [Qml]
@@ -288,9 +289,27 @@ public sealed class BindingElement : QObject
 
     public override void ComponentComplete() => Apply();
 
-    protected override void OnDestroy() => Lift();
+    protected override void OnDestroy()
+    {
+        _delay?.Dispose();
+        Lift();
+    }
 
     private void Apply()
+    {
+        if (!IsComplete || IsDestroyed)
+            return;
+        if (_delayed && Engine is not null)
+        {
+            _delay ??= Engine.Loop.Schedule(TimeSpan.Zero, () => { _delay = null; if (!IsDestroyed) Commit(); });
+            return;
+        }
+        _delay?.Dispose();
+        _delay = null;
+        Commit();
+    }
+
+    private void Commit()
     {
         if (!IsComplete)
             return;

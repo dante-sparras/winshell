@@ -16,6 +16,8 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     private double _contentX, _contentY;
     private bool _interactive = true;
     private int _boundsBehavior = 3;
+    private int _boundsMovement = 1;
+    private bool _pixelAligned;
     private int _flickableDirection;
     private bool _movingX, _movingY;
     private double _pressX, _pressY, _pressContentX, _pressContentY;
@@ -44,6 +46,13 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
         DragOverBounds = 1,
         OvershootBounds = 2,
         DragAndOvershootBounds = 3,
+    }
+
+    /// <summary>Qt's <c>StopAtBounds</c> is 0, the same value as <see cref="BoundsBehaviorValue.StopAtBounds"/>, so it is not declared again.</summary>
+    [QmlEnum]
+    public enum BoundsMovementValue
+    {
+        FollowBoundsBehavior = 1,
     }
 
     [QmlEnum]
@@ -123,7 +132,7 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     public int BoundsBehavior { get { Track(); return _boundsBehavior; } set => SetField(ref _boundsBehavior, value); }
 
     [Qml]
-    public int BoundsMovement { get; set; }
+    public int BoundsMovement { get { Track(); return _boundsMovement; } set => SetField(ref _boundsMovement, value); }
 
     [Qml]
     public int FlickableDirection { get { Track(); return _flickableDirection; } set => SetField(ref _flickableDirection, value); }
@@ -135,7 +144,17 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
     public double MaximumFlickVelocity { get { Track(); return _maximumFlickVelocity; } set => SetField(ref _maximumFlickVelocity, value); }
 
     [Qml]
-    public bool PixelAligned { get; set; }
+    public bool PixelAligned
+    {
+        get { Track(); return _pixelAligned; }
+        set
+        {
+            if (!SetField(ref _pixelAligned, value))
+                return;
+            SetContentX(_contentX);
+            SetContentY(_contentY);
+        }
+    }
 
     [Qml]
     public bool Synchronous { get; set; }
@@ -214,6 +233,8 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
 
     protected void SetContentX(double value)
     {
+        if (_pixelAligned)
+            value = Math.Round(value, MidpointRounding.AwayFromZero);
         if (SetField(ref _contentX, value, nameof(ContentX)))
         {
             ContentItem.SetLayoutX(-value);
@@ -226,6 +247,8 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
 
     protected void SetContentY(double value)
     {
+        if (_pixelAligned)
+            value = Math.Round(value, MidpointRounding.AwayFromZero);
         if (SetField(ref _contentY, value, nameof(ContentY)))
         {
             ContentItem.SetLayoutY(-value);
@@ -409,18 +432,30 @@ public class Flickable : Item, IPointerTarget, IWheelTarget, IPropertyObserver
             SetMoving(CanScrollX, CanScrollY);
         }
         if (CanScrollX)
-            SetContentX(Math.Clamp(_pressContentX - dx, MinX, MaxX));
+            SetContentX(Dragged(_pressContentX - dx, MinX, MaxX));
         if (CanScrollY)
-            SetContentY(Math.Clamp(_pressContentY - dy, MinY, MaxY));
+            SetContentY(Dragged(_pressContentY - dy, MinY, MaxY));
+    }
+
+    /// <summary>Past the edge, a drag moves half way. Qt does this when <c>boundsBehavior</c> includes <c>DragOverBounds</c> and <c>boundsMovement</c> follows it. A flick stays clamped.</summary>
+    private double Dragged(double next, double min, double max)
+    {
+        if (_boundsMovement == 0 || (_boundsBehavior & (int)BoundsBehaviorValue.DragOverBounds) == 0)
+            return Math.Clamp(next, min, max);
+        if (next < min)
+            return min + (next - min) / 2;
+        if (next > max)
+            return max + (next - max) / 2;
+        return next;
     }
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
     {
-        if (IsDragging)
-        {
-            SetDragging(false, false);
-            SetMoving(false, false);
-        }
+        if (!IsDragging)
+            return;
+        SetDragging(false, false);
+        SetMoving(false, false);
+        Clamp();
     }
 
     public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
