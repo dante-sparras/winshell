@@ -206,7 +206,7 @@ $header
 
 PackageIdentifier: $id
 PackageVersion: $Version
-MinimumOSVersion: 10.0.22000.0
+MinimumOSVersion: 10.0.22621.0
 InstallerType: zip
 Scope: user
 NestedInstallerType: portable
