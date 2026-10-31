@@ -75,25 +75,31 @@ Item {
 
   function readPins() {
     // A file that does not parse is the same as a missing one: show the defaults, and do not write them over it.
+    // No pins array is not a choice either. [] is a choice to pin nothing, and a later reload that has not
+    // produced an array must not mark the file known or wipe pins already shown.
     if (pinData.error) {
       pinsKnown = false
       return
     }
+    if (!Array.isArray(pinData.pins))
+      return
     pinsKnown = true
-    if (Array.isArray(pinData.pins))
-      pinIds = pinData.pins.slice()
+    pinIds = pinData.pins.slice()
   }
 
   function ensureSeed() {
-    // The pin file loads during completion. Seeding earlier would replace a file that is already there.
+    // The pin file loads during completion. Seeding over a file that already has a pins array would replace
+    // a choice, including []. A load with no array, and a file that is not there, still get the defaults.
+    // pinIds is assigned before pinsKnown. A handler that stops between the two used to leave the initial
+    // empty list and also refuse every later attempt.
     if (!pinsReady || pinsPath === "" || pinsKnown)
       return
-    if (pinFile.loaded && !pinData.error)
+    if (pinFile.loaded && !pinData.error && Array.isArray(pinData.pins))
       return
     if (Launcher.visibleApps(apps).length === 0)
       return
-    pinsKnown = true
     pinIds = Launcher.defaultPins(apps)
+    pinsKnown = true
     if (!pinData.error)
       writePins()
   }
@@ -211,6 +217,9 @@ Item {
   onQueryChanged: selected = 0
   Component.onCompleted: {
     pinsReady = true
+    // The completed handler logs and continues when the seed stops early, so the next turn tries again.
+    // A seed that already stuck returns immediately.
+    Qt.callLater(() => root.ensureSeed())
     ensureSeed()
     focusSearch()
   }
@@ -225,6 +234,9 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.readPins()
+    // The load of a missing file fails instead of loading an empty list. Completion can run before that,
+    // and a failure after a load that named no pins has to seed once the apps are known.
+    onLoadFailed: if (!root.pinsKnown) root.ensureSeed()
 
     TomlAdapter {
       id: pinData
