@@ -1043,7 +1043,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private void PlaceIme(Scene scene)
     {
         var caret = scene.ImeCaret();
-        ImeNative.Place(Handle, (int)Math.Round(caret.X * _scale), (int)Math.Round((caret.Y + caret.Height) * _scale));
+        ImeNative.Place(Handle, ImeSession.CandidateWindow(caret.X, caret.Y, caret.Width, caret.Height, _scale));
     }
 
     private (double X, double Y) Point(nint lParam) => (Win32.LowWord(lParam) / _scale, Win32.HighWord(lParam) / _scale);

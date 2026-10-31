@@ -733,7 +733,7 @@ public sealed class Scene : IItemHost
             target.CancelComposition();
     }
 
-    /// <summary>The caret, in the content item's coordinates, so the candidate window can sit under it.</summary>
+    /// <summary>The caret, in the content item's coordinates, so the candidate window can stay off it.</summary>
     public QRect ImeCaret()
     {
         if (_focusItem is not ITextTarget target)
