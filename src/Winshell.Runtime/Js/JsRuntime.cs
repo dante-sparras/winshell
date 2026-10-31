@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Text;
 using Jint;
+using Winshell.Runtime.Quick;
 using Jint.Native;
 using Jint.Native.Object;
 using Jint.Runtime;
@@ -95,11 +96,31 @@ public sealed class JsRuntime
                 }
             case string[] strings:
                 return new JsArray(Engine, strings.Select(s => (JsValue)s).ToArray());
-            case IEnumerable items when value is not QColor:
-                return new JsArray(Engine, items.Cast<object?>().Select(ToJs).ToArray());
-            default:
+            case QColor or QPoint or QSize or QRect or AnchorLine:
+                // The value types a script reads fields from, or assigns, such as parent.right.
                 return JsValue.FromObject(Engine, value);
+            case IEnumerable items:
+                return new JsArray(Engine, items.Cast<object?>().Select(ToJs).ToArray());
+            case byte or sbyte or short or ushort or uint or ulong or decimal or nint or nuint:
+                return Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
+            case char c:
+                return c.ToString();
+            default:
+                // Anything else would be reflected, case-insensitively, which is not a script API.
+                Reject(value);
+                return JsValue.Undefined;
         }
+    }
+
+    private static readonly ConcurrentDictionary<Type, byte> _unscripted = new();
+
+    /// <summary>Logs once per CLR type that has no script form.</summary>
+    private void Reject(object value)
+    {
+        var type = value.GetType();
+        if (!_unscripted.TryAdd(type, 0))
+            return;
+        _qml.Log.Warn("script", $"{type.Name} is not a script value, so it is undefined");
     }
 
     public JsValue Wrap(QObject o)
