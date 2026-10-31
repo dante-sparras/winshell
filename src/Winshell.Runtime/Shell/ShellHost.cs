@@ -241,7 +241,10 @@ public sealed class ShellHost : IShellHost, IDisposable
         return Load(hard: true, initial: true);
     }
 
-    public void Reload(bool hard) => Load(hard, initial: false);
+    public void Reload(bool hard) => TryReload(hard);
+
+    /// <summary>Reloads now. False when the new generation did not load, and the old one, if any, keeps running.</summary>
+    public bool TryReload(bool hard) => Load(hard, initial: false);
 
     public void InhibitReloadPopup() => _inhibitPopup = true;
 

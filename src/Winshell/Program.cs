@@ -55,6 +55,8 @@ namespace Winshell
             /// <summary>End the process when the instance does not exit after it is asked.</summary>
             public bool Force { get; set; }
 
+            public bool Hard { get; set; }
+
             public bool NoColor { get; set; }
 
             public int? Tail { get; set; }
@@ -153,6 +155,8 @@ namespace Winshell
                     return List(options);
                 case "kill":
                     return await Kill(options);
+                case "reload":
+                    return await Reload(options);
                 case "log":
                     return await PrintLog(options);
                 case "ipc":
@@ -297,6 +301,9 @@ namespace Winshell
                     case "-f" or "--follow":
                         o.Follow = true;
                         break;
+                    case "--hard":
+                        o.Hard = true;
+                        break;
                     case "--force":
                         o.Force = true;
                         break;
@@ -423,6 +430,16 @@ namespace Winshell
                           With several, this exits and lists them.
                         """);
                     return;
+                case "reload":
+                    WriteHelp("""
+                        winshell reload [--hard] [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                          Reloads one running instance's configuration, and says whether it loaded.
+                          If it did not, the instance keeps running what it had.
+                          --hard does not hand the old objects to the new generation.
+                          With one running instance and no selector, that instance is used.
+                          With several, this exits and lists them.
+                        """);
+                    return;
                 case "log":
                     WriteHelp("""
                         winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
@@ -470,6 +487,8 @@ namespace Winshell
                        winshell list [-j]                  list running instances
                        winshell kill [--force] [instance options]
                                                            stop an instance and wait until it exits
+                       winshell reload [--hard] [instance options]
+                                                           reload an instance's configuration
                        winshell log [-f] [-t N] [file]     print an instance's log
                        winshell ipc show [-j]              list IPC targets
                        winshell ipc call <target> <function> [args...]
@@ -484,7 +503,7 @@ namespace Winshell
                   -p, --path <path>      a shell.qml, or the folder it is in
                   -c, --config <name>    a named config in {ConfigPaths.Root()}
                                          ({ConfigPaths.OverrideVariable} overrides that folder)
-                Instance selection (kill, log, ipc):
+                Instance selection (kill, reload, log, ipc):
                   -i, --id <id>          an instance id, or the start of one
                       --pid <pid>        an instance's process id
                 Other:
@@ -1148,6 +1167,35 @@ namespace Winshell
             }
             Console.WriteLine($"Killed {info.Id}");
             return 0;
+        }
+
+        private static async Task<int> Reload(Options o)
+        {
+            var choice = Select(o);
+            if (choice.Info is not { } info)
+            {
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
+            }
+            try
+            {
+                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("reload", Hard: o.Hard)))
+                {
+                    if (response.Ok)
+                    {
+                        Console.WriteLine($"Reloaded {info.Id}");
+                        return 0;
+                    }
+                    Console.Error.WriteLine($"Instance {info.Id} did not reload: {response.Error}");
+                    return 1;
+                }
+                Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
+            }
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+            }
+            return 1;
         }
 
         /// <summary>True when this instance's process has exited, or the process id now belongs to something else.</summary>
