@@ -85,12 +85,40 @@ public class NestedFrameTests
             var window = (ShellWindow)Assert.Single(platform.Windows).Client;
             Resizer.Loop = loop;
 
+            // A late loop runs every timer that is already due in one batch, then returns. A quit scheduled up front
+            // can run in that same batch as the update, and the frame posted from the update never gets a pass.
+            var started = false;
             loop.Schedule(TimeSpan.FromMilliseconds(100), () =>
             {
+                started = true;
                 Resizer.Resize = window;
                 window.Scene.RequestUpdate();
+                var finished = false;
+                var hang = loop.Schedule(TimeSpan.FromSeconds(2), () =>
+                {
+                    if (!finished)
+                        loop.Quit(1);
+                });
+                void Look()
+                {
+                    // The paint records what it drew with a post. A look that is already due in that batch runs
+                    // before the post, so it has to come back on a later pass.
+                    if (Resizer.SeenAfterTheFrame is not null && Resizer.Resize is null)
+                    {
+                        finished = true;
+                        hang.Dispose();
+                        loop.Quit(0);
+                        return;
+                    }
+                    loop.Schedule(TimeSpan.FromMilliseconds(16), Look);
+                }
+                loop.Schedule(TimeSpan.FromMilliseconds(16), Look);
             });
-            loop.Schedule(TimeSpan.FromMilliseconds(600), () => loop.Quit(0));
+            loop.Schedule(TimeSpan.FromSeconds(2), () =>
+            {
+                if (!started)
+                    loop.Quit(1);
+            });
             loop.Run();
 
             Assert.Null(Resizer.Resize);
