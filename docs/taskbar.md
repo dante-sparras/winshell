@@ -48,7 +48,7 @@ Other surfaces plug into the taskbar from `shell.qml`:
 | `startOpen` | Set it while the launcher is open, so Start looks pressed and an auto-hiding taskbar stays up. |
 | `searchRequested(button)`, `searchOpen` | The same for Search. The default shell opens Start and focuses its search box. |
 | `trayArea` | A `Component` for the right side before the clock. The default, `TrayArea.qml`, has the hidden icons chevron, the tray icons Settings shows, and the quick settings button. An item with a `busy` property keeps an auto-hiding taskbar up while it is true. |
-| `clockArea` | A `Component` for the clock. The default, `TaskbarClock.qml`, opens the notification center and calendar. |
+| `clockArea` | A `Component` for the clock. The default, `TaskbarClock.qml`, opens the notification center and calendar. Its accessible name includes how many notifications that center is showing. |
 | `startButton`, `searchButton`, `startX` | The buttons, and where Start sits along the taskbar, to anchor popup windows to. |
 
 ## Checks only a live session can do
