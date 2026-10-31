@@ -706,6 +706,92 @@ public class TaskbarTests
         Assert.Equal(["Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"], Ids(pins));
     }
 
+    private const string Reorder = """
+        import QtQuick
+        import Winshell
+        Item {
+          property alias pins: pins
+          property alias bar: bar
+          TaskbarPins { id: pins }
+          Taskbar { id: bar; pins: pins }
+        }
+        """;
+
+    [Fact]
+    public void Dragging_a_pinned_app_onto_another_rewrites_the_pin_order()
+    {
+        var desk = new Desk();
+        using var shell = new DefaultShellHarness(Reorder, width: 100, height: 100, services: desk.Services);
+        var bar = (PanelWindow)shell.Root.ReadProperty("bar")!;
+        bar.OnResized(1920, 48, 1);
+        shell.Loop.Advance(TimeSpan.FromSeconds(1));
+        var pins = (QObject)shell.Root.ReadProperty("pins")!;
+        Assert.Equal(["Microsoft.Windows.Explorer", "MSEdge", "Microsoft.WindowsStore_8wekyb3d8bbwe!App"], Ids(pins));
+        Assert.False(Shown(bar, "taskDrop"));
+
+        var explorer = In(bar, "task:app:file explorer");
+        var store = In(bar, "task:app:microsoft.windowsstore_8wekyb3d8bbwe!app");
+        Drag(shell, bar, explorer, store, () =>
+        {
+            Assert.Equal(0.5, explorer.Opacity);
+            Assert.True(Shown(bar, "taskDrop"));
+        });
+
+        // Forward: Explorer lands after the Store. Edge has no button and keeps its place in the list.
+        Assert.Equal(["MSEdge", "Microsoft.WindowsStore_8wekyb3d8bbwe!App", "Microsoft.Windows.Explorer"], Ids(pins));
+        Assert.Equal(
+            ["task:app:microsoft.windowsstore_8wekyb3d8bbwe!app", "task:app:file explorer", "task:app:microsoft.windowsterminal_8wekyb3d8bbwe!app", "task:window:tool"],
+            TaskButtons(bar));
+        Assert.Equal(1, explorer.Opacity);
+        Assert.False(Shown(bar, "taskDrop"));
+        // The drag is not also a click.
+        Assert.Empty(desk.Documents.Calls);
+        Assert.Equal(0, desk.Store.Launches);
+
+        // Win+1 is the app now in front of the row.
+        var list = (Item)bar.ReadProperty("taskList")!;
+        shell.Engine.Js.CallFunction(list.GetFunction("invokeAt")!, shell.Engine.Js.Wrap(list), [0, false]);
+        shell.Settle();
+        Assert.Equal(1, desk.Store.Launches);
+
+        // Back: Explorer lands before the Store. Edge stays ahead of both, with no button of its own.
+        Drag(shell, bar, In(bar, "task:app:file explorer"), In(bar, "task:app:microsoft.windowsstore_8wekyb3d8bbwe!app"));
+        Assert.Equal(["MSEdge", "Microsoft.Windows.Explorer", "Microsoft.WindowsStore_8wekyb3d8bbwe!App"], Ids(pins));
+        Assert.Equal("task:app:file explorer", TaskButtons(bar)[0]);
+
+        // A press that stays put still clicks, and an app that is not pinned does not move.
+        Click(shell, bar, In(bar, "task:app:file explorer"));
+        Assert.Equal(["activate"], desk.Documents.Calls);
+        var tool = In(bar, "task:window:tool");
+        Drag(shell, bar, tool, In(bar, "task:app:file explorer"));
+        Assert.Equal(["MSEdge", "Microsoft.Windows.Explorer", "Microsoft.WindowsStore_8wekyb3d8bbwe!App"], Ids(pins));
+        Assert.Empty(desk.Tool.Calls);
+    }
+
+    private static string[] TaskButtons(PanelWindow bar) =>
+        DefaultShellHarness.FindAll(bar.Scene.Root)
+            .Where(i => i.ObjectName.StartsWith("task:", StringComparison.Ordinal) && i.Visible)
+            .OrderBy(i => i.MapToScene(0, 0).X)
+            .Select(i => i.ObjectName)
+            .ToArray();
+
+    private static bool Shown(PanelWindow bar, string objectName) =>
+        DefaultShellHarness.FindAll(bar.Scene.Root).Any(i => i.ObjectName == objectName && i.Visible);
+
+    /// <summary>Presses a taskbar button, moves to another, and lets go, as <see cref="DefaultShellHarness.Drag"/> does on its own scene.</summary>
+    private static void Drag(DefaultShellHarness shell, PanelWindow bar, Item item, Item to, Action? whileHeld = null)
+    {
+        var from = item.MapToScene(item.Width / 2, item.Height / 2);
+        var dest = to.MapToScene(to.Width / 2, to.Height / 2);
+        bar.Scene.PointerPress(from.X, from.Y, QtEnums.LeftButton);
+        bar.Scene.PointerMove((from.X + dest.X) / 2, (from.Y + dest.Y) / 2);
+        bar.Scene.PointerMove(dest.X, dest.Y);
+        shell.Settle();
+        whileHeld?.Invoke();
+        bar.Scene.PointerRelease(dest.X, dest.Y, QtEnums.LeftButton);
+        shell.Settle();
+    }
+
     [Fact]
     public void An_auto_hiding_taskbar_reserves_nothing_and_slides_down_to_a_2_pixel_line()
     {
@@ -1565,6 +1651,38 @@ public class TaskbarTests
           TaskbarPins { id: pins }
         }
         """;
+
+    [Fact]
+    public void Move_rewrites_the_pin_list_and_keeps_that_order()
+    {
+        using var shell = new DefaultShellHarness(Pins, services: new FakeServices());
+        var path = Path.Combine(shell.Directory, "data", "taskbar.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var pins = (QObject)shell.Root.ReadProperty("pins")!;
+        pins.WriteProperty("path", path);
+        shell.Settle();
+
+        void Move(string id, string target) =>
+            shell.Engine.Js.CallFunction(pins.GetFunction("move")!, shell.Engine.Js.Wrap(pins), [id, target]);
+
+        // Onto a later pin: the pin lands after it.
+        Move("Microsoft.Windows.Explorer", "Microsoft.WindowsStore_8wekyb3d8bbwe!App");
+        Assert.Equal(["MSEdge", "Microsoft.WindowsStore_8wekyb3d8bbwe!App", "Microsoft.Windows.Explorer"], Ids(pins));
+        // Onto an earlier pin: the pin lands before it.
+        Move("Microsoft.Windows.Explorer", "MSEdge");
+        Assert.Equal(["Microsoft.Windows.Explorer", "MSEdge", "Microsoft.WindowsStore_8wekyb3d8bbwe!App"], Ids(pins));
+        Move("MSEdge", "MSEdge");
+        Move("", "MSEdge");
+        Move("Missing", "MSEdge");
+        Move("MSEdge", "Missing");
+        Assert.Equal(["Microsoft.Windows.Explorer", "MSEdge", "Microsoft.WindowsStore_8wekyb3d8bbwe!App"], Ids(pins));
+
+        var text = File.ReadAllText(path);
+        var explorer = text.IndexOf("Microsoft.Windows.Explorer", StringComparison.Ordinal);
+        var edge = text.IndexOf("MSEdge", StringComparison.Ordinal);
+        var store = text.IndexOf("Microsoft.WindowsStore_8wekyb3d8bbwe!App", StringComparison.Ordinal);
+        Assert.True(explorer >= 0 && explorer < edge && edge < store, text);
+    }
 
     [Fact]
     public void Pins_are_kept_in_a_file_once_they_change_and_read_back()
