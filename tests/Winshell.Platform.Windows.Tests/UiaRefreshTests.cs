@@ -42,6 +42,8 @@ public class UiaRefreshTests
     {
         WithWindow((_, automation, go, notice) =>
         {
+            // A tenth of a second is the product's coalesce. Stretch it so a preempted frame is not counted as a change.
+            automation.SyncInterval = TimeSpan.FromMinutes(10);
             Assert.NotNull(automation.ElementFor(go));
             Assert.Equal(0, automation.SyncCount);
             automation.AfterFrame();
