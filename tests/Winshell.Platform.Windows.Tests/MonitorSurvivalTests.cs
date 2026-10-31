@@ -39,6 +39,28 @@ public class MonitorSurvivalTests
     }
 
     [Fact]
+    public async Task A_refresh_still_reads_after_the_monitor_stops()
+    {
+        var backend = new TokenBluetooth();
+        var loop = new ManualEventLoop();
+        using var engine = new QmlEngine(StandardModules.Create(), loop);
+        var service = new BluetoothService(engine, backend);
+        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        service.StopMonitoring();
+        var before = backend.Finished;
+
+        var until = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        while (backend.Finished == before && DateTime.UtcNow < until)
+        {
+            await service.RefreshAsync();
+            await Task.Delay(10);
+        }
+
+        Assert.True(backend.Finished > before, "A refresh was cancelled along with the monitor.");
+        service.Destroy();
+    }
+
+    [Fact]
     public async Task Destroying_bluetooth_waits_for_the_read_before_disposing_the_backend()
     {
         var backend = new BlockingBluetooth();
@@ -137,6 +159,27 @@ public class MonitorSurvivalTests
         public Task<string?> UnpairAsync(string id) => Task.FromResult<string?>(null);
         public Task<bool> SetAudioConnectionAsync(Guid container, bool connect) => Task.FromResult(true);
         public void Dispose() => Disposed = true;
+    }
+
+    private sealed class TokenBluetooth : IBluetoothBackend
+    {
+        private int _finished;
+        public int Finished => Volatile.Read(ref _finished);
+        public TaskCompletionSource First { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
+        public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
+        {
+            First.TrySetResult();
+            cancellation.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _finished);
+            return Task.FromResult(ReadyBluetooth());
+        }
+        public void StartDiscovery() { }
+        public void StopDiscovery() { }
+        public Task<string?> PairAsync(string id, CancellationToken cancellation) => Task.FromResult<string?>(null);
+        public Task<string?> UnpairAsync(string id) => Task.FromResult<string?>(null);
+        public Task<bool> SetAudioConnectionAsync(Guid container, bool connect) => Task.FromResult(true);
+        public void Dispose() { }
     }
 
     private sealed class BlockingBluetooth : IBluetoothBackend
