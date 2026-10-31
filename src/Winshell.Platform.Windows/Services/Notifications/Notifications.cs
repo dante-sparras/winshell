@@ -110,15 +110,25 @@ public sealed class NotificationListener : QObject
 
     private async Task MonitorAsync(CancellationToken cancellation)
     {
+        // Not disposed: a toast event can still arrive after the watch stops.
+        var changed = new SemaphoreSlim(0);
+        Action? unwatch = null;
         try
         {
             while (!cancellation.IsCancellationRequested)
             {
+                // With package identity Windows reports toast changes; the poll catches Focus, Do Not Disturb and access.
+                unwatch ??= _backend.WatchToasts(() => changed.Release());
                 await RefreshAsync().ConfigureAwait(false);
-                await Task.Delay(TimeSpan.FromSeconds(2), cancellation).ConfigureAwait(false);
+                await changed.WaitAsync(TimeSpan.FromSeconds(10), cancellation).ConfigureAwait(false);
+                while (changed.Wait(0)) { }
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally
+        {
+            unwatch?.Invoke();
+        }
     }
 
     internal async Task RefreshAsync()

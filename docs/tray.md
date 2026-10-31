@@ -18,6 +18,8 @@ Repeater {
 
 Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that uses `SystemTray` makes one, keeps it in front of Explorer's taskbar, and passes every message on to Explorer. Explorer's own tray, app bars and toasts keep working. On start, the shell broadcasts `TaskbarCreated` so that running apps add their icons again.
 
+Foreground and desktop window-order events keep the host in front. Every thirty seconds it also checks the order and removes icons whose windows have gone. A waiting instance still checks the owner every half second.
+
 - **Explorer restarts.** When a new Explorer taskbar broadcasts `TaskbarCreated`, the shell gets back in front and answers once with its own broadcast a second later, so every app re-registers through it. It does not answer its own broadcast, or another one while the same Explorer taskbar is up.
 - **More than one instance.** One instance in the session owns the notification area. The others log that they are waiting, and their `items` stay empty. When the owner exits, it removes its window and broadcasts `TaskbarCreated`. When it crashes, Windows releases its owner name. Either way, a waiting instance takes over within half a second.
 - **Elevation.** The window accepts `TaskbarCreated` and `WM_COPYDATA` from any integrity level, as Explorer's taskbar does.

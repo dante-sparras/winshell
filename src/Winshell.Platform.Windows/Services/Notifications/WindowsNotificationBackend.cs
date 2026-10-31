@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Windows.Foundation.Metadata;
 using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
 using Windows.UI.Shell;
+using Winshell.Platform.Windows.Services.Updates;
 
 namespace Winshell.Platform.Windows.Services.Notifications;
 
@@ -11,6 +13,7 @@ internal interface INotificationBackend
     Task<NotificationAccessStatus> RequestAccessAsync();
     Task<NotificationSnapshot> ReadAsync();
     void Dismiss(uint id);
+    Action? WatchToasts(Action changed) => null;
 }
 
 internal sealed class WindowsNotificationBackend : INotificationBackend
@@ -59,6 +62,29 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed)
             throw new UnauthorizedAccessException("Windows notification listener access is no longer allowed.");
         listener.RemoveNotification(id);
+    }
+
+    /// <summary>
+    /// Calls <paramref name="changed"/> when a toast arrives or goes, and returns the call that stops it. Null without
+    /// package identity or access, where Windows does not raise the event.
+    /// </summary>
+    public Action? WatchToasts(Action changed)
+    {
+        if (!Packaging.IsPackaged)
+            return null;
+        try
+        {
+            var listener = UserNotificationListener.Current;
+            if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed)
+                return null;
+            TypedEventHandler<UserNotificationListener, UserNotificationChangedEventArgs> handler = (_, _) => changed();
+            listener.NotificationChanged += handler;
+            return () => listener.NotificationChanged -= handler;
+        }
+        catch (Exception e) when (IsExpectedFailure(e))
+        {
+            return null;
+        }
     }
 
     internal static NotificationAccessStatus MapAccess(UserNotificationListenerAccessStatus access) => access switch

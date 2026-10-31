@@ -301,6 +301,26 @@ public sealed class TrayHostTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Explorer_coming_to_the_front_raises_the_host_without_waiting_for_a_timer()
+    {
+        var explorer = StartExplorer();
+        var host = Start(HostNames, out _);
+        Assert.True(Above(host.Window, explorer.Window));
+
+        Win32.SetWindowPos(explorer.Window, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (!Above(host.Window, explorer.Window) && watch.Elapsed < TimeSpan.FromSeconds(2))
+        {
+            while (Win32.PeekMessageW(out var msg, 0, 0, 0, Win32.PM_REMOVE))
+                Win32.DispatchMessageW(msg);
+            _loop.Process();
+            Thread.Sleep(5);
+        }
+
+        Assert.True(Above(host.Window, explorer.Window));
+    }
+
     /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>
     private static bool Above(nint upper, nint lower)
     {
