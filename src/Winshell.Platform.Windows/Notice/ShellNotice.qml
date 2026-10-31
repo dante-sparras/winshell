@@ -7,8 +7,8 @@ import QtQuick.Controls
 // Winshell's own notice, drawn like a Windows 11 notification: bottom right of the main screen, above the taskbar,
 // Acrylic, with the app name, a title, the text and two buttons. It is not part of a configuration, so it shows
 // even when the configuration did not load. It does not take the keyboard when it appears; a click anywhere on it
-// gives it the keyboard, and then Tab moves between its buttons and Escape dismisses it. Pointing at it, or having
-// the keyboard, holds a timed notice open.
+// gives it the keyboard, and then Tab moves between its buttons and Escape dismisses it. From the keyboard, without
+// a click, `winshell ipc call notice dismiss` closes it. Pointing at it, or having the keyboard, holds a timed notice open.
 PanelWindow {
   id: root
 

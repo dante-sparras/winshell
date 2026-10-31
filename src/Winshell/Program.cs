@@ -438,6 +438,7 @@ namespace Winshell
                         winshell ipc [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
                           show [-j]                             list IPC targets. -j prints JSON
                           call <target> <function> [args...]    call a function and print the result
+                          call notice dismiss                   close Winshell's own notice
                           prop get <target> <property>          print a property
                           wait <target> <signal>                wait for one signal
                           listen <target> <signal>              print each signal until Ctrl+C
@@ -770,7 +771,7 @@ namespace Winshell
             }
             if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
                 log.Warn("", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
-            using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0));
+            using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0), dismissNotice: () => notices.Hide());
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
             Console.CancelKeyPress += (_, e) =>

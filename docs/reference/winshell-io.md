@@ -197,7 +197,7 @@ The commands run against the instance chosen with `-i`, `--pid`, `-p` or `-c`, a
 - `winshell ipc prop get <target> <property>` prints a property.
 - `winshell ipc wait <target> <signal>` waits for the signal once, prints its first argument, and exits. `winshell ipc listen <target> <signal>` prints the first argument each time the signal fires, until it is stopped. A change signal such as `visibleChanged` works too.
 
-An unknown target, function, property or signal, a wrong number of arguments, or an argument that does not parse prints an error and exits with code 1.
+An unknown target, function, property or signal, a wrong number of arguments, or an argument that does not parse prints an error and exits with code 1. `notice dismiss` is not one of these targets: it closes Winshell's own notice. See [the command line](command-line.md#commands).
 
 ```qml
 import QtQuick
