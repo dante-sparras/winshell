@@ -177,7 +177,11 @@ public sealed class ScriptModel : ObjectModel
     public int ComparisonMode
     {
         get { Track(); return _comparisonMode; }
-        set => SetField(ref _comparisonMode, value);
+        set
+        {
+            if (SetField(ref _comparisonMode, value))
+                Recompute();
+        }
     }
 
     private void Recompute()
@@ -235,7 +239,7 @@ public sealed class Region : QObject, IPropertyObserver
     private double _x, _y, _width, _height;
     private int _shape;
     private int _intersection;
-    private double _radius;
+    private double _radius, _topLeftRadius, _topRightRadius, _bottomLeftRadius, _bottomRightRadius;
 
     public Region()
     {
@@ -290,13 +294,13 @@ public sealed class Region : QObject, IPropertyObserver
 
     [Qml] public double Radius { get { Track(); return _radius; } set { if (SetField(ref _radius, value)) Changed(); } }
 
-    [Qml] public double TopLeftRadius { get; set; }
+    [Qml] public double TopLeftRadius { get { Track(); return _topLeftRadius; } set { if (SetField(ref _topLeftRadius, value)) Changed(); } }
 
-    [Qml] public double TopRightRadius { get; set; }
+    [Qml] public double TopRightRadius { get { Track(); return _topRightRadius; } set { if (SetField(ref _topRightRadius, value)) Changed(); } }
 
-    [Qml] public double BottomLeftRadius { get; set; }
+    [Qml] public double BottomLeftRadius { get { Track(); return _bottomLeftRadius; } set { if (SetField(ref _bottomLeftRadius, value)) Changed(); } }
 
-    [Qml] public double BottomRightRadius { get; set; }
+    [Qml] public double BottomRightRadius { get { Track(); return _bottomRightRadius; } set { if (SetField(ref _bottomRightRadius, value)) Changed(); } }
 
     [Qml]
     public QmlList<Region> Regions { get; }
