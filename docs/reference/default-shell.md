@@ -50,7 +50,7 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 - **The media playing**, with play, pause, previous and next for that [media session](winshell-media.md).
 - **Tiles**: Wi-Fi, Bluetooth, Airplane mode, Energy saver, Power mode, Night light and Accessibility. A tile shows the setting's state where Winshell can read it. Power mode opens a page that changes the [power mode](winshell-power.md#powermode). The other tiles open their page in Windows Settings, because Winshell doesn't change radios or Windows settings. A tile for hardware the PC doesn't have is hidden.
-- **Sliders**: the volume of the default playback device, with a page to pick the output, and the brightness of a monitor that reports one.
+- **Sliders**: the volume of the default playback device, with a page to pick the output. **App volume** on that page sets the volume and mute of each audio session. The brightness slider is a monitor that reports one.
 - **The battery**, on a PC that has one.
 
 **Edit quick settings** edits the tiles: unpin, add back and reorder them, with the mouse or the keyboard. They are kept in `quick-settings.toml` in the shell's state folder.
