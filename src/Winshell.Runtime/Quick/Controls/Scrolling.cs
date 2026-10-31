@@ -630,7 +630,7 @@ public sealed class ScrollView : Control
 
     private static Flickable MakeFlickable()
     {
-        var f = new Flickable { Clip = true };
+        var f = new Flickable { Clip = true, BoundsBehavior = (int)Flickable.BoundsBehaviorValue.StopAtBounds };
         f.MarkComplete();
         return f;
     }
