@@ -114,24 +114,31 @@ public class HiddenWindowTests
         {
             var window = (ShellWindow)Assert.Single(platform.Windows).Client;
             int atHide = 0, afterHidden = 0, atShow = 0;
-            loop.Schedule(TimeSpan.FromMilliseconds(300), () =>
+            // Each step waits for real frames, so a slow runner takes longer instead of running out of time.
+            // Run quits with 1 after 10 seconds if a step never comes.
+            void When(Func<bool> ready, Action then)
+            {
+                if (ready())
+                    then();
+                else
+                    loop.Schedule(TimeSpan.FromMilliseconds(10), () => When(ready, then));
+            }
+            When(() => PaintCounter.Paints > 3, () =>
             {
                 window.Visible = false;
                 atHide = PaintCounter.Paints;
+                loop.Schedule(TimeSpan.FromMilliseconds(300), () =>
+                {
+                    afterHidden = PaintCounter.Paints;
+                    window.Visible = true;
+                    atShow = PaintCounter.Paints;
+                    When(() => PaintCounter.Paints > atShow + 3, () => loop.Quit(0));
+                });
             });
-            loop.Schedule(TimeSpan.FromMilliseconds(600), () =>
-            {
-                afterHidden = PaintCounter.Paints;
-                window.Visible = true;
-                atShow = PaintCounter.Paints;
-            });
-            loop.Schedule(TimeSpan.FromMilliseconds(900), () => loop.Quit(0));
 
             Assert.Equal(0, loop.Run());
             // It draws frame after frame while shown, none while hidden, and again once shown.
-            Assert.True(atHide > 3, $"{atHide} frames while shown");
             Assert.Equal(atHide, afterHidden);
-            Assert.True(PaintCounter.Paints > atShow + 3, $"{PaintCounter.Paints - atShow} frames after showing again");
         });
     }
 
