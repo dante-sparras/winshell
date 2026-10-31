@@ -5,6 +5,7 @@ using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
 
+[Collection(ThemeCollection.Name)]
 public sealed class ImageRemoteTests : IDisposable
 {
     private readonly HttpClient _original = ImageLoader.Http;

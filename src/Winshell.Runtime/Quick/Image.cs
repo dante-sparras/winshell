@@ -29,19 +29,8 @@ public static class ImageLoader
 
     private static readonly TimeSpan RemoteTimeout = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// Fetches <c>https://</c> images. A test swaps it for one with a fake handler. The swap stays on the calling
-    /// execution context, so one test cannot replace another's client while a read is still in flight.
-    /// </summary>
-    private static readonly HttpClient SharedHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
-
-    private static readonly AsyncLocal<HttpClient?> ScopedHttp = new();
-
-    internal static HttpClient Http
-    {
-        get => ScopedHttp.Value ?? SharedHttp;
-        set => ScopedHttp.Value = value;
-    }
+    /// <summary>Fetches <c>https://</c> images. A test swaps it for one with a fake handler.</summary>
+    internal static HttpClient Http { get; set; } = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     static ImageLoader() => Theme.Changed += DropProviderEntries;
 
@@ -135,54 +124,21 @@ public static class ImageLoader
     private static async Task<byte[]?> ReadCappedAsync(Uri uri)
     {
         using var timeout = new CancellationTokenSource(RemoteTimeout);
-        // Captured before the first await. A test restores the shared client when it returns, and that restore
-        // must not retarget a read that has already chosen its client.
-        var http = Http;
-        using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+        using var response = await Http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > MaxRemoteBytes)
             return null;
         await using var body = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-        // The body is read here, on this thread. ReadAsync on a stream that only implements Read queues every
-        // chunk onto the pool, and a busy pool leaves the image Loading after the headers have already arrived.
-        return ReadCapped(body, timeout.Token);
-    }
-
-    private static byte[]? ReadCapped(Stream body, CancellationToken token)
-    {
-        using var cancel = token.Register(() =>
-        {
-            try
-            {
-                body.Close();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-            catch (IOException)
-            {
-            }
-        });
         using var bytes = new MemoryStream();
         var buffer = new byte[81920];
-        while (true)
+        int read;
+        while ((read = await body.ReadAsync(buffer, timeout.Token).ConfigureAwait(false)) > 0)
         {
-            token.ThrowIfCancellationRequested();
-            int read;
-            try
-            {
-                read = body.Read(buffer, 0, buffer.Length);
-            }
-            catch (Exception e) when (token.IsCancellationRequested && e is IOException or ObjectDisposedException)
-            {
-                throw new OperationCanceledException(token);
-            }
-            if (read == 0)
-                return bytes.ToArray();
             if (bytes.Length + read > MaxRemoteBytes)
                 return null;
             bytes.Write(buffer, 0, read);
         }
+        return bytes.ToArray();
     }
 
     /// <summary>
