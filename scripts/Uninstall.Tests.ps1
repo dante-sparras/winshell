@@ -293,6 +293,29 @@ Describe 'unreadable process path' {
     }
 }
 
+Describe 'helpers shared with install.ps1' {
+    It 'keeps each one the same in both scripts' {
+        function Get-ScriptFunctions([string] $Path) {
+            $tokens = $null
+            $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseFile($Path, [ref] $tokens, [ref] $errors)
+            $found = @{}
+            $isFunction = { param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }
+            foreach ($function in $ast.FindAll($isFunction, $false)) {
+                $found[$function.Name] = ($function.Extent.Text -replace "`r`n", "`n") -replace 'uninstaller', 'installer'
+            }
+            $found
+        }
+
+        $install = Get-ScriptFunctions (Join-Path $PSScriptRoot 'install.ps1')
+        $uninstall = Get-ScriptFunctions $script:UninstallFile
+        $shared = @($uninstall.Keys | Where-Object { $install.ContainsKey($_) })
+
+        $shared.Count | Should -BeGreaterThan 0
+        @($shared | Where-Object { $install[$_] -cne $uninstall[$_] }) | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'failed invocation' {
     It 'returns from a failed script block and exits 1 when started as a file' {
         $quoted = $script:UninstallFile.Replace("'", "''")

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Windows.UI.Notifications.Management;
 using Winshell.Platform.Windows.Services.Notifications;
 using Winshell.Runtime;
+using Winshell.Runtime.Shell;
 using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
@@ -379,6 +380,68 @@ public class NotificationTests(ITestOutputHelper output)
             Assert.Equal((int)NotificationState.On, root.ReadProperty("dnd"));
         }
         finally { listener.Destroy(); Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void A_qml_lock_keeps_a_dismissed_notification_until_it_unlocks()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "winshell-notifications", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var messages = new List<string>();
+        var listener = new NotificationListener(new FakeBackend());
+        try
+        {
+            var path = Path.Combine(directory, "shell.qml");
+            File.WriteAllText(path, """
+                import QtQml
+                import Winshell
+                import Winshell.Notifications
+                QtObject {
+                  id: root
+                  property var note: TestCenter.notifications.values[0]
+                  property int drops: 0
+                  property RetainableLock hold: RetainableLock {
+                    object: root.note
+                    locked: true
+                    onDropped: root.drops = root.drops + 1
+                  }
+                  Component.onCompleted: note = note
+                }
+                """);
+            var registry = StandardModules.Create();
+            NotificationModule.Register(registry);
+            registry.Module("Winshell.Notifications").Singleton(_ => listener, "TestCenter");
+            var loop = new ManualEventLoop();
+            using var engine = new QmlEngine(registry, loop, new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") }, directory);
+            listener.Engine = engine;
+            listener.Apply(Snapshot(Toast()));
+            var item = Item(listener);
+            var root = engine.CreateRoot(path);
+            var hold = (RetainableLock)root.ReadProperty("hold")!;
+
+            Assert.Same(item, root.ReadProperty("note"));
+            Assert.Same(item, hold.Object);
+            Assert.True(hold.Locked);
+            Assert.False(item.IsDestroyed);
+            Assert.DoesNotContain(messages, message => message.Contains("non-retainable", StringComparison.Ordinal));
+
+            Assert.True(item.Dismiss());
+
+            Assert.Equal(1, root.ReadProperty("drops"));
+            Assert.True(hold.Retained);
+            Assert.False(item.IsDestroyed);
+            Assert.Empty(listener.Notifications.Rows);
+
+            hold.Locked = false;
+
+            Assert.True(item.IsDestroyed);
+            Assert.False(hold.Retained);
+        }
+        finally
+        {
+            listener.Destroy();
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private sealed class FakeBackend : INotificationBackend

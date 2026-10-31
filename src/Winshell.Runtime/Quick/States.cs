@@ -51,8 +51,11 @@ public sealed class PropertyChanges : QObject, IAcceptsAnyProperty
     [Qml]
     public bool RestoreEntryValues { get; set; } = true;
 
-    [Qml]
-    public bool ExplicitChanges { get; set; }
+    private bool _explicit;
+
+    [Qml("explicit")] public bool Explicit { get => _explicit; set => _explicit = value; }
+
+    [Qml] public bool ExplicitChanges { get => _explicit; set => _explicit = value; }
 
     /// <summary>The object that holds the values written as <c>id.property: value</c> for one target.</summary>
     internal QObject HolderFor(QObject target)
@@ -226,12 +229,15 @@ public static class States
         var next = new Dictionary<(QObject Target, string Property), Change>();
         if (state is not null)
         {
-            foreach (var change in state.Changes.Snapshot.OfType<PropertyChanges>())
+            foreach (var layer in BaseFirst(item, state))
             {
-                foreach (var (target, prop, holder) in change.Assignments(item))
+                foreach (var change in layer.Changes.Snapshot.OfType<PropertyChanges>())
                 {
-                    if (!target.IsDestroyed && target.HasProperty(prop))
-                        next[(target, prop)] = new Change(holder, prop, change.RestoreEntryValues);
+                    foreach (var (target, prop, holder) in change.Assignments(item))
+                    {
+                        if (!target.IsDestroyed && target.HasProperty(prop))
+                            next[(target, prop)] = new Change(holder, prop, change.RestoreEntryValues, change.Explicit);
+                    }
                 }
             }
         }
@@ -294,7 +300,7 @@ public static class States
             {
                 if (session.Generation != generation || target.IsDestroyed)
                     return;
-                ApplyChange(target, prop, change.Holder);
+                ApplyChange(target, prop, change.Holder, change.Explicit);
             }
             object? to;
             using (DependencyTracker.Suspend())
@@ -328,9 +334,9 @@ public static class States
         });
     }
 
-    private static void ApplyChange(QObject target, string property, QObject holder)
+    private static void ApplyChange(QObject target, string property, QObject holder, bool once)
     {
-        if (holder.GetBinding(property) is not null)
+        if (!once && holder.GetBinding(property) is not null)
         {
             PropertyOverride.InstallLive(target, property, () =>
             {
@@ -366,6 +372,16 @@ public static class States
     private static bool Matches(Transition t, string from, string to) =>
         (t.From == "*" || t.From == from) && (t.To == "*" || t.To == to);
 
+    private static List<State> BaseFirst(Item item, State state)
+    {
+        var chain = new List<State>();
+        var seen = new HashSet<State>();
+        for (var s = state; s is not null && seen.Add(s); s = s.Extend.Length == 0 ? null : item.StatesList.Snapshot.OfType<State>().FirstOrDefault(o => o.Name == s.Extend))
+            chain.Add(s);
+        chain.Reverse();
+        return chain;
+    }
+
     private sealed class Session
     {
         public Dictionary<(QObject Target, string Property), Entry> Saved { get; } = new();
@@ -386,7 +402,7 @@ public static class States
         public bool Restore { get; set; } = restore;
     }
 
-    private readonly record struct Change(QObject Holder, string Name, bool Restore);
+    private readonly record struct Change(QObject Holder, string Name, bool Restore, bool Explicit);
 
     private readonly record struct Deferred(QObject Target, string Property, Action Commit);
 }

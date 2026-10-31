@@ -20,6 +20,11 @@ public sealed class VirtualDesktopsService : QObject
     private bool _supported;
     private bool _proved;
     private string _reason = "";
+    private string _stamp = "";
+    private IDisposable? _reread;
+
+    /// <summary>How often <see cref="IVirtualDesktopSource.ListStamp"/> is checked. Windows signals a switch, not an add or a remove.</summary>
+    internal static readonly TimeSpan RereadInterval = TimeSpan.FromSeconds(1);
 
     public VirtualDesktopsService(QmlEngine engine)
         : this(engine, VirtualDesktopBroker.Shared, engine.Log, watch: true)
@@ -36,7 +41,7 @@ public sealed class VirtualDesktopsService : QObject
         Desktops.SetOwner(this);
         Desktops.Engine = engine;
         _contractSupported = source.Contract.Supported;
-        if (_watch && engine is not null)
+        if (_watch && engine is not null && ReferenceEquals(source, VirtualDesktopBroker.Shared))
         {
             DesktopSwitchWatch.Ensure(engine.Loop, log);
             DesktopSwitchWatch.Fired += Refresh;
@@ -45,6 +50,11 @@ public sealed class VirtualDesktopsService : QObject
             SetField(ref _reason, source.Contract.Reason, nameof(UnsupportedReason));
         else
             Refresh();
+        if (_watch && engine is not null && _contractSupported)
+        {
+            _stamp = source.ListStamp;
+            ScheduleRead();
+        }
     }
 
     [Qml] public ObjectModel Desktops { get; }
@@ -106,8 +116,26 @@ public sealed class VirtualDesktopsService : QObject
 
     protected override void OnDestroy()
     {
+        _reread?.Dispose();
+        _reread = null;
         if (_watch)
             DesktopSwitchWatch.Fired -= Refresh;
+    }
+
+    private void ScheduleRead() => _reread = _engine!.Loop.Schedule(RereadInterval, ReadAgain);
+
+    private void ReadAgain()
+    {
+        if (IsDestroyed)
+            return;
+        var stamp = _source.ListStamp;
+        if (stamp != _stamp)
+        {
+            _stamp = stamp;
+            Refresh();
+        }
+        if (!IsDestroyed)
+            ScheduleRead();
     }
 
     private void Refresh()
