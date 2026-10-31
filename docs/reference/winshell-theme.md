@@ -16,6 +16,7 @@ A singleton, reached as `Theme`. Every color token is a read-only `color` proper
 | `highContrast` | bool, read-only | Whether a contrast theme is on. Every color token is then one of the eight system colors, and the shadows are transparent. A window's backdrop reads as none, and a transparent window with a backdrop clears to `solidBackgroundFillColorBase`. |
 | `animationsEnabled` | bool, read-only | Whether Windows animation effects are on. Skip motion when this is false. A contrast theme does not turn it off. |
 | `autoHideScrollBars` | bool, read-only | False when "Always show scrollbars" is on in Windows' Accessibility settings. Scroll bars then stay wide, with their track and arrows. |
+| `textScaleFactor` | real, read-only | Windows text size (Settings &gt; Accessibility &gt; Text size) as a multiplier. 1 is the default and 2.25 is the largest value that page offers. |
 | `fontFamily` | string, read-only | The Windows 11 text font, `"Segoe UI Variable"`. |
 | `iconFontFamily` | string, read-only | The Windows 11 icon font, `"Segoe Fluent Icons"`. |
 | `typography` | [Typography](#typography), read-only | The Windows 11 type ramp, as fonts to assign whole: `font: Theme.typography.subtitle`. |
@@ -48,7 +49,7 @@ The accent shades follow the accent picked in Windows. With `accentColor` set, t
 
 ### Typography
 
-`Theme.typography` has one font per step of the Windows 11 type ramp, all in Segoe UI Variable, with sizes in pixels: `caption` (12, regular), `body` (14, regular), `bodyStrong` (14, semibold), `bodyLarge` (18, regular), `subtitle` (20, semibold), `title` (28, semibold), `titleLarge` (40, semibold) and `display` (68, semibold).
+`Theme.typography` has one font per step of the Windows 11 type ramp, all in Segoe UI Variable, with sizes in pixels at text scale 1: `caption` (12, regular), `body` (14, regular), `bodyStrong` (14, semibold), `bodyLarge` (18, regular), `subtitle` (20, semibold), `title` (28, semibold), `titleLarge` (40, semibold) and `display` (68, semibold). Windows multiplies each of those sizes, and the size of text that sets neither `font.pixelSize` nor `font.pointSize`, by `textScaleFactor`. A pixel size or point size written in QML stays as written.
 
 ### Shadows
 

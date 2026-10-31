@@ -55,7 +55,10 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private void OnTheme()
     {
-        if (!_colorSet && !IsDestroyed)
+        if (IsDestroyed)
+            return;
+        _fontGroup.RefreshDefaultSize();
+        if (!_colorSet)
         {
             _color = Theme.Current.TextFillColorPrimary;
             NotifyChanged("color");

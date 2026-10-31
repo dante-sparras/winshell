@@ -13,7 +13,11 @@ public readonly record struct FontSpec(string Family, double PixelSize, int Weig
     /// </summary>
     public static string DefaultFamily { get; set; } = "Segoe UI Variable";
 
-    public static double DefaultPixelSize { get; set; } = 14;
+    /// <summary>Body text at Windows' default text size, before <see cref="Theme.TextScaleFactor"/>.</summary>
+    public const double UnscaledDefaultPixelSize = 14;
+
+    /// <summary>The font size, in pixels, when none is set. The theme sets this from Windows text size.</summary>
+    public static double DefaultPixelSize { get; set; } = UnscaledDefaultPixelSize;
 
     public static FontSpec Default => new(DefaultFamily, DefaultPixelSize, 400, false, false, false, 0, 0);
 }
@@ -56,6 +60,18 @@ public sealed class FontGroup(Item? owner) : QObject
     {
         Changed?.Invoke();
         owner?.Update();
+    }
+
+    /// <summary>
+    /// The default size changed. An explicit <c>pixelSize</c> or <c>pointSize</c> stays as it was set.
+    /// </summary>
+    internal void RefreshDefaultSize()
+    {
+        if (_pixelSize > 0 || _pointSize > 0)
+            return;
+        NotifyChanged("pixelSize");
+        NotifyChanged("pointSize");
+        Raise();
     }
 
     [Qml]
