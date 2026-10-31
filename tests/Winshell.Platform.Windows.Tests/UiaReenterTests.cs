@@ -171,19 +171,37 @@ public class UiaReenterTests
             Assert.True(host.Start());
             var window = Assert.Single(platform.Windows);
             var saw = false;
+            var started = false;
             loop.Schedule(TimeSpan.FromMilliseconds(100), () =>
             {
                 saw = true;
+                // This batch can already contain the outer quit: a busy loop runs every due timer after this
+                // callback, before a timer scheduled here. Started means that quit must not beat the follow-up.
+                started = true;
                 if (first(window))
+                {
                     loop.Quit(0);
-                else
-                    loop.Schedule(TimeSpan.FromMilliseconds(80), () =>
-                    {
-                        then(window);
-                        loop.Quit(0);
-                    });
+                    return;
+                }
+                var finished = false;
+                var hang = loop.Schedule(TimeSpan.FromSeconds(2), () =>
+                {
+                    if (!finished)
+                        loop.Quit(1);
+                });
+                loop.Schedule(TimeSpan.FromMilliseconds(80), () =>
+                {
+                    finished = true;
+                    hang.Dispose();
+                    then(window);
+                    loop.Quit(0);
+                });
             });
-            loop.Schedule(TimeSpan.FromMilliseconds(2000), () => loop.Quit(1));
+            loop.Schedule(TimeSpan.FromMilliseconds(2000), () =>
+            {
+                if (!started)
+                    loop.Quit(1);
+            });
             Assert.True(loop.Run() == 0, notes.ToString());
             Assert.True(saw);
         }
