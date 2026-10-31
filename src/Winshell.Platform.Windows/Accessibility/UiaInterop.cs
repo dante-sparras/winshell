@@ -158,6 +158,7 @@ internal static partial class Uia
     public const int ElementNotEnabled = unchecked((int)0x80040200);
     public const int ElementNotAvailable = unchecked((int)0x80040201);
     public const int InvalidOperation = unchecked((int)0x80131509);
+    public const int Timeout = unchecked((int)0x80131505);
 
     public const int RootObjectId = -25;
     public const int AppendRuntimeId = 3;

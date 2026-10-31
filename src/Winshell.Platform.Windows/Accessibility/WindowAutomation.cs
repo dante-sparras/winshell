@@ -124,6 +124,9 @@ internal sealed class WindowAutomation : IDisposable
         return Uia.UiaReturnRawElementProvider(Handle, wParam, lParam, Root);
     }
 
+    /// <summary>How long a call from UI Automation waits for the window, in milliseconds. A test shortens it.</summary>
+    internal uint CallTimeout { get; set; } = 3000;
+
     /// <summary>Runs a call from UI Automation on the window's thread and returns its HRESULT.</summary>
     public int Run(Func<int> call)
     {
@@ -137,8 +140,10 @@ internal sealed class WindowAutomation : IDisposable
         _pending[key] = work;
         try
         {
-            // The key is not a pointer. Only this send, matched in RunPosted, may run the call.
-            Win32.SendMessageW(handle, RunMessage, 0, key);
+            // The key is not a pointer. Only this send, matched in RunPosted, may run the call. A window that stopped
+            // answering must not stop the screen reader with it.
+            if (Win32.SendMessageTimeoutW(handle, RunMessage, 0, key, Win32.SMTO_BLOCK | Win32.SMTO_ABORTIFHUNG, CallTimeout, out _) == 0)
+                return Uia.Timeout;
         }
         finally
         {

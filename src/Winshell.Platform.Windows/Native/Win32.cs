@@ -492,6 +492,12 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     public static partial nint SendMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
 
+    public const uint SMTO_BLOCK = 0x1;
+    public const uint SMTO_ABORTIFHUNG = 0x2;
+
+    [LibraryImport("user32.dll")]
+    public static partial nint SendMessageTimeoutW(nint hwnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
+
     /// <summary>The message was delivered with SendMessage, not posted or broadcast as a notification.</summary>
     public const uint ISMEX_SEND = 0x00000001;
 
