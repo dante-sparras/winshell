@@ -11,11 +11,35 @@ public sealed class AnchorRect(PopupAnchor owner) : QObject
 
     [Qml] public double Y { get { Track(); return _y; } set { if (SetField(ref _y, value)) owner.Changed(); } }
 
-    [Qml] public double Width { get { Track(); return _width; } set { if (SetField(ref _width, Math.Max(1, value))) owner.Changed(); } }
+    [Qml]
+    public double Width
+    {
+        get { Track(); return _width; }
+        set
+        {
+            var first = !WidthSet;
+            WidthSet = true;
+            if (SetField(ref _width, Math.Max(1, value)) || first)
+                owner.Changed();
+        }
+    }
 
-    [Qml] public double Height { get { Track(); return _height; } set { if (SetField(ref _height, Math.Max(1, value))) owner.Changed(); } }
+    [Qml]
+    public double Height
+    {
+        get { Track(); return _height; }
+        set
+        {
+            var first = !HeightSet;
+            HeightSet = true;
+            if (SetField(ref _height, Math.Max(1, value)) || first)
+                owner.Changed();
+        }
+    }
 
-    internal bool WasSet { get; set; }
+    internal bool WidthSet { get; private set; }
+
+    internal bool HeightSet { get; private set; }
 }
 
 public sealed class AnchorMargins(PopupAnchor owner) : QObject
@@ -99,8 +123,8 @@ public sealed class PopupAnchor : QObject
         if (_item is not null)
         {
             var origin = _item.MapToScene(0, 0);
-            var w = Rect.WasSet ? Rect.Width : _item.Width;
-            var h = Rect.WasSet ? Rect.Height : _item.Height;
+            var w = Rect.WidthSet ? Rect.Width : _item.Width;
+            var h = Rect.HeightSet ? Rect.Height : _item.Height;
             rect = new QRect(origin.X + Rect.X, origin.Y + Rect.Y, w, h);
         }
         else
