@@ -109,15 +109,14 @@ Use a full path, such as one built from `Shell.dataDir`. A relative path is take
 | `text()` | method, returns string | The file's text. If it was not read yet, reads it now. Returns an empty string when the file cannot be read. |
 | `data()` | method, returns string | The same text as `text()`. |
 | `reload()` | method | Reads the file again. Call it from `onFileChanged` to follow changes on disk. |
-| `waitForJob()` | method, returns bool | Returns `true` at once. It does not wait for a read or write in progress. |
 | `setText(text)` | method | Replaces the file's contents with `text`. Creates missing folders. |
 | `setData(data)` | method | Replaces the file's contents with `data`, as text. |
-| `writeAdapter()` | method | Writes what the adapter's properties hold to the file. When the file on disk does not parse, nothing is written and `saveFailed` is raised. |
+| `writeAdapter()` | method | Writes what the adapter's properties hold to the file. When the file on disk does not parse, nothing is written and `saveFailed` is raised with `FileView.Unknown`. |
 | `loaded()` | signal | The file was read. It fires after each successful read, including `reload()`. |
 | `loadFailed(error)` | signal | The file could not be read. `error` is a [FileViewError](#fileviewerror) value, such as `FileView.FileNotFound`. |
 | `fileChanged()` | signal | The file changed on disk or was deleted, with `watchChanges` on. The view does not read it again by itself. |
 | `saved()` | signal | A write finished. |
-| `saveFailed(error)` | signal | A write failed, or it was skipped because the file on disk does not parse. `error` is always `FileView.Unknown`. |
+| `saveFailed(error)` | signal | A write failed, or it was skipped because the file on disk does not parse. `error` is a [FileViewError](#fileviewerror) value: `FileView.PermissionDenied` when Windows denied access, `FileView.FileNotFound` when the file or its folder is missing, `FileView.NotAFile` when the path is a folder, and `FileView.Unknown` for any other failure, including a file that does not parse. |
 | `adapterUpdated()` | signal | A property of the adapter changed, other than by reading the file. Call `writeAdapter()` here to save each change. |
 
 Enum values: `Success`, `Unknown`, `FileNotFound`, `PermissionDenied`, `NotAFile`
@@ -241,11 +240,9 @@ A stream to a Unix domain socket or a Windows named pipe, created with `Socket {
 | `connected` | bool | Set it to true to connect and to false to disconnect. It turns true once connected, and false when the other side closes. A named pipe is waited for up to 3 seconds. |
 | `write(data)` | method | Sends text, as UTF-8. Text written before the socket connects is sent once it does. |
 | `flush()` | method | Sends what is buffered now. |
-| `error(error)` | signal | Connecting or writing failed. `error` is `Socket.NotFound` when nothing listens on the path or the pipe did not answer in time, `Socket.ConnectionRefused` for other connect failures, and `Socket.RemoteHostClosed` when a write fails. |
+| `error(error)` | signal | Connecting or writing failed. `error` is `Socket.NotFound` when the pipe does not answer in time, `Socket.ConnectionRefused` when the connection is refused, `Socket.RemoteHostClosed` when a write fails, and `Socket.Unknown` for another connect failure, such as a path that is a folder. |
 
 Enum values: `ConnectionRefused`, `RemoteHostClosed`, `NotFound`, `Unknown`
-
-`Unknown` is not emitted on this checkout.
 
 ```qml
 import QtQuick

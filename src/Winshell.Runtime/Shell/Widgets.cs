@@ -15,6 +15,7 @@ public sealed class MarginWrapper : IPropertyObserver
     private double _margin;
     private double? _top, _bottom, _left, _right;
     private double _extra;
+    private double _inset;
     private bool _resizeChild = true;
     private double? _implicitWidthOverride, _implicitHeightOverride;
     private bool _updating;
@@ -46,6 +47,19 @@ public sealed class MarginWrapper : IPropertyObserver
     public double RightMargin { get => _right ?? _margin; set { _right = value; Update(); } }
 
     public double ExtraMargin { get => _extra; set { _extra = value; Update(); } }
+
+    /// <summary>Added on every side, on top of the margins. A rectangle uses it for the border width.</summary>
+    public double Inset
+    {
+        get => _inset;
+        set
+        {
+            if (_inset == value)
+                return;
+            _inset = value;
+            Update();
+        }
+    }
 
     public bool ResizeChild { get => _resizeChild; set { _resizeChild = value; Update(); } }
 
@@ -105,10 +119,10 @@ public sealed class MarginWrapper : IPropertyObserver
         try
         {
             using var _ = DependencyTracker.Suspend();
-            var l = LeftMargin + _extra;
-            var r = RightMargin + _extra;
-            var t = TopMargin + _extra;
-            var b = BottomMargin + _extra;
+            var l = LeftMargin + _extra + _inset;
+            var r = RightMargin + _extra + _inset;
+            var t = TopMargin + _extra + _inset;
+            var b = BottomMargin + _extra + _inset;
             var childW = _child is { IsVisibleFlag: true } ? _child.ImplicitWidth : 0;
             var childH = _child is { IsVisibleFlag: true } ? _child.ImplicitHeight : 0;
             _wrapper.ImplicitWidth = _implicitWidthOverride ?? childW + l + r;
@@ -202,7 +216,11 @@ public class WrapperRectangle : Quick.Rectangle
     public WrapperRectangle()
     {
         Margins = new MarginWrapper(this);
+        Border.LayoutChanged = SyncInset;
     }
+
+    private void SyncInset() =>
+        Margins.Inset = _contentInsideBorder && Border.IsVisible ? Border.Width : 0;
 
     protected MarginWrapper Margins { get; }
 
@@ -235,7 +253,7 @@ public class WrapperRectangle : Quick.Rectangle
         set
         {
             if (SetField(ref _contentInsideBorder, value))
-                Margins.Update();
+                SyncInset();
         }
     }
 
@@ -444,9 +462,15 @@ public sealed class MarginWrapperManager : QObject
     private double? _top, _bottom, _left, _right;
     private double _extra;
     private bool _resizeChild = true;
-    private double _implicitWidth, _implicitHeight;
+    private double? _implicitWidth;
+    private double? _implicitHeight;
 
-    [Qml] public Item? Wrapper_ => _target;
+    /// <summary>The item this manager is declared in. The C# name avoids <see cref="QObject"/>'s script wrapper.</summary>
+    [Qml("wrapper")]
+    public Item? Wrapper_
+    {
+        get { TrackQml("wrapper"); return _target ?? Owner as Item; }
+    }
 
     [Qml] public Item? Child { get { Track(); return _child; } set { if (SetField(ref _child, value)) Apply(); } }
 
@@ -479,10 +503,31 @@ public sealed class MarginWrapperManager : QObject
 
     [Qml] public bool ResizeChild { get { Track(); return _resizeChild; } set { if (SetField(ref _resizeChild, value)) Apply(); } }
 
-    [Qml] public double ImplicitWidth { get { Track(); return _implicitWidth; } set => SetField(ref _implicitWidth, value); }
+    [Qml]
+    public double ImplicitWidth
+    {
+        get { Track(); return _implicitWidth ?? _target?.ImplicitWidth ?? 0; }
+        set
+        {
+            if (!SetField(ref _implicitWidth, value))
+                return;
+            _wrapper?.OverrideImplicitWidth(value);
+        }
+    }
 
-    [Qml] public double ImplicitHeight { get { Track(); return _implicitHeight; } set => SetField(ref _implicitHeight, value); }
+    [Qml]
+    public double ImplicitHeight
+    {
+        get { Track(); return _implicitHeight ?? _target?.ImplicitHeight ?? 0; }
+        set
+        {
+            if (!SetField(ref _implicitHeight, value))
+                return;
+            _wrapper?.OverrideImplicitHeight(value);
+        }
+    }
 
+    protected override void OnOwnerChanged() => _target = Owner as Item;
 
     public override void ComponentComplete()
     {
@@ -506,6 +551,10 @@ public sealed class MarginWrapperManager : QObject
         if (_right is { } r) _wrapper.RightMargin = r;
         _wrapper.ExtraMargin = _extra;
         _wrapper.ResizeChild = _resizeChild;
+        if (_implicitWidth is { } width)
+            _wrapper.OverrideImplicitWidth(width);
+        if (_implicitHeight is { } height)
+            _wrapper.OverrideImplicitHeight(height);
         _wrapper.Child = _child ?? _target.ChildItems.FirstOrDefault();
     }
 }
@@ -514,7 +563,6 @@ public sealed class MarginWrapperManager : QObject
 public sealed class ClippingRectangle : Quick.Rectangle, IRoundedClip
 {
     private bool _contentInsideBorder;
-    private bool _contentUnderBorder;
 
     public ClippingRectangle()
     {
@@ -526,9 +574,6 @@ public sealed class ClippingRectangle : Quick.Rectangle, IRoundedClip
 
     [Qml]
     public bool ContentInsideBorder { get { Track(); return _contentInsideBorder; } set => SetField(ref _contentInsideBorder, value); }
-
-    [Qml]
-    public bool ContentUnderBorder { get { Track(); return _contentUnderBorder; } set => SetField(ref _contentUnderBorder, value); }
 
     public override SKRoundRect? ClipShape => Shape(_contentInsideBorder && Border.IsVisible ? Border.Width : 0);
 }
