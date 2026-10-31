@@ -67,12 +67,11 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Context2D.createPattern()` | Makes a pattern from a color only; for an image it returns null. |
 | `Context2D.fillText()` | Draws with the one typeface `font` names, without fallback or shaping: characters that typeface lacks don't draw, and scripts that need shaping, such as Arabic or Devanagari, draw wrong. `strokeText()` and `measureText()` work the same way. |
 | `Canvas.loadImage()` | Loads local images only, before it returns, so `isImageLoading()` is always false. An `http` or `https` image never loads, and `isImageError()` turns true. |
-| `Canvas.toDataURL()` | Always returns a PNG, whatever `mimeType` names. |
-| `Canvas.save()` | Always writes a PNG, whatever the file name's extension. |
+| `Canvas.toDataURL()` | Encodes `image/png` and `image/jpeg` only. Any other type, such as `image/bmp`, returns `data:,`. |
+| `Canvas.save()` | Writes `.png`, `.jpg` and `.jpeg` only, and returns false for any other extension, such as `.bmp`. |
 | `Shape.horizontalAlignment` | Ignored, as is `verticalAlignment`: content scaled by `fillMode` sits at the top left. |
 | `ShapePath.fillItem` | Ignored. |
 | `ShapePath.fillTransform` | Ignored. |
-| `PathRectangle.bevel` | Ignored; corners are always rounded. |
 | `MenuItem.subMenu` | Always null: menus don't nest, and `arrow` is never shown. |
 | `Menu.cascade` | Ignored, as is `overlap`. |
 | `Menu.currentIndex` | Not updated by the highlight or the keys. |
@@ -135,12 +134,10 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Image.mirrorVertically` | Ignored. |
 | `Image.sourceClipRect` | Ignored. |
 | `Image.autoTransform` | Ignored: a photo's EXIF orientation is never applied. |
-| `Image.cache` | Ignored when `asynchronous` is true or the source is remote: the image is always cached. |
 | `Rectangle.border` | `border.pixelAligned` is ignored: the border isn't snapped to whole pixels. |
 | `GaussianBlur.cached` | Ignored, on every effect: the source is drawn and filtered again on each paint. |
 | `GaussianBlur.samples` | Ignored, as on `DropShadow` and `Glow`. |
 | `DropShadow.transparentBorder` | Ignored, as on `Glow`: the shadow always spreads past the source's edges. |
-| `MultiEffect.blurMultiplier` | Ignored. |
 | `MultiEffect.autoPaddingEnabled` | Ignored, as is `paddingRect`: the shadow and blur always spread past the item's edges. |
 | `RectangularShadow.material` | Ignored: the built-in shadow is drawn. |
 | `Keys.forwardTo` | Ignored. A key event's `matches()` is always false. |
