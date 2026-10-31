@@ -120,6 +120,10 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmQueryThumbnailSourceSize(nint thumbnail, out THUMBNAIL_SIZE size);
 
+    // Undocumented, and the only way to ask for the peek Windows' own taskbar uses. dwmapi exports it by ordinal alone.
+    [LibraryImport("dwmapi.dll", EntryPoint = "#113")]
+    public static partial int DwmpActivateLivePreview([MarshalAs(UnmanagedType.Bool)] bool on, nint window, nint above, uint type, nuint reserved);
+
     [DllImport("shell32.dll")]
     public static extern int SHGetPropertyStoreForWindow(nint hwnd, in Guid riid, [MarshalAs(UnmanagedType.Interface)] out IPropertyStore store);
 

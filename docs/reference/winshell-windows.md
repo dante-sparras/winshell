@@ -46,6 +46,7 @@ A live preview of an app window, as the taskbar and Alt+Tab show it. It is an It
 | --- | --- | --- |
 | `window` | [AppWindow](#appwindow) | The app window to preview, from `WindowList.windows`. Null shows nothing. It becomes null when the window closes. |
 | `sourceSize` | size, read-only | The previewed part of the window in physical pixels, without its invisible resize borders, or zero before the preview is first shown. |
+| `peek` | bool | While true, Windows shows this window at full size and hides the others, as its own peek does. It stays off when the user turned peek off in System Properties, and ends with this item or the window. Windows has no documented call for this, so a build without it shows no peek. |
 
 Windows draws the preview over the shell window this item is in, so it stays live without copying pixels and puts no capture border around the source. It fills the item as far as it can without being enlarged, keeping its shape, centered. Without a size of its own, the item takes the window's size in logical pixels. The preview follows the item's position and opacity, and is hidden whenever the item is not drawn. Other items cannot draw over it, and a clipping parent does not clip it.
 

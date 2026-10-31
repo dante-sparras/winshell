@@ -100,8 +100,22 @@ PopupWindow {
       repeater.itemAt(0).forceActiveFocus(Qt.TabFocusReason)
   }
 
+  // The window a pointer rests on the preview of. Windows peeks at it, if the user has peek on.
+  property var peekWindow: null
+
+  function pointerOn(window) {
+    peekTimer.stop()
+    peekTimer.window = window
+    peekWindow = null
+    if (window)
+      peekTimer.restart()
+  }
+
   // Opened by hovering again, the previews leave the keyboard where it is.
-  onVisibleChanged: if (!visible) grabFocus = false
+  onVisibleChanged: if (!visible) {
+    grabFocus = false
+    pointerOn(null)
+  }
   onGrabFocusChanged: if (grabFocus) closeTimer.stop()
 
   onTaskChanged: if (task === null) {
@@ -133,6 +147,13 @@ PopupWindow {
     id: openTimer
     interval: 400
     onTriggered: root.visible = root.task !== null
+  }
+
+  Timer {
+    id: peekTimer
+    property var window: null
+    interval: 400
+    onTriggered: root.peekWindow = window
   }
 
   Timer {
@@ -209,6 +230,7 @@ PopupWindow {
           hoverEnabled: true
           activeFocusOnTab: true
           onActiveFocusChanged: if (activeFocus) root.focusedWindow = modelData
+          onContainsMouseChanged: root.pointerOn(containsMouse ? modelData : null)
           Keys.onPressed: event => {
             event.accepted = false
             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
@@ -268,6 +290,7 @@ PopupWindow {
             width: parent.width - 16
             height: parent.height - 40
             window: card.modelData
+            peek: root.visible && root.peekWindow === card.modelData
           }
         }
       }
