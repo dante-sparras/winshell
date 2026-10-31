@@ -346,7 +346,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         oldEngine?.Dispose();
         WatchFilesOf(engine);
         if (!initial)
-            Log.Info("", "Configuration Loaded");
+            Log.Info("shell", "Configuration Loaded");
         engine.FindNativeSingleton<ShellGlobal>()?.Emit("reloadCompleted");
         Reloaded?.Invoke(scriptError);
         return true;
