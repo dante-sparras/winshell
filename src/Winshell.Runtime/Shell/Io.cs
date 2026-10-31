@@ -776,8 +776,8 @@ public sealed class FileView : QObject
     private bool _printErrors = true;
     private bool _loaded;
 
-    /// <summary>Bytes a read will take. Past this, the read is refused and the file is left as it is.</summary>
-    internal int MaxFileBytes { get; set; } = DataLimits.MaxFileBytes;
+    /// <summary>Bytes a read will take. Past this, the read is refused and the file is left as it is. 64 MiB.</summary>
+    internal int MaxFileBytes { get; set; } = DataLimits.MaxReadBytes;
     private string? _text;
     private FileViewAdapter? _adapter;
     private DirectoryWatch? _watch;

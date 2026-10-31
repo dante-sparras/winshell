@@ -5,7 +5,7 @@ namespace Winshell.Runtime.Tests;
 
 /// <summary>
 /// Budgets for a file read and a TOML parse. The numbers are the production limits; every refusal uses a small
-/// budget or a few hundred bytes, so the test never builds a large file.
+/// budget or a short in-memory document, so the test never builds a large file.
 /// </summary>
 public class DataLimitsTests
 {
@@ -37,14 +37,15 @@ public class DataLimitsTests
     [Fact]
     public void The_budgets_sit_above_a_preferences_file()
     {
-        Assert.Equal(1024 * 1024, DataLimits.MaxFileBytes);
-        Assert.Equal(100_000, DataLimits.MaxNodes);
-        Assert.Equal(64, DataLimits.MaxDepth);
-        Assert.Null(DataLimits.FileBytes(DataLimits.MaxFileBytes, DataLimits.MaxFileBytes));
-        Assert.Null(DataLimits.FileBytes(-1, DataLimits.MaxFileBytes));
-        Assert.Contains("above the limit of ", DataLimits.FileBytes(DataLimits.MaxFileBytes + 1, DataLimits.MaxFileBytes), StringComparison.Ordinal);
+        Assert.Equal(64 * 1024 * 1024, DataLimits.MaxReadBytes);
+        Assert.Equal(1024 * 1024, DataLimits.MaxTextBytes);
+        Assert.Null(DataLimits.FileBytes(DataLimits.MaxTextBytes, DataLimits.MaxTextBytes));
+        Assert.Null(DataLimits.FileBytes(-1, DataLimits.MaxTextBytes));
+        Assert.Contains(
+            "above the limit of ",
+            DataLimits.FileBytes(DataLimits.MaxReadBytes + 1, DataLimits.MaxReadBytes),
+            StringComparison.Ordinal);
 
-        // A dozen keys, and the deepest value the default shell writes: one array of one inline table.
         const string preferences = """
             colorScheme = "system"
             accentColor = ""
@@ -59,54 +60,16 @@ public class DataLimitsTests
             settingsHotkey = ""
             autoUpdate = true
             """;
-        Assert.Null(DataLimits.Toml(preferences, DataLimits.MaxFileBytes, DataLimits.MaxNodes, DataLimits.MaxDepth));
-    }
+        Assert.True(TomlAdapter.TryLoad("preferences.toml", preferences, out var table, out var error), error);
+        Assert.Equal("system", table["colorScheme"]);
 
-    [Fact]
-    public void Strings_comments_and_quoted_keys_are_not_structure()
-    {
-        Accept("a = \"[[[not deep]]]\"", maxNodes: 1);
-        Accept("a = 1 # [[[", maxNodes: 1);
-        Accept("a = \"\"\"\n[[\n\"\"\"", maxNodes: 1);
-        Accept("\"a.b.c\" = 1", maxNodes: 1);
-        Accept("scale = 1.5", maxNodes: 1);
-    }
+        Assert.True(TomlAdapter.TryLoad("deep.toml", Dotted(64), out _, out error), error);
+        Assert.False(TomlAdapter.TryLoad("deep.toml", Dotted(65), out _, out error));
+        Assert.Contains("maximum depth of 64", error, StringComparison.Ordinal);
 
-    [Fact]
-    public void Nesting_and_value_count_follow_the_budget()
-    {
-        RefuseDepth("a = [1]", 0);
-        Accept("a = [1]", maxDepth: 1);
-        RefuseDepth("a = [[1]]", 1);
-        Accept("a = [[1]]", maxDepth: 2);
-        RefuseDepth("a = { b = 1 }", 0);
-        Accept("a = { b = 1 }", maxDepth: 1);
-        RefuseDepth("a.b = 1", 0);
-        Accept("a.b = 1", maxDepth: 1);
-        RefuseDepth("[a]", 0);
-        Accept("[a]", maxDepth: 1);
-        RefuseDepth("[a.b]", 1);
-        Accept("[a.b]", maxDepth: 2);
-        RefuseDepth("[[a]]", 1);
-        Accept("[[a]]", maxDepth: 2);
-        RefuseDepth("a.b = { c = 1 }", 1);
-        Accept("a.b = { c = 1 }", maxDepth: 2);
-        Accept("hidden = [{ id = \"a\", name = \"b\" }]", maxDepth: 2);
-
-        var two = DataLimits.Toml("a = 1\nb = 2", 1000, maxNodes: 1, maxDepth: 64);
-        Assert.Contains("has more than", two, StringComparison.Ordinal);
-        Assert.Null(DataLimits.Toml("a = 1\nb = 2", 1000, 2, 64));
-
-        var tooDeep = "a = " + new string('[', 65) + "1" + new string(']', 65);
-        Assert.Contains(
-            "nested deeper than 64",
-            DataLimits.Toml(tooDeep, DataLimits.MaxFileBytes, DataLimits.MaxNodes, DataLimits.MaxDepth),
-            StringComparison.Ordinal);
-        var atLimit = "a = " + new string('[', 64) + "1" + new string(']', 64);
-        Assert.Null(DataLimits.Toml(atLimit, DataLimits.MaxFileBytes, DataLimits.MaxNodes, DataLimits.MaxDepth));
-
-        Assert.Contains("above the limit of 4", DataLimits.Toml("hello", 4, 100, 64), StringComparison.Ordinal);
-        Assert.Contains("above the limit of 1", DataLimits.Toml("é", 1, 100, 64), StringComparison.Ordinal);
+        Assert.True(TomlAdapter.TryLoad("arrays.toml", Nested(63), out _, out error), error);
+        Assert.False(TomlAdapter.TryLoad("arrays.toml", Nested(64), out _, out error));
+        Assert.Contains("maximum depth of 64", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -131,46 +94,50 @@ public class DataLimitsTests
         shell.Eval(root, "settings.name = 'next'");
         Assert.Equal(oversized, File.ReadAllBytes(path));
 
-        view.MaxFileBytes = DataLimits.MaxFileBytes;
+        view.MaxFileBytes = DataLimits.MaxReadBytes;
         File.WriteAllText(path, "name = \"kept\"");
         view.Reload();
-        settings.MaxNodes = 1;
-        var wide = "name = \"other\"\nextra = 1\n"u8.ToArray();
-        File.WriteAllBytes(path, wide);
+        var accented = "name = \"é\"\n"u8.ToArray();
+        settings.MaxFileBytes = accented.Length - 1;
+        File.WriteAllBytes(path, accented);
         view.Reload();
         Assert.Equal("kept", shell.Eval(root, "settings.name"));
-        Assert.Contains("has more than", settings.Error, StringComparison.Ordinal);
+        Assert.Contains("above the limit", settings.Error, StringComparison.Ordinal);
         shell.Eval(root, "settings.name = 'next'");
-        Assert.Equal(wide, File.ReadAllBytes(path));
+        Assert.Equal(accented, File.ReadAllBytes(path));
 
-        settings.MaxNodes = DataLimits.MaxNodes;
-        settings.MaxDepth = DataLimits.MaxDepth;
+        settings.MaxFileBytes = DataLimits.MaxTextBytes;
         File.WriteAllText(path, "name = \"kept\"");
         view.Reload();
-        var bomb = Encoding.UTF8.GetBytes("name = \"other\"\nbomb = " + new string('[', 70) + "1" + new string(']', 70) + "\n");
+        Assert.Equal("kept", shell.Eval(root, "settings.name"));
+        settings.MaxDepth = 1;
+        var nested = "name = \"other\"\nhidden = [{ id = \"a\", name = \"b\" }]\n"u8.ToArray();
+        File.WriteAllBytes(path, nested);
+        view.Reload();
+        Assert.Equal("kept", shell.Eval(root, "settings.name"));
+        Assert.Contains("nested deeper than 1", settings.Error, StringComparison.Ordinal);
+        Assert.Equal(nested, File.ReadAllBytes(path));
+
+        settings.MaxDepth = 2;
+        view.Reload();
+        Assert.True(string.IsNullOrEmpty(settings.Error), settings.Error);
+        Assert.Equal("other", shell.Eval(root, "settings.name"));
+        Assert.Equal("a,b", shell.Eval(root, "settings.hidden.map(a => a.id + ',' + (a.name ?? '')).join('|')"));
+
+        settings.MaxDepth = 64;
+        File.WriteAllText(path, "name = \"kept\"");
+        view.Reload();
+        var bomb = Encoding.UTF8.GetBytes("bomb = " + new string('[', 64) + "1" + new string(']', 64) + "\n");
         Assert.InRange(bomb.Length, 1, 4096);
         File.WriteAllBytes(path, bomb);
         view.Reload();
         Assert.Equal("kept", shell.Eval(root, "settings.name"));
-        Assert.Contains("nested deeper than 64", settings.Error, StringComparison.Ordinal);
+        Assert.Contains("maximum depth of 64", settings.Error, StringComparison.Ordinal);
         shell.Eval(root, "settings.name = 'next'");
         Assert.Equal(bomb, File.ReadAllBytes(path));
-
-        settings.MaxDepth = 2;
-        settings.MaxNodes = 20;
-        File.WriteAllText(path, "name = \"kept\"\nhidden = [{ id = \"a\", name = \"b\" }]\n");
-        view.Reload();
-        Assert.True(string.IsNullOrEmpty(settings.Error), settings.Error);
-        Assert.Equal("kept", shell.Eval(root, "settings.name"));
-        Assert.Equal("a,b", shell.Eval(root, "settings.hidden.map(a => a.id + ',' + (a.name ?? '')).join('|')"));
     }
 
-    private static void Accept(string text, int maxDepth = 0, int maxNodes = 20) =>
-        Assert.Null(DataLimits.Toml(text, 10_000, maxNodes, maxDepth));
+    private static string Dotted(int segments) => string.Join('.', Enumerable.Repeat("a", segments)) + " = 1";
 
-    private static void RefuseDepth(string text, int maxDepth)
-    {
-        var why = DataLimits.Toml(text, 10_000, 10_000, maxDepth);
-        Assert.Contains("nested deeper than " + maxDepth.ToString(System.Globalization.CultureInfo.InvariantCulture), why, StringComparison.Ordinal);
-    }
+    private static string Nested(int depth) => "a = " + new string('[', depth) + "1" + new string(']', depth);
 }

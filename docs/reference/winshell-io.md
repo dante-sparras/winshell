@@ -94,7 +94,7 @@ A file the shell reads, watches and writes, created with `FileView { }`. Its def
 
 Use a full path, such as one built from `Shell.dataDir`. A relative path is taken from winshell's current folder, not from the config folder. Reads and writes happen off the UI thread unless `blockLoading` or `blockWrites` says otherwise.
 
-A file larger than 1 MiB (1,048,576 bytes) is left unread. The text already loaded stays, the properties stay, and the file on disk stays. `loadFailed` is `FileView.Unknown`, and the adapter's `error` says how many bytes the file was. `writeAdapter()` leaves a file of that size unchanged and raises `saveFailed`.
+A file larger than 64 MiB (67,108,864 bytes) is left unread. The text already loaded stays, the properties stay, and the file on disk stays. `loadFailed` is `FileView.Unknown`, and the adapter's `error` says how many bytes the file was. `writeAdapter()` leaves a file of that size unchanged and raises `saveFailed`.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -104,7 +104,7 @@ A file larger than 1 MiB (1,048,576 bytes) is left unread. The text already load
 | `blockWrites` | bool | Writes on the UI thread, so a write is finished when the call returns and two quick writes land in order. Default `false`. |
 | `blockAllReads` | bool | Makes the first read and `reload()` read on the UI thread. Default `false`. A change of `path` still follows `blockLoading`. |
 | `atomicWrites` | bool | Writes a temporary file next to the file, then moves it over the file, so a reader never sees half a write. A symbolic link is followed and the link itself stays. A hard link is written in place, so its other names keep the new text. Default `true`. |
-| `printErrors` | bool | Logs a failed read or write as a warning in the `io` category. A missing file is not logged. Default `true`. A file larger than 1 MiB is still logged when this is false, and the adapter's `error` is set. |
+| `printErrors` | bool | Logs a failed read or write as a warning in the `io` category. A missing file is not logged. Default `true`. A file larger than 64 MiB is still logged when this is false, and the adapter's `error` is set. |
 | `watchChanges` | bool | Emits `fileChanged` when the file's text on disk differs from the text this view holds. Default `false`. Its own write does not count, and a hand save in the same moment does. A folder that does not exist yet is watched from the nearest folder that does, so a file made by hand in a new folder is seen too. |
 | `loaded` | bool, read-only | Whether the file's text has been read. |
 | `adapter` | [FileViewAdapter](#fileviewadapter) | Turns the file's text into properties and back. It reads the text each time the file is read. |
@@ -114,12 +114,12 @@ A file larger than 1 MiB (1,048,576 bytes) is left unread. The text already load
 | `waitForJob()` | method, returns bool | Returns `true` at once. It does not wait for a read or write in progress. |
 | `setText(text)` | method | Replaces the file's contents with `text`. Creates missing folders. |
 | `setData(data)` | method | Replaces the file's contents with `data`, as text. |
-| `writeAdapter()` | method | Writes what the adapter's properties hold to the file. When the file on disk does not parse, or is larger than 1 MiB, nothing is written and `saveFailed` is raised. |
+| `writeAdapter()` | method | Writes what the adapter's properties hold to the file. When the file on disk does not parse, or is larger than 64 MiB, nothing is written and `saveFailed` is raised. |
 | `loaded()` | signal | The file was read. It fires after each successful read, including `reload()`. |
-| `loadFailed(error)` | signal | The file could not be read. `error` is a [FileViewError](#fileviewerror) value, such as `FileView.FileNotFound`. A file larger than 1 MiB uses `FileView.Unknown`. |
+| `loadFailed(error)` | signal | The file could not be read. `error` is a [FileViewError](#fileviewerror) value, such as `FileView.FileNotFound`. A file larger than 64 MiB uses `FileView.Unknown`. |
 | `fileChanged()` | signal | The file changed on disk or was deleted, with `watchChanges` on. The view does not read it again by itself. |
 | `saved()` | signal | A write finished. |
-| `saveFailed(error)` | signal | A write failed, or it was skipped because the file on disk does not parse or is larger than 1 MiB. `error` is always `FileView.Unknown`. |
+| `saveFailed(error)` | signal | A write failed, or it was skipped because the file on disk does not parse or is larger than 64 MiB. `error` is always `FileView.Unknown`. |
 | `adapterUpdated()` | signal | A property of the adapter changed, other than by reading the file. Call `writeAdapter()` here to save each change. |
 
 Enum values: `Success`, `Unknown`, `FileNotFound`, `PermissionDenied`, `NotAFile`
@@ -128,7 +128,7 @@ Enum values: `Success`, `Unknown`, `FileNotFound`, `PermissionDenied`, `NotAFile
 
 The adapter for a JSON file, created with `JsonAdapter { }` inside a [FileView](#fileview). Every property declared on it is a key of the JSON object: reading the file sets each writable property the file has, and `writeAdapter()` writes them all, indented by two spaces. It has the members of [FileViewAdapter](#fileviewadapter).
 
-A key the file does not have keeps its value. A file that is not valid JSON logs a warning in the `io` category and changes nothing. A file larger than 1 MiB is left unread, as for any other [FileView](#fileview). JSON has no separate limit on how many values there are or how deep they are nested. A property whose value is a [JsonObject](#jsonobject) is a nested JSON object.
+A key the file does not have keeps its value. A file that is not valid JSON logs a warning in the `io` category and changes nothing. A file larger than 64 MiB is left unread, as for any other [FileView](#fileview). JSON has no separate limit on how many values there are or how deep they are nested. A property whose value is a [JsonObject](#jsonobject) is a nested JSON object.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -165,7 +165,7 @@ The file is read at start, written each time a property changes, and read again 
 
 The adapter for a TOML file, created with `TomlAdapter { }` inside a [FileView](#fileview). Every property declared on it is a key. Reading the file sets each writable property. `writeAdapter()` changes a key only when its value changed, and updates a table, an array of tables, or a dotted key already in the file instead of writing a second one. Comments, blank lines, number spellings, and keys it does not own stay. A key the file does not have yet goes at the end, under the line from `comments` when that key has one. It has the members of [FileViewAdapter](#fileviewadapter).
 
-A key the file does not have keeps its value. A string, url or color property is set only from a TOML string; another value keeps the property's value and is left as written, and a later save does not rewrite it. A bool property is set only from a TOML boolean or number; a string, array, or table is left as written. An integer past 2^53, or a value that cannot be converted, is left as written. Each of those last three logs a warning in the `io` category. A file that is not valid TOML logs a warning and changes nothing. The same happens when the text has more than 100,000 values, or is nested more than 64 levels: arrays, inline tables and dotted keys all count, the properties stay, and a later save leaves the file unchanged. A preferences file is about a dozen keys and one or two levels deep (`hiddenNotificationApps = [{ id, name }]`), and a pin list of thousands of apps stays under both limits. A later `writeAdapter()` reads the file again: when that read parses, the change is written into it and keys that were not assigned stay as that read has them; when it does not, or the read fails, or the file is past one of these limits, nothing is written and a warning is logged.
+A key the file does not have keeps its value. A string, url or color property is set only from a TOML string; another value keeps the property's value and is left as written, and a later save does not rewrite it. A bool property is set only from a TOML boolean or number; a string, array, or table is left as written. An integer past 2^53, or a value that cannot be converted, is left as written. Each of those last three logs a warning in the `io` category. A file that is not valid TOML logs a warning and changes nothing. The same happens when the file is larger than 1 MiB (1,048,576 bytes): the properties stay, and a later save leaves that file unchanged. A document nested past 64 levels is not applied. Tomlyn refuses it, including a dotted key, and reports that the maximum depth of 64 was exceeded. The conversion of a value into a property also stops at 64 containers, which is what keeps that walk off the stack. A preferences file is about a dozen keys and one or two levels deep (`hiddenNotificationApps = [{ id, name }]`). A pin list of thousands of apps stays under the 1 MiB cap. There is no separate limit on how many values the file holds. A later `writeAdapter()` reads the file again: when that read parses, the change is written into it and keys that were not assigned stay as that read has them; when it does not, or the read fails, or the file is larger than 1 MiB, nothing is written and a warning is logged.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -302,7 +302,7 @@ The base of [JsonAdapter](#jsonadapter) and [TomlAdapter](#tomladapter), which t
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `error` | string, read-only | Why the file could not be parsed, as `path[line:column]: message`, or empty when the last read parsed. A size, value-count or nesting limit is `path: message`, with no line or column. A `TomlAdapter` sets it, and so does a `FileView` when the file is larger than 1 MiB. |
+| `error` | string, read-only | Why the file could not be parsed, as `path[line:column]: message`, or empty when the last read parsed. A size limit, or Tomlyn's depth limit, is `path: message`, with no line or column. A `TomlAdapter` sets it, and so does a `FileView` when the file is larger than 64 MiB. |
 | `adapterUpdated()` | signal | A property of the adapter changed, other than by reading the file. The `FileView` passes it on as its own `adapterUpdated`. |
 
 ## FileViewError
@@ -314,7 +314,7 @@ Values: `Success`, `Unknown`, `FileNotFound`, `PermissionDenied`, `NotAFile`
 | Value | Meaning |
 | --- | --- |
 | `Success` | The file was read. Not passed to `loadFailed`. |
-| `Unknown` | Another read or write error, including a file larger than 1 MiB. |
+| `Unknown` | Another read or write error, including a file larger than 64 MiB. |
 | `FileNotFound` | The file or its folder does not exist. |
 | `PermissionDenied` | Windows denied access to the file. |
 | `NotAFile` | The path is a folder. |
