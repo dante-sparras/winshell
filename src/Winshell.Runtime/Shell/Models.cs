@@ -209,7 +209,7 @@ public sealed class ScriptModel : ObjectModel
         {
             if (_objectProp.Length > 0)
                 return ja.AsObject().Get(_objectProp).Equals(jb.AsObject().Get(_objectProp));
-            if (_comparisonMode == 1)
+            if (_comparisonMode == (int)ObjectComparison.Identity)
                 return false;
             var engine = ja.AsObject().Engine;
             var serializer = new Jint.Native.Json.JsonSerializer(engine);
@@ -333,15 +333,31 @@ public sealed class Region : QObject, IPropertyObserver
         foreach (var child in Regions.Snapshot)
         {
             using var other = child.ToSkRegion(windowRoot);
-            var op = child._intersection switch
+            var op = (Shell.Intersection)child._intersection switch
             {
-                1 => SkiaSharp.SKRegionOperation.Difference,
-                2 => SkiaSharp.SKRegionOperation.Intersect,
-                3 => SkiaSharp.SKRegionOperation.XOR,
+                Shell.Intersection.Subtract => SkiaSharp.SKRegionOperation.Difference,
+                Shell.Intersection.Intersect => SkiaSharp.SKRegionOperation.Intersect,
+                Shell.Intersection.Xor => SkiaSharp.SKRegionOperation.XOR,
                 _ => SkiaSharp.SKRegionOperation.Union,
             };
             region.Op(other, op);
         }
         return region;
     }
+}
+
+/// <summary>The <c>Intersection</c> values, for <c>Region.intersection</c>.</summary>
+public enum Intersection
+{
+    Combine = 0,
+    Subtract = 1,
+    Intersect = 2,
+    Xor = 3,
+}
+
+/// <summary>The <c>ObjectComparison</c> values, for <c>ScriptModel.comparisonMode</c>.</summary>
+public enum ObjectComparison
+{
+    Structure = 0,
+    Identity = 1,
 }

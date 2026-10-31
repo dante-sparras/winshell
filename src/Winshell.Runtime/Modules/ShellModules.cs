@@ -43,14 +43,11 @@ public static partial class StandardModules
             .Uncreatable<PopupAnchor>("PopupAnchor")
             .Uncreatable<ShellWindowAttached>("ShellWindow", "ShellWindow is the base of the shell's windows", attached: o => new ShellWindowAttached(o), attachedType: typeof(ShellWindowAttached))
             .Uncreatable<Edges>("Edges")
-            .Add(EnumType("ExclusionMode", [new("Normal", 0), new("Ignore", 1), new("Auto", 2)], core.Name))
-            .Add(EnumType("RegionShape", [new("Rect", 0), new("Ellipse", 1)], core.Name))
-            .Add(EnumType("Intersection", [new("Combine", 0), new("Subtract", 1), new("Intersect", 2), new("Xor", 3)], core.Name))
-            .Add(EnumType("ObjectComparison", [new("Structure", 0), new("Identity", 1)], core.Name))
-            .Add(EnumType("PopupAdjustment", [
-                new("None", 0), new("SlideX", 1), new("SlideY", 2), new("Slide", 3), new("FlipX", 4), new("FlipY", 8), new("Flip", 12),
-                new("ResizeX", 16), new("ResizeY", 32), new("Resize", 48), new("All", 63)], core.Name));
-
+            .Uncreatable<PanelWindow.ExclusionModeValue>("ExclusionMode")
+            .Uncreatable<Region.ShapeValue>("RegionShape")
+            .Uncreatable<Intersection>("Intersection")
+            .Uncreatable<ObjectComparison>("ObjectComparison")
+            .Uncreatable<PopupAdjustment>("PopupAdjustment");
 
         var io = registry.Module("Winshell.Io");
         io.Type<ProcessObject>("Process")
@@ -66,7 +63,7 @@ public static partial class StandardModules
             .Type<IpcHandler>("IpcHandler")
             .Type<SocketObject>("Socket")
             .Type<SocketServer>("SocketServer")
-            .Add(EnumType("FileViewError", [new("Success", 0), new("Unknown", 1), new("FileNotFound", 2), new("PermissionDenied", 3), new("NotAFile", 4)], io.Name));
+            .Uncreatable<FileView.FileViewError>("FileViewError");
 
         var widgets = registry.Module("Winshell.Widgets");
         widgets.Type<IconImage>("IconImage")
