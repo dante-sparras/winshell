@@ -61,8 +61,7 @@ public sealed record FloatingPlacement(
     QSize MinimumSize,
     QSize MaximumSize,
     bool Maximized,
-    bool Minimized,
-    bool Fullscreen);
+    bool Minimized);
 
 /// <summary>What the window shows behind its content: nothing, or a Windows 11 material.</summary>
 public enum WindowBackdrop
@@ -144,7 +143,7 @@ public interface IWindowClient
     /// <summary>The window lost focus or was dismissed by a click elsewhere, as a grabbing popup is.</summary>
     void OnDismissed();
 
-    void OnStateChanged(bool maximized, bool minimized, bool fullscreen);
+    void OnStateChanged(bool maximized, bool minimized);
 
     /// <summary>
     /// The native window threw while drawing or handling a message, and stopped doing either. Called on the loop,

@@ -2,13 +2,13 @@
 
 The `Winshell` module is the core of a configuration: the `Shell` singleton, the root object of a shell, its windows (panels, floating windows and popup windows), the screens they go on, and the small helpers a shell needs, such as a clock, a month grid and models that keep their objects. Every configuration imports it with `import Winshell`.
 
-A configuration that started as a Quickshell one finds the old names in [Migrating from Quickshell](../migrating-from-quickshell.md). The default shell shows these types in use: see [the taskbar](../taskbar.md), [Winshell Settings](../settings.md) and [notifications and the calendar](../notifications.md). Tray menus, which `MenuAnchor` opens, are in [the notification area](../tray.md).
+A configuration that started as a Quickshell one finds the old names in [Migrating from Quickshell](../migrating-from-quickshell.md). The default shell shows these types in use: see [the taskbar](../taskbar.md), [Winshell Settings](../settings.md) and [notifications and the calendar](../notifications.md). Tray menus are in [the notification area](../tray.md).
 
 ## Shell
 
 The `Shell` singleton: the screens, the clipboard, reloads, processes and folders of this shell. Use it by name, as in `Shell.screens`. It mirrors `watchFiles`, `workingDirectory` and `lastWindowClosed()` from [ShellSettings](#shellsettings).
 
-A few of its values come from `//@ pragma` comments at the top of the root file, before the first line of code: `ShellId`, `AppId`, `DataDir`, `StateDir`, `CacheDir`, and `Env NAME=value`, which sets an environment variable for the shell. An `IconTheme` pragma is read but has no effect.
+A few of its values come from `//@ pragma` comments at the top of the root file, before the first line of code: `ShellId`, `AppId`, `DataDir`, `StateDir`, `CacheDir`, and `Env NAME=value`, which sets an environment variable for the shell. A `//@ pragma IconTheme` line is not a shell setting: the configuration fails to load until it is removed.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -128,16 +128,14 @@ One screen. The object stays the same while the screen is connected. Reach it fr
 | --- | --- | --- |
 | `name` | string, read-only | The Windows device name, such as `DISPLAY1`. |
 | `model` | string, read-only | The monitor's name in Windows' device list, often `Generic PnP Monitor`. |
-| `manufacturer` | string, read-only | Meant to be the three-letter PnP manufacturer code, such as `AUS`. Empty in this release. |
-| `serialNumber` | string, read-only | Meant to be the monitor's serial part of its device id. Reads `?` in this release. |
+| `manufacturer` | string, read-only | The three-letter PnP manufacturer code from the monitor's device id, such as `AUS`, or empty when Windows does not report one. |
+| `serialNumber` | string, read-only | The instance part of the monitor's device id, such as `5&15335277&0&UID184582`, or empty when Windows does not report one. It tells two identical monitors apart. It is not the serial number printed on the monitor. |
 | `x` | real, read-only | The left edge on the virtual desktop. |
 | `y` | real, read-only | The top edge on the virtual desktop. |
 | `width` | real, read-only | The width in logical pixels. |
 | `height` | real, read-only | The height in logical pixels. |
 | `workArea` | rect, read-only | A Windows extension: the part of the screen windows maximize into, without the taskbar and the zones other app bars reserve, in the same logical coordinates as `x` and `y`. |
 | `devicePixelRatio` | real, read-only | The screen's scale: physical pixels per logical pixel, such as 1.5 at 144 DPI. |
-| `physicalPixelDensity` | real, read-only | Physical pixels per millimeter. Winshell does not read the monitor's size, so this is 96 DPI times the scale, about 3.78 × `devicePixelRatio`. |
-| `logicalPixelDensity` | real, read-only | Logical pixels per millimeter. Always 96 DPI, about 3.78, for the same reason. |
 | `orientation` | int, read-only | `Qt.LandscapeOrientation` (2) when the screen is at least as wide as it is tall, else `Qt.PortraitOrientation` (1). |
 | `primaryOrientation` | int, read-only | The same as `orientation`. |
 | `refreshRate` | int, read-only | The refresh rate in hertz, or 60 when Windows does not report one. |
@@ -163,7 +161,6 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `backingWindowVisible` | bool, read-only | Whether the native window is on screen now. |
 | `color` | color | What the window clears to before drawing its items. Default white. Make it `"transparent"` or translucent to let a [WindowEffects](#windoweffects) backdrop show through. |
 | `mask` | [Region](#region) | The part of the window that takes clicks; clicks elsewhere go to the window below. Null, the default, is the whole window. An empty region lets every click through. Windows also clips drawing to a non-empty mask, so the parts outside it are not shown. |
-| `surfaceFormat` | group: `opaque` (bool) | Set the field, as in `surfaceFormat.opaque: true`; the group itself can't be replaced. Whether the window is opaque, which by default follows `color`. The Windows backend does not use it. |
 | `screen` | [ShellScreen](#shellscreen) | The screen the window is on. Setting it puts a panel or a new floating window on that screen. Unset, it is the screen the window is shown on, or the primary screen. |
 | `devicePixelRatio` | real, read-only | The scale of the screen the window is on. |
 | `updatesEnabled` | bool | Whether the window draws its items. Default true. While false, it shows only `color`. |
@@ -173,7 +170,6 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `itemRect(item)` | method, returns rect | The bounds of `item` in the window's coordinates. |
 | `mapFromItem(item, xOrPoint, y, width, height)` | method, returns var | Maps a point (`x, y`, or a point) or a rectangle (`x, y, width, height`, or a rect) from `item` to the window's coordinates. |
 | `closed()` | signal | Emitted when the window is closed, as with Alt+F4. The window hides; it is not destroyed. |
-| `resourcesLost()` | signal | Not emitted on Windows. |
 | `windowConnected()` | signal | Emitted when the window gets its native window, after each load or reload. |
 
 ## PanelWindow
@@ -204,8 +200,6 @@ A normal desktop window with a title bar, created as `FloatingWindow { }`. It op
 | `maximumSize` | size | The largest size the user can resize to, in logical pixels. 0 means no limit, as by default. |
 | `maximized` | bool | Whether the window is maximized. Setting it maximizes or restores the window; it follows the user. |
 | `minimized` | bool | Whether the window is minimized. Setting it minimizes or restores the window; it follows the user. |
-| `fullscreen` | bool | Not applied on Windows in this release, and set back to false when the window moves or resizes. |
-| `parentWindow` | [ShellWindow](#shellwindow) | Stored, but not used on Windows in this release. |
 | `activate()` | method | Shows the window, restores it when it is minimized, and brings it to the front with keyboard focus. Windows allows this after a click or hotkey in the shell; asked from elsewhere, Windows may only flash its taskbar button. |
 | `startSystemMove()` | method | Starts moving the window with the mouse, as dragging its title bar does. Call it from a mouse press. |
 | `startSystemResize(edges)` | method | Starts resizing the window with the mouse from `edges`, an [Edges](#edges) value such as `Edges.Bottom \| Edges.Right`. Call it from a mouse press. |
@@ -226,13 +220,13 @@ A frameless window placed next to its parent window, created as `PopupWindow { }
 
 ## PopupAnchor
 
-Where a popup window attaches to its parent window. Reach it as `PopupWindow.anchor` or `MenuAnchor.anchor`; it cannot be created. The anchor is a rectangle in the parent window: an item's bounds, or `rect`. `edges` picks a point on it, and the popup window grows from that point toward `gravity`, then flips, slides or shrinks as `adjustment` allows to stay in the work area.
+Where a popup window attaches to its parent window. Reach it as `PopupWindow.anchor`; it cannot be created. The anchor is a rectangle in the parent window: an item's bounds, or `rect`. `edges` picks a point on it, and the popup window grows from that point toward `gravity`, then flips, slides or shrinks as `adjustment` allows to stay in the work area.
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `window` | [ShellWindow](#shellwindow) | The parent window. With `item` set, the item's window. Setting it clears `item`. |
 | `item` | Item | An item whose bounds are the anchor rectangle. Setting it clears `window`. |
-| `rect` | group: `x`, `y`, `width`, `height` (real) | The anchor rectangle in the window, 1 by 1 at the corner by default. Set each field, as in `anchor.rect.x: 12`; the group itself can't be replaced. With `item` set, `x` and `y` move the item's bounds, and `width` and `height` are not used. |
+| `rect` | group: `x`, `y`, `width`, `height` (real) | The anchor rectangle in the window, 1 by 1 at the corner by default. Set each field, as in `anchor.rect.x: 12`; the group itself can't be replaced. With `item` set, `x` and `y` offset the item's bounds. Setting `width` or `height` replaces that side of the item's size. |
 | `margins` | group: `left`, `top`, `right`, `bottom` (real) | Grows the anchor rectangle outward on each side, in logical pixels, to leave a gap. Set each side, as in `anchor.margins.top: 8`; the group itself can't be replaced. |
 | `edges` | [Edges](#edges) | The point on the anchor rectangle: an edge or a corner. No edge on an axis means its middle. Default `Edges.Top \| Edges.Left`. |
 | `gravity` | [Edges](#edges) | The direction the popup window grows from that point. Default `Edges.Bottom \| Edges.Right`. |
@@ -264,11 +258,11 @@ A shape for a window's `mask`, created as `Region { }`. Child regions in `region
 | `height` | real | The height, when `item` is not set. Default 0. |
 | `shape` | [RegionShape](#regionshape) | `RegionShape.Rect`, the default, or `RegionShape.Ellipse`, which fills the bounds. |
 | `intersection` | [Intersection](#intersection) | How this region combines with its parent region. Default `Combine`. On the window's mask itself, anything but `Combine` applies the region to the whole window, so `Subtract` makes every part but the region take clicks. |
-| `radius` | real | Not used in this release. |
-| `topLeftRadius` | real | Not used in this release. |
-| `topRightRadius` | real | Not used in this release. |
-| `bottomLeftRadius` | real | Not used in this release. |
-| `bottomRightRadius` | real | Not used in this release. |
+| `radius` | real | The corner radius, in logical pixels. A corner whose own radius is 0 uses this. All of them 0 is a sharp rectangle. An ellipse ignores it. |
+| `topLeftRadius` | real | That corner's radius. 0 uses `radius`. An ellipse ignores it. |
+| `topRightRadius` | real | That corner's radius. 0 uses `radius`. An ellipse ignores it. |
+| `bottomLeftRadius` | real | That corner's radius. 0 uses `radius`. An ellipse ignores it. |
+| `bottomRightRadius` | real | That corner's radius. 0 uses `radius`. An ellipse ignores it. |
 | `regions` | list of [Region](#region), read-only | The child regions. |
 | `changed()` | signal | Emitted when the region or a child region changes. |
 
@@ -469,50 +463,7 @@ A model made from a script's array, as `ScriptModel { values: list.filter(...) }
 
 ## MenuHandle
 
-A menu QML can open or read, which a service gives, such as `SystemTrayItem.menu` from `Winshell.Tray`. Open it with [MenuAnchor](#menuanchor), or read its entries with [MenuOpener](#menuopener). A tray icon's menu belongs to its app, which draws it itself, so it has no entries to read; see [the notification area](../tray.md). It cannot be created.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `menuChanged()` | signal | Emitted when the menu's entries change. |
-
-## MenuEntry
-
-One entry of a menu, from `MenuOpener.children`. It is also a [MenuHandle](#menuhandle) for its submenu. No service in this release gives a menu with readable entries, so none exist yet. It cannot be created.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `enabled` | bool, read-only | Whether the entry can be chosen. |
-| `isSeparator` | bool, read-only | Whether the entry is a separator line. |
-| `hasChildren` | bool, read-only | Whether the entry opens a submenu. |
-| `checkState` | int, read-only | `Qt.Unchecked`, `Qt.PartiallyChecked` or `Qt.Checked`. |
-| `text` | string, read-only | The entry's text. |
-| `buttonType` | [MenuButtonType](#menubuttontype), read-only | Whether the entry has a check box or a radio button. |
-| `icon` | string, read-only | The entry's icon, or empty. |
-| `display(parentWindow, relativeX, relativeY)` | method | Shows the entry's submenu as a Windows menu at a point in a window. |
-| `triggered()` | signal | Emitted when the entry is chosen. |
-
-## MenuOpener
-
-The entries of a menu, to draw the menu in QML, as `MenuOpener { menu: someMenu }`.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `menu` | [MenuHandle](#menuhandle) | The menu to read. |
-| `children` | ObjectModel of [MenuEntry](#menuentry), read-only | The menu's entries. Empty for a tray icon's menu. |
-
-## MenuAnchor
-
-Opens a menu as a Windows menu next to an anchor, as `MenuAnchor { menu: item.menu; anchor.item: button }`. The menu opens at the bottom-left corner of the anchor rectangle; the anchor's `edges`, `gravity` and `adjustment` are not used.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `menu` | [MenuHandle](#menuhandle) | The menu to open. |
-| `anchor` | [PopupAnchor](#popupanchor), read-only | Where the menu opens, as `anchor.item: button`. |
-| `visible` | bool, read-only | True from `open()` until `closed()`. |
-| `open()` | method | Opens the menu. |
-| `close()` | method | Marks the menu closed. Windows runs the menu itself, so the anchor closes on the next turn of the event loop after it opens, without waiting for the menu. |
-| `opened()` | signal | Emitted when `open()` opens the menu. |
-| `closed()` | signal | Emitted when the anchor closes. |
+A menu a service gives, such as `SystemTrayItem.menu` from `Winshell.Tray`. A tray icon's menu belongs to its app, which draws it itself. `SystemTrayItem.display()` asks the app to open it; see [the notification area](../tray.md). It cannot be created.
 
 ## Retainable
 
@@ -610,7 +561,7 @@ How a [ScriptModel](#scriptmodel) matches JavaScript objects, for `comparisonMod
 
 ## MenuButtonType
 
-The kind of button a [MenuEntry](#menuentry) has, from `buttonType`.
+Button kinds a menu entry can show. No menu in this release exposes one. The values stay so a configuration that names them still loads.
 
 | Value | Description |
 | --- | --- |
