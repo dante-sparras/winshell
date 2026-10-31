@@ -63,16 +63,14 @@ A workspace, reached from `Winland.workspaces` and other Winland objects. Winlan
 | `toplevels` | ObjectModel of [WinlandWindow](#winlandwindow), read-only | The windows on the workspace. |
 | `lastIpcObject` | var, read-only | The workspace's entry from Winland's last workspace list, as a JavaScript object. Null before the first one. |
 | `activate()` | method | Shows the workspace. When it is on a monitor other than the focused one, that monitor is focused first. |
-| `typeChanged()` | signal | Never emitted on this checkout. |
 
 ## WinlandWindow
 
-A window as Winland reports it, reached from `Winland.toplevels` and `WinlandWorkspace.toplevels`. It is also an attached object of an [AppWindow](winshell-windows.md#appwindow), but a QML expression attaches it to the object it is written in, which is never an `AppWindow`, so in practice only the listed windows carry data.
+A window as Winland reports it, reached from `Winland.toplevels` and `WinlandWorkspace.toplevels`.
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `address` | string, read-only | The window handle in hexadecimal, without `0x`. |
-| `handle` | [WinlandWindow](#winlandwindow), read-only | For the attached object, the listed window with the same handle; null until Winland reports it. Null on a listed window. |
 | `wayland` | [AppWindow](winshell-windows.md#appwindow), read-only | The same window from `WindowList`. Null unless the shell uses `WindowList` from `Winshell.Windows`. |
 | `title` | string, read-only | The window's title. |
 | `workspace` | [WinlandWorkspace](#winlandworkspace), read-only | The workspace the window is on, or null. |

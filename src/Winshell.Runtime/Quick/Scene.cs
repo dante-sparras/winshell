@@ -551,7 +551,7 @@ public sealed class Scene : IItemHost
     {
         var now = new List<(IHoverTarget Target, double X, double Y)>();
         using (DependencyTracker.Suspend())
-            CollectHover(Root, x, y, now, isRoot: true);
+            CollectHover(Root, x, y, now, modifiers, isRoot: true);
         foreach (var old in _hovered.ToArray())
         {
             if (old is QObject { IsDestroyed: true })
@@ -606,7 +606,7 @@ public sealed class Scene : IItemHost
     /// Collects the hover targets under a point, topmost first. Hover passes through items that do not take it,
     /// and an item that takes it is hovered with the items above it that do.
     /// </summary>
-    private static bool CollectHover(Item item, double x, double y, List<(IHoverTarget, double, double)> result, bool isRoot = false)
+    private static bool CollectHover(Item item, double x, double y, List<(IHoverTarget, double, double)> result, int modifiers, bool isRoot = false)
     {
         if (!item.IsVisibleFlag || !item.Enabled)
             return false;
@@ -617,7 +617,7 @@ public sealed class Scene : IItemHost
         var order = item.PaintOrder;
         for (var i = order.Count - 1; i >= 0; i--)
         {
-            if (CollectHover(order[i], lx, ly, result))
+            if (CollectHover(order[i], lx, ly, result, modifiers))
             {
                 accepted = true;
                 break;
@@ -625,7 +625,7 @@ public sealed class Scene : IItemHost
         }
         foreach (var handler in item.PointerHandlers)
         {
-            if (handler is HoverHandler { AcceptsHover: true } hover && hover.HitTest(item, lx, ly))
+            if (handler is HoverHandler { AcceptsHover: true } hover && hover.AcceptsModifiers(modifiers) && hover.HitTest(item, lx, ly))
             {
                 result.Add((hover, lx, ly));
                 if (hover.Blocking)

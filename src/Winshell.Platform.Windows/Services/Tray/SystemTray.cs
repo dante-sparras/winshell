@@ -91,8 +91,8 @@ public sealed class SystemTray : QObject
 }
 
 /// <summary>
-/// The <c>SystemTrayItem</c> for an app's notification area icon. Its menu belongs to the app, which only
-/// shows it itself: <c>display()</c> and <c>MenuAnchor</c> open it, while <c>MenuOpener</c> sees no entries.
+/// The <c>SystemTrayItem</c> for an app's notification area icon. Its menu belongs to the app, which draws
+/// it itself. <c>display()</c> asks the app to open it.
 /// </summary>
 [QmlSignal("ready")]
 [QmlSignal("balloon", "title", "message", "icon")]

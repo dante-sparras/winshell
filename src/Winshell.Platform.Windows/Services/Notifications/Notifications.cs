@@ -212,7 +212,7 @@ public sealed class NotificationListener : QObject
         }
         RebuildModels();
         foreach (var item in removed)
-            item.Destroy();
+            RetainableHook.Release(item);
         foreach (var item in added)
             Emit("notificationAdded", item);
     }
@@ -232,7 +232,7 @@ public sealed class NotificationListener : QObject
             _items.Clear();
             RebuildModels();
             foreach (var item in removed)
-                item.Destroy();
+                RetainableHook.Release(item);
         }
     }
 
@@ -288,7 +288,7 @@ public sealed class NotificationListener : QObject
                 Interlocked.Increment(ref _revision);
                 _items.Remove(notification.NativeId);
                 RebuildModels();
-                notification.Destroy();
+                RetainableHook.Release(notification);
             }
             catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
             {
@@ -323,12 +323,17 @@ public sealed class NotificationListener : QObject
     }
 }
 
-/// <summary>Windows listener content, with timestamps in Unix milliseconds for JavaScript Date.</summary>
-public sealed class ShellNotification : QObject
+/// <summary>
+/// Windows listener content, with timestamps in Unix milliseconds for JavaScript Date.
+/// A <see cref="RetainableHook"/> lock keeps it after it leaves the center.
+/// </summary>
+public sealed class ShellNotification : QObject, IRetainable
 {
     private readonly NotificationListener _listener;
     private IncomingToast _toast;
     internal ShellNotification(NotificationListener listener, IncomingToast toast) { _listener = listener; _toast = toast; }
+    RetainableHook? IRetainable.RetainHook { get; set; }
+    void IRetainable.FinishRetain() => Destroy();
     internal uint NativeId => _toast.Id;
     internal DateTimeOffset CreatedAtValue => _toast.CreatedAt;
     [Qml] public double Id => NativeId;
