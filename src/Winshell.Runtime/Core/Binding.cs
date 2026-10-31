@@ -164,9 +164,23 @@ public sealed class Binding : IPropertyObserver, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        Park();
+    }
+
+    /// <summary>Drops subscriptions without disposing, so the binding can be installed on the property again.</summary>
+    internal void Park()
+    {
         foreach (var (obj, prop) in _dependencies)
             obj.RemoveObserver(prop, this);
         _dependencies.Clear();
+    }
+
+    /// <summary>The expression's current value, without writing it or changing subscriptions.</summary>
+    internal object? Peek()
+    {
+        if (_disposed)
+            return null;
+        return _evaluate();
     }
 }
 

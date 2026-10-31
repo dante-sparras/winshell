@@ -1,5 +1,3 @@
-using Jint.Native;
-
 namespace Winshell.Runtime.Quick;
 
 /// <summary>QtQuick's <c>State</c>: a named set of property changes.</summary>
@@ -71,19 +69,22 @@ public sealed class PropertyChanges : QObject, IAcceptsAnyProperty
         return created;
     }
 
-    /// <summary>The property assignments, on <see cref="Target"/> (or <paramref name="item"/>) and on targets named by id.</summary>
-    internal IEnumerable<(QObject Target, string Name, object? Value)> Values(QObject item)
+    /// <summary>
+    /// The property assignments, on <see cref="Target"/> (or <paramref name="item"/>) and on targets named by id.
+    /// The holder is the object whose binding or value is the expression to apply.
+    /// </summary>
+    internal IEnumerable<(QObject Target, string Name, QObject Holder)> Assignments(QObject item)
     {
         var target = Target ?? item;
         foreach (var p in DynamicProperties)
         {
             if (p.Name != "target")
-                yield return (target, p.Name, p.Read());
+                yield return (target, p.Name, this);
         }
         foreach (var (qualifiedTarget, holder) in _qualified ?? [])
         {
             foreach (var p in holder.DynamicProperties)
-                yield return (qualifiedTarget, p.Name, p.Read());
+                yield return (qualifiedTarget, p.Name, holder);
         }
     }
 
@@ -118,14 +119,32 @@ public sealed class Transition : QObject
     /// <summary>Gives a change to the animations that animate it. Returns whether any does.</summary>
     internal bool Animate(QObject target, string property, object? to) => Animate(Animations.Snapshot, target, property, to);
 
-    /// <summary>Starts the animations that were given a change.</summary>
-    internal void Run()
+    /// <summary>Starts the animations that were given a change. <paramref name="onFinished"/> runs as each of those animations finishes.</summary>
+    internal void Run(List<IDisposable> hooks, Action<AnimationBase> onFinished)
     {
         foreach (var a in Animations.Snapshot)
         {
-            if (HasChanges(a))
-                a.Start();
+            if (!HasChanges(a))
+                continue;
+            hooks.Add(a.Connect("finished", _ => onFinished(a)));
+            a.Start();
         }
+    }
+
+    /// <summary>Whether this animation, or a member of it, was given <paramref name="property"/> on <paramref name="target"/>.</summary>
+    internal static bool Covers(AnimationBase animation, QObject target, string property)
+    {
+        if (animation is PropertyAnimation pa)
+            return pa.TransitionTracks.Any(t => ReferenceEquals(t.Target, target) && t.Property == property);
+        if (animation is AnimationGroup group)
+        {
+            foreach (var child in group.Animations.Snapshot)
+            {
+                if (Covers(child, target, property))
+                    return true;
+            }
+        }
+        return false;
     }
 
     private static void Reset(IEnumerable<AnimationBase> animations)
@@ -178,7 +197,7 @@ public sealed class Transition : QObject
 
 public static class States
 {
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Item, Dictionary<(QObject, string), object?>> Saved = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Item, Session> Sessions = new();
 
     /// <summary>Picks the state whose <c>when</c> holds, for items that use when instead of setting state.</summary>
     public static void Reevaluate(Item item)
@@ -194,46 +213,180 @@ public static class States
     {
         if (!item.IsComplete)
             return;
-        var saved = Saved.GetOrCreateValue(item);
-        // Restore what the last state changed, then apply the new one.
-        foreach (var ((target, property), value) in saved)
+        var session = Sessions.GetOrCreateValue(item);
+        session.Generation++;
+        var generation = session.Generation;
+        foreach (var hook in session.Hooks)
+            hook.Dispose();
+        session.Hooks.Clear();
+        foreach (var t in item.TransitionsList.Snapshot.OfType<Transition>())
+            t.Reset();
+
+        var state = name.Length == 0 ? null : item.StatesList.Snapshot.OfType<State>().FirstOrDefault(s => s.Name == name);
+        var next = new Dictionary<(QObject Target, string Property), Change>();
+        if (state is not null)
         {
-            if (!target.IsDestroyed)
-                Write(target, property, value);
-        }
-        saved.Clear();
-        var state = item.StatesList.Snapshot.OfType<State>().FirstOrDefault(s => s.Name == name);
-        if (state is null)
-            return;
-        var transition = item.TransitionsList.Snapshot.OfType<Transition>()
-            .FirstOrDefault(t => t.Enabled && (Matches(t, previous, name) || (t.Reversible && Matches(t, name, previous))));
-        transition?.Reset();
-        foreach (var change in state.Changes.Snapshot.OfType<PropertyChanges>())
-        {
-            foreach (var (target, prop, value) in change.Values(item))
+            foreach (var change in state.Changes.Snapshot.OfType<PropertyChanges>())
             {
-                if (!target.HasProperty(prop))
-                    continue;
-                using (DependencyTracker.Suspend())
-                    saved[(target, prop)] = target.ReadProperty(prop);
-                if (transition?.Animate(target, prop, value) != true)
-                    Write(target, prop, value);
+                foreach (var (target, prop, holder) in change.Assignments(item))
+                {
+                    if (!target.IsDestroyed && target.HasProperty(prop))
+                        next[(target, prop)] = new Change(holder, prop, change.RestoreEntryValues);
+                }
             }
         }
-        transition?.Run();
+
+        var transition = item.TransitionsList.Snapshot.OfType<Transition>()
+            .FirstOrDefault(t => t.Enabled && (Matches(t, previous, name) || (t.Reversible && Matches(t, name, previous))));
+        var deferred = new List<Deferred>();
+
+        foreach (var key in session.Saved.Keys.ToArray())
+        {
+            if (next.ContainsKey(key))
+                continue;
+            var entry = session.Saved[key];
+            if (!entry.Restore || entry.Target.IsDestroyed)
+            {
+                entry.Slot.Binding?.Dispose();
+                session.Saved.Remove(key);
+                continue;
+            }
+            void Commit()
+            {
+                if (session.Generation != generation || entry.Target.IsDestroyed)
+                    return;
+                PropertyOverride.Restore(entry.Target, entry.Property, entry.Slot);
+                session.Saved.Remove(key);
+            }
+            if (transition?.Animate(entry.Target, entry.Property, Endpoint(entry.Slot)) == true)
+            {
+                entry.Target.RemoveBinding(entry.Property);
+                deferred.Add(new Deferred(entry.Target, entry.Property, Commit));
+            }
+            else
+            {
+                Commit();
+            }
+        }
+
+        foreach (var (key, change) in next)
+        {
+            var (target, prop) = key;
+            if (session.Saved.TryGetValue(key, out var entry))
+            {
+                entry.Restore = change.Restore;
+                if (!change.Restore)
+                {
+                    entry.Slot.Binding?.Dispose();
+                    entry.Slot = new PropertyOverride.Slot();
+                }
+            }
+            else if (change.Restore)
+            {
+                session.Saved[key] = new Entry(target, prop, PropertyOverride.Capture(target, prop), true);
+            }
+            else
+            {
+                target.RemoveBinding(prop);
+            }
+
+            void CommitChange()
+            {
+                if (session.Generation != generation || target.IsDestroyed)
+                    return;
+                ApplyChange(target, prop, change.Holder);
+            }
+            object? to;
+            using (DependencyTracker.Suspend())
+                to = change.Holder.ReadProperty(change.Name);
+            if (transition?.Animate(target, prop, to) == true)
+            {
+                target.RemoveBinding(prop);
+                deferred.Add(new Deferred(target, prop, CommitChange));
+            }
+            else
+            {
+                CommitChange();
+            }
+        }
+
+        if (transition is null)
+            return;
+        var pending = deferred.ToList();
+        transition.Run(session.Hooks, anim =>
+        {
+            for (var i = pending.Count - 1; i >= 0; i--)
+            {
+                if (session.Generation != generation)
+                    return;
+                var job = pending[i];
+                if (!Transition.Covers(anim, job.Target, job.Property))
+                    continue;
+                pending.RemoveAt(i);
+                job.Commit();
+            }
+        });
+    }
+
+    private static void ApplyChange(QObject target, string property, QObject holder)
+    {
+        if (holder.GetBinding(property) is not null)
+        {
+            PropertyOverride.InstallLive(target, property, () =>
+            {
+                if (holder.IsDestroyed || !holder.HasProperty(property))
+                    return null;
+                return holder.ReadProperty(property);
+            }, $"state {target.TypeName}.{property}");
+            return;
+        }
+        target.RemoveBinding(property);
+        object? value;
+        using (DependencyTracker.Suspend())
+            value = holder.ReadProperty(property);
+        PropertyOverride.Write(target, property, value);
+    }
+
+    private static object? Endpoint(PropertyOverride.Slot slot)
+    {
+        if (!slot.HadBinding || slot.Binding is null)
+            return slot.Value;
+        try
+        {
+            using (DependencyTracker.Suspend())
+                return slot.Binding.Peek();
+        }
+        catch (Exception e)
+        {
+            Log.Default.Warn("scene", $"State: {e.Message}");
+            return slot.Value;
+        }
     }
 
     private static bool Matches(Transition t, string from, string to) =>
         (t.From == "*" || t.From == from) && (t.To == "*" || t.To == to);
 
-    private static void Write(QObject target, string property, object? value)
+    private sealed class Session
     {
-        try
-        {
-            target.WritePropertyDirect(property, value is JsValue js ? js : value);
-        }
-        catch (QmlException)
-        {
-        }
+        public Dictionary<(QObject Target, string Property), Entry> Saved { get; } = new();
+
+        public int Generation { get; set; }
+
+        public List<IDisposable> Hooks { get; } = [];
     }
+
+    private sealed class Entry(QObject target, string property, PropertyOverride.Slot slot, bool restore)
+    {
+        public QObject Target { get; } = target;
+
+        public string Property { get; } = property;
+
+        public PropertyOverride.Slot Slot { get; set; } = slot;
+
+        public bool Restore { get; set; } = restore;
+    }
+
+    private readonly record struct Change(QObject Holder, string Name, bool Restore);
+
+    private readonly record struct Deferred(QObject Target, string Property, Action Commit);
 }
