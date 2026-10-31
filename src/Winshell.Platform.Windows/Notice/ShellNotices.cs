@@ -65,6 +65,7 @@ public sealed partial class ShellNotices : IDisposable
         _host = host;
         _loop = loop;
         _platform = platform;
+        IsQuiet = () => platform.NotificationsAreQuiet;
         _log = log;
         _open = open;
         _modules = modules ?? StandardModules.Create;
@@ -75,7 +76,7 @@ public sealed partial class ShellNotices : IDisposable
     }
 
     /// <summary>Whether Windows is holding notifications back. A test replaces this.</summary>
-    internal Func<bool> IsQuiet { get; set; } = () => Win32.SHQueryUserNotificationState(out var state) == 0 && QuietState(state);
+    internal Func<bool> IsQuiet { get; set; }
 
     /// <summary>
     /// A full-screen app, a presentation, a busy state or quiet hours, the states in which Windows holds a toast back.
