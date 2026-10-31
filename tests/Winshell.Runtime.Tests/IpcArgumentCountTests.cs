@@ -6,6 +6,7 @@ public class IpcArgumentCountTests
 {
     private const string Qml = """
         import Winshell
+        import Winshell.Io
         ShellRoot {
           IpcHandler {
             target: "notes"
@@ -22,8 +23,7 @@ public class IpcArgumentCountTests
     {
         using var files = new TestShell(("shell.qml", Qml));
         using var host = new ShellHost(Path.Combine(files.Directory, "shell.qml"), files.Loop, new FakePlatform(), files.Log, null);
-        Assert.True(host.Start(), string.Join("
-", files.Messages));
+        Assert.True(host.Start(), string.Join(Environment.NewLine, files.Messages));
         files.Loop.Process();
 
         var error = Assert.Throws<IpcException>(() => host.Ipc.Call("notes", function, []));
