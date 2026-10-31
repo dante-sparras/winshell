@@ -3,8 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Winshell.Platform.Windows.Services.Session;
+using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
+using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Platform.Windows.Diagnostics;
 
@@ -65,16 +67,25 @@ public static class Doctor
         var downloaded = context.ConfigFile is { } root && ZoneIdentifier.IsDownloaded(root);
         DoctorCheck[] checks =
         [
-            Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer())),
+            Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer(), DoctorProbe.TransparencyEffectsOff(), DoctorProbe.ContrastThemeOn())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
-            Guard("config", "Config", () => Config(context.ConfigFile, context.ConfigProblem, downloaded ? new ConfigScan(0, []) : DoctorProbe.ParseConfig(context.ConfigFile), instanceLog.LoadError, instanceLog.Unreadable, downloaded)),
+            Guard("config", "Config", () => Config(
+                context.ConfigFile,
+                context.ConfigProblem,
+                downloaded ? new ConfigScan(0, []) : DoctorProbe.ParseConfig(context.ConfigFile),
+                instanceLog.LoadError,
+                instanceLog.Unreadable,
+                downloaded,
+                downloaded || context.ConfigProblem is not null ? null : DoctorProbe.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot))),
             Guard("folders", "Folders", () => Folders(
                 [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
                 context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
                 Environment.IsPrivilegedProcess)),
             Guard("appBars", "App bars", () => AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
             Guard("dpi", "DPI", () => Dpi(DoctorProbe.PerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath), DoctorProbe.Monitors())),
-            Guard("signIn", "Sign-in", () => SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
+            Guard("signIn", "Sign-in", () => Packaging.IsPackaged
+                ? SignIn(WindowsStartupTasks.Open())
+                : SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(DoctorProbe.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes", () => CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now, DoctorProbe.PeekCrash)),
@@ -115,11 +126,19 @@ public static class Doctor
 
     // Windows
 
-    internal static DoctorCheck Windows(int build, int revision, string? displayVersion, bool server = false)
+    /// <param name="transparencyOff">Whether Windows transparency effects are off. The message says so. The result does not change.</param>
+    /// <param name="contrastTheme">Whether a contrast theme is on. The message says so. The result does not change.</param>
+    internal static DoctorCheck Windows(int build, int revision, string? displayVersion, bool server = false, bool transparencyOff = false, bool contrastTheme = false)
     {
         var name = server ? "Windows Server" : build >= 22000 ? "Windows 11" : "Windows 10";
         var version = string.IsNullOrEmpty(displayVersion) ? "" : " " + displayVersion;
         var message = string.Create(CultureInfo.InvariantCulture, $"{name}{version}, build {build}.{revision}");
+        if (transparencyOff)
+            message += ". Transparency effects are off, so Mica and Acrylic look flat";
+        if (contrastTheme)
+            message += ". A contrast theme is on";
+        if (transparencyOff || contrastTheme)
+            message += ".";
         if (build < 22000)
             return new("windows", "Windows", CheckStatus.Fail, message, "Winshell needs Windows 11. Upgrade this PC to Windows 11.");
         if (build < 22621)
@@ -151,31 +170,44 @@ public static class Doctor
     }
 
     /// <param name="downloaded">Whether the config's <c>shell.qml</c> was downloaded and is not unblocked, so Winshell does not run it.</param>
-    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError, string? logUnreadable = null, bool downloaded = false)
+    /// <param name="userFiles">Why a user TOML file cannot be loaded. A missing file is not listed. They warn, and do not hide a failure.</param>
+    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError, string? logUnreadable = null, bool downloaded = false, IReadOnlyList<string>? userFiles = null)
     {
+        DoctorCheck Noted(DoctorCheck check)
+        {
+            // A config that cannot be picked, or a downloaded one, does not read these files. Its message stays as it is.
+            if (userFiles is not { Count: > 0 } || downloaded || problem is not null)
+                return check;
+            var note = string.Join(" ", userFiles);
+            var message = check.Message.EndsWith('.') ? $"{check.Message} {note}" : $"{check.Message}. {note}";
+            if (check.Status != CheckStatus.Pass)
+                return check with { Message = message };
+            return check with { Status = CheckStatus.Warn, Message = message, Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses." };
+        }
+
         if (problem is not null)
-            return new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
+            return Noted(new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it."));
         if (file is null)
-            return new("config", "Config", CheckStatus.Pass, "No config of your own: Winshell runs its default shell. Copy that shell to your config folder to change it.");
+            return Noted(new("config", "Config", CheckStatus.Pass, "No config of your own: Winshell runs its default shell. Copy that shell to your config folder to change it."));
         if (downloaded)
-            return new("config", "Config", CheckStatus.Fail, $"{file} was downloaded from the internet, so Winshell does not run it. It would run as you.", "If you trust it, unblock it: right-click it > Properties > Unblock, or run Unblock-File. Then save it, or start Winshell again.");
+            return Noted(new("config", "Config", CheckStatus.Fail, $"{file} was downloaded from the internet, so Winshell does not run it. It would run as you.", "If you trust it, unblock it: right-click it > Properties > Unblock, or run Unblock-File. Then save it, or start Winshell again."));
         if (scan.Errors.Count > 0)
         {
             var more = scan.Errors.Count > 1 ? $" ({scan.Errors.Count - 1} more)" : "";
-            return new("config", "Config", CheckStatus.Fail, $"{scan.Errors[0]}{more}", "Correct that line and save. A running Winshell loads it again, and keeps the last version that loaded until then.");
+            return Noted(new("config", "Config", CheckStatus.Fail, $"{scan.Errors[0]}{more}", "Correct that line and save. A running Winshell loads it again, and keeps the last version that loaded until then."));
         }
         var files = scan.Files == 1 ? "1 QML file" : $"{scan.Files} QML files";
         if (loadError is not null)
-            return new("config", "Config", CheckStatus.Fail, $"{file}: {files} read, but the running instance could not load it: {loadError}", "Correct that line and save. Winshell keeps the last version that loaded until then.");
+            return Noted(new("config", "Config", CheckStatus.Fail, $"{file}: {files} read, but the running instance could not load it: {loadError}", "Correct that line and save. Winshell keeps the last version that loaded until then."));
         var stopped = scan.Stopped ? $" Stopped after {DoctorProbe.MaxFolders} folders; the rest were not read." : "";
         if (scan.SubfolderErrors.Count > 0)
         {
             var more = scan.SubfolderErrors.Count > 1 ? $" ({scan.SubfolderErrors.Count - 1} more)" : "";
-            return new("config", "Config", CheckStatus.Warn, $"{scan.SubfolderErrors[0]}{more}. It does not parse; Winshell only fails if the config imports it.{stopped}", "Correct that line, or delete the file if nothing uses it.");
+            return Noted(new("config", "Config", CheckStatus.Warn, $"{scan.SubfolderErrors[0]}{more}. It does not parse; Winshell only fails if the config imports it.{stopped}", "Correct that line, or delete the file if nothing uses it."));
         }
         if (logUnreadable is not null)
-            return new("config", "Config", CheckStatus.Warn, $"Could not read the running instance's log: {logUnreadable}", "Make sure your account can read that log, then run winshell doctor again.");
-        return new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors{(stopped.Length > 0 ? "." + stopped : "")}");
+            return Noted(new("config", "Config", CheckStatus.Warn, $"Could not read the running instance's log: {logUnreadable}", "Make sure your account can read that log, then run winshell doctor again."));
+        return Noted(new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors{(stopped.Length > 0 ? "." + stopped : "")}"));
     }
 
     // Folders
@@ -349,6 +381,23 @@ public static class Doctor
         if (turnedOff)
             return new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup.");
         return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in");
+    }
+
+    /// <summary>Sign-in for a packaged Winshell: the startup task, which names no executable path.</summary>
+    internal static DoctorCheck SignIn(IStartupTask? task)
+    {
+        if (task is null)
+            return new("signIn", "Sign-in", CheckStatus.Warn, "This package has no startup task, so Winshell cannot run when you sign in.");
+        return task.State switch
+        {
+            StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy =>
+                new("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"),
+            StartupTaskState.DisabledByUser =>
+                new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup."),
+            StartupTaskState.DisabledByPolicy =>
+                new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Windows policy turned it off.", "A Windows policy controls this. Startup apps in Settings cannot turn it on."),
+            _ => new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on."),
+        };
     }
 
     // Notifications

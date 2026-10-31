@@ -294,7 +294,9 @@ public sealed partial class CrashReports(string folder)
             return ([], 0);
         }
         var kept = new List<string>();
-        var omitted = 0;
+        // For each kept line, how many lines were left out before the next kept one.
+        var gaps = new List<int>();
+        var before = 0;
         // Until the first line that says what it is, a line cannot be told from script output.
         var keep = false;
         foreach (var line in lines)
@@ -302,12 +304,20 @@ public sealed partial class CrashReports(string folder)
             if (LogLine().Match(line) is { Success: true } m)
                 keep = m.Groups["category"].Success;
             if (keep)
+            {
                 kept.Add(CrashRedaction.Redact(line));
+                gaps.Add(0);
+            }
+            else if (gaps.Count > 0)
+                gaps[^1]++;
             else
-                omitted++;
+                before++;
         }
-        var tail = kept.TakeLast(LogLines).ToList();
-        return (tail, omitted);
+        // Only what was left out among the lines shown. With nothing kept, that is every line.
+        if (kept.Count == 0)
+            return ([], before);
+        var first = Math.Max(0, kept.Count - LogLines);
+        return (kept.GetRange(first, kept.Count - first), gaps.Skip(first).Sum() + (first == 0 ? before : 0));
     }
 
     /// <summary>

@@ -76,7 +76,7 @@ The connections between one source and one target. Windows has one connection pe
 
 ## AudioLinkTracker
 
-The link groups connected to one device: for a volume mixer, the apps playing to a speaker. Create one with `AudioLinkTracker { node: Audio.defaultPlaybackDevice }`.
+The link groups connected to one node: for a volume mixer, the apps playing to a speaker, or for one app, the speaker it plays to. Create one with `AudioLinkTracker { node: Audio.defaultPlaybackDevice }`.
 
 | Member | Type | Description |
 | --- | --- | --- |

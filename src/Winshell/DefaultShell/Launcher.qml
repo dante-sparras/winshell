@@ -55,10 +55,15 @@ PopupWindow {
     recent: Apps.recent.values
     showRecommended: Preferences.startRecommended
     searchResults: Apps.search(view.query)
+    recentFiles: RecentDocuments.search(view.query)
     pinsPath: Shell.configPath("launcher.toml")
     showIcons: launcher.visible
     onLaunched: app => {
       app.launch()
+      launcher.close()
+    }
+    onLinkRequested: url => {
+      Qt.openUrlExternally(url)
       launcher.close()
     }
     onLocationRequested: app => {

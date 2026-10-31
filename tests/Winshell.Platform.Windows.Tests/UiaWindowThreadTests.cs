@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Winshell.Platform.Windows.Accessibility;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -64,6 +65,7 @@ public class UiaWindowThreadTests
                 Assert.Equal(Uia.S_OK, text.get_DocumentRange(out fresh));
                 ready.Set();
             });
+            var started = 0L;
             loop.Schedule(TimeSpan.FromMilliseconds(200), () =>
             {
                 var worker = new Thread(() =>
@@ -99,21 +101,25 @@ public class UiaWindowThreadTests
                     }
                 })
                 { IsBackground = true };
+                started = Stopwatch.GetTimestamp();
                 worker.Start();
             });
             void Watch()
             {
                 if (done.IsSet)
                     loop.Quit(0);
+                // Several calls, each bounded by its own timeout. This only stops a call that never returns,
+                // so a timed-out call still fails below on its result.
+                else if (started != 0 && Stopwatch.GetElapsedTime(started) > TimeSpan.FromSeconds(45))
+                    loop.Quit(1);
                 else
                     loop.Schedule(TimeSpan.FromMilliseconds(50), Watch);
             }
             loop.Schedule(TimeSpan.FromMilliseconds(250), Watch);
-            loop.Schedule(TimeSpan.FromMilliseconds(4000), () => loop.Quit(0));
-            loop.Run();
+            Assert.True(loop.Run() == 0, "The call did not finish.");
 
             Assert.True(ready.IsSet);
-            Assert.True(done.Wait(TimeSpan.FromSeconds(2)));
+            Assert.True(done.IsSet);
             Assert.Null(failure);
             Assert.True(treeRejected);
             Assert.Equal(Uia.S_OK, rootHr);
@@ -127,9 +133,17 @@ public class UiaWindowThreadTests
             Assert.Null(id);
             var rootAfter = 0;
             IRawElementProviderFragmentRoot? gone = null;
-            var detached = new Thread(() => rootAfter = ((IRawElementProviderFragment)element).get_FragmentRoot(out gone)) { IsBackground = true };
+            var call = TimeSpan.Zero;
+            var detached = new Thread(() =>
+            {
+                var watch = Stopwatch.StartNew();
+                rootAfter = ((IRawElementProviderFragment)element).get_FragmentRoot(out gone);
+                call = watch.Elapsed;
+            })
+            { IsBackground = true };
             detached.Start();
-            Assert.True(detached.Join(TimeSpan.FromSeconds(2)));
+            Assert.True(detached.Join(TimeSpan.FromSeconds(15)), "The disconnected call did not return.");
+            Assert.True(call < TimeSpan.FromSeconds(1), $"get_FragmentRoot took {call.TotalMilliseconds:0} ms");
             Assert.Equal(Uia.ElementNotAvailable, rootAfter);
             Assert.Null(gone);
         }

@@ -18,7 +18,7 @@ Every part of it is a QML file. Change the default shell, or write your own: a b
 
 Winshell Settings changes the default shell: the taskbar's alignment and auto-hide, which displays have a taskbar, Start's recommendations, quick settings' tiles, hotkeys and more.
 
-Winshell runs alongside Windows. It does not change Windows settings or remove Windows' own taskbar.
+Winshell runs alongside Windows. It does not change Windows settings. It leaves Windows' own taskbar in place unless `hideExplorerTaskbar` is set in preferences.toml, which is off until then.
 
 ## Product features (up to 20, ≤ 200 each)
 
@@ -61,9 +61,9 @@ https://github.com/dante-sparras/winshell/issues
 Paste the two bullets. Do not paste the note under them.
 
 - **runFullTrust:** Winshell is a desktop shell. It draws its own windows with DirectComposition, reserves screen edges for its taskbar, and reads the running windows and the notification area.
-- **unvirtualizedResources:** Winshell keeps its configuration in `%APPDATA%\winshell`, which users edit by hand and share between the Store and portable versions. With file writes virtualized, that folder would land in a copy only the package sees. **Run Winshell when I sign in** writes the user's `Run` key. Registry virtualization would hide that entry from Windows, so the package would not start at sign-in.
+- **unvirtualizedResources:** Winshell keeps its configuration in `%APPDATA%\winshell`, which users edit by hand and share between the Store and portable versions. With file writes virtualized, that folder would land in a copy only the package sees. It also reads the user's real registry, such as the theme and which tray icons show. Registry virtualization would hide those. Sign-in does not use the `Run` key: it is the package's startup task.
 
-Not for pasting. After #142 moves the Store build's sign-in entry to a startup task, check whether registry virtualization can stay on, and if it can, shorten the second bullet to the config folder. If review refuses `unvirtualizedResources`: MSIX virtualizes writes only under AppData and HKCU, so the Store build could keep its config in a folder outside AppData and drop this capability. The second bullet describes the package as it is now, with the `Run` key, not that later state.
+Not for pasting. Registry virtualization stays off because the shell reads the user's real registry, not because of sign-in. If review refuses `unvirtualizedResources`: MSIX virtualizes writes only under AppData and HKCU, so the Store build could keep its config in a folder outside AppData and drop this capability, and would then see a virtual registry instead of the user's theme and tray settings.
 
 ## Images
 

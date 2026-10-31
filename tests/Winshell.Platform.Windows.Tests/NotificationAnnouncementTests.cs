@@ -64,6 +64,10 @@ public class NotificationAnnouncementTests
                 window.Scene.RequestUpdate,
             ]);
             var heard = new List<int>();
+            // The announcement is delivered when the window refreshes its automation tree, on the frame after the
+            // change. Waiting out a fixed gap misses that frame when the thread was inside DwmFlush, and a second
+            // timer that quits the loop is then already due: it runs in the same batch as the next step and
+            // abandons the rest. This cap counts turns the loop actually takes, so one long stall does not.
             void Next()
             {
                 heard.Add(spoken.Count);
@@ -72,11 +76,26 @@ public class NotificationAnnouncementTests
                     loop.Quit(0);
                     return;
                 }
+                var synced = backend.Automation.SyncCount;
                 step();
-                loop.Schedule(TimeSpan.FromMilliseconds(80), Next);
+                var waits = 0;
+                void WaitForRefresh()
+                {
+                    if (backend.Automation.SyncCount != synced)
+                    {
+                        Next();
+                        return;
+                    }
+                    if (++waits == 1000)
+                    {
+                        loop.Quit(1);
+                        return;
+                    }
+                    loop.Schedule(TimeSpan.FromMilliseconds(10), WaitForRefresh);
+                }
+                WaitForRefresh();
             }
             loop.Schedule(TimeSpan.FromMilliseconds(80), Next);
-            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(1));
             Assert.Equal(0, loop.Run());
 
             // Nothing while hidden; once when shown; nothing on two repaints or while hidden; once when shown again.
