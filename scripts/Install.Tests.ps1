@@ -450,6 +450,59 @@ Describe 'install' {
         Test-Path -LiteralPath $link | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
     }
+
+    It 'warns when a Store copy is installed and still finishes' {
+        $ctx = Enter-WinshellInstallTest
+        $arch = Get-WinshellArchitecture
+        $name = "winshell-0.6.0-win-$arch.zip"
+        $zip = Join-Path $TestDrive $name
+        New-WinshellTestZip -Path $zip -Marker 'marker-store'
+        $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $sums = "$hash  $name"
+        $downloadText = { param($Url) $sums }.GetNewClosure()
+        $downloadFile = {
+            param($Url, $Destination)
+            Copy-Item -LiteralPath $zip -Destination $Destination
+        }.GetNewClosure()
+        $queries = [System.Collections.Generic.List[string]]::new()
+        $probe = {
+            $queries.Add('called')
+            throw 'queried this PC'
+        }.GetNewClosure()
+        Mock Get-AppxPackage $probe
+        $previous = [Console]::Out
+        $withStore = New-Object IO.StringWriter
+        try {
+            [Console]::SetOut($withStore)
+            Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile -StorePackages { 'Winshell' }
+        } finally {
+            [Console]::SetOut($previous)
+        }
+        $withStore.ToString() | Should -Match 'Microsoft Store copy of Winshell is also installed'
+        $withStore.ToString() | Should -Match 'WindowsApps alias usually comes first on PATH'
+        [IO.File]::ReadAllText((Join-Path $ctx.Bin 'winshell.exe')) | Should -Be 'marker-store'
+        $queries.Count | Should -Be 0
+
+        $withoutStore = New-Object IO.StringWriter
+        try {
+            [Console]::SetOut($withoutStore)
+            Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile -StorePackages { @() }
+        } finally {
+            [Console]::SetOut($previous)
+        }
+        $withoutStore.ToString() | Should -Not -Match 'Microsoft Store copy'
+        [IO.File]::ReadAllText((Join-Path $ctx.Bin 'winshell.exe')) | Should -Be 'marker-store'
+
+        $unspecified = New-Object IO.StringWriter
+        try {
+            [Console]::SetOut($unspecified)
+            Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile
+        } finally {
+            [Console]::SetOut($previous)
+        }
+        $unspecified.ToString() | Should -Not -Match 'Microsoft Store copy'
+        $queries.Count | Should -Be 0
+    }
 }
 
 Describe 'script safety' {
