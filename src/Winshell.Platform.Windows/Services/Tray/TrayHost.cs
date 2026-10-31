@@ -406,7 +406,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
         // An icon is answered here, and apps animate theirs several times a second, so a busy Explorer holds the shell
         // up only briefly for one. An app bar needs Explorer's answer.
         var icon = data->dwData == TrayProtocol.NotifyIconData;
-        SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, SMTO_ABORTIFHUNG, icon ? 200u : 2000u, out var result);
+        Win32.SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, Win32.SMTO_ABORTIFHUNG, icon ? 200u : 2000u, out var result);
         return icon ? 1 : result;
     }
 
@@ -753,7 +753,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
     // Native
 
     private static readonly nint HWND_BROADCAST = 0xffff;
-    private const uint SMTO_ABORTIFHUNG = 0x2;
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const uint TOKEN_QUERY = 0x0008;
     private const int TokenIntegrityLevel = 25;
@@ -818,9 +817,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool ChangeWindowMessageFilterEx(nint hwnd, uint message, uint action, nint changeFilter);
-
-    [LibraryImport("user32.dll")]
-    private static partial nint SendMessageTimeoutW(nint hwnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
