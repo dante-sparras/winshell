@@ -63,7 +63,7 @@ public sealed record IpcPropertyView(string Name, string Type);
 /// <summary>A signal declared on an <c>IpcHandler</c>.</summary>
 public sealed record IpcSignalView(string Name, IReadOnlyList<IpcParameterView> Parameters);
 
-/// <summary>One IPC target, as <c>ipc show</c> knows it. The command line prints its own copy of this.</summary>
+/// <summary>One IPC target, as <c>ipc show</c> knows it. <c>ipc show -j</c> prints these records as they are.</summary>
 public sealed record IpcTargetView(
     string Target,
     IReadOnlyList<IpcFunctionView> Functions,
