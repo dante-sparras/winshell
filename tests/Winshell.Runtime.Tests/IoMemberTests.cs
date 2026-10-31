@@ -4,6 +4,7 @@ using Winshell.Runtime.Shell;
 namespace Winshell.Runtime.Tests;
 
 /// <summary>Io members from issue 137 report the real failure or fail to load.</summary>
+[Collection(ThemeCollection.Name)]
 public class IoMemberTests
 {
     [Fact]
