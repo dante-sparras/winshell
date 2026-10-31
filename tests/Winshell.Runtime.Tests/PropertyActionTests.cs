@@ -1,6 +1,9 @@
 namespace Winshell.Runtime.Tests;
 
 /// <summary>A PropertyAction in a transition writes the state's value when the sequence reaches it.</summary>
+// Theme.Current is one record for the process. AnimationEffectsTests turns animations off while it runs, and a
+// transition that finishes at once would commit visible: false before this test can read the held value.
+[Collection(ThemeCollection.Name)]
 public class PropertyActionTests
 {
     [Fact]
