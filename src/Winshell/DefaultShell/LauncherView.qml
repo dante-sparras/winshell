@@ -347,6 +347,7 @@ Item {
     }
 
     Flickable {
+      boundsBehavior: Flickable.StopAtBounds
       id: pinScroll
       objectName: "pinScroll"
       width: Launcher.contentWidth
@@ -390,6 +391,7 @@ Item {
     }
 
     ListView {
+      boundsBehavior: Flickable.StopAtBounds
       id: recommendedList
       objectName: "recommendedList"
       width: Launcher.contentWidth
@@ -503,6 +505,7 @@ Item {
     }
 
     ListView {
+      boundsBehavior: Flickable.StopAtBounds
       id: allList
       objectName: "allList"
       width: Launcher.contentWidth
@@ -532,6 +535,7 @@ Item {
   }
 
   Flickable {
+    boundsBehavior: Flickable.StopAtBounds
     id: resultsScroll
     objectName: "resultsScroll"
     x: Launcher.margin
@@ -563,6 +567,7 @@ Item {
       }
 
       ListView {
+        boundsBehavior: Flickable.StopAtBounds
         id: resultsList
         objectName: "resultsList"
         width: Launcher.contentWidth

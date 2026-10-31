@@ -117,7 +117,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `TextInput.autoScroll` | Ignored: the text always scrolls to keep the cursor in view. |
 | `TextInput.canPaste` | Always true, even when the clipboard holds no text. |
 | `Flickable.flicking` | Always false. Content stops when the pointer lets go: `flickStarted` and `flickEnded` aren't emitted, `horizontalVelocity` and `verticalVelocity` are 0, and `flickDeceleration` and `maximumFlickVelocity` aren't used. |
-| `Flickable.boundsBehavior` | A drag follows the value. A flick does not overshoot the bounds. |
+| `Flickable.boundsBehavior` | A drag follows the value, and on release the view goes back to its bounds at once, with no rebound. A flick does not overshoot the bounds. `ScrollView`'s own flickable stops at the bounds. |
 | `Flickable.pressDelay` | Ignored: a press reaches the content at once. |
 | `Flickable.originX` | Always 0, as is `originY`. |
 | `ListView.section` | Ignored: there are no section headers. |
