@@ -23,6 +23,13 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private IDisposable? _screenRefresh;
     private Services.Tray.TrayHost? _tray;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
+    private readonly object _followGate = new();
+    private SystemFollowUp _followUp;
+    private bool _followPosted;
+    private int _themeReads;
+    private int _textRefreshes;
+    private int _screenNotes;
+    private int _workAreaNotes;
     private static WindowsPlatform? _current;
 
     public WindowsPlatform(WinEventLoop loop, Log log)
@@ -37,11 +44,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         ReadTheme();
         ListenForClipboard();
         SystemEvents.DisplaySettingsChanged += (_, _) => Loop.Post(RefreshScreens);
-        SystemEvents.UserPreferenceChanged += (_, e) =>
-        {
-            if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Accessibility)
-                Loop.Post(ReadTheme);
-        };
+        SystemEvents.UserPreferenceChanged += (_, e) => NoteUserPreference(e.Category);
     }
 
     public WinEventLoop Loop { get; }
@@ -102,26 +105,123 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         WorkAreaMayHaveChanged();
     }
 
+    /// <summary>How many times settings broadcasts have read the theme.</summary>
+    internal int ThemeReads => _themeReads;
+
+    /// <summary>How many times settings broadcasts have dropped the cached font smoothing.</summary>
+    internal int TextRefreshes => _textRefreshes;
+
+    /// <summary>How many times settings broadcasts have asked for another look at the monitors.</summary>
+    internal int ScreenNotes => _screenNotes;
+
+    /// <summary>How many times settings broadcasts have asked panels to follow the work area.</summary>
+    internal int WorkAreaNotes => _workAreaNotes;
+
     internal void SystemChanged(uint message, nint wParam)
     {
         if (message == Win32.WM_DISPLAYCHANGE)
         {
-            ScreensMayHaveChanged();
+            FollowSystem(SystemFollowUp.Screens);
         }
         else if (message == Win32.WM_SETTINGCHANGE)
         {
-            TextRaster.Refresh();
             // The taskbar moved, resized, or started or stopped hiding.
-            if (wParam == Win32.SPI_SETWORKAREA)
-                WorkAreaMayHaveChanged();
-            else
-                ScreensMayHaveChanged();
-            Loop.Post(ReadTheme);
+            var follow = SystemFollowUp.Text | SystemFollowUp.Theme;
+            follow |= wParam == Win32.SPI_SETWORKAREA ? SystemFollowUp.WorkArea : SystemFollowUp.Screens;
+            FollowSystem(follow);
         }
         else
         {
-            Loop.Post(ReadTheme);
+            FollowSystem(SystemFollowUp.Theme);
         }
+    }
+
+    /// <summary>
+    /// Records a user-preference change. Theme categories are the same broadcast the windows already saw, so they
+    /// join that follow-up instead of reading the theme again.
+    /// </summary>
+    internal void NoteUserPreference(UserPreferenceCategory category)
+    {
+        if (category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Accessibility)
+            FollowSystem(SystemFollowUp.Theme);
+    }
+
+    /// <summary>
+    /// Windows delivers one settings broadcast to every top-level window, and
+    /// <see cref="SystemEvents.UserPreferenceChanged"/> reports the same change. The copies share one follow-up, so
+    /// the theme, the font smoothing and the screens are handled once. A later change is handled again.
+    /// </summary>
+    private void FollowSystem(SystemFollowUp note)
+    {
+        SystemFollowUp added;
+        var post = false;
+        lock (_followGate)
+        {
+            added = note & ~_followUp;
+            _followUp |= note;
+            if (added == SystemFollowUp.None)
+                return;
+            if (!_followPosted)
+            {
+                _followPosted = true;
+                post = true;
+            }
+        }
+        if ((added & SystemFollowUp.Text) != 0)
+            NoteText();
+        if ((added & SystemFollowUp.WorkArea) != 0)
+            NoteWorkArea();
+        if ((added & SystemFollowUp.Screens) != 0)
+            NoteScreens();
+        if (post)
+            Loop.Post(FinishSystemFollowUp);
+    }
+
+    private void FinishSystemFollowUp()
+    {
+        SystemFollowUp notes;
+        lock (_followGate)
+        {
+            notes = _followUp;
+            _followUp = SystemFollowUp.None;
+            _followPosted = false;
+        }
+        if ((notes & SystemFollowUp.Theme) != 0)
+            NoteTheme();
+    }
+
+    [Flags]
+    private enum SystemFollowUp
+    {
+        None = 0,
+        Theme = 1,
+        Text = 2,
+        Screens = 4,
+        WorkArea = 8,
+    }
+
+    private void NoteTheme()
+    {
+        Interlocked.Increment(ref _themeReads);
+        ReadTheme();
+    }
+
+    private void NoteText()
+    {
+        Interlocked.Increment(ref _textRefreshes);
+        TextRaster.Refresh();
+    }
+
+    private void NoteScreens()
+    {
+        Interlocked.Increment(ref _screenNotes);
+        ScreensMayHaveChanged();
+    }
+
+    private void NoteWorkArea()
+    {
+        Interlocked.Increment(ref _workAreaNotes);
+        WorkAreaMayHaveChanged();
     }
 
     /// <summary>
