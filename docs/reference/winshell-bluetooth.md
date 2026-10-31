@@ -1,6 +1,6 @@
 # Winshell.Bluetooth
 
-The default Windows Bluetooth adapter, paired devices, and devices found nearby. Reading the module never pairs, connects or changes a radio; state is read again every three seconds. [Windows Bluetooth](../bluetooth.md) explains discovery, pairing, battery and what connect can do.
+The default Windows Bluetooth adapter, paired devices, and devices found nearby. Reading the module never pairs, connects or changes a radio. While monitoring is on, state is read again every three seconds. [Windows Bluetooth](../bluetooth.md) explains discovery, pairing, battery and what connect can do.
 
 `import Winshell.Bluetooth`
 
@@ -19,6 +19,8 @@ The singleton for the whole shell. It holds the default adapter and the devices,
 | `discovering` | bool, read-only | Whether discovery is running. |
 | `error` | string, read-only | Why the last read or discovery request failed. Empty when it succeeded. |
 | `refresh()` | method | Reads the state now, rather than at the next three-second read. |
+| `startMonitoring()` | method | Starts the three-second read. The service starts it when it is created. |
+| `stopMonitoring()` | method | Stops that read until `startMonitoring()`. |
 | `startDiscovery()` | method | Starts looking for nearby devices. Needs an adapter that is `On`. |
 | `stopDiscovery()` | method | Stops looking, and clears the unpaired devices it found. |
 | `operationFailed(message)` | signal | Emitted when starting or stopping discovery fails. |

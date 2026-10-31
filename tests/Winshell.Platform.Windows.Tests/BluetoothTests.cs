@@ -377,6 +377,41 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         }
     }
 
+    [Fact]
+    public async Task Monitoring_can_stop_and_an_unchanged_read_leaves_the_models_alone()
+    {
+        var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
+        var loop = new ManualEventLoop();
+        var quiet = new BluetoothService(backend, loop);
+        await quiet.RefreshAsync();
+        loop.Process();
+        var updates = 0;
+        quiet.Devices.ModelChanged += () => updates++;
+        quiet.Adapters.ModelChanged += () => updates++;
+        quiet.PairedDevices.ModelChanged += () => updates++;
+        quiet.NearbyDevices.ModelChanged += () => updates++;
+        await quiet.RefreshAsync();
+        loop.Process();
+        Assert.Equal(0, updates);
+        Assert.Equal("Headphones", Item(quiet).Name);
+        quiet.Destroy();
+
+        var watched = new FakeBackend { Snapshot = Snapshot(Device()) };
+        using var engine = new QmlEngine(StandardModules.Create(), loop);
+        var service = new BluetoothService(engine, watched);
+        await watched.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        loop.Process();
+        var reads = watched.Reads;
+        service.StopMonitoring();
+        service.StartMonitoring();
+        var until = DateTime.UtcNow.AddSeconds(2);
+        while (watched.Reads == reads && DateTime.UtcNow < until)
+            await Task.Delay(10);
+        Assert.True(watched.Reads > reads);
+        service.Destroy();
+        loop.Process();
+    }
+
     private sealed class FakeBackend : IBluetoothBackend
     {
         public BluetoothSnapshot Snapshot { get; set; } = Snapshot();

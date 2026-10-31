@@ -1,6 +1,6 @@
 # Windows Bluetooth
 
-`Winshell.Bluetooth` exposes the `Bluetooth` singleton. Reading it enumerates the default Windows Bluetooth adapter and paired classic/LE association endpoints. It never requests radio-control access, pairs, connects, opens a remote device/GATT handle, or changes a radio. State refreshes every three seconds; `refresh()` requests an earlier read. Each shell generation owns its backend and stops its discovery watchers when destroyed.
+`Winshell.Bluetooth` exposes the `Bluetooth` singleton. Reading it enumerates the default Windows Bluetooth adapter and paired classic/LE association endpoints. It never requests radio-control access, pairs, connects, opens a remote device/GATT handle, or changes a radio. The service starts monitoring when it is created, and while monitoring is on, state refreshes every three seconds. `stopMonitoring()` stops that read and `startMonitoring()` starts it again. `refresh()` requests an earlier read. The default shell stops monitoring until Quick settings is open. Each shell generation owns its backend and stops its discovery watchers when destroyed.
 
 ```qml
 import QtQuick
