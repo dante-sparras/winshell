@@ -46,7 +46,8 @@ public abstract class PointerHandler : QObject
     private bool _enabled = true;
     private Item? _target;
     private int _acceptedButtons = QtEnums.LeftButton;
-    private int _acceptedModifiers;
+    private const int AnyModifier = 0x7fffffff;
+    private int _acceptedModifiers = AnyModifier;
     private int _cursorShape = -1;
     private double _margin;
 
@@ -107,7 +108,7 @@ public abstract class PointerHandler : QObject
     protected bool Contains(Item item, double x, double y) =>
         x >= -_margin && y >= -_margin && x < item.Width + _margin && y < item.Height + _margin;
 
-    internal bool AcceptsModifiers(int modifiers) => AcceptedModifiers == modifiers;
+    internal bool AcceptsModifiers(int modifiers) => _acceptedModifiers == AnyModifier || _acceptedModifiers == modifiers;
 }
 
 /// <summary>QtQuick's <c>HoverHandler</c>.</summary>
@@ -253,7 +254,7 @@ public sealed class TapHandler : PointerHandler, IPointerTarget
         var dy = y - Point.PressPosition.Y;
         var outside = !Contains(item, x, y);
         var dragged = Math.Sqrt(dx * dx + dy * dy) >= Theme.Current.DragThreshold;
-        var reject = _gesturePolicy switch { 1 => outside, 2 => false, 3 => outside || dragged, _ => dragged };
+        var reject = _gesturePolicy switch { 1 or 3 => outside, 2 => false, _ => outside || dragged };
         if (reject)
         {
             _rejected = true;

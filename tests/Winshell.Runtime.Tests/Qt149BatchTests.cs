@@ -29,6 +29,31 @@ public class Qt149BatchTests
     }
 
     [Fact]
+    public void Drag_within_bounds_keeps_a_tap_until_the_pointer_leaves()
+    {
+        var (root, scene, shell) = Show("import QtQuick\nItem { width: 400; height: 80; Item { objectName: \"drag\"; width: 180; height: 80; property int taps: 0; TapHandler { gesturePolicy: 3; onTapped: parent.taps++ } } }");
+        using var _ = shell;
+        Click(scene, 20, 120);
+        Assert.Equal(1, Taps(root, "drag"));
+
+        scene.PointerPress(20, 20, QtEnums.LeftButton);
+        scene.PointerMove(300, 20);
+        scene.PointerMove(20, 20);
+        scene.PointerRelease(20, 20, QtEnums.LeftButton);
+        Assert.Equal(1, Taps(root, "drag"));
+    }
+
+    [Fact]
+    public void A_handler_with_no_accepted_modifiers_ignores_the_modifier_keys()
+    {
+        var (root, scene, shell) = Show("import QtQuick\nItem { id: box; width: 80; height: 80; property int taps: 0; TapHandler { onTapped: box.taps++ } }");
+        using var _ = shell;
+        scene.PointerPress(20, 20, QtEnums.LeftButton, QtEnums.ShiftModifier);
+        scene.PointerRelease(20, 20, QtEnums.LeftButton, QtEnums.ShiftModifier);
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("taps")));
+    }
+
+    [Fact]
     public void Accepted_modifiers_must_match_the_event()
     {
         var (root, scene, shell) = Show("import QtQuick\nItem { id: box; width: 80; height: 80; property int taps: 0; property bool hot: false; HoverHandler { acceptedModifiers: Qt.ShiftModifier; onHoveredChanged: box.hot = hovered } TapHandler { acceptedModifiers: Qt.ShiftModifier; onTapped: box.taps++ } }");
@@ -85,6 +110,18 @@ public class Qt149BatchTests
         root.WriteProperty("go", false);
         shell.Loop.Advance(TimeSpan.FromMilliseconds(1000));
         Assert.Equal(100, Convert.ToDouble(root.ReadProperty("w")));
+    }
+
+    [Fact]
+    public void Always_run_to_end_finishes_the_loop_it_is_on()
+    {
+        using var shell = Load("import QtQuick\nItem { id: root; property bool go: true; property real w: 0; property bool live: spin.running; NumberAnimation { id: spin; target: root; property: \"w\"; from: 0; to: 100; duration: 1000; loops: Animation.Infinite; alwaysRunToEnd: true; running: root.go } }", out var root);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(200));
+        root.WriteProperty("go", false);
+        Assert.True(root.ReadProperty("live") is true);
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(1000));
+        Assert.Equal(100, Convert.ToDouble(root.ReadProperty("w")));
+        Assert.False(root.ReadProperty("live") is true);
     }
 
     [Fact]
