@@ -932,6 +932,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             case Win32.WM_ACTIVATE:
                 // A grabbing popup closes on a click outside it, which the mouse hook sees; losing activation
                 // alone does not close it, since Windows can take activation away at any time.
+                _client.OnActiveChanged(Win32.LowWord(wParam) != 0);
                 return null;
             case Win32.WM_KILLFOCUS:
                 scene.SetFocusItem(scene.FocusItem is { } focused && _kind == WindowKind.Floating ? focused : null);

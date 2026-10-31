@@ -561,6 +561,39 @@ public class ShellTests
     }
 
     [Fact]
+    public void A_window_is_active_while_its_native_window_is_in_front()
+    {
+        using var shell = new Shell(("shell.qml", """
+            import Winshell
+            import QtQuick
+            FloatingWindow {
+              visible: false
+              property int changes: 0
+              property bool activeNow: active
+              onActiveChanged: changes++
+            }
+            """));
+        shell.Start();
+        var root = shell.Host.Root!;
+        var client = shell.Platform.Windows.Single().Client;
+        Assert.False((bool)root.ReadProperty("activeNow")!);
+
+        client.OnActiveChanged(true);
+        shell.Files.Loop.Process();
+        Assert.True((bool)root.ReadProperty("activeNow")!);
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("changes")));
+
+        client.OnActiveChanged(true);
+        shell.Files.Loop.Process();
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("changes")));
+
+        client.OnActiveChanged(false);
+        shell.Files.Loop.Process();
+        Assert.False((bool)root.ReadProperty("activeNow")!);
+        Assert.Equal(2, Convert.ToInt32(root.ReadProperty("changes")));
+    }
+
+    [Fact]
     public void A_popup_is_placed_on_the_screen_its_parent_was_moved_to()
     {
         using var shell = new Shell(("shell.qml", """

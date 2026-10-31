@@ -159,6 +159,7 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `implicitWidth` | real | The width the window asks for. Default 100, at least 1. |
 | `implicitHeight` | real | The height the window asks for. Default 100, at least 1. |
 | `visible` | bool | Whether the window is shown. Default true. Closing the window, as with Alt+F4, sets it to false. |
+| `active` | bool, read-only | True while the native window is the foreground window. |
 | `backingWindowVisible` | bool, read-only | Whether the native window is on screen now. |
 | `color` | color | What the window clears to before drawing its items. Default white. Make it `"transparent"` or translucent to let a [WindowEffects](#windoweffects) backdrop show through. |
 | `mask` | [Region](#region) | The part of the window that takes clicks; clicks elsewhere go to the window below. Null, the default, is the whole window. An empty region lets every click through. Windows also clips drawing to a non-empty mask, so the parts outside it are not shown. |

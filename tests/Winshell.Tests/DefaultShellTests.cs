@@ -54,6 +54,16 @@ public class DefaultShellTests
         Assert.Contains("onSettingsRequested: settings.open(\"taskbar\")", shell);
     }
 
+    [Fact]
+    public void Settings_refreshes_startup_when_its_window_is_shown_or_comes_forward()
+    {
+        var window = Read(typeof(global::Winshell.DefaultShell).Assembly, "DefaultShell/SettingsWindow.qml");
+        Assert.Contains("onVisibleChanged: if (visible) Startup.refresh()", window);
+        Assert.Contains("onActiveChanged: if (active) Startup.refresh()", window);
+        Assert.Contains("if (showing)", window);
+        Assert.Contains("Startup.refresh()", window);
+    }
+
     private static string Read(Assembly assembly, string name)
     {
         using var stream = assembly.GetManifestResourceStream(name);

@@ -13,6 +13,7 @@ namespace Winshell.Runtime.Shell;
 [QmlSignal("windowConnected")]
 public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 {
+    private bool _active;
     private double _implicitWidth = 100;
     private double _implicitHeight = 100;
     private double _width = 100;
@@ -70,6 +71,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         get { Track(); return _height; }
         set => ImplicitHeight = value;
     }
+
+    /// <summary>True while the native window is the foreground window.</summary>
+    [Qml] public bool Active { get { Track(); return _active; } }
 
     [Qml]
     public double ImplicitWidth
@@ -453,6 +457,15 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         }
         NotifyChanged("backingWindowVisible");
         WindowRegistry.Changed(this);
+    }
+
+    /// <summary>The native window became the foreground window, or stopped being it.</summary>
+    public void OnActiveChanged(bool active)
+    {
+        if (IsDestroyed || _active == active)
+            return;
+        _active = active;
+        NotifyChanged("active");
     }
 
     public void OnScreenChanged(string screenId)
