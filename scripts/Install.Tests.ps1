@@ -510,7 +510,7 @@ Describe 'failed invocation' {
         $result = Invoke-WinshellScriptFile -Command $inline
         $result.ExitCode | Should -Be 1
         $result.Error | Should -Match 'full language mode'
-        $result.Error | Should -Match 'portable zip'
+        $result.Error | Should -Match 'Download'
         $result.Error | Should -Not -Match 'Cannot invoke method'
     }
 }
