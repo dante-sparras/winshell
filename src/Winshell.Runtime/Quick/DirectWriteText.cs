@@ -573,6 +573,51 @@ internal sealed class DirectWriteLayout : IDisposable
         return HitX((uint)position, trailing: false);
     }
 
+    public (double X, double Y, double Height) CaretBox(int position)
+    {
+        if (_layout is null || Source.Length == 0)
+            return (0, 0, 0);
+        position = Math.Clamp(position, 0, Source.Length);
+        var metrics = _layout.HitTestTextPosition((uint)position, false, out var point);
+        var height = metrics.Height > 0 ? metrics.Height : 0;
+        return (point.X, point.Y, height);
+    }
+
+    public TextRunBox GlyphBox(int position)
+    {
+        if (_layout is null || Source.Length == 0)
+            return default;
+        position = Math.Clamp(position, 0, Source.Length - 1);
+        var metrics = _layout.HitTestTextPosition((uint)position, false, out _);
+        return new TextRunBox((int)metrics.TextPosition, Math.Max(1, (int)metrics.Length), metrics.Left, metrics.Top, metrics.Width, metrics.Height);
+    }
+
+    public List<TextRunBox> RunBoxes(int start, int length)
+    {
+        if (_layout is null || length <= 0 || Source.Length == 0)
+            return [];
+        start = Math.Clamp(start, 0, Source.Length);
+        length = Math.Min(length, Source.Length - start);
+        if (length <= 0)
+            return [];
+        var buffer = ArrayPool<HitTestMetrics>.Shared.Rent(length);
+        try
+        {
+            _layout.HitTestTextRange((uint)start, (uint)length, 0, 0, buffer, out var count);
+            var boxes = new List<TextRunBox>((int)count);
+            for (var i = 0; i < count; i++)
+            {
+                var box = buffer[i];
+                boxes.Add(new TextRunBox((int)box.TextPosition, (int)box.Length, box.Left, box.Top, box.Width, box.Height));
+            }
+            return boxes;
+        }
+        finally
+        {
+            ArrayPool<HitTestMetrics>.Shared.Return(buffer);
+        }
+    }
+
     public int PositionAt(double x, double y)
     {
         if (_layout is null || Source.Length == 0)

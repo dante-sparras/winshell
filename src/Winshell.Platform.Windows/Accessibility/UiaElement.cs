@@ -362,7 +362,16 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
         return new object[] { new UiaTextRange(this, input.SelectionStart == input.SelectionEnd ? input.CursorPosition : input.SelectionStart, input.SelectionEnd == input.SelectionStart ? input.CursorPosition : input.SelectionEnd) };
     }, out ranges);
 
-    int ITextProvider.GetVisibleRanges(out object[]? ranges) => Get(() => new object[] { new UiaTextRange(this, 0, Node.TextInput!.DisplayText.Length) }, out ranges);
+    int ITextProvider.GetVisibleRanges(out object[]? ranges) => Get(() =>
+    {
+        var spans = Node.TextInput!.VisibleSpans();
+        if (spans.Count == 0)
+            return Array.Empty<object>();
+        var result = new object[spans.Count];
+        for (var i = 0; i < spans.Count; i++)
+            result[i] = new UiaTextRange(this, spans[i].Start, spans[i].End);
+        return result;
+    }, out ranges);
 
     int ITextProvider.RangeFromChild(IRawElementProviderSimple child, out ITextRangeProvider? range)
     {
