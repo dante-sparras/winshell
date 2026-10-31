@@ -85,12 +85,45 @@ public class NestedFrameTests
             var window = (ShellWindow)Assert.Single(platform.Windows).Client;
             Resizer.Loop = loop;
 
+            // A late loop runs every timer that is already due in one batch, then returns. A quit scheduled up front
+            // can run in that same batch as the update, and the frame posted from the update never gets a pass.
+            // The paint records what it drew with a post. That post is not in the batch that drew, so a deadline
+            // already due beside the frame quits before the record exists. The failure check is a timer queued
+            // from the look, and the next pass runs the post before it.
+            var started = false;
             loop.Schedule(TimeSpan.FromMilliseconds(100), () =>
             {
+                started = true;
+                var deadline = loop.Now + TimeSpan.FromSeconds(2);
                 Resizer.Resize = window;
                 window.Scene.RequestUpdate();
+                void Look()
+                {
+                    if (Resizer.SeenAfterTheFrame is not null && Resizer.Resize is null)
+                    {
+                        loop.Quit(0);
+                        return;
+                    }
+                    if (loop.Now >= deadline)
+                    {
+                        loop.Schedule(TimeSpan.Zero, () =>
+                        {
+                            if (Resizer.SeenAfterTheFrame is not null && Resizer.Resize is null)
+                                loop.Quit(0);
+                            else
+                                loop.Quit(1);
+                        });
+                        return;
+                    }
+                    loop.Schedule(TimeSpan.FromMilliseconds(16), Look);
+                }
+                loop.Schedule(TimeSpan.FromMilliseconds(16), Look);
             });
-            loop.Schedule(TimeSpan.FromMilliseconds(600), () => loop.Quit(0));
+            loop.Schedule(TimeSpan.FromSeconds(2), () =>
+            {
+                if (!started)
+                    loop.Quit(1);
+            });
             loop.Run();
 
             Assert.Null(Resizer.Resize);
