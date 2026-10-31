@@ -6,7 +6,6 @@ import Winshell.Audio
 import Winshell.Media
 import QtQuick
 import QtQuick.Controls
-import "launcher.js" as Launcher
 import "settings.js" as Settings
 
 // What quick settings shows: the media playing, the tiles, the volume and brightness sliders, and a footer with the
@@ -69,9 +68,12 @@ Item {
 
   // Puts the tile with this key where the tile with another key is, before it when moving back, after it when moving on.
   function move(key, target) {
-    const next = Launcher.moveTo(pinned, key, target)
-    if (next)
-      setPinned(next)
+    const keys = pinned.filter(k => k !== key)
+    const at = pinned.indexOf(target)
+    if (key === target || at < 0)
+      return
+    keys.splice(at, 0, key)
+    setPinned(keys)
   }
 
   // Moves a tile by an offset among the tiles shown, and keeps the keyboard on it.
