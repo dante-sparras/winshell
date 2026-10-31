@@ -100,7 +100,6 @@ public sealed class WinlandMonitor : QObject
 /// The <c>WinlandWorkspace</c>. Winland numbers Workspaces per Monitor, so two Workspaces can both be 3;
 /// one is told from the other by its Monitor.
 /// </summary>
-[QmlSignal("typeChanged")]
 public sealed class WinlandWorkspace : QObject
 {
     private readonly WinlandService _ipc;
