@@ -154,6 +154,7 @@ Item {
         Accessible.name: modelData.title
         Accessible.onPressAction: root.show(modelData.key)
         Keys.onReturnPressed: root.show(modelData.key)
+        Keys.onEnterPressed: root.show(modelData.key)
         Keys.onSpacePressed: root.show(modelData.key)
 
         Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
@@ -263,6 +264,7 @@ Item {
             Accessible.name: crumb.modelData.title
             Accessible.onPressAction: if (!crumb.last) root.show(crumb.modelData.key)
             Keys.onReturnPressed: if (!crumb.last) root.show(crumb.modelData.key)
+            Keys.onEnterPressed: if (!crumb.last) root.show(crumb.modelData.key)
             Keys.onSpacePressed: if (!crumb.last) root.show(crumb.modelData.key)
 
             Rectangle {

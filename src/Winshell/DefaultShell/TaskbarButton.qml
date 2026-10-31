@@ -3,7 +3,7 @@ import QtQuick
 
 // A button on the taskbar that is not an app, such as Start or Search: a glyph, or items of its own, on a subtle
 // fill when hovered, pressed, or while what it opens is open.
-MouseArea {
+SubtleButton {
   id: root
 
   property string glyph
@@ -18,19 +18,8 @@ MouseArea {
   implicitHeight: 40
   hoverEnabled: true
   activeFocusOnTab: true
-  onClicked: root.invoked()
-
-  Keys.onPressed: event => {
-    event.accepted = false
-    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-      root.invoked()
-      event.accepted = true
-    }
-  }
-
-  Accessible.role: Accessible.Button
+  onActivated: root.invoked()
   Accessible.name: label
-  Accessible.onPressAction: root.invoked()
 
   Rectangle {
     anchors.fill: parent
