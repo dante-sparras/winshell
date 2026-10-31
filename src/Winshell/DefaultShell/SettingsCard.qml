@@ -70,6 +70,7 @@ Rectangle {
 
   onActiveFocusChanged: if (activeFocus) reveal()
   Keys.onReturnPressed: if (clickable) activate()
+  Keys.onEnterPressed: if (clickable) activate()
   Keys.onSpacePressed: if (clickable) activate()
 
   MouseArea {

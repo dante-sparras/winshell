@@ -32,7 +32,7 @@ irm https://github.com/dante-sparras/winshell/releases/latest/download/install.p
 & ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 ```
 
-The installer checks the zip against `SHA256SUMS.txt` on the release and stops if the hash does not match. It installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. The files are the portable build, so Winshell updates itself the same way. From `irm | iex`, run `winshell` in that same window. A window that only launched the script, such as `pwsh scripts/install.ps1`, needs a new terminal.
+The installer checks the zip against `SHA256SUMS.txt` on the release and stops if the hash does not match. It installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. If a Microsoft Store copy is also installed, the installer says so and still finishes. The Store's WindowsApps alias usually comes first on PATH, so `winshell` may start that copy. The files are the portable build, so Winshell updates itself the same way. From `irm | iex`, run `winshell` in that same window. A window that only launched the script, such as `pwsh scripts/install.ps1`, needs a new terminal.
 
 Remove that install with:
 
@@ -40,7 +40,7 @@ Remove that install with:
 irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
 ```
 
-That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
+That removes the install folder, the PATH entry, the shortcut, the sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves your configuration in `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
 
 ### winget, coming
 

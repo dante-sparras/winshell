@@ -221,7 +221,7 @@ PopupWindow {
         id: previews
         model: root.running && !root.listed ? root.windows : []
 
-        MouseArea {
+        SubtleButton {
           id: card
           required property var modelData
           objectName: "preview:" + modelData.title
@@ -231,12 +231,10 @@ PopupWindow {
           activeFocusOnTab: true
           onActiveFocusChanged: if (activeFocus) root.focusedWindow = modelData
           onContainsMouseChanged: root.pointerOn(containsMouse ? modelData : null)
+          onActivated: root.activateRequested(modelData)
           Keys.onPressed: event => {
             event.accepted = false
-            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-              root.activateRequested(modelData)
-              event.accepted = true
-            } else if (event.key === Qt.Key_Delete) {
+            if (event.key === Qt.Key_Delete) {
               modelData.close()
               event.accepted = true
             }
@@ -244,8 +242,6 @@ PopupWindow {
           // A list item, not a button, so Narrator also reaches the close button inside it.
           Accessible.role: Accessible.ListItem
           Accessible.name: modelData.title
-          Accessible.onPressAction: root.activateRequested(modelData)
-          onClicked: root.activateRequested(modelData)
 
           Rectangle {
             anchors.fill: parent
@@ -321,7 +317,7 @@ PopupWindow {
           id: lines
           model: root.running && root.listed ? root.windows : []
 
-          MouseArea {
+          SubtleButton {
             id: line
             required property var modelData
             objectName: "previewRow:" + modelData.title
@@ -339,20 +335,16 @@ PopupWindow {
               else if (y + height > list.contentY + list.height)
                 list.contentY = y + height - list.height
             }
+            onActivated: root.activateRequested(modelData)
             Keys.onPressed: event => {
               event.accepted = false
-              if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-                root.activateRequested(modelData)
-                event.accepted = true
-              } else if (event.key === Qt.Key_Delete) {
+              if (event.key === Qt.Key_Delete) {
                 modelData.close()
                 event.accepted = true
               }
             }
             Accessible.role: Accessible.ListItem
             Accessible.name: modelData.title
-            Accessible.onPressAction: root.activateRequested(modelData)
-            onClicked: root.activateRequested(modelData)
 
             Rectangle {
               anchors.fill: parent
@@ -395,7 +387,7 @@ PopupWindow {
     }
   }
 
-  component CloseButton: MouseArea {
+  component CloseButton: SubtleButton {
     id: close
     property var window
     objectName: "previewClose"
@@ -403,17 +395,8 @@ PopupWindow {
     height: 24
     hoverEnabled: true
     activeFocusOnTab: true
-    Keys.onPressed: event => {
-      event.accepted = false
-      if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-        window.close()
-        event.accepted = true
-      }
-    }
-    Accessible.role: Accessible.Button
+    onActivated: window.close()
     Accessible.name: "Close " + (window ? window.title : "")
-    Accessible.onPressAction: window.close()
-    onClicked: window.close()
 
     // Windows' caption close red with a white glyph, in light and dark alike; a contrast theme highlights instead.
     Rectangle {

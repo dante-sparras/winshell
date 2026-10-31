@@ -16,7 +16,7 @@ Releases will be signed through SignPath Foundation once its project for Winshel
 
 ### Install with PowerShell
 
-No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. From `irm | iex`, run `winshell` in that same window. A window that only launched the script needs a new terminal.
+No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. If a Microsoft Store copy is also installed, the installer says so and still finishes. The Store's WindowsApps alias usually comes first on PATH, so `winshell` may start that copy. From `irm | iex`, run `winshell` in that same window. A window that only launched the script needs a new terminal.
 
 It needs `install.ps1` and the zip on that release.
 
@@ -42,7 +42,7 @@ Remove that install with:
 irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
 ```
 
-That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
+That removes the install folder, the PATH entry, the shortcut, the sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves your configuration in `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
 
 ### winget, coming
 
@@ -124,7 +124,7 @@ If the new version has an error, Winshell keeps running the old one. A notice in
 ERROR scene: Failed to reload configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
 ```
 
-Fix the file and save it again: Winshell reloads, and the notice goes away. If the configuration fails when Winshell starts, there is nothing to keep running: the notice says so, and Winshell stays open with no windows until you save a fix.
+Fix the file and save it again: Winshell reloads, and the notice goes away. If the configuration fails when Winshell starts, there is nothing to keep running: the notice says so, and Winshell stays open with no windows until you save a fix. The notice does not take the keyboard; `winshell ipc call notice dismiss` closes it.
 
 Read the log with `winshell log`, or `winshell log -f` to follow it as you edit. To leave the notice out, set `WINSHELL_NO_RELOAD_POPUP=1`, or call `Shell.inhibitReloadPopup()` in your configuration's `Shell.onReloadFailed`.
 

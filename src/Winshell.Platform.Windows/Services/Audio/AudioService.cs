@@ -434,7 +434,7 @@ public sealed class AudioLinkTracker : QObject
         var node = _node;
         var groups = node is null || _service is null
             ? []
-            : _service.AllLinkGroups.Where(g => node.IsPlayback ? g.Target == node : g.Source == node).ToList();
+            : _service.AllLinkGroups.Where(g => g.Source == node || g.Target == node).ToList();
         if (groups.SequenceEqual(_linkGroups))
             return;
         _linkGroups = groups;

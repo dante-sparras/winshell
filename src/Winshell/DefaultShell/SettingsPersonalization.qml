@@ -114,6 +114,7 @@ Column {
 
           onActiveFocusChanged: if (activeFocus) accent.reveal()
           Keys.onReturnPressed: pick()
+          Keys.onEnterPressed: pick()
           Keys.onSpacePressed: pick()
           Keys.onLeftPressed: swatches.focusSwatch(index - 1)
           Keys.onRightPressed: swatches.focusSwatch(index + 1)
