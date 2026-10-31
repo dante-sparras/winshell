@@ -38,7 +38,12 @@ public sealed class DiagnosticsService : QObject
         if (_doctor is not { } doctor || _running || Engine is not { } engine)
             return;
         SetField(ref _running, true, "running");
-        _ = Task.Run(() => Attempt(doctor)).ContinueWith(t => engine.Loop.Post(() => Show(t.Result)), TaskScheduler.Default);
+        _ = Task.Run(() => Attempt(doctor)).ContinueWith(t =>
+        {
+            // A faulted run has no result. Reading it throws, and Running would stay true.
+            var checks = t.IsCompletedSuccessfully ? t.Result : [CouldNotRun(t)];
+            engine.Loop.Post(() => Show(checks));
+        }, TaskScheduler.Default);
     }
 
     private static IReadOnlyList<DoctorCheck> Attempt(IDoctor doctor)
@@ -49,8 +54,19 @@ public sealed class DiagnosticsService : QObject
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            return [new DoctorCheck("doctor", "Diagnostics", CheckStatus.Fail, $"Could not run: {e.GetType().Name}: {e.Message}", $"Report it at {Doctor.BugReports}.")];
+            return [CouldNotRun(e)];
         }
+    }
+
+    private static DoctorCheck CouldNotRun(Exception e) =>
+        new("doctor", "Diagnostics", CheckStatus.Fail, $"Could not run: {e.GetType().Name}: {e.Message}", $"Report it at {Doctor.BugReports}.");
+
+    private static DoctorCheck CouldNotRun(Task run)
+    {
+        var error = run.IsFaulted ? run.Exception?.GetBaseException() : null;
+        return error is null
+            ? new("doctor", "Diagnostics", CheckStatus.Fail, "Could not run: Exception: The run did not finish.", $"Report it at {Doctor.BugReports}.")
+            : CouldNotRun(error);
     }
 
     private void Show(IReadOnlyList<DoctorCheck> checks)

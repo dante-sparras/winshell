@@ -21,16 +21,39 @@ internal static unsafe partial class DoctorProbe
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string LayersKey = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
 
+    // Held around OpenVersionKey so a test can watch one open without another read seeing the replacement.
+    internal static readonly object VersionKeyGate = new();
+
+    /// <summary>Opens the Windows version key. A test replaces it, under <see cref="VersionKeyGate"/>, to see the key closed.</summary>
+    internal static Func<RegistryKey?> OpenVersionKey = static () => Registry.LocalMachine.OpenSubKey(CurrentVersionKey);
+
     // Windows and .NET
 
     public static int WindowsBuild() => Environment.OSVersion.Version.Build;
 
-    public static int WindowsUpdateRevision() => Registry.LocalMachine.OpenSubKey(CurrentVersionKey)?.GetValue("UBR") is int revision ? revision : 0;
+    public static int WindowsUpdateRevision()
+    {
+        using var key = OpenVersion();
+        return key?.GetValue("UBR") is int revision ? revision : 0;
+    }
 
-    public static bool WindowsServer() => Registry.LocalMachine.OpenSubKey(CurrentVersionKey)?.GetValue("InstallationType") is string type
-        && type.StartsWith("Server", StringComparison.OrdinalIgnoreCase);
+    public static bool WindowsServer()
+    {
+        using var key = OpenVersion();
+        return key?.GetValue("InstallationType") is string type && type.StartsWith("Server", StringComparison.OrdinalIgnoreCase);
+    }
 
-    public static string? WindowsDisplayVersion() => Registry.LocalMachine.OpenSubKey(CurrentVersionKey)?.GetValue("DisplayVersion") as string;
+    public static string? WindowsDisplayVersion()
+    {
+        using var key = OpenVersion();
+        return key?.GetValue("DisplayVersion") as string;
+    }
+
+    private static RegistryKey? OpenVersion()
+    {
+        lock (VersionKeyGate)
+            return OpenVersionKey();
+    }
 
     /// <summary>Whether .NET came with Winshell: then its own files sit next to Winshell's, or are bundled into it.</summary>
     public static bool SelfContained(string exePath)
@@ -131,23 +154,29 @@ internal static unsafe partial class DoctorProbe
     /// <summary>The last load error in an instance log, or why that log could not be read.</summary>
     public readonly record struct InstanceLogRead(string? LoadError, string? Unreadable);
 
+    /// <summary>How many bytes of a log are read at once, from the end. A load line longer than this is joined across reads.</summary>
+    internal const int LogChunk = 8192;
+
+    private static readonly string[] LoadFailureMarkers =
+    [
+        "Failed to load configuration: ",
+        "Failed to reload configuration: ",
+    ];
+
     /// <summary>Reads the last load error. A missing log is neither an error nor unreadable.</summary>
     public static InstanceLogRead ReadInstanceLog(string logPath)
     {
         if (!File.Exists(logPath))
             return default;
-        string text;
         try
         {
             using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream);
-            text = reader.ReadToEnd();
+            return new(LastLoadErrorIn(stream), null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return new(null, $"{logPath}: {e.Message}");
         }
-        return new(LastLoadErrorIn(text), null);
     }
 
     public static string? LastLoadError(string logPath) => ReadInstanceLog(logPath).LoadError;
@@ -157,16 +186,137 @@ internal static unsafe partial class DoctorProbe
         string? error = null;
         foreach (var line in log.Split('\n'))
         {
-            foreach (var marker in new[] { "Failed to load configuration: ", "Failed to reload configuration: " })
-            {
-                var at = line.IndexOf(marker, StringComparison.Ordinal);
-                if (at >= 0)
-                    error = line[(at + marker.Length)..].TrimEnd('\r');
-            }
-            if (line.Contains(": Configuration Loaded", StringComparison.Ordinal) || line.Contains(": Launching config:", StringComparison.Ordinal))
-                error = null;
+            if (DecideLoad(line, out var next))
+                error = next;
         }
         return error;
+    }
+
+    /// <summary>The last load error, read from the end of the log. The last failure or successful load decides, so earlier bytes stay unread.</summary>
+    internal static string? LastLoadErrorIn(Stream stream)
+    {
+        foreach (var line in LinesFromEnd(stream))
+        {
+            if (DecideLoad(line, out var error))
+                return error;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// True when this line is a failed load or a load that went on. A load that went on clears
+    /// <paramref name="error"/>, which is what a later success does to an earlier failure.
+    /// </summary>
+    private static bool DecideLoad(string line, out string? error)
+    {
+        error = null;
+        var failed = false;
+        foreach (var marker in LoadFailureMarkers)
+        {
+            var at = line.IndexOf(marker, StringComparison.Ordinal);
+            if (at < 0)
+                continue;
+            error = line[(at + marker.Length)..].TrimEnd('\r');
+            failed = true;
+        }
+        if (line.Contains(": Configuration Loaded", StringComparison.Ordinal) || line.Contains(": Launching config:", StringComparison.Ordinal))
+        {
+            error = null;
+            return true;
+        }
+        return failed;
+    }
+
+    /// <summary>Lines of a UTF-8 log from last to first. A line that crosses a read is joined before it is decoded.</summary>
+    private static IEnumerable<string> LinesFromEnd(Stream stream)
+    {
+        var length = stream.Length;
+        if (length == 0)
+            yield break;
+
+        // Pieces of the line that is not finished yet, with the later piece first.
+        var pending = new List<byte[]>();
+        var pendingBytes = 0;
+        var pos = length;
+        var buffer = new byte[LogChunk];
+        while (pos > 0)
+        {
+            var take = (int)Math.Min(LogChunk, pos);
+            pos -= take;
+            stream.Position = pos;
+            ReadExact(stream, buffer, take);
+
+            var end = take;
+            while (true)
+            {
+                var nl = LastNewline(buffer, end);
+                if (nl < 0)
+                    break;
+                var line = Join(buffer.AsSpan(nl + 1, end - (nl + 1)), pending);
+                pending.Clear();
+                pendingBytes = 0;
+                if (line.Length > 0)
+                    yield return line;
+                end = nl;
+            }
+
+            if (end > 0)
+            {
+                var piece = new byte[end];
+                Buffer.BlockCopy(buffer, 0, piece, 0, end);
+                pending.Add(piece);
+                pendingBytes += end;
+            }
+        }
+
+        if (pendingBytes > 0)
+        {
+            var line = Join(ReadOnlySpan<byte>.Empty, pending);
+            if (line.Length > 0)
+                yield return line;
+        }
+    }
+
+    /// <summary><paramref name="laterFirst"/> is the rest of the line toward its end, later piece first.</summary>
+    private static string Join(ReadOnlySpan<byte> first, List<byte[]> laterFirst)
+    {
+        var count = first.Length;
+        foreach (var part in laterFirst)
+            count += part.Length;
+        if (count == 0)
+            return "";
+        var bytes = new byte[count];
+        first.CopyTo(bytes);
+        var offset = first.Length;
+        for (var i = laterFirst.Count - 1; i >= 0; i--)
+        {
+            var part = laterFirst[i];
+            Buffer.BlockCopy(part, 0, bytes, offset, part.Length);
+            offset += part.Length;
+        }
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    private static int LastNewline(byte[] buffer, int end)
+    {
+        for (var i = end - 1; i >= 0; i--)
+        {
+            if (buffer[i] == (byte)'\n')
+                return i;
+        }
+        return -1;
+    }
+
+    private static void ReadExact(Stream stream, byte[] buffer, int count)
+    {
+        var read = 0;
+        while (read < count)
+        {
+            var n = stream.Read(buffer, read, count - read);
+            if (n == 0)
+                throw new EndOfStreamException();
+            read += n;
+        }
     }
 
     // Folders
