@@ -202,7 +202,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            dark = key?.GetValue("AppsUseLightTheme") is int light && light == 0;
+            dark = WindowsModeDark(key?.GetValue("SystemUsesLightTheme"), key?.GetValue("AppsUseLightTheme"));
         }
         catch (System.Security.SecurityException)
         {
@@ -249,6 +249,14 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         }
         Theme.Current = theme;
     }
+
+    /// <summary>
+    /// Whether Windows mode is dark, from the Personalize values, where <c>0</c> is dark. The taskbar and Start follow
+    /// Windows mode, so every Winshell window does. A missing Windows-mode value follows app mode, and a missing pair is
+    /// light.
+    /// </summary>
+    internal static bool WindowsModeDark(object? systemValue, object? appsValue) =>
+        systemValue is int systemLight ? systemLight == 0 : appsValue is int appsLight && appsLight == 0;
 
     private static bool HighContrastOn()
     {
