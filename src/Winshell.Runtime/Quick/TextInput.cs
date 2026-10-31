@@ -425,46 +425,59 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         var lineHeight = LineHeight;
         var (x, y) = TextOrigin(lineHeight);
-        return new QRect(x + OffsetOf(position), y, 1, lineHeight);
+        if (VisualLayout() is not { } layout)
+            return new QRect(x, y, 1, lineHeight);
+        var caret = layout.CaretBox(ToVisual(position));
+        return new QRect(x + caret.X, y + caret.Y, 1, caret.Height);
     }
 
-    /// <summary>
-    /// The parts of a display-text span that this field draws, in item coordinates. One rectangle per visible
-    /// line. A caret is a zero-width rectangle. Text scrolled or clipped out of the field is left out.
-    /// </summary>
     internal IReadOnlyList<QRect> VisibleRectangles(int start, int end)
     {
-        var rects = new List<QRect>();
-        foreach (var piece in Pieces(start, end))
+        var length = DisplayText.Length;
+        start = Math.Clamp(start, 0, length);
+        end = Math.Clamp(end, start, length);
+        var area = TextArea();
+        var lines = new List<QRect>();
+        for (var i = start; i <= end; i++)
         {
-            if (piece.Bounds is { } bounds)
-                rects.Add(bounds);
+            var caret = PositionToRectangle(i);
+            var at = lines.FindIndex(line => Math.Abs(line.Y - caret.Y) < 0.5);
+            var seed = at < 0 ? new QRect(caret.X, caret.Y, 0, caret.Height) : lines[at];
+            var left = Math.Min(seed.X, caret.X);
+            var box = new QRect(left, seed.Y, Math.Max(seed.Right, caret.X) - left, Math.Max(seed.Height, caret.Height));
+            if (at < 0)
+                lines.Add(box);
+            else
+                lines[at] = box;
         }
-        rects.Sort(static (a, b) =>
+        for (var n = lines.Count - 1; n >= 0; n--)
         {
-            var byY = a.Y.CompareTo(b.Y);
-            return byY != 0 ? byY : a.X.CompareTo(b.X);
-        });
-        return rects;
+            var line = lines[n];
+            var top = Math.Max(line.Y, area.Y);
+            var bottom = Math.Min(line.Bottom, area.Bottom);
+            var left = Math.Max(line.X, area.X);
+            var right = Math.Min(line.Right, area.Right);
+            var point = start == end && line.X >= area.X && line.X < area.Right;
+            if (bottom > top && (point || right > left))
+                lines[n] = new QRect(point ? line.X : left, top, point ? 0 : right - left, bottom - top);
+            else
+                lines.RemoveAt(n);
+        }
+        return lines;
     }
 
-    /// <summary>
-    /// The spans of <see cref="DisplayText"/> that are at least partly inside the field.
-    /// None when the text is fully hidden. An empty field is one empty span when its caret is inside.
-    /// </summary>
-    internal IReadOnlyList<(int Start, int End)> VisibleSpans()
+    internal (int Start, int End)? VisibleSpan()
     {
-        var length = DisplayTextRaw.Length;
-        if (length == 0)
-            return CaretIfVisible(0) is null ? [] : [(0, 0)];
-        var spans = new List<(int Start, int End)>();
-        foreach (var piece in Pieces(0, length))
-        {
-            if (piece.End > piece.Start)
-                spans.Add((piece.Start, piece.End));
-        }
-        return MergeSpans(spans);
+        var area = TextArea();
+        int first = -1, last = -1;
+        for (var i = 0; i <= DisplayText.Length; i++)
+            if (area.IntersectsWith(PositionToRectangle(i)))
+                (first, last) = (first < 0 ? i : first, i);
+        return first < 0 ? null : (first, last);
     }
+
+    private QRect TextArea() => new QRect(_leftPadding, 0,
+        Math.Max(0, Width - _leftPadding - _rightPadding - ReservedRight + 1), Math.Max(0, Height));
 
     [Qml]
     public bool IsRightToLeft(int start, int end)
@@ -612,193 +625,6 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         else if ((_verticalAlignment & QtEnums.AlignBottom) != 0)
             y = Height - _bottomPadding - lineHeight;
         return (x, y);
-    }
-
-    /// <summary>The rectangle text is clipped to while it is drawn, in item coordinates.</summary>
-    private QRect TextClip()
-    {
-        var available = Width - _leftPadding - _rightPadding - ReservedRight;
-        return new QRect(_leftPadding, 0, Math.Max(0, available + 1), Math.Max(0, Height));
-    }
-
-    private readonly record struct Piece(int Start, int End, QRect? Bounds);
-
-    private List<Piece> Pieces(int start, int end)
-    {
-        var length = DisplayTextRaw.Length;
-        start = Math.Clamp(start, 0, length);
-        end = Math.Clamp(end, start, length);
-        if (start == end)
-        {
-            var caret = CaretIfVisible(start);
-            return caret is { } rect ? [new Piece(start, end, rect)] : [];
-        }
-
-        var clip = TextClip();
-        if (clip.Width <= 0 || clip.Height <= 0)
-            return [];
-        var layout = VisualLayout();
-        if (layout is null)
-            return [];
-        var origin = TextOrigin(LineHeight);
-        var visualStart = DisplayIndexToVisual(start);
-        var visualEnd = DisplayIndexToVisual(end);
-        if (visualEnd < visualStart)
-            (visualStart, visualEnd) = (visualEnd, visualStart);
-        var pieces = new List<Piece>();
-        foreach (var box in layout.RunBoxes(visualStart, visualEnd - visualStart))
-        {
-            if (box.Length <= 0)
-                continue;
-            var item = new QRect(origin.X + box.X, origin.Y + box.Y, Math.Max(0, box.Width), Math.Max(0, box.Height));
-            if (box.Width <= 0 || box.Height <= 0)
-            {
-                if (box.X + origin.X >= clip.X && box.X + origin.X < clip.Right && VerticalOverlap(item.Y, Math.Max(item.Height, 1), clip))
-                {
-                    var (spanStart, spanEnd) = DisplaySpan(box.Start, box.Start + box.Length);
-                    if (spanEnd > spanStart)
-                        pieces.Add(new Piece(spanStart, spanEnd, null));
-                }
-                continue;
-            }
-            if (Intersect(item, clip) is not { } visible)
-                continue;
-            int spanFrom, spanTo;
-            if (item.X >= clip.X && item.Right <= clip.Right)
-                (spanFrom, spanTo) = DisplaySpan(box.Start, box.Start + box.Length);
-            else
-                (spanFrom, spanTo) = VisibleCharacters(layout, box, clip.X - origin.X, clip.Right - origin.X);
-            if (spanTo > spanFrom)
-                pieces.Add(new Piece(spanFrom, spanTo, visible));
-        }
-        return pieces;
-    }
-
-    private (int Start, int End) VisibleCharacters(TextLayout layout, TextRunBox box, double clipLeft, double clipRight)
-    {
-        var from = int.MaxValue;
-        var to = int.MinValue;
-        var end = box.Start + box.Length;
-        for (var i = box.Start; i < end; i++)
-        {
-            var glyph = layout.GlyphBox(i);
-            var left = glyph.X;
-            var right = glyph.X + Math.Max(0, glyph.Width);
-            var hits = glyph.Width <= 0
-                ? glyph.X >= clipLeft && glyph.X < clipRight
-                : left < clipRight && right > clipLeft;
-            if (!hits)
-                continue;
-            var glyphEnd = Math.Min(end, Math.Max(i + 1, glyph.Start + Math.Max(1, glyph.Length)));
-            var (spanStart, spanEnd) = DisplaySpan(i, glyphEnd);
-            if (spanEnd <= spanStart)
-                continue;
-            from = Math.Min(from, spanStart);
-            to = Math.Max(to, spanEnd);
-            i = glyphEnd - 1;
-        }
-        return to > from ? (from, to) : (0, 0);
-    }
-
-    private QRect? CaretIfVisible(int displayIndex)
-    {
-        var clip = TextClip();
-        if (clip.Width <= 0 || clip.Height <= 0)
-            return null;
-        var lineHeight = LineHeight;
-        var origin = TextOrigin(lineHeight);
-        var layout = VisualLayout();
-        double x, y, height;
-        if (layout is null)
-        {
-            x = origin.X;
-            y = origin.Y;
-            height = lineHeight;
-        }
-        else
-        {
-            var caret = layout.CaretBox(DisplayIndexToVisual(displayIndex));
-            x = origin.X + caret.X;
-            y = origin.Y + caret.Y;
-            height = caret.Height > 0 ? caret.Height : lineHeight;
-        }
-        if (x < clip.X || x >= clip.Right || !VerticalOverlap(y, height, clip))
-            return null;
-        var top = Math.Max(y, clip.Y);
-        var bottom = Math.Min(y + height, clip.Bottom);
-        return bottom > top ? new QRect(x, top, 0, bottom - top) : null;
-    }
-
-    private static bool VerticalOverlap(double y, double height, QRect clip)
-    {
-        var top = Math.Max(y, clip.Y);
-        var bottom = Math.Min(y + height, clip.Bottom);
-        return bottom > top;
-    }
-
-    private static QRect? Intersect(QRect rect, QRect clip)
-    {
-        var left = Math.Max(rect.X, clip.X);
-        var top = Math.Max(rect.Y, clip.Y);
-        var right = Math.Min(rect.Right, clip.Right);
-        var bottom = Math.Min(rect.Bottom, clip.Bottom);
-        if (right <= left || bottom <= top)
-            return null;
-        return new QRect(left, top, right - left, bottom - top);
-    }
-
-    private static List<(int Start, int End)> MergeSpans(List<(int Start, int End)> spans)
-    {
-        if (spans.Count == 0)
-            return spans;
-        spans.Sort(static (a, b) => a.Start.CompareTo(b.Start));
-        var merged = new List<(int Start, int End)>(spans.Count);
-        var current = spans[0];
-        for (var i = 1; i < spans.Count; i++)
-        {
-            var next = spans[i];
-            if (next.Start <= current.End)
-                current = (current.Start, Math.Max(current.End, next.End));
-            else
-            {
-                merged.Add(current);
-                current = next;
-            }
-        }
-        merged.Add(current);
-        return merged;
-    }
-
-    /// <summary>A display-text index, as an index into the text DirectWrite laid out.</summary>
-    private int DisplayIndexToVisual(int displayIndex)
-    {
-        var visual = Math.Clamp(displayIndex, 0, DisplayTextRaw.Length);
-        if (_composition.Length == 0 || visual < Insertion)
-            return visual;
-        return visual + _composition.Length;
-    }
-
-    /// <summary>A laid-out index, as an index into <see cref="DisplayTextRaw"/>. The preedit collapses to the caret.</summary>
-    private int VisualIndexToDisplay(int visual)
-    {
-        if (_composition.Length == 0)
-            return Math.Clamp(visual, 0, DisplayTextRaw.Length);
-        if (visual <= Insertion)
-            return Math.Clamp(visual, 0, DisplayTextRaw.Length);
-        if (visual < Insertion + _composition.Length)
-            return Insertion;
-        return Math.Clamp(visual - _composition.Length, 0, DisplayTextRaw.Length);
-    }
-
-    private (int Start, int End) DisplaySpan(int visualStart, int visualEnd)
-    {
-        if (_composition.Length > 0 && visualStart >= Insertion && visualEnd <= Insertion + _composition.Length)
-            return (0, 0);
-        var start = VisualIndexToDisplay(visualStart);
-        var end = VisualIndexToDisplay(visualEnd);
-        if (end < start)
-            (start, end) = (end, start);
-        return end > start ? (start, end) : (0, 0);
     }
 
     public void SetComposition(string text)

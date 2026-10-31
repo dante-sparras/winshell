@@ -34,39 +34,51 @@ public class UiaTextGeometryTests
         """;
 
     [Fact]
-    public void Overflow_reports_the_visible_prefix_and_no_rectangle_for_the_hidden_tail() => Run(window =>
+    public void A_scrolled_field_reports_a_clipped_range_and_no_negative_width() => Run(window =>
     {
         var field = Field(window);
         field.Width = 48;
         field.Height = 32;
         field.Text_ = new string('m', 40);
-        field.CursorPosition = 0;
+        field.CursorPosition = field.Text_.Length;
 
         var text = Provider(window, field);
         var document = Document(text);
         var all = RangeText(document);
         Assert.Equal(field.Text_, all);
+        var shown = VisibleText(text);
+        Assert.True(shown.Length > 0 && shown.Length < all.Length);
+        Assert.EndsWith(shown, all, StringComparison.Ordinal);
+
+        var rects = Rectangles(document);
+        Assert.Equal(4, rects.Length);
+        Inside(ScreenOf(window, field), rects);
+        Assert.True(rects[2] >= 0);
 
         Assert.Equal(Uia.S_OK, text.GetVisibleRanges(out var ranges));
         var visible = (ITextRangeProvider)Assert.Single(ranges!);
-        var shown = RangeText(visible);
-        Assert.True(shown.Length > 0 && shown.Length < all.Length);
-        Assert.Equal(shown, all[..shown.Length]);
-
-        var screen = ScreenOf(window, field);
-        var rects = Rectangles(document);
-        Assert.Equal(4, rects.Length);
-        Inside(screen, rects);
-
         Assert.Equal(Uia.S_OK, document.Clone(out var hidden));
         Assert.NotNull(hidden);
-        Assert.Equal(Uia.S_OK, hidden.MoveEndpointByRange(Uia.EndpointStart, visible, Uia.EndpointEnd));
+        Assert.Equal(Uia.S_OK, hidden.MoveEndpointByRange(Uia.EndpointEnd, visible, Uia.EndpointStart));
         Assert.True(RangeText(hidden).Length > 0);
-        Assert.Empty(Rectangles(hidden));
+        Inside(ScreenOf(window, field), Rectangles(hidden));
+
+        field.CursorPosition = 0;
+        var prefixText = VisibleText(text);
+        Assert.True(prefixText.Length > 0 && prefixText.Length < all.Length);
+        Assert.Equal(prefixText, all[..prefixText.Length]);
+        Assert.Equal(Uia.S_OK, text.GetVisibleRanges(out var prefixRanges));
+        var prefix = (ITextRangeProvider)Assert.Single(prefixRanges!);
+        Assert.Equal(Uia.S_OK, Document(text).Clone(out var tail));
+        Assert.NotNull(tail);
+        Assert.Equal(Uia.S_OK, tail.MoveEndpointByRange(Uia.EndpointStart, prefix, Uia.EndpointEnd));
+        Assert.Equal(Uia.S_OK, tail.MoveEndpointByUnit(Uia.EndpointStart, TextUnits.Character, 1, out _));
+        Assert.True(RangeText(tail).Length > 0);
+        Assert.Empty(Rectangles(tail));
     });
 
     [Fact]
-    public void A_range_on_two_lines_has_a_rectangle_for_each_visible_line() => Run(window =>
+    public void A_range_on_two_lines_has_one_rectangle_per_visible_line() => Run(window =>
     {
         var field = Field(window);
         field.Width = 200;
@@ -75,18 +87,16 @@ public class UiaTextGeometryTests
         field.CursorPosition = 0;
 
         var text = Provider(window, field);
-        var document = Document(text);
-        Assert.Equal(field.Text_, RangeText(document));
         Assert.Equal(field.Text_, VisibleText(text));
-
-        var rects = Rectangles(document);
-        Assert.True(rects.Length >= 8 && rects.Length % 4 == 0);
+        var rects = Rectangles(Document(text));
+        Assert.Equal(8, rects.Length);
         Inside(ScreenOf(window, field), rects);
-        Assert.True(Tops(rects).Max() - Tops(rects).Min() > 1);
+        Assert.True(rects[5] - rects[1] > 1);
+        Assert.True(rects[2] >= 0 && rects[6] >= 0);
     });
 
     [Fact]
-    public void A_line_below_the_field_and_a_field_with_no_area_are_omitted() => Run(window =>
+    public void Fully_hidden_text_has_no_range_and_no_rectangle() => Run(window =>
     {
         var field = Field(window);
         field.Width = 200;
@@ -95,24 +105,12 @@ public class UiaTextGeometryTests
         field.CursorPosition = 0;
 
         var text = Provider(window, field);
-        var document = Document(text);
-        Assert.Equal("alpha\nbeta", RangeText(document));
         var shown = VisibleText(text);
         Assert.Contains("alpha", shown, StringComparison.Ordinal);
         Assert.DoesNotContain("beta", shown, StringComparison.Ordinal);
-
-        var screen = ScreenOf(window, field);
-        var rects = Rectangles(document);
-        Assert.NotEmpty(rects);
-        Inside(screen, rects);
-
-        var at = field.Text_.IndexOf('b');
-        Assert.Equal(Uia.S_OK, document.Clone(out var beta));
-        Assert.NotNull(beta);
-        Assert.Equal(Uia.S_OK, beta.MoveEndpointByUnit(Uia.EndpointStart, TextUnits.Character, at, out var moved));
-        Assert.Equal(at, moved);
-        Assert.Equal("beta", RangeText(beta));
-        Assert.Empty(Rectangles(beta));
+        var rects = Rectangles(Document(text));
+        Assert.Equal(4, rects.Length);
+        Inside(ScreenOf(window, field), rects);
 
         field.Width = 80;
         field.Height = 0;
@@ -161,14 +159,6 @@ public class UiaTextGeometryTests
     {
         var origin = field.MapToScene(0, 0);
         return window.Automation.ToScreen(new QRect(origin.X, origin.Y, field.Width, field.Height));
-    }
-
-    private static List<double> Tops(double[] rects)
-    {
-        var tops = new List<double>();
-        for (var i = 0; i < rects.Length; i += 4)
-            tops.Add(rects[i + 1]);
-        return tops;
     }
 
     private static void Inside(UiaRect screen, double[] rects)

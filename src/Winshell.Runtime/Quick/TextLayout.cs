@@ -9,9 +9,6 @@ namespace Winshell.Runtime.Quick;
 /// <summary>A piece of text in one style.</summary>
 public sealed record TextSpan(string Text, FontSpec Font, QColor? Color = null, string? Href = null);
 
-/// <summary>One directional run of a text range, in layout coordinates.</summary>
-internal readonly record struct TextRunBox(int Start, int Length, double X, double Y, double Width, double Height);
-
 /// <summary>A run of text DirectWrite resolved to one font face, including its optical size in points.</summary>
 public readonly record struct FontRun(string Family, string Text, float OpticalSize);
 
@@ -85,14 +82,7 @@ public sealed partial class TextLayout : IDisposable
     /// <summary>The horizontal offset of a caret at a UTF-16 index, in DIPs.</summary>
     public double CaretX(int position) => _native?.CaretX(position) ?? 0;
 
-    /// <summary>The caret at a UTF-16 index, in layout coordinates. The height is that line's.</summary>
     internal (double X, double Y, double Height) CaretBox(int position) => _native?.CaretBox(position) ?? (0, 0, 0);
-
-    /// <summary>The ink of one UTF-16 position, in layout coordinates.</summary>
-    internal TextRunBox GlyphBox(int position) => _native?.GlyphBox(position) ?? default;
-
-    /// <summary>One box per line and directional run in a UTF-16 span, in layout coordinates.</summary>
-    internal IReadOnlyList<TextRunBox> RunBoxes(int start, int length) => _native?.RunBoxes(start, length) ?? [];
 
     /// <summary>The UTF-16 index closest to a point in the layout, in DIPs.</summary>
     public int PositionAt(double x, double y = 0) => _native?.PositionAt(x, y) ?? 0;

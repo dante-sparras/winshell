@@ -128,21 +128,16 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
 
     int ITextRangeProvider.GetBoundingRectangles(out double[]? rectangles) => Get(() =>
     {
-        // One rectangle per line that is at least partly inside the field. A line scrolled or clipped away is omitted.
         var input = Input;
         var pieces = input.VisibleRectangles(_start, _end);
-        if (pieces.Count == 0)
-            return Array.Empty<double>();
         var values = new double[pieces.Count * 4];
         for (var i = 0; i < pieces.Count; i++)
         {
             var piece = pieces[i];
             var origin = input.MapToScene(piece.X, piece.Y);
             var rect = owner.Automation.ToScreen(new Runtime.QRect(origin.X, origin.Y, piece.Width, piece.Height));
-            values[i * 4] = rect.Left;
-            values[i * 4 + 1] = rect.Top;
-            values[i * 4 + 2] = rect.Width;
-            values[i * 4 + 3] = rect.Height;
+            (values[i * 4], values[i * 4 + 1], values[i * 4 + 2], values[i * 4 + 3]) =
+                (rect.Left, rect.Top, rect.Width, rect.Height);
         }
         return values;
     }, out rectangles);
