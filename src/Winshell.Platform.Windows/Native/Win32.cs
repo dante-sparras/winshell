@@ -635,6 +635,9 @@ internal static partial class Win32
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmExtendFrameIntoClientArea(nint hwnd, in MARGINS margins);
 
+    [LibraryImport("shell32.dll")]
+    public static partial int SHQueryUserNotificationState(out int state);
+
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmFlush();
 

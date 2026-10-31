@@ -74,6 +74,16 @@ public sealed partial class ShellNotices : IDisposable
             crashes.Written += OnReport;
     }
 
+    /// <summary>Whether Windows is holding notifications back. A test replaces this.</summary>
+    internal Func<bool> IsQuiet { get; set; } = () => Win32.SHQueryUserNotificationState(out var state) == 0 && QuietState(state);
+
+    /// <summary>
+    /// A full-screen app, a presentation, a busy state or quiet hours, the states in which Windows holds a toast back.
+    /// </summary>
+    internal static bool QuietState(int state) => state is QunsBusy or QunsFullScreen or QunsPresentation or QunsQuietTime;
+
+    private const int QunsBusy = 2, QunsFullScreen = 3, QunsPresentation = 4, QunsQuietTime = 6;
+
     /// <summary>The notice showing now, or null.</summary>
     public Notice? Current { get; private set; }
 
@@ -129,8 +139,14 @@ public sealed partial class ShellNotices : IDisposable
             return;
         _loop.Post(() =>
         {
-            if (Current?.Kind != NoticeKind.ConfigError)
-                Show(ForCrash(report));
+            if (Current?.Kind == NoticeKind.ConfigError)
+                return;
+            if (IsQuiet())
+            {
+                _log.Info("shell", $"A crash notice was held back while Windows is quiet. See {report.Path}");
+                return;
+            }
+            Show(ForCrash(report));
         });
     }
 
