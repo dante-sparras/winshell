@@ -113,10 +113,8 @@ These members are there, so a document that uses them loads, but they don't do w
 | `TextInput.wrapMode` | Ignored. |
 | `TextInput.passwordMaskDelay` | Ignored: a typed character is masked at once. |
 | `Flickable.flicking` | Always false. Content stops when the pointer lets go: `flickStarted` and `flickEnded` aren't emitted, `horizontalVelocity` and `verticalVelocity` are 0, and `flickDeceleration` and `maximumFlickVelocity` aren't used. |
-| `Flickable.boundsBehavior` | Ignored: dragging stops at the bounds, with no overshoot. |
-| `Flickable.boundsMovement` | Ignored. |
+| `Flickable.boundsBehavior` | A drag follows the value, and on release the view goes back to its bounds at once, with no rebound. A flick does not overshoot the bounds. `ScrollView`'s own flickable stops at the bounds. |
 | `Flickable.pressDelay` | Ignored: a press reaches the content at once. |
-| `Flickable.pixelAligned` | Ignored. |
 | `Flickable.originX` | Always 0, as is `originY`. |
 | `ListView.section` | Ignored: there are no section headers. |
 | `ListView.cacheBuffer` | Ignored, as is `reuseItems`: a delegate is made for every row in the model, in view or not. |
@@ -125,11 +123,8 @@ These members are there, so a document that uses them loads, but they don't do w
 | `ListView.highlightMoveDuration` | Ignored, as is `highlightMoveVelocity`: the highlight jumps to the current item. |
 | `ListView.populate` | Ignored, as are `add`, `remove`, `move`, `displaced`, `addDisplaced`, `removeDisplaced` and `moveDisplaced`: there are no view transitions. The attached `add` and `remove` signals aren't emitted. |
 | `Row.add` | Ignored, as are `move` and `populate`, here and on `Column`, `Grid` and `Flow`. |
-| `Grid.layoutDirection` | Ignored, as on `Flow`: items are placed left to right. |
 | `AnimatedImage.frameCount` | Always 1: only the first frame is shown, and `playing`, `paused`, `currentFrame` and `speed` aren't used. |
 | `Image.source` | Fetches `https` URLs only, and gives up on a body over 8 MiB. An `http` URL isn't fetched: `status` turns to `Image.Error` and the log says why. |
-| `Image.mirrorVertically` | Ignored. |
-| `Image.sourceClipRect` | Ignored. |
 | `Image.autoTransform` | Ignored: a photo's EXIF orientation is never applied. |
 | `Image.cache` | Ignored when `asynchronous` is true or the source is remote: the image is always cached. |
 | `Rectangle.border` | `border.pixelAligned` is ignored: the border isn't snapped to whole pixels. |
