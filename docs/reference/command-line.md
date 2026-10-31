@@ -34,6 +34,8 @@ winshell doctor [config options] [-j] [--no-color]
 
 The log goes to the console and to the instance's log file. The file is kept to about 4 MB, and the previous part is `log.1.txt` beside it. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.
 
+A failure before that log exists, such as no configuration to run, is printed to the console. The Start tile, the sign-in entry and any other start with no console window also show that message in a dialog, unless another program is reading the error. **Open config folder** opens the `--path` folder, or the config folder when there was no `--path`. An attached console prints the message and shows no dialog.
+
 Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2.
 
 ## Pick an instance

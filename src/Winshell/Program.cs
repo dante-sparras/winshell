@@ -597,7 +597,9 @@ namespace Winshell
             var root = ResolveConfig(o, out var error);
             if (root is null)
             {
-                Console.Error.WriteLine(error);
+                // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
+                if (error is not null)
+                    StartupError.Report(error, StartupError.FolderFor(o.Path, ConfigPaths.Root()));
                 return 1;
             }
             // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
@@ -969,7 +971,7 @@ namespace Winshell
             }
             catch (System.ComponentModel.Win32Exception e)
             {
-                Console.Error.WriteLine($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.");
+                StartupError.Report($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.", null);
                 return 1;
             }
             using (shell)
