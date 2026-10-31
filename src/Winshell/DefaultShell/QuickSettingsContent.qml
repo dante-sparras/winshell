@@ -1,4 +1,3 @@
-import Winshell.Io
 import Winshell.Theme
 import Winshell.Network
 import Winshell.Bluetooth
@@ -7,6 +6,8 @@ import Winshell.Audio
 import Winshell.Media
 import QtQuick
 import QtQuick.Controls
+import "launcher.js" as Launcher
+import "settings.js" as Settings
 
 // What quick settings shows: the media playing, the tiles, the volume and brightness sliders, and a footer with the
 // battery. A tile whose setting Winshell cannot change opens its page in Settings instead; values only change when
@@ -21,7 +22,8 @@ Item {
   // The TOML file the pinned tiles are kept in. Empty keeps them for this run only.
   property string layoutPath: ""
   // The keys of the pinned tiles, in order. A pinned tile the PC has no hardware for keeps its place, hidden.
-  property var pinned: ["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"]
+  // Until a file says otherwise, the order is the tile list in settings.js.
+  property var pinned: Settings.tiles.map(t => t.key)
   readonly property var mediaSession: Media.sessions.values.find(s => s.isPlaying) ?? Media.sessions.values[0] ?? null
   readonly property var outputs: Audio.nodes.values.filter(n => n.isPlayback && !n.isSession)
   readonly property var sessions: Audio.nodes.values.filter(n => n.isSession)
@@ -61,18 +63,15 @@ Item {
 
   function setPinned(keys) {
     pinned = keys
-    layout.pinned = keys
+    layoutFile.pinned = keys
     layoutFile.writeAdapter()
   }
 
   // Puts the tile with this key where the tile with another key is, before it when moving back, after it when moving on.
   function move(key, target) {
-    const keys = pinned.filter(k => k !== key)
-    const at = pinned.indexOf(target)
-    if (key === target || at < 0)
-      return
-    keys.splice(at, 0, key)
-    setPinned(keys)
+    const next = Launcher.moveTo(pinned, key, target)
+    if (next)
+      setPinned(next)
   }
 
   // Moves a tile by an offset among the tiles shown, and keeps the keyboard on it.
@@ -98,8 +97,8 @@ Item {
   }
 
   function restore() {
-    if (Array.isArray(layout.pinned))
-      pinned = layout.pinned.filter(k => typeof k === "string")
+    if (Array.isArray(layoutFile.pinned))
+      pinned = layoutFile.pinned.filter(k => typeof k === "string")
   }
 
   implicitWidth: 360
@@ -107,23 +106,10 @@ Item {
   focus: true
   Keys.onEscapePressed: page !== "" ? page = "" : editing ? editing = false : closeRequested()
 
-  FileView {
+  QuickSettingsLayout {
     id: layoutFile
     path: root.layoutPath
-    blockLoading: true
-    blockWrites: true
-    atomicWrites: true
-    // Winshell Settings changes the tiles in the same file.
-    watchChanges: true
-    onFileChanged: reload()
     onLoaded: root.restore()
-
-    TomlAdapter {
-      id: layout
-      comments: ({ pinned: "The quick settings tiles, in order: wifi, bluetooth, airplaneMode, energySaver, powerMode, nightLight,\naccessibility. A tile left out is not shown until quick settings or Winshell Settings adds it back." })
-      // null until the file has tiles.
-      property var pinned: null
-    }
   }
 
   component TileSpec: QtObject {

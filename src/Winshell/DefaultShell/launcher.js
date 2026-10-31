@@ -122,6 +122,58 @@ function move(index, key, count, pinnedCount, columns) {
   return index
 }
 
+// Moves id to the index target has in keys. Nothing changes when id is target, or target is not in keys.
+function moveTo(keys, id, target) {
+  if (id === target)
+    return null
+  var at = -1
+  var i
+  for (i = 0; i < keys.length; i++) {
+    if (keys[i] === target) {
+      at = i
+      break
+    }
+  }
+  if (at < 0)
+    return null
+  var list = []
+  for (i = 0; i < keys.length; i++) {
+    if (keys[i] !== id)
+      list.push(keys[i])
+  }
+  list.splice(at, 0, id)
+  return list
+}
+
+// Moves id past the entry offset steps away in visible. Entries visible does not contain keep their place.
+function reorder(keys, visible, id, offset) {
+  var at = -1
+  var i
+  for (i = 0; i < visible.length; i++) {
+    if (sameId(visible[i], id)) {
+      at = i
+      break
+    }
+  }
+  var neighbour = at < 0 ? undefined : visible[at + offset]
+  if (at < 0 || !neighbour)
+    return null
+  var list = []
+  for (i = 0; i < keys.length; i++) {
+    if (!sameId(keys[i], id))
+      list.push(keys[i])
+  }
+  var to = -1
+  for (i = 0; i < list.length; i++) {
+    if (sameId(list[i], neighbour)) {
+      to = i
+      break
+    }
+  }
+  list.splice(offset > 0 ? to + 1 : to, 0, id)
+  return list
+}
+
 // Windows Settings pages this shell already opens, from QuickSettingsContent and settings.js.
 // Start search does not add pages of its own, and it does not search the web.
 var settingsPages = [

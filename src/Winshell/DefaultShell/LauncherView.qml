@@ -1,5 +1,4 @@
 import Winshell
-import Winshell.Io
 import Winshell.Theme
 import QtQuick
 import QtQuick.Controls
@@ -83,14 +82,14 @@ Item {
     // A file that does not parse is the same as a missing one: show the defaults, and do not write them over it.
     // No pins array is not a choice either. [] is a choice to pin nothing, and a later reload that has not
     // produced an array must not mark the file known or wipe pins already shown.
-    if (pinData.error) {
+    if (pinFile.error) {
       pinsKnown = false
       return
     }
-    if (!Array.isArray(pinData.pins))
+    if (!Array.isArray(pinFile.pins))
       return
     pinsKnown = true
-    pinIds = pinData.pins.slice()
+    pinIds = pinFile.pins.slice()
   }
 
   function ensureSeed() {
@@ -100,20 +99,20 @@ Item {
     // empty list and also refuse every later attempt.
     if (!pinsReady || pinsPath === "" || pinsKnown)
       return
-    if (pinFile.loaded && !pinData.error && Array.isArray(pinData.pins))
+    if (pinFile.loaded && !pinFile.error && Array.isArray(pinFile.pins))
       return
     if (Launcher.visibleApps(apps).length === 0)
       return
     pinIds = Launcher.defaultPins(apps)
     pinsKnown = true
-    if (!pinData.error)
+    if (!pinFile.error)
       writePins()
   }
 
   function writePins() {
     if (pinsPath === "")
       return
-    pinData.pins = pinIds
+    pinFile.pins = pinIds
     pinFile.writeAdapter()
   }
 
@@ -255,26 +254,13 @@ Item {
     focusSearch()
   }
 
-  FileView {
+  StartPins {
     id: pinFile
     path: root.pinsPath
-    blockLoading: true
-    blockWrites: true
-    // Winshell Settings moves and unpins pins in the same file.
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
     onLoaded: root.readPins()
     // The load of a missing file fails instead of loading an empty list. Completion can run before that,
     // and a failure after a load that named no pins has to seed once the apps are known.
     onLoadFailed: if (!root.pinsKnown) root.ensureSeed()
-
-    TomlAdapter {
-      id: pinData
-      comments: ({ pins: "The apps pinned to Start, in order. [] pins nothing; without this file Start pins its defaults." })
-      // null until the file has pins.
-      property var pins: null
-    }
   }
 
   TextField {
