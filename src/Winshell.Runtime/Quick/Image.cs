@@ -565,9 +565,11 @@ public class Image : Item
             SetStatus((int)StatusValue.Loading);
             var source = _source;
             var loop = Engine?.Loop;
-            _ = ImageLoader.LoadAsync(source, baseDir, w, h).ContinueWith(t =>
+            // A finished load has to report on this thread. ContinueWith otherwise queues that report on the
+            // thread pool, and a busy pool leaves the image Loading after the bytes are already in hand.
+            void Report(Task<SKImage?> task)
             {
-                var image = t.IsCompletedSuccessfully ? t.Result : null;
+                var image = task.IsCompletedSuccessfully ? task.Result : null;
                 if (loop is null)
                 {
                     image?.Dispose();
@@ -584,7 +586,12 @@ public class Image : Item
                     if (image is null)
                         Engine?.Log.Warn("scene", $"QML {TypeName}: Cannot open: {source}" + (source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? " (only https:// images are loaded)" : ""));
                 });
-            }, TaskScheduler.Default);
+            }
+            var load = ImageLoader.LoadAsync(source, baseDir, w, h);
+            if (load.IsCompleted)
+                Report(load);
+            else
+                _ = load.ContinueWith(Report, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             return;
         }
         var loaded = ImageLoader.Load(_source, baseDir, w, h, _cache);
