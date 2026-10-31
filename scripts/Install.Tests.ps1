@@ -450,6 +450,63 @@ Describe 'install' {
         Test-Path -LiteralPath $link | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
     }
+
+    It 'deletes a staged update on install and leaves logs' {
+        $ctx = Enter-WinshellInstallTest
+        $staged = Join-Path $ctx.Local 'winshell\updates\9.9.9\winshell.exe'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $staged) | Out-Null
+        [IO.File]::WriteAllText($staged, 'staged', $script:Utf8)
+        $log = Join-Path $ctx.Local 'winshell\run\log.txt'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $log) | Out-Null
+        [IO.File]::WriteAllText($log, 'log', $script:Utf8)
+        $arch = Get-WinshellArchitecture
+        $name = "winshell-0.6.0-win-$arch.zip"
+        $zip = Join-Path $TestDrive $name
+        New-WinshellTestZip -Path $zip -Marker 'installed'
+        $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $sums = "$hash  $name"
+        $downloadText = { param($Url) $sums }.GetNewClosure()
+        $downloadFile = {
+            param($Url, $Destination)
+            Copy-Item -LiteralPath $zip -Destination $Destination
+        }.GetNewClosure()
+        $badSums = ('11' * 32) + "  $name"
+        $badText = { param($Url) $badSums }.GetNewClosure()
+        { Install-Winshell -Version '0.6.0' -DownloadText $badText -DownloadFile $downloadFile } |
+            Should -Throw '*SHA256 mismatch*'
+        [IO.File]::ReadAllText($staged) | Should -Be 'staged'
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshell.exe'), 'old', $script:Utf8)
+        { Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile -ProcessesUnder { 4242 } } |
+            Should -Throw '*Nothing was changed*'
+        [IO.File]::ReadAllText($staged) | Should -Be 'staged'
+        Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile
+        Test-Path -LiteralPath (Join-Path $ctx.Local 'winshell\updates') | Should -BeFalse
+        Test-Path -LiteralPath $log | Should -BeTrue
+        [IO.File]::ReadAllText((Join-Path $ctx.Bin 'winshell.exe')) | Should -Be 'installed'
+    }
+
+    It 'leaves a staged update link and says where it is' {
+        $ctx = Enter-WinshellInstallTest
+        $target = Join-Path $TestDrive 'staged-target'
+        New-Item -ItemType Directory -Path $target | Out-Null
+        [IO.File]::WriteAllText((Join-Path $target 'winshell.exe'), 'staged', $script:Utf8)
+        $updates = Join-Path $ctx.Local 'winshell\updates'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $updates) | Out-Null
+        New-Item -ItemType Junction -Path $updates -Target $target | Out-Null
+        $writer = [IO.StringWriter]::new()
+        $previous = [Console]::Out
+        try {
+            [Console]::SetOut($writer)
+            Remove-WinshellStagedUpdate | Should -BeFalse
+            $writer.ToString() | Should -Match ([regex]::Escape($updates))
+        } finally {
+            [Console]::SetOut($previous)
+            $writer.Dispose()
+        }
+        Test-Path -LiteralPath $updates | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $target 'winshell.exe') | Should -BeTrue
+    }
 }
 
 Describe 'script safety' {

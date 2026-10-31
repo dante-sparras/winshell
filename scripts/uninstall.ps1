@@ -5,8 +5,9 @@
 
 .DESCRIPTION
     Removes %LOCALAPPDATA%\Programs\winshell, that bin folder's user PATH entry, the Winshell Start
-    menu shortcut, and the Winshell sign-in entry when it starts that install. It does not remove
-    configuration, cache, or logs under %APPDATA%\winshell and %LOCALAPPDATA%\winshell.
+    menu shortcut, the Winshell sign-in entry when it starts that install, and a staged update in
+    %LOCALAPPDATA%\winshell\updates. It does not remove configuration under %APPDATA%\winshell, or
+    logs and state under %LOCALAPPDATA%\winshell.
     irm | iex removes that folder from this session's PATH and leaves every other entry.
 
     Stops without changing anything while that Winshell is running. Safe to run when Winshell is
@@ -261,6 +262,25 @@ function Test-WinshellCommandTarget([string] $Command, [string] $Exe) {
     return [regex]::IsMatch($Command, "(?i)(^|[\s""])$pattern($|[\s""])")
 }
 
+function Remove-WinshellStagedUpdate {
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is not set.' }
+    $updates = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'winshell\updates'))
+    if (-not (Test-Path -LiteralPath $updates)) { return $false }
+    # A leftover staged update replaces the next start, including an older install. A recursive delete could follow a link.
+    if (Test-WinshellReparsePoint $updates) {
+        Write-WinshellLine "The staged update is still at $updates because it is a link."
+        return $false
+    }
+    Write-WinshellLine "Removing $updates."
+    try {
+        Remove-Item -LiteralPath $updates -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-WinshellLine "The staged update is still at $updates because it could not be deleted."
+        return $false
+    }
+    return $true
+}
+
 function Get-WinshellShortcutTarget([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
     $shell = New-Object -ComObject WScript.Shell
@@ -311,11 +331,12 @@ function Uninstall-Winshell {
         Set-WinshellAutostartCommand ''
         $removed = $true
     }
+    if (Remove-WinshellStagedUpdate) { $removed = $true }
     if (-not $removed) {
         Write-WinshellLine 'Winshell is not installed.'
         return
     }
-    Write-WinshellLine 'Winshell is uninstalled. Your configuration in %APPDATA%\winshell was left in place.'
+    Write-WinshellLine 'Winshell is uninstalled. Your configuration in %APPDATA%\winshell was left in place. Logs and state stay in %LOCALAPPDATA%\winshell.'
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
