@@ -230,6 +230,9 @@ public class QObject
 
     private Dictionary<string, SignalDefinition>? _dynamicSignals;
 
+    /// <summary>The signals this object's document declared.</summary>
+    public IEnumerable<SignalDefinition> DynamicSignals => (IEnumerable<SignalDefinition>?)_dynamicSignals?.Values ?? [];
+
     public void AddSignal(SignalDefinition signal)
     {
         _dynamicSignals ??= [];

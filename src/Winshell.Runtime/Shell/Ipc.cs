@@ -87,6 +87,8 @@ public sealed class IpcRegistry
                 if (IpcTypes.Contains(p.QmlType))
                     sb.Append("  property ").Append(p.Name).Append(": ").Append(p.QmlType).Append('\n');
             }
+            foreach (var signal in handler.DynamicSignals)
+                sb.Append("  signal ").Append(signal.Name).Append('(').Append(string.Join(", ", signal.Parameters)).Append(")\n");
         }
         return sb.ToString();
     }
@@ -99,8 +101,10 @@ public sealed class IpcRegistry
     {
         if (!_handlers.TryGetValue(target, out var handler))
             throw new IpcException($"Target not found: {target}");
-        if (handler.FunctionDeclaration(function) is not { } d || !Callable(d))
+        if (handler.FunctionDeclaration(function) is not { } d)
             throw new IpcException($"Function not found: {target}.{function}");
+        if (!Callable(d))
+            throw new IpcException($"Function {target}.{function} has a type IPC can't pass. It takes and returns string, int, bool, real, double or color.");
         if (args.Count != d.Parameters.Count)
             throw new IpcException($"Function {target}.{function} takes {d.Parameters.Count} argument{(d.Parameters.Count == 1 ? "" : "s")}, {args.Count} given");
         var converted = new object?[args.Count];
