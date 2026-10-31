@@ -51,6 +51,25 @@ public sealed class IpcHandler : QObject
     protected override void OnDestroy() => Engine?.GetService<IpcRegistry>()?.Unregister(_target, this);
 }
 
+/// <summary>One parameter of a function or a signal <c>ipc show</c> can list.</summary>
+public sealed record IpcParameterView(string Name, string? Type);
+
+/// <summary>A function <c>ipc show</c> can call.</summary>
+public sealed record IpcFunctionView(string Name, IReadOnlyList<IpcParameterView> Parameters, string Returns);
+
+/// <summary>A property <c>ipc show</c> can read.</summary>
+public sealed record IpcPropertyView(string Name, string Type);
+
+/// <summary>A signal declared on an <c>IpcHandler</c>.</summary>
+public sealed record IpcSignalView(string Name, IReadOnlyList<IpcParameterView> Parameters);
+
+/// <summary>One IPC target, as <c>ipc show</c> knows it. <c>ipc show -j</c> prints these records as they are.</summary>
+public sealed record IpcTargetView(
+    string Target,
+    IReadOnlyList<IpcFunctionView> Functions,
+    IReadOnlyList<IpcPropertyView> Properties,
+    IReadOnlyList<IpcSignalView> Signals);
+
 /// <summary>The IPC handlers of one shell, by target, and the calls the CLI makes to them.</summary>
 public sealed class IpcRegistry
 {
@@ -70,27 +89,51 @@ public sealed class IpcRegistry
             _handlers.Remove(target);
     }
 
+    /// <summary>Every target with the functions, properties and signals <c>ipc show</c> lists.</summary>
+    public IReadOnlyList<IpcTargetView> Describe()
+    {
+        var targets = new List<IpcTargetView>();
+        foreach (var (target, handler) in _handlers.OrderBy(h => h.Key, StringComparer.Ordinal))
+        {
+            var functions = new List<IpcFunctionView>();
+            foreach (var name in handler.FunctionNames)
+            {
+                if (handler.FunctionDeclaration(name) is { } d && Callable(d))
+                    functions.Add(new IpcFunctionView(name, d.Parameters.Select(p => new IpcParameterView(p.Name, p.Type)).ToList(), d.ReturnType!));
+            }
+            var properties = handler.DynamicProperties.Where(p => IpcTypes.Contains(p.QmlType)).Select(p => new IpcPropertyView(p.Name, p.QmlType)).ToList();
+            var signals = handler.DynamicSignals.Select(signal => new IpcSignalView(signal.Name, SignalParameters(signal))).ToList();
+            targets.Add(new IpcTargetView(target, functions, properties, signals));
+        }
+        return targets;
+    }
+
     /// <summary>Every target with its functions, properties and signals, as <c>ipc show</c> prints them.</summary>
     public string Show()
     {
         var sb = new StringBuilder();
-        foreach (var (target, handler) in _handlers.OrderBy(h => h.Key, StringComparer.Ordinal))
+        foreach (var target in Describe())
         {
-            sb.Append("target ").Append(target).Append('\n');
-            foreach (var name in handler.FunctionNames)
-            {
-                if (handler.FunctionDeclaration(name) is { } d && Callable(d))
-                    sb.Append("  function ").Append(name).Append('(').Append(string.Join(", ", d.Parameters.Select(p => $"{p.Name}: {p.Type}"))).Append("): ").Append(d.ReturnType).Append('\n');
-            }
-            foreach (var p in handler.DynamicProperties)
-            {
-                if (IpcTypes.Contains(p.QmlType))
-                    sb.Append("  property ").Append(p.Name).Append(": ").Append(p.QmlType).Append('\n');
-            }
-            foreach (var signal in handler.DynamicSignals)
-                sb.Append("  signal ").Append(signal.Name).Append('(').Append(string.Join(", ", signal.Parameters)).Append(")\n");
+            sb.Append("target ").Append(target.Target).Append('\n');
+            foreach (var function in target.Functions)
+                sb.Append("  function ").Append(function.Name).Append('(').Append(string.Join(", ", function.Parameters.Select(p => $"{p.Name}: {p.Type}"))).Append("): ").Append(function.Returns).Append('\n');
+            foreach (var property in target.Properties)
+                sb.Append("  property ").Append(property.Name).Append(": ").Append(property.Type).Append('\n');
+            foreach (var signal in target.Signals)
+                sb.Append("  signal ").Append(signal.Name).Append('(').Append(string.Join(", ", signal.Parameters.Select(p => p.Name))).Append(")\n");
         }
         return sb.ToString();
+    }
+
+    private static List<IpcParameterView> SignalParameters(SignalDefinition signal)
+    {
+        var parameters = new List<IpcParameterView>(signal.Parameters.Count);
+        for (var i = 0; i < signal.Parameters.Count; i++)
+        {
+            string? type = signal.ParameterTypes is { } types && i < types.Count ? types[i] : null;
+            parameters.Add(new IpcParameterView(signal.Parameters[i], type));
+        }
+        return parameters;
     }
 
     private static bool Callable(Qml.QmlFunctionDeclaration d) =>
@@ -388,7 +431,7 @@ public sealed class SocketObject : DataStream
 }
 
 /// <summary>The <c>SocketServer</c>: listens on a path and makes a Socket from its handler for each client.</summary>
-public sealed class SocketServer : QObject
+public sealed class SocketServer : QObject, IPropertyObserver
 {
     private string _path = "";
     private bool _active;
@@ -396,7 +439,6 @@ public sealed class SocketServer : QObject
     private CancellationTokenSource? _cancel;
     private Task? _listen;
     private int _generation;
-    private readonly List<QObject> _clients = [];
 
     [Qml] public string Path { get { Track(); return _path; } set { if (SetField(ref _path, value ?? "")) Restart(); } }
 
@@ -508,10 +550,27 @@ public sealed class SocketServer : QObject
         }
         var obj = _handler.Create(null, null, null, o => o.SetOwner(this));
         if (obj is SocketObject socket)
+        {
+            socket.AddObserver("connected", this);
             socket.Adopt(stream);
+        }
         else
+        {
             stream.Dispose();
-        _clients.Add(obj);
+            obj?.Destroy();
+        }
+    }
+
+    /// <summary>A client that disconnected is done. Its own handlers have run by the next turn of the loop.</summary>
+    public void OnPropertyChanged(QObject sender, string property)
+    {
+        if (sender is not SocketObject { Connected: false } socket || Engine is not { } engine)
+            return;
+        engine.Loop.Post(() =>
+        {
+            if (!socket.IsDestroyed)
+                socket.Destroy();
+        });
     }
 
     protected override void OnDestroy()

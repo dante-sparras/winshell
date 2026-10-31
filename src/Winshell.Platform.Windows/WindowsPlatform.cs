@@ -23,6 +23,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private IDisposable? _screenRefresh;
     private Services.Tray.TrayHost? _tray;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
+    private readonly SystemChanges _systemChanges = new();
     private static WindowsPlatform? _current;
 
     public WindowsPlatform(WinEventLoop loop, Log log)
@@ -37,11 +38,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         ReadTheme();
         ListenForClipboard();
         SystemEvents.DisplaySettingsChanged += (_, _) => Loop.Post(RefreshScreens);
-        SystemEvents.UserPreferenceChanged += (_, e) =>
-        {
-            if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Accessibility)
-                Loop.Post(ReadTheme);
-        };
+        SystemEvents.UserPreferenceChanged += (_, e) => FollowSystem(SystemChanges.From(e.Category));
     }
 
     public WinEventLoop Loop { get; }
@@ -102,26 +99,25 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         WorkAreaMayHaveChanged();
     }
 
-    internal void SystemChanged(uint message, nint wParam)
+    internal void SystemChanged(uint message, nint wParam) => FollowSystem(SystemChanges.From(message, wParam));
+
+    private void FollowSystem(SystemChange change)
     {
-        if (message == Win32.WM_DISPLAYCHANGE)
-        {
-            ScreensMayHaveChanged();
-        }
-        else if (message == Win32.WM_SETTINGCHANGE)
-        {
+        if (_systemChanges.Add(change))
+            Loop.Post(FollowPendingChanges);
+    }
+
+    private void FollowPendingChanges()
+    {
+        var pending = _systemChanges.Take();
+        if (pending.HasFlag(SystemChange.Text))
             TextRaster.Refresh();
-            // The taskbar moved, resized, or started or stopped hiding.
-            if (wParam == Win32.SPI_SETWORKAREA)
-                WorkAreaMayHaveChanged();
-            else
-                ScreensMayHaveChanged();
-            Loop.Post(ReadTheme);
-        }
-        else
-        {
-            Loop.Post(ReadTheme);
-        }
+        if (pending.HasFlag(SystemChange.WorkArea))
+            WorkAreaMayHaveChanged();
+        if (pending.HasFlag(SystemChange.Screens))
+            ScreensMayHaveChanged();
+        if (pending.HasFlag(SystemChange.Theme))
+            ReadTheme();
     }
 
     /// <summary>

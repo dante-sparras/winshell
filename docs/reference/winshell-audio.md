@@ -17,7 +17,7 @@ The `Audio` singleton: every playback device, recording device, and audio sessio
 | `linkGroups` | ObjectModel of [AudioLinkGroup](#audiolinkgroup), read-only | Every link group. Windows has one connection per session, so there is one group for each entry of `links`. |
 | `defaultPlaybackDevice` | [AudioNode](#audionode) | The default playback device, or null when there is none. Setting it makes that device the Windows default. |
 | `defaultRecordingDevice` | [AudioNode](#audionode) | The default recording device, or null when there is none. Setting it makes that device the Windows default. |
-| `ready` | bool, read-only | Always true. The devices are read the first time `Audio` is used, before any binding sees it. When Windows audio cannot be opened, `ready` is still true and `nodes` is empty. |
+| `ready` | bool, read-only | True once the devices are read, the first time `Audio` is used and before any binding sees it. False when Windows audio cannot be opened, and then `nodes` is empty. |
 
 Setting either default to a node that is not a device of that kind changes nothing and writes a warning to the log. Windows has one System Sounds session on every playback device; only the one on the default playback device is in `nodes`, named `system-sounds`.
 
@@ -76,7 +76,7 @@ The connections between one source and one target. Windows has one connection pe
 
 ## AudioLinkTracker
 
-The link groups connected to one device: for a volume mixer, the apps playing to a speaker. Create one with `AudioLinkTracker { node: Audio.defaultPlaybackDevice }`.
+The link groups connected to one node: for a volume mixer, the apps playing to a speaker, or for one app, the speaker it plays to. Create one with `AudioLinkTracker { node: Audio.defaultPlaybackDevice }`.
 
 | Member | Type | Description |
 | --- | --- | --- |

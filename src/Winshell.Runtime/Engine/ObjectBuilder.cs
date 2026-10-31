@@ -100,7 +100,10 @@ internal sealed partial class ObjectBuilder(QmlEngine engine, CreationBatch batc
                         batch.Required.Add(dynamicProperty);
                     break;
                 case QmlSignalDeclaration s:
-                    obj.AddSignal(new SignalDefinition(s.Name, s.Parameters.Select(x => x.Name).ToList()));
+                    obj.AddSignal(new SignalDefinition(
+                        s.Name,
+                        s.Parameters.Select(x => x.Name).ToList(),
+                        s.Parameters.Select(x => x.Type).ToList()));
                     break;
                 case QmlFunctionDeclaration f:
                     {

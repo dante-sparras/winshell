@@ -425,8 +425,59 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         var lineHeight = LineHeight;
         var (x, y) = TextOrigin(lineHeight);
-        return new QRect(x + OffsetOf(position), y, 1, lineHeight);
+        if (VisualLayout() is not { } layout)
+            return new QRect(x, y, 1, lineHeight);
+        var caret = layout.CaretBox(ToVisual(position));
+        return new QRect(x + caret.X, y + caret.Y, 1, caret.Height > 0 ? caret.Height : lineHeight);
     }
+
+    internal IReadOnlyList<QRect> VisibleRectangles(int start, int end)
+    {
+        var length = DisplayText.Length;
+        start = Math.Clamp(start, 0, length);
+        end = Math.Clamp(end, start, length);
+        var area = TextArea();
+        var lines = new List<QRect>();
+        for (var i = start; i <= end; i++)
+        {
+            var caret = PositionToRectangle(i);
+            var at = lines.FindIndex(line => Math.Abs(line.Y - caret.Y) < 0.5);
+            var seed = at < 0 ? new QRect(caret.X, caret.Y, 0, caret.Height) : lines[at];
+            var left = Math.Min(seed.X, caret.X);
+            var box = new QRect(left, seed.Y, Math.Max(seed.Right, caret.X) - left, Math.Max(seed.Height, caret.Height));
+            if (at < 0)
+                lines.Add(box);
+            else
+                lines[at] = box;
+        }
+        for (var n = lines.Count - 1; n >= 0; n--)
+        {
+            var line = lines[n];
+            var top = Math.Max(line.Y, area.Y);
+            var bottom = Math.Min(line.Bottom, area.Bottom);
+            var left = Math.Max(line.X, area.X);
+            var right = Math.Min(line.Right, area.Right);
+            var point = start == end && line.X >= area.X && line.X < area.Right;
+            if (bottom > top && (point || right > left))
+                lines[n] = new QRect(point ? line.X : left, top, point ? 0 : right - left, bottom - top);
+            else
+                lines.RemoveAt(n);
+        }
+        return lines;
+    }
+
+    internal (int Start, int End)? VisibleSpan()
+    {
+        var area = TextArea();
+        int first = -1, last = -1;
+        for (var i = 0; i <= DisplayText.Length; i++)
+            if (area.IntersectsWith(PositionToRectangle(i)))
+                (first, last) = (first < 0 ? i : first, i);
+        return first < 0 ? null : (first, last);
+    }
+
+    private QRect TextArea() => new QRect(_leftPadding, 0,
+        Math.Max(0, Width - _leftPadding - _rightPadding - ReservedRight + 1), Math.Max(0, Height));
 
     [Qml]
     public bool IsRightToLeft(int start, int end)

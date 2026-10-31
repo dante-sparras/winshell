@@ -24,7 +24,8 @@ public sealed record Notice(NoticeKind Kind, string Title, string Detail, string
 /// Winshell's own notices: a configuration error, and a window that failed. Each is a window drawn like a Windows 11
 /// notification by <c>ShellNotice.qml</c>, in an engine of its own, so it shows whatever the configuration is doing,
 /// including nothing. One notice shows at a time: a new one replaces it, except that a window that failed does not
-/// replace a configuration error, which stays until it is fixed or dismissed. Nothing is sent anywhere: the button
+/// replace a configuration error, which stays until it is fixed or dismissed. The notice does not take the keyboard;
+/// <c>winshell ipc call notice dismiss</c> closes whichever one is showing. Nothing is sent anywhere: the button
 /// opens a file on this PC, and never runs one. <c>WINSHELL_NO_RELOAD_POPUP=1</c> and <c>Shell.inhibitReloadPopup()</c>
 /// hide configuration errors.
 /// </summary>
