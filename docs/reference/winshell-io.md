@@ -30,7 +30,7 @@ The first word of `command` is looked up on `PATH` with each `PATHEXT` extension
 
 Enum values: `NormalExit`, `CrashExit`
 
-Setting `running` to false is the same as `signal(15)`. A program ended by force that way reports `CrashExit`; one ended by `signal(15)`, `signal(2)` or `signal(1)` reports `NormalExit`. When the `Process` is destroyed or the shell reloads, a program still running is ended with its child processes.
+Setting `running` to false is the same as `signal(15)`. That, `signal(2)` and `signal(1)` ask a windowed program to close, and end any other by force. A program ended by force reports `CrashExit`, and one that closed when asked reports `NormalExit`. When the `Process` is destroyed or the shell reloads, a program still running is ended with its child processes.
 
 ```qml
 import QtQuick
@@ -174,7 +174,7 @@ A key the file does not have keeps its value. A string, url or color property is
 
 A nested JSON object, created with `JsonObject { }` as the value of a property of a [JsonAdapter](#jsonadapter), as in `property JsonObject window: JsonObject { property int width: 400 }`. The properties declared on it are its keys.
 
-A change to a property of a `JsonObject` set directly on the adapter emits `adapterUpdated`. A `JsonObject` inside another `JsonObject` is read and written, but its changes do not emit `adapterUpdated`.
+A change to a property of a `JsonObject` emits `adapterUpdated`, at any depth.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -276,7 +276,7 @@ Listens on a Unix domain socket or a named pipe and makes a [Socket](#socket) fo
 | `active` | bool | Whether the server listens. Default `false`. A path it cannot listen on logs a warning in the `io` category. |
 | `handler` | Component | The component made for each client. Its root must be a `Socket`; a client whose handler makes anything else is closed. |
 
-A client's `Socket` stays until the server is destroyed, also after the client disconnects.
+A client's `Socket` is destroyed on the next turn of the loop after the client disconnects, so `onConnectedChanged` still runs.
 
 ## DataStream
 
