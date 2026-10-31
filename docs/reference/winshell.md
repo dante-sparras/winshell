@@ -129,7 +129,7 @@ One screen. The object stays the same while the screen is connected. Reach it fr
 | `name` | string, read-only | The Windows device name, such as `DISPLAY1`. |
 | `model` | string, read-only | The monitor's name in Windows' device list, often `Generic PnP Monitor`. |
 | `manufacturer` | string, read-only | The three-letter PnP manufacturer code from the monitor's device id, such as `AUS`, or empty when Windows does not report one. |
-| `serialNumber` | string, read-only | The serial part of the monitor's device id, or empty when Windows does not report one. |
+| `serialNumber` | string, read-only | The instance part of the monitor's device id, such as `5&15335277&0&UID184582`, or empty when Windows does not report one. It tells two identical monitors apart. It is not the serial number printed on the monitor. |
 | `x` | real, read-only | The left edge on the virtual desktop. |
 | `y` | real, read-only | The top edge on the virtual desktop. |
 | `width` | real, read-only | The width in logical pixels. |
@@ -226,7 +226,7 @@ Where a popup window attaches to its parent window. Reach it as `PopupWindow.anc
 | --- | --- | --- |
 | `window` | [ShellWindow](#shellwindow) | The parent window. With `item` set, the item's window. Setting it clears `item`. |
 | `item` | Item | An item whose bounds are the anchor rectangle. Setting it clears `window`. |
-| `rect` | group: `x`, `y`, `width`, `height` (real) | The anchor rectangle in the window, 1 by 1 at the corner by default. Set each field, as in `anchor.rect.x: 12`; the group itself can't be replaced. With `item` set, `x` and `y` offset the item's bounds. Setting `width` or `height` uses this rectangle's width and height instead of the item's size. |
+| `rect` | group: `x`, `y`, `width`, `height` (real) | The anchor rectangle in the window, 1 by 1 at the corner by default. Set each field, as in `anchor.rect.x: 12`; the group itself can't be replaced. With `item` set, `x` and `y` offset the item's bounds. Setting `width` or `height` replaces that side of the item's size. |
 | `margins` | group: `left`, `top`, `right`, `bottom` (real) | Grows the anchor rectangle outward on each side, in logical pixels, to leave a gap. Set each side, as in `anchor.margins.top: 8`; the group itself can't be replaced. |
 | `edges` | [Edges](#edges) | The point on the anchor rectangle: an edge or a corner. No edge on an axis means its middle. Default `Edges.Top \| Edges.Left`. |
 | `gravity` | [Edges](#edges) | The direction the popup window grows from that point. Default `Edges.Bottom \| Edges.Right`. |

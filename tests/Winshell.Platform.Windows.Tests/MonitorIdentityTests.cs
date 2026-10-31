@@ -6,18 +6,18 @@ namespace Winshell.Platform.Windows.Tests;
 public class MonitorIdentityTests
 {
     [Fact]
-    public void A_monitor_device_id_splits_into_the_manufacturer_and_the_serial()
+    public void A_monitor_interface_path_splits_into_the_manufacturer_and_the_instance()
     {
-        Assert.Equal("AUS", Screens.Manufacturer(@"MONITOR\AUS32A8\5&1"));
-        Assert.Equal("5&1", Screens.Serial(@"MONITOR\AUS32A8\5&1"));
+        // What EnumDisplayDevicesW returned with flag 1 for a real monitor.
+        var id = @"\\?\DISPLAY#AUS32A8#5&15335277&0&UID184582#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}";
+        Assert.Equal("AUS", Screens.Manufacturer(id));
+        Assert.Equal("5&15335277&0&UID184582", Screens.Serial(id));
     }
 
     [Fact]
-    public void An_interface_path_has_no_manufacturer_and_the_question_mark_serial()
+    public void A_monitor_windows_does_not_name_has_no_manufacturer_or_serial()
     {
-        // Flag 1 of EnumDisplayDevicesW returns this shape. The call site asks for flag 0 instead.
-        var id = @"\\?\DISPLAY#AUS32A8#4&abc";
-        Assert.Equal("", Screens.Manufacturer(id));
-        Assert.Equal("?", Screens.Serial(id));
+        Assert.Equal("", Screens.Manufacturer(""));
+        Assert.Equal("", Screens.Serial(""));
     }
 }

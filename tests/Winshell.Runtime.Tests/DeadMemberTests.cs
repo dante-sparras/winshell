@@ -112,7 +112,7 @@ public class DeadMemberTests
         anchor.Rect.Width = 1;
         var replaced = anchor.AnchorRectInWindow();
         Assert.Equal(1, replaced.Width);
-        Assert.Equal(1, replaced.Height);
+        Assert.Equal(20, replaced.Height);
 
         var offset = new PopupAnchor(() => { });
         offset.Item = new Item { Width = 40, Height = 20 };

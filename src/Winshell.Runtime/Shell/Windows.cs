@@ -475,7 +475,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     {
     }
 
-    public virtual void OnStateChanged(bool maximized, bool minimized, bool fullscreen)
+    public virtual void OnStateChanged(bool maximized, bool minimized)
     {
     }
 
@@ -900,7 +900,7 @@ public sealed class FloatingWindow : ShellWindow
     [Qml]
     public void StartSystemResize(int edges) => Backend?.StartSystemResize((Edges)edges);
 
-    public override void OnStateChanged(bool maximized, bool minimized, bool fullscreen)
+    public override void OnStateChanged(bool maximized, bool minimized)
     {
         if (SetField(ref _maximized, maximized, nameof(Maximized))) { }
         if (SetField(ref _minimized, minimized, nameof(Minimized))) { }

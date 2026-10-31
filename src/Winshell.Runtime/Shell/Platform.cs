@@ -143,8 +143,7 @@ public interface IWindowClient
     /// <summary>The window lost focus or was dismissed by a click elsewhere, as a grabbing popup is.</summary>
     void OnDismissed();
 
-    /// <summary>The window was maximized or minimized. <paramref name="fullscreen"/> is ignored.</summary>
-    void OnStateChanged(bool maximized, bool minimized, bool fullscreen);
+    void OnStateChanged(bool maximized, bool minimized);
 
     /// <summary>
     /// The native window threw while drawing or handling a message, and stopped doing either. Called on the loop,
