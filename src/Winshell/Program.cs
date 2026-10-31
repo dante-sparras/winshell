@@ -1236,12 +1236,6 @@ namespace Winshell
                 PrintHelp("ipc");
                 return 2;
             }
-            var choice = Select(o);
-            if (choice.Info is not { } info)
-            {
-                Console.Error.WriteLine(choice.Error);
-                return choice.Code;
-            }
             IpcRequest request = args[0] switch
             {
                 "show" => new IpcRequest("show"),
@@ -1255,6 +1249,12 @@ namespace Winshell
             {
                 Console.Error.WriteLine("Usage: winshell ipc call <target> <function> [args...] | prop get <target> <property> | wait|listen <target> <signal> | show");
                 return 2;
+            }
+            var choice = Select(o);
+            if (choice.Info is not { } info)
+            {
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
             }
             var answered = false;
             try
