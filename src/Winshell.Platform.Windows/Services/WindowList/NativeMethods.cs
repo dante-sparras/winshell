@@ -127,6 +127,27 @@ internal static unsafe partial class NativeMethods
     [DllImport("shell32.dll")]
     public static extern int SHGetPropertyStoreForWindow(nint hwnd, in Guid riid, [MarshalAs(UnmanagedType.Interface)] out IPropertyStore store);
 
+    /// <summary><c>ERROR_SUCCESS</c>.</summary>
+    internal const int ErrorSuccess = 0;
+
+    /// <summary><c>ERROR_INSUFFICIENT_BUFFER</c>. The length includes the terminating null.</summary>
+    internal const int ErrorInsufficientBuffer = 122;
+
+    /// <summary><c>APPMODEL_ERROR_NO_APPLICATION</c>. The process has no application identity.</summary>
+    internal const int AppModelErrorNoApplication = 15703;
+
+    /// <summary>
+    /// Characters, including the terminating null, that an application user model id can hold.
+    /// <c>APPLICATION_USER_MODEL_ID_MAX_LENGTH</c>.
+    /// </summary>
+    internal const int MaxAppUserModelIdCharacters = 130;
+
+    /// <summary>One <c>GetApplicationUserModelId</c> call. <see cref="AppUserModelQuery.Length"/> counts wide characters and includes the terminating null.</summary>
+    internal readonly record struct AppUserModelQuery(int Code, uint Length);
+
+    [LibraryImport("kernel32.dll")]
+    private static partial int GetApplicationUserModelId(nint process, ref uint length, char* applicationUserModelId);
+
     [LibraryImport("ole32.dll")]
     public static partial int PropVariantClear(ref PROPVARIANT value);
 
@@ -172,6 +193,56 @@ internal static unsafe partial class NativeMethods
         {
             PropVariantClear(ref value);
         }
+    }
+
+    /// <summary>
+    /// The application user model id of a process's package, or an explicit id that process set. Empty when the
+    /// process has none or cannot be opened. <paramref name="processId"/> zero is empty.
+    /// </summary>
+    public static string ProcessAppUserModelId(uint processId)
+    {
+        if (processId == 0)
+            return "";
+        const uint queryLimitedInformation = 0x1000;
+        var process = Win32.OpenProcess(queryLimitedInformation, false, processId);
+        if (process == 0)
+            return "";
+        try
+        {
+            return ReadAppUserModelId((buffer, capacity) =>
+            {
+                var length = (uint)capacity;
+                int code;
+                if (buffer is null)
+                    code = GetApplicationUserModelId(process, ref length, null);
+                else
+                {
+                    fixed (char* text = buffer)
+                        code = GetApplicationUserModelId(process, ref length, text);
+                }
+                return new AppUserModelQuery(code, length);
+            });
+        }
+        finally
+        {
+            Win32.CloseHandle(process);
+        }
+    }
+
+    /// <summary>
+    /// The application user model id <paramref name="query"/> reports, or empty when the process has none or the
+    /// answer does not fit. The first call asks for the size. The second fills a buffer of that size.
+    /// </summary>
+    internal static string ReadAppUserModelId(Func<char[]?, int, AppUserModelQuery> query)
+    {
+        var sized = query(null, 0);
+        if (sized.Code != ErrorInsufficientBuffer || sized.Length <= 1 || sized.Length > MaxAppUserModelIdCharacters)
+            return "";
+        var buffer = new char[sized.Length];
+        var read = query(buffer, buffer.Length);
+        if (read.Code != ErrorSuccess || read.Length <= 1 || read.Length > (uint)buffer.Length)
+            return "";
+        return new string(buffer, 0, (int)read.Length - 1);
     }
 
     /// <summary>The AppUserModelID of a window, when its app set one.</summary>
