@@ -8,6 +8,7 @@
     SHA256SUMS.txt, and stops without changing an existing install if the hash does not match.
     Installs into %LOCALAPPDATA%\Programs\winshell\bin, adds that folder to the user PATH, and creates
     a Start menu shortcut. Refuses to replace an install while that Winshell is running.
+    A later install removes a leftover bin.old-* folder once nothing from that install is running.
 
     The installed files are the portable build, so Winshell's own update check keeps working.
 
@@ -482,6 +483,18 @@ function Move-WinshellDirectory([string] $From, [string] $To) {
     }
 }
 
+function Remove-WinshellOldBin([string] $Parent) {
+    foreach ($item in @(Get-ChildItem -LiteralPath $Parent -Force -Directory -Filter 'bin.old-*')) {
+        # The installer never leaves a link here, and a recursive delete could follow one out of the install.
+        if (Test-WinshellReparsePoint $item.FullName) { continue }
+        try {
+            Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+        } catch {
+            Write-WinshellLine "The previous copy is still at $($item.FullName) because it could not be deleted."
+        }
+    }
+}
+
 function Install-WinshellBin([string] $Stage, [string] $Bin, [scriptblock] $ProcessesUnder) {
     $parent = Split-Path -Parent $Bin
     if (-not (Test-Path -LiteralPath $parent)) {
@@ -493,6 +506,7 @@ function Install-WinshellBin([string] $Stage, [string] $Bin, [scriptblock] $Proc
     if ($running.Count -gt 0) {
         throw "Winshell is running (pid $($running -join ', ')). Close it, then run the installer again.`nNothing was changed."
     }
+    Remove-WinshellOldBin $parent
     $old = Join-Path $parent ('bin.old-' + [guid]::NewGuid().ToString('n'))
     $movedOld = $false
     if (Test-Path -LiteralPath $Bin) {
