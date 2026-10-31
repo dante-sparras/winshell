@@ -57,7 +57,7 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 ## Notification center and calendar
 
-The clock on the taskbar opens one popup window with the notifications above a month calendar. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
+The clock on the taskbar opens one popup window with the notifications above a month calendar. Its accessible name includes how many of those notifications are showing, and the time and date it draws stay as they are. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
 
 [Windows notifications](../notifications.md#default-notification-center-and-calendar) explains access, grouping, the calendar's regional formats and the keyboard.
 
