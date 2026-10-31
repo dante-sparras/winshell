@@ -64,6 +64,31 @@ public sealed class QmlEngine : IDisposable
     /// <summary>Folders searched for a module that is not built in, such as <c>import Foo.Bar</c>.</summary>
     public List<string> ImportPaths { get; } = [];
 
+    /// <summary>
+    /// Whether a configuration may load a file or folder: it is inside <see cref="ShellDir"/> or an import path. The
+    /// full paths are compared as text, so a rooted path, a UNC path or a <c>..</c> that leaves the folder is refused
+    /// before anything is read. A link inside the folder is followed. An engine without a shell folder loads anything.
+    /// </summary>
+    public bool IsInShellDir(string path)
+    {
+        if (ShellDir is null)
+            return true;
+        var full = Folder(path);
+        return ImportPaths.Prepend(ShellDir).Any(root => full.StartsWith(Folder(root), StringComparison.OrdinalIgnoreCase));
+
+        static string Folder(string path)
+        {
+            var full = Path.GetFullPath(path);
+            return Path.EndsInDirectorySeparator(full) ? full : full + Path.DirectorySeparatorChar;
+        }
+    }
+
+    private void RequireInShellDir(string path)
+    {
+        if (!IsInShellDir(path))
+            throw new QmlException($"{path} is outside the configuration folder {ShellDir}");
+    }
+
     /// <summary>Every file this engine read, so a change to any of them can reload the shell.</summary>
     public IReadOnlyCollection<string> LoadedFiles => [.. _documents.Keys, .. _scriptSources.Keys];
 
@@ -101,6 +126,7 @@ public sealed class QmlEngine : IDisposable
         path = Path.GetFullPath(path);
         if (_documents.TryGetValue(path, out var doc))
             return doc;
+        RequireInShellDir(path);
         var text = Preprocess(File.ReadAllText(path), path);
         doc = QmlParser.Parse(text, path);
         _documents[path] = doc;
@@ -250,6 +276,7 @@ public sealed class QmlEngine : IDisposable
     public JsValue LoadScript(string path, ComponentContext? context = null)
     {
         path = Path.GetFullPath(path);
+        RequireInShellDir(path);
         if (_scripts.TryGetValue(path, out var module))
             return module;
         var instance = context;
