@@ -44,6 +44,13 @@ on:
 permissions:
   contents: read
 
+# One run per release tag, for the whole workflow. Two calls for the same tag queue, so they do not
+# both build and both ask SignPath to sign. A push or a pull request has no tag, so it uses its own
+# run id and does not wait behind another run. A queued run is not cancelled.
+concurrency:
+  group: package-${{ inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   package:
     name: package
@@ -183,9 +190,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write # uploads to the release
-    concurrency:
-      group: package-release-${{ inputs.tag }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
