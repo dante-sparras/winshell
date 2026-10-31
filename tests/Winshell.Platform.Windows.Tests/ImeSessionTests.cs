@@ -73,4 +73,22 @@ public class ImeSessionTests
         var shown = unchecked((nint)(0x80000000 | 1));
         Assert.Equal((nint)1, ImeSession.HideDefaultCompositionWindow(shown));
     }
+
+    [Fact]
+    public void The_candidate_window_excludes_the_caret_rectangle()
+    {
+        var window = ImeSession.CandidateWindow(40, 1000, 2, 20, 1);
+        Assert.Equal(ImeSession.CfsExclude, window.Style);
+        Assert.Equal(40, window.Left);
+        Assert.Equal(1000, window.Top);
+        Assert.Equal(42, window.Right);
+        Assert.Equal(1020, window.Bottom);
+
+        var scaled = ImeSession.CandidateWindow(10, 1000, 2, 20, 1.5);
+        Assert.Equal(ImeSession.CfsExclude, scaled.Style);
+        Assert.Equal(15, scaled.Left);
+        Assert.Equal(1500, scaled.Top);
+        Assert.Equal(18, scaled.Right);
+        Assert.Equal(1530, scaled.Bottom);
+    }
 }
