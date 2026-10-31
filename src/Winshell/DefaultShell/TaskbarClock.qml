@@ -21,7 +21,7 @@ Item {
 
   SystemClock {
     id: clock
-    precision: SystemClock.Minutes
+    precision: Preferences.clockSeconds ? SystemClock.Seconds : SystemClock.Minutes
   }
 
   CalendarMonth { id: clockFormat; date: clock.date }
@@ -29,7 +29,8 @@ Item {
   Button {
     id: clockButton
     anchors.verticalCenter: parent.verticalCenter
-    text: clockFormat.timeLabel + "\n" + clockFormat.shortDateLabel
+    objectName: "clockButton"
+    text: (Preferences.clockSeconds ? clockFormat.longTimeLabel : clockFormat.timeLabel) + "\n" + clockFormat.shortDateLabel
     font: Theme.typography.caption
     padding: 0
     horizontalPadding: 10
