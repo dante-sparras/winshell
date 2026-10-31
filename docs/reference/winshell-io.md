@@ -8,7 +8,7 @@ The default shell opens its settings window with an `IpcHandler`; see [Winshell 
 
 A program the shell starts and watches, created with `Process { }`. Setting `running` to true starts `command`; `stdout` and `stderr` take a parser that receives the program's output, decoded as UTF-8.
 
-The first word of `command` is looked up on `PATH` with each `PATHEXT` extension, as in a terminal. A `.cmd` or `.bat` file runs through `cmd`, a `.ps1` file through `pwsh` (or Windows PowerShell), and a `.sh` file through `bash`. The program gets no console window.
+The first word of `command` is looked up on `PATH` with each `PATHEXT` extension, as in a terminal. A `.cmd` or `.bat` file runs through `cmd`. A `.ps1` file runs through `pwsh` (or Windows PowerShell) with `-NoProfile -ExecutionPolicy Bypass -File`. A `.sh` file runs through `bash` or `sh`. The program gets no console window, because this object captures its output.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ The first word of `command` is looked up on `PATH` with each `PATHEXT` extension
 | `processId` | int, read-only | The Windows process id while the program runs, and `null` otherwise. |
 | `signal(signal)` | method | Stops the program with a Unix signal number. `9` ends it and its child processes at once. `1`, `2` and `15` ask a program with a window to close it, and end a program without one. Other numbers do nothing. |
 | `write(data)` | method | Sends text to the program's standard input. Does nothing unless `stdinEnabled` is true and the program runs. |
-| `startDetached()` | method | Starts another copy of `command` with the same environment and folder, which the shell does not watch: no output, no signals, and it keeps running after the shell exits. |
+| `startDetached()` | method | Starts another copy of `command`, which the shell does not watch: no output, no signals, and it keeps running after the shell exits. With no `environment`, this is `ShellExecuteEx` in `%USERPROFILE%` unless `workingDirectory` is set, and a console program gets its own console. With `environment` or `clearEnvironment`, the copy is started with `CreateProcess` so those variables apply. |
 | `exec(context)` | method | Stops the running program, then starts a new one. `context` is a command list, or an object with `command`, and optionally `environment`, `clearEnvironment` and `workingDirectory`. Without `environment` or `workingDirectory`, the current ones stay; `clearEnvironment` is false unless the object sets it. |
 | `started()` | signal | The program started. |
 | `exited(exitCode, exitStatus)` | signal | The program exited with `exitCode`. `exitStatus` is `Process.CrashExit` when the shell ended it by force, and `Process.NormalExit` otherwise. A program that cannot start emits `exited(-1, Process.CrashExit)` and logs a warning in the `process` category. |
