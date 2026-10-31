@@ -10,7 +10,7 @@ public interface IImageProvider
     SKImage? Load(string id, int requestedWidth, int requestedHeight);
 }
 
-/// <summary>Loads image sources: files, <c>file://</c> and <c>data:</c> URLs, http, SVG and image providers.</summary>
+/// <summary>Loads image sources: files, <c>file://</c> and <c>data:</c> URLs, https, SVG and image providers.</summary>
 public static class ImageLoader
 {
     /// <summary>How many decoded images the cache keeps. Callers hold their own copies, so a drop can be disposed.</summary>
@@ -23,7 +23,14 @@ public static class ImageLoader
     private static readonly Dictionary<CacheKey, SKImage> Images = [];
     private static readonly Dictionary<CacheKey, LinkedListNode<CacheKey>> Nodes = [];
     private static readonly LinkedList<CacheKey> Order = [];
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    /// <summary>The most bytes an <c>https://</c> image can be.</summary>
+    internal const int MaxRemoteBytes = 8 * 1024 * 1024;
+
+    private static readonly TimeSpan RemoteTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>Fetches <c>https://</c> images. A test swaps it for one with a fake handler.</summary>
+    internal static HttpClient Http { get; set; } = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     static ImageLoader() => Theme.Changed += DropProviderEntries;
 
@@ -81,11 +88,16 @@ public static class ImageLoader
     {
         if (!IsRemote(source))
             return await Task.Run(() => Load(source, baseDirectory, width, height)).ConfigureAwait(false);
+        // Cleartext is never fetched, as the updater never does. This comes first, so the cache can't answer for it.
+        if (!source.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return null;
         if (TryRemembered(source, baseDirectory, width, height, out var remembered))
             return remembered;
         try
         {
-            var bytes = await Http.GetByteArrayAsync(new Uri(source)).ConfigureAwait(false);
+            var bytes = await ReadCappedAsync(new Uri(source)).ConfigureAwait(false);
+            if (bytes is null)
+                return null;
             var image = Decode(bytes, source, width, height);
             if (image is null || !TryKey(source, baseDirectory, width, height, out var key))
                 return image;
@@ -99,10 +111,31 @@ public static class ImageLoader
         {
             return null;
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
             return null;
         }
+    }
+
+    /// <summary>The body at the url, or null when it is longer than <see cref="MaxRemoteBytes"/> or takes too long.</summary>
+    private static async Task<byte[]?> ReadCappedAsync(Uri uri)
+    {
+        using var timeout = new CancellationTokenSource(RemoteTimeout);
+        using var response = await Http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > MaxRemoteBytes)
+            return null;
+        await using var body = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+        using var bytes = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await body.ReadAsync(buffer, timeout.Token).ConfigureAwait(false)) > 0)
+        {
+            if (bytes.Length + read > MaxRemoteBytes)
+                return null;
+            bytes.Write(buffer, 0, read);
+        }
+        return bytes.ToArray();
     }
 
     /// <summary>
@@ -511,10 +544,14 @@ public class Image : Item
                 }
                 loop.Post(() =>
                 {
-                    if (generation == _loadGeneration && !IsDestroyed)
-                        SetImage(image, image is null ? (int)StatusValue.Error : (int)StatusValue.Ready);
-                    else
+                    if (generation != _loadGeneration || IsDestroyed)
+                    {
                         image?.Dispose();
+                        return;
+                    }
+                    SetImage(image, image is null ? (int)StatusValue.Error : (int)StatusValue.Ready);
+                    if (image is null)
+                        Engine?.Log.Warn("scene", $"QML {TypeName}: Cannot open: {source}" + (source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? " (only https:// images are loaded)" : ""));
                 });
             }, TaskScheduler.Default);
             return;

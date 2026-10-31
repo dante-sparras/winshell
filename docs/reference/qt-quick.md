@@ -131,6 +131,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Row.add` | Ignored, as are `move` and `populate`, here and on `Column`, `Grid` and `Flow`. |
 | `Grid.layoutDirection` | Ignored, as on `Flow`: items are placed left to right. |
 | `AnimatedImage.frameCount` | Always 1: only the first frame is shown, and `playing`, `paused`, `currentFrame` and `speed` aren't used. |
+| `Image.source` | Fetches `https` URLs only, and gives up on a body over 8 MiB. An `http` URL isn't fetched: `status` turns to `Image.Error` and the log says why. |
 | `Image.mirrorVertically` | Ignored. |
 | `Image.sourceClipRect` | Ignored. |
 | `Image.autoTransform` | Ignored: a photo's EXIF orientation is never applied. |
