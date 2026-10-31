@@ -18,7 +18,7 @@ Every part of it is a QML file. Change the default shell, or write your own: a b
 
 Winshell Settings changes the default shell: the taskbar's alignment and auto-hide, which displays have a taskbar, Start's recommendations, quick settings' tiles, hotkeys and more.
 
-Winshell runs alongside Windows. It does not change Windows settings or remove Windows' own taskbar.
+Winshell runs alongside Windows. It does not change Windows settings. It leaves Windows' own taskbar in place unless `hideExplorerTaskbar` is set in preferences.toml, which is off until then.
 
 ## Product features (up to 20, ≤ 200 each)
 

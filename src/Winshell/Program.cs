@@ -8,6 +8,7 @@ using System.Text;
 using Winshell;
 using Winshell.Platform.Windows;
 using Winshell.Platform.Windows.Diagnostics;
+using Winshell.Platform.Windows.Services.ExplorerTaskbar;
 using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -669,6 +670,8 @@ namespace Winshell
                     Quietly(() => log.Info("", $"Wrote a crash report to \"{report.Path}\""));
             }
             Exception? fatal = null;
+            // Null until the shell is about to start. A crash before that has not hidden Explorer's taskbar.
+            ExplorerTaskbarSession? explorerTaskbar = null;
             // Writes the report first, since logging can fail as the process ends. Returns false, so it can be an
             // exception filter: that runs before the finally blocks below close the log.
             bool ReportFatal(Exception error)
@@ -683,6 +686,8 @@ namespace Winshell
             }
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
+                // A crash on another thread can end the process without the finally below. Restore first.
+                Quietly(() => explorerTaskbar?.Restore());
                 if (e.ExceptionObject is Exception error)
                     ReportFatal(error);
                 else
@@ -729,6 +734,9 @@ namespace Winshell
             crashes.ShellId = host.ShellId;
             // Winshell's own notice for a config error or a window that failed; it shows even when the config does not.
             using var notices = new ShellNotices(host, loop, platform, log, path => ShellNotices.Open(path, log));
+            // Creating this does not look at Explorer. The real taskbar is built only if the shell asks to hide it.
+            var taskbar = ExplorerTaskbarSession.ForThisProcess();
+            explorerTaskbar = taskbar;
             host.Services.Add(engine =>
             {
                 engine.AddService<IClipboard>(platform);
@@ -740,6 +748,7 @@ namespace Winshell
                     WindowsModules.AddUpdates(engine, updater);
                 // Winshell Settings' About page runs the same checks as winshell doctor, for this shell's config.
                 engine.AddService<IDoctor>(new CliDoctor(() => DoctorContextFor(root, null)));
+                engine.AddService(taskbar);
             });
             log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
             log.Info("", $"Launching config: \"{root}\"");
@@ -766,6 +775,7 @@ namespace Winshell
                 catch (Exception deleteError) when (deleteError is IOException or UnauthorizedAccessException)
                 {
                 }
+                Quietly(() => explorerTaskbar?.Dispose());
                 return 1;
             }
             if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
@@ -816,6 +826,9 @@ namespace Winshell
                 if (fatal is null)
                     Quietly(() => CrashFollowUp.MarkClean(exitState, DateTimeOffset.Now));
                 host.Dispose();
+                // After the shell is gone, so a binding cannot hide the taskbar again. This runs when the loop
+                // returns and when an exception leaves this try, because the filter above does not swallow it.
+                Quietly(() => explorerTaskbar?.Dispose());
                 Instances.Remove(id);
                 lock (consoleLock)
                 {

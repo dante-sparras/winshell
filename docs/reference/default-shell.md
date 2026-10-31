@@ -32,7 +32,7 @@ A hotkey another app or Windows already holds isn't taken from it; Winshell Sett
 
 ## Taskbar
 
-A Windows 11 taskbar along the bottom of each screen, or of the main screen only: Start, Search and the apps in the middle or on the left, then the hidden icons chevron, the tray icons, the network, volume and battery icons, and the clock. It reserves the bottom edge, so maximized windows stop above it, unless it hides itself. Explorer's taskbar stays, and the two stack.
+A Windows 11 taskbar along the bottom of each screen, or of the main screen only: Start, Search and the apps in the middle or on the left, then the hidden icons chevron, the tray icons, the network, volume and battery icons, and the clock. It reserves the bottom edge, so maximized windows stop above it, unless it hides itself. Explorer's taskbar stays, and the two stack, unless `hideExplorerTaskbar` is true. That key is false until `preferences.toml` sets it. Winshell Settings has no switch for it. Winshell puts Explorer's taskbar and its edge back when it exits.
 
 [The taskbar](../taskbar.md) explains its settings (`centered`, `autoHide`, `appsOn`), pinned apps, previews, the keyboard and Narrator, and the hooks other surfaces plug into: `startRequested`, `searchRequested`, `trayArea` and `clockArea`. Pins are in `taskbar.json` in the shell's data folder.
 

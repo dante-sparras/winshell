@@ -1,6 +1,6 @@
 # The taskbar
 
-The default shell puts a Windows 11 taskbar along the bottom of every screen (`Taskbar.qml`). Start, Search and the apps sit in the middle, and the notification area and the clock sit on the right. The taskbar reserves its edge as an app bar, so maximized windows on that screen stop above it. It does not hide or replace Explorer's taskbar: while Explorer runs, the two app bars stack.
+The default shell puts a Windows 11 taskbar along the bottom of every screen (`Taskbar.qml`). Start, Search and the apps sit in the middle, and the notification area and the clock sit on the right. The taskbar reserves its edge as an app bar, so maximized windows on that screen stop above it. Explorer's taskbar stays, so while Explorer runs the two app bars stack, unless `hideExplorerTaskbar` is true in [preferences.toml](settings.md#where-the-choices-live). That hides Explorer's taskbar window and releases the edge it reserved. Winshell puts both back when it exits. The key is false until the file sets it, and Winshell Settings has no switch for it.
 
 ## Settings
 
