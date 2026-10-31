@@ -227,20 +227,28 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     }
 
     /// <summary><c>path[line:column]: message</c>. Tomlyn's <c>Message</c> drops the span; the span's line is 0-based.</summary>
-    private string Locate(DiagnosticMessage diagnostic)
+    private string Locate(DiagnosticMessage diagnostic) => Locate(Where, diagnostic);
+
+    private static string Locate(string where, DiagnosticMessage diagnostic)
     {
         var line = diagnostic.Span.Start.Line + 1;
         var column = diagnostic.Span.Start.Column + 1;
-        return string.Create(CultureInfo.InvariantCulture, $"{Where}[{line}:{column}]: {diagnostic.Message}");
+        return string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {diagnostic.Message}");
     }
 
-    private bool TryParse(string text, out TomlTable table, out string error)
+    private bool TryParse(string text, out TomlTable table, out string error) => TryLoad(Where, text, out table, out error);
+
+    /// <summary>
+    /// Whether <paramref name="text"/> loads. <paramref name="error"/> is <c>path[line:column]: message</c> when it
+    /// does not. This is the parse <see cref="Deserialize"/> uses: the syntax tree, then the table.
+    /// </summary>
+    internal static bool TryLoad(string where, string text, out TomlTable table, out string error)
     {
         var document = SyntaxParser.Parse(text);
         if (document.HasErrors)
         {
             table = [];
-            error = document.Diagnostics.Count > 0 ? Locate(document.Diagnostics[0]) : $"{Where}: invalid TOML";
+            error = document.Diagnostics.Count > 0 ? Locate(where, document.Diagnostics[0]) : $"{where}: invalid TOML";
             return false;
         }
         try
@@ -253,8 +261,8 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         {
             table = [];
             error = e.Line > 0
-                ? string.Create(CultureInfo.InvariantCulture, $"{Where}[{e.Line}:{e.Column}]: {e.Message}")
-                : $"{Where}: {e.Message}";
+                ? string.Create(CultureInfo.InvariantCulture, $"{where}[{e.Line}:{e.Column}]: {e.Message}")
+                : $"{where}: {e.Message}";
             return false;
         }
     }

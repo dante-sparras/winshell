@@ -14,6 +14,8 @@
     A later install removes a leftover bin.old-* folder once nothing from that install is running.
     It also deletes %LOCALAPPDATA%\winshell\updates, so a staged update cannot replace this install
     on the next start. A link, or a folder that cannot be deleted, is left in place and named.
+    If a Microsoft Store copy is also installed, it says so and still finishes. The Store's
+    WindowsApps alias usually comes first on PATH, so winshell may start that copy.
 
     The installed files are the portable build, so Winshell's own update check keeps working.
 
@@ -299,6 +301,22 @@ function Get-WinshellProcessIdUnder([string] $Directory) {
 function Get-WinshellRunningId([string] $Directory, [scriptblock] $ProcessesUnder) {
     $ids = if ($ProcessesUnder) { @(& $ProcessesUnder $Directory) } else { @(Get-WinshellProcessIdUnder $Directory) }
     return @($ids | Where-Object { $null -ne $_ -and "$_" -ne '' })
+}
+
+function Get-WinshellStorePackage([scriptblock] $StorePackages) {
+    # Tests pass -StorePackages. Otherwise a test must not ask this PC which packages are installed.
+    if ($StorePackages) {
+        $found = @(& $StorePackages)
+    } elseif ($env:WINSHELL_INSTALL_TEST -eq '1') {
+        $found = @()
+    } else {
+        try {
+            $found = @(Get-AppxPackage -Name '*Winshell*')
+        } catch {
+            $found = @()
+        }
+    }
+    return @($found | Where-Object { $null -ne $_ -and "$_" -ne '' })
 }
 
 function Split-WinshellPath([string] $Path) {
@@ -607,6 +625,7 @@ function Install-Winshell {
         [scriptblock] $DownloadText,
         [scriptblock] $DownloadFile,
         [scriptblock] $ProcessesUnder,
+        [scriptblock] $StorePackages,
         [switch] $SessionKeepsPath
     )
     $ErrorActionPreference = 'Stop'
@@ -684,6 +703,9 @@ function Install-Winshell {
     $installed = $resolved
     if ($package -match '^winshell-(\d+\.\d+\.\d+)-') { $installed = $Matches[1] }
     Write-WinshellLine (Get-WinshellInstalledLine $installed ([bool]$SessionKeepsPath))
+    if (@(Get-WinshellStorePackage $StorePackages).Count -gt 0) {
+        Write-WinshellLine 'A Microsoft Store copy of Winshell is also installed. Its WindowsApps alias usually comes first on PATH, so winshell may start the Store app instead of this copy.'
+    }
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

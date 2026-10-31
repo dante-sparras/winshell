@@ -37,12 +37,12 @@ internal sealed class AudioGraph
             _enumerator.RegisterEndpointNotificationCallback(_notifications);
             Sync();
             ReadDefaults();
+            Ready = true;
         }
         catch (COMException e)
         {
             _log.Warn("audio", $"Windows audio is not available: {e.Message}");
         }
-        Ready = true;
     }
 
     /// <summary>The graph, made on first use. Call on the UI thread.</summary>

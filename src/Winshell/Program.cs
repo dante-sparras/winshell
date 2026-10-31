@@ -438,6 +438,7 @@ namespace Winshell
                         winshell ipc [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
                           show [-j]                             list IPC targets. -j prints JSON
                           call <target> <function> [args...]    call a function and print the result
+                          call notice dismiss                   close Winshell's own notice
                           prop get <target> <property>          print a property
                           wait <target> <signal>                wait for one signal
                           listen <target> <signal>              print each signal until Ctrl+C
@@ -597,7 +598,9 @@ namespace Winshell
             var root = ResolveConfig(o, out var error);
             if (root is null)
             {
-                Console.Error.WriteLine(error);
+                // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
+                if (error is not null)
+                    StartupError.Report(error, StartupError.FolderFor(o.Path, ConfigPaths.Root()));
                 return 1;
             }
             // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
@@ -768,7 +771,7 @@ namespace Winshell
             }
             if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
                 log.Warn("", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
-            using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0));
+            using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0), dismissNotice: () => notices.Hide());
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
             Console.CancelKeyPress += (_, e) =>
@@ -969,7 +972,7 @@ namespace Winshell
             }
             catch (System.ComponentModel.Win32Exception e)
             {
-                Console.Error.WriteLine($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.");
+                StartupError.Report($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.", null);
                 return 1;
             }
             using (shell)

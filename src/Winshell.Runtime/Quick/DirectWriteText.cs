@@ -573,6 +573,14 @@ internal sealed class DirectWriteLayout : IDisposable
         return HitX((uint)position, trailing: false);
     }
 
+    public (double X, double Y, double Height) CaretBox(int position)
+    {
+        if (_layout is null || Source.Length == 0)
+            return (0, 0, 0);
+        var hit = _layout.HitTestTextPosition((uint)Math.Clamp(position, 0, Source.Length), false, out var point);
+        return (point.X, point.Y, hit.Height);
+    }
+
     public int PositionAt(double x, double y)
     {
         if (_layout is null || Source.Length == 0)
