@@ -36,12 +36,8 @@ public sealed class ShellScreen : QObject
             NotifyChanged("orientation");
             NotifyChanged("primaryOrientation");
         }
-        if (old.Geometry != info.Geometry || old.DevicePixelRatio != info.DevicePixelRatio || old.PhysicalWidthMm != info.PhysicalWidthMm)
-        {
+        if (old.Geometry != info.Geometry || old.DevicePixelRatio != info.DevicePixelRatio)
             NotifyChanged("devicePixelRatio");
-            NotifyChanged("logicalPixelDensity");
-            NotifyChanged("physicalPixelDensity");
-        }
         if (old.WorkArea != info.WorkArea) NotifyChanged("workArea");
         if (old.RefreshRate != info.RefreshRate) NotifyChanged("refreshRate");
     }
@@ -69,26 +65,6 @@ public sealed class ShellScreen : QObject
     [Qml] public QRect WorkArea { get { Track(); return _info.WorkArea; } }
 
     [Qml] public double DevicePixelRatio { get { Track(); return _info.DevicePixelRatio; } }
-
-    [Qml]
-    public double PhysicalPixelDensity
-    {
-        get
-        {
-            Track();
-            return _info.PhysicalWidthMm > 0 ? _info.Geometry.Width * _info.DevicePixelRatio / _info.PhysicalWidthMm : 96 / 25.4 * _info.DevicePixelRatio;
-        }
-    }
-
-    [Qml]
-    public double LogicalPixelDensity
-    {
-        get
-        {
-            Track();
-            return _info.PhysicalWidthMm > 0 ? _info.Geometry.Width / _info.PhysicalWidthMm : 96 / 25.4;
-        }
-    }
 
     [Qml] public int Orientation { get { Track(); return _info.Geometry.Width >= _info.Geometry.Height ? 2 : 1; } }
 

@@ -81,7 +81,8 @@ internal static unsafe partial class Screens
     private static (string Model, string Id) MonitorName(string device)
     {
         var dd = new DISPLAY_DEVICEW { cb = (uint)sizeof(DISPLAY_DEVICEW) };
-        if (Win32.EnumDisplayDevicesW(device, 0, ref dd, 1))
+        // Flag 0 returns MONITOR\CODE\serial. Flag 1 is the interface path \\?\DISPLAY#..., which does not split.
+        if (Win32.EnumDisplayDevicesW(device, 0, ref dd, 0))
         {
             var model = new string(dd.DeviceString).TrimEnd('\0');
             var id = new string(dd.DeviceID).TrimEnd('\0');
@@ -91,13 +92,13 @@ internal static unsafe partial class Screens
     }
 
     /// <summary>The three-letter PnP manufacturer code, from a device id like MONITOR\GSM5B7F\...</summary>
-    private static string Manufacturer(string id)
+    internal static string Manufacturer(string id)
     {
         var parts = id.Split('\\');
         return parts.Length > 1 && parts[1].Length >= 3 ? parts[1][..3] : "";
     }
 
-    private static string Serial(string id)
+    internal static string Serial(string id)
     {
         var parts = id.Split('\\');
         return parts.Length > 2 ? parts[2] : "";

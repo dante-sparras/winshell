@@ -11,9 +11,31 @@ public sealed class AnchorRect(PopupAnchor owner) : QObject
 
     [Qml] public double Y { get { Track(); return _y; } set { if (SetField(ref _y, value)) owner.Changed(); } }
 
-    [Qml] public double Width { get { Track(); return _width; } set { if (SetField(ref _width, Math.Max(1, value))) owner.Changed(); } }
+    [Qml]
+    public double Width
+    {
+        get { Track(); return _width; }
+        set
+        {
+            var sized = WasSet;
+            WasSet = true;
+            if (SetField(ref _width, Math.Max(1, value)) || !sized)
+                owner.Changed();
+        }
+    }
 
-    [Qml] public double Height { get { Track(); return _height; } set { if (SetField(ref _height, Math.Max(1, value))) owner.Changed(); } }
+    [Qml]
+    public double Height
+    {
+        get { Track(); return _height; }
+        set
+        {
+            var sized = WasSet;
+            WasSet = true;
+            if (SetField(ref _height, Math.Max(1, value)) || !sized)
+                owner.Changed();
+        }
+    }
 
     internal bool WasSet { get; set; }
 }
