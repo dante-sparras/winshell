@@ -154,9 +154,24 @@ public static class SignalFunction
         {
             if (args.Length == 0)
                 return JsValue.Undefined;
-            // connect(object, method) form, or connect(function).
-            var target = args.Length >= 2 && args[1].IsCallable() ? args[1] : args[0];
-            var thisValue = args.Length >= 2 ? args[0] : null;
+            // connect(object, method), or connect(function). A value that cannot be called is an error now,
+            // rather than a handler that fails the next time the signal is emitted.
+            JsValue target;
+            JsValue? thisValue;
+            if (args.Length >= 2)
+            {
+                if (!args[1].IsCallable())
+                    throw new JavaScriptException(engine.Intrinsics.TypeError, "connect() argument is not a function");
+                target = args[1];
+                thisValue = args[0];
+            }
+            else
+            {
+                if (!args[0].IsCallable())
+                    throw new JavaScriptException(engine.Intrinsics.TypeError, "connect() argument is not a function");
+                target = args[0];
+                thisValue = null;
+            }
             if (Slots.TryGetValue(target, out var other))
             {
                 slot.ConnectFor(runtime, a => other.Owner.Emit(other.Definition.Name, a), target);
@@ -167,8 +182,10 @@ public static class SignalFunction
         }));
         function.Set("disconnect", new ClrFunction(engine, "disconnect", (_, args) =>
         {
-            if (args.Length > 0)
-                slot.DisconnectScript(args.Length >= 2 ? args[1] : args[0]);
+            if (args.Length >= 2)
+                slot.DisconnectScript(args[1], args[0]);
+            else if (args.Length == 1)
+                slot.DisconnectScript(args[0]);
             return JsValue.Undefined;
         }));
         return function;
