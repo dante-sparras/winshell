@@ -18,14 +18,6 @@ public class SubtleButtonTests
             onActivated: hits = hits + 1
           }
           SubtleButton {
-            objectName: "noEnter"
-            x: 0; y: 48; width: 40; height: 40
-            enterKey: false
-            Accessible.name: "No numpad Enter"
-            property int hits: 0
-            onActivated: hits = hits + 1
-          }
-          SubtleButton {
             objectName: "shift"
             x: 0; y: 96; width: 40; height: 40
             shiftEnterActivates: false
@@ -95,18 +87,6 @@ public class SubtleButtonTests
 
         Assert.Equal(4, Number(shell, "plain", "hits"));
         Assert.Empty(shell.Messages);
-    }
-
-    [Fact]
-    public void Numpad_Enter_does_nothing_when_that_key_is_off()
-    {
-        using var shell = new DefaultShellHarness(Qml);
-
-        Press(shell, "noEnter", Enter);
-        Press(shell, "noEnter", Return);
-        Press(shell, "noEnter", Space);
-
-        Assert.Equal(2, Number(shell, "noEnter", "hits"));
     }
 
     [Fact]

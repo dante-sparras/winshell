@@ -46,8 +46,6 @@ PopupWindow {
       height: 36
       focus: true
       hoverEnabled: true
-      // This item has never taken numpad Enter.
-      enterKey: false
       onActivated: root.trigger()
       Accessible.role: Accessible.MenuItem
       Accessible.name: "Taskbar settings"

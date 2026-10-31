@@ -1,17 +1,13 @@
 import QtQuick
 
-// Return, numpad Enter and Space, and Narrator's invoke, for a button that keeps its own fill. A button whose
-// pointer does something of its own sets activateOnClick off. Shift+Return stays with the caller's Keys handler
-// when shiftEnterActivates is off, and a control that never took numpad Enter sets enterKey off.
+// Return, numpad Enter and Space, and Narrator's invoke, for a button that keeps its own fill.
 MouseArea {
   id: control
 
-  property bool returnKey: true
-  // Numpad Enter. The main Enter key is returnKey.
-  property bool enterKey: true
-  property bool spaceKey: true
-  property bool shiftEnterActivates: true
+  // Off for a button whose pointer buttons each do something of their own.
   property bool activateOnClick: true
+  // Off for a button that gives Shift+Enter a meaning of its own, in its Keys.onPressed.
+  property bool shiftEnterActivates: true
 
   signal activated()
 
@@ -19,15 +15,14 @@ MouseArea {
   Accessible.onPressAction: control.activated()
   onClicked: if (control.activateOnClick) control.activated()
 
-  Keys.onReturnPressed: event => control.typed(event, control.returnKey, true)
-  Keys.onEnterPressed: event => control.typed(event, control.enterKey, true)
-  Keys.onSpacePressed: event => control.typed(event, control.spaceKey, false)
+  Keys.onReturnPressed: event => control.enterPressed(event)
+  Keys.onEnterPressed: event => control.enterPressed(event)
+  Keys.onSpacePressed: control.activated()
 
-  function typed(event, enabled, enter) {
-    if (!enabled || (enter && !control.shiftEnterActivates && (event.modifiers & Qt.ShiftModifier))) {
+  function enterPressed(event) {
+    if (control.shiftEnterActivates || !(event.modifiers & Qt.ShiftModifier))
+      control.activated()
+    else
       event.accepted = false
-      return
-    }
-    control.activated()
   }
 }
