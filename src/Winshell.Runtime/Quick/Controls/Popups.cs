@@ -1051,23 +1051,28 @@ public sealed class Menu : Popup
     public int CurrentIndex
     {
         get { Track(); return _currentIndex; }
-        set => Select(value, true);
+        set => Select(value, chosen: true);
     }
 
     internal void NoteCurrent(MenuItem item)
     {
         var index = Items.ToList().IndexOf(item);
         if (index >= 0)
-            Select(index, false);
+            Select(index, chosen: false);
     }
 
-    private void Select(int index, bool focus)
+    /// <summary>Hover and focus only move the index: a row stays lit by them alone. A chosen row is lit and focused.</summary>
+    private void Select(int index, bool chosen)
     {
-        if (SetField(ref _currentIndex, index, nameof(CurrentIndex)))
-            for (var i = 0; i < Items.Count; i++)
-                if (Items[i] is MenuItem row)
-                    row.Highlighted = i == index;
-        if (focus && ItemAt(index) is MenuItem current)
+        SetField(ref _currentIndex, index, nameof(CurrentIndex));
+        if (!chosen)
+            return;
+        for (var i = 0; i < Items.Count; i++)
+        {
+            if (Items[i] is MenuItem row)
+                row.Highlighted = i == index;
+        }
+        if (ItemAt(index) is MenuItem current)
             current.ForceActiveFocus();
     }
 
@@ -1154,7 +1159,7 @@ public sealed class Menu : Popup
     protected override void OnClosed()
     {
         _atPoint = false;
-        Select(-1, false);
+        Select(-1, chosen: true);
     }
 
     /// <summary>
