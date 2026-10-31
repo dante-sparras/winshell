@@ -7,6 +7,7 @@
     Removes %LOCALAPPDATA%\Programs\winshell, that bin folder's user PATH entry, the Winshell Start
     menu shortcut, and the Winshell sign-in entry when it starts that install. It does not remove
     configuration, cache, or logs under %APPDATA%\winshell and %LOCALAPPDATA%\winshell.
+    irm | iex removes that folder from this session's PATH and leaves every other entry.
 
     Stops without changing anything while that Winshell is running. Safe to run when Winshell is
     already gone.
@@ -177,17 +178,26 @@ function Set-WinshellPathValue([string] $Value) {
         $key.SetValue('Path', $Value, $kind)
     } finally { $key.Dispose() }
     Publish-WinshellEnvironmentChange
-    $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-    $user = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $env:Path = (@($machine, $user) | Where-Object { -not [string]::IsNullOrEmpty($_) }) -join ';'
+}
+
+function Remove-WinshellSessionPathEntry([string] $Entry) {
+    # The stored user PATH is separate. This only edits the current process, so a developer prompt
+    # or a venv entry stays put.
+    $parts = @(Split-WinshellPath $env:Path)
+    $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
+    if ($kept.Count -eq $parts.Count) { return }
+    $env:Path = $kept -join ';'
 }
 
 function Remove-WinshellPathEntry([string] $Entry) {
     $parts = @(Split-WinshellPath (Get-WinshellPathValue))
     $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
-    if ($kept.Count -eq $parts.Count) { return $false }
-    Set-WinshellPathValue ($kept -join ';')
-    return $true
+    $removed = $kept.Count -ne $parts.Count
+    if ($removed) { Set-WinshellPathValue ($kept -join ';') }
+    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
+        Remove-WinshellSessionPathEntry $Entry
+    }
+    return $removed
 }
 
 function Get-WinshellAutostartCommand {

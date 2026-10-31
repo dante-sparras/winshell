@@ -8,6 +8,9 @@
     SHA256SUMS.txt, and stops without changing an existing install if the hash does not match.
     Installs into %LOCALAPPDATA%\Programs\winshell\bin, adds that folder to the user PATH, and creates
     a Start menu shortcut. Refuses to replace an install while that Winshell is running.
+    irm | iex, and running this file with the call operator, also add that folder to this session's
+    PATH and tell you to run winshell. pwsh -File leaves the caller unchanged and tells you to open
+    a new terminal.
     A later install removes a leftover bin.old-* folder once nothing from that install is running.
 
     The installed files are the portable build, so Winshell's own update check keeps working.
@@ -354,28 +357,70 @@ function Set-WinshellPathValue([string] $Value) {
         $key.SetValue('Path', $Value, $kind)
     } finally { $key.Dispose() }
     Publish-WinshellEnvironmentChange
-    $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-    $user = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $env:Path = (@($machine, $user) | Where-Object { -not [string]::IsNullOrEmpty($_) }) -join ';'
+}
+
+function Add-WinshellSessionPathEntry([string] $Entry) {
+    # The stored user PATH is separate. This only edits the current process, so a developer prompt
+    # or a venv entry stays put.
+    $entry = $Entry.TrimEnd('\')
+    foreach ($part in @(Split-WinshellPath $env:Path)) {
+        if (Test-WinshellSamePath $part $entry) { return }
+    }
+    if ([string]::IsNullOrEmpty($env:Path)) {
+        $env:Path = $entry
+        return
+    }
+    if ($env:Path.EndsWith(';')) {
+        $env:Path = $env:Path + $entry
+    } else {
+        $env:Path = $env:Path + ';' + $entry
+    }
+}
+
+function Remove-WinshellSessionPathEntry([string] $Entry) {
+    $parts = @(Split-WinshellPath $env:Path)
+    $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
+    if ($kept.Count -eq $parts.Count) { return }
+    $env:Path = $kept -join ';'
+}
+
+function Test-WinshellSessionKeepsPath([string] $CommandPath, [string] $InvocationName) {
+    # iex has no script path. `& .\install.ps1` returns to this process, which already has the folder.
+    # pwsh -File and `pwsh install.ps1` exit, so that process's PATH does not help the caller.
+    if ([string]::IsNullOrEmpty($CommandPath)) { return $true }
+    return $InvocationName -eq '&'
+}
+
+function Get-WinshellInstalledLine([string] $Installed, [bool] $SessionKeepsPath) {
+    if ($SessionKeepsPath) {
+        return "Winshell $Installed is installed. Run winshell."
+    }
+    return "Winshell $Installed is installed. Open a new terminal and run winshell."
 }
 
 function Add-WinshellPathEntry([string] $Entry) {
     $entry = $Entry.TrimEnd('\')
     $parts = @(Split-WinshellPath (Get-WinshellPathValue))
+    $added = $true
     foreach ($part in $parts) {
-        if (Test-WinshellSamePath $part $entry) { return $false }
+        if (Test-WinshellSamePath $part $entry) { $added = $false; break }
     }
-    $updated = @($parts + $entry)
-    Set-WinshellPathValue ($updated -join ';')
-    return $true
+    if ($added) { Set-WinshellPathValue ((@($parts + $entry)) -join ';') }
+    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
+        Add-WinshellSessionPathEntry $entry
+    }
+    return $added
 }
 
 function Remove-WinshellPathEntry([string] $Entry) {
     $parts = @(Split-WinshellPath (Get-WinshellPathValue))
     $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
-    if ($kept.Count -eq $parts.Count) { return $false }
-    Set-WinshellPathValue ($kept -join ';')
-    return $true
+    $removed = $kept.Count -ne $parts.Count
+    if ($removed) { Set-WinshellPathValue ($kept -join ';') }
+    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
+        Remove-WinshellSessionPathEntry $Entry
+    }
+    return $removed
 }
 
 function Format-WinshellArgument([string] $Argument) {
@@ -540,7 +585,8 @@ function Install-Winshell {
         [switch] $AutoStart,
         [scriptblock] $DownloadText,
         [scriptblock] $DownloadFile,
-        [scriptblock] $ProcessesUnder
+        [scriptblock] $ProcessesUnder,
+        [switch] $SessionKeepsPath
     )
     $ErrorActionPreference = 'Stop'
     Set-StrictMode -Version 2.0
@@ -615,7 +661,7 @@ function Install-Winshell {
     }
     $installed = $resolved
     if ($package -match '^winshell-(\d+\.\d+\.\d+)-') { $installed = $Matches[1] }
-    Write-WinshellLine "Winshell $installed is installed. Open a new terminal and run winshell."
+    Write-WinshellLine (Get-WinshellInstalledLine $installed ([bool]$SessionKeepsPath))
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
@@ -628,7 +674,8 @@ if ($MyInvocation.InvocationName -ne '.') {
         exit 1
     }
     try {
-        Install-Winshell -Version $Version -AutoStart:$AutoStart
+        $keeps = Test-WinshellSessionKeepsPath $PSCommandPath $MyInvocation.InvocationName
+        Install-Winshell -Version $Version -AutoStart:$AutoStart -SessionKeepsPath:$keeps
     } catch {
         $message = $_.Exception.Message
         if ([string]::IsNullOrWhiteSpace($message)) { $message = $_.ToString() }
