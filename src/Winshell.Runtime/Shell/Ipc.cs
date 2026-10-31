@@ -431,7 +431,7 @@ public sealed class SocketObject : DataStream
 }
 
 /// <summary>The <c>SocketServer</c>: listens on a path and makes a Socket from its handler for each client.</summary>
-public sealed class SocketServer : QObject
+public sealed class SocketServer : QObject, IPropertyObserver
 {
     private string _path = "";
     private bool _active;
@@ -439,7 +439,6 @@ public sealed class SocketServer : QObject
     private CancellationTokenSource? _cancel;
     private Task? _listen;
     private int _generation;
-    private readonly List<QObject> _clients = [];
 
     [Qml] public string Path { get { Track(); return _path; } set { if (SetField(ref _path, value ?? "")) Restart(); } }
 
@@ -551,10 +550,27 @@ public sealed class SocketServer : QObject
         }
         var obj = _handler.Create(null, null, null, o => o.SetOwner(this));
         if (obj is SocketObject socket)
+        {
+            socket.AddObserver("connected", this);
             socket.Adopt(stream);
+        }
         else
+        {
             stream.Dispose();
-        _clients.Add(obj);
+            obj?.Destroy();
+        }
+    }
+
+    /// <summary>A client that disconnected is done. Its own handlers have run by the next turn of the loop.</summary>
+    public void OnPropertyChanged(QObject sender, string property)
+    {
+        if (sender is not SocketObject { Connected: false } socket || Engine is not { } engine)
+            return;
+        engine.Loop.Post(() =>
+        {
+            if (!socket.IsDestroyed)
+                socket.Destroy();
+        });
     }
 
     protected override void OnDestroy()

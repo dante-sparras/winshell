@@ -251,6 +251,8 @@ public sealed class FakeServices
     public FakeWindowList WindowList { get; } = new();
     public FakeApps Apps { get; } = new();
     public FakeJumpLists JumpLists { get; } = new();
+
+    public FakeRecentDocuments Recent { get; } = new();
     public FakeSystemTray SystemTray { get; } = new();
 
     /// <summary>The real type each fake stands for, so their QML names can be compared.</summary>
@@ -277,6 +279,7 @@ public sealed class FakeServices
         (typeof(FakeApps), typeof(AppsService)),
         (typeof(FakeAppEntry), typeof(AppEntry)),
         (typeof(FakeJumpLists), typeof(JumpListService)),
+        (typeof(FakeRecentDocuments), typeof(RecentDocuments)),
         (typeof(FakeSystemTray), typeof(SystemTray)),
         (typeof(FakeTrayItem), typeof(SystemTrayItem)),
     ];
@@ -294,7 +297,8 @@ public sealed class FakeServices
         registry.Module("Winshell.Windows").Singleton(_ => WindowList, "WindowList");
         registry.Module("Winshell.Apps")
             .Singleton(_ => Apps, "Apps")
-            .Singleton(_ => JumpLists, "JumpLists");
+            .Singleton(_ => JumpLists, "JumpLists")
+            .Singleton(_ => Recent, "RecentDocuments");
         registry.Module("Winshell.Tray").Singleton(_ => SystemTray, "SystemTray");
     }
 }

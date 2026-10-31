@@ -47,10 +47,16 @@ public sealed class WinEventLoop : EventQueue, IDisposable
             if (framePending)
                 timeout = 0;
             SetFineTimer(FramePace.NeedsFineTimer(framePending, timeout));
-            // DwmFlush waits for vblank. It fails when composition is off, and the zero timeout is then the
-            // old immediate wake so the frame still runs.
+            // DwmFlush waits for vblank and does not pump. It fails when composition is off, and the zero timeout
+            // is then the old immediate wake so the frame still runs. A sent UI Automation call that is already
+            // waiting would sit out that wait, so deliver it first.
             if (framePending)
+            {
+                Win32.PeekMessageW(out _, 0, 0, 0, Win32.PM_NOREMOVE);
+                if (_quit)
+                    break;
                 Win32.DwmFlush();
+            }
             Win32.MsgWaitForMultipleObjectsEx(1, handles, timeout, Win32.QS_ALLINPUT, Win32.MWMO_INPUTAVAILABLE);
             // Messages first, but a flood of them must not starve timers and frames.
             for (var i = 0; i < 200 && Win32.PeekMessageW(out var msg, 0, 0, 0, Win32.PM_REMOVE); i++)

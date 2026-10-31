@@ -1,6 +1,6 @@
 # Winshell.Apps
 
-`import Winshell.Apps`. The apps Start lists: the Start menu shortcuts for all users and the current user, and the packaged apps Windows has installed. A shell uses it for its own Start, for search, and to match an app window to its app with `Apps.find(window.appId)`, as the default [taskbar](../taskbar.md#apps) does. `JumpLists` reads the recent and frequent documents Windows will give for an app.
+`import Winshell.Apps`. The apps Start lists: the Start menu shortcuts for all users and the current user, and the packaged apps Windows has installed. A shell uses it for its own Start, for search, and to match an app window to its app with `Apps.find(window.appId)`, as the default [taskbar](../taskbar.md#apps) does. `RecentDocuments` lists recent files from the shortcuts Windows already keeps. Those files are not apps. `JumpLists` reads the recent and frequent documents Windows will give for an app.
 
 A shortcut in the user's Programs folder replaces the all-users shortcut with the same path, and the Startup folder is not listed. An app whose windows carry an AppUserModelID that a packaged app has is listed once, as the packaged app. The list updates when apps are installed or removed. [Migrating from Quickshell](../migrating-from-quickshell.md#apps) has more on search ranking and maps the `DesktopEntries` names onto these.
 
@@ -57,6 +57,14 @@ One read of an app's jump list. You get one from `JumpLists.forApp`; QML cannot 
 | --- | --- | --- |
 | `available` | bool, read-only | False when the recent and frequent lists cannot be read. |
 | `destinations` | list of string, read-only | The document names, recent first, a name that is in both lists once, at most 10 from each. Empty when `available` is false, or when the lists were read and have no documents. Pinned items and custom tasks are not included. |
+
+## RecentDocuments
+
+The `RecentDocuments` singleton: shortcuts Windows already keeps in the Recent folder. Reach it as `RecentDocuments`, for example `RecentDocuments.search("notes")`. This reads those shortcut names. It does not index files, and it does not search a path. A blank query matches nothing and does not open the folder.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `search(query)` | method, returns list of object | Up to 20 shortcuts whose name contains every word of the query, newest first. Each object has `name` and `path`. A blank query returns an empty list. |
 
 ## Examples
 

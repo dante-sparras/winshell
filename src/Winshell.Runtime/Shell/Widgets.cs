@@ -444,28 +444,45 @@ public sealed class MarginWrapperManager : QObject
     private double? _top, _bottom, _left, _right;
     private double _extra;
     private bool _resizeChild = true;
+    private double _implicitWidth, _implicitHeight;
 
     [Qml] public Item? Wrapper_ => _target;
 
-    [Qml] public Item? Child { get { Track(); return _child; } set { _child = value; Apply(); } }
+    [Qml] public Item? Child { get { Track(); return _child; } set { if (SetField(ref _child, value)) Apply(); } }
 
-    [Qml] public double Margin { get => _margin; set { _margin = value; Apply(); } }
+    [Qml]
+    public double Margin
+    {
+        get { Track(); return _margin; }
+        set
+        {
+            if (!SetField(ref _margin, value))
+                return;
+            // A side with no margin of its own follows this one.
+            if (_top is null) NotifyChanged("topMargin");
+            if (_bottom is null) NotifyChanged("bottomMargin");
+            if (_left is null) NotifyChanged("leftMargin");
+            if (_right is null) NotifyChanged("rightMargin");
+            Apply();
+        }
+    }
 
-    [Qml] public double TopMargin { get => _top ?? _margin; set { _top = value; Apply(); } }
+    [Qml] public double TopMargin { get { Track(); return _top ?? _margin; } set { if (SetField(ref _top, value, nameof(TopMargin))) Apply(); } }
 
-    [Qml] public double BottomMargin { get => _bottom ?? _margin; set { _bottom = value; Apply(); } }
+    [Qml] public double BottomMargin { get { Track(); return _bottom ?? _margin; } set { if (SetField(ref _bottom, value, nameof(BottomMargin))) Apply(); } }
 
-    [Qml] public double LeftMargin { get => _left ?? _margin; set { _left = value; Apply(); } }
+    [Qml] public double LeftMargin { get { Track(); return _left ?? _margin; } set { if (SetField(ref _left, value, nameof(LeftMargin))) Apply(); } }
 
-    [Qml] public double RightMargin { get => _right ?? _margin; set { _right = value; Apply(); } }
+    [Qml] public double RightMargin { get { Track(); return _right ?? _margin; } set { if (SetField(ref _right, value, nameof(RightMargin))) Apply(); } }
 
-    [Qml] public double ExtraMargin { get => _extra; set { _extra = value; Apply(); } }
+    [Qml] public double ExtraMargin { get { Track(); return _extra; } set { if (SetField(ref _extra, value)) Apply(); } }
 
-    [Qml] public bool ResizeChild { get => _resizeChild; set { _resizeChild = value; Apply(); } }
+    [Qml] public bool ResizeChild { get { Track(); return _resizeChild; } set { if (SetField(ref _resizeChild, value)) Apply(); } }
 
-    [Qml] public double ImplicitWidth { get; set; }
+    [Qml] public double ImplicitWidth { get { Track(); return _implicitWidth; } set => SetField(ref _implicitWidth, value); }
 
-    [Qml] public double ImplicitHeight { get; set; }
+    [Qml] public double ImplicitHeight { get { Track(); return _implicitHeight; } set => SetField(ref _implicitHeight, value); }
+
 
     public override void ComponentComplete()
     {

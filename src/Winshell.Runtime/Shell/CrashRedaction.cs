@@ -18,6 +18,7 @@ public static partial class CrashRedaction
         text = UrlQuery().Replace(text, m => m.Groups["url"].Value + "?" + Mask);
         text = AuthorizationHeader().Replace(text, m => m.Groups["name"].Value + Mask);
         text = SchemeToken().Replace(text, m => m.Groups["scheme"].Value + " " + Mask);
+        text = PassphraseLine().Replace(text, m => m.Groups["name"].Value + Mask);
         text = Assignment().Replace(text, m => m.Groups["key"].Value + m.Groups["sep"].Value + Mask);
         text = KnownTokenShape().Replace(text, Mask);
         text = Jwt().Replace(text, Mask);
@@ -33,9 +34,13 @@ public static partial class CrashRedaction
     [GeneratedRegex(@"(?<url>\b[a-z][a-z0-9+.\-]*://[^\s?#""'<>]*)\?[^\s#""'<>]*", RegexOptions.IgnoreCase)]
     private static partial Regex UrlQuery();
 
-    // Authorization: Bearer abc / Proxy-Authorization: Basic abc, to the end of the line.
-    [GeneratedRegex(@"(?<name>\b(?:proxy-)?authorization\s*[:=]\s*)[^\r\n]+", RegexOptions.IgnoreCase)]
+    // Authorization: Bearer abc / Proxy-Authorization: Basic abc / Cookie: a=b; c=d, to the end of the line.
+    [GeneratedRegex(@"(?<name>\b(?:(?:proxy-)?authorization|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+", RegexOptions.IgnoreCase)]
     private static partial Regex AuthorizationHeader();
+
+    // password = correct horse battery: an unquoted passphrase can have spaces, so it runs to the end of the line.
+    [GeneratedRegex(@"(?<name>\b[A-Za-z0-9_\-]{0,64}(?:passw(?:or)?d|passphrase|pwd)\s*[:=]\s*)(?![""'])[^\r\n]+", RegexOptions.IgnoreCase)]
+    private static partial Regex PassphraseLine();
 
     [GeneratedRegex(@"(?<scheme>\b(?:bearer|basic|digest|token))\s+[A-Za-z0-9\-._~+/]{8,}=*", RegexOptions.IgnoreCase)]
     private static partial Regex SchemeToken();

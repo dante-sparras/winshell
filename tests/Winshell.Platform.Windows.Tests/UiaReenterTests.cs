@@ -111,7 +111,7 @@ public class UiaReenterTests
         var duringPaint = -1;
         var expected = -1;
         WindowAutomation? automation = null;
-        Run(window =>
+        WaitForFrame(window =>
         {
             automation = window.Automation;
             var scene = ((ShellWindow)window.Client).Scene;
@@ -141,12 +141,71 @@ public class UiaReenterTests
                 duringPaint = automation.Run(() => automation.SyncCount);
             };
             scene.RequestUpdate();
-            return false;
-        }, _ =>
+        }, () => duringPaint >= 0, _ =>
         {
             Assert.Equal(expected, duringPaint);
             Assert.Equal(expected, automation!.SyncCount);
         });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="setup"/> on one turn, then waits until <paramref name="ready"/> or 200 turns.
+    /// A wall-clock deadline can come due in the same batch as setup and quit before the frame is drawn.
+    /// </summary>
+    private static void WaitForFrame(Action<Win32Window> setup, Func<bool> ready, Action<Win32Window> check)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "shell.qml"), Config);
+        var notes = new StringBuilder();
+        var log = new Log { Sink = (_, _, message) => notes.AppendLine(message) };
+        PaintProbe.DuringPaint = null;
+        try
+        {
+            using var loop = new WinEventLoop { Log = log };
+            using var platform = new WindowsPlatform(loop, log);
+            using var host = new ShellHost(Path.Combine(dir, "shell.qml"), loop, platform, log, () =>
+            {
+                var modules = StandardModules.Create();
+                modules.Module("Probe").Type<PaintProbe>("PaintProbe");
+                return modules;
+            })
+            { WatchFiles = false };
+            Assert.True(host.Start());
+            var window = Assert.Single(platform.Windows);
+            var armed = false;
+            var turns = 0;
+            void Step()
+            {
+                if (!armed)
+                {
+                    armed = true;
+                    setup(window);
+                    loop.Post(Step);
+                    return;
+                }
+                if (ready() || ++turns >= 200)
+                {
+                    check(window);
+                    loop.Quit(0);
+                    return;
+                }
+                loop.Post(Step);
+            }
+            loop.Post(Step);
+            Assert.True(loop.Run() == 0, notes.ToString());
+        }
+        finally
+        {
+            PaintProbe.DuringPaint = null;
+            try
+            {
+                Directory.Delete(dir, true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     private static void Run(Func<Win32Window, bool> first, Action<Win32Window> then)
@@ -171,19 +230,37 @@ public class UiaReenterTests
             Assert.True(host.Start());
             var window = Assert.Single(platform.Windows);
             var saw = false;
+            var started = false;
             loop.Schedule(TimeSpan.FromMilliseconds(100), () =>
             {
                 saw = true;
+                // This batch can already contain the outer quit: a busy loop runs every due timer after this
+                // callback, before a timer scheduled here. Started means that quit must not beat the follow-up.
+                started = true;
                 if (first(window))
+                {
                     loop.Quit(0);
-                else
-                    loop.Schedule(TimeSpan.FromMilliseconds(80), () =>
-                    {
-                        then(window);
-                        loop.Quit(0);
-                    });
+                    return;
+                }
+                var finished = false;
+                var hang = loop.Schedule(TimeSpan.FromSeconds(2), () =>
+                {
+                    if (!finished)
+                        loop.Quit(1);
+                });
+                loop.Schedule(TimeSpan.FromMilliseconds(80), () =>
+                {
+                    finished = true;
+                    hang.Dispose();
+                    then(window);
+                    loop.Quit(0);
+                });
             });
-            loop.Schedule(TimeSpan.FromMilliseconds(2000), () => loop.Quit(1));
+            loop.Schedule(TimeSpan.FromMilliseconds(2000), () =>
+            {
+                if (!started)
+                    loop.Quit(1);
+            });
             Assert.True(loop.Run() == 0, notes.ToString());
             Assert.True(saw);
         }

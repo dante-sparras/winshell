@@ -66,8 +66,10 @@ public class UiaCallTimeoutTests
                 })
                 { IsBackground = true };
                 next.Start();
+                // After the stall. A timer armed before it becomes due during the wait and quits in the same
+                // batch as this callback, before the next call is dispatched.
+                loop.Schedule(TimeSpan.FromSeconds(45), () => loop.Quit(1));
             });
-            loop.Schedule(TimeSpan.FromSeconds(15), () => loop.Quit(1));
 
             Assert.Equal(0, loop.Run());
             Assert.Equal(Uia.Timeout, stalled);

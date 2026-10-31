@@ -204,6 +204,7 @@ internal static partial class Win32
     public const int GWL_EXSTYLE = -20;
     public const int GWLP_USERDATA = -21;
 
+    public const uint WM_NULL = 0x0000;
     public const uint WM_CREATE = 0x0001;
     public const uint WM_DESTROY = 0x0002;
     public const uint WM_GETOBJECT = 0x003D;
