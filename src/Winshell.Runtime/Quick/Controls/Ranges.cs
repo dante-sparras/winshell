@@ -652,7 +652,7 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeyTarget, IKeepsPoi
 
     private double Snapped(double value)
     {
-        if (_stepSize <= 0 || _snapMode == 0)
+        if (_stepSize <= 0)
             return value;
         return Clamp(_from + Math.Round((value - _from) / _stepSize) * _stepSize);
     }
@@ -676,8 +676,11 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeyTarget, IKeepsPoi
     {
         if (_dragging is null)
             return;
+        var value = ValueAt(PositionAt(x, y));
+        if (_snapMode == (int)Slider.SnapModeValue.SnapAlways)
+            value = Snapped(value);
         var old = _dragging.Value;
-        SetNodeValue(_dragging, Snapped(ValueAt(PositionAt(x, y))));
+        SetNodeValue(_dragging, value);
         if (old != _dragging.Value)
             _dragging.Emit("moved");
     }
@@ -687,6 +690,13 @@ public sealed class RangeSlider : Control, IPointerTarget, IKeyTarget, IKeepsPoi
         if (_dragging is null)
             return;
         PointerMove(x, y, buttons, modifiers);
+        if (_snapMode != (int)Slider.SnapModeValue.NoSnap)
+        {
+            var old = _dragging.Value;
+            SetNodeValue(_dragging, Snapped(_dragging.Value));
+            if (old != _dragging.Value)
+                _dragging.Emit("moved");
+        }
         _dragging.SetPressed(false);
         _dragging = null;
         StateChanged();
@@ -990,14 +1000,16 @@ public sealed class Dial : Control, IPointerTarget, IKeyTarget, IKeepsPointerGra
         Fluent.FillCircle(c, hx, hy, _pressed ? 5 : Hovered ? 7 : 6, Enabled ? t.AccentFillColorDefault : t.AccentFillColorDisabled);
     }, 120, 120));
 
-    private void SetFrom(double x, double y)
+    private void SetFrom(double x, double y, bool release = false)
     {
         var dx = x - Width / 2;
         var dy = y - Height / 2;
         var angle = Math.Atan2(dx, -dy) * 180 / Math.PI;
         angle = Math.Clamp(angle, -140, 140);
         var value = _from + (angle + 140) / 280 * (_to - _from);
-        if (_stepSize > 0 && _snapMode != 0)
+        var snap = _snapMode == (int)Slider.SnapModeValue.SnapAlways
+            || release && _snapMode == (int)Slider.SnapModeValue.SnapOnRelease;
+        if (_stepSize > 0 && snap)
             value = _from + Math.Round((value - _from) / _stepSize) * _stepSize;
         var old = _value;
         Value = value;
@@ -1023,6 +1035,8 @@ public sealed class Dial : Control, IPointerTarget, IKeyTarget, IKeepsPointerGra
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
     {
+        if (_pressed && _snapMode == (int)Slider.SnapModeValue.SnapOnRelease)
+            SetFrom(x, y, release: true);
         SetField(ref _pressed, false, "pressed");
         StateChanged();
     }
