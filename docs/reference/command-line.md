@@ -9,7 +9,7 @@ winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
 winshell log [-f] [-t N]            print an instance's log
-winshell ipc show                   list IPC targets
+winshell ipc show [-j]              list IPC targets
 winshell ipc call <target> <function> [args...]
 winshell ipc prop get <target> <property>
 winshell ipc wait <target> <signal>
@@ -34,6 +34,8 @@ winshell doctor [config options] [-j] [--no-color]
 
 The log goes to the console and to the instance's log file. The file is kept to about 4 MB, and the previous part is `log.1.txt` beside it. Ctrl+C in the console stops the shell. If the configuration fails to load, Winshell keeps running with no windows and loads it again when its files change.
 
+A failure before that log exists, such as no configuration to run, is printed to the console. The Start tile, the sign-in entry and any other start with no console window also show that message in a dialog, unless another program is reading the error. **Open config folder** opens the `--path` folder, or the config folder when there was no `--path`. An attached console prints the message and shows no dialog.
+
 Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2.
 
 ## Pick an instance
@@ -51,23 +53,76 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 
 | Command | What it does |
 | --- | --- |
-| `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. |
+| `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. The shape is under [JSON](#json). |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. |
 | `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
-| `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. |
+| `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. `-j`, `--json` prints that list as JSON. The shape is under [JSON](#json). |
 | `winshell ipc call <target> <function> [args...]` | Calls a function of an [`IpcHandler`](winshell-io.md#ipchandler) and prints what it returns. |
 | `winshell ipc prop get <target> <property>` | Prints a property of an `IpcHandler`. |
 | `winshell ipc wait <target> <signal>` | Waits for a signal of an `IpcHandler` once and prints its first argument. |
 | `winshell ipc listen <target> <signal>` | Prints the first argument of each signal until you press Ctrl+C. |
 | `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. See [winshell doctor](../doctor.md). |
 
-`winshell msg` is the old name of `winshell ipc call`; it still works and says so. There is no command that reloads a running shell yet ([#134](https://github.com/dante-sparras/winshell/issues/134)); save a file, or call [`Shell.reload()`](winshell.md#shell) from an `IpcHandler`.
+`winshell msg` is the old name of `winshell ipc call`; it still works and says so. `winshell ipc call notice dismiss` closes Winshell's own notice for a configuration error or a window that failed. That notice is not an `IpcHandler`, so `ipc show` does not list it, and the call still works when the configuration failed to load. It takes no arguments. `winshell msg notice dismiss` is the same call. There is no command that reloads a running shell yet ([#134](https://github.com/dante-sparras/winshell/issues/134)); save a file, or call [`Shell.reload()`](winshell.md#shell) from an `IpcHandler`.
 
 The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
 
 A `--` ends options. Words after it are arguments, so `winshell log -- -f` prints the file `-f`. `ipc call` and `msg` do the same after the function name, with no `--`: `winshell ipc call notes add -v` passes `-v` to `add`. `--after <pid>` is removed while options are still being read, which is where an update's restart puts it. After `--`, and after an `ipc call` or `msg` function name, those words stay arguments.
 
 Output sent to a pipe or a file is UTF-8 without a byte order mark. In a console window it follows the console's code page. To read it in PowerShell, set `[Console]::OutputEncoding = [Text.UTF8Encoding]::new()` first, or PowerShell decodes it with the console's code page.
+
+## JSON
+
+`-j` and `--json` on `list` and `ipc show` write JSON to stdout. Characters outside ASCII are written as themselves, the same way [`winshell doctor --json`](../doctor.md) writes a path. `doctor --json` keeps the shape that page shows.
+
+`winshell list --json` prints a JSON array, one object per running instance:
+
+| Field | What it is |
+| --- | --- |
+| `id` | The instance id. |
+| `pid` | The process id. |
+| `shellId` | The shell id. |
+| `configPath` | The configuration file. |
+| `launchTime` | When it started, as a local time with its offset. |
+| `pipe` | The name of its control pipe. |
+| `log` | Its log file. |
+
+The array does not include `processStart` or `exitedAt`. Those stay in `instance.json`, the file the instance writes for itself, so that file can change without changing this command.
+
+`winshell ipc show -j` prints a JSON array, one object per target, in ordinal order of the target name. Members stay in the order the handler declares them. A function `ipc call` cannot reach is left out, and so is a property of a type other than `string`, `int`, `bool`, `real`, `double` or `color`.
+
+| Field | What it is |
+| --- | --- |
+| `target` | The target name. |
+| `functions` | The functions `ipc call` can reach. Each has `name`, `parameters` and `returns`. |
+| `properties` | The properties `ipc prop get` can read. Each has `name` and `type`. |
+| `signals` | The signals declared on the handler. Each has `name` and `parameters`. A property's `nameChanged` signal is not listed again. |
+
+A parameter has `name` and `type`. `type` is null when the signal's parameter was declared without one.
+
+```json
+[
+  {
+    "target": "notes",
+    "functions": [
+      {
+        "name": "hello",
+        "parameters": [ { "name": "name", "type": "string" } ],
+        "returns": "string"
+      }
+    ],
+    "properties": [
+      { "name": "title", "type": "string" }
+    ],
+    "signals": [
+      {
+        "name": "opened",
+        "parameters": [ { "name": "query", "type": "string" } ]
+      }
+    ]
+  }
+]
+```
 
 ## Exit codes
 

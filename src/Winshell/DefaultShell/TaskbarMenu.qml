@@ -37,7 +37,7 @@ PopupWindow {
     Accessible.role: Accessible.PopupMenu
     Accessible.name: "Taskbar"
 
-    MouseArea {
+    SubtleButton {
       id: item
       objectName: "menu:taskbarSettings"
       x: 4
@@ -46,13 +46,10 @@ PopupWindow {
       height: 36
       focus: true
       hoverEnabled: true
-      onClicked: root.trigger()
+      onActivated: root.trigger()
       Accessible.role: Accessible.MenuItem
       Accessible.name: "Taskbar settings"
-      Accessible.onPressAction: root.trigger()
       Keys.onEscapePressed: root.visible = false
-      Keys.onReturnPressed: root.trigger()
-      Keys.onSpacePressed: root.trigger()
 
       Rectangle {
         anchors.fill: parent

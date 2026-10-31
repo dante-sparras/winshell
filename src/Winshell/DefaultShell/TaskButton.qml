@@ -6,7 +6,7 @@ import "tasks.js" as Tasks
 // One app on the taskbar, as Windows 11 draws it: its icon on a subtle fill when hovered or in front, and a line
 // under it while it runs, longer and in the accent color while one of its windows is in front. A window that
 // flashes for attention turns the button red until it is activated.
-MouseArea {
+SubtleButton {
   id: root
 
   required property var task
@@ -27,14 +27,16 @@ MouseArea {
   hoverEnabled: true
   acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
   activeFocusOnTab: true
+  // Shift+Enter opens a new window, and the pointer distinguishes left, middle and right.
+  shiftEnterActivates: false
+  activateOnClick: false
+  onActivated: root.invoked()
 
   Keys.onPressed: event => {
     event.accepted = false
     const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
     if (enter && (event.modifiers & Qt.ShiftModifier))
       root.launchRequested()
-    else if (enter || event.key === Qt.Key_Space)
-      root.invoked()
     else if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)))
       root.menuRequested()
     else if (event.key === Qt.Key_Up && root.running)
@@ -44,10 +46,8 @@ MouseArea {
     event.accepted = true
   }
 
-  Accessible.role: Accessible.Button
   Accessible.name: task ? Tasks.accessibleName(task) : ""
   Accessible.description: attention ? "Needs your attention" : ""
-  Accessible.onPressAction: root.invoked()
 
   onClicked: mouse => {
     if (mouse.button === Qt.RightButton)

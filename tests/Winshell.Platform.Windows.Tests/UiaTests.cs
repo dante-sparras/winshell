@@ -47,6 +47,45 @@ public class UiaTests
         Assert.Equal(1, TextUnits.PreviousStart(text, 3, TextUnits.Character));
     }
 
+    [Fact]
+    public void A_character_is_one_grapheme_cluster()
+    {
+        var accented = "e\u0301x";
+        Assert.Equal((0, 2), TextUnits.Enclose(accented, 1, TextUnits.Character));
+        Assert.Equal(2, TextUnits.NextStart(accented, 0, TextUnits.Character));
+        Assert.Equal(0, TextUnits.PreviousStart(accented, 2, TextUnits.Character));
+
+        // A Thai vowel mark stays on its base. The family emoji is one ZWJ sequence.
+        var thai = "ก้a";
+        Assert.Equal((0, 2), TextUnits.Enclose(thai, 1, TextUnits.Character));
+        var family = "👩‍👩‍👧";
+        Assert.Equal((0, family.Length), TextUnits.Enclose(family, 4, TextUnits.Character));
+        Assert.Equal(family.Length, TextUnits.NextStart(family, 0, TextUnits.Character));
+    }
+
+    [Fact]
+    public void Each_ideograph_is_its_own_word()
+    {
+        var text = "中国人";
+        Assert.Equal((0, 1), TextUnits.Enclose(text, 0, TextUnits.Word));
+        Assert.Equal((1, 2), TextUnits.Enclose(text, 1, TextUnits.Word));
+        Assert.Equal((2, 3, 2), TextUnits.Move(text, 0, 1, TextUnits.Word, 2));
+
+        // The ideograph keeps its trailing spaces, and it does not stick to the Latin word beside it.
+        Assert.Equal((0, 2), TextUnits.Enclose("中 国", 0, TextUnits.Word));
+        Assert.Equal((2, 3), TextUnits.Enclose("中 国", 2, TextUnits.Word));
+        Assert.Equal((0, 5), TextUnits.Enclose("Hello中", 0, TextUnits.Word));
+        Assert.Equal((5, 6), TextUnits.Enclose("Hello中", 5, TextUnits.Word));
+        Assert.Equal((0, 1), TextUnits.Enclose("中,", 0, TextUnits.Word));
+        Assert.Equal((1, 2), TextUnits.Enclose("中,", 1, TextUnits.Word));
+
+        // A supplementary-plane ideograph is one character and one word.
+        var extended = "\U00020000\U00020001";
+        Assert.Equal((0, 2), TextUnits.Enclose(extended, 1, TextUnits.Character));
+        Assert.Equal((0, 2), TextUnits.Enclose(extended, 0, TextUnits.Word));
+        Assert.Equal((2, 4), TextUnits.Enclose(extended, 2, TextUnits.Word));
+    }
+
     [Theory]
     [InlineData(Role.Button, 50000)]
     [InlineData(Role.Switch, 50000)]

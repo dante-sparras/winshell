@@ -31,6 +31,37 @@ public class IpcShowTests
     }
 
     [Fact]
+    public void Describe_keeps_a_signal_parameter_type()
+    {
+        using var files = new TestShell(("shell.qml", """
+            import Winshell
+            import Winshell.Io
+            ShellRoot {
+              IpcHandler {
+                target: "notes"
+                property string title: "notes"
+                property var extra: 1
+                signal opened(query: string)
+                signal saved(name, size)
+                function hello(name: string): string { return name }
+                function take(items: var): void {}
+              }
+            }
+            """));
+        using var host = Start(files);
+
+        var target = Assert.Single(host.Ipc.Describe());
+        var hello = Assert.Single(target.Functions);
+        Assert.Equal("hello", hello.Name);
+        Assert.Equal("string", hello.Returns);
+        Assert.Equal("string", Assert.Single(hello.Parameters).Type);
+        Assert.Equal("string", Assert.Single(target.Properties).Type);
+        Assert.Equal("string", Assert.Single(target.Signals.Single(s => s.Name == "opened").Parameters).Type);
+        Assert.All(target.Signals.Single(s => s.Name == "saved").Parameters, p => Assert.Null(p.Type));
+        Assert.Contains("  signal saved(name, size)\n", host.Ipc.Show(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_function_ipc_cannot_call_says_why()
     {
         using var files = new TestShell(("shell.qml", Qml));
