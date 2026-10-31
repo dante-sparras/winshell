@@ -50,7 +50,7 @@ Before opening a PR, run `pwsh scripts/check.ps1`. That is the required `ci` job
 | `links` | Every pull request, in `docs.yml` | lychee 0.24.2 over `docs/**/*.md` and `README.md`, excluding `docs/agents` and `https://about.signpath.io`. |
 | `actionlint` | Every pull request and every push to `main` | actionlint on `.github/workflows`. |
 | `zizmor` | Every pull request and every push to `main` | zizmor on `.github`. |
-| `package` | Pushes to `main`, and pull requests that change packaging or the package workflow | `pwsh scripts/package.ps1`. It publishes both architectures and needs the Windows SDK for the MSIX check. |
+| `package` | Pushes to `main`, and pull requests that change packaging or the package workflow | `pwsh scripts/package.ps1`. It publishes both architectures and needs the Windows SDK for the MSIX check. The `arm64` job then runs that zip's `winshell.exe --version` on `windows-11-arm`. |
 
 The docs `build` job is DocFX with warnings as errors, which `check.ps1` already runs. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
 
