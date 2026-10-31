@@ -1,3 +1,4 @@
+using Winshell.Platform.Windows.Services;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -157,10 +158,15 @@ public sealed class BluetoothService : QObject
     private readonly Dictionary<string, BluetoothDevice> _devices = new(StringComparer.Ordinal);
     private readonly bool _monitor;
     private CancellationTokenSource _stop = new();
+    // Ends with the service. Stopping the monitor leaves this alone, so Refresh still reads.
+    private readonly CancellationTokenSource _reading = new();
+    private Task? _monitorTask;
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
     private BluetoothAdapter? _adapter;
     private string _error = "";
-    private int _refreshing;
+    // A destroyed service closes immediately when idle, or lets its in-flight read close the backend.
+    private const int Idle = 0, Reading = 1, Closing = 2, Closed = 3;
+    private int _reads;
     private int _monitoring;
     private int _monitorHolders;
     private bool _started;
@@ -181,6 +187,7 @@ public sealed class BluetoothService : QObject
         foreach (var model in new[] { Adapters, Devices, PairedDevices, NearbyDevices }) model.SetOwner(this);
     }
     internal IBluetoothBackend Backend { get; }
+    internal Task? MonitorTask => _monitorTask;
     [Qml] public BluetoothAdapter? DefaultAdapter { get { Track(); return _adapter; } }
     [Qml] public ObjectModel Adapters { get; } = new();
     [Qml] public ObjectModel Devices { get; } = new();
@@ -222,7 +229,7 @@ public sealed class BluetoothService : QObject
             stop = _stop;
             cancellation = stop.Token;
         }
-        _ = Task.Run(async () =>
+        _monitorTask = Task.Run(async () =>
         {
             try
             {
@@ -256,31 +263,56 @@ public sealed class BluetoothService : QObject
     }
     private async Task MonitorAsync(CancellationToken cancellation)
     {
-        try
+        var warning = new MonitorWarning(this, "bluetooth");
+        while (!cancellation.IsCancellationRequested)
         {
-            while (!cancellation.IsCancellationRequested)
+            try
             {
                 await RefreshAsync().ConfigureAwait(false);
+                warning.Succeeded();
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
+            catch (ObjectDisposedException) { return; }
+#pragma warning disable CA1031 // One failed read must not stop the rest of the poll.
+            catch (Exception e)
+#pragma warning restore CA1031
+            {
+                warning.Failed(e);
+            }
+            try
+            {
                 await Task.Delay(TimeSpan.FromSeconds(3), cancellation).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
         }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
     }
     internal void Post(Action action) => _loop.Post(() => { if (!IsDestroyed) action(); });
     internal void Invalidate() => Interlocked.Increment(ref _revision);
     [Qml] public void Refresh() => _ = RefreshAsync();
     internal async Task RefreshAsync()
     {
-        if (IsDestroyed || Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) return;
+        if (IsDestroyed || Interlocked.CompareExchange(ref _reads, Reading, Idle) != Idle) return;
         var revision = Interlocked.Read(ref _revision);
-        BluetoothSnapshot snapshot;
-        try { snapshot = await Backend.ReadAsync().ConfigureAwait(false); }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e)) { snapshot = BluetoothSnapshot.Initial with { Error = e.Message }; }
-        Post(() =>
+        try
         {
-            Interlocked.Exchange(ref _refreshing, 0);
-            if (revision == Interlocked.Read(ref _revision)) Apply(snapshot);
-        });
+            BluetoothSnapshot snapshot;
+            try { snapshot = await Backend.ReadAsync(_reading.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
+            catch (ObjectDisposedException) { return; }
+            catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e)) { snapshot = BluetoothSnapshot.Initial with { Error = e.Message }; }
+            Post(() =>
+            {
+                if (revision == Interlocked.Read(ref _revision)) Apply(snapshot);
+            });
+        }
+        finally
+        {
+            if (Interlocked.CompareExchange(ref _reads, Idle, Reading) == Closing)
+            {
+                Volatile.Write(ref _reads, Closed);
+                CloseBackend();
+            }
+        }
     }
 
     [Qml] public void StartDiscovery() => SetDiscovery(true);
@@ -366,7 +398,29 @@ public sealed class BluetoothService : QObject
     {
         StopMonitoring();
         foreach (var device in _devices.Values) device.CancelPairing();
-        Backend.Dispose();
+        _reading.Cancel();
+        while (true)
+        {
+            var reads = Volatile.Read(ref _reads);
+            if (reads == Reading && Interlocked.CompareExchange(ref _reads, Closing, Reading) == Reading)
+                return;
+            if (reads == Idle && Interlocked.CompareExchange(ref _reads, Closed, Idle) == Idle)
+            {
+                CloseBackend();
+                return;
+            }
+            if (reads is Closing or Closed)
+                return;
+        }
+    }
+    private void CloseBackend()
+    {
+        try { Backend.Dispose(); }
+        finally
+        {
+            _reading.Dispose();
+            ServiceSupport.DisposeAfterMonitor(_stop, _monitorTask);
+        }
     }
 }
 
