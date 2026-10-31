@@ -14,7 +14,7 @@ The singleton for the whole shell. It lists every app's tray icon. Only one runn
 
 ## SystemTrayItem
 
-One app's tray icon, reached from `SystemTray.items`. Its menu belongs to the app, which draws it itself: `display()` and `MenuAnchor` open it, while `MenuOpener` sees no entries.
+One app's tray icon, reached from `SystemTray.items`. Its menu belongs to the app, which draws it itself. `display()` asks the app to open it.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ One app's tray icon, reached from `SystemTray.items`. Its menu belongs to the ap
 | `icon` | string, read-only | An `image://trayicon/…` source for the icon the app set. It changes when the app changes the icon. Give the `Image` a `sourceSize` to get it sharp at the screen's scale. |
 | `tooltip` | string, read-only | The icon's tooltip, which may run over several lines. |
 | `overflow` | bool, read-only | Whether Windows shows the icon in the overflow rather than on the taskbar. Users choose in Settings. |
-| `menu` | [MenuHandle](winshell.md#menuhandle), read-only | The app's menu, for `MenuAnchor`. |
+| `menu` | [MenuHandle](winshell.md#menuhandle), read-only | The app's menu. `display()` opens it. |
 | `click()` | method | A left click at the cursor, which most apps answer by showing their window. |
 | `doubleClick()` | method | A double click at the cursor, which many older apps need before they show their window. |
 | `middleClick()` | method | A middle click at the cursor. |

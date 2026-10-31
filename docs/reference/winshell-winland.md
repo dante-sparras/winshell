@@ -63,7 +63,6 @@ A workspace, reached from `Winland.workspaces` and other Winland objects. Winlan
 | `toplevels` | ObjectModel of [WinlandWindow](#winlandwindow), read-only | The windows on the workspace. |
 | `lastIpcObject` | var, read-only | The workspace's entry from Winland's last workspace list, as a JavaScript object. Null before the first one. |
 | `activate()` | method | Shows the workspace. When it is on a monitor other than the focused one, that monitor is focused first. |
-| `typeChanged()` | signal | Never emitted on this checkout. |
 
 ## WinlandWindow
 
