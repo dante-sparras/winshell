@@ -25,12 +25,18 @@ internal static unsafe partial class DoctorProbe
 
     public static int WindowsBuild() => Environment.OSVersion.Version.Build;
 
-    public static int WindowsUpdateRevision() => Registry.LocalMachine.OpenSubKey(CurrentVersionKey)?.GetValue("UBR") is int revision ? revision : 0;
+    public static int WindowsUpdateRevision() => CurrentVersionValue("UBR") is int revision ? revision : 0;
 
-    public static bool WindowsServer() => Registry.LocalMachine.OpenSubKey(CurrentVersionKey)?.GetValue("InstallationType") is string type
+    public static bool WindowsServer() => CurrentVersionValue("InstallationType") is string type
         && type.StartsWith("Server", StringComparison.OrdinalIgnoreCase);
 
-    public static string? WindowsDisplayVersion() => Registry.LocalMachine.OpenSubKey(CurrentVersionKey)?.GetValue("DisplayVersion") as string;
+    public static string? WindowsDisplayVersion() => CurrentVersionValue("DisplayVersion") as string;
+
+    private static object? CurrentVersionValue(string name)
+    {
+        using var key = Registry.LocalMachine.OpenSubKey(CurrentVersionKey);
+        return key?.GetValue(name);
+    }
 
     /// <summary>Whether .NET came with Winshell: then its own files sit next to Winshell's, or are bundled into it.</summary>
     public static bool SelfContained(string exePath)
@@ -136,26 +142,31 @@ internal static unsafe partial class DoctorProbe
     {
         if (!File.Exists(logPath))
             return default;
-        string text;
         try
         {
             using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
-            text = reader.ReadToEnd();
+            return new(LastLoadErrorIn(reader), null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return new(null, $"{logPath}: {e.Message}");
         }
-        return new(LastLoadErrorIn(text), null);
     }
 
     public static string? LastLoadError(string logPath) => ReadInstanceLog(logPath).LoadError;
 
     internal static string? LastLoadErrorIn(string log)
     {
+        using var reader = new StringReader(log);
+        return LastLoadErrorIn(reader);
+    }
+
+    /// <summary>Reads a line at a time, so a long log is never all in memory.</summary>
+    private static string? LastLoadErrorIn(TextReader log)
+    {
         string? error = null;
-        foreach (var line in log.Split('\n'))
+        while (log.ReadLine() is { } line)
         {
             foreach (var marker in new[] { "Failed to load configuration: ", "Failed to reload configuration: " })
             {
