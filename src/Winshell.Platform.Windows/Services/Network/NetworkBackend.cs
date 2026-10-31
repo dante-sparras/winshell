@@ -230,13 +230,13 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                 if (networks.TryGetValue(network.Ssid, out var seen) && seen.SignalStrength >= strength)
                     continue;
                 var state = network.Ssid == connectedSsid ? deviceState : ConnectionState.Disconnected;
-                networks[network.Ssid] = new NetworkInfo(network.Ssid, state, known.Contains(network.Ssid), strength, Security(network.SecuritySettings));
+                networks[network.Ssid] = new NetworkInfo(network.Ssid, state, IsSaved(known, network.Ssid), strength, Security(network.SecuritySettings));
             }
         }
         if (connectedSsid is not null && !networks.ContainsKey(connectedSsid))
         {
             var bars = profile!.GetSignalBars() is { } b ? b / 5.0 : 0;
-            networks[connectedSsid] = new NetworkInfo(connectedSsid, deviceState, true, bars, Security(profile.NetworkSecuritySettings));
+            networks[connectedSsid] = new NetworkInfo(connectedSsid, deviceState, IsSaved(known, connectedSsid), bars, Security(profile.NetworkSecuritySettings));
         }
         return [.. networks.Values.OrderByDescending(n => n.State == ConnectionState.Connected).ThenByDescending(n => n.SignalStrength)];
     }
@@ -295,6 +295,12 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         Refresh();
         return MapConnectionResult(result.ConnectionStatus);
     }
+
+    /// <summary>
+    /// Whether <paramref name="ssid"/> is the name of a saved WLAN profile. A connected network the scan has not
+    /// reported uses the same match, not an assumed profile.
+    /// </summary>
+    internal static bool IsSaved(IReadOnlySet<string> profileNames, string ssid) => profileNames.Contains(ssid);
 
     internal static ConnectionFailReason? MapConnectionResult(WiFiConnectionStatus status) => status switch
         {

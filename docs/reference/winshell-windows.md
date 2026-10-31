@@ -66,7 +66,7 @@ The `VirtualDesktops` singleton: the desktops Task View shows. Reach it as `Virt
 
 `supported` is false outside Windows builds 26100 through 26399, or when the desktop list cannot be read; then `switchTo()`, `create()` and `remove()` do nothing and write a warning to the log.
 
-The list is read again when Windows switches desktop, and after `switchTo()`, `create()` or `remove()`. A desktop added, renamed or removed in Task View without a switch shows at the next switch.
+The list is read again when Windows switches desktop, about once a second, and after `switchTo()`, `create()` or `remove()`. A desktop added, renamed or removed outside Winshell shows up on that read.
 
 ## VirtualDesktop
 

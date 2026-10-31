@@ -96,6 +96,41 @@ public class VirtualDesktopTests
     }
 
     [Fact]
+    public void A_desktop_added_renamed_or_removed_outside_this_service_shows_up()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var source = Source(first, ("", first));
+        var loop = new ManualEventLoop();
+        using var engine = new QmlEngine(new ModuleRegistry(), loop);
+        var desktops = new VirtualDesktopsService(engine, source, new Log(), watch: true);
+        try
+        {
+            Assert.Single(desktops.Desktops.Rows);
+            Assert.DoesNotContain(source.Calls, call => call is not "read");
+
+            source.Items[0] = new DesktopRecord(first, "Work");
+            loop.Advance(VirtualDesktopsService.RereadInterval);
+            Assert.Equal("Work", Assert.IsType<VirtualDesktop>(desktops.Desktops.Rows[0]).Name);
+
+            source.Items.Add(new DesktopRecord(second, "Extra"));
+            loop.Advance(VirtualDesktopsService.RereadInterval);
+            Assert.Equal(2, desktops.Desktops.Rows.Count);
+            Assert.Equal("Extra", Assert.IsType<VirtualDesktop>(desktops.Desktops.Rows[1]).Name);
+
+            source.Items.RemoveAll(item => item.Id == second);
+            loop.Advance(VirtualDesktopsService.RereadInterval);
+            Assert.Single(desktops.Desktops.Rows);
+            Assert.Equal(first.ToString("D"), Assert.IsType<VirtualDesktop>(desktops.Desktops.Rows[0]).Id);
+            Assert.DoesNotContain(source.Calls, call => call is not "read");
+        }
+        finally
+        {
+            desktops.Destroy();
+        }
+    }
+
+    [Fact]
     public void An_unknown_build_does_not_read_or_change_desktops()
     {
         var source = Source(Guid.NewGuid());
