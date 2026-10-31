@@ -33,7 +33,7 @@ One app of Start: a shortcut or a packaged app. You get entries from `Apps`; QML
 | `arguments` | string, read-only | The shortcut's arguments. Empty for a packaged app. |
 | `commandLine` | string, read-only | A command line that describes how the app is opened: the target, quoted when it has spaces, and the arguments. |
 | `startIn` | string, read-only | The shortcut's Start in folder, or the target's folder when the shortcut has none. |
-| `appId` | string, read-only | The AppUserModelID the app's windows carry, or its program's name in lower case. It matches `AppWindow.appId` in [Winshell.Windows](winshell-windows.md#appwindow). |
+| `appId` | string, read-only | The AppUserModelID the app's windows carry, or its program's name in lower case. It matches `AppWindow.appId` in [Winshell.Windows](winshell-windows.md#appwindow), which also uses the process package's id when a window sets none. |
 | `folders` | list of string, read-only | The Start menu folders the shortcut is in, outermost first. Empty for a packaged app. |
 | `hidden` | bool, read-only | True for an uninstaller or a document shortcut. Hidden apps stay out of `apps`, `search`, `recent`, and `frequent`. |
 | `packaged` | bool, read-only | True for a packaged app, such as a Microsoft Store app. |

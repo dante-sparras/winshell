@@ -2,8 +2,8 @@ import Winshell
 import Winshell.Io
 import QtQuick
 
-// The apps pinned to the taskbar, kept in taskbar.json in the shell's data folder. Until you pin or unpin
-// something, the taskbar has the apps Windows 11 pins: File Explorer, Microsoft Edge and the Microsoft Store.
+// The apps pinned to the taskbar, kept in taskbar.json in the shell's data folder. Until you pin, unpin or
+// reorder something, the taskbar has the apps Windows 11 pins: File Explorer, Microsoft Edge and the Microsoft Store.
 Scope {
   id: root
 
@@ -19,6 +19,17 @@ Scope {
 
   function unpin(id) {
     adapter.pinned = adapter.pinned.filter(pinned => pinned !== id)
+  }
+
+  // Puts this pin where another pin is: before it when moving back, after it when moving on.
+  function move(id, target) {
+    const pins = adapter.pinned
+    const order = pins.filter(pinned => pinned !== id)
+    const at = pins.indexOf(target)
+    if (!id || id === target || at < 0 || pins.indexOf(id) < 0)
+      return
+    order.splice(at, 0, id)
+    adapter.pinned = order
   }
 
   FileView {

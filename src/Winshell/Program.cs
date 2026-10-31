@@ -436,7 +436,7 @@ namespace Winshell
                 case "ipc":
                     WriteHelp("""
                         winshell ipc [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
-                          show                                  list IPC targets
+                          show [-j]                             list IPC targets. -j prints JSON
                           call <target> <function> [args...]    call a function and print the result
                           call notice dismiss                   close Winshell's own notice
                           prop get <target> <property>          print a property
@@ -471,7 +471,7 @@ namespace Winshell
                        winshell kill [--force] [instance options]
                                                            stop an instance and wait until it exits
                        winshell log [-f] [-t N] [file]     print an instance's log
-                       winshell ipc show                   list IPC targets
+                       winshell ipc show [-j]              list IPC targets
                        winshell ipc call <target> <function> [args...]
                        winshell ipc prop get <target> <property>
                        winshell ipc wait <target> <signal>
@@ -491,7 +491,7 @@ namespace Winshell
                   -d, --daemonize        run in the background
                   -n, --no-duplicate     exit quietly if this config is already running
                   -v, --verbose          log debug messages
-                  -j, --json             print list or doctor as JSON
+                  -j, --json             print list, ipc show or doctor as JSON
                       --no-color         print doctor without color
                   -h, --help, /?         print help and exit
                   -V, --version          print the version
@@ -598,7 +598,9 @@ namespace Winshell
             var root = ResolveConfig(o, out var error);
             if (root is null)
             {
-                Console.Error.WriteLine(error);
+                // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
+                if (error is not null)
+                    StartupError.Report(error, StartupError.FolderFor(o.Path, ConfigPaths.Root()));
                 return 1;
             }
             // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
@@ -970,7 +972,7 @@ namespace Winshell
             }
             catch (System.ComponentModel.Win32Exception e)
             {
-                Console.Error.WriteLine($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.");
+                StartupError.Report($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.", null);
                 return 1;
             }
             using (shell)
@@ -1092,7 +1094,7 @@ namespace Winshell
             var instances = Instances.List(false);
             if (o.Json)
             {
-                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(instances.Select(i => i.Info).ToList(), InstanceJson.Default.ListInstanceInfo));
+                Console.WriteLine(CliJson.Instances(instances.Select(i => i.Info)));
                 return 0;
             }
             if (instances.Count == 0)
@@ -1261,7 +1263,7 @@ namespace Winshell
             }
             IpcRequest request = args[0] switch
             {
-                "show" => new IpcRequest("show"),
+                "show" => new IpcRequest("show", Json: o.Json),
                 "call" when args.Count >= 3 => new IpcRequest("call", args[1], args[2], args.Skip(3).ToList()),
                 "prop" when args.Count >= 4 && args[1] == "get" => new IpcRequest("prop", args[2], args[3]),
                 "wait" when args.Count >= 3 => new IpcRequest("wait", args[1], args[2]),

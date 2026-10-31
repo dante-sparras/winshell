@@ -16,7 +16,7 @@ Releases will be signed through SignPath Foundation once its project for Winshel
 
 ### Install with PowerShell
 
-No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running.
+No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. From `irm | iex`, run `winshell` in that same window. A window that only launched the script needs a new terminal.
 
 It needs `install.ps1` and the zip on that release.
 
@@ -42,7 +42,7 @@ Remove that install with:
 irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
 ```
 
-That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`.
+That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
 
 ### winget, coming
 
@@ -80,7 +80,7 @@ With no configuration of your own, Winshell runs its default shell: a Windows 11
 
 Winshell doesn't hide or replace Explorer's taskbar. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. If you want only Winshell's, turn on **Automatically hide the taskbar** for Explorer's in Windows Settings > Personalization > Taskbar.
 
-- **Run it without a terminal:** `winshell -d` starts it in the background and returns.
+- **Run it without a terminal:** `winshell -d` starts it in the background and returns. From a terminal, a failure before it starts is printed there. The Start tile and the sign-in entry have no console, so that same failure is a dialog.
 - **Stop it:** press Ctrl+C in its terminal, or run `winshell kill`.
 - **Start it when you sign in:** right-click an empty part of the taskbar, choose **Taskbar settings**, and turn on **Run Winshell when I sign in** on the Startup page.
 - **See what is running:** `winshell list`. `winshell log` prints the log of the running instance.

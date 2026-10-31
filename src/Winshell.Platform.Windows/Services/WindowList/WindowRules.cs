@@ -30,13 +30,21 @@ internal static class WindowRules
         && (window.AppWindow || (!window.Owned && !window.ToolWindow && !window.NoActivate))
         && window.HasTitle && !window.Cloaked;
 
-    /// <summary>The AppUserModelID, or else the program's file name in lower case without the extension.</summary>
-    public static string AppId(string appUserModelId, string executable)
+    /// <summary>
+    /// The window's AppUserModelID, or else its process package's application user model id, or else the program's
+    /// file name in lower case without the extension.
+    /// </summary>
+    public static string AppId(string windowProperty, string packageAppId, string executable)
     {
-        if (appUserModelId.Length > 0)
-            return appUserModelId;
+        if (windowProperty.Length > 0)
+            return windowProperty;
+        if (packageAppId.Length > 0)
+            return packageAppId;
         return executable.Length == 0 ? "" : Path.GetFileNameWithoutExtension(executable).ToLowerInvariant();
     }
+
+    /// <summary>The AppUserModelID, or else the program's file name in lower case without the extension.</summary>
+    public static string AppId(string appUserModelId, string executable) => AppId(appUserModelId, "", executable);
 
     /// <summary>
     /// A path the icon provider draws. A packaged app's id contains <c>!</c>, and its icon is the one Start shows

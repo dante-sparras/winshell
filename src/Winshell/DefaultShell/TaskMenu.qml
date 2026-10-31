@@ -117,7 +117,7 @@ PopupWindow {
         id: rows
         model: root.items.map(i => i.id)
 
-        MouseArea {
+        SubtleButton {
           id: item
           required property string modelData
           readonly property var entry: root.itemFor(modelData) ?? { id: modelData, label: "" }
@@ -128,17 +128,9 @@ PopupWindow {
           activeFocusOnTab: true
           // The pointer and the keyboard share one current item: the one with focus.
           onContainsMouseChanged: if (containsMouse) forceActiveFocus()
-          onClicked: root.trigger(modelData)
-          Keys.onPressed: event => {
-            event.accepted = false
-            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-              root.trigger(modelData)
-              event.accepted = true
-            }
-          }
+          onActivated: root.trigger(modelData)
           Accessible.role: Accessible.MenuItem
           Accessible.name: entry.label
-          Accessible.onPressAction: root.trigger(modelData)
 
           Rectangle {
             anchors.fill: parent

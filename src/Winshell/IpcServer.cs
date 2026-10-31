@@ -12,7 +12,8 @@ internal sealed record IpcRequest(
     [property: JsonPropertyName("op")] string Op,
     [property: JsonPropertyName("target")] string? Target = null,
     [property: JsonPropertyName("name")] string? Name = null,
-    [property: JsonPropertyName("args")] List<string>? Args = null);
+    [property: JsonPropertyName("args")] List<string>? Args = null,
+    [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false);
 
 internal sealed record IpcResponse(
     [property: JsonPropertyName("ok")] bool Ok,
@@ -231,6 +232,7 @@ internal sealed class IpcServer : IDisposable
         {
             return request.Op switch
             {
+                "show" when request.Json => new IpcResponse(true, CliJson.IpcShow(ipc.Describe())),
                 "show" => new IpcResponse(true, ipc.Show()),
                 "call" => new IpcResponse(true, ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
                 "prop" => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),

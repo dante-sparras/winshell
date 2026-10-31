@@ -4,7 +4,7 @@ import QtQuick.Controls
 
 // One app's icon in the notification area. Clicks reach the app the way Explorer sends them; a right click asks
 // the app for its menu at the icon.
-MouseArea {
+SubtleButton {
   id: root
 
   required property var item
@@ -17,6 +17,9 @@ MouseArea {
   hoverEnabled: true
   acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
   activeFocusOnTab: true
+  // Left, middle and right clicks do different things, so a click is not the invoke action.
+  activateOnClick: false
+  onActivated: item.click()
 
   function showMenu() {
     const point = mapToItem(null, width / 2, 0)
@@ -25,18 +28,13 @@ MouseArea {
 
   Keys.onPressed: event => {
     event.accepted = false
-    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space)
-      item.click()
-    else if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)))
+    if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
       showMenu()
-    else
-      return
-    event.accepted = true
+      event.accepted = true
+    }
   }
 
-  Accessible.role: Accessible.Button
   Accessible.name: item ? (item.tooltip || item.appName).split("\n")[0] : ""
-  Accessible.onPressAction: item.click()
 
   ToolTip.text: item ? item.tooltip || item.appName : ""
   ToolTip.visible: containsMouse && ToolTip.text !== ""
