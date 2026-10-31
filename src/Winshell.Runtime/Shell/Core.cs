@@ -463,18 +463,13 @@ public static class ProcessLauncher
 {
     public static ProcessStartInfo CreateStartInfo(ProcessSpec spec, bool redirect)
     {
-        var (file, args) = Resolve(spec.Command);
-        var psi = new ProcessStartInfo(file)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = redirect,
-            RedirectStandardError = redirect,
-            RedirectStandardInput = redirect,
-            WorkingDirectory = spec.WorkingDirectory ?? Environment.CurrentDirectory,
-        };
-        foreach (var a in args)
-            psi.ArgumentList.Add(a);
+        var psi = Resolve(spec.Command);
+        psi.UseShellExecute = false;
+        psi.CreateNoWindow = true;
+        psi.RedirectStandardOutput = redirect;
+        psi.RedirectStandardError = redirect;
+        psi.RedirectStandardInput = redirect;
+        psi.WorkingDirectory = spec.WorkingDirectory ?? Environment.CurrentDirectory;
         if (spec.ClearEnvironment)
             psi.Environment.Clear();
         foreach (var (k, v) in spec.Environment)
@@ -519,7 +514,7 @@ public static class ProcessLauncher
             else
                 Process.Start(psi)?.Dispose();
         }
-        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException or ArgumentException)
         {
             log.Warn("process", $"Failed to start {spec.Command[0]}: {e.Message}");
         }
@@ -528,33 +523,68 @@ public static class ProcessLauncher
     /// <summary>How a detached command will start. Tests read this and do not launch the program.</summary>
     internal static DetachedLaunch PlanDetached(ProcessSpec spec)
     {
-        var (file, args) = Resolve(spec.Command);
+        var resolved = Resolve(spec.Command);
         var directory = spec.WorkingDirectory ?? Profile();
         // An explicit environment cannot ride along with ShellExecuteEx, so that case stays CreateProcess.
         var customEnvironment = spec.ClearEnvironment || spec.Environment.Count > 0;
         if (!customEnvironment)
-            return new DetachedLaunch(true, false, file, Quote(args), directory);
-        return new DetachedLaunch(false, IsConsoleImage(file), file, "", directory);
+            return new DetachedLaunch(true, false, resolved.FileName, Arguments(resolved), directory);
+        return new DetachedLaunch(false, IsConsoleImage(resolved.FileName), resolved.FileName, "", directory);
     }
 
+    /// <summary>The whole command line <c>CreateProcess</c> gets.</summary>
+    internal static string CommandLine(ProcessStartInfo psi)
+    {
+        var arguments = Arguments(psi);
+        return arguments.Length == 0 ? Quote(psi.FileName) : $"{Quote(psi.FileName)} {arguments}";
+    }
+
+    /// <summary>A batch file's line is already built for cmd, and quoting it again would break it.</summary>
+    private static string Arguments(ProcessStartInfo psi) =>
+        psi.ArgumentList.Count == 0 ? psi.Arguments : Quote(psi.ArgumentList);
+
     /// <summary>The program to start and its arguments. Batch files run through cmd and PowerShell scripts through pwsh.</summary>
-    public static (string File, List<string> Args) Resolve(IReadOnlyList<string> command)
+    public static ProcessStartInfo Resolve(IReadOnlyList<string> command)
     {
         var program = command[0];
         var args = command.Skip(1).ToList();
         var path = Which(program) ?? program;
-        var ext = Path.GetExtension(path).ToLowerInvariant();
+        // Win32 removes trailing dots and spaces when opening a file, including a batch file handed to cmd.
+        var ext = Path.GetExtension(path.TrimEnd('.', ' ')).ToLowerInvariant();
         switch (ext)
         {
             case ".cmd" or ".bat":
-                return (System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", ["/d", "/c", path, .. args]);
+                return new ProcessStartInfo(System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", BatchCommandLine(path, args));
             case ".ps1":
-                return (Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. args]);
+                return new ProcessStartInfo(Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. args]);
             case ".sh":
-                return (Which("bash") ?? Which("sh") ?? "bash", [path, .. args]);
+                return new ProcessStartInfo(Which("bash") ?? Which("sh") ?? "bash", [path, .. args]);
         }
-        return (path, args);
+        return new ProcessStartInfo(path, args);
     }
+
+    /// <summary>
+    /// cmd's arguments for a batch file. cmd parses its command line again, so the script path and any argument
+    /// with a character outside a known-safe set go in quotes, where <c>&amp;|&lt;&gt;()</c> are plain text.
+    /// <c>"</c>, <c>%</c>, <c>!</c>, <c>^</c> and line breaks can end the quotes or still mean something inside them,
+    /// so those are refused.
+    /// </summary>
+    private static string BatchCommandLine(string path, List<string> args)
+    {
+        var line = new System.Text.StringBuilder("/d /s /c \"");
+        line.Append('"').Append(BatchSafe(path)).Append('"');
+        foreach (var arg in args)
+        {
+            var quote = arg.Length == 0 || arg.Any(c => char.IsControl(c) || char.IsAscii(c) && !char.IsAsciiLetterOrDigit(c) && !@"#$*+-./:?@\_".Contains(c));
+            line.Append(' ').Append(quote ? $"\"{BatchSafe(arg)}\"" : BatchSafe(arg));
+        }
+        return line.Append('"').ToString();
+    }
+
+    private static string BatchSafe(string text) =>
+        text.AsSpan().IndexOfAny("\"%!^\r\n\0") >= 0
+            ? throw new ArgumentException($"cmd cannot pass \"{text}\" to a batch file safely, as it contains \", %, !, ^ or a line break.")
+            : text;
 
     /// <summary>Finds a program on PATH, trying each PATHEXT extension.</summary>
     public static string? Which(string program)
@@ -585,13 +615,7 @@ public static class ProcessLauncher
 
     private static void StartInNewConsole(ProcessStartInfo psi)
     {
-        var command = new StringBuilder(32768);
-        command.Append(Quote(psi.FileName));
-        foreach (string arg in psi.ArgumentList)
-        {
-            command.Append(' ');
-            command.Append(Quote(arg));
-        }
+        var command = new StringBuilder(CommandLine(psi), 32768);
         var environment = EnvironmentBlock(psi);
         try
         {
