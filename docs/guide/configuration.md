@@ -254,7 +254,7 @@ Lines at the very top of `shell.qml`, before any `import`, set up the shell:
 
 | Line | What it does |
 | --- | --- |
-| `//@ pragma ShellId <id>` | The shell id, which names its data, state and cache folders. Without it, the id comes from the path of `shell.qml`, so moving the folder starts with empty folders. |
+| `//@ pragma ShellId <id>` | The shell id, which names its data, state and cache folders. Without it, a config in the config folder is named after its folder: `root` for the folder itself, or the `-c` name, so moving the config folder keeps them. A shell anywhere else is named after the path of its `shell.qml`, so moving it starts with empty folders. |
 | `//@ pragma AppId <id>` | `Shell.appId`, instead of `winshell` or `WINSHELL_APP_ID`. |
 | `//@ pragma DataDir <path>`, `StateDir`, `CacheDir` | Other folders for `Shell.dataDir`, `stateDir` and `cacheDir`. A relative path is next to the shell file, and `%NAME%` expands. `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
 | `//@ pragma Env NAME=value` | Sets an environment variable for this process, such as for the programs it starts. One per line. |
