@@ -25,8 +25,9 @@
     <DisplayName>Winshell</DisplayName>
     <PublisherDisplayName>$(PublisherDisplayName)</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
-    <!-- Writes go where every other Winshell writes them: the config in %APPDATA%\winshell, and the sign-in entry
-         under the user's Run key. Packaged, they would otherwise land in a copy only this package sees. -->
+    <!-- Writes go where every other Winshell writes them: the config in %APPDATA%\winshell, and registry values
+         other than sign-in. Packaged, they would otherwise land in a copy only this package sees. Sign-in is the
+         startup task on the application, declared off, not the Run key. -->
     <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
     <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
   </Properties>
@@ -55,6 +56,10 @@
             <desktop:ExecutionAlias Alias="winshell.exe" />
           </uap3:AppExecutionAlias>
         </uap3:Extension>
+        <!-- Sign-in. Off until the shell asks Windows to enable it. Windows starts this package, not a Run-key path. -->
+        <desktop:Extension Category="windows.startupTask" Executable="winshellw.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--no-duplicate">
+          <desktop:StartupTask TaskId="Winshell" Enabled="false" DisplayName="Winshell" />
+        </desktop:Extension>
       </Extensions>
     </Application>
   </Applications>

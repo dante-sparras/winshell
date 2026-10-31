@@ -12,6 +12,8 @@
     PATH and tell you to run winshell. pwsh -File leaves the caller unchanged and tells you to open
     a new terminal.
     A later install removes a leftover bin.old-* folder once nothing from that install is running.
+    It also deletes %LOCALAPPDATA%\winshell\updates, so a staged update cannot replace this install
+    on the next start. A link, or a folder that cannot be deleted, is left in place and named.
     If a Microsoft Store copy is also installed, it says so and still finishes. The Store's
     WindowsApps alias usually comes first on PATH, so winshell may start that copy.
 
@@ -546,6 +548,25 @@ function Move-WinshellDirectory([string] $From, [string] $To) {
     }
 }
 
+function Remove-WinshellStagedUpdate {
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is not set.' }
+    $updates = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'winshell\updates'))
+    if (-not (Test-Path -LiteralPath $updates)) { return $false }
+    # A leftover staged update replaces the next start, including an older install. A recursive delete could follow a link.
+    if (Test-WinshellReparsePoint $updates) {
+        Write-WinshellLine "The staged update is still at $updates because it is a link."
+        return $false
+    }
+    Write-WinshellLine "Removing $updates."
+    try {
+        Remove-Item -LiteralPath $updates -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-WinshellLine "The staged update is still at $updates because it could not be deleted."
+        return $false
+    }
+    return $true
+}
+
 function Remove-WinshellOldBin([string] $Parent) {
     foreach ($item in @(Get-ChildItem -LiteralPath $Parent -Force -Directory -Filter 'bin.old-*')) {
         # The installer never leaves a link here, and a recursive delete could follow one out of the install.
@@ -662,6 +683,7 @@ function Install-Winshell {
         }
         Write-WinshellLine "Installing to $bin."
         Install-WinshellBin $stage $bin $ProcessesUnder
+        Remove-WinshellStagedUpdate | Out-Null
     } finally {
         if (Test-Path -LiteralPath $temp) {
             Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue

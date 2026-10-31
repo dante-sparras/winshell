@@ -231,22 +231,27 @@ public sealed class BluetoothService : QObject
             stop = _stop;
             cancellation = stop.Token;
         }
-        _monitorTask = Task.Run(async () =>
-        {
-            try
+        // A long-running thread, not the pool. A busy pool never started the read, so the monitor had not begun.
+        _monitorTask = Task.Factory.StartNew(
+            async () =>
             {
-                await MonitorAsync(cancellation).ConfigureAwait(false);
-            }
-            finally
-            {
-                lock (_monitorGate)
+                try
                 {
-                    _monitorHolders--;
-                    if (!ReferenceEquals(_stop, stop))
-                        stop.Dispose();
+                    await MonitorAsync(cancellation).ConfigureAwait(false);
                 }
-            }
-        });
+                finally
+                {
+                    lock (_monitorGate)
+                    {
+                        _monitorHolders--;
+                        if (!ReferenceEquals(_stop, stop))
+                            stop.Dispose();
+                    }
+                }
+            },
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
+            TaskScheduler.Default).Unwrap();
     }
 
     /// <summary>Stops the three-second read. A later <see cref="StartMonitoring"/> starts it again.</summary>

@@ -40,7 +40,9 @@ internal sealed class WindowAutomation : IDisposable
     private bool _syncScheduled;
     private bool _everSynced;
     private TimeSpan _syncedAt;
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>How long frames are coalesced. A test stretches it so a slow machine is not counted as a change.</summary>
+    internal TimeSpan SyncInterval { get; set; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// How many times the tree was refreshed. Tests use it to see that a nested call did not refresh again, and that
@@ -140,9 +142,10 @@ internal sealed class WindowAutomation : IDisposable
         _pending[key] = work;
         try
         {
-            // The key is not a pointer. Only this send, matched in RunPosted, may run the call. A window that stopped
-            // answering must not stop the screen reader with it.
-            if (Win32.SendMessageTimeoutW(handle, RunMessage, 0, key, Win32.SMTO_BLOCK | Win32.SMTO_ABORTIFHUNG, CallTimeout, out _) == 0)
+            // The key is not a pointer. Only this send, matched in RunPosted, may run the call. Abort-if-hung fails
+            // the call at once while the window thread is briefly not pumping, and the next call dies too.
+            // CallTimeout is how long a window that stopped answering may hold the screen reader.
+            if (Win32.SendMessageTimeoutW(handle, RunMessage, 0, key, Win32.SMTO_BLOCK, CallTimeout, out _) == 0)
                 return Uia.Timeout;
         }
         finally
@@ -262,8 +265,9 @@ internal sealed class WindowAutomation : IDisposable
             return;
         }
         // A full walk every animation frame costs a shell that is only moving. Accessible edits and notifications
-        // still go out on this frame; anything else waits until the interval, including after the frames stop.
-        if (ShownChanged() || _scene.Signals.TakeDirty() || SyncDue)
+        // still go out on this frame. A frame that follows a fresh sync only marks the tree stale; the one after
+        // that, once the interval has passed, catches geometry up. The scheduled sync does the same after frames stop.
+        if (ShownChanged() || _scene.Signals.TakeDirty() || !_everSynced || (_stale && SyncDue))
             Sync();
         else
         {

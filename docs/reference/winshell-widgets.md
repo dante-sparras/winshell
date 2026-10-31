@@ -126,7 +126,7 @@ Gives the item it is declared in the margin behavior of a wrapper, created with 
 | `implicitWidth` | real | Overrides the item's implicit width. Until it is set, that width is the child's plus the margins. |
 | `implicitHeight` | real | Overrides the item's implicit height. Until it is set, that height is the child's plus the margins. |
 
-The manager's properties do not emit change signals, so a binding that reads them does not update.
+Setting one of these properties emits its change signal. A side that still follows `margin` also changes when `margin` changes.
 
 ## WrapperManager
 

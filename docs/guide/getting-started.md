@@ -42,7 +42,7 @@ Remove that install with:
 irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
 ```
 
-That removes the install folder, the PATH entry, the shortcut, and the sign-in entry. It leaves your configuration in `%APPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
+That removes the install folder, the PATH entry, the shortcut, the sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves your configuration in `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
 
 ### winget, coming
 
@@ -78,7 +78,7 @@ winshell
 
 With no configuration of your own, Winshell runs its default shell: a Windows 11 [taskbar](../taskbar.md) on every screen, with Start, quick settings, the notification center and calendar, the on-screen display, and [Winshell Settings](../settings.md). It writes the log to the terminal and to a file.
 
-Winshell doesn't hide or replace Explorer's taskbar. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. If you want only Winshell's, turn on **Automatically hide the taskbar** for Explorer's in Windows Settings > Personalization > Taskbar.
+By default Winshell leaves Explorer's taskbar in place. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. To hide Explorer's taskbar and release its edge while Winshell is running, set `hideExplorerTaskbar = true` in [preferences.toml](../settings.md#where-the-choices-live). That key stays off until the file sets it, and there is no switch for it in Winshell Settings. Winshell puts the window and the edge back when it exits. If you would rather leave Explorer's taskbar visible, turn on **Automatically hide the taskbar** for it in Windows Settings > Personalization > Taskbar. See [Explorer's taskbar is missing](troubleshooting.md#explorers-taskbar-is-missing) if a killed Winshell leaves it hidden.
 
 - **Run it without a terminal:** `winshell -d` starts it in the background and returns. From a terminal, a failure before it starts is printed there. The Start tile and the sign-in entry have no console, so that same failure is a dialog.
 - **Stop it:** press Ctrl+C in its terminal, or run `winshell kill`.

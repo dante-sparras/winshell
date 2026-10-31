@@ -299,6 +299,78 @@ public class QuickSettingsTests
         Assert.True(more.MapToScene(0, 0).Y + more.Height <= shell.Find("footer").MapToScene(0, 0).Y);
     }
 
+    private static Slider SessionSlider(DefaultShellHarness shell, int index) =>
+        (Slider)DefaultShellHarness.FindAll(shell.Find("session:" + index)).Single(i => i.ObjectName == "slider");
+
+    [Fact]
+    public void The_volume_page_sets_each_audio_session_and_stays_hidden_until_it_is_opened()
+    {
+        var services = Laptop();
+        var music = new FakeAudioNode("Music", isSession: true);
+        music.Audio.Volume = 0.4;
+        var call = new FakeAudioNode("Call", isPlayback: false, isSession: true);
+        call.Audio.Volume = 0.2;
+        services.Audio.Nodes.Add(new FakeAudioNode("Microphone", isPlayback: false));
+        services.Audio.Nodes.Add(music);
+        services.Audio.Nodes.Add(call);
+        using var shell = new DefaultShellHarness(Content, services: services);
+
+        // The resting panel still opens the output page from the volume chevron, and does not show the session page.
+        Assert.False(shell.Has("volumePage"));
+        Assert.False(shell.Has("appVolume"));
+        shell.Click(OutputChevron(shell));
+        Assert.Equal("Speakers", shell.Find("output:0").ReadProperty("text"));
+        Assert.False(shell.Has("output:1"));
+        Assert.False(shell.Has("volumePage"));
+
+        shell.Click(shell.Find("appVolume"));
+        Assert.False(shell.Has("mainPage"));
+        Assert.False(shell.Has("outputPage"));
+        Assert.Equal("Music", shell.Find("session:0").ReadProperty("label"));
+        Assert.Equal("Call", shell.Find("session:1").ReadProperty("label"));
+        Assert.False(shell.Has("session:2"));
+        Assert.Equal(0.4, SessionSlider(shell, 0).Value, 3);
+        Assert.Equal(0.2, SessionSlider(shell, 1).Value, 3);
+
+        shell.Click(SessionSlider(shell, 0), 0.8);
+        Assert.InRange(music.Audio.Volume, 0.7, 0.9);
+        Assert.Equal(0.2, call.Audio.Volume, 3);
+        Assert.Equal(0.3, services.Audio.DefaultPlaybackDevice!.Audio.Volume, 3);
+
+        var mute = DefaultShellHarness.FindAll(shell.Find("session:0")).Single(i => i.ObjectName == "glyph");
+        shell.Click(mute);
+        Assert.True(music.Audio.Muted);
+        Assert.False(call.Audio.Muted);
+        Assert.InRange(music.Audio.Volume, 0.7, 0.9);
+
+        music.Audio.Volume = 0.5;
+        shell.Settle();
+        Assert.Equal(0.5, SessionSlider(shell, 0).Value, 3);
+
+        shell.Click(shell.Find("back"));
+        Assert.True(shell.Has("mainPage"));
+        Assert.False(shell.Has("volumePage"));
+
+        shell.Click(OutputChevron(shell));
+        shell.Click(shell.Find("appVolume"));
+        shell.Click(shell.Find("moreAppVolume"));
+        Assert.Equal(["ms-settings:apps-volume"], shell.Urls.Opened);
+        Assert.Equal(1, shell.Root.ReadProperty("closed"));
+    }
+
+    [Fact]
+    public void The_volume_page_scrolls_inside_quick_settings_when_there_are_many_sessions()
+    {
+        var services = Laptop();
+        for (var i = 0; i < 20; i++)
+            services.Audio.Nodes.Add(new FakeAudioNode($"App {i}", isSession: true));
+        using var shell = new DefaultShellHarness(Content, services: services);
+        shell.Click(OutputChevron(shell));
+        shell.Click(shell.Find("appVolume"));
+        var more = shell.Find("moreAppVolume");
+        Assert.True(more.MapToScene(0, 0).Y + more.Height <= shell.Find("footer").MapToScene(0, 0).Y);
+    }
+
     [Fact]
     public void The_media_card_shows_the_playing_session_and_its_controls()
     {
