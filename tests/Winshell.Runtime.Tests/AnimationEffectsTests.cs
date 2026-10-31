@@ -2,6 +2,7 @@ using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
 
+[Collection(ThemeCollection.Name)]
 public class AnimationEffectsTests
 {
     [Fact]
