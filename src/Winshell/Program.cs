@@ -229,6 +229,14 @@ namespace Winshell
         /// <paramref name="args"/>. A <c>--</c> ends options. So does the function name of <c>ipc call</c> and
         /// <c>msg</c>: hotkeys pass <c>-v</c> and <c>-p</c> as arguments, and those must not become winshell options.
         /// </summary>
+        /// <summary>A config name is one folder in the config folder, so it can't leave it. A path goes in -p.</summary>
+        private static string ConfigName(string option, string name)
+        {
+            if (name.Length == 0 || name is "." or ".." || name.IndexOfAny(['/', '\\', ':']) >= 0)
+                throw new ArgumentException($"{option} needs the name of a config folder, not \"{name}\". Use -p for a path.");
+            return name;
+        }
+
         internal static Options Parse(string[] args, string? command = null)
         {
             var o = new Options();
@@ -252,7 +260,7 @@ namespace Winshell
                         o.Path = Next();
                         break;
                     case "-c" or "--config":
-                        o.Config = Next();
+                        o.Config = ConfigName(args[i], Next());
                         break;
                     case "-i" or "--id":
                         o.Id = Next();

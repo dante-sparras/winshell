@@ -25,7 +25,7 @@ winshell doctor [config options] [-j] [--no-color]
 | Option | What it does |
 | --- | --- |
 | `-p`, `--path <path>` | Runs this `shell.qml`, or the `shell.qml` in this folder. |
-| `-c`, `--config <name>` | Runs `<name>\shell.qml` in the config folder, `%APPDATA%\winshell` or `WINSHELL_CONFIG_DIR`. |
+| `-c`, `--config <name>` | Runs `<name>\shell.qml` in the config folder, `%APPDATA%\winshell` or `WINSHELL_CONFIG_DIR`. The name is one folder: use `-p` for a path. |
 | `-d`, `--daemonize` | Starts the shell in the background, with no console window, and returns at once. |
 | `-n`, `--no-duplicate` | Exits 0 without starting, and without a message, when this configuration is already running. Two starts that overlap do the same: only one of them keeps running. |
 | `-v`, `--verbose` | Also logs debug messages. |
