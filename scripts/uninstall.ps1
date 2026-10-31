@@ -295,7 +295,8 @@ function Uninstall-Winshell {
         $removed = $true
     }
     $command = Get-WinshellAutostartCommand
-    if (Test-WinshellCommandTarget $command $exe) {
+    # Settings used to record winshellw.exe when Start launched the windowed copy. Either name in this folder is this install.
+    if ((Test-WinshellCommandTarget $command $exe) -or (Test-WinshellCommandTarget $command $gui)) {
         Write-WinshellLine 'Removing the sign-in entry.'
         Set-WinshellAutostartCommand ''
         $removed = $true

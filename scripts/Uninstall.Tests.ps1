@@ -82,6 +82,17 @@ Describe 'uninstall' {
         Test-Path -LiteralPath (Join-Path $config 'preferences.json') | Should -BeTrue
     }
 
+    It 'removes a sign-in entry that starts winshellw.exe in this install' {
+        $ctx = Enter-WinshellInstallTest
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshell.exe'), 'exe', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshellw.exe'), 'gui', $script:Utf8)
+        [IO.File]::WriteAllText($ctx.AutostartFile, "C:\Windows\System32\conhost.exe --headless `"$($ctx.Bin)\winshellw.exe`" --no-duplicate", $script:Utf8)
+        Uninstall-Winshell
+        Test-Path -LiteralPath $ctx.Root | Should -BeFalse
+        Test-Path -LiteralPath $ctx.AutostartFile | Should -BeFalse
+    }
+
     It 'leaves a sign-in entry and a shortcut that point somewhere else' {
         $ctx = Enter-WinshellInstallTest
         New-Item -ItemType Directory -Path $ctx.Bin | Out-Null

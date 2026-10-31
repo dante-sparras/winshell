@@ -175,6 +175,27 @@ public sealed class StartupTests : IDisposable
             WindowsStartupRegistry.CommandFor(@"C:\winshell.exe", ["-n", "-p", relative]));
     }
 
+    [Fact]
+    public void The_windowed_copy_is_the_same_sign_in_entry_as_the_console_exe_beside_it()
+    {
+        var conhost = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "conhost.exe");
+        const string folder = @"C:\Program Files\Winshell";
+        var console = WindowsStartupRegistry.CommandFor(folder + @"\winshell.exe", ["--no-duplicate"]);
+        Assert.Equal(console, WindowsStartupRegistry.CommandFor(folder + @"\winshellw.exe", ["--no-duplicate"]));
+        Assert.Equal($@"{conhost} --headless ""{folder}\winshell.exe"" --no-duplicate", console);
+
+        var run = _testKey + @"\Run";
+        var registry = new WindowsStartupRegistry(console, run, _testKey + @"\StartupApproved");
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+            key.SetValue(WindowsStartupRegistry.ValueName, $@"{conhost} --headless ""{folder}\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
+        Assert.True(registry.IsRegistered());
+        Assert.False(registry.PointsElsewhere());
+
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+            key.SetValue(WindowsStartupRegistry.ValueName, $@"{conhost} --headless ""C:\Old\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
+        Assert.True(registry.PointsElsewhere());
+    }
+
     [Theory]
     [InlineData("plain", "plain")]
     [InlineData("", "\"\"")]
