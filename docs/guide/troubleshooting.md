@@ -43,7 +43,7 @@ Check names against the [reference](../reference/index.md). A Quickshell name, s
 
 ## There are two taskbars
 
-By default Winshell does not hide or replace Explorer's taskbar, and it never restarts Explorer. Both reserve the bottom of the screen, so they stack. To leave Explorer's taskbar where it is and only get it out of the way, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar.
+By default Winshell does not hide or replace Explorer's taskbar, and it never restarts Explorer. Both reserve the bottom of the screen, so they stack. To leave Explorer's taskbar where it is and only get it out of the way, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar. `Alt+Tab`, `Win+Tab`, `Win+D` and `Win+X` stay with Windows unless `desktopChords` is true in `preferences.toml`, and while Explorer holds one it can still report `taken`.
 
 To make Winshell the only bar, set this in `preferences.toml` and save:
 

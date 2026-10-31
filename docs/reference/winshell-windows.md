@@ -1,6 +1,6 @@
 # Winshell.Windows
 
-`import Winshell.Windows`. The other programs' windows, as the taskbar and Alt+Tab list them, live previews of them, and the virtual desktops Task View shows. A shell uses it for a taskbar, a window switcher, or a desktop switcher. The default shell's [taskbar](../taskbar.md) is built on it.
+`import Winshell.Windows`. The other programs' windows, as the taskbar and Alt+Tab list them, live previews of them, and the virtual desktops Task View shows. A shell uses it for a taskbar, a window switcher, or a desktop switcher. The default shell's [taskbar](../taskbar.md) is built on it. With `desktopChords` on, its Alt+Tab popup uses `WindowList`, `WindowThumbnail` and `VirtualDesktops`.
 
 [Migrating from Quickshell](../migrating-from-quickshell.md#windows) maps the `ToplevelManager` names onto these, and [Virtual desktops](../migrating-from-quickshell.md#virtual-desktops) says which Windows builds `VirtualDesktops` works on.
 

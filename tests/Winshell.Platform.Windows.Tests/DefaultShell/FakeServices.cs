@@ -249,6 +249,7 @@ public sealed class FakeServices
     public FakeAudio Audio { get; } = new();
     public FakeMedia Media { get; } = new();
     public FakeWindowList WindowList { get; } = new();
+    public FakeVirtualDesktops Desktops { get; } = new();
     public FakeApps Apps { get; } = new();
     public FakeJumpLists JumpLists { get; } = new();
 
@@ -276,6 +277,8 @@ public sealed class FakeServices
         (typeof(FakeMediaSession), typeof(MediaSession)),
         (typeof(FakeWindowList), typeof(WindowListService)),
         (typeof(FakeAppWindow), typeof(AppWindow)),
+        (typeof(FakeVirtualDesktops), typeof(VirtualDesktopsService)),
+        (typeof(FakeVirtualDesktop), typeof(VirtualDesktop)),
         (typeof(FakeApps), typeof(AppsService)),
         (typeof(FakeAppEntry), typeof(AppEntry)),
         (typeof(FakeJumpLists), typeof(JumpListService)),
@@ -294,7 +297,9 @@ public sealed class FakeServices
             .Singleton(_ => Brightness, "Brightness");
         registry.Module("Winshell.Audio").Singleton(_ => Audio, "Audio");
         registry.Module("Winshell.Media").Singleton(_ => Media, "Media");
-        registry.Module("Winshell.Windows").Singleton(_ => WindowList, "WindowList");
+        registry.Module("Winshell.Windows")
+            .Singleton(_ => WindowList, "WindowList")
+            .Singleton(_ => Desktops, "VirtualDesktops");
         registry.Module("Winshell.Apps")
             .Singleton(_ => Apps, "Apps")
             .Singleton(_ => JumpLists, "JumpLists")
