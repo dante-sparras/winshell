@@ -24,7 +24,6 @@ A Rectangle whose children are clipped to its rounded corners, created with `Cli
 | --- | --- | --- |
 | `contentItem` | Item, read-only | The item children go in: the rectangle itself. |
 | `contentInsideBorder` | bool | Clips the children inside the border, when the border is visible. Default `false`, which clips them to the outer edge, so they can cover the border. |
-| `contentUnderBorder` | bool | Default `false`. Has no effect on this checkout: children are always drawn over the border. |
 
 ## WrapperItem
 
@@ -57,7 +56,7 @@ A Rectangle sized to one child plus margins, created with `WrapperRectangle { }`
 | `rightMargin` | real | The space right of the child. Follows `margin` until set. |
 | `extraMargin` | real | Added to each of the four margins. Default `0`. |
 | `resizeChild` | bool | Default `true`: the child fills the rectangle inside the margins. False keeps the child at its implicit size and places it by the ratio of the margins. |
-| `contentInsideBorder` | bool | Meant to keep the child inside the border by adding the border width to the margins. Default `true`. On this checkout the margins do not include the border width, so add it to `margin` yourself. |
+| `contentInsideBorder` | bool | When `true` (the default) and the border is visible, each margin grows by the border's width, so the child stays inside the border. `false` keeps the margins as they are. |
 
 ```qml
 import QtQuick
@@ -115,7 +114,7 @@ Gives the item it is declared in the margin behavior of a wrapper, created with 
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `wrapper_` | Item, read-only | The item the manager is declared in. The name ends with an underscore on this checkout. |
+| `wrapper` | Item, read-only | The item the manager is declared in. |
 | `child` | Item | The wrapped item. Default: the first item child of the wrapper when the manager is complete. |
 | `margin` | real | The space on every side. Default `0`. |
 | `topMargin` | real | The space above the child. Follows `margin` until set. |
@@ -124,8 +123,8 @@ Gives the item it is declared in the margin behavior of a wrapper, created with 
 | `rightMargin` | real | The space right of the child. Follows `margin` until set. |
 | `extraMargin` | real | Added to each of the four margins. Default `0`. |
 | `resizeChild` | bool | Default `true`: the child fills the wrapper inside the margins. False keeps the child at its implicit size and places it by the ratio of the margins. |
-| `implicitWidth` | real | Stored, but has no effect on this checkout; set `implicitWidth` on the wrapper item instead. |
-| `implicitHeight` | real | Stored, but has no effect on this checkout; set `implicitHeight` on the wrapper item instead. |
+| `implicitWidth` | real | Overrides the item's implicit width. Until it is set, that width is the child's plus the margins. |
+| `implicitHeight` | real | Overrides the item's implicit height. Until it is set, that height is the child's plus the margins. |
 
 The manager's properties do not emit change signals, so a binding that reads them does not update.
 
