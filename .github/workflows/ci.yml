@@ -29,6 +29,16 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      - name: Turn Windows animation effects on
+        # The runner has them off. Winshell follows that setting, and tests of a sliding taskbar or a fading on-screen
+        # display need the frames in between, so this makes the runner match a default Windows desktop.
+        shell: pwsh
+        run: |
+          Add-Type -Namespace Native -Name Spi -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfoW(uint action, uint param, nint value, uint flags);'
+          # SPI_SETCLIENTAREAANIMATION, on, SPIF_SENDCHANGE.
+          if (-not [Native.Spi]::SystemParametersInfoW(0x1043, 0, 1, 2)) {
+            throw "Could not turn animation effects on: error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
+          }
       - name: Check
         shell: pwsh
         env:

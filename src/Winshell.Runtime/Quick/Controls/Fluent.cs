@@ -331,6 +331,11 @@ public abstract class Transition<T>(int milliseconds, bool easeOut) where T : st
 
     public T Step(T target, PaintContext context)
     {
+        if (!Theme.Current.AnimationsEnabled)
+        {
+            Jump(target);
+            return target;
+        }
         var now = context.Time;
         if (!_started || now <= TimeSpan.Zero)
         {

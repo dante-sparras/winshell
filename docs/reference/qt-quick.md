@@ -159,6 +159,8 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Text.font` | `font.styleName`, `font.kerning`, `font.wordSpacing`, `font.hintingPreference`, `font.preferShaping`, `font.features` and `font.variableAxes` are ignored, and `Font.SmallCaps` leaves the text as it is, here and on every item and control with a `font`. |
 | `Loader.asynchronous` | Ignored. The component is still created on this thread before the property assignment returns. |
 
+When Windows "Animation effects" is off, every animation, `Behavior` and `Transition` jumps to its end, and one that loops forever stops there. Qt has no such setting.
+
 ## The Qt object
 
 The global `Qt` object has the helpers configurations use most, such as `Qt.rgba()`, `Qt.point()`, `Qt.rect()`, `Qt.size()`, `Qt.binding()` and the alignment and key enums. JavaScript runs on [Jint](https://github.com/sebastienros/jint) ([ADR-0001](../adr/0001-own-qml-parser-and-jint-runtime.md)).
