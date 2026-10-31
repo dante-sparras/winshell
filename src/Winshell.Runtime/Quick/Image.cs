@@ -87,14 +87,14 @@ public static class ImageLoader
         return copy;
     }
 
-    public static async Task<SKImage?> LoadAsync(string source, string? baseDirectory, int width, int height)
+    public static async Task<SKImage?> LoadAsync(string source, string? baseDirectory, int width, int height, bool cache = true)
     {
         if (!IsRemote(source))
-            return await Task.Run(() => Load(source, baseDirectory, width, height)).ConfigureAwait(false);
+            return await Task.Run(() => Load(source, baseDirectory, width, height, cache)).ConfigureAwait(false);
         // Cleartext is never fetched, as the updater never does. This comes first, so the cache can't answer for it.
         if (!source.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return null;
-        if (TryRemembered(source, baseDirectory, width, height, out var remembered))
+        if (cache && TryRemembered(source, baseDirectory, width, height, out var remembered))
             return remembered;
         try
         {
@@ -102,7 +102,7 @@ public static class ImageLoader
             if (bytes is null)
                 return null;
             var image = Decode(bytes, source, width, height);
-            if (image is null || !TryKey(source, baseDirectory, width, height, out var key))
+            if (!cache || image is null || !TryKey(source, baseDirectory, width, height, out var key))
                 return image;
             var copy = Copy(image);
             if (copy is null)
@@ -582,6 +582,7 @@ public class Image : Item
         {
             SetStatus((int)StatusValue.Loading);
             var source = _source;
+            var cache = _cache;
             var loop = Engine?.Loop;
             // A finished load has to report on this thread. ContinueWith otherwise queues that report on the
             // thread pool, and a busy pool leaves the image Loading after the bytes are already in hand.
@@ -605,7 +606,7 @@ public class Image : Item
                         Engine?.Log.Warn("scene", $"QML {TypeName}: Cannot open: {source}" + (source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? " (only https:// images are loaded)" : ""));
                 });
             }
-            var load = ImageLoader.LoadAsync(source, baseDir, w, h);
+            var load = ImageLoader.LoadAsync(source, baseDir, w, h, cache);
             if (load.IsCompleted)
                 Report(load);
             else
