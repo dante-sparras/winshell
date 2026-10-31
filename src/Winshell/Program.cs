@@ -48,8 +48,6 @@ namespace Winshell
 
             public bool Json { get; set; }
 
-            public bool All { get; set; }
-
             public bool Follow { get; set; }
 
             /// <summary>End the process when the instance does not exit after it is asked.</summary>
@@ -91,6 +89,20 @@ namespace Winshell
             catch (ArgumentException e)
             {
                 Console.Error.WriteLine(e.Message);
+                return 2;
+            }
+            // A spare word must not be ignored. log takes one file, and ipc takes its own arguments.
+            if (command is "log")
+            {
+                if (options.Positional.Count > 1)
+                {
+                    Console.Error.WriteLine($"Unexpected argument \"{options.Positional[1]}\".");
+                    return 2;
+                }
+            }
+            else if (command is not ("ipc" or "msg") && options.Positional.Count > 0)
+            {
+                Console.Error.WriteLine($"Unexpected argument \"{options.Positional[0]}\".");
                 return 2;
             }
             // list, kill, log, ipc and doctor can fail on the files and pipes around them. That is a sentence
@@ -185,8 +197,7 @@ namespace Winshell
         }
 
         private static bool TakesValue(string option) => option is
-            "-p" or "--path" or "-c" or "--config" or "-i" or "--id" or "--pid" or "-t" or "--tail"
-            or "--log-rules" or "-m" or "--manifest" or "--debug";
+            "-p" or "--path" or "-c" or "--config" or "-i" or "--id" or "--pid" or "-t" or "--tail";
 
         /// <summary>The Start tile and a sign-in entry pass these, and no command word.</summary>
         private static bool OnlyShellStartOptions(string[] args)
@@ -239,9 +250,6 @@ namespace Winshell
                     case "-j" or "--json":
                         o.Json = true;
                         break;
-                    case "-a" or "--all":
-                        o.All = true;
-                        break;
                     case "-f" or "--follow":
                         o.Follow = true;
                         break;
@@ -254,12 +262,11 @@ namespace Winshell
                     case "--no-color":
                         o.NoColor = true;
                         break;
-                    case "-V" or "--version" or "-h" or "--help" or "--log-times" or "--any-display" or "--newest":
-                        break;
-                    case "--log-rules" or "-m" or "--manifest" or "--debug":
-                        Next();
+                    case "-V" or "--version" or "-h" or "--help":
                         break;
                     default:
+                        if (args[i].StartsWith('-'))
+                            throw new ArgumentException($"Unknown option \"{args[i]}\".");
                         o.Positional.Add(args[i]);
                         break;
                 }
