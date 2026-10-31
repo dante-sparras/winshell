@@ -124,7 +124,7 @@ If the new version has an error, Winshell keeps running the old one. A notice in
 ERROR scene: Failed to reload configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
 ```
 
-Fix the file and save it again: Winshell reloads, and the notice goes away. If the configuration fails when Winshell starts, there is nothing to keep running: the notice says so, and Winshell stays open with no windows until you save a fix.
+Fix the file and save it again: Winshell reloads, and the notice goes away. If the configuration fails when Winshell starts, there is nothing to keep running: the notice says so, and Winshell stays open with no windows until you save a fix. The notice does not take the keyboard; `winshell ipc call notice dismiss` closes it.
 
 Read the log with `winshell log`, or `winshell log -f` to follow it as you edit. To leave the notice out, set `WINSHELL_NO_RELOAD_POPUP=1`, or call `Shell.inhibitReloadPopup()` in your configuration's `Shell.onReloadFailed`.
 

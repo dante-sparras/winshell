@@ -25,7 +25,7 @@ Nothing printed and nothing on screen? Run `winshell` from a terminal, not with 
 
 ## My configuration has an error
 
-A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The log has an `ERROR` line with the same error:
+A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`. The log has an `ERROR` line with the same error:
 
 ```text
 ERROR scene: Failed to load configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"

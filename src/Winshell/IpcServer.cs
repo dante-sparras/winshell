@@ -30,6 +30,7 @@ internal sealed class IpcServer : IDisposable
     private readonly IEventLoop _loop;
     private readonly Func<ShellHost> _host;
     private readonly Action _kill;
+    private readonly Action? _dismissNotice;
     private readonly Func<SafePipeHandle, string?> _refusal;
     private readonly CancellationTokenSource _cancel = new();
 
@@ -40,13 +41,18 @@ internal sealed class IpcServer : IDisposable
     private NamedPipeServerStream? _first;
 
     /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
-    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, Func<ShellHost> host, Action kill, Func<SafePipeHandle, string?>? refusal = null)
+    /// <param name="dismissNotice">
+    /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it: that notice is not an <c>IpcHandler</c>,
+    /// and it is showing when the configuration failed to load, which is when a handler cannot exist.
+    /// </param>
+    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, Func<ShellHost> host, Action kill, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null)
     {
         _pipe = pipe;
         _first = first;
         _loop = loop;
         _host = host;
         _kill = kill;
+        _dismissNotice = dismissNotice;
         _refusal = refusal ?? PipeTrust.ClientRefusal;
         _ = Task.Run(AcceptLoop);
     }
@@ -217,6 +223,9 @@ internal sealed class IpcServer : IDisposable
 
     private IpcResponse Handle(IpcRequest request)
     {
+        // Before the configuration's handlers: there is no handler when the configuration did not load.
+        if (request is { Op: "call", Target: "notice", Name: "dismiss" })
+            return DismissNotice(request.Args);
         var ipc = _host().Ipc;
         try
         {
@@ -239,6 +248,17 @@ internal sealed class IpcServer : IDisposable
             // A script error is a failed call, not a crash report from an unobserved task.
             return new IpcResponse(false, Error: Log.Describe(e, "ipc"));
         }
+    }
+
+    /// <summary><c>winshell ipc call notice dismiss</c>. It takes no arguments and closes whichever notice is showing.</summary>
+    private IpcResponse DismissNotice(List<string>? args)
+    {
+        if (args is { Count: > 0 })
+            return new IpcResponse(false, Error: $"Function notice.dismiss takes 0 arguments, {args.Count} given");
+        if (_dismissNotice is not { } dismiss)
+            return new IpcResponse(false, Error: "Target not found: notice");
+        dismiss();
+        return new IpcResponse(true);
     }
 
     private IpcResponse Kill()

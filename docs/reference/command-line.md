@@ -61,7 +61,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | `winshell ipc listen <target> <signal>` | Prints the first argument of each signal until you press Ctrl+C. |
 | `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. See [winshell doctor](../doctor.md). |
 
-`winshell msg` is the old name of `winshell ipc call`; it still works and says so. There is no command that reloads a running shell yet ([#134](https://github.com/dante-sparras/winshell/issues/134)); save a file, or call [`Shell.reload()`](winshell.md#shell) from an `IpcHandler`.
+`winshell msg` is the old name of `winshell ipc call`; it still works and says so. `winshell ipc call notice dismiss` closes Winshell's own notice for a configuration error or a window that failed. That notice is not an `IpcHandler`, so `ipc show` does not list it, and the call still works when the configuration failed to load. It takes no arguments. `winshell msg notice dismiss` is the same call. There is no command that reloads a running shell yet ([#134](https://github.com/dante-sparras/winshell/issues/134)); save a file, or call [`Shell.reload()`](winshell.md#shell) from an `IpcHandler`.
 
 The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
 
