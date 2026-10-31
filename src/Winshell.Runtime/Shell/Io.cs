@@ -382,7 +382,7 @@ public sealed class ProcessObject : QObject
             process = new Process { StartInfo = ProcessLauncher.CreateStartInfo(spec, redirect: true), EnableRaisingEvents = true };
             process.Start();
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or ArgumentException)
         {
             Engine.Log.Warn("process", $"Failed to start process {_command[0]}: {e.Message}");
             loop.Post(() =>

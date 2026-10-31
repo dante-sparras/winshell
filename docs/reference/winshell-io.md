@@ -8,7 +8,7 @@ The default shell opens its settings window with an `IpcHandler`; see [Winshell 
 
 A program the shell starts and watches, created with `Process { }`. Setting `running` to true starts `command`; `stdout` and `stderr` take a parser that receives the program's output, decoded as UTF-8.
 
-The first word of `command` is looked up on `PATH` with each `PATHEXT` extension, as in a terminal. A `.cmd` or `.bat` file runs through `cmd`. A `.ps1` file runs through `pwsh` (or Windows PowerShell) with `-NoProfile -ExecutionPolicy Bypass -File`. A `.sh` file runs through `bash` or `sh`. The program gets no console window, because this object captures its output.
+The first word of `command` is looked up on `PATH` with each `PATHEXT` extension, as in a terminal. A `.cmd` or `.bat` file runs through `cmd`. A batch file's path and arguments cannot contain `"`, `%`, `!`, `^` or a line break, which `cmd` would read; such a start fails with a warning. A `.ps1` file runs through `pwsh` (or Windows PowerShell) with `-NoProfile -ExecutionPolicy Bypass -File`. A `.sh` file runs through `bash` or `sh`. The program gets no console window, because this object captures its output.
 
 | Member | Type | Description |
 | --- | --- | --- |
