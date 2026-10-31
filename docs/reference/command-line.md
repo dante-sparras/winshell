@@ -53,7 +53,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | --- | --- |
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. |
-| `winshell log` | Prints an instance's log. With no instance running, it prints the log of one that has stopped. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
+| `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions and properties. |
 | `winshell ipc call <target> <function> [args...]` | Calls a function of an [`IpcHandler`](winshell-io.md#ipchandler) and prints what it returns. |
 | `winshell ipc prop get <target> <property>` | Prints a property of an `IpcHandler`. |

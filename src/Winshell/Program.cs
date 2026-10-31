@@ -869,9 +869,9 @@ namespace Winshell
             public IReadOnlyList<DoctorCheck> Run() => Platform.Windows.Diagnostics.Doctor.Run(context());
         }
 
-        private static (InstanceInfo? Info, string? Error) Select(Options o)
+        private static (InstanceInfo? Info, string? Error) Select(Options o, bool includeDead = false)
         {
-            var instances = Instances.List(false);
+            var instances = Instances.List(includeDead);
             if (o.Pid is { } pid)
                 return (instances.FirstOrDefault(i => i.Info.Pid == pid).Info, $"No instance with process id {pid}");
             if (o.Id is { } id)
@@ -1014,13 +1014,15 @@ namespace Winshell
                 var (info, error) = Select(o);
                 if (info is null)
                 {
-                    var dead = Instances.List(true).FirstOrDefault().Info;
-                    if (dead is null)
+                    // A selector can name an instance that stopped, but never gets a different one instead.
+                    var selected = o.Pid is not null || o.Id is not null || o.Path is not null || o.Config is not null;
+                    info = selected ? Select(o, includeDead: true).Info : Instances.List(true).FirstOrDefault().Info;
+                    if (info is null)
                     {
                         Console.Error.WriteLine(error);
                         return 1;
                     }
-                    info = dead;
+                    Console.Error.WriteLine($"Showing the log of stopped instance {info.Id}.");
                 }
                 path = info.Log;
             }
