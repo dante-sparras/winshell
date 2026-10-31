@@ -294,14 +294,14 @@ The `Session` singleton: the Windows session the shell runs in. `lock()` asks Wi
 
 ## Startup
 
-The `Startup` singleton: whether Winshell runs when the current user signs in. The entry is a `Winshell` value under the user's `Run` key, which Windows' Startup apps page lists and can turn off. Nothing is registered until the shell sets `runAtSignIn`, and Winshell never changes what that page chose. Winshell Settings has a Startup page for it; see [Winshell Settings](../settings.md) and [where files live](../development.md#where-files-live).
+The `Startup` singleton: whether Winshell runs when the current user signs in. An unpackaged Winshell is a `Winshell` value under the user's `Run` key. A packaged Winshell is the package's `windows.startupTask`, task id `Winshell`, which starts `winshellw.exe --no-duplicate` and is declared off. Windows' Startup apps page lists either and can turn it off. Nothing is registered until the shell sets `runAtSignIn`, and Winshell never changes what that page chose. Winshell Settings has a Startup page for it; see [Winshell Settings](../settings.md) and [where files live](../development.md#where-files-live).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `available` | bool, read-only | Whether this shell can register itself: false when it does not run as `winshell.exe`. |
-| `runAtSignIn` | bool | Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry, and setting it when the entry starts another `winshell.exe` points the entry here. |
-| `turnedOffInWindows` | bool, read-only | True when the entry is there but Windows' Startup apps page turned it off. Only that page can turn it back on. |
-| `registeredElsewhere` | bool, read-only | True when the entry is there but starts Winshell another way: a `winshell.exe` in another folder, as after an update unzipped somewhere new, or other arguments. `winshell.exe` and `winshellw.exe` in the same folder are one install. `runAtSignIn` is false until it is set. |
+| `available` | bool, read-only | Whether this shell can register itself: false when it does not run as `winshell.exe`, and, for a package, when Windows has no startup task. |
+| `runAtSignIn` | bool | Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry. On an unpackaged Winshell, setting it when the entry starts another `winshell.exe` points the entry here. On a package, setting it asks Windows to enable or disable the startup task. |
+| `turnedOffInWindows` | bool, read-only | True when the entry is there but Windows' Startup apps page turned it off, or a Windows policy keeps the packaged task off. Only Windows can turn it back on. |
+| `registeredElsewhere` | bool, read-only | True when the unpackaged entry is there but starts Winshell another way: a `winshell.exe` in another folder, as after an update unzipped somewhere new, or other arguments. `winshell.exe` and `winshellw.exe` in the same folder are one install. `runAtSignIn` is false until it is set. A packaged task does not name a path, so this stays false. |
 | `refresh()` | method | Reads the entry again, after the user may have changed it in Windows. |
 
 ## Diagnostics

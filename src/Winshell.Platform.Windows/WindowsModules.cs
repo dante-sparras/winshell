@@ -296,10 +296,20 @@ public static class WindowsModules
 
     /// <summary>
     /// Lets <c>Startup</c> register this <c>winshell.exe</c>, with the arguments it was started with, to run when the
-    /// current user signs in. Without it, <c>Startup.available</c> is false.
+    /// current user signs in. A package uses its startup task instead: a <c>Run</c> value would name the versioned
+    /// package folder, which the next Store update deletes. Without a registry, <c>Startup.available</c> is false.
     /// </summary>
-    public static void AddStartup(QmlEngine engine, string exe, IEnumerable<string> args) =>
+    public static void AddStartup(QmlEngine engine, string exe, IEnumerable<string> args)
+    {
+        if (Services.Updates.Packaging.IsPackaged)
+        {
+            if (Services.Session.WindowsStartupTasks.Open() is { } task)
+                engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.StartupTaskRegistry(task));
+            return;
+        }
+
         engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.WindowsStartupRegistry(Services.Session.WindowsStartupRegistry.CommandFor(exe, args)));
+    }
 
     /// <summary>Lets <c>Updates</c> follow the process's updater. Without one, <c>Updates.available</c> is false.</summary>
     public static void AddUpdates(QmlEngine engine, Services.Updates.Updater updater) => engine.AddService(updater);

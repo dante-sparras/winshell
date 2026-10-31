@@ -157,6 +157,6 @@ A configuration can set variables for its own process with `//@ pragma Env NAME=
 | Per-shell data, state and cache | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>`, and the same under `state` and `cache`. They are `Shell.dataDir`, `Shell.stateDir` and `Shell.cacheDir`. |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that exits cleanly keeps that folder, with `exitedAt` set in `instance.json`, so `winshell log` can still print it. A later start deletes a stopped folder once it is a day old, including a folder that has no `instance.json`. |
 | Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one text file per crash. Nothing is sent anywhere. See [troubleshooting](../guide/troubleshooting.md#winshell-crashed-or-a-surface-closed). |
-| Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets [`Startup.runAtSignIn`](winshell.md#startup) |
+| Run at sign-in | Unpackaged: the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets [`Startup.runAtSignIn`](winshell.md#startup). Packaged: the package's startup task, not that value. |
 
 The console writes `LEVEL category: message`. The log file writes that same line with `HH:mm:ss.fff` in front. `INFO` and `WARN` have a leading space, on both. The levels are `DEBUG` (with `-v`), `INFO`, `WARN`, `ERROR` and `FATAL`.
