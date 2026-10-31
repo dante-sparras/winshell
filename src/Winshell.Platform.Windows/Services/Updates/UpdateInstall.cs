@@ -73,13 +73,21 @@ internal static class UpdateInstall
 
     /// <summary>
     /// Hashes the saved zip again, extracts that zip, and copies the extract. A staged folder whose bytes were
-    /// swapped after the download is not what gets copied. Returns null when it is in place, or why not.
+    /// swapped after the download is not what gets copied. When the installed <c>winshell.exe</c> is signed, the
+    /// update's own binaries must be signed by the same signer. Returns null when it is in place, or why not.
     /// </summary>
     public static string? ApplyVerified(string updatesDir, string staged, string installDir) =>
         ApplyVerified(updatesDir, staged, installDir, Environment.IsPrivilegedProcess);
 
     /// <summary>The same install, with elevation supplied so a test can cover it without an elevated process.</summary>
-    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, bool privileged)
+    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, bool privileged) =>
+        ApplyVerified(updatesDir, staged, installDir, privileged, UpdateSignature.Signer);
+
+    /// <summary>
+    /// The same install, with <paramref name="signer"/> giving the subject that signed a file, or null when it is not
+    /// validly signed, so a test can cover signed installs without certificates.
+    /// </summary>
+    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, bool privileged, Func<string, string?> signer)
     {
         // The update was saved by this user at medium integrity; an elevated process must not run what that user can rewrite.
         if (privileged)
@@ -111,6 +119,7 @@ internal static class UpdateInstall
                     System.IO.Compression.ZipFile.ExtractToDirectory(stream, fresh);
                 }
             }
+            mismatch ??= SignerMismatch(fresh, installDir, signer);
             if (mismatch is not null)
             {
                 DeleteStaged(updatesDir, staged, version);
@@ -131,6 +140,30 @@ internal static class UpdateInstall
             if (Directory.Exists(fresh))
                 TryDeleteDirectory(fresh);
         }
+    }
+
+    /// <summary>
+    /// Why the update in <paramref name="extract"/> must not replace a signed install, or null when it may. An
+    /// unsigned install, such as a build before releases were signed, takes any update whose digest matched; a signed
+    /// one takes only an update whose binaries <see cref="UpdateSignature.Signed"/> lists are signed by its own signer.
+    /// </summary>
+    private static string? SignerMismatch(string extract, string installDir, Func<string, string?> signer)
+    {
+        if (signer(Path.Combine(installDir, "winshell.exe")) is not { } expected)
+            return null;
+        foreach (var name in UpdateSignature.Signed)
+        {
+            var file = Path.Combine(extract, name);
+            if (!File.Exists(file))
+                continue;
+            var actual = signer(file);
+            if (actual != expected)
+            {
+                var by = actual is null ? "is not validly signed" : $"is signed by {actual}";
+                return $"This Winshell is signed by {expected}, but the update's {name} {by}, so Winshell does not install it.";
+            }
+        }
+        return null;
     }
 
     private static void DeleteStaged(string updatesDir, string staged, string version)
