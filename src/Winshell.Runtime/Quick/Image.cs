@@ -40,6 +40,9 @@ public static class ImageLoader
         get { lock (Gate) return Images.Count; }
     }
 
+    /// <summary>The most pixels a decoded image has. A bigger image is decoded smaller, keeping its aspect ratio.</summary>
+    internal const long MaxPixels = 64L * 1024 * 1024;
+
     public static void AddProvider(string name, IImageProvider provider) => Providers[name] = provider;
 
     public static bool IsRemote(string source) =>
@@ -244,35 +247,36 @@ public static class ImageLoader
 
     private static SKImage? LoadUncached(string source, string? baseDirectory, int width, int height)
     {
-        if (source.StartsWith("image://", StringComparison.OrdinalIgnoreCase))
-        {
-            var rest = source[8..];
-            var slash = rest.IndexOf('/');
-            var name = slash < 0 ? rest : rest[..slash];
-            var id = slash < 0 ? "" : Uri.UnescapeDataString(rest[(slash + 1)..]);
-            return Providers.TryGetValue(name, out var provider) ? provider.Load(id, width, height) : null;
-        }
-        if (source.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-        {
-            var comma = source.IndexOf(',');
-            if (comma < 0)
-                return null;
-            var meta = source[5..comma];
-            var data = source[(comma + 1)..];
-            var bytes = meta.EndsWith(";base64", StringComparison.OrdinalIgnoreCase)
-                ? Convert.FromBase64String(data)
-                : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(data));
-            return Decode(bytes, meta.Contains("svg", StringComparison.OrdinalIgnoreCase) ? "x.svg" : "x", width, height);
-        }
-        var path = LocalPath(source, baseDirectory);
-        if (path is null || !File.Exists(path))
-            return null;
         try
         {
+            if (source.StartsWith("image://", StringComparison.OrdinalIgnoreCase))
+            {
+                var rest = source[8..];
+                var slash = rest.IndexOf('/');
+                var name = slash < 0 ? rest : rest[..slash];
+                var id = slash < 0 ? "" : Uri.UnescapeDataString(rest[(slash + 1)..]);
+                return Providers.TryGetValue(name, out var provider) ? provider.Load(id, width, height) : null;
+            }
+            if (source.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                var comma = source.IndexOf(',');
+                if (comma < 0)
+                    return null;
+                var meta = source[5..comma];
+                var data = source[(comma + 1)..];
+                var bytes = meta.EndsWith(";base64", StringComparison.OrdinalIgnoreCase)
+                    ? Convert.FromBase64String(data)
+                    : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(data));
+                return Decode(bytes, meta.Contains("svg", StringComparison.OrdinalIgnoreCase) ? "x.svg" : "x", width, height);
+            }
+            var path = LocalPath(source, baseDirectory);
+            if (path is null || !File.Exists(path))
+                return null;
             return Decode(File.ReadAllBytes(path), path, width, height);
         }
-        catch (IOException)
+        catch (Exception)
         {
+            // A bad data: URL, an unreadable file or a broken image is an image that didn't load, not a script error.
             return null;
         }
     }
@@ -286,21 +290,44 @@ public static class ImageLoader
         if (codec is null)
             return null;
         var info = codec.Info;
-        if (width > 0 && height > 0 && (width < info.Width || height < info.Height))
+        var scale = 1f;
+        if (width > 0 && height > 0)
+            scale = Math.Max((float)width / info.Width, (float)height / info.Height);
+        else if (width > 0)
+            scale = (float)width / info.Width;
+        else if (height > 0)
+            scale = (float)height / info.Height;
+        scale = Math.Min(scale, (float)CapScale(info.Width, info.Height));
+        if (scale < 1)
         {
             // Decode at a size near the one asked for, which saves memory for big pictures.
-            var scale = Math.Max((float)width / info.Width, (float)height / info.Height);
             var dims = codec.GetScaledDimensions(scale);
             info = info.WithSize(dims.Width, dims.Height);
         }
-        using var bitmap = new SKBitmap(info.WithColorType(SKColorType.Rgba8888).WithAlphaType(SKAlphaType.Premul));
-        var result = codec.GetPixels(bitmap.Info, bitmap.GetPixels());
-        if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
-        {
-            using var decoded = SKBitmap.Decode(bytes);
-            return decoded is null ? null : SKImage.FromBitmap(decoded);
-        }
-        return SKImage.FromBitmap(bitmap);
+        using var bitmap = DecodeAt(codec, info.WithColorType(SKColorType.Rgba8888).WithAlphaType(SKAlphaType.Premul)) ?? SKBitmap.Decode(bytes);
+        if (bitmap is null)
+            return null;
+        // A codec that can't decode smaller, such as PNG's, gives the whole picture, so a huge one is scaled down here.
+        var cap = CapScale(bitmap.Width, bitmap.Height);
+        if (cap >= 1)
+            return SKImage.FromBitmap(bitmap);
+        using var capped = bitmap.Resize(Scaled(bitmap.Width, bitmap.Height, cap), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+        return capped is null ? null : SKImage.FromBitmap(capped);
+    }
+
+    /// <summary>The scale that brings a picture down to <see cref="MaxPixels"/>, or 1 when it is no bigger.</summary>
+    private static double CapScale(double width, double height) => Math.Min(1, Math.Sqrt(MaxPixels / (width * height)));
+
+    private static SKSizeI Scaled(double width, double height, double scale) =>
+        new((int)Math.Max(1, Math.Floor(width * scale)), (int)Math.Max(1, Math.Floor(height * scale)));
+
+    private static SKBitmap? DecodeAt(SKCodec codec, SKImageInfo info)
+    {
+        var bitmap = new SKBitmap(info);
+        if (codec.GetPixels(info, bitmap.GetPixels()) is SKCodecResult.Success or SKCodecResult.IncompleteInput)
+            return bitmap;
+        bitmap.Dispose();
+        return null;
     }
 
     private static bool LooksLikeSvg(byte[] bytes)
@@ -319,16 +346,20 @@ public static class ImageLoader
         var bounds = picture.CullRect;
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return null;
-        var w = width > 0 ? width : (int)Math.Ceiling(bounds.Width);
-        var h = height > 0 ? height : (int)Math.Ceiling(bounds.Height);
+        double w = width > 0 ? width : Math.Ceiling(bounds.Width);
+        double h = height > 0 ? height : Math.Ceiling(bounds.Height);
         if (width > 0 && height <= 0)
-            h = (int)Math.Ceiling(bounds.Height * width / bounds.Width);
+            h = Math.Ceiling(bounds.Height * width / bounds.Width);
         if (height > 0 && width <= 0)
-            w = (int)Math.Ceiling(bounds.Width * height / bounds.Height);
-        using var surface = SKSurface.Create(new SKImageInfo(Math.Max(1, w), Math.Max(1, h), SKColorType.Rgba8888, SKAlphaType.Premul));
+            w = Math.Ceiling(bounds.Width * height / bounds.Height);
+        // The document picks its own size, so cap it like a decoded picture.
+        var size = Scaled(w, h, CapScale(w, h));
+        using var surface = SKSurface.Create(new SKImageInfo(size.Width, size.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        if (surface is null)
+            return null;
         var canvas = surface.Canvas;
         canvas.Clear(SKColors.Transparent);
-        canvas.Scale(w / bounds.Width, h / bounds.Height);
+        canvas.Scale(size.Width / bounds.Width, size.Height / bounds.Height);
         canvas.Translate(-bounds.Left, -bounds.Top);
         canvas.DrawPicture(picture);
         return surface.Snapshot();
