@@ -44,21 +44,24 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private string _discoveryError = "";
     private bool _disposed;
 
-    public async Task<BluetoothSnapshot> ReadAsync()
+    public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
+
+    public async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
     {
-        await _readGate.WaitAsync().ConfigureAwait(false);
+        await _readGate.WaitAsync(cancellation).ConfigureAwait(false);
         try
         {
             lock (_lock) ObjectDisposedException.ThrowIf(_disposed, this);
-            var adapter = await WinAdapter.GetDefaultAsync();
+            cancellation.ThrowIfCancellationRequested();
+            var adapter = await WinAdapter.GetDefaultAsync().AsTask(cancellation).ConfigureAwait(false);
             if (adapter is null)
             {
                 StopDiscovery();
                 return new(true, null, []);
             }
-            var name = (await DeviceInformation.CreateFromIdAsync(adapter.DeviceId))?.Name ?? "Bluetooth";
+            var name = (await DeviceInformation.CreateFromIdAsync(adapter.DeviceId).AsTask(cancellation).ConfigureAwait(false))?.Name ?? "Bluetooth";
             Radio? radio = null;
-            try { radio = await adapter.GetRadioAsync(); }
+            try { radio = await adapter.GetRadioAsync().AsTask(cancellation).ConfigureAwait(false); }
             catch (Exception e) when (IsExpectedFailure(e)) { }
             var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
                 ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State));
@@ -69,7 +72,8 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             List<BluetoothEndpointInfo> endpoints = [];
             foreach (var selector in PairedSelectors())
             {
-                var devices = await DeviceInformation.FindAllAsync(selector, EndpointProperties, DeviceInformationKind.AssociationEndpoint);
+                cancellation.ThrowIfCancellationRequested();
+                var devices = await DeviceInformation.FindAllAsync(selector, EndpointProperties, DeviceInformationKind.AssociationEndpoint).AsTask(cancellation).ConfigureAwait(false);
                 endpoints.AddRange(devices.Select(ReadEndpoint));
             }
             bool discovering;
@@ -86,7 +90,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             {
                 // Windows' cached device property only: do not query the remote Battery GATT service.
                 var battery = device.Connected && device.Container is { } container
-                    ? await ReadBatteryAsync(container).ConfigureAwait(false) : null;
+                    ? await ReadBatteryAsync(container, cancellation).ConfigureAwait(false) : null;
                 result.Add(device with { Battery = battery });
             }
             return new(true, adapterInfo, result, discovering, discoveryError);
@@ -146,14 +150,14 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         _ => null,
     };
 
-    private async Task<double?> ReadBatteryAsync(Guid container)
+    private async Task<double?> ReadBatteryAsync(Guid container, CancellationToken cancellation)
     {
         if (_batteries.TryGetValue(container, out var cached) && DateTimeOffset.UtcNow - cached.Read < TimeSpan.FromSeconds(30))
             return cached.Level;
         double? level = null;
         try
         {
-            var nodes = await DeviceInformation.FindAllAsync($"System.Devices.ContainerId:=\"{{{container}}}\"", [BatteryKey], DeviceInformationKind.Device);
+            var nodes = await DeviceInformation.FindAllAsync($"System.Devices.ContainerId:=\"{{{container}}}\"", [BatteryKey], DeviceInformationKind.Device).AsTask(cancellation).ConfigureAwait(false);
             level = nodes.Select(n => BatteryLevel(n.Properties.GetValueOrDefault(BatteryKey))).FirstOrDefault(n => n.HasValue);
         }
         catch (Exception e) when (IsExpectedFailure(e)) { }

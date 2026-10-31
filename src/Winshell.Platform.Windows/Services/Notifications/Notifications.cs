@@ -1,4 +1,5 @@
 using NotificationModeValue = Winshell.Platform.Windows.Services.Notifications.NotificationMode;
+using Winshell.Platform.Windows.Services;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -21,6 +22,7 @@ public sealed class NotificationListener : QObject
     private readonly INotificationBackend _backend;
     private readonly bool _monitor;
     private readonly CancellationTokenSource _stop = new();
+    private Task? _monitorTask;
     private readonly Dictionary<uint, ShellNotification> _items = [];
     private readonly Dictionary<string, NotificationGroup> _groups = [];
     private NotificationAccessStatus _accessStatus;
@@ -62,6 +64,7 @@ public sealed class NotificationListener : QObject
         }
     }
     [Qml] public string Error { get { Track(); return _error; } }
+    internal Task? MonitorTask => _monitorTask;
 
     public override void ComponentComplete()
     {
@@ -70,7 +73,7 @@ public sealed class NotificationListener : QObject
         {
             _started = true;
             var cancellation = _stop.Token;
-            _ = Task.Run(() => MonitorAsync(cancellation));
+            _monitorTask = Task.Run(() => MonitorAsync(cancellation));
         }
     }
 
@@ -110,6 +113,7 @@ public sealed class NotificationListener : QObject
 
     private async Task MonitorAsync(CancellationToken cancellation)
     {
+        var warning = new MonitorWarning(this, "notifications");
         // Not disposed: a toast event can still arrive after the watch stops.
         var changed = new SemaphoreSlim(0);
         Action? unwatch = null;
@@ -117,14 +121,32 @@ public sealed class NotificationListener : QObject
         {
             while (!cancellation.IsCancellationRequested)
             {
-                // With package identity Windows reports toast changes; the poll catches Focus, Do Not Disturb and access.
-                unwatch ??= _backend.WatchToasts(() => changed.Release());
-                await RefreshAsync().ConfigureAwait(false);
-                await changed.WaitAsync(TimeSpan.FromSeconds(10), cancellation).ConfigureAwait(false);
-                while (changed.Wait(0)) { }
+                // A failed read tries again sooner than the idle poll.
+                var wait = TimeSpan.FromSeconds(10);
+                try
+                {
+                    // With package identity Windows reports toast changes; the poll catches Focus, Do Not Disturb and access.
+                    unwatch ??= _backend.WatchToasts(() => changed.Release());
+                    await RefreshAsync().ConfigureAwait(false);
+                    warning.Succeeded();
+                }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
+                catch (ObjectDisposedException) { return; }
+#pragma warning disable CA1031 // One failed read must not stop the rest of the poll.
+                catch (Exception e)
+#pragma warning restore CA1031
+                {
+                    warning.Failed(e);
+                    wait = TimeSpan.FromSeconds(2);
+                }
+                try
+                {
+                    await changed.WaitAsync(wait, cancellation).ConfigureAwait(false);
+                    while (changed.Wait(0)) { }
+                }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
             }
         }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         finally
         {
             unwatch?.Invoke();
@@ -136,7 +158,7 @@ public sealed class NotificationListener : QObject
         var revision = Interlocked.Read(ref _revision);
         try
         {
-            var snapshot = await _backend.ReadAsync().ConfigureAwait(false);
+            var snapshot = await _backend.ReadAsync(_stop.Token).ConfigureAwait(false);
             Post(() =>
             {
                 // A read started before dismissal or a permission request must not undo that operation.
@@ -144,6 +166,8 @@ public sealed class NotificationListener : QObject
                     Apply(snapshot);
             });
         }
+        catch (OperationCanceledException) { return; }
+        catch (ObjectDisposedException) { return; }
         catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
         {
             Post(() =>
@@ -295,7 +319,7 @@ public sealed class NotificationListener : QObject
     protected override void OnDestroy()
     {
         _stop.Cancel();
-        _stop.Dispose();
+        ServiceSupport.DisposeAfterMonitor(_stop, _monitorTask);
     }
 }
 

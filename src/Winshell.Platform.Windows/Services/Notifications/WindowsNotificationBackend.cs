@@ -12,6 +12,9 @@ internal interface INotificationBackend
 {
     Task<NotificationAccessStatus> RequestAccessAsync();
     Task<NotificationSnapshot> ReadAsync();
+
+    /// <summary>The same read, stopping when <paramref name="cancellation"/> is cancelled. The default ignores the token.</summary>
+    Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation) => ReadAsync();
     void Dismiss(uint id);
     Action? WatchToasts(Action changed) => null;
 }
@@ -21,8 +24,11 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     public async Task<NotificationAccessStatus> RequestAccessAsync() =>
         MapAccess(await UserNotificationListener.Current.RequestAccessAsync());
 
-    public async Task<NotificationSnapshot> ReadAsync()
+    public Task<NotificationSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
+
+    public async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
     {
+        cancellation.ThrowIfCancellationRequested();
         // Focus and notification restriction mode do not require listener permission.
         var focus = ReadFocus();
         var mode = ReadMode();
@@ -32,7 +38,8 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             var access = MapAccess(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
                 return new(access, [], focus, mode);
-            var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast);
+            var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast).AsTask(cancellation).ConfigureAwait(false);
+            cancellation.ThrowIfCancellationRequested();
             // Access may be revoked while the asynchronous read is in progress.
             access = MapAccess(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
