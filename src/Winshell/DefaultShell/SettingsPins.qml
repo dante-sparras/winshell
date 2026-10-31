@@ -1,5 +1,4 @@
 import Winshell
-import Winshell.Io
 import Winshell.Theme
 import QtQuick
 import "launcher.js" as Launcher
@@ -21,8 +20,8 @@ Column {
   spacing: 4
 
   function read() {
-    known = Array.isArray(pinData.pins)
-    ids = known ? pinData.pins.slice() : []
+    known = Array.isArray(file.pins)
+    ids = known ? file.pins.slice() : []
   }
 
   function write(next) {
@@ -30,46 +29,29 @@ Column {
     known = true
     if (pinsPath === "")
       return
-    pinData.pins = next
+    file.pins = next
     file.writeAdapter()
   }
 
   // Moves a pin past the pin next to it in Start. Pins Start cannot show keep their place.
   function reorder(id, offset) {
-    const at = pinned.findIndex(app => app.id === id)
-    const neighbour = pinned[at + offset]
-    if (at < 0 || !neighbour)
-      return
-    const list = shownIds.filter(k => !Launcher.sameId(k, id))
-    const to = list.findIndex(k => Launcher.sameId(k, neighbour.id))
-    list.splice(offset > 0 ? to + 1 : to, 0, id)
-    write(list)
+    const next = Launcher.reorder(shownIds, pinned.map(app => app.id), id, offset)
+    if (next)
+      write(next)
   }
 
   function unpin(id) {
     write(shownIds.filter(k => !Launcher.sameId(k, id)))
   }
 
-  FileView {
+  StartPins {
     id: file
     path: root.pinsPath
-    blockLoading: true
-    blockWrites: true
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
     onLoaded: root.read()
     // A deleted file brings Start's default pins back, as the next Start does.
     onLoadFailed: {
-      pinData.pins = null
+      file.pins = null
       root.read()
-    }
-
-    TomlAdapter {
-      id: pinData
-      comments: ({ pins: "The apps pinned to Start, in order. [] pins nothing; without this file Start pins its defaults." })
-      // null until the file has pins.
-      property var pins: null
     }
   }
 

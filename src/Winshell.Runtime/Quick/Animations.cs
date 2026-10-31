@@ -62,7 +62,7 @@ public static class AnimationClock
                     log.ScriptError(e, a.TypeName);
                     try
                     {
-                        a.Stop();
+                        a.Halt();
                     }
 #pragma warning disable CA1031 // Stopping the failed animation must not stop the clock.
                     catch (Exception stop)
@@ -261,6 +261,7 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
     private TimeSpan _pausedAt;
     private int _loops = 1;
     private bool _alwaysRunToEnd;
+    private bool _runToEnd;
     private TimeSpan _start;
     private int _loopsDone;
     private bool _runningSetBeforeComplete;
@@ -326,8 +327,10 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
     [Qml]
     public void Start()
     {
-        if (_running && Group is null && _ticking)
+        if (_running && Group is null && _ticking && !_runToEnd)
             return;
+        if (_runToEnd)
+            Halt();
         // Windows "Animation effects" off: jump to the end. A forever loop stops there instead of finishing.
         if (!Theme.Current.AnimationsEnabled)
         {
@@ -363,16 +366,18 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
     {
         if (!_running)
             return;
-        _ticking = false;
-        AnimationClock.Remove(this);
-        SetField(ref _running, false, nameof(Running));
-        Emit("stopped");
+        if (_alwaysRunToEnd && !_runToEnd && DurationMs > 0 && Theme.Current.AnimationsEnabled)
+        {
+            _runToEnd = true;
+            return;
+        }
+        Halt();
     }
 
     [Qml]
     public void Restart()
     {
-        Stop();
+        Halt();
         Start();
     }
 
@@ -407,7 +412,7 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
         if (progress >= 1)
         {
             _loopsDone++;
-            if (_loops == Infinite || _loopsDone < _loops)
+            if (!_runToEnd && (_loops == Infinite || _loopsDone < _loops))
             {
                 Apply(1);
                 _start = now;
@@ -424,11 +429,19 @@ public abstract class AnimationBase : QObject, IPropertyValueSource
 
     private void Finish()
     {
+        Halt();
+        Emit("finished");
+    }
+
+    internal void Halt()
+    {
+        _runToEnd = false;
         _ticking = false;
         AnimationClock.Remove(this);
+        if (!_running)
+            return;
         SetField(ref _running, false, nameof(Running));
         Emit("stopped");
-        Emit("finished");
     }
 
     /// <summary>Reads the start values before a run.</summary>

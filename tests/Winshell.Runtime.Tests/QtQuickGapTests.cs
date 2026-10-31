@@ -1,169 +1,146 @@
 using SkiaSharp;
+using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quick.Controls;
 
 namespace Winshell.Runtime.Tests;
 
+/// <summary>Qt Quick members that used to load and then do nothing.</summary>
 public class QtQuickGapTests
 {
     [Fact]
-    public void A_modal_popup_closes_on_release_outside_its_parent_only()
+    public void A_drag_past_the_edge_moves_halfway_and_returns_on_release()
     {
-        var (root, scene, shell) = Show("""
-            import QtQuick
-            import QtQuick.Controls
-            Item {
-              id: root; width: 300; height: 300; property var flyout: pop
-              Item { id: box; x: 100; y: 100; width: 80; height: 80 }
-              Popup { id: pop; modal: true; parent: box; x: 20; y: 20; width: 40; height: 40
-                closePolicy: Popup.CloseOnReleaseOutsideParent }
-            }
-            """);
-        using var _ = shell;
-        var popup = (Popup)root.ReadProperty("flyout")!;
-        popup.Open();
-        shell.Loop.Process();
-        scene.PointerPress(10, 10, QtEnums.LeftButton);
-        scene.PointerRelease(130, 130, QtEnums.LeftButton);
-        Assert.True(popup.Opened);
-        scene.PointerPress(110, 110, QtEnums.LeftButton);
-        scene.PointerRelease(110, 110, QtEnums.LeftButton);
-        Assert.True(popup.Opened);
-        scene.PointerPress(10, 10, QtEnums.LeftButton);
-        scene.PointerRelease(10, 10, QtEnums.LeftButton);
-        Assert.False(popup.Opened);
+        var flickable = FlickableOf();
+        Drag(flickable, 10, 50);
+        Assert.Equal(-20, flickable.ContentY);
+        flickable.PointerRelease(10, 50, QtEnums.LeftButton, 0, 0);
+        Assert.Equal(0, flickable.ContentY);
+
+        flickable.BoundsBehavior = (int)Flickable.BoundsBehaviorValue.StopAtBounds;
+        Drag(flickable, 10, 50);
+        Assert.Equal(0, flickable.ContentY);
+
+        flickable.BoundsBehavior = (int)Flickable.BoundsBehaviorValue.DragAndOvershootBounds;
+        flickable.BoundsMovement = 0;
+        Drag(flickable, 10, 50);
+        Assert.Equal(0, flickable.ContentY);
+
+        flickable.BoundsMovement = (int)Flickable.BoundsMovementValue.FollowBoundsBehavior;
+        flickable.BoundsBehavior = (int)Flickable.BoundsBehaviorValue.OvershootBounds;
+        Drag(flickable, 10, 50);
+        Assert.Equal(0, flickable.ContentY);
+        flickable.Destroy();
     }
 
     [Fact]
-    public void Next_check_state_is_called_on_a_click()
+    public void Pixel_aligned_content_rounds_half_away_from_zero()
     {
-        var (root, _, shell) = Show("""
-            import QtQuick
-            import QtQuick.Controls
-            CheckBox { objectName: "box"; tristate: true; checkState: 0
-              nextCheckState: function() { return checkState === 0 ? 2 : 0 } }
-            """);
-        using var _ = shell;
-        var box = (CheckBox)Find(root, "box");
-        box.Click();
-        Assert.Equal(2, box.CheckState);
-        box.Click();
-        Assert.Equal(0, box.CheckState);
+        var flickable = FlickableOf();
+        flickable.ContentX = 1.6;
+        Assert.Equal(1.6, flickable.ContentX);
+        flickable.PixelAligned = true;
+        Assert.Equal(2, flickable.ContentX);
+        flickable.ContentX = 1.4;
+        Assert.Equal(1, flickable.ContentX);
+        flickable.ContentY = -1.5;
+        Assert.Equal(-2, flickable.ContentY);
+        flickable.PixelAligned = false;
+        flickable.ContentX = 1.6;
+        Assert.Equal(1.6, flickable.ContentX);
+        flickable.Destroy();
     }
 
     [Fact]
-    public void A_scroll_indicator_draws_only_while_active()
+    public void Grid_and_flow_place_right_to_left()
     {
-        var (root, scene, shell) = Show("""
-            import QtQuick
-            import QtQuick.Controls
-            ScrollIndicator { objectName: "bar"; width: 12; height: 40; size: 0.5; position: 0 }
-            """, 12, 40);
-        using var _ = shell;
-        using var hidden = Render(scene, 12, 40);
-        Assert.Equal(0, Ink(hidden));
-        ((ScrollIndicator)Find(root, "bar")).Active = true;
-        shell.Loop.Process();
-        using var shown = Render(scene, 12, 40);
-        Assert.True(Ink(shown) > 0);
+        var grid = new Grid { Columns = 1, LayoutDirection = 1 };
+        var narrow = Child(grid, 10, 10);
+        var wide = Child(grid, 20, 10);
+        grid.ForceLayout();
+        Assert.Equal(10, narrow.X);
+        Assert.Equal(0, wide.X);
+
+        var flow = new Flow { Width = 100, LayoutDirection = 1 };
+        var first = Child(flow, 10, 10);
+        var second = Child(flow, 10, 10);
+        flow.ForceLayout();
+        Assert.Equal(90, first.X);
+        Assert.Equal(80, second.X);
+
+        var left = new Flow { Width = 100 };
+        var a = Child(left, 10, 10);
+        var b = Child(left, 10, 10);
+        left.ForceLayout();
+        Assert.Equal(0, a.X);
+        Assert.Equal(10, b.X);
+        grid.Destroy();
+        flow.Destroy();
+        left.Destroy();
     }
 
     [Fact]
-    public void Snap_on_release_waits_until_the_pointer_lets_go()
+    public void An_image_mirrors_vertically_and_clips_its_source()
     {
-        var (root, _, shell) = Show("""
-            import QtQuick
-            import QtQuick.Controls
-            Item {
-              RangeSlider { objectName: "range"; width: 200; height: 40; from: 0; to: 1; stepSize: 0.25; snapMode: 2 }
-              Dial { objectName: "dial"; y: 50; width: 100; height: 100; from: 0; to: 1; stepSize: 0.5; snapMode: 2 }
-            }
-            """);
-        using var _ = shell;
-        var range = (RangeSlider)Find(root, "range");
-        range.PointerPress(64, 20, QtEnums.LeftButton, QtEnums.LeftButton, 0);
-        Assert.InRange(range.First.Value, 0.2, 0.4);
-        range.PointerRelease(64, 20, QtEnums.LeftButton, 0, 0);
-        Assert.Equal(0.25, range.First.Value);
-        var dial = (Dial)Find(root, "dial");
-        var angle = -84 * Math.PI / 180;
-        var x = 50 + Math.Sin(angle) * 30;
-        var y = 50 - Math.Cos(angle) * 30;
-        dial.PointerPress(x, y, QtEnums.LeftButton, QtEnums.LeftButton, 0);
-        Assert.InRange(dial.Value, 0.1, 0.4);
-        dial.PointerRelease(x, y, QtEnums.LeftButton, 0, 0);
-        Assert.Equal(0, dial.Value);
+        var image = Load(4, 2, (x, y) => y == 0
+            ? x switch { 0 => SKColors.Red, 1 => SKColors.Green, 2 => SKColors.Blue, _ => SKColors.Yellow }
+            : x switch { 0 => SKColors.White, 1 => SKColors.Black, 2 => SKColors.Cyan, _ => SKColors.Magenta });
+        Assert.Equal(SKColors.Red, Pixel(image, 0, 0));
+        image.MirrorVertically = true;
+        Assert.Equal(SKColors.Cyan, Pixel(image, 2, 0));
+        image.MirrorVertically = false;
+        image.SourceClipRect = new QRect(2, 0, 2, 2);
+        image.Width = image.ImplicitWidth;
+        image.Height = image.ImplicitHeight;
+        Assert.Equal(2, image.ImplicitWidth);
+        Assert.Equal(SKColors.Blue, Pixel(image, 0, 0));
+        Assert.Equal(SKColors.Yellow, Pixel(image, 1, 0));
+        image.SourceClipRect = new QRect(0, 0, 0, 0);
+        Assert.Equal(4, image.ImplicitWidth);
+        image.Destroy();
     }
 
-    [Fact]
-    public void Menu_current_index_follows_keys_and_hover()
+    private static Flickable FlickableOf()
     {
-        var (root, scene, shell) = Show("""
-            import QtQuick
-            import QtQuick.Controls
-            Item {
-              id: root; width: 300; height: 300; property var menu: menu
-              Menu { id: menu; MenuItem { text: "One" } MenuItem { text: "Two" } }
-            }
-            """);
-        using var _ = shell;
-        var menu = (Menu)root.ReadProperty("menu")!;
-        menu.Popup(20.0, 20.0);
-        shell.Loop.Process();
-        PolishQueue.Flush();
-        Assert.Equal(-1, menu.CurrentIndex);
-        scene.KeyPress(new KeyEvent { Key = 0x01000015 });
-        Assert.Equal(0, menu.CurrentIndex);
-        var second = (MenuItem)menu.ItemAt(1)!;
-        var at = (QPoint)second.MapToItem(scene.Root, second.Width / 2, second.Height / 2);
-        scene.PointerMove(at.X, at.Y);
-        Assert.Equal(1, menu.CurrentIndex);
-        menu.Close();
-        Assert.Equal(-1, menu.CurrentIndex);
-        Assert.True(second.Highlighted);
+        var flickable = new Flickable { Width = 100, Height = 100, ContentHeight = 1000 };
+        flickable.MarkComplete();
+        return flickable;
     }
 
-    private static int Ink(SKBitmap bitmap)
+    private static void Drag(Flickable flickable, double x, double y)
     {
-        var n = 0;
-        for (var y = 0; y < bitmap.Height; y++)
-            for (var x = 0; x < bitmap.Width; x++)
-                if (bitmap.GetPixel(x, y).Alpha > 0)
-                    n++;
-        return n;
+        flickable.PointerPress(10, 10, QtEnums.LeftButton, QtEnums.LeftButton, 0);
+        flickable.PointerMove(x, y, QtEnums.LeftButton, 0);
     }
 
-    private static SKBitmap Render(Scene scene, int width, int height)
+    private static Item Child(Item parent, double width, double height)
     {
-        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Transparent);
-        scene.Paint(canvas, TimeSpan.Zero);
-        return bitmap;
+        var item = new Item { Width = width, Height = height };
+        item.SetParentItem(parent);
+        return item;
     }
 
-    private static (Item Root, Scene Scene, TestShell Shell) Show(string qml, double width = 300, double height = 300)
+    private static Image Load(int width, int height, Func<int, int, SKColor> pixel)
     {
-        var shell = new TestShell(("shell.qml", qml));
-        var root = (Item)shell.Load();
-        var scene = new Scene();
-        scene.Root.SetLayoutWidth(width);
-        scene.Root.SetLayoutHeight(height);
-        root.SetParentItem(scene.Root);
-        shell.Loop.Process();
-        PolishQueue.Flush();
-        return (root, scene, shell);
+        using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+                bitmap.SetPixel(x, y, pixel(x, y));
+        using var picture = SKImage.FromBitmap(bitmap);
+        using var encoded = picture.Encode(SKEncodedImageFormat.Png, 100);
+        var image = new Image { Source = "data:image/png;base64," + Convert.ToBase64String(encoded.ToArray()), Smooth = false };
+        image.MarkComplete();
+        image.Width = image.ImplicitWidth;
+        image.Height = image.ImplicitHeight;
+        return image;
     }
 
-    private static Item Find(Item root, string objectName)
+    private static SKColor Pixel(Image image, int x, int y)
     {
-        if (root.ObjectName == objectName)
-            return root;
-        foreach (var child in root.ChildItems)
-        {
-            try { return Find(child, objectName); }
-            catch (InvalidOperationException) { }
-        }
-        throw new InvalidOperationException($"No item named {objectName}");
+        using var surface = SKSurface.Create(new SKImageInfo((int)image.Width, (int)image.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        surface!.Canvas.Clear(SKColors.Transparent);
+        image.Paint(surface.Canvas, new PaintContext());
+        using var snap = surface.Snapshot();
+        using var bitmap = SKBitmap.FromImage(snap);
+        return bitmap.GetPixel(x, y);
     }
 }

@@ -110,14 +110,6 @@ public sealed class WinlandService : QObject
         return monitor ?? (_monitorsRequested ? null : FindMonitor(screen.Id, create: true));
     }
 
-    /// <summary>The Client of a window, by its handle. Tracked, so a binding sees it appear.</summary>
-    internal WinlandWindow? FindToplevel(ulong address)
-    {
-        // Reading the model's values makes a binding depend on them.
-        _ = Toplevels.Values;
-        return address == 0 ? null : _toplevelList.FirstOrDefault(t => t.RawAddress == address);
-    }
-
     /// <summary>Sends a request whose reply should be <c>ok</c>, and warns otherwise.</summary>
     internal void Send(string request) => Request(request, reply =>
     {

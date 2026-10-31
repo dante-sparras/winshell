@@ -18,13 +18,15 @@ public class ScopeSetTests
         var scope = new ScopeObject(shell.Engine.Js, root, root.CreationContext!);
         var set = shell.Engine.Js.Compile("n = 4", [], scope, "test");
         shell.Engine.Js.Engine.Call(set, JsValue.Undefined, []);
-        Assert.Equal(4, root.ReadProperty("n"));
+        var n = root.GetDynamicProperty("n")!;
+        Assert.Equal(4, n.Read());
 
         root.Destroy();
         var again = shell.Engine.Js.Compile("n = 9", [], scope, "test-destroyed");
         shell.Engine.Js.Engine.Call(again, JsValue.Undefined, []);
 
-        Assert.Equal(4, root.ReadProperty("n"));
+        Assert.Equal(4, n.Read());
+        Assert.Null(root.GetDynamicProperty("n"));
         Assert.Empty(shell.Messages);
     }
 
