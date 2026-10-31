@@ -20,10 +20,10 @@ public sealed class VirtualDesktopsService : QObject
     private bool _supported;
     private bool _proved;
     private string _reason = "";
-    private string _lastReadError = "";
+    private string _stamp = "";
     private IDisposable? _reread;
 
-    /// <summary>How often the list is read when nothing has signaled a change. Windows signals a switch, not an add or a remove.</summary>
+    /// <summary>How often <see cref="IVirtualDesktopSource.ListStamp"/> is checked. Windows signals a switch, not an add or a remove.</summary>
     internal static readonly TimeSpan RereadInterval = TimeSpan.FromSeconds(1);
 
     public VirtualDesktopsService(QmlEngine engine)
@@ -50,9 +50,11 @@ public sealed class VirtualDesktopsService : QObject
             SetField(ref _reason, source.Contract.Reason, nameof(UnsupportedReason));
         else
             Refresh();
-        // The switch hook is Windows. Another source has nothing to hook, and is read again on the loop.
         if (_watch && engine is not null && _contractSupported)
+        {
+            _stamp = source.ListStamp;
             ScheduleRead();
+        }
     }
 
     [Qml] public ObjectModel Desktops { get; }
@@ -126,7 +128,12 @@ public sealed class VirtualDesktopsService : QObject
     {
         if (IsDestroyed)
             return;
-        Refresh();
+        var stamp = _source.ListStamp;
+        if (stamp != _stamp)
+        {
+            _stamp = stamp;
+            Refresh();
+        }
         if (!IsDestroyed)
             ScheduleRead();
     }
@@ -137,11 +144,7 @@ public sealed class VirtualDesktopsService : QObject
             return;
         if (!_source.TryRead(out var records, out var current, out var error))
         {
-            if (_lastReadError != error)
-            {
-                _lastReadError = error;
-                _log.Warn("desktops", error);
-            }
+            _log.Warn("desktops", error);
             if (_proved)
                 return;
             Clear();
@@ -151,7 +154,6 @@ public sealed class VirtualDesktopsService : QObject
         }
 
         _proved = true;
-        _lastReadError = "";
         var currentId = VirtualDesktopRules.FormatId(current);
         var seen = new HashSet<string>();
         var ordered = new List<VirtualDesktop>(records.Count);
@@ -178,15 +180,11 @@ public sealed class VirtualDesktopsService : QObject
             desktop.Destroy();
         }
 
-        var previousIds = Desktops.Rows.OfType<VirtualDesktop>().Select(desktop => desktop.Id).ToArray();
-        var listChanged = !previousIds.SequenceEqual(ordered.Select(desktop => desktop.Id));
-        var currentChanged = (_current?.Id ?? "") != currentId;
         Desktops.Set(ordered.Cast<object?>().ToArray());
         SetField(ref _current, currentId.Length == 0 ? null : _byId.GetValueOrDefault(currentId), nameof(Current));
         SetField(ref _supported, true, nameof(Supported));
         SetField(ref _reason, "", nameof(UnsupportedReason));
-        if (listChanged || currentChanged)
-            _engine?.FindNativeSingleton<WindowListService>()?.NotifyDesktopsChanged();
+        _engine?.FindNativeSingleton<WindowListService>()?.NotifyDesktopsChanged();
     }
 
     private void Clear()

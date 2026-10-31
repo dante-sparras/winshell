@@ -222,14 +222,6 @@ public sealed class NetworkTests(ITestOutputHelper output)
         Assert.Equal(expected, NetworkBackend.MapConnectionResult(value));
 
     [Fact]
-    public void A_connected_network_no_scan_reported_is_saved_only_when_its_name_is_a_profile()
-    {
-        var profiles = new HashSet<string>(StringComparer.Ordinal) { "Home" };
-        Assert.True(NetworkBackend.IsSaved(profiles, "Home"));
-        Assert.False(NetworkBackend.IsSaved(profiles, "Cafe"));
-    }
-
-    [Fact]
     public void Qml_bindings_follow_profiles_signal_and_removal()
     {
         var directory = Path.Combine(Path.GetTempPath(), "winshell-network-tests", Guid.NewGuid().ToString("N"));

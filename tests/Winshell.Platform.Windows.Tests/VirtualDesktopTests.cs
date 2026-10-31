@@ -96,7 +96,7 @@ public class VirtualDesktopTests
     }
 
     [Fact]
-    public void A_desktop_added_renamed_or_removed_outside_this_service_shows_up()
+    public void A_desktop_added_or_removed_outside_this_service_shows_up_and_nothing_else_reads_again()
     {
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
@@ -109,9 +109,9 @@ public class VirtualDesktopTests
             Assert.Single(desktops.Desktops.Rows);
             Assert.DoesNotContain(source.Calls, call => call is not "read");
 
-            source.Items[0] = new DesktopRecord(first, "Work");
+            var reads = source.Calls.Count;
             loop.Advance(VirtualDesktopsService.RereadInterval);
-            Assert.Equal("Work", Assert.IsType<VirtualDesktop>(desktops.Desktops.Rows[0]).Name);
+            Assert.Equal(reads, source.Calls.Count);
 
             source.Items.Add(new DesktopRecord(second, "Extra"));
             loop.Advance(VirtualDesktopsService.RereadInterval);
@@ -235,6 +235,7 @@ public class VirtualDesktopTests
         public Guid Current { get; set; }
         public List<string> Calls { get; } = [];
         public bool FailRead { get; set; }
+        public string ListStamp => string.Join(",", Items.Select(item => item.Id));
 
         public bool TryRead(out IReadOnlyList<DesktopRecord> desktops, out Guid current, out string error)
         {
