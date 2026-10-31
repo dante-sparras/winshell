@@ -1233,7 +1233,7 @@ namespace Winshell
             var args = o.Positional;
             if (args.Count == 0)
             {
-                Console.Error.WriteLine("winshell ipc needs a command: show, call, prop get, wait or listen.");
+                PrintHelp("ipc");
                 return 2;
             }
             var choice = Select(o);

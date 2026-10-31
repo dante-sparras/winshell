@@ -102,7 +102,7 @@ public sealed class IpcRegistry
         if (handler.FunctionDeclaration(function) is not { } d || !Callable(d))
             throw new IpcException($"Function not found: {target}.{function}");
         if (args.Count != d.Parameters.Count)
-            throw new IpcException($"Function {target}.{function} takes {d.Parameters.Count} arguments, {args.Count} given");
+            throw new IpcException($"Function {target}.{function} takes {d.Parameters.Count} argument{(d.Parameters.Count == 1 ? "" : "s")}, {args.Count} given");
         var converted = new object?[args.Count];
         for (var i = 0; i < args.Count; i++)
             converted[i] = Parse(args[i], d.Parameters[i].Type!, d.Parameters[i].Name);
