@@ -61,6 +61,27 @@ public class MonitorSurvivalTests
     }
 
     [Fact]
+    public async Task A_refresh_during_a_read_reads_again_when_it_ends()
+    {
+        var backend = new GatedBluetooth();
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        var first = service.RefreshAsync();
+        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await service.RefreshAsync();
+        Assert.Equal(1, backend.Reads);
+        backend.Gate.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var until = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        while (backend.Reads < 2 && DateTime.UtcNow < until)
+            await Task.Delay(10);
+        Assert.Equal(2, backend.Reads);
+        service.Destroy();
+    }
+
+    [Fact]
     public async Task Destroying_bluetooth_waits_for_the_read_before_disposing_the_backend()
     {
         var backend = new BlockingBluetooth();
@@ -173,6 +194,28 @@ public class MonitorSurvivalTests
             cancellation.ThrowIfCancellationRequested();
             Interlocked.Increment(ref _finished);
             return Task.FromResult(ReadyBluetooth());
+        }
+        public void StartDiscovery() { }
+        public void StopDiscovery() { }
+        public Task<string?> PairAsync(string id, CancellationToken cancellation) => Task.FromResult<string?>(null);
+        public Task<string?> UnpairAsync(string id) => Task.FromResult<string?>(null);
+        public Task<bool> SetAudioConnectionAsync(Guid container, bool connect) => Task.FromResult(true);
+        public void Dispose() { }
+    }
+
+    private sealed class GatedBluetooth : IBluetoothBackend
+    {
+        private int _reads;
+        public int Reads => Volatile.Read(ref _reads);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
+        public async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
+        {
+            Interlocked.Increment(ref _reads);
+            Started.TrySetResult();
+            await Gate.Task.WaitAsync(cancellation).ConfigureAwait(false);
+            return ReadyBluetooth();
         }
         public void StartDiscovery() { }
         public void StopDiscovery() { }
