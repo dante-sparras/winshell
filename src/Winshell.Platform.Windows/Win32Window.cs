@@ -787,7 +787,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 if (Handle != 0)
                     UpdateSize();
                 if (_kind == WindowKind.Floating)
-                    _client.OnStateChanged(Win32.IsZoomed(Handle), Win32.IsIconic(Handle), false);
+                    _client.OnStateChanged(Win32.IsZoomed(Handle), Win32.IsIconic(Handle));
                 return null;
             case Win32.WM_DPICHANGED:
                 {

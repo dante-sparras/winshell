@@ -33,7 +33,8 @@ Types not listed keep their names in the new module.
 | `Quickshell` (the singleton) | `Shell` | `Winshell` |
 | `QuickshellSettings` | `ShellSettings` | `Winshell` |
 | `QsWindow` | `ShellWindow` | `Winshell` |
-| `QsMenuHandle`, `QsMenuEntry`, `QsMenuButtonType`, `QsMenuOpener`, `QsMenuAnchor` | `MenuHandle`, `MenuEntry`, `MenuButtonType`, `MenuOpener`, `MenuAnchor` | `Winshell` |
+| `QsMenuHandle`, `QsMenuButtonType` | `MenuHandle`, `MenuButtonType` | `Winshell` |
+| `QsMenuEntry`, `QsMenuOpener`, `QsMenuAnchor` | Removed. A tray menu opens with `SystemTrayItem.display()` | `Winshell` |
 | `DesktopEntries`, `DesktopEntry` | `Apps`, `AppEntry` | `Winshell.Apps` |
 | `HyprlandFocusGrab` | `FocusGrab` | `Winshell` |
 | `WindowsTheme` | `Theme` | `Winshell.Theme` |
@@ -267,6 +268,7 @@ These did nothing on Windows, or repeated what another type does.
 | `WlrLayershell.namespace` | Nothing |
 | `BackgroundEffect.blurRegion` | `WindowEffects.backdrop: WindowEffects.Acrylic` |
 | `HyprlandWindow` | Nothing |
+| `HyprlandToplevel` attached to a toplevel | `Winland.toplevels`. `WinlandWindow` is not attached to an `AppWindow` |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
 | `ShortcutInhibitor` | Nothing |
 | `Quickshell.Services.Greetd`, `Quickshell.Services.Polkit`, `Quickshell.I3`, `Quickshell.DBusMenu`, `Quickshell.WindowManager` | Nothing |
@@ -297,6 +299,8 @@ Stopping clears the preview and all retained pixels. Export with `saveToFile()` 
 - `FloatingWindow.activate()` shows the window, restores it from minimized, and asks Windows to bring it to the front with the keyboard. Windows lets a shell do that after a click or hotkey in it; asked from another program, such as `winshell ipc call`, Windows may only flash its taskbar button.
 - The environment variables are `WINSHELL_CONFIG_DIR`, `WINSHELL_APP_ID`, `WINSHELL_DISABLE_FILE_WATCHER` and `WINSHELL_NO_RELOAD_POPUP`, not `XDG_CONFIG_HOME`, `QS_APP_ID`, `QS_DISABLE_FILE_WATCHER` and `QS_NO_RELOAD_POPUP`.
 - `Shell.appId` is `winshell` unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets it.
+- `//@ pragma IconTheme` is not a shell setting. A configuration that contains it fails to load.
+- `ShellScreen.physicalPixelDensity`, `ShellScreen.logicalPixelDensity`, `FloatingWindow.fullscreen`, `FloatingWindow.parentWindow`, `ShellWindow.surfaceFormat` and `ShellWindow.resourcesLost` are removed. `Region` corner radii do clip the input mask: a corner above 0 replaces `radius`, and 0 uses `radius`. An ellipse ignores them.
 - `Shell.hasVersion` and `//@ if hasVersion(...)` answer for the Winshell release stamped into the build from `.release-please-manifest.json`, not Quickshell 0.3. `hasVersion(0, 3)` is true on 0.3.0 and any later release. A feature list names unreleased features of that exact release; none are declared, so `hasVersion(0, 3, ["feature"])` is false on 0.3.0 and true on a later release. `Shell.hasQtVersion` and `//@ if hasQtVersion(...)` still check the Qt Quick language level this runtime implements, which is 6.10.
 - Log categories are short: `audio`, `media`, `power`, `hotkey`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.
 

@@ -51,6 +51,9 @@ public class HiddenWindowTests
               }
             }
             """;
+        // A late loop runs every timer that is already due in one batch. The 500 ms quit and the 10 s
+        // deadline then both run, and the deadline's code replaces the success code. The paints are still checked.
+        var finished = false;
         Run(config, (loop, platform, host) =>
         {
             var popup = Assert.Single(host.Root!.OwnedObjects.OfType<PopupWindow>());
@@ -79,6 +82,7 @@ public class HiddenWindowTests
             {
                 popup.Visible = false;
                 releasedBuffers = HoldsBuffers(backend);
+                finished = true;
                 loop.Quit(0);
             });
 
@@ -89,7 +93,7 @@ public class HiddenWindowTests
             Assert.False(PaintCounter.ShownAtFirstPaint);
             Assert.True(shownBuffers);
             Assert.False(releasedBuffers);
-        });
+        }, () => finished);
     }
 
     [Fact]
@@ -150,7 +154,7 @@ public class HiddenWindowTests
             || typeof(CompositionSurface).GetField("_bitmap", fields)!.GetValue(surface) is not null;
     }
 
-    private static void Run(string config, Action<WinEventLoop, WindowsPlatform, ShellHost> test)
+    private static void Run(string config, Action<WinEventLoop, WindowsPlatform, ShellHost> test, Func<bool>? finished = null)
     {
         var dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -172,7 +176,7 @@ public class HiddenWindowTests
             })
             { WatchFiles = false };
             Assert.True(host.Start());
-            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(1));
+            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(finished?.Invoke() == true ? 0 : 1));
             test(loop, platform, host);
         }
         finally
