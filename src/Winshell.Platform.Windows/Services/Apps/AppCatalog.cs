@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using global::Windows.ApplicationModel;
 using global::Windows.Management.Deployment;
 using Winshell.Runtime;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Apps;
 
@@ -66,11 +67,14 @@ internal sealed class AppCatalog : IDisposable
     private readonly bool _watchPackages;
     private readonly bool _registerIcons;
     private readonly Log _log;
-    private readonly List<FileSystemWatcher> _watchers = [];
-    private readonly Timer _debounce;
+    private readonly List<DirectoryWatch> _watches = [];
+    private readonly AutoResetEvent _wake = new(false);
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private PackageCatalog? _packages;
-    private bool _started, _scanning, _queued, _disposed;
+    private Thread? _scanThread;
+    private long _quietUntil = long.MinValue;
+    private bool _started, _disposed;
+    private volatile bool _stop;
     private volatile AppSnapshot _snapshot = AppSnapshot.Empty;
 
     public AppCatalog(
@@ -88,7 +92,6 @@ internal sealed class AppCatalog : IDisposable
         _watchPackages = watchPackages;
         _registerIcons = registerIcons;
         _log = log ?? Log.Default;
-        _debounce = new Timer(_ => Rescan(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         Debounce = debounce;
     }
 
@@ -111,20 +114,12 @@ internal sealed class AppCatalog : IDisposable
         }
         if (_registerIcons)
             IconProvider.AppIconLookup = LookupIcon;
+        // The scan thread is waiting before any watch is armed, so a change cannot arrive with nobody to scan it.
+        _scanThread = new Thread(ScanLoop) { IsBackground = true, Name = "App scan" };
+        _scanThread.Start();
+        Poke(TimeSpan.Zero);
         foreach (var folder in _folders.Where(Directory.Exists))
-        {
-            var watcher = new FileSystemWatcher(folder)
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite,
-            };
-            watcher.Created += OnFileChanged;
-            watcher.Deleted += OnFileChanged;
-            watcher.Changed += OnFileChanged;
-            watcher.Renamed += OnFileChanged;
-            watcher.EnableRaisingEvents = true;
-            _watchers.Add(watcher);
-        }
+            Arm(folder);
         if (_watchPackages)
         {
             try
@@ -139,7 +134,6 @@ internal sealed class AppCatalog : IDisposable
                 Debug.WriteLine(e);
             }
         }
-        Rescan();
     }
 
     public void Dispose()
@@ -150,12 +144,12 @@ internal sealed class AppCatalog : IDisposable
                 return;
             _disposed = true;
         }
-        foreach (var watcher in _watchers)
-        {
-            watcher.EnableRaisingEvents = false;
-            watcher.Dispose();
-        }
-        _watchers.Clear();
+        _stop = true;
+        _wake.Set();
+        foreach (var watch in _watches)
+            watch.Dispose();
+        _watches.Clear();
+        _scanThread?.Join();
         if (_packages is not null)
         {
             _packages.PackageInstalling -= OnInstalling;
@@ -163,7 +157,7 @@ internal sealed class AppCatalog : IDisposable
             _packages.PackageUpdating -= OnUpdating;
             _packages = null;
         }
-        _debounce.Dispose();
+        _wake.Dispose();
         _ready.TrySetResult();
     }
 
@@ -174,7 +168,18 @@ internal sealed class AppCatalog : IDisposable
         return AppIndex.Find(_snapshot.Entries, name)?.Icon;
     }
 
-    private void OnFileChanged(object sender, FileSystemEventArgs e) => Soon();
+    private void Arm(string folder)
+    {
+        // FileSystemWatcher delivers on a pool worker. A busy pool can hold a change, and the scan behind it, forever.
+        var watch = DirectoryWatch.Start(
+            folder,
+            DirectoryWatch.FileChanges | DirectoryWatch.NameChanges,
+            _ => Poke(Debounce),
+            () => Poke(Debounce),
+            subtree: true);
+        if (watch is not null)
+            _watches.Add(watch);
+    }
 
     private void OnInstalling(PackageCatalog sender, PackageInstallingEventArgs args)
     {
@@ -195,57 +200,65 @@ internal sealed class AppCatalog : IDisposable
     }
 
     // Installers write many files at once, so a scan waits until they have been quiet.
-    private void Soon() => _debounce.Change(Debounce, Timeout.InfiniteTimeSpan);
-
-    private void Rescan()
+    private void Poke(TimeSpan delay)
     {
         lock (_gate)
         {
             if (_disposed)
                 return;
-            if (_scanning)
-            {
-                _queued = true;
-                return;
-            }
-            _scanning = true;
+            var until = Environment.TickCount64 + (long)delay.TotalMilliseconds;
+            if (until > _quietUntil)
+                _quietUntil = until;
         }
-        Task.Run(() =>
+        _wake.Set();
+    }
+
+    private void Soon() => Poke(Debounce);
+
+    private void ScanLoop()
+    {
+        while (!_stop)
         {
-            try
+            _wake.WaitOne();
+            if (_stop)
+                return;
+            while (!_stop)
             {
-                while (true)
-                {
-                    var snapshot = Take();
-                    var changed = !_snapshot.SameAs(snapshot);
-                    _snapshot = snapshot;
-                    if (changed)
-                        Changed?.Invoke();
-                    _ready.TrySetResult();
-                    lock (_gate)
-                    {
-                        if (_disposed || !_queued)
-                        {
-                            _scanning = false;
-                            return;
-                        }
-                        _queued = false;
-                    }
-                }
-            }
-#pragma warning disable CA1031 // A failed scan is a finished empty result. The next file event tries again.
-            catch (Exception e)
-#pragma warning restore CA1031
-            {
-                _log.Warn("apps", e.Message);
+                int waitMs;
                 lock (_gate)
                 {
-                    _scanning = false;
-                    _queued = false;
+                    var remain = _quietUntil - Environment.TickCount64;
+                    waitMs = remain <= 0 ? 0 : (int)Math.Min(remain, int.MaxValue);
                 }
-                _ready.TrySetResult();
+                if (waitMs == 0)
+                    break;
+                if (!_wake.WaitOne(waitMs))
+                    break;
             }
-        });
+            if (_stop)
+                return;
+            ScanOnce();
+        }
+    }
+
+    private void ScanOnce()
+    {
+        try
+        {
+            var snapshot = Take();
+            var changed = !_snapshot.SameAs(snapshot);
+            _snapshot = snapshot;
+            if (changed)
+                Changed?.Invoke();
+            _ready.TrySetResult();
+        }
+#pragma warning disable CA1031 // A failed scan is a finished empty result. The next file event tries again.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            _log.Warn("apps", e.Message);
+            _ready.TrySetResult();
+        }
     }
 
     private AppSnapshot Take()

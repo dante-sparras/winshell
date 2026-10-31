@@ -170,6 +170,9 @@ public class EventQueue : IEventLoop
             if (entry.Cancelled)
                 return;
             entry.Cancelled = true;
+            // The entry stays in the heap until it is due when other timers are still live. The action closes over
+            // the object that scheduled it, so leaving it there keeps that object until the due time.
+            entry.DropAction();
             if (++_cancelled <= _timers.Count / 2)
                 return;
             var live = _timers.UnorderedItems.Where(item => !item.Element.Cancelled).ToList();
@@ -219,10 +222,14 @@ public class EventQueue : IEventLoop
 
     private sealed class TimerEntry(EventQueue queue, Action action) : IDisposable
     {
-        public Action Action { get; } = action;
+        private static readonly Action Dropped = static () => { };
+
+        public Action Action { get; private set; } = action;
 
         /// <summary>Set under the timer lock when the timer is cancelled or taken off the heap to fire.</summary>
         public bool Cancelled { get; set; }
+
+        public void DropAction() => Action = Dropped;
 
         public void Dispose() => queue.Cancel(this);
     }

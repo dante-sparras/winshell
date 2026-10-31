@@ -630,7 +630,7 @@ public sealed class ScrollView : Control
 
     private static Flickable MakeFlickable()
     {
-        var f = new Flickable { Clip = true };
+        var f = new Flickable { Clip = true, BoundsBehavior = (int)Flickable.BoundsBehaviorValue.StopAtBounds };
         f.MarkComplete();
         return f;
     }
@@ -789,7 +789,7 @@ public sealed class ScrollIndicator : Control
 
     [Qml] public double Position { get { Track(); return _position; } set { if (SetField(ref _position, value)) Update(); } }
 
-    [Qml] public bool Active { get { Track(); return _active; } set => SetField(ref _active, value); }
+    [Qml] public bool Active { get { Track(); return _active; } set { if (SetField(ref _active, value)) Update(); } }
 
     [Qml] public int Orientation { get { Track(); return _orientation; } set { if (SetField(ref _orientation, value)) UpdateImplicitSize(); } }
 
@@ -797,7 +797,7 @@ public sealed class ScrollIndicator : Control
 
     protected override Item? CreateDefaultContentItem() => Part(new PaintedItem((c, i, _) =>
     {
-        if (_size >= 1)
+        if (!_active || _size >= 1)
             return;
         var r = i.Bounds;
         var color = Theme.Current.ControlStrongFillColorDefault;

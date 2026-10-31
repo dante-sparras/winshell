@@ -48,7 +48,7 @@ A network of an adapter, reached from `NetworkDevice.networks`. Wi-Fi networks a
 | `name` | string, read-only | The SSID of a Wi-Fi network. For a wired network, the connection profile's name, or the adapter's. |
 | `device` | [NetworkDevice](#networkdevice), read-only | The adapter that sees this network. |
 | `connected` | bool, read-only | Whether `state` is `Connected`. |
-| `saved` | bool, read-only | Whether a saved Wi-Fi profile has this SSID as its name. True for a wired network and for a connected network a scan has not reported. |
+| `saved` | bool, read-only | Whether a saved Wi-Fi profile has this SSID as its name, including a connected network the last scan did not report. True for a wired network. |
 | `state` | [ConnectionState](#connectionstate), read-only | The network's connection state. A Wi-Fi network the adapter is not on is `Disconnected`. |
 | `busy` | bool, read-only | True while `connect()`, `disconnect()` or `forget()` runs. Other calls are ignored until it ends. |
 | `error` | string, read-only | Why the last action failed. Empty when it succeeded. |

@@ -87,14 +87,14 @@ public static class ImageLoader
         return copy;
     }
 
-    public static async Task<SKImage?> LoadAsync(string source, string? baseDirectory, int width, int height)
+    public static async Task<SKImage?> LoadAsync(string source, string? baseDirectory, int width, int height, bool cache = true)
     {
         if (!IsRemote(source))
-            return await Task.Run(() => Load(source, baseDirectory, width, height)).ConfigureAwait(false);
+            return await Task.Run(() => Load(source, baseDirectory, width, height, cache)).ConfigureAwait(false);
         // Cleartext is never fetched, as the updater never does. This comes first, so the cache can't answer for it.
         if (!source.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return null;
-        if (TryRemembered(source, baseDirectory, width, height, out var remembered))
+        if (cache && TryRemembered(source, baseDirectory, width, height, out var remembered))
             return remembered;
         try
         {
@@ -102,7 +102,7 @@ public static class ImageLoader
             if (bytes is null)
                 return null;
             var image = Decode(bytes, source, width, height);
-            if (image is null || !TryKey(source, baseDirectory, width, height, out var key))
+            if (!cache || image is null || !TryKey(source, baseDirectory, width, height, out var key))
                 return image;
             var copy = Copy(image);
             if (copy is null)
@@ -378,6 +378,8 @@ public class Image : Item
     private bool _asynchronous;
     private bool _cache = true;
     private bool _mirror;
+    private bool _mirrorVertically;
+    private QRect? _sourceClip;
     private bool _mipmap;
     private int _horizontalAlignment = QtEnums.AlignHCenter;
     private int _verticalAlignment = QtEnums.AlignVCenter;
@@ -480,7 +482,15 @@ public class Image : Item
     }
 
     [Qml]
-    public bool MirrorVertically { get; set; }
+    public bool MirrorVertically
+    {
+        get { Track(); return _mirrorVertically; }
+        set
+        {
+            if (SetField(ref _mirrorVertically, value))
+                Update();
+        }
+    }
 
     [Qml]
     public bool Mipmap
@@ -527,7 +537,15 @@ public class Image : Item
     }
 
     [Qml]
-    public object? SourceClipRect { get; set; }
+    public QRect? SourceClipRect
+    {
+        get { Track(); return _sourceClip; }
+        set
+        {
+            if (SetField(ref _sourceClip, value) && _image is not null)
+                SetImage(_image, _status);
+        }
+    }
 
     public SKImage? CurrentImage => _image;
 
@@ -564,10 +582,13 @@ public class Image : Item
         {
             SetStatus((int)StatusValue.Loading);
             var source = _source;
+            var cache = _cache;
             var loop = Engine?.Loop;
-            _ = ImageLoader.LoadAsync(source, baseDir, w, h).ContinueWith(t =>
+            // A finished load has to report on this thread. ContinueWith otherwise queues that report on the
+            // thread pool, and a busy pool leaves the image Loading after the bytes are already in hand.
+            void Report(Task<SKImage?> task)
             {
-                var image = t.IsCompletedSuccessfully ? t.Result : null;
+                var image = task.IsCompletedSuccessfully ? task.Result : null;
                 if (loop is null)
                 {
                     image?.Dispose();
@@ -584,7 +605,12 @@ public class Image : Item
                     if (image is null)
                         Engine?.Log.Warn("scene", $"QML {TypeName}: Cannot open: {source}" + (source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? " (only https:// images are loaded)" : ""));
                 });
-            }, TaskScheduler.Default);
+            }
+            var load = ImageLoader.LoadAsync(source, baseDir, w, h, cache);
+            if (load.IsCompleted)
+                Report(load);
+            else
+                _ = load.ContinueWith(Report, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             return;
         }
         var loaded = ImageLoader.Load(_source, baseDir, w, h, _cache);
@@ -624,6 +650,12 @@ public class Image : Item
                 h = w * image.Height / image.Width;
             if (_sourceSizeSet && _sourceSize.Height > 0 && _sourceSize.Width <= 0)
                 w = h * image.Width / image.Height;
+            if (SourcePixels(image) is { } pixels)
+            {
+                var scale = _sourceSizeSet ? dpr : 1;
+                w = pixels.Width / scale;
+                h = pixels.Height / scale;
+            }
             ImplicitWidth = w;
             ImplicitHeight = h;
         }
@@ -692,18 +724,41 @@ public class Image : Item
         return SKRect.Create(x, y, pw, ph);
     }
 
+    /// <summary>The device-pixel region <c>sourceClipRect</c> names. Null means the whole image. An empty rect shows nothing.</summary>
+    private SKRectI? SourcePixels(SKImage image)
+    {
+        if (_sourceClip is not { Width: > 0, Height: > 0 } clip)
+            return null;
+        var scale = _sourceSizeSet ? Host?.DevicePixelRatio ?? 1 : 1;
+        var left = Math.Clamp((int)Math.Round(clip.X * scale), 0, image.Width);
+        var top = Math.Clamp((int)Math.Round(clip.Y * scale), 0, image.Height);
+        var right = Math.Clamp((int)Math.Round((clip.X + clip.Width) * scale), left, image.Width);
+        var bottom = Math.Clamp((int)Math.Round((clip.Y + clip.Height) * scale), top, image.Height);
+        return new SKRectI(left, top, right, bottom);
+    }
+
     public override void Paint(SKCanvas canvas, PaintContext context)
     {
         var image = _image;
         if (image is null || Width <= 0 || Height <= 0)
             return;
+        SKImage? subset = null;
+        if (SourcePixels(image) is { } pixels)
+        {
+            if (pixels.Width <= 0 || pixels.Height <= 0)
+                return;
+            subset = image.Subset(pixels);
+            if (subset is null)
+                return;
+            image = subset;
+        }
         using var paint = new SKPaint { IsAntialias = true };
         var sampling = Smooth ? new SKSamplingOptions(SKFilterMode.Linear, _mipmap ? SKMipmapMode.Linear : SKMipmapMode.None) : new SKSamplingOptions(SKFilterMode.Nearest);
         canvas.Save();
-        if (_mirror)
+        if (_mirror || _mirrorVertically)
         {
-            canvas.Translate((float)Width, 0);
-            canvas.Scale(-1, 1);
+            canvas.Translate(_mirror ? (float)Width : 0, _mirrorVertically ? (float)Height : 0);
+            canvas.Scale(_mirror ? -1 : 1, _mirrorVertically ? -1 : 1);
         }
         if (_fillMode is (int)FillModeValue.Tile or (int)FillModeValue.TileHorizontally or (int)FillModeValue.TileVertically)
         {
@@ -725,6 +780,7 @@ public class Image : Item
             canvas.DrawImage(image, rect, sampling, paint);
         }
         canvas.Restore();
+        subset?.Dispose();
     }
 }
 

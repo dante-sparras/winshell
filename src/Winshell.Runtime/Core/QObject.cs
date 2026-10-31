@@ -498,10 +498,11 @@ public class QObject
             foreach (var slot in _signals.Values)
                 slot.Clear();
         }
-        // A stale script reference must not keep the functions and context this object no longer uses alive.
+        // A stale script reference must not keep the functions, properties and context this object no longer uses alive.
         _functions = null;
         _functionDeclarations = null;
         _interceptors = null;
+        _dynamic = null;
         CreationContext = null;
         IsDestroyed = true;
         _owner?._owned?.Remove(this);
