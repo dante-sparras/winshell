@@ -45,6 +45,19 @@ public class QtTextMemberTests
     }
 
     [Fact]
+    public void Overwrite_mode_replaces_a_cluster_in_a_full_field()
+    {
+        var (field, scene, shell) = Show("width: 80; text: 'abcd'; maximumLength: 4");
+        using var _ = shell;
+        field.CursorPosition = 1;
+        field.OverwriteMode = true;
+
+        scene.TextInput("Z");
+
+        Assert.Equal("aZcd", field.Text_);
+    }
+
+    [Fact]
     public void Auto_scroll_off_leaves_the_caret_past_the_field()
     {
         var (field, _, shell) = Show("width: 20; text: 'hello world'; autoScroll: false");

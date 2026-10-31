@@ -799,20 +799,17 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         var replacing = SelectionEnd > SelectionStart;
         if (replacing)
             DeleteSelection(fromUser: true);
-        var room = _maximumLength - _text.Length;
+        var pos = TextClusters.Snap(_text, _cursorPosition);
+        var current = overwrite && !replacing && pos < _text.Length
+            ? _text.Remove(pos, TextClusters.Next(_text, pos) - pos)
+            : _text;
+        var room = _maximumLength - current.Length;
         if (room <= 0)
             return;
         if (text.Length > room)
             text = TextClusters.Limit(text, room);
         if (text.Length == 0)
             return;
-        var pos = TextClusters.Snap(_text, _cursorPosition);
-        var current = _text;
-        if (overwrite && !replacing && pos < current.Length)
-        {
-            var to = TextClusters.Next(current, pos);
-            current = current.Remove(pos, to - pos);
-        }
         SetText(current.Insert(pos, text), fromUser: true, clearHistory: false, recordUndo);
         _selectionStart = _selectionEnd = pos + text.Length;
         CursorPosition = pos + text.Length;
