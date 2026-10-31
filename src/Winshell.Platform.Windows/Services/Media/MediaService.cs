@@ -68,6 +68,7 @@ public sealed class MediaSession : QObject
     private const string PositionKey = "position:tick";
 
     private readonly SmtcSession _session;
+    private bool _canSwitchTo;
 
     internal MediaSession(SmtcSession session)
     {
@@ -101,7 +102,9 @@ public sealed class MediaSession : QObject
     [Qml] public bool CanGoPrevious { get { Track(); return _session.CanGoPrevious; } }
 
     /// <summary>True when Windows can bring the app's window forward.</summary>
-    [Qml] public bool CanSwitchTo => _session.AppId.Contains('!') || MainWindow() != 0;
+    [Qml] public bool CanSwitchTo { get { Track(); return _canSwitchTo = FindCanSwitchTo(); } }
+
+    private bool FindCanSwitchTo() => _session.AppId.Contains('!') || MainWindow() != 0;
 
     /// <summary>The name Windows shows for the app.</summary>
     [Qml] public string AppName => _session.AppName;
@@ -395,6 +398,7 @@ public sealed class MediaSession : QObject
             Emit("trackChanged");
         foreach (var name in names)
             NotifyChanged(name);
+        SetField(ref _canSwitchTo, FindCanSwitchTo(), nameof(CanSwitchTo));
         if (trackChanged)
             Emit("postTrackChanged");
     }

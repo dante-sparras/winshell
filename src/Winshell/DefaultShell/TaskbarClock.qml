@@ -10,6 +10,16 @@ Item {
   property var notificationListener: null
   // Whether the flyout is open, so an auto-hiding taskbar stays up.
   readonly property bool busy: calendar.visible
+  // Notifications the center is showing. The button still draws only the time and date.
+  readonly property int notificationCount: {
+    var groups = calendar.visibleGroups
+    if (!groups)
+      return 0
+    var count = 0
+    for (var i = 0; i < groups.length; i++)
+      count += groups[i].notifications.values.length
+    return count
+  }
 
   // Win+N, as a click on the clock.
   function toggleCalendar() {
@@ -36,7 +46,7 @@ Item {
     horizontalPadding: 10
     implicitHeight: 40
     flat: true
-    Accessible.name: clockFormat.timeLabel + ", " + clockFormat.dateLabel
+    Accessible.name: clockFormat.timeLabel + ", " + clockFormat.dateLabel + (root.notificationCount < 1 ? "" : ", " + root.notificationCount + (root.notificationCount === 1 ? " notification" : " notifications"))
     Accessible.description: "Open notification center and calendar"
     onClicked: root.toggleCalendar()
   }

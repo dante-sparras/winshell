@@ -1,12 +1,14 @@
 using Microsoft.Win32;
 using Winshell.Platform.Windows.Services.Session;
 using Winshell.Runtime;
+using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Platform.Windows.Tests;
 
 /// <summary>
 /// <c>Startup</c> registers Winshell to run at sign-in. These tests use a fake, or a registry key of their own under
-/// <c>HKCU\Software\Winshell\Tests</c> that they delete, and never touch the user's Run key.
+/// <c>HKCU\Software\Winshell\Tests</c> that they delete, and never touch the user's Run key. The packaged startup
+/// task is a fake too: nothing here calls <c>StartupTask.GetAsync</c>.
 /// </summary>
 public sealed class StartupTests : IDisposable
 {
@@ -204,6 +206,75 @@ public sealed class StartupTests : IDisposable
     public void Arguments_are_quoted_the_way_Windows_splits_a_command_line(string arg, string quoted) =>
         Assert.Equal(quoted, WindowsStartupRegistry.Quote(arg));
 
+    [Fact]
+    public void A_startup_task_turns_on_and_off_without_a_path()
+    {
+        var task = new FakeStartupTask();
+        var root = Load(new StartupTaskRegistry(task));
+
+        Assert.False((bool)root.ReadProperty("runs")!);
+        Assert.False((bool)root.ReadProperty("elsewhere")!);
+
+        root.WriteProperty("want", true);
+        Assert.True((bool)root.ReadProperty("runs")!);
+        Assert.Equal(StartupTaskState.Enabled, task.State);
+        Assert.Equal(1, task.Enables);
+        Assert.Empty(_warnings);
+
+        root.WriteProperty("want", false);
+        Assert.False((bool)root.ReadProperty("runs")!);
+        Assert.Equal(StartupTaskState.Disabled, task.State);
+        Assert.Equal(1, task.Disables);
+    }
+
+    [Fact]
+    public void A_startup_task_Windows_turned_off_stays_off_until_Windows_turns_it_on()
+    {
+        var task = new FakeStartupTask { State = StartupTaskState.DisabledByUser };
+        var registry = new StartupTaskRegistry(task);
+        var root = Load(registry);
+
+        Assert.True((bool)root.ReadProperty("runs")!);
+        Assert.True((bool)root.ReadProperty("turnedOff")!);
+        Assert.False((bool)root.ReadProperty("elsewhere")!);
+
+        Assert.False(registry.Register());
+        Assert.False(registry.Unregister());
+        Assert.Equal(0, task.Enables);
+        Assert.Equal(0, task.Disables);
+        Assert.Equal(StartupTaskState.DisabledByUser, task.State);
+    }
+
+    [Fact]
+    public void A_startup_task_Windows_policy_owns_is_left_alone()
+    {
+        var forced = new FakeStartupTask { State = StartupTaskState.EnabledByPolicy };
+        var on = new StartupTaskRegistry(forced);
+        Assert.True(on.IsRegistered());
+        Assert.False(on.TurnedOffInWindows());
+        Assert.False(on.Unregister());
+        Assert.Equal(0, forced.Disables);
+
+        var blocked = new FakeStartupTask { State = StartupTaskState.DisabledByPolicy };
+        var off = new StartupTaskRegistry(blocked);
+        Assert.True(off.IsRegistered());
+        Assert.True(off.TurnedOffInWindows());
+        Assert.False(off.Register());
+        Assert.Equal(0, blocked.Enables);
+    }
+
+    [Fact]
+    public void A_startup_task_that_stays_disabled_warns_and_stays_off()
+    {
+        var task = new FakeStartupTask { EnableResult = StartupTaskState.Disabled };
+        var root = Load(new StartupTaskRegistry(task));
+
+        root.WriteProperty("want", true);
+        Assert.False((bool)root.ReadProperty("runs")!);
+        Assert.Equal(StartupTaskState.Disabled, task.State);
+        Assert.Contains("startup: Windows did not let Winshell register to run at sign-in.", _warnings);
+    }
+
     private QObject Load(IStartupRegistry? windows)
     {
         var path = Path.Combine(_directory, "shell.qml");
@@ -253,6 +324,32 @@ public sealed class StartupTests : IDisposable
             if (Accepts)
                 Registered = false;
             return Accepts;
+        }
+    }
+
+    /// <summary>A startup task that records calls. It is not <c>Windows.ApplicationModel.StartupTask</c>.</summary>
+    private sealed class FakeStartupTask : IStartupTask
+    {
+        public StartupTaskState State { get; set; } = StartupTaskState.Disabled;
+
+        public StartupTaskState EnableResult { get; set; } = StartupTaskState.Enabled;
+
+        public int Enables { get; private set; }
+
+        public int Disables { get; private set; }
+
+        public StartupTaskState RequestEnable()
+        {
+            Enables++;
+            State = EnableResult;
+            return EnableResult;
+        }
+
+        public bool Disable()
+        {
+            Disables++;
+            State = StartupTaskState.Disabled;
+            return true;
         }
     }
 }

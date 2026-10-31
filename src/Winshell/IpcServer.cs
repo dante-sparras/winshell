@@ -13,7 +13,8 @@ internal sealed record IpcRequest(
     [property: JsonPropertyName("target")] string? Target = null,
     [property: JsonPropertyName("name")] string? Name = null,
     [property: JsonPropertyName("args")] List<string>? Args = null,
-    [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false);
+    [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false,
+    [property: JsonPropertyName("hard"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hard = false);
 
 internal sealed record IpcResponse(
     [property: JsonPropertyName("ok")] bool Ok,
@@ -237,7 +238,7 @@ internal sealed class IpcServer : IDisposable
                 "call" => new IpcResponse(true, ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
                 "prop" => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
                 "kill" => Kill(),
-                "reload" => Reload(),
+                "reload" => Reload(request.Hard),
                 _ => new IpcResponse(false, Error: $"Unknown request {request.Op}"),
             };
         }
@@ -269,11 +270,9 @@ internal sealed class IpcServer : IDisposable
         return new IpcResponse(true);
     }
 
-    private IpcResponse Reload()
-    {
-        _host().Reload(hard: false);
-        return new IpcResponse(true);
-    }
+    private IpcResponse Reload(bool hard) => _host().TryReload(hard)
+        ? new IpcResponse(true)
+        : new IpcResponse(false, Error: "The configuration did not load. Run winshell log to see why.");
 
     private async Task Listen(IpcRequest request, StreamWriter writer, bool once)
     {

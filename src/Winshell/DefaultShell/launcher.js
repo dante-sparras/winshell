@@ -121,3 +121,89 @@ function move(index, key, count, pinnedCount, columns) {
   }
   return index
 }
+
+// Windows Settings pages this shell already opens, from QuickSettingsContent and settings.js.
+// Start search does not add pages of its own, and it does not search the web.
+var settingsPages = [
+  { name: "Wi-Fi", uri: "ms-settings:network-wifi", keywords: "wifi wi-fi wireless network", glyph: "\uE701" },
+  { name: "Bluetooth", uri: "ms-settings:bluetooth", keywords: "bluetooth devices", glyph: "\uE702" },
+  { name: "Airplane mode", uri: "ms-settings:network-airplanemode", keywords: "airplane flight mode", glyph: "\uE709" },
+  { name: "Energy saver", uri: "ms-settings:batterysaver", keywords: "battery saver power", glyph: "\uE863" },
+  { name: "Night light", uri: "ms-settings:nightlight", keywords: "night light blue light", glyph: "\uF08C" },
+  { name: "Accessibility", uri: "ms-settings:easeofaccess", keywords: "accessibility ease of access", glyph: "\uE776" },
+  { name: "More volume settings", uri: "ms-settings:apps-volume", keywords: "volume sound mixer apps", glyph: "\uE767" },
+  { name: "Colors in Windows", uri: "ms-settings:colors", keywords: "colors colour transparency windows personalization", glyph: "\uE771" },
+  { name: "Other system tray icons", uri: "ms-settings:taskbar", keywords: "tray notification area hidden icons overflow", glyph: "\uE712" },
+  { name: "Do not disturb", uri: "ms-settings:notifications", keywords: "dnd focus quiet hours silence", glyph: "\uE708" },
+  { name: "Startup apps in Windows", uri: "ms-settings:startupapps", keywords: "startup apps sign-in", glyph: "\uE7E8" },
+  { name: "All settings", uri: "ms-settings:", keywords: "settings windows", glyph: "\uE713" }
+]
+
+function wordsOf(query) {
+  return String(query || "").toLowerCase().split(/\s+/).filter(function (word) { return word.length > 0 })
+}
+
+function containsAll(text, words) {
+  var hay = String(text || "").toLowerCase()
+  for (var i = 0; i < words.length; i++) {
+    if (hay.indexOf(words[i]) < 0)
+      return false
+  }
+  return true
+}
+
+// Every word must be in the page's name or keywords. A name that starts with the query comes first.
+function searchSettings(query) {
+  var words = wordsOf(query)
+  if (words.length === 0)
+    return []
+  var q = words.join(" ")
+  var hits = []
+  for (var i = 0; i < settingsPages.length; i++) {
+    var page = settingsPages[i]
+    if (!containsAll(page.name + " " + page.keywords, words))
+      continue
+    var title = page.name.toLowerCase()
+    hits.push({ page: page, rank: title.indexOf(q) === 0 ? 0 : title.indexOf(q) > 0 ? 1 : 2, order: i })
+  }
+  hits.sort(function (a, b) { return a.rank - b.rank || a.order - b.order })
+  var out = []
+  for (var h = 0; h < hits.length; h++) {
+    var match = hits[h].page
+    out.push({ kind: "settings", name: match.name, uri: match.uri, path: match.uri, glyph: match.glyph })
+  }
+  return out
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : []
+}
+
+// Recent documents the caller already has. The name is matched; the path is not, so a folder name is not a hit.
+function searchFiles(files, query) {
+  var words = wordsOf(query)
+  if (words.length === 0)
+    return []
+  var list = asArray(files)
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var file = list[i]
+    if (!file || !containsAll(file.name, words))
+      continue
+    var path = file.path ? String(file.path) : ""
+    out.push({ kind: "file", name: String(file.name), uri: path, path: path, glyph: "\uE8A5" })
+  }
+  return out
+}
+
+// Apps stay the first group. Settings and files follow, and only while there is a query.
+function resultEntries(apps, settings, files) {
+  var out = []
+  var lists = [apps, settings, files]
+  for (var g = 0; g < lists.length; g++) {
+    var list = asArray(lists[g])
+    for (var i = 0; i < list.length; i++)
+      out.push(list[i])
+  }
+  return out
+}

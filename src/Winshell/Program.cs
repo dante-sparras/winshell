@@ -8,6 +8,7 @@ using System.Text;
 using Winshell;
 using Winshell.Platform.Windows;
 using Winshell.Platform.Windows.Diagnostics;
+using Winshell.Platform.Windows.Services.ExplorerTaskbar;
 using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -54,6 +55,8 @@ namespace Winshell
 
             /// <summary>End the process when the instance does not exit after it is asked.</summary>
             public bool Force { get; set; }
+
+            public bool Hard { get; set; }
 
             public bool NoColor { get; set; }
 
@@ -153,6 +156,8 @@ namespace Winshell
                     return List(options);
                 case "kill":
                     return await Kill(options);
+                case "reload":
+                    return await Reload(options);
                 case "log":
                     return await PrintLog(options);
                 case "ipc":
@@ -297,6 +302,9 @@ namespace Winshell
                     case "-f" or "--follow":
                         o.Follow = true;
                         break;
+                    case "--hard":
+                        o.Hard = true;
+                        break;
                     case "--force":
                         o.Force = true;
                         break;
@@ -423,6 +431,16 @@ namespace Winshell
                           With several, this exits and lists them.
                         """);
                     return;
+                case "reload":
+                    WriteHelp("""
+                        winshell reload [--hard] [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                          Reloads one running instance's configuration, and says whether it loaded.
+                          If it did not, the instance keeps running what it had.
+                          --hard does not hand the old objects to the new generation.
+                          With one running instance and no selector, that instance is used.
+                          With several, this exits and lists them.
+                        """);
+                    return;
                 case "log":
                     WriteHelp("""
                         winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
@@ -470,6 +488,8 @@ namespace Winshell
                        winshell list [-j]                  list running instances
                        winshell kill [--force] [instance options]
                                                            stop an instance and wait until it exits
+                       winshell reload [--hard] [instance options]
+                                                           reload an instance's configuration
                        winshell log [-f] [-t N] [file]     print an instance's log
                        winshell ipc show [-j]              list IPC targets
                        winshell ipc call <target> <function> [args...]
@@ -484,7 +504,7 @@ namespace Winshell
                   -p, --path <path>      a shell.qml, or the folder it is in
                   -c, --config <name>    a named config in {ConfigPaths.Root()}
                                          ({ConfigPaths.OverrideVariable} overrides that folder)
-                Instance selection (kill, log, ipc):
+                Instance selection (kill, reload, log, ipc):
                   -i, --id <id>          an instance id, or the start of one
                       --pid <pid>        an instance's process id
                 Other:
@@ -667,9 +687,11 @@ namespace Winshell
             void Reported(CrashReport? report)
             {
                 if (report is not null)
-                    Quietly(() => log.Info("", $"Wrote a crash report to \"{report.Path}\""));
+                    Quietly(() => log.Info("shell", $"Wrote a crash report to \"{report.Path}\""));
             }
             Exception? fatal = null;
+            // Null until the shell is about to start. A crash before that has not hidden Explorer's taskbar.
+            ExplorerTaskbarSession? explorerTaskbar = null;
             // Writes the report first, since logging can fail as the process ends. Returns false, so it can be an
             // exception filter: that runs before the finally blocks below close the log.
             bool ReportFatal(Exception error)
@@ -684,6 +706,8 @@ namespace Winshell
             }
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
+                // A crash on another thread can end the process without the finally below. Restore first.
+                Quietly(() => explorerTaskbar?.Restore());
                 if (e.ExceptionObject is Exception error)
                     ReportFatal(error);
                 else
@@ -691,7 +715,7 @@ namespace Winshell
             };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
-                Quietly(() => log.Error("", $"A background task failed: {e.Exception}"));
+                Quietly(() => log.Error("shell", $"A background task failed: {e.Exception}"));
                 e.SetObserved();
                 Reported(crashes.WriteOnce("background task", e.Exception, recovery: "A background task failed. Winshell is still running."));
             };
@@ -730,6 +754,9 @@ namespace Winshell
             crashes.ShellId = host.ShellId;
             // Winshell's own notice for a config error or a window that failed; it shows even when the config does not.
             using var notices = new ShellNotices(host, loop, platform, log, path => ShellNotices.Open(path, log));
+            // Creating this does not look at Explorer. The real taskbar is built only if the shell asks to hide it.
+            var taskbar = ExplorerTaskbarSession.ForThisProcess();
+            explorerTaskbar = taskbar;
             host.Services.Add(engine =>
             {
                 engine.AddService<IClipboard>(platform);
@@ -741,11 +768,12 @@ namespace Winshell
                     WindowsModules.AddUpdates(engine, updater);
                 // Winshell Settings' About page runs the same checks as winshell doctor, for this shell's config.
                 engine.AddService<IDoctor>(new CliDoctor(() => DoctorContextFor(root, null)));
+                engine.AddService(taskbar);
             });
             log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
             log.Info("", $"Launching config: \"{root}\"");
-            log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
-            log.Info("", $"Saving logs to \"{logPath}\"");
+            log.Info("shell", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
+            log.Info("shell", $"Saving logs to \"{logPath}\"");
             var pipe = $"winshell-{id}";
             NamedPipeServerStream listening;
             try
@@ -754,7 +782,7 @@ namespace Winshell
             }
             catch (IOException)
             {
-                log.Error("", "The control pipe is already taken.");
+                log.Error("shell", "The control pipe is already taken.");
                 lock (consoleLock)
                 {
                     logClosed = true;
@@ -767,10 +795,11 @@ namespace Winshell
                 catch (Exception deleteError) when (deleteError is IOException or UnauthorizedAccessException)
                 {
                 }
+                Quietly(() => explorerTaskbar?.Dispose());
                 return 1;
             }
             if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
-                log.Warn("", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
+                log.Warn("shell", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
             using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0), dismissNotice: () => notices.Hide());
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
@@ -783,7 +812,7 @@ namespace Winshell
             try
             {
                 if (!host.Start() && host.Root is null)
-                    log.Warn("", "The config failed to load. Winshell keeps running and reloads it when the files change.");
+                    log.Warn("shell", "The config failed to load. Winshell keeps running and reloads it when the files change.");
                 if (host.Root is not null)
                     Quietly(() =>
                     {
@@ -817,6 +846,9 @@ namespace Winshell
                 if (fatal is null)
                     Quietly(() => CrashFollowUp.MarkClean(exitState, DateTimeOffset.Now));
                 host.Dispose();
+                // After the shell is gone, so a binding cannot hide the taskbar again. This runs when the loop
+                // returns and when an exception leaves this try, because the filter above does not swallow it.
+                Quietly(() => explorerTaskbar?.Dispose());
                 Instances.Remove(id);
                 lock (consoleLock)
                 {
@@ -1148,6 +1180,35 @@ namespace Winshell
             }
             Console.WriteLine($"Killed {info.Id}");
             return 0;
+        }
+
+        private static async Task<int> Reload(Options o)
+        {
+            var choice = Select(o);
+            if (choice.Info is not { } info)
+            {
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
+            }
+            try
+            {
+                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("reload", Hard: o.Hard)))
+                {
+                    if (response.Ok)
+                    {
+                        Console.WriteLine($"Reloaded {info.Id}");
+                        return 0;
+                    }
+                    Console.Error.WriteLine($"Instance {info.Id} did not reload: {response.Error}");
+                    return 1;
+                }
+                Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
+            }
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+            }
+            return 1;
         }
 
         /// <summary>True when this instance's process has exited, or the process id now belongs to something else.</summary>
