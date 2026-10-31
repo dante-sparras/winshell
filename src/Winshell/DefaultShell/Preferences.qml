@@ -44,6 +44,8 @@ Singleton {
   property alias calendarWeekNumbers: adapter.calendarWeekNumbers
   // Show seconds on the taskbar clock, which wakes the shell every second.
   property alias clockSeconds: adapter.clockSeconds
+  // true lets Winshell take Alt+Tab, Win+Tab, Win+D and Win+X. false leaves them with Windows.
+  property alias desktopChords: adapter.desktopChords
   // false leaves Explorer's taskbar alone. true hides it and releases its edge until Winshell exits.
   property alias hideExplorerTaskbar: adapter.hideExplorerTaskbar
 
@@ -143,6 +145,7 @@ Singleton {
         startRecommended: "true shows recommended apps in Start under the pins.",
         calendarWeekNumbers: "true shows week numbers beside the calendar.",
         clockSeconds: "true shows seconds on the taskbar clock.",
+        desktopChords: "true lets Winshell take Alt+Tab, Win+Tab, Win+D and Win+X. false leaves them with Windows.",
         hideExplorerTaskbar: "true hides Explorer's taskbar and releases the screen edge it reserved, until Winshell exits.\nfalse leaves it alone. There is no switch for this in Winshell Settings.",
         hiddenNotificationApps: "The apps the notification center leaves out, as { id = \"<AppUserModelID>\", name = \"<app name>\" }.",
         startHotkey: "The hotkey that opens Start, such as \"Win\" or \"Ctrl+Alt+S\"; \"\" turns it off.",
@@ -172,6 +175,7 @@ Singleton {
       property bool startRecommended: true
       property bool calendarWeekNumbers: false
       property bool clockSeconds: false
+      property bool desktopChords: false
       property bool hideExplorerTaskbar: false
       property var hiddenNotificationApps: []
       property string startHotkey: "Win"

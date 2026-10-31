@@ -56,6 +56,90 @@ public sealed class FakeAppWindow(string title, string appId, string executable 
     [Qml] public void Close() => Calls.Add("close");
 }
 
+public sealed class FakeVirtualDesktops : QObject
+{
+    private bool _supported;
+    private string _reason = "virtual desktops are not supported";
+    private FakeVirtualDesktop? _current;
+
+    public FakeVirtualDesktops() => Desktops = FakeModel.Of(this);
+
+    public List<string> Calls { get; } = [];
+
+    [Qml] public ObjectModel Desktops { get; }
+
+    [Qml] public bool Supported { get { Track(); return _supported; } internal set => SetField(ref _supported, value, nameof(Supported)); }
+
+    [Qml] public string UnsupportedReason { get { Track(); return _reason; } internal set => SetField(ref _reason, value, nameof(UnsupportedReason)); }
+
+    [Qml] public FakeVirtualDesktop? Current { get { Track(); return _current; } }
+
+    [Qml]
+    public void SwitchTo(FakeVirtualDesktop? desktop)
+    {
+        if (desktop is null)
+            return;
+        Calls.Add("switch:" + desktop.Name);
+        foreach (var item in Desktops.Values.OfType<FakeVirtualDesktop>())
+            item.Current = item == desktop;
+        SetField(ref _current, desktop, nameof(Current));
+    }
+
+    [Qml]
+    public FakeVirtualDesktop? Create() => Add("Desktop " + (Desktops.Values.Count + 1));
+
+    [Qml]
+    public void Remove(FakeVirtualDesktop? desktop)
+    {
+        if (desktop is null || Desktops.Values.Count <= 1)
+            return;
+        var wasCurrent = desktop.Current;
+        Desktops.Remove(desktop);
+        var left = Desktops.Values.OfType<FakeVirtualDesktop>().ToList();
+        for (var i = 0; i < left.Count; i++)
+            left[i].Index = i;
+        if (wasCurrent && left.Count > 0)
+            SwitchTo(left[0]);
+    }
+
+    /// <summary>Adds a desktop and marks the list supported. Tests use this instead of the real broker.</summary>
+    public FakeVirtualDesktop Add(string name)
+    {
+        var desktop = new FakeVirtualDesktop(Guid.NewGuid().ToString("D"), name, Desktops.Values.Count);
+        Desktops.Add(desktop);
+        Supported = true;
+        UnsupportedReason = "";
+        if (_current is null)
+        {
+            desktop.Current = true;
+            SetField(ref _current, desktop, nameof(Current));
+        }
+        return desktop;
+    }
+}
+
+public sealed class FakeVirtualDesktop : QObject
+{
+    private string _name;
+    private int _index;
+    private bool _current;
+
+    public FakeVirtualDesktop(string id, string name, int index)
+    {
+        Id = id;
+        _name = name;
+        _index = index;
+    }
+
+    [Qml] public string Id { get; }
+
+    [Qml] public string Name { get { Track(); return _name; } internal set => SetField(ref _name, value, nameof(Name)); }
+
+    [Qml] public int Index { get { Track(); return _index; } internal set => SetField(ref _index, value, nameof(Index)); }
+
+    [Qml] public bool Current { get { Track(); return _current; } internal set => SetField(ref _current, value, nameof(Current)); }
+}
+
 public sealed class FakeApps : QObject
 {
     private readonly List<FakeAppEntry> _entries = [];
