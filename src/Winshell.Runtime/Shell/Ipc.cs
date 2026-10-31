@@ -315,13 +315,30 @@ public sealed class SocketObject : DataStream
             }
             catch (Exception e) when (e is SocketException or IOException or TimeoutException or UnauthorizedAccessException)
             {
+                var error = ConnectError(e);
                 loop.Post(() =>
                 {
                     if (generation == _generation && !IsDestroyed)
-                        Emit("error", e is TimeoutException or SocketException { SocketErrorCode: System.Net.Sockets.SocketError.AddressNotAvailable } ? 2 : 0);
+                        Emit("error", error);
                 });
             }
         });
+    }
+
+    private static int ConnectError(Exception exception)
+    {
+        if (exception is TimeoutException)
+            return (int)SocketError.NotFound;
+        if (exception is SocketException socket)
+        {
+            return socket.SocketErrorCode switch
+            {
+                System.Net.Sockets.SocketError.AddressNotAvailable => (int)SocketError.NotFound,
+                System.Net.Sockets.SocketError.ConnectionRefused => (int)SocketError.ConnectionRefused,
+                _ => (int)SocketError.Unknown,
+            };
+        }
+        return (int)SocketError.Unknown;
     }
 
     private void StartReading(int generation)

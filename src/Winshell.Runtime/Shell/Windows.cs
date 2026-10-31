@@ -9,7 +9,6 @@ namespace Winshell.Runtime.Shell;
 /// </summary>
 [QmlDefaultProperty("data")]
 [QmlSignal("closed")]
-[QmlSignal("resourcesLost")]
 [QmlSignal("windowConnected")]
 public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 {
@@ -25,8 +24,6 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     private string? _shownOnScreenId;
     private bool _updatesEnabled = true;
     private double _devicePixelRatio = 1;
-    private bool _opaqueSet;
-    private bool _opaque;
     private IWindowBackend? _backend;
     private SurfaceRestarts? _restarts;
     private IDisposable? _restartTimer;
@@ -42,7 +39,6 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         Scene.UpdateRequested += () => _backend?.RequestFrame();
         Scene.CursorChanged += c => _backend?.SetCursor(c);
         Scene.FocusChanged += OnSceneFocus;
-        SurfaceFormat = new SurfaceFormatGroup(this);
         Theme.Changed += OnThemeChanged;
     }
 
@@ -145,17 +141,6 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     }
 
     private IDisposable? _maskConnection;
-
-    [Qml]
-    public SurfaceFormatGroup SurfaceFormat { get; }
-
-    internal bool IsOpaque => _opaqueSet ? _opaque : _color.A >= 1;
-
-    internal void SetOpaque(bool value)
-    {
-        _opaqueSet = true;
-        _opaque = value;
-    }
 
     [Qml]
     public virtual ShellScreen? Screen
@@ -490,7 +475,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     {
     }
 
-    public virtual void OnStateChanged(bool maximized, bool minimized, bool fullscreen)
+    public virtual void OnStateChanged(bool maximized, bool minimized)
     {
     }
 
@@ -629,17 +614,6 @@ internal sealed class SurfaceRestarts
 public interface IRebindable
 {
     void Rebind(IWindowClient client);
-}
-
-/// <summary>A window's <c>surfaceFormat</c> group.</summary>
-public sealed class SurfaceFormatGroup(ShellWindow window) : QObject
-{
-    [Qml]
-    public bool Opaque
-    {
-        get => window.IsOpaque;
-        set => window.SetOpaque(value);
-    }
 }
 
 /// <summary>Tracks the shell's visible windows, for <c>Shell.lastWindowClosed</c>.</summary>
@@ -887,8 +861,7 @@ public sealed class FloatingWindow : ShellWindow
     private string _title = "";
     private QSize _minimumSize;
     private QSize _maximumSize;
-    private bool _maximized, _minimized, _fullscreen;
-    private ShellWindow? _parentWindow;
+    private bool _maximized, _minimized;
 
     public FloatingWindow()
     {
@@ -912,12 +885,6 @@ public sealed class FloatingWindow : ShellWindow
     [Qml]
     public bool Minimized { get { Track(); return _minimized; } set { if (SetField(ref _minimized, value)) OnPlacementChanged(); } }
 
-    [Qml]
-    public bool Fullscreen { get { Track(); return _fullscreen; } set { if (SetField(ref _fullscreen, value)) OnPlacementChanged(); } }
-
-    [Qml]
-    public ShellWindow? ParentWindow { get { Track(); return _parentWindow; } set => SetField(ref _parentWindow, value); }
-
     /// <summary>Shows the window, restores it when it is minimized, and brings it to the front with keyboard focus.</summary>
     [Qml]
     public void Activate()
@@ -933,11 +900,10 @@ public sealed class FloatingWindow : ShellWindow
     [Qml]
     public void StartSystemResize(int edges) => Backend?.StartSystemResize((Edges)edges);
 
-    public override void OnStateChanged(bool maximized, bool minimized, bool fullscreen)
+    public override void OnStateChanged(bool maximized, bool minimized)
     {
         if (SetField(ref _maximized, maximized, nameof(Maximized))) { }
         if (SetField(ref _minimized, minimized, nameof(Minimized))) { }
-        if (SetField(ref _fullscreen, fullscreen, nameof(Fullscreen))) { }
     }
 
     protected override void OnPlacementChanged()
@@ -945,6 +911,6 @@ public sealed class FloatingWindow : ShellWindow
         if (Backend is null)
             return;
         using var _ = DependencyTracker.Suspend();
-        Backend.SetFloating(new FloatingPlacement(Screen?.Info, _title, ImplicitWidth, ImplicitHeight, _minimumSize, _maximumSize, _maximized, _minimized, _fullscreen));
+        Backend.SetFloating(new FloatingPlacement(Screen?.Info, _title, ImplicitWidth, ImplicitHeight, _minimumSize, _maximumSize, _maximized, _minimized));
     }
 }
