@@ -16,7 +16,7 @@ Releases will be signed through SignPath Foundation once its project for Winshel
 
 ### Install with PowerShell
 
-No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running.
+No administrator account. This downloads the portable build for the current user, checks the zip against `SHA256SUMS.txt`, installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running.
 
 It needs `install.ps1` and the zip on that release.
 

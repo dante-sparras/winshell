@@ -32,7 +32,7 @@ irm https://github.com/dante-sparras/winshell/releases/latest/download/install.p
 & ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 ```
 
-The installer checks the zip against `SHA256SUMS.txt` on the release and stops if the hash does not match. It installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. The files are the portable build, so Winshell updates itself the same way.
+The installer checks the zip against `SHA256SUMS.txt` on the release and stops if the hash does not match. It installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. The files are the portable build, so Winshell updates itself the same way.
 
 Remove that install with:
 
