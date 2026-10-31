@@ -1,5 +1,75 @@
 # Changelog
 
+## [0.8.0](https://github.com/dante-sparras/winshell/compare/v0.7.0...v0.8.0) (2026-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **qml:** remove WinlandWorkspace.typeChanged and retain notifications ([#921](https://github.com/dante-sparras/winshell/issues/921))
+* **shell:** drop qml members that do nothing ([#919](https://github.com/dante-sparras/winshell/issues/919))
+* **qml:** silent widget and io members work or are gone ([#909](https://github.com/dante-sparras/winshell/issues/909))
+
+### Features
+
+* **cli:** winshell reload reloads a running instance ([#896](https://github.com/dante-sparras/winshell/issues/896)) ([0a92c74](https://github.com/dante-sparras/winshell/commit/0a92c7404585189e2cb045971f1542ba4f492a48))
+* **shell:** the taskbar clock can show seconds ([#831](https://github.com/dante-sparras/winshell/issues/831)) ([418ae28](https://github.com/dante-sparras/winshell/commit/418ae2889a316e521854d59096c9b3397f595f19))
+* **startup:** packaged sign-in uses the startup task ([#905](https://github.com/dante-sparras/winshell/issues/905)) ([2f6216e](https://github.com/dante-sparras/winshell/commit/2f6216e9a2223bc2f161214d4916b3aeb7f51e56))
+
+
+### Bug Fixes
+
+* **a11y:** a ui automation call gives up on a stalled window ([#829](https://github.com/dante-sparras/winshell/issues/829)) ([c67363e](https://github.com/dante-sparras/winshell/commit/c67363effcb9a345337ebab4d471abc2d1fdc0ec))
+* **a11y:** characters stay whole and each ideograph is a word ([#852](https://github.com/dante-sparras/winshell/issues/852)) ([470402a](https://github.com/dante-sparras/winshell/commit/470402a3e9269644627e3ea7fff01b5970339d98))
+* **a11y:** clip text ranges to the visible field ([#868](https://github.com/dante-sparras/winshell/issues/868)) ([7580638](https://github.com/dante-sparras/winshell/commit/758063827513631eaa982e5310292e4a24e749e6))
+* **a11y:** ui automation calls do not stall on a hung window ([#897](https://github.com/dante-sparras/winshell/issues/897)) ([cc5ed5f](https://github.com/dante-sparras/winshell/commit/cc5ed5f98bf9a5ae5e073175ae0dac85b701088a))
+* **audio:** a link tracker on a session finds its link ([#903](https://github.com/dante-sparras/winshell/issues/903)) ([0cf0c45](https://github.com/dante-sparras/winshell/commit/0cf0c4529f5a988ff955d1417123214cb704e52e))
+* **cli:** a config name is one folder ([#818](https://github.com/dante-sparras/winshell/issues/818)) ([389797e](https://github.com/dante-sparras/winshell/commit/389797ed8367057f0afbe1cdbe4631886f26c000))
+* **cli:** a wrong ipc command is a usage error with nothing running ([#815](https://github.com/dante-sparras/winshell/issues/815)) ([aae9849](https://github.com/dante-sparras/winshell/commit/aae9849b65c7079ab5d1800e9320c13459c8f40f))
+* **cli:** give list and ipc show their own json ([#854](https://github.com/dante-sparras/winshell/issues/854)) ([b3aa180](https://github.com/dante-sparras/winshell/commit/b3aa180d73bd8d6791db895dbae16b7457839745))
+* **cli:** ipc usage and its argument count read plainly ([#813](https://github.com/dante-sparras/winshell/issues/813)) ([998ef7c](https://github.com/dante-sparras/winshell/commit/998ef7c2ba333ae0053a25014cc7cce973d3b9d3))
+* **cli:** redirected output is utf-8 ([#839](https://github.com/dante-sparras/winshell/issues/839)) ([593f975](https://github.com/dante-sparras/winshell/commit/593f975bd6734275fe7b75c0144c4f85efd48380))
+* **cli:** show a dialog when a shell cannot start ([#875](https://github.com/dante-sparras/winshell/issues/875)) ([6078ef5](https://github.com/dante-sparras/winshell/commit/6078ef5ecc2d415bc4e176c83b21999a737bd3da))
+* define start pins and quick settings files once ([#920](https://github.com/dante-sparras/winshell/issues/920)) ([65e405f](https://github.com/dante-sparras/winshell/commit/65e405f1834be5882cb09a3c84bb8d4806dc6070))
+* **doctor:** close version keys, read logs by line, finish a failed run ([#851](https://github.com/dante-sparras/winshell/issues/851)) ([6152bb2](https://github.com/dante-sparras/winshell/commit/6152bb23be2a60c7acb4b8c0d7362d54109e6f92))
+* **doctor:** report a broken user file and name transparency ([#872](https://github.com/dante-sparras/winshell/issues/872)) ([dea8037](https://github.com/dante-sparras/winshell/commit/dea803723ad28da4926925d753bdb43e1a912512))
+* **input:** exclude the caret from the ime candidate list ([#846](https://github.com/dante-sparras/winshell/issues/846)) ([1dfe05e](https://github.com/dante-sparras/winshell/commit/1dfe05e8247aa022e96e1807f3c008e959b1f542))
+* **input:** translate altgr, numpad keys, and a handled alt shortcut ([#867](https://github.com/dante-sparras/winshell/issues/867)) ([ed2b7b1](https://github.com/dante-sparras/winshell/commit/ed2b7b15f16024de27dbfeabee5d8a86ea6eb7a4))
+* **install:** delete a staged update on install and uninstall ([#885](https://github.com/dante-sparras/winshell/issues/885)) ([22bf8c2](https://github.com/dante-sparras/winshell/commit/22bf8c2487f5eb58524a45c22e6e753e7b5a65e9))
+* **install:** explain constrained language mode instead of a raw error ([#841](https://github.com/dante-sparras/winshell/issues/841)) ([ab4bf42](https://github.com/dante-sparras/winshell/commit/ab4bf42d830ad10b2748778f1723ad4a220f6c80))
+* **install:** keep session path entries under irm | iex ([#866](https://github.com/dante-sparras/winshell/issues/866)) ([cbb4e7e](https://github.com/dante-sparras/winshell/commit/cbb4e7eb89e719af4e7adf4c0ec0b86ec385147d))
+* **install:** remove leftover bin.old folders on the next install ([#849](https://github.com/dante-sparras/winshell/issues/849)) ([6a4e753](https://github.com/dante-sparras/winshell/commit/6a4e75382852eaf4a34da063e5f2842611049284))
+* **install:** warn when a Store copy is also installed ([#880](https://github.com/dante-sparras/winshell/issues/880)) ([6ee6fda](https://github.com/dante-sparras/winshell/commit/6ee6fda61bb82b94084413fdb9f036877f51d126))
+* **io:** limit how large a file or toml value winshell will read ([#908](https://github.com/dante-sparras/winshell/issues/908)) ([b25d133](https://github.com/dante-sparras/winshell/commit/b25d1338c57b57978b097f2abfc4c4a01599a0a8))
+* **ipc:** limit request size, clients, and queued signals ([#906](https://github.com/dante-sparras/winshell/issues/906)) ([ce430b7](https://github.com/dante-sparras/winshell/commit/ce430b721a066395918520fa358c689bc0abc6e5))
+* **ipc:** show lists signals and says why a function can't be called ([#820](https://github.com/dante-sparras/winshell/issues/820)) ([ed776b7](https://github.com/dante-sparras/winshell/commit/ed776b74ee82cbb2257df2e38f174568e17b6719))
+* keep flaky shell waits off a busy pool and a late batch ([#910](https://github.com/dante-sparras/winshell/issues/910)) ([4d44c31](https://github.com/dante-sparras/winshell/commit/4d44c311876e6eaa9320c14e0b246132f7d76335))
+* **qml:** remove WinlandWorkspace.typeChanged and retain notifications ([#921](https://github.com/dante-sparras/winshell/issues/921)) ([dbe867f](https://github.com/dante-sparras/winshell/commit/dbe867f36379e5a1dd66172140a05b53ce997b9a))
+* **qml:** silent widget and io members work or are gone ([#909](https://github.com/dante-sparras/winshell/issues/909)) ([9683894](https://github.com/dante-sparras/winshell/commit/9683894e55eaebcfde161785890856a64d90da7d))
+* **quick:** report a finished image load without a thread-pool hop ([#894](https://github.com/dante-sparras/winshell/issues/894)) ([3cde638](https://github.com/dante-sparras/winshell/commit/3cde638ebb5fa213d7801fd034c0be2d2079c976))
+* **runtime:** a destroyed object drops its dynamic properties ([#922](https://github.com/dante-sparras/winshell/issues/922)) ([f16ee09](https://github.com/dante-sparras/winshell/commit/f16ee090b037892466de7bd8cd86401d99a82e7c))
+* **services:** report finished background work without another thread-pool hop ([#904](https://github.com/dante-sparras/winshell/issues/904)) ([407735e](https://github.com/dante-sparras/winshell/commit/407735e723f639d6078035f35b4b1b8fbb78549a))
+* **shell:** a crash notice follows the windows notification time ([#825](https://github.com/dante-sparras/winshell/issues/825)) ([cd2f146](https://github.com/dante-sparras/winshell/commit/cd2f1467436dafe7a386c1c62e853e743517147b))
+* **shell:** a crash notice waits out quiet hours and full screen ([#827](https://github.com/dante-sparras/winshell/issues/827)) ([95d2735](https://github.com/dante-sparras/winshell/commit/95d2735152110532d625b10ba8e6381da66c5ba3))
+* **shell:** bindings see a few more property changes ([#898](https://github.com/dante-sparras/winshell/issues/898)) ([2ae2914](https://github.com/dante-sparras/winshell/commit/2ae291428a9806adc65e142eb4173fe21187e385))
+* **shell:** crash reports keep Winshell's lines and mask whole values ([#899](https://github.com/dante-sparras/winshell/issues/899)) ([41e951a](https://github.com/dante-sparras/winshell/commit/41e951ad48c1644c640765e109ff98ce4c8681fa))
+* **shell:** dismiss the configuration notice from the keyboard ([#860](https://github.com/dante-sparras/winshell/issues/860)) ([0ee2a70](https://github.com/dante-sparras/winshell/commit/0ee2a70cf35a2243559714b435cc18269dbbcbf1))
+* **shell:** drag a taskbar pin onto another to reorder it ([#876](https://github.com/dante-sparras/winshell/issues/876)) ([0e4652b](https://github.com/dante-sparras/winshell/commit/0e4652b5a8c6359420f2cdfd18ae8dffd8529c73))
+* **shell:** drop qml members that do nothing ([#919](https://github.com/dante-sparras/winshell/issues/919)) ([65bf052](https://github.com/dante-sparras/winshell/commit/65bf052b2801bb74e7f53262d8809a38ccfe90b3))
+* **shell:** four services do what their reference pages say ([#900](https://github.com/dante-sparras/winshell/issues/900)) ([5d38ff6](https://github.com/dante-sparras/winshell/commit/5d38ff634f746664cbce575de1dcfc8e8035e658))
+* **shell:** hide Explorer's taskbar only when asked ([#891](https://github.com/dante-sparras/winshell/issues/891)) ([ba6e1f6](https://github.com/dante-sparras/winshell/commit/ba6e1f680f36cc1cd09a5e969ff7ce9d400366c2))
+* **shell:** open a volume page for each audio session ([#889](https://github.com/dante-sparras/winshell/issues/889)) ([aa20f7f](https://github.com/dante-sparras/winshell/commit/aa20f7f21b60e03db91bbc208968769d33e949ed))
+* **shell:** resting on a taskbar thumbnail peeks at its window ([#836](https://github.com/dante-sparras/winshell/issues/836)) ([39ba4e8](https://github.com/dante-sparras/winshell/commit/39ba4e84965d4c6101fed6db7de60414f608c047))
+* **shell:** start search lists settings and recent documents ([#888](https://github.com/dante-sparras/winshell/issues/888)) ([911d8e5](https://github.com/dante-sparras/winshell/commit/911d8e5d145e5d286b26607ae619d78e66ed92cc))
+* **shell:** the clock names how many notifications are showing ([#884](https://github.com/dante-sparras/winshell/issues/884)) ([ea6cbbf](https://github.com/dante-sparras/winshell/commit/ea6cbbf73662853afbdc94b9ec7dd8d3268f62b8))
+* **shell:** tray icons show their tooltip ([#822](https://github.com/dante-sparras/winshell/issues/822)) ([7ec8e27](https://github.com/dante-sparras/winshell/commit/7ec8e279b698dcfae0077137001b0daf490496fc))
+* **shell:** wait for a notification refresh and seed pins that are not a list ([#902](https://github.com/dante-sparras/winshell/issues/902)) ([78b0eb8](https://github.com/dante-sparras/winshell/commit/78b0eb8a217db64eb010fdf46311a93e41ff406a))
+* **windows:** a running packaged app joins its pin ([#874](https://github.com/dante-sparras/winshell/issues/874)) ([5b55d3c](https://github.com/dante-sparras/winshell/commit/5b55d3c166814c2849f3c3c68c7889be8342d4c9))
+
+
+### Performance Improvements
+
+* **windows:** handle a settings broadcast once ([#855](https://github.com/dante-sparras/winshell/issues/855)) ([d2b5dbe](https://github.com/dante-sparras/winshell/commit/d2b5dbe662acd940f3f37559c8546e89d62353fe))
+
 ## [0.7.0](https://github.com/dante-sparras/winshell/compare/v0.6.1...v0.7.0) (2026-10-31)
 
 
