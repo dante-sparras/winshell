@@ -45,7 +45,8 @@ ShellRoot {
   // The chords of Windows 11's taskbar, on the main taskbar. While Explorer runs, it keeps these for its own, and each
   // reports that it is taken. Win+T puts the keyboard on the apps, Win+S opens Search, Win+A opens quick settings,
   // Win+N the notification center, and Win+1 to Win+9 and Win+0 the apps in order, as a click does. With Shift, they
-  // open a new window. Win+D, Win+Alt+number, Win+X, Alt+Tab and Win+Tab stay with Windows until those surfaces exist.
+  // open a new window. Alt+Tab, Win+Tab, Win+D and Win+X are registered below only when desktopChords is on.
+  // Win+Alt+number stays with Windows.
   Hotkey {
     sequence: "Win+T"
     onPressed: shell.mainTaskbar()?.focusApps()
@@ -151,6 +152,18 @@ ShellRoot {
         anchor.gravity: taskbar.centered ? Edges.Top : Edges.Top | Edges.Right
         anchor.margins.top: 12
       }
+    }
+  }
+
+  // Alt+Tab, Win+Tab, Win+D and Win+X. Off unless preferences.toml sets desktopChords, so a resting shell registers none of them.
+  LazyLoader {
+    id: desktopChords
+    active: Preferences.desktopChords
+
+    DesktopChords {
+      taskbar: shell.mainTaskbar()
+      onOpenSettings: settings.open("taskbar")
+      onOpenSearch: shell.mainTaskbar()?.openSearch()
     }
   }
 

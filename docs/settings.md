@@ -41,6 +41,7 @@ Everything the window chooses applies at once, without a reload, and is kept in 
 | `startRecommended` | `true` | |
 | `calendarWeekNumbers` | `false` | `true` shows week numbers beside the calendar |
 | `clockSeconds` | `false` | `true` shows seconds on the taskbar clock. It wakes the shell every second, so it is off by default. Not in Winshell Settings. |
+| `desktopChords` | `false` | `true` lets Winshell take Alt+Tab, Win+Tab, Win+D and Win+X. `false` leaves them with Windows. Not in Winshell Settings. |
 | `hiddenNotificationApps` | `[]` | `{ id = "<AppUserModelID>", name = "<app name>" }` for each app turned off |
 | `startHotkey` | `"Win"` | a sequence as `Hotkey.sequence` takes it, or `""` |
 | `settingsHotkey` | `""` | the same |

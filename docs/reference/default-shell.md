@@ -5,6 +5,7 @@ Winshell runs the default shell when you have no configuration of your own ([get
 | File | Surface |
 | --- | --- |
 | `shell.qml` | The root: a taskbar per screen, the hotkeys, Winshell Settings and the on-screen display |
+| `DesktopChords.qml` | Alt+Tab, Win+Tab, Win+D and Win+X, built only when `desktopChords` is on |
 | `Taskbar.qml` | The [taskbar](#taskbar) on one screen |
 | `Launcher.qml`, `LauncherView.qml`, `launcher.js` | [Start](#start) |
 | `QuickSettings.qml`, `QuickSettingsContent.qml`, `QuickSettingsTile.qml` | [Quick settings](#quick-settings) |
@@ -27,8 +28,16 @@ To change a surface, [copy the default shell](../guide/getting-started.md#make-t
 | `Win+A` | Opens or closes quick settings on the main taskbar. While Explorer runs, Windows keeps `Win+A` and the hotkey is `taken`. |
 | `Win+N` | Opens or closes the notification center on the main taskbar. While Explorer runs, Windows keeps `Win+N` and the hotkey is `taken`. |
 | `Win+1` to `Win+9`, `Win+0` | Does what a click does on that app of the main taskbar. `Win+0` is the tenth. `Win+Shift` with the number opens a new window. While Explorer runs, Windows keeps these and the hotkey is `taken`. |
+| `Alt+Tab`, `Alt+Shift+Tab` | Off until `desktopChords` is true. Opens the window switcher and moves through it. While Explorer runs, Windows may still keep the chord and it is `taken`. |
+| `Win+Tab` | Off until `desktopChords` is true. Opens or closes the same switcher. While Explorer runs, Windows may still keep the chord and it is `taken`. |
+| `Win+D` | Off until `desktopChords` is true. Shows the desktop, then restores those windows. While Explorer runs, Windows may still keep the chord and it is `taken`. |
+| `Win+X` | Off until `desktopChords` is true. Opens the power-user menu. While Explorer runs, Windows may still keep the chord and it is `taken`. |
 
-A hotkey another app or Windows already holds isn't taken from it; Winshell Settings shows that it is taken. See [hotkeys](../hotkeys.md).
+`desktopChords` is not in Winshell Settings. `Win+S` is registered on its own, whether or not `desktopChords` is on. `Win+Alt+number` stays with Windows. A hotkey another app or Windows already holds isn't taken from it; Winshell Settings shows that it is taken. See [hotkeys](../hotkeys.md).
+
+## Window switcher
+
+With `desktopChords` on, Alt+Tab opens a popup over the main taskbar. It lists `WindowList` in the order windows opened, not by most recent use, and each card is a `WindowThumbnail`. Enter, Space or a click activates that window and closes the popup. Releasing Alt does not. Win+Tab opens the same popup on the window in front, or closes it. When `VirtualDesktops.supported` is true, a row of desktops sits under the cards and a click switches to that desktop. Win+D minimizes every window that is not already minimized and remembers them; the next press restores those. Nothing is drawn on the taskbar for it. Win+X opens a menu from the top left of the main taskbar: Installed apps, System, Network, Settings, File Explorer, Search, Desktop and Taskbar settings. It does not shut the PC down or open Task Manager. Widgets are not part of the default shell.
 
 ## Taskbar
 
