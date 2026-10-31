@@ -20,12 +20,24 @@ internal sealed record WindowInfo(
     string Monitor);
 
 /// <summary>
+/// The app id kept for a window between reads. <see cref="PackageKnown"/> is true once the process package has been
+/// asked, including when it has none.
+/// </summary>
+internal readonly record struct WindowIdentity(
+    string AppId,
+    string Executable,
+    string Icon,
+    string PackageAppId,
+    bool PackageKnown);
+
+/// <summary>
 /// The windows the taskbar and Alt+Tab show, for the whole process, kept current by WinEvent hooks set on the UI
 /// thread. Events are gathered and read once per turn of the loop, then <see cref="Changed"/> is raised.
 /// </summary>
 internal static unsafe class WindowTracker
 {
     private static readonly Dictionary<nint, WindowInfo> Tracked = [];
+    private static readonly Dictionary<nint, WindowIdentity> Identities = [];
     private static readonly HashSet<nint> Dirty = [];
     private static readonly HashSet<nint> Flashed = [];
     private static readonly HashSet<nint> Wanting = [];
@@ -173,9 +185,12 @@ internal static unsafe class WindowTracker
         {
             duringDescribe?.Invoke();
             Tracked.TryGetValue(hwnd, out var old);
-            var info = IsTaskbarWindow(hwnd) ? Describe(hwnd, old) : null;
+            var info = IsTaskbarWindow(hwnd) ? Describe(hwnd) : null;
             if (info is null)
+            {
                 changed |= Tracked.Remove(hwnd);
+                Identities.Remove(hwnd);
+            }
             else if (info != old)
             {
                 Tracked[hwnd] = info;
@@ -243,7 +258,7 @@ internal static unsafe class WindowTracker
             IsCloaked(hwnd)));
     }
 
-    private static WindowInfo Describe(nint hwnd, WindowInfo? old)
+    private static WindowInfo Describe(nint hwnd)
     {
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
@@ -258,23 +273,39 @@ internal static unsafe class WindowTracker
             var screen = mi.rcMonitor;
             fullscreen = (style & WS_CAPTION) != WS_CAPTION && rect.Left <= screen.Left && rect.Top <= screen.Top && rect.Right >= screen.Right && rect.Bottom >= screen.Bottom;
         }
-        // The app id and icon are read once: reading them asks the shell and the process.
-        string executable, appId, icon;
-        if (old is { } kept && (kept.AppId.Length > 0 || kept.Executable.Length > 0))
+        Identities.TryGetValue(hwnd, out var previous);
+        // The property can arrive after the window is first shown. Read it every time. The package id and the
+        // program path do not change, so each is read once.
+        var property = WindowAppId(hwnd);
+        string? package = null;
+        if (property.Length == 0 && !previous.PackageKnown)
         {
-            executable = kept.Executable;
-            appId = kept.AppId.Length > 0 ? kept.AppId : WindowRules.AppId("", executable);
-            icon = kept.Icon.Length > 0 ? kept.Icon : WindowRules.IconPath("", executable);
+            Win32.GetWindowThreadProcessId(hwnd, out var pid);
+            package = ProcessAppUserModelId(pid);
         }
-        else
-        {
-            executable = ExePath(hwnd);
-            var aumid = WindowAppId(hwnd);
-            appId = WindowRules.AppId(aumid, executable);
-            icon = WindowRules.IconPath(aumid, executable);
-        }
+        string? executable = previous.Executable is { Length: > 0 } ? null : ExePath(hwnd);
+        var identity = Resolve(previous, property, package, executable);
+        Identities[hwnd] = identity;
         var owner = GetWindow(hwnd, GW_OWNER);
-        return new WindowInfo(hwnd, WindowText(hwnd), appId, executable, icon, owner, maximized, minimized, fullscreen, device);
+        return new WindowInfo(hwnd, WindowText(hwnd), identity.AppId, identity.Executable, identity.Icon, owner, maximized, minimized, fullscreen, device);
+    }
+
+    /// <summary>
+    /// The app id to keep after one read of the window. <paramref name="windowProperty"/> is the property store now,
+    /// and it replaces a package id or a program name. An empty property uses <paramref name="packageAppId"/> when
+    /// that was read, or the package id already known. A null executable keeps the path already read.
+    /// </summary>
+    internal static WindowIdentity Resolve(WindowIdentity previous, string windowProperty, string? packageAppId, string? executable)
+    {
+        var package = packageAppId ?? previous.PackageAppId ?? "";
+        var path = executable ?? previous.Executable ?? "";
+        var source = windowProperty.Length > 0 ? windowProperty : package;
+        return new WindowIdentity(
+            WindowRules.AppId(windowProperty, package, path),
+            path,
+            WindowRules.IconPath(source, path),
+            package,
+            previous.PackageKnown || packageAppId is not null);
     }
 
     /// <summary>

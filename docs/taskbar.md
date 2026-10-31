@@ -14,7 +14,7 @@ Set these on `Taskbar` in `shell.qml`. They match Settings > Personalization > T
 
 ## Apps
 
-Pinned apps come first, in the order they were pinned, then every other running app in the order it opened. Each app's windows are grouped on one button. The apps take the room between Search and the tray area; when they need more, they scroll sideways with the mouse wheel or a drag. Windows are matched to apps through the app index (`Apps.find(window.appId)`). An app the index does not have is grouped by its app id.
+Pinned apps come first, in the order they were pinned, then every other running app in the order it opened. Each app's windows are grouped on one button. The apps take the room between Search and the tray area; when they need more, they scroll sideways with the mouse wheel or a drag. Windows are matched to apps through the app index (`Apps.find(window.appId)`). A window that sets no id takes the application user model id of its process's package, so a running packaged app joins the pin for that app. An app the index does not have is grouped by its app id.
 
 - **Click.** Launches a pinned app that is not running. It brings the app's window forward, or minimizes the window when it is already in front. With several windows, it goes to the next window when one is in front, and otherwise to the one used last.
 - **Middle click or Shift+click.** Opens a new window of the app.
