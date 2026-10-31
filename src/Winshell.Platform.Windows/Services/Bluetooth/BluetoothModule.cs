@@ -167,6 +167,8 @@ public sealed class BluetoothService : QObject
     // A destroyed service closes immediately when idle, or lets its in-flight read close the backend.
     private const int Idle = 0, Reading = 1, Closing = 2, Closed = 3;
     private int _reads;
+    // Someone asked for a read while one ran. What they want to see may be newer than that read.
+    private int _readAgain;
     private int _monitoring;
     private int _monitorHolders;
     private bool _started;
@@ -291,7 +293,14 @@ public sealed class BluetoothService : QObject
     [Qml] public void Refresh() => _ = RefreshAsync();
     internal async Task RefreshAsync()
     {
-        if (IsDestroyed || Interlocked.CompareExchange(ref _reads, Reading, Idle) != Idle) return;
+        if (IsDestroyed) return;
+        if (Interlocked.CompareExchange(ref _reads, Reading, Idle) != Idle)
+        {
+            Volatile.Write(ref _readAgain, 1);
+            // The read may have ended before it could see that, so try once more.
+            if (Interlocked.CompareExchange(ref _reads, Reading, Idle) != Idle) return;
+        }
+        Volatile.Write(ref _readAgain, 0);
         var revision = Interlocked.Read(ref _revision);
         try
         {
@@ -311,6 +320,10 @@ public sealed class BluetoothService : QObject
             {
                 Volatile.Write(ref _reads, Closed);
                 CloseBackend();
+            }
+            else if (Interlocked.Exchange(ref _readAgain, 0) != 0)
+            {
+                Refresh();
             }
         }
     }
