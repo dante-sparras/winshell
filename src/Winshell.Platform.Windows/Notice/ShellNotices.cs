@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -31,6 +32,19 @@ public sealed partial class ShellNotices : IDisposable
 {
     /// <summary>How long a crash notice stays, as a long Windows notification does.</summary>
     public static readonly TimeSpan CrashTimeout = TimeSpan.FromSeconds(25);
+
+    /// <summary>
+    /// How long a crash notice stays for someone who asked Windows to keep notifications up for
+    /// <paramref name="messageSeconds"/>. A shorter setting doesn't shorten a notice about a crash.
+    /// </summary>
+    internal static TimeSpan CrashTimeoutFor(uint messageSeconds) =>
+        TimeSpan.FromSeconds(Math.Max(CrashTimeout.TotalSeconds, messageSeconds));
+
+    private static unsafe TimeSpan ReadCrashTimeout()
+    {
+        uint seconds = 0;
+        return Win32.SystemParametersInfoW(Win32.SPI_GETMESSAGEDURATION, 0, &seconds, 0) ? CrashTimeoutFor(seconds) : CrashTimeout;
+    }
 
     private const string Resource = "Winshell.Platform.Windows.ShellNotice.qml";
     private readonly ShellHost _host;
@@ -153,7 +167,7 @@ public sealed partial class ShellNotices : IDisposable
     {
         var subject = report.Subject.Length > 0 ? report.Subject : "a window";
         var title = char.ToUpperInvariant(subject[0]) + subject[1..] + " stopped working";
-        return new Notice(NoticeKind.Crash, title, "", report.Recovery, "A crash report was saved on this PC.", "Open report", report.Path, CrashTimeout);
+        return new Notice(NoticeKind.Crash, title, "", report.Recovery, "A crash report was saved on this PC.", "Open report", report.Path, ReadCrashTimeout());
     }
 
     /// <summary>Shows a notice in place of the one showing.</summary>
