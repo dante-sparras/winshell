@@ -1,9 +1,10 @@
 # Winshell updates
 
-A portable Winshell, the zip from GitHub Releases, updates itself from that repository's releases. winget, once the package is accepted, installs that same build, and it updates the same way. The Microsoft Store package is not published yet; once it is, the Store updates it and Winshell does not. The release build names the repository: `scripts/package.ps1` stamps it into `winshell.exe`. Two kinds of Winshell never update themselves:
+A portable Winshell, the zip from GitHub Releases, updates itself from that repository's releases. winget, once the package is accepted, installs that same portable build, and winget is the only updater for that copy. Winshell does not also update it. The Microsoft Store package is not published yet; once it is, the Store updates it and Winshell does not. The release build names the repository: `scripts/package.ps1` stamps it into `winshell.exe`. Three kinds of Winshell never update themselves:
 
 - A build from source has no repository stamped in it.
 - A packaged Winshell, such as the Microsoft Store's, is updated by whatever installed it.
+- A winget install, under `%LOCALAPPDATA%\Microsoft\WinGet\Packages` or the Links alias next to it, is updated by winget. The package installs per user. A copy that winget put somewhere else, with `--location` or a custom portable root, isn't detected and still updates itself.
 
 ## How an update arrives
 
@@ -24,6 +25,7 @@ Winshell checks for itself only while `Updates.automatic` is on: 30 seconds afte
 | --- | --- |
 | `available` | Whether this Winshell updates itself. |
 | `packaged` | Whether Winshell runs from an MSIX package, which its installer updates. |
+| `winget` | Whether this copy lives under winget's Packages or Links folder. winget updates it, and Winshell does not. |
 | `automatic` | Check by itself and download what it finds. Off until a shell turns it on. |
 | `status` | `UpdateStatus.Idle`, `Checking`, `UpToDate`, `Downloading`, `Ready` or `Failed`. An update downloaded before this run started is `Ready` from the start. |
 | `version` | The release found: the latest one when up to date, or the one downloading or ready. |
