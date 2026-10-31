@@ -499,10 +499,11 @@ public static class ProcessLauncher
     /// <summary>How a detached command will start. Tests read this and do not launch the program.</summary>
     internal static DetachedLaunch PlanDetached(ProcessSpec spec)
     {
-        var resolved = Resolve(spec.Command);
         var directory = spec.WorkingDirectory ?? Profile();
         // An explicit environment cannot ride along with ShellExecuteEx, so that case stays CreateProcess.
         var customEnvironment = spec.ClearEnvironment || spec.Environment.Count > 0;
+        // ShellExecuteEx opens a .sh with whatever Windows has for it. CreateProcess needs an interpreter.
+        var resolved = Resolve(spec.Command, windowsOpens: !customEnvironment);
         if (!customEnvironment)
             return new DetachedLaunch(true, false, resolved.FileName, Arguments(resolved), directory);
         return new DetachedLaunch(false, IsConsoleImage(resolved.FileName), resolved.FileName, "", directory);
@@ -520,7 +521,7 @@ public static class ProcessLauncher
         psi.ArgumentList.Count == 0 ? psi.Arguments : Quote(psi.ArgumentList);
 
     /// <summary>The program to start and its arguments. Batch files run through cmd and PowerShell scripts through pwsh.</summary>
-    public static ProcessStartInfo Resolve(IReadOnlyList<string> command)
+    public static ProcessStartInfo Resolve(IReadOnlyList<string> command, bool windowsOpens = false)
     {
         var program = command[0];
         var args = command.Skip(1).ToList();
@@ -532,8 +533,8 @@ public static class ProcessLauncher
             case ".cmd" or ".bat":
                 return new ProcessStartInfo(System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", BatchCommandLine(path, args));
             case ".ps1":
-                return new ProcessStartInfo(Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. args]);
-            case ".sh":
+                return new ProcessStartInfo(Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-File", path, .. args]);
+            case ".sh" when !windowsOpens:
                 return new ProcessStartInfo(Which("bash") ?? Which("sh") ?? "bash", [path, .. args]);
         }
         return new ProcessStartInfo(path, args);
