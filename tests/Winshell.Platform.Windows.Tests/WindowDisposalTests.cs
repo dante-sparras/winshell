@@ -72,7 +72,16 @@ public class WindowDisposalTests
                 };
                 window.Scene.RequestUpdate();
             });
-            loop.Schedule(TimeSpan.FromMilliseconds(500), () => loop.Quit(0));
+            // Waits for the end state, so a stall on a slow runner takes longer instead of quitting before the frame.
+            void QuitOnceReleased()
+            {
+                if (painted && backend.Handle == 0)
+                    loop.Quit(0);
+                else
+                    loop.Schedule(TimeSpan.FromMilliseconds(10), QuitOnceReleased);
+            }
+            QuitOnceReleased();
+            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(1));
             loop.Run();
 
             Assert.True(painted);
