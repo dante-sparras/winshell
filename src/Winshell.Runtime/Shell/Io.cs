@@ -775,6 +775,9 @@ public sealed class FileView : QObject
     private bool _atomicWrites = true;
     private bool _printErrors = true;
     private bool _loaded;
+
+    /// <summary>Bytes a read will take. Past this, the read is refused and the file is left as it is. 64 MiB.</summary>
+    internal int MaxFileBytes { get; set; } = DataLimits.MaxReadBytes;
     private string? _text;
     private FileViewAdapter? _adapter;
     private DirectoryWatch? _watch;
@@ -930,16 +933,17 @@ public sealed class FileView : QObject
             return;
         var generation = ++_generation;
         var path = _path;
+        var maxFileBytes = MaxFileBytes;
         if (sync)
         {
-            Apply(generation, Read(path));
+            Apply(generation, Read(path, maxFileBytes));
             return;
         }
         var loop = Engine.Loop;
-        Task.Run(() => Read(path)).ContinueWith(t => loop.Post(() => Apply(generation, t.Result)), TaskScheduler.Default);
+        Task.Run(() => Read(path, maxFileBytes)).ContinueWith(t => loop.Post(() => Apply(generation, t.Result)), TaskScheduler.Default);
     }
 
-    private static (string? Text, bool Bom, FileViewError Error, string Message) Read(string path)
+    private static (string? Text, bool Bom, FileViewError Error, string Message) Read(string path, int maxFileBytes)
     {
         try
         {
@@ -947,6 +951,9 @@ public sealed class FileView : QObject
                 return (null, false, FileViewError.NotAFile, "not a file");
             // Share the file so a save can replace it, and a test can delete it, while this read is open.
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            // The length is known before the bytes are. A file past the limit is not copied into a string.
+            if (DataLimits.FileBytes(stream.Length, maxFileBytes) is { } why)
+                return (null, false, FileViewError.Unknown, why);
             Span<byte> start = stackalloc byte[3];
             var count = stream.Read(start);
             var bom = count == 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF;
@@ -1219,6 +1226,16 @@ public sealed class FileView : QObject
             return;
         if (result.Text is null)
         {
+            // A file past the limit is still the user's file. Dropping the text already read would make the next
+            // save replace it with the values from before.
+            if (DataLimits.IsFileLimit(result.Message))
+            {
+                if (_adapter is not null)
+                    _adapter.Error = $"{_path}: {result.Message}";
+                Engine?.Log.Warn("io", $"FileView: failed to read {_path}: {result.Message}");
+                Emit("loadFailed", (int)result.Error);
+                return;
+            }
             if (_printErrors && result.Error != FileViewError.FileNotFound)
                 Engine?.Log.Warn("io", $"FileView: failed to read {_path}: {result.Message}");
             _text = null;
@@ -1248,6 +1265,14 @@ public sealed class FileView : QObject
     {
         if (_adapter is null)
             return;
+        // Merging into a file we will not read would replace it. The values in use stay in memory.
+        if (DataLimits.FileBytes(FileLength(_path), MaxFileBytes) is { } why)
+        {
+            _adapter.Error = $"{_path}: {why}";
+            Engine?.Log.Warn("io", $"FileView: failed to write {_path}: {why}");
+            Emit("saveFailed", (int)FileViewError.Unknown);
+            return;
+        }
         var text = _adapter.Serialize();
         if (_adapter.PreserveFile)
         {
@@ -1256,6 +1281,18 @@ public sealed class FileView : QObject
             return;
         }
         Write(text);
+    }
+
+    private static long FileLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return -1;
+        }
     }
 
     private void Write(string text)
@@ -1361,6 +1398,7 @@ public sealed class FileView : QObject
     {
         var path = save.Path;
         var text = save.Text;
+        var maxFileBytes = MaxFileBytes;
         FileViewError? failure = null;
         var message = "";
         var handSaveWon = false;
@@ -1382,7 +1420,7 @@ public sealed class FileView : QObject
                 // Captured before the temporary file exists. A hand save during that write changes the destination
                 // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
                 // recovers from it and the text above already includes it.
-                var diskAtStart = Read(destination).Text;
+                var diskAtStart = Read(destination, maxFileBytes).Text;
                 // A hard link shares its bytes with another name. Replacing the name would break that link.
                 if (save.Atomic && !hardLink)
                 {
@@ -1392,7 +1430,7 @@ public sealed class FileView : QObject
                     {
                         // A slow scan of the temporary file is when a hand save usually lands.
                         _beforeReplace?.Invoke(destination);
-                        if (HandSaveWins(Read(destination).Text, diskAtStart, text))
+                        if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
                             handSaveWon = true;
                         else
                             MoveReplacing(temp, destination);
@@ -1411,7 +1449,7 @@ public sealed class FileView : QObject
                         }
                     }
                 }
-                else if (HandSaveWins(Read(destination).Text, diskAtStart, text))
+                else if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
                 {
                     handSaveWon = true;
                 }
@@ -1467,7 +1505,16 @@ public sealed class FileView : QObject
         if (IsDestroyed)
             return;
         // Our own write already matches the buffer. A hand save in the same moment does not.
-        var read = Read(path);
+        var read = Read(path, MaxFileBytes);
+        // A file past the limit is still the user's file. Say so, and leave the text already loaded.
+        if (read.Text is null && DataLimits.IsFileLimit(read.Message))
+        {
+            if (_adapter is not null)
+                _adapter.Error = $"{path}: {read.Message}";
+            Engine?.Log.Warn("io", $"FileView: failed to read {path}: {read.Message}");
+            Emit("loadFailed", (int)read.Error);
+            return;
+        }
         // A deleted file differs from the text this view holds. Any other failed read says nothing about the file.
         var deleted = read.Error == FileViewError.FileNotFound && _text is not null;
         if (!deleted && (read.Text is null || read.Text == _text))
