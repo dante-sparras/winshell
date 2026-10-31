@@ -14,6 +14,8 @@ public sealed class PopupOverlay : Item, IPointerTarget, IWheelTarget
     private readonly Item _root;
     private readonly PropertyWatch _rootWatch;
     private readonly List<Popup> _open = [];
+    private readonly List<Popup> _pressedOutside = [];
+    private readonly List<Popup> _pressedOutsideParent = [];
 
     private PopupOverlay(Item root)
     {
@@ -89,16 +91,26 @@ public sealed class PopupOverlay : Item, IPointerTarget, IWheelTarget
     public bool PointerPress(double x, double y, int button, int buttons, int modifiers)
     {
         ClosedByPress.Clear();
+        _pressedOutside.Clear();
+        _pressedOutsideParent.Clear();
         var modal = _open.Any(p => p.Modal);
         foreach (var popup in _open.ToArray().Reverse())
         {
             var policy = popup.ClosePolicy;
             var outsideParent = popup.ParentItem is not { } parent || !Contains(parent, x, y);
+            var outside = !Contains(popup.PopupItem, x, y);
             if ((policy & (int)Popup.ClosePolicyValue.CloseOnPressOutside) != 0
                 || ((policy & (int)Popup.ClosePolicyValue.CloseOnPressOutsideParent) != 0 && outsideParent))
             {
                 ClosedByPress.Add(popup);
                 popup.Close();
+            }
+            else
+            {
+                if (outside)
+                    _pressedOutside.Add(popup);
+                if (outsideParent)
+                    _pressedOutsideParent.Add(popup);
             }
             if (popup.Modal)
                 break;
@@ -118,6 +130,23 @@ public sealed class PopupOverlay : Item, IPointerTarget, IWheelTarget
 
     public void PointerRelease(double x, double y, int button, int buttons, int modifiers)
     {
+        foreach (var popup in _open.ToArray().Reverse())
+        {
+            if (popup.Interactive && _pressedOutside.Contains(popup))
+            {
+                var outside = !Contains(popup.PopupItem, x, y);
+                var outsideParent = popup.ParentItem is not { } parent || !Contains(parent, x, y);
+                var policy = popup.ClosePolicy;
+                var releaseParent = (policy & (int)Popup.ClosePolicyValue.CloseOnReleaseOutsideParent) != 0
+                    && outsideParent && _pressedOutsideParent.Contains(popup);
+                if (outside && ((policy & (int)Popup.ClosePolicyValue.CloseOnReleaseOutside) != 0 || releaseParent))
+                    popup.Close();
+            }
+            if (popup.Modal)
+                break;
+        }
+        _pressedOutside.Clear();
+        _pressedOutsideParent.Clear();
     }
 
     public bool PointerDoubleClick(double x, double y, int button, int buttons, int modifiers) => PointerPress(x, y, button, buttons, modifiers);
@@ -1016,7 +1045,31 @@ public sealed class Menu : Popup
 
     [Qml] public QmlComponent? Delegate { get; set; }
 
-    [Qml] public int CurrentIndex { get; set; } = -1;
+    private int _currentIndex = -1;
+
+    [Qml]
+    public int CurrentIndex
+    {
+        get { Track(); return _currentIndex; }
+        set => Select(value, true);
+    }
+
+    internal void NoteCurrent(MenuItem item)
+    {
+        var index = Items.ToList().IndexOf(item);
+        if (index >= 0)
+            Select(index, false);
+    }
+
+    private void Select(int index, bool focus)
+    {
+        if (SetField(ref _currentIndex, index, nameof(CurrentIndex)))
+            for (var i = 0; i < Items.Count; i++)
+                if (Items[i] is MenuItem row)
+                    row.Highlighted = i == index;
+        if (focus && ItemAt(index) is MenuItem current)
+            current.ForceActiveFocus();
+    }
 
     private IReadOnlyList<Item> Items => _column?.ChildItems ?? [];
 
@@ -1153,8 +1206,17 @@ public sealed class MenuItem : AbstractButton
 
     protected override void OnHoveredChanged()
     {
+        if (Hovered)
+            _menu?.NoteCurrent(this);
         if (!_highlighted)
             NotifyChanged("highlighted");
+    }
+
+    protected override void OnActiveFocusChanged(bool focused)
+    {
+        base.OnActiveFocusChanged(focused);
+        if (focused)
+            _menu?.NoteCurrent(this);
     }
 
     [Qml] public Menu? Menu { get { Track(); return _menu; } internal set => SetField(ref _menu, value); }

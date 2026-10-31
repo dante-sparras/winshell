@@ -1,3 +1,4 @@
+using Jint;
 using SkiaSharp;
 
 namespace Winshell.Runtime.Quick.Controls;
@@ -733,20 +734,38 @@ public sealed class CheckBox : IndicatorButton
     {
         if (!Checkable)
             return;
+        if (NextCheckStateFunction is Jint.Native.JsValue fn && fn.IsCallable() && Engine is not null)
+        {
+            try
+            {
+                var result = Engine.Js.CallFunction(fn, Engine.Js.Wrap(this), []);
+                var next = result.IsNumber() ? (int)result.AsNumber() : result.IsBoolean() && result.AsBoolean() ? 1 : 0;
+                ApplyCheckedState(next);
+            }
+            catch (Jint.Runtime.JavaScriptException e)
+            {
+                Engine.Log.Warn("scene", e.Message);
+            }
+            return;
+        }
         if (_tristate)
         {
-            var next = (_checkState + 1) % 3;
-            _checkState = next;
-            _syncing = true;
-            SetChecked(next == 2, fromUser: true);
-            _syncing = false;
-            NotifyChanged("checkState");
-            StateChanged();
-            if (next == 1)
-                Emit("toggled");
+            ApplyCheckedState((_checkState + 1) % 3);
             return;
         }
         base.NextCheckState();
+    }
+
+    private void ApplyCheckedState(int next)
+    {
+        _checkState = next;
+        _syncing = true;
+        SetChecked(next == 2, fromUser: true);
+        _syncing = false;
+        NotifyChanged("checkState");
+        StateChanged();
+        if (next == 1)
+            Emit("toggled");
     }
 
     /// <summary>How much of the check mark is drawn: it draws itself in when the box is checked.</summary>

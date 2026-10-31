@@ -75,9 +75,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `PathRectangle.bevel` | Ignored; corners are always rounded. |
 | `MenuItem.subMenu` | Always null: menus don't nest, and `arrow` is never shown. |
 | `Menu.cascade` | Ignored, as is `overlap`. |
-| `Menu.currentIndex` | Not updated by the highlight or the keys. |
 | `Popup.enter` | Ignored, as is `exit`: popups open and close without a transition. |
-| `Popup.closePolicy` | `Popup.CloseOnReleaseOutside` and `Popup.CloseOnReleaseOutsideParent` are ignored: only a press outside closes a popup. |
 | `Popup.popupType` | Ignored: a popup is always an item in its window, as with `Popup.Item`. |
 | `Menu.delegate` | Ignored. |
 | `ToolTip.delay` | Defaults to 500 ms, not 0, as Windows tool tips wait. The attached `ToolTip.delay` does too. |
@@ -91,10 +89,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Dial.wrap` | Ignored: the handle stops at `from` and `to`. |
 | `Dial.inputMode` | Ignored: the handle always follows the pointer's angle, as with `Dial.Circular`. |
 | `Dial.live` | Ignored, as on `RangeSlider`: `value` changes during the drag. |
-| `RangeSlider.snapMode` | `RangeSlider.SnapOnRelease` snaps during the drag, as `RangeSlider.SnapAlways` does, here and on `Dial`. |
-| `CheckBox.nextCheckStateFunction` | Never called. Qt names this `nextCheckState`. |
 | `AbstractButton.action` | Ignored. |
-| `ScrollIndicator.active` | Ignored: the indicator shows whenever the content is larger than the view. |
 | `ToolBar.position` | Ignored: a footer tool bar looks like a header one. |
 | `ApplicationWindow.menuBar` | Not shown. |
 | `ApplicationWindow.flags` | Ignored, as are `visibility`, `minimumWidth`, `minimumHeight`, `maximumWidth` and `maximumHeight`: an `ApplicationWindow` is a page in a shell window, not a window. |
