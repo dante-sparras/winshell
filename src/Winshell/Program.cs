@@ -71,8 +71,22 @@ namespace Winshell
         private static readonly string? ReleaseRepository = typeof(Cli).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => a.Key == "WinshellReleaseRepository")?.Value;
 
+        /// <summary>
+        /// A pipe or a file gets UTF-8. The console's own code page would turn text outside it into question marks,
+        /// and setting that code page would change it for the terminal too.
+        /// </summary>
+        private static void WriteUtf8WhenRedirected()
+        {
+            var utf8 = new UTF8Encoding(false);
+            if (Console.IsOutputRedirected)
+                Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true });
+            if (Console.IsErrorRedirected)
+                Console.SetError(new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true });
+        }
+
         public static async Task<int> Run(string[] args)
         {
+            WriteUtf8WhenRedirected();
             args = WithoutAfter(args, out var after);
             // Help is checked before any command runs. `winshell kill --help` must not kill the shell.
             // A --, and the arguments of ipc call, end that scan so a help word there is data.
