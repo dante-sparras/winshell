@@ -125,4 +125,21 @@ public class FluentRangeTests
         bar.PointerRelease(6, 156, QtEnums.LeftButton, 0, 0);
         Assert.Equal(0.5, bar.Position, 3);
     }
+
+    [Fact]
+    public void A_busy_indicator_asks_for_frames_only_once_it_runs()
+    {
+        var (root, scene, shell) = Show("""
+            import QtQuick
+            import QtQuick.Controls
+            BusyIndicator { width: 32; height: 32 }
+            """);
+        using var _ = shell;
+        using var canvas = new SKCanvas(new SKBitmap(200, 200));
+        Assert.False(scene.Paint(canvas, TimeSpan.FromSeconds(1)).WantsAnotherFrame);
+
+        root.WriteProperty("running", true);
+        shell.Loop.Process();
+        Assert.True(scene.Paint(canvas, TimeSpan.FromSeconds(2)).WantsAnotherFrame);
+    }
 }
