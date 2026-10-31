@@ -99,7 +99,6 @@ Keeps the screen on and the PC awake while enabled, like a video player does. Cr
 | Member | Type | Description |
 | --- | --- | --- |
 | `enabled` | bool | Whether to keep the PC awake. Defaults to false. While any `KeepAwake` in the shell is enabled, Windows does not turn the screen off or sleep. |
-| `window` | [ShellWindow](winshell.md#shellwindow) | A window to tie this to. It is kept for configurations from Quickshell; on Windows, it has no effect. |
 
 ## PowerDeviceState
 

@@ -211,6 +211,7 @@ Types not listed keep their names in the new module.
 | `PowerDeviceState.PendingCharge` | `NotCharging` |
 | `PowerDeviceState.PendingDischarge` | Removed. |
 | `PowerDeviceType` values other than `Unknown` and `Battery` | Removed. Windows reports batteries. |
+| `IdleInhibitor.window` | Removed. `KeepAwake` is not tied to a window. |
 | `IdleMonitor.respectInhibitors` | `respectKeepAwake` |
 
 `Brightness`, `BrightnessMonitor`, `BrightnessConnection`, and `EffectivePowerMode` are new.
