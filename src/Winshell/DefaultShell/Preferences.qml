@@ -63,6 +63,17 @@ Singleton {
     ? hiddenNotificationApps.filter(app => app !== null && typeof app === "object" && typeof app.id === "string")
     : []
 
+  // Why a hotkey sequence is not taken, or "". A first chord without Win, Ctrl or Alt would take that key from every
+  // app on the PC: Shift alone is still typing.
+  function hotkeyRefusal(text) {
+    if (text === "")
+      return ""
+    const first = text.split(",")[0].split("+").map(p => p.trim().toLowerCase())
+    if (!first.some(p => p === "win" || p === "left win" || p === "right win" || p === "ctrl" || p === "alt"))
+      return "Start it with Win, Ctrl or Alt, so " + text + " still types in other apps"
+    return ""
+  }
+
   function showsNotificationsFrom(appId) {
     return !hiddenApps.some(app => app.id === appId)
   }
@@ -125,6 +136,19 @@ Singleton {
         settingsHotkey: "The hotkey that opens Winshell Settings; \"\" turns it off.",
         autoUpdate: "true checks for, downloads and installs Winshell updates. Only a portable Winshell updates itself."
       })
+      // A value Winshell Settings would not offer is reported and left in the file; the one in use stays.
+      check: (key, value) => {
+        const among = (choices, text) => choices.includes(value) ? "" : "is not " + text
+        switch (key) {
+        case "backdrop": return among(["acrylic", "mica"], "\"acrylic\" or \"mica\"")
+        case "startHotkey":
+        case "settingsHotkey": {
+          const why = root.hotkeyRefusal(value)
+          return why ? "is refused: " + why : ""
+        }
+        }
+        return ""
+      }
       property string colorScheme: "system"
       property string accentColor: ""
       property string backdrop: "acrylic"

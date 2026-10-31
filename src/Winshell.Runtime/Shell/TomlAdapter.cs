@@ -32,6 +32,12 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     /// <summary>A comment for each key, as <c>{ key: "text" }</c>, written above a key the file does not have yet.</summary>
     [Qml] public object? Comments { get; set; }
 
+    /// <summary>
+    /// A function <c>(key, value)</c> that returns why a value read from the file is refused, or <c>""</c>. A refused
+    /// key is left as the file has it, like a value of the wrong type.
+    /// </summary>
+    [Qml] public object? Check { get; set; }
+
     public override void ComponentComplete()
     {
         foreach (var p in DynamicProperties)
@@ -105,8 +111,14 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
                         Leave(p.Name, $"{p.Name} is an integer past 2^53, so it was left unchanged");
                         continue;
                     }
+                    var js = ToJs(value, Engine.Js.Engine);
+                    if (Refusal(p.Name, js) is { Length: > 0 } reason)
+                    {
+                        Leave(p.Name, $"{p.Name} {reason}, so it was left unchanged");
+                        continue;
+                    }
                     _leave.Remove(p.Name);
-                    p.Write(ToJs(value, Engine.Js.Engine));
+                    p.Write(js);
                 }
                 catch (QmlException e)
                 {
@@ -911,6 +923,21 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
 
     private static bool IsIntegerNumber(double value) =>
         !double.IsNaN(value) && !double.IsInfinity(value) && value == Math.Floor(value) && Math.Abs(value) <= ExactIntegerLimit;
+
+    private string Refusal(string key, JsValue value)
+    {
+        if (Check is not JsValue check || !check.IsCallable() || Engine is null)
+            return "";
+        try
+        {
+            var result = Engine.Js.CallFunction(check, null, [key, value]);
+            return result.IsString() ? result.AsString() : "";
+        }
+        catch (Jint.Runtime.JavaScriptException e)
+        {
+            return $"could not be checked: {e.Message}";
+        }
+    }
 
     private void Leave(string key, string message)
     {
