@@ -667,7 +667,7 @@ namespace Winshell
             void Reported(CrashReport? report)
             {
                 if (report is not null)
-                    Quietly(() => log.Info("", $"Wrote a crash report to \"{report.Path}\""));
+                    Quietly(() => log.Info("shell", $"Wrote a crash report to \"{report.Path}\""));
             }
             Exception? fatal = null;
             // Writes the report first, since logging can fail as the process ends. Returns false, so it can be an
@@ -691,7 +691,7 @@ namespace Winshell
             };
             TaskScheduler.UnobservedTaskException += (_, e) =>
             {
-                Quietly(() => log.Error("", $"A background task failed: {e.Exception}"));
+                Quietly(() => log.Error("shell", $"A background task failed: {e.Exception}"));
                 e.SetObserved();
                 Reported(crashes.WriteOnce("background task", e.Exception, recovery: "A background task failed. Winshell is still running."));
             };
@@ -744,8 +744,8 @@ namespace Winshell
             });
             log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
             log.Info("", $"Launching config: \"{root}\"");
-            log.Info("", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
-            log.Info("", $"Saving logs to \"{logPath}\"");
+            log.Info("shell", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
+            log.Info("shell", $"Saving logs to \"{logPath}\"");
             var pipe = $"winshell-{id}";
             NamedPipeServerStream listening;
             try
@@ -754,7 +754,7 @@ namespace Winshell
             }
             catch (IOException)
             {
-                log.Error("", "The control pipe is already taken.");
+                log.Error("shell", "The control pipe is already taken.");
                 lock (consoleLock)
                 {
                     logClosed = true;
@@ -770,7 +770,7 @@ namespace Winshell
                 return 1;
             }
             if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
-                log.Warn("", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
+                log.Warn("shell", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
             using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0), dismissNotice: () => notices.Hide());
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
@@ -783,7 +783,7 @@ namespace Winshell
             try
             {
                 if (!host.Start() && host.Root is null)
-                    log.Warn("", "The config failed to load. Winshell keeps running and reloads it when the files change.");
+                    log.Warn("shell", "The config failed to load. Winshell keeps running and reloads it when the files change.");
                 if (host.Root is not null)
                     Quietly(() =>
                     {
