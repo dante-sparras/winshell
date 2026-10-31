@@ -278,6 +278,19 @@ public sealed class SocketObject : DataStream
         var generation = ++_generation;
         var loop = Engine.Loop;
         var path = _path;
+        // A directory is not a socket. Report that here: Connect on a directory fails at once with an error this
+        // already maps to Unknown, and waiting for a connect thread to post it loses the error when that thread
+        // is not scheduled in time.
+        if (!path.StartsWith(@"\\.\pipe\", StringComparison.OrdinalIgnoreCase) && Directory.Exists(path))
+        {
+            var error = (int)SocketError.Unknown;
+            loop.Post(() =>
+            {
+                if (generation == _generation && !IsDestroyed)
+                    Emit("error", error);
+            });
+            return;
+        }
         // A thread of its own. Task.Run waits for a pool worker, and a saturated pool holds the connect past the peer.
         RunOffPool("Socket connect", () =>
         {
