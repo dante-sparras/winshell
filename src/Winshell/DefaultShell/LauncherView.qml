@@ -12,6 +12,7 @@ Item {
 
   signal launched(app)
   signal locationRequested(app)
+  signal linkRequested(url)
   signal dismissed()
 
   property var apps: []
@@ -19,6 +20,9 @@ Item {
   // Recommended apps under the pins; off shows the pins alone.
   property bool showRecommended: true
   property var searchResults: []
+  // Recent documents to filter while searching. Empty reads nothing.
+  property var recentFiles: []
+  property string lastLink: ""
   property var pinIds: []
   property string pinsPath: ""
   property string page: "home"
@@ -39,7 +43,9 @@ Item {
   readonly property var pinnedApps: Launcher.pinned(apps, pinIds)
   readonly property var recommendedApps: showRecommended ? Launcher.recommended(recent, pinIds, Launcher.recommendedLimit) : []
   readonly property var allApps: Launcher.visibleApps(apps)
-  readonly property var shown: searching ? searchResults : page === "all" ? allApps : Launcher.homeEntries(apps, showRecommended ? recent : [], pinIds)
+  readonly property var settingsHits: searching ? Launcher.searchSettings(query) : []
+  readonly property var fileHits: searching ? Launcher.searchFiles(recentFiles, query) : []
+  readonly property var shown: searching ? Launcher.resultEntries(searchResults, settingsHits, fileHits) : page === "all" ? allApps : Launcher.homeEntries(apps, showRecommended ? recent : [], pinIds)
   readonly property int pinnedCount: searching || page === "all" ? 0 : pinnedApps.length
 
   implicitWidth: Launcher.menuWidth
@@ -126,7 +132,17 @@ Item {
 
   function reveal(index) {
     if (searching) {
-      resultsList.positionViewAtIndex(index, ListView.Contain)
+      if (root.searchResults && index < root.searchResults.length)
+        resultsList.positionViewAtIndex(index, ListView.Contain)
+      var row = itemFor(index)
+      if (!row)
+        return
+      var top = row.mapToItem(resultsColumn, 0, 0).y
+      var bottom = top + row.height
+      if (top < resultsScroll.contentY)
+        resultsScroll.contentY = top
+      else if (bottom > resultsScroll.contentY + resultsScroll.height)
+        resultsScroll.contentY = bottom - resultsScroll.height
       return
     }
     if (page === "all") {
@@ -148,11 +164,19 @@ Item {
   }
 
   function activateSelection() {
-    var app = currentApp()
-    if (!app)
+    var entry = currentApp()
+    if (!entry)
       return
-    lastLaunched = app
-    launched(app)
+    if (entry.kind === "settings" || entry.kind === "file") {
+      var url = entry.uri || entry.path || ""
+      if (!url)
+        return
+      lastLink = url
+      linkRequested(url)
+      return
+    }
+    lastLaunched = entry
+    launched(entry)
   }
 
   function locationCommand(app) {
@@ -167,8 +191,15 @@ Item {
   }
 
   function itemFor(index) {
-    if (searching)
-      return resultsList.itemAtIndex(index)
+    if (searching) {
+      var apps = root.searchResults ? root.searchResults.length : 0
+      var settings = root.settingsHits ? root.settingsHits.length : 0
+      if (index < apps)
+        return resultsList.itemAtIndex(index)
+      if (index < apps + settings)
+        return settingsRepeater.itemAt(index - apps)
+      return filesRepeater.itemAt(index - apps - settings)
+    }
     if (page === "all")
       return allList.itemAtIndex(index)
     if (index < pinnedCount)
@@ -177,7 +208,7 @@ Item {
   }
 
   function showMenu(app, item) {
-    if (!app)
+    if (!app || app.kind === "settings" || app.kind === "file")
       return
     menuApp = app
     if (item)
@@ -482,29 +513,119 @@ Item {
     x: Launcher.margin
     y: Launcher.searchY + Launcher.searchHeight + 24
     width: Launcher.contentWidth
-    visible: root.searching && root.searchResults.length === 0
+    visible: root.searching && root.shown ? root.shown.length === 0 : false
     text: "No results"
     font: Theme.typography.body
     color: Theme.textFillColorSecondary
   }
 
-  ListView {
-    id: resultsList
-    objectName: "resultsList"
+  Flickable {
+    id: resultsScroll
+    objectName: "resultsScroll"
     x: Launcher.margin
     y: Launcher.searchY + Launcher.searchHeight + 12
     width: Launcher.contentWidth
-    height: root.height - y - 16
-    visible: root.searching && root.searchResults.length > 0
-    keyNavigationEnabled: false
+    height: root.height - y - 40
+    visible: root.searching && root.shown ? root.shown.length > 0 : false
+    contentWidth: width
+    contentHeight: resultsColumn.height
     clip: true
-    model: root.searchResults
-    delegate: AppButton {
-      objectName: "searchRow"
+    flickableDirection: Flickable.VerticalFlick
+
+    Column {
+      id: resultsColumn
       width: Launcher.contentWidth
-      height: Launcher.recommendedRow
-      section: "Search"
+      spacing: 4
+
+      Text {
+        objectName: "appsHeader"
+        visible: root.searchResults ? root.searchResults.length > 0 : false
+        width: Launcher.contentWidth
+        height: 28
+        text: "Apps"
+        font: Theme.typography.bodyStrong
+        color: Theme.textFillColorPrimary
+        verticalAlignment: Text.AlignVCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: "Apps"
+      }
+
+      ListView {
+        id: resultsList
+        objectName: "resultsList"
+        width: Launcher.contentWidth
+        height: count * Launcher.recommendedRow
+        visible: count > 0
+        interactive: false
+        keyNavigationEnabled: false
+        model: root.searchResults
+        delegate: AppButton {
+          objectName: "searchRow"
+          width: Launcher.contentWidth
+          height: Launcher.recommendedRow
+          section: "Search"
+        }
+      }
+
+      Text {
+        objectName: "settingsHeader"
+        visible: root.settingsHits ? root.settingsHits.length > 0 : false
+        width: Launcher.contentWidth
+        height: 28
+        text: "Settings"
+        font: Theme.typography.bodyStrong
+        color: Theme.textFillColorPrimary
+        verticalAlignment: Text.AlignVCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: "Settings"
+      }
+
+      Repeater {
+        id: settingsRepeater
+        model: root.settingsHits
+        delegate: GroupRow {
+          indexBase: root.searchResults ? root.searchResults.length : 0
+          rowObjectName: "settingsRow"
+          section: "Settings"
+        }
+      }
+
+      Text {
+        objectName: "filesHeader"
+        visible: root.fileHits ? root.fileHits.length > 0 : false
+        width: Launcher.contentWidth
+        height: 28
+        text: "Files"
+        font: Theme.typography.bodyStrong
+        color: Theme.textFillColorPrimary
+        verticalAlignment: Text.AlignVCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: "Files"
+      }
+
+      Repeater {
+        id: filesRepeater
+        model: root.fileHits
+        delegate: GroupRow {
+          indexBase: (root.searchResults ? root.searchResults.length : 0) + (root.settingsHits ? root.settingsHits.length : 0)
+          rowObjectName: "fileRow"
+          section: "Files"
+        }
+      }
     }
+  }
+
+  Text {
+    objectName: "webAbsent"
+    x: Launcher.margin
+    y: root.height - 28
+    width: Launcher.contentWidth
+    height: 20
+    visible: root.searching
+    text: "Web results aren't included"
+    font: Theme.typography.caption
+    color: Theme.textFillColorSecondary
+    verticalAlignment: Text.AlignVCenter
   }
 
   Menu {
@@ -538,6 +659,59 @@ Item {
     color: "transparent"
     border.width: 2
     border.color: Theme.focusStrokeColorOuter
+  }
+
+  // A settings page or a recent document in search. Apps keep AppButton, so their rows stay as they were.
+  component GroupRow: MouseArea {
+    id: row
+    required property int index
+    required property var modelData
+    property int indexBase: 0
+    property string rowObjectName: "settingsRow"
+    property string section: "Settings"
+    objectName: rowObjectName
+    readonly property string appName: modelData.name
+    readonly property int entryIndex: indexBase + index
+    readonly property bool chosen: root.selected === entryIndex
+    width: Launcher.contentWidth
+    height: Launcher.recommendedRow
+    hoverEnabled: true
+    Accessible.role: Accessible.Button
+    Accessible.name: modelData.name
+    Accessible.description: section
+    onClicked: {
+      root.selected = entryIndex
+      root.activateSelection()
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      radius: Theme.controlCornerRadius
+      color: row.pressed ? Theme.subtleFillColorTertiary : row.chosen || row.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+      Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
+    }
+
+    Text {
+      x: 8
+      width: Launcher.rowIcon
+      height: Launcher.recommendedRow
+      verticalAlignment: Text.AlignVCenter
+      text: row.modelData.glyph || ""
+      font.family: Theme.iconFontFamily
+      font.pixelSize: 16
+      color: Theme.textFillColorPrimary
+    }
+
+    Text {
+      x: Launcher.rowIcon + 16
+      width: row.width - x - 12
+      height: Launcher.recommendedRow
+      verticalAlignment: Text.AlignVCenter
+      text: row.modelData.name
+      elide: Text.ElideRight
+      font: Theme.typography.body
+      color: Theme.textFillColorPrimary
+    }
   }
 
   // An app in Start: a pinned tile, or a row with its icon before its name.

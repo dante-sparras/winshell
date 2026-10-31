@@ -40,7 +40,7 @@ Right-click an empty part of the taskbar for **Taskbar settings**. Search opens 
 
 ## Start
 
-A popup window over the taskbar, opened by the Start button or the Windows key, on the material chosen in Winshell Settings. It has a search box, the pinned apps, and up to six recommended apps: the ones used most recently that aren't pinned. **All apps** lists every app. Typing searches every app Start lists ([`Apps.search`](winshell-apps.md#apps)). The arrow keys move between apps, Enter opens the selected one, and Escape or the Windows key closes Start.
+A popup window over the taskbar, opened by the Start button or the Windows key, on the material chosen in Winshell Settings. It has a search box, the pinned apps, and up to six recommended apps: the ones used most recently that aren't pinned. **All apps** lists every app. Typing searches apps first ([`Apps.search`](winshell-apps.md#apps)), then the Windows Settings pages this shell already opens, then recent documents ([`RecentDocuments.search`](winshell-apps.md#recentdocuments)). The box still says Search apps. While you are typing, Start says that web results aren't included. The arrow keys move through those results, Enter opens the selected app, settings page, or document, and Escape or the Windows key closes Start. Recommended stays apps.
 
 Pins are in `launcher.toml` next to the shell's `shell.qml`: for the default shell, `%LOCALAPPDATA%\winshell\default-shell\launcher.toml`. Until you pin or unpin something, Start shows its default pins. Winshell Settings' Start page turns recommended apps off and moves or unpins pins.
 
