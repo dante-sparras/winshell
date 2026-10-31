@@ -36,12 +36,8 @@ public sealed class ShellScreen : QObject
             NotifyChanged("orientation");
             NotifyChanged("primaryOrientation");
         }
-        if (old.Geometry != info.Geometry || old.DevicePixelRatio != info.DevicePixelRatio || old.PhysicalWidthMm != info.PhysicalWidthMm)
-        {
+        if (old.Geometry != info.Geometry || old.DevicePixelRatio != info.DevicePixelRatio)
             NotifyChanged("devicePixelRatio");
-            NotifyChanged("logicalPixelDensity");
-            NotifyChanged("physicalPixelDensity");
-        }
         if (old.WorkArea != info.WorkArea) NotifyChanged("workArea");
         if (old.RefreshRate != info.RefreshRate) NotifyChanged("refreshRate");
     }
@@ -69,26 +65,6 @@ public sealed class ShellScreen : QObject
     [Qml] public QRect WorkArea { get { Track(); return _info.WorkArea; } }
 
     [Qml] public double DevicePixelRatio { get { Track(); return _info.DevicePixelRatio; } }
-
-    [Qml]
-    public double PhysicalPixelDensity
-    {
-        get
-        {
-            Track();
-            return _info.PhysicalWidthMm > 0 ? _info.Geometry.Width * _info.DevicePixelRatio / _info.PhysicalWidthMm : 96 / 25.4 * _info.DevicePixelRatio;
-        }
-    }
-
-    [Qml]
-    public double LogicalPixelDensity
-    {
-        get
-        {
-            Track();
-            return _info.PhysicalWidthMm > 0 ? _info.Geometry.Width / _info.PhysicalWidthMm : 96 / 25.4;
-        }
-    }
 
     [Qml] public int Orientation { get { Track(); return _info.Geometry.Width >= _info.Geometry.Height ? 2 : 1; } }
 
@@ -523,10 +499,11 @@ public static class ProcessLauncher
     /// <summary>How a detached command will start. Tests read this and do not launch the program.</summary>
     internal static DetachedLaunch PlanDetached(ProcessSpec spec)
     {
-        var resolved = Resolve(spec.Command);
         var directory = spec.WorkingDirectory ?? Profile();
         // An explicit environment cannot ride along with ShellExecuteEx, so that case stays CreateProcess.
         var customEnvironment = spec.ClearEnvironment || spec.Environment.Count > 0;
+        // ShellExecuteEx opens a .sh with whatever Windows has for it. CreateProcess needs an interpreter.
+        var resolved = Resolve(spec.Command, windowsOpens: !customEnvironment);
         if (!customEnvironment)
             return new DetachedLaunch(true, false, resolved.FileName, Arguments(resolved), directory);
         return new DetachedLaunch(false, IsConsoleImage(resolved.FileName), resolved.FileName, "", directory);
@@ -544,7 +521,7 @@ public static class ProcessLauncher
         psi.ArgumentList.Count == 0 ? psi.Arguments : Quote(psi.ArgumentList);
 
     /// <summary>The program to start and its arguments. Batch files run through cmd and PowerShell scripts through pwsh.</summary>
-    public static ProcessStartInfo Resolve(IReadOnlyList<string> command)
+    public static ProcessStartInfo Resolve(IReadOnlyList<string> command, bool windowsOpens = false)
     {
         var program = command[0];
         var args = command.Skip(1).ToList();
@@ -556,8 +533,8 @@ public static class ProcessLauncher
             case ".cmd" or ".bat":
                 return new ProcessStartInfo(System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", BatchCommandLine(path, args));
             case ".ps1":
-                return new ProcessStartInfo(Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. args]);
-            case ".sh":
+                return new ProcessStartInfo(Which("pwsh") ?? Which("powershell") ?? "powershell.exe", ["-NoProfile", "-File", path, .. args]);
+            case ".sh" when !windowsOpens:
                 return new ProcessStartInfo(Which("bash") ?? Which("sh") ?? "bash", [path, .. args]);
         }
         return new ProcessStartInfo(path, args);

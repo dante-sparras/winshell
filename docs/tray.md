@@ -35,7 +35,7 @@ Foreground and desktop window-order events keep the host in front. Every thirty 
 | `icon` | An `image://trayicon/…` source for the icon the app set, sharp at the screen's scale (see below) |
 | `tooltip` | The tooltip text, which may run over several lines |
 | `overflow` | Windows shows the icon in the hidden icons flyout, not in the taskbar |
-| `menu` | A `MenuHandle` for `MenuAnchor`; the app draws the menu itself |
+| `menu` | A `MenuHandle`. The app draws the menu itself; `display()` asks it to open |
 | `click()` | A left click at the cursor. Most apps show their window |
 | `doubleClick()` | A double click at the cursor. Many older apps show their window only for this |
 | `middleClick()` | A middle click at the cursor |

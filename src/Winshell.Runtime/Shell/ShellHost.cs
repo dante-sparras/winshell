@@ -4,11 +4,12 @@ using System.Text;
 namespace Winshell.Runtime.Shell;
 
 /// <summary>The settings a shell gives with <c>//@ pragma</c> comments at the top of its root file.</summary>
-public sealed record ShellPragmas(string? ShellId, string? AppId, string? DataDir, string? StateDir, string? CacheDir, string? IconTheme, IReadOnlyDictionary<string, string> Env)
+public sealed record ShellPragmas(string? ShellId, string? AppId, string? DataDir, string? StateDir, string? CacheDir, bool HasIconTheme, IReadOnlyDictionary<string, string> Env)
 {
     public static ShellPragmas Read(string rootFile)
     {
-        string? id = null, appId = null, data = null, state = null, cache = null, icons = null;
+        string? id = null, appId = null, data = null, state = null, cache = null;
+        var iconTheme = false;
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (File.Exists(rootFile))
         {
@@ -32,7 +33,7 @@ public sealed record ShellPragmas(string? ShellId, string? AppId, string? DataDi
                     case "DataDir": data = value; break;
                     case "StateDir": state = value; break;
                     case "CacheDir": cache = value; break;
-                    case "IconTheme": icons = value; break;
+                    case "IconTheme": iconTheme = true; break;
                     case "Env":
                         var eq = value.IndexOf('=');
                         if (eq > 0)
@@ -41,7 +42,7 @@ public sealed record ShellPragmas(string? ShellId, string? AppId, string? DataDi
                 }
             }
         }
-        return new ShellPragmas(id, appId, data, state, cache, icons, env);
+        return new ShellPragmas(id, appId, data, state, cache, iconTheme, env);
     }
 }
 
@@ -89,7 +90,7 @@ public sealed class ShellHost : IShellHost, IDisposable
             Environment.SetEnvironmentVariable(k, v);
     }
 
-    private ShellPragmas _declared = new(null, null, null, null, null, null, new Dictionary<string, string>());
+    private ShellPragmas _declared = new(null, null, null, null, null, false, new Dictionary<string, string>());
 
     /// <summary>
     /// A pragma path is relative to the shell file, and <c>%NAME%</c> is expanded.
@@ -301,6 +302,9 @@ public sealed class ShellHost : IShellHost, IDisposable
             // A downloaded configuration runs as the user, so it waits until the user unblocks it.
             if (ZoneIdentifier.IsDownloaded(_rootFile))
                 throw new QmlException(ZoneIdentifier.Blocked(_rootFile));
+            // Read stores the flag and does not throw: doctor and the restart warning call it outside this try.
+            if (ShellPragmas.Read(_rootFile).HasIconTheme)
+                throw new QmlException("//@ pragma IconTheme is not a shell setting. Remove it.");
             root = engine.CreateRoot(_rootFile);
         }
         catch (Exception e) when (e is not OutOfMemoryException)

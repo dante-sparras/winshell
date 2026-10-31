@@ -24,6 +24,7 @@ internal sealed class DirectoryWatch : IDisposable
 
     private readonly SafeFileHandle _handle;
     private readonly uint _filter;
+    private readonly bool _subtree;
     private readonly Action<string> _changed;
     private readonly Action _lost;
     private readonly ManualResetEvent _completed = new(false);
@@ -32,10 +33,11 @@ internal sealed class DirectoryWatch : IDisposable
     private readonly Thread _thread;
     private volatile bool _stopped;
 
-    private DirectoryWatch(SafeFileHandle handle, uint filter, Action<string> changed, Action lost)
+    private DirectoryWatch(SafeFileHandle handle, uint filter, bool subtree, Action<string> changed, Action lost)
     {
         _handle = handle;
         _filter = filter;
+        _subtree = subtree;
         _changed = changed;
         _lost = lost;
         Marshal.StructureToPtr(new NativeOverlapped { EventHandle = _completed.SafeWaitHandle.DangerousGetHandle() }, _overlapped, false);
@@ -47,7 +49,8 @@ internal sealed class DirectoryWatch : IDisposable
     /// <param name="filter"><see cref="FileChanges"/> or <see cref="NameChanges"/>.</param>
     /// <param name="changed">Called with the name of each thing that changed, relative to the folder.</param>
     /// <param name="lost">Called once when the folder went away or changes were dropped. Nothing is reported after it.</param>
-    public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost)
+    /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
+    public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost, bool subtree = false)
     {
         var handle = CreateFileW(path, FileListDirectory, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
             FileFlagBackupSemantics | FileFlagOverlapped, IntPtr.Zero);
@@ -56,7 +59,7 @@ internal sealed class DirectoryWatch : IDisposable
             handle.Dispose();
             return null;
         }
-        var watch = new DirectoryWatch(handle, filter, changed, lost);
+        var watch = new DirectoryWatch(handle, filter, subtree, changed, lost);
         if (!watch.Read())
         {
             watch.Dispose();
@@ -66,7 +69,7 @@ internal sealed class DirectoryWatch : IDisposable
         return watch;
     }
 
-    private bool Read() => ReadDirectoryChangesW(_handle, _buffer, BufferSize, false, _filter, IntPtr.Zero, _overlapped, IntPtr.Zero);
+    private bool Read() => ReadDirectoryChangesW(_handle, _buffer, BufferSize, _subtree, _filter, IntPtr.Zero, _overlapped, IntPtr.Zero);
 
     private void Run()
     {

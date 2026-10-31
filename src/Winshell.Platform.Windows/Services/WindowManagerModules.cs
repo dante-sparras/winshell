@@ -19,6 +19,8 @@ internal static class WindowManagerModules
         registry.Module("Winshell.Apps")
             .Singleton(e => new AppsService(e), "Apps")
             .Uncreatable<AppEntry>("AppEntry", "AppEntry comes from Apps")
+            .Singleton(e => new JumpListService(e), "JumpLists")
+            .Uncreatable<AppJumpList>("AppJumpList", "AppJumpList comes from JumpLists.forApp")
             .Singleton(_ => new RecentDocuments(), "RecentDocuments");
 
         registry.Module("Winshell.Windows")
@@ -33,6 +35,6 @@ internal static class WindowManagerModules
             .Uncreatable<WinlandEvent>("WinlandEvent")
             .Uncreatable<WinlandMonitor>("WinlandMonitor")
             .Uncreatable<WinlandWorkspace>("WinlandWorkspace")
-            .Uncreatable<WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels, or as an attached object of an AppWindow", attached: WinlandWindow.Attach, attachedType: typeof(WinlandWindow));
+            .Uncreatable<WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels");
     }
 }

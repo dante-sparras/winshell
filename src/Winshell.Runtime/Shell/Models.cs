@@ -330,6 +330,16 @@ public sealed class Region : QObject, IPropertyObserver
             using var path = builder.Detach();
             region.SetPath(path);
         }
+        else if (RoundRect(rect) is { } round)
+        {
+            using (round)
+            using (var builder = new SkiaSharp.SKPathBuilder())
+            {
+                builder.AddRoundRect(round, SkiaSharp.SKPathDirection.Clockwise);
+                using var path = builder.Detach();
+                region.SetPath(path);
+            }
+        }
         else
         {
             region.SetRect(rect);
@@ -347,6 +357,32 @@ public sealed class Region : QObject, IPropertyObserver
             region.Op(other, op);
         }
         return region;
+    }
+
+    /// <summary>A round rectangle when any corner is curved. A corner above 0 replaces <c>radius</c>; 0 uses it.</summary>
+    private SkiaSharp.SKRoundRect? RoundRect(SkiaSharp.SKRectI rect)
+    {
+        var max = Math.Min(rect.Width, rect.Height) / 2f;
+        float Curve(double corner)
+        {
+            var chosen = corner > 0 ? corner : _radius;
+            return (float)Math.Clamp(chosen, 0, max);
+        }
+        var topLeft = Curve(_topLeftRadius);
+        var topRight = Curve(_topRightRadius);
+        var bottomRight = Curve(_bottomRightRadius);
+        var bottomLeft = Curve(_bottomLeftRadius);
+        if (topLeft == 0 && topRight == 0 && bottomRight == 0 && bottomLeft == 0)
+            return null;
+        var round = new SkiaSharp.SKRoundRect();
+        round.SetRectRadii(new SkiaSharp.SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom),
+        [
+            new SkiaSharp.SKPoint(topLeft, topLeft),
+            new SkiaSharp.SKPoint(topRight, topRight),
+            new SkiaSharp.SKPoint(bottomRight, bottomRight),
+            new SkiaSharp.SKPoint(bottomLeft, bottomLeft),
+        ]);
+        return round;
     }
 }
 
