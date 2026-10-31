@@ -1,10 +1,12 @@
 import Winshell
+import Winshell.Apps
 import Winshell.Theme
 import QtQuick
 import "tasks.js" as Tasks
 
-// The menu Windows 11 opens from a right click on a taskbar button, the part of a jump list every app has: open
-// the app, pin or unpin it, and close its windows. The arrow keys move between the items, and Escape closes it.
+// The menu Windows 11 opens from a right click on a taskbar button. Recent and frequent documents the shell API
+// gives for the app sit above the app, pin or unpin, and close. Choosing a document does not open it. When those
+// lists cannot be read, the menu says so. The arrow keys move between the items, and Escape closes it.
 PopupWindow {
   id: root
 
@@ -23,7 +25,16 @@ PopupWindow {
     if (!task)
       return []
     const count = task.windows.length
-    const list = [{ id: "launch", label: Tasks.name(task), icon: task.icon }]
+    const list = []
+    const jump = JumpLists.forApp(Tasks.appUserModelId(task))
+    if (!jump.available)
+      list.push({ id: "unavailable", label: "Jump list can't be read" })
+    else {
+      const names = jump.destinations || []
+      for (let i = 0; i < names.length; i++)
+        list.push({ id: "dest:" + i, label: String(names[i]) })
+    }
+    list.push({ id: "launch", label: Tasks.name(task), icon: task.icon })
     // One slot for pinning, whichever way it goes, so its row and its focus stay while the app is pinned or unpinned.
     list.push({ id: "pin", label: task.pinned ? "Unpin from taskbar" : "Pin to taskbar", glyph: task.pinned ? "" : "" })
     if (count > 0)
@@ -56,6 +67,9 @@ PopupWindow {
   }
 
   function trigger(id) {
+    // A destination is only shown. Opening it would launch a document, and this menu does not.
+    if (id === "unavailable" || String(id).startsWith("dest:"))
+      return
     const task = root.task
     visible = false
     if (!task)
@@ -161,8 +175,8 @@ PopupWindow {
           }
 
           Text {
-            x: 40
-            width: parent.width - 52
+            x: item.entry.icon !== undefined || item.entry.glyph !== undefined ? 40 : 12
+            width: parent.width - x - 12
             anchors.verticalCenter: parent.verticalCenter
             text: item.entry.label
             elide: Text.ElideRight

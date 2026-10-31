@@ -32,6 +32,16 @@ function windowKey(window, find) {
   return "window:" + (window.appId || programId(window.executable)).toLowerCase()
 }
 
+// The AppUserModelID a jump list is read with, or "" when the task has none.
+function appUserModelId(task) {
+  if (task && task.entry && task.entry.appId)
+    return task.entry.appId
+  const windows = task && task.windows
+  if (windows && windows.length > 0 && windows[0].appId)
+    return windows[0].appId
+  return ""
+}
+
 // The taskbar's buttons. `windows` is the window list in the order the windows opened, `pins` the pinned apps,
 // `find` looks an app up in the index, and `shows` says whether this taskbar shows a window. Pinned apps are left
 // out when `showPins` is false, unless one of their windows is shown.

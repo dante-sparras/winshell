@@ -19,9 +19,9 @@ Pinned apps come first, in the order they are pinned, then every other running a
 - **Click.** Launches a pinned app that is not running. It brings the app's window forward, or minimizes the window when it is already in front. With several windows, it goes to the next window when one is in front, and otherwise to the one used last.
 - **Middle click or Shift+click.** Opens a new window of the app.
 - **Hover.** After 400 ms, live previews (`WindowThumbnail`) of the app's windows appear, each with its title and a close button. For an app that isn't running, only the app's name appears.
-- **Right click.** Opens a menu with the app, Pin to taskbar or Unpin from taskbar, and Close window or Close all windows. Windows has no supported API to read another app's jump list, so recent and pinned files are not shown.
+- **Right click.** Opens a menu with the recent and frequent documents Windows will give for that app, then the app, Pin to taskbar or Unpin from taskbar, and Close window or Close all windows. Choosing a document does not open it. Pinned items and custom tasks are not listed: Windows does not give those lists to another program. When the recent and frequent lists cannot be read, the menu says so instead of showing placeholder rows.
 - **Drag.** Drag a pinned app onto another pinned app to move it. It lands before that app when you drag it back, and after it when you drag it on. The order is kept in `taskbar.json`, and it is the order Win+1 through Win+0 count. A press that stays on the button is still a click. An app that is not pinned stays where the running apps are.
-- **Indicators.** A grey line marks a running app, and a longer accent line marks the app in front. A window that flashes for attention (`AppWindow.attention`) turns its button red until it is activated.
+- **Indicators.** A grey line marks a running app, and a longer accent line marks the app in front. A window that flashes for attention (`AppWindow.attention`) turns its button red until it is activated. A progress bar or an overlay icon is not drawn. Apps send those to Explorer with `ITaskbarList3`. They are not notification-area messages, and the tray host passes every message on to Explorer unchanged, so Winshell does not take them.
 
 ## Keyboard
 

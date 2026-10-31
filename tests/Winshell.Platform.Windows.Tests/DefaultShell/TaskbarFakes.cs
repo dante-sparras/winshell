@@ -1,3 +1,4 @@
+using Winshell.Platform.Windows.Services.Apps;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -109,6 +110,45 @@ public sealed class FakeAppEntry(string id, string name, string appId, string? i
     [Qml] public string Icon => icon ?? id;
 
     [Qml] public void Launch() => Launches++;
+}
+
+/// <summary>
+/// Stands in for <c>JumpLists</c>. An app that a test has not mentioned has a successful empty list, so a menu
+/// that does not care about destinations stays as it was. Nothing here reads this PC.
+/// </summary>
+public sealed class FakeJumpLists : QObject
+{
+    private readonly Dictionary<string, AppJumpList> _byId = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The app ids <c>forApp</c> was asked for, in order.</summary>
+    public List<string> Asked { get; } = [];
+
+    [Qml]
+    public AppJumpList ForApp(string appId)
+    {
+        TrackQml("jumpLists");
+        Asked.Add(appId ?? "");
+        var list = ListFor(appId ?? "");
+        list.Engine ??= Engine;
+        return list;
+    }
+
+    /// <summary>The names a later <c>forApp</c> returns for this app. The list was read.</summary>
+    public void Set(string appId, params string[] destinations) => ListFor(appId).Apply(true, destinations);
+
+    /// <summary>A later <c>forApp</c> reports that this app's list cannot be read.</summary>
+    public void Unreadable(string appId) => ListFor(appId).Apply(false, []);
+
+    private AppJumpList ListFor(string appId)
+    {
+        if (!_byId.TryGetValue(appId, out var list))
+        {
+            list = new AppJumpList { Engine = Engine };
+            list.Apply(true, []);
+            _byId[appId] = list;
+        }
+        return list;
+    }
 }
 
 /// <summary>
