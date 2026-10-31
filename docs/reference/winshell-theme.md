@@ -13,7 +13,7 @@ A singleton, reached as `Theme`. Every color token is a read-only `color` proper
 | `dark` | bool, read-only | Whether the theme in use is dark, after `colorScheme`. |
 | `colorScheme` | string | `"system"` follows Windows mode, as the taskbar and Start do, for every Winshell window, Settings included. `"light"` and `"dark"` are the shell's own choice for Winshell's windows, including their title-bar frame. Other programs keep their own mode. Default `"system"`. Another value logs a warning in the `theme` category and changes nothing. |
 | `accentColor` | color | The shell's own accent, from which the accent tokens and their shades are made. Default transparent, which follows the accent picked in Windows. |
-| `highContrast` | bool, read-only | Whether a contrast theme is on. Every color token is then one of the eight system colors, and the shadows are transparent. |
+| `highContrast` | bool, read-only | Whether a contrast theme is on. Every color token is then one of the eight system colors, and the shadows are transparent. A window's backdrop reads as none, and a transparent window with a backdrop clears to `solidBackgroundFillColorBase`. |
 | `animationsEnabled` | bool, read-only | Whether Windows animation effects are on. Skip motion when this is false. A contrast theme does not turn it off. |
 | `autoHideScrollBars` | bool, read-only | False when "Always show scrollbars" is on in Windows' Accessibility settings. Scroll bars then stay wide, with their track and arrows. |
 | `fontFamily` | string, read-only | The Windows 11 text font, `"Segoe UI Variable"`. |

@@ -38,7 +38,7 @@ PanelWindow {
   exclusiveZone: 0
   aboveWindows: true
   focusable: true
-  WindowEffects.backdrop: contrast ? WindowEffects.None : WindowEffects.Acrylic
+  WindowEffects.backdrop: WindowEffects.Acrylic
   WindowEffects.corners: WindowEffects.RoundCorners
 
   Timer {
@@ -54,9 +54,9 @@ PanelWindow {
     objectName: "card"
     anchors.fill: parent
     radius: Theme.overlayCornerRadius
-    color: root.contrast ? Theme.systemColorWindowColor : "transparent"
+    color: "transparent"
     border.width: root.contrast ? 2 : 1
-    border.color: root.contrast ? Theme.systemColorWindowTextColor : Theme.surfaceStrokeColorFlyout
+    border.color: Theme.surfaceStrokeColorFlyout
     Accessible.role: Accessible.Notification
     Accessible.name: root.announcement
 
@@ -88,7 +88,7 @@ PanelWindow {
           Layout.fillWidth: true
           text: "Winshell"
           font: Theme.typography.caption
-          color: root.contrast ? Theme.systemColorWindowTextColor : Theme.textFillColorSecondary
+          color: Theme.textFillColorSecondary
         }
         Button {
           id: close
@@ -112,7 +112,7 @@ PanelWindow {
         text: root.title
         font: Theme.typography.bodyStrong
         wrapMode: Text.Wrap
-        color: root.contrast ? Theme.systemColorWindowTextColor : Theme.textFillColorPrimary
+        color: Theme.textFillColorPrimary
       }
 
       Text {
@@ -122,7 +122,7 @@ PanelWindow {
         text: root.detail
         font: Theme.typography.caption
         wrapMode: Text.Wrap
-        color: root.contrast ? Theme.systemColorWindowTextColor : Theme.textFillColorSecondary
+        color: Theme.textFillColorSecondary
       }
 
       Text {
@@ -135,7 +135,7 @@ PanelWindow {
         // A long script error stops at about six lines; the file it names has the rest.
         Layout.maximumHeight: 120
         clip: true
-        color: root.contrast ? Theme.systemColorWindowTextColor : Theme.textFillColorPrimary
+        color: Theme.textFillColorPrimary
       }
 
       Text {
@@ -145,7 +145,7 @@ PanelWindow {
         text: root.note
         font: Theme.typography.body
         wrapMode: Text.Wrap
-        color: root.contrast ? Theme.systemColorWindowTextColor : Theme.textFillColorSecondary
+        color: Theme.textFillColorSecondary
       }
 
       RowLayout {

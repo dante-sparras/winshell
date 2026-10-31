@@ -201,10 +201,13 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         get { Track(); return _windowTransform; }
     }
 
-    /// <summary>The Windows 11 material behind the window: none, Mica or Acrylic.</summary>
+    /// <summary>
+    /// The Windows 11 material behind the window: none, Mica or Acrylic. A contrast theme reports none, and the
+    /// window clears to the contrast window color wherever its own color is transparent.
+    /// </summary>
     public WindowBackdrop Backdrop
     {
-        get => _backdrop;
+        get => Theme.Current.IsHighContrast ? WindowBackdrop.None : _backdrop;
         set
         {
             _backdrop = value;
@@ -224,14 +227,26 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 
     private void OnThemeChanged()
     {
-        if (!IsDestroyed)
-            ApplyBackdrop();
+        if (IsDestroyed)
+            return;
+        ApplyBackdrop();
+        Scene.RequestUpdate();
     }
 
     private void ApplyBackdrop()
     {
-        Scene.TextOnBackdrop = _backdrop != WindowBackdrop.None || _color.A < 1;
-        _backend?.SetBackdrop(_backdrop, _corners, Theme.Current.IsDark);
+        var backdrop = Theme.Current.IsHighContrast ? WindowBackdrop.None : _backdrop;
+        Scene.TextOnBackdrop = backdrop != WindowBackdrop.None || PaintedColor().A < 1;
+        _backend?.SetBackdrop(backdrop, _corners, Theme.Current.IsDark);
+    }
+
+    /// <summary>The color the surface clears to. Contrast replaces a transparent material with the system window color.</summary>
+    private QColor PaintedColor()
+    {
+        var color = _color.IsValid ? _color : QColor.White;
+        if (Theme.Current.IsHighContrast && _backdrop != WindowBackdrop.None && color.A < 1)
+            return Theme.Current.SolidBackgroundFillColorBase;
+        return color;
     }
 
     public QPoint GlobalOrigin => _backend?.Origin ?? new QPoint(0, 0);
@@ -437,13 +452,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     }
 
     /// <summary>The window color as the surface clears to. With a backdrop the window shows through.</summary>
-    private SKColor PremultipliedBackground()
-    {
-        var c = _color;
-        if (!c.IsValid)
-            c = QColor.White;
-        return c.ToSk();
-    }
+    private SKColor PremultipliedBackground() => PaintedColor().ToSk();
 
     public void OnClosed()
     {

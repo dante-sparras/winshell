@@ -246,7 +246,7 @@ An attached object for a window, as `WindowEffects.backdrop: WindowEffects.Mica`
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `backdrop` | int | The material: `WindowEffects.None`, `Mica`, `Acrylic` or `MicaAlt`. Default `None`, or `Mica` for a floating window. |
+| `backdrop` | int | The material: `WindowEffects.None`, `Mica`, `Acrylic` or `MicaAlt`. Default `None`, or `Mica` for a floating window. While `Theme.highContrast` is on, this reads as `None`, and a transparent window with a backdrop clears to `Theme.solidBackgroundFillColorBase`. |
 | `corners` | int | The corners: `WindowEffects.DefaultCorners` (Windows decides, the default), `SquareCorners`, `RoundCorners` or `SmallRoundCorners`. |
 
 Enum values: `None`, `Mica`, `Acrylic`, `MicaAlt`, `DefaultCorners`, `SquareCorners`, `RoundCorners`, `SmallRoundCorners`
