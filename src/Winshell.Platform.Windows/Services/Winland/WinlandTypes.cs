@@ -198,14 +198,12 @@ public sealed class WinlandWorkspace : QObject
 }
 
 /// <summary>
-/// The <c>WinlandWindow</c>: a Client as Winland reports it. Its address is the window handle, so
-/// <c>wayland</c> is the <c>AppWindow</c> of the same window. As an attached object of an <c>AppWindow</c> it finds the
-/// Client of that window.
+/// The <c>WinlandWindow</c>: a window as Winland reports it. Its address is the window handle, so
+/// <c>wayland</c> is the <c>AppWindow</c> of the same window when <c>WindowList</c> is in use.
 /// </summary>
 public sealed class WinlandWindow : QObject
 {
     private readonly WinlandService? _ipc;
-    private readonly AppWindow? _attachedTo;
     private ulong _address;
     private string _title = "";
     private WinlandWorkspace? _workspace;
@@ -218,19 +216,6 @@ public sealed class WinlandWindow : QObject
         _ipc = ipc;
     }
 
-    private WinlandWindow(AppWindow toplevel, WinlandService? ipc)
-    {
-        _attachedTo = toplevel;
-        _ipc = ipc;
-        _address = (ulong)toplevel.Hwnd;
-    }
-
-    /// <summary>The attached object of an <c>AppWindow</c>.</summary>
-    internal static QObject Attach(QObject owner) =>
-        owner is AppWindow toplevel
-            ? new WinlandWindow(toplevel, toplevel.Manager.Engine?.FindNativeSingleton<WinlandService>())
-            : new WinlandWindow((WinlandService?)null);
-
     [Qml]
     public string Address
     {
@@ -241,17 +226,11 @@ public sealed class WinlandWindow : QObject
         }
     }
 
-    /// <summary>For an attached object, the Client of its window; null until Winland reports it.</summary>
-    [Qml]
-    public WinlandWindow? Handle => _attachedTo is not null ? _ipc?.FindToplevel(_address) : null;
-
     [Qml]
     public AppWindow? Wayland
     {
         get
         {
-            if (_attachedTo is not null)
-                return _attachedTo;
             Track("address");
             return _ipc?.WindowListService?.Find((nint)_address);
         }
