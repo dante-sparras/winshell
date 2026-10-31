@@ -17,8 +17,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private const string ClassName = "WinshellHotkey";
 
     private static readonly object Gate = new();
-    private static Thread? HookThread;
-    private static uint HookThreadId;
+    private static HookThread? Hook;
     private static WindowsHotkeyRegistrar? HookOwner;
 
     private readonly object _bookLock = new();
@@ -63,12 +62,12 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     internal static bool IsHookInstalled
     {
-        get { lock (Gate) return HookThread is not null; }
+        get { lock (Gate) return Hook is not null; }
     }
 
     internal static Thread? InstalledHookThread
     {
-        get { lock (Gate) return HookThread; }
+        get { lock (Gate) return Hook?.Thread; }
     }
 
     public HotkeyClaim Claim(IHotkeyListener listener, HotkeySequence? sequence)
@@ -161,17 +160,14 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     /// <summary>Removes this process's hotkey hook, whoever installed it. Tests call this if a registrar is abandoned.</summary>
     internal static void EmergencyUnhook()
     {
-        Thread? thread;
-        uint threadId;
+        HookThread? hook;
         lock (Gate)
         {
-            thread = HookThread;
-            threadId = HookThreadId;
-            HookThread = null;
-            HookThreadId = 0;
+            hook = Hook;
+            Hook = null;
             HookOwner = null;
         }
-        StopHookThread(thread, threadId);
+        hook?.Stop();
     }
 
     internal bool TryGetId(OsChord chord, out int id)
@@ -441,7 +437,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     private bool OwnsHook
     {
-        get { lock (Gate) return ReferenceEquals(HookOwner, this) && HookThread is not null; }
+        get { lock (Gate) return ReferenceEquals(HookOwner, this) && Hook is not null; }
     }
 
     private void SyncHook()
@@ -459,71 +455,39 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     {
         lock (Gate)
         {
-            if (HookOwner == this && HookThread is not null)
+            if (HookOwner == this && Hook is not null)
                 return true;
             if (HookOwner is not null && HookOwner != this)
                 return false;
             HookOwner = this;
         }
-        var started = new TaskCompletionSource<(nint Hook, uint ThreadId)>();
-        var thread = new Thread(() => PumpHook(started)) { IsBackground = true, Name = "Winshell keyboard hook" };
-        thread.Start();
-        var (hook, threadId) = started.Task.Result;
+        var hook = HookThread.Start(Win32.WH_KEYBOARD_LL, &KeyboardProc, "Winshell keyboard hook");
         lock (Gate)
         {
-            if (HookOwner == this && hook != 0)
+            if (HookOwner == this && hook is not null)
             {
-                HookThread = thread;
-                HookThreadId = threadId;
+                Hook = hook;
                 return true;
             }
             if (HookOwner == this)
                 HookOwner = null;
         }
-        StopHookThread(thread, threadId);
+        hook?.Stop();
         return false;
     }
 
     private void DetachHook()
     {
-        Thread? thread;
-        uint threadId;
+        HookThread? hook;
         lock (Gate)
         {
             if (HookOwner != this)
                 return;
-            thread = HookThread;
-            threadId = HookThreadId;
-            HookThread = null;
-            HookThreadId = 0;
+            hook = Hook;
+            Hook = null;
             HookOwner = null;
         }
-        StopHookThread(thread, threadId);
-    }
-
-    /// <summary>
-    /// Windows removes a low-level hook that misses its timeout, without telling anyone. The hook gets a thread of its
-    /// own, so a busy loop thread cannot stall it. That thread installs the hook, waits in GetMessage, and unhooks on WM_QUIT.
-    /// </summary>
-    private static void PumpHook(TaskCompletionSource<(nint Hook, uint ThreadId)> started)
-    {
-        Win32.PeekMessageW(out _, 0, 0, 0, Win32.PM_NOREMOVE);
-        var hook = Win32.SetWindowsHookExW(Win32.WH_KEYBOARD_LL, &KeyboardProc, Win32.GetModuleHandleW(null), 0);
-        started.SetResult((hook, Win32.GetCurrentThreadId()));
-        if (hook == 0)
-            return;
-        while (Win32.GetMessageW(out _, 0, 0, 0) > 0)
-        {
-        }
-        Win32.UnhookWindowsHookEx(hook);
-    }
-
-    private static void StopHookThread(Thread? thread, uint threadId)
-    {
-        if (thread is null)
-            return;
-        Win32.PostThreadMessageW(threadId, Win32.WM_QUIT, 0, 0);
-        thread.Join();
+        hook?.Stop();
     }
 
     // The procedure runs on the hook thread. Work for the loop is posted, and so is the unhook.
