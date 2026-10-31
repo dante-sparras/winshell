@@ -206,6 +206,12 @@ public interface IShellHost
     void Reload(bool hard);
 
     void InhibitReloadPopup();
+
+    /// <summary>
+    /// A watched config file failed to parse, or parsed again. <paramref name="error"/> is empty when the file is fine.
+    /// The text is <c>path[line:column]: message</c> so a notice can open the file at the line.
+    /// </summary>
+    void ReportFileError(FileView source, string? error) { }
 }
 
 /// <summary>The <c>Shell</c> singleton: the screens, the clipboard, reloads and processes of this shell.</summary>

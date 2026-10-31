@@ -58,6 +58,7 @@ public sealed class ShellHost : IShellHost, IDisposable
     private readonly Action<QmlEngine>? _configure;
     private readonly ShellSettings _settings = new();
     private readonly List<DirectoryWatch> _watchers = [];
+    private readonly Dictionary<FileView, string> _fileErrors = new(ReferenceEqualityComparer.Instance);
     private ScreenRegistry? _screens;
     private QmlEngine? _engine;
     private QObject? _root;
@@ -194,6 +195,9 @@ public sealed class ShellHost : IShellHost, IDisposable
     /// <summary>Raised after each load or reload, with the error when it failed.</summary>
     public event Action<string?>? Reloaded;
 
+    /// <summary>Raised when a watched config file fails to parse, or parses again. Null when none are broken.</summary>
+    public event Action<string?>? FileError;
+
     /// <summary>Registers services every generation's engine gets, such as the clipboard.</summary>
     public List<Action<QmlEngine>> Services { get; } = [];
 
@@ -206,6 +210,25 @@ public sealed class ShellHost : IShellHost, IDisposable
     public void Reload(bool hard) => Load(hard, initial: false);
 
     public void InhibitReloadPopup() => _inhibitPopup = true;
+
+    public void ReportFileError(FileView source, string? error)
+    {
+        if (string.IsNullOrEmpty(error))
+        {
+            if (!_fileErrors.Remove(source))
+                return;
+        }
+        else
+            _fileErrors[source] = error;
+        // The file that just broke is the one to show. A clear falls back to whatever is still broken.
+        string? shown = string.IsNullOrEmpty(error) ? null : error;
+        if (shown is null)
+        {
+            foreach (var value in _fileErrors.Values)
+                shown = value;
+        }
+        FileError?.Invoke(shown);
+    }
 
     private bool Load(bool hard, bool initial)
     {

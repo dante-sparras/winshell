@@ -54,6 +54,8 @@ Singleton {
   property alias autoUpdate: adapter.autoUpdate
 
   readonly property int material: backdrop === "mica" ? WindowEffects.Mica : WindowEffects.Acrylic
+  // Empty when preferences.toml parses. A notice and Settings use it; changes are not written while it is set.
+  readonly property string error: adapter.error
   readonly property bool validAccent: /^#[0-9a-fA-F]{6}$/.test(accentColor)
   readonly property string appsOn: ["all", "main", "where"].includes(taskbarAppsOn) ? taskbarAppsOn : "all"
   // The hidden apps that have an id.
