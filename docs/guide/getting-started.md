@@ -80,7 +80,7 @@ With no configuration of your own, Winshell runs its default shell: a Windows 11
 
 Winshell doesn't hide or replace Explorer's taskbar. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. If you want only Winshell's, turn on **Automatically hide the taskbar** for Explorer's in Windows Settings > Personalization > Taskbar.
 
-- **Run it without a terminal:** `winshell -d` starts it in the background and returns.
+- **Run it without a terminal:** `winshell -d` starts it in the background and returns. From a terminal, a failure before it starts is printed there. The Start tile and the sign-in entry have no console, so that same failure is a dialog.
 - **Stop it:** press Ctrl+C in its terminal, or run `winshell kill`.
 - **Start it when you sign in:** right-click an empty part of the taskbar, choose **Taskbar settings**, and turn on **Run Winshell when I sign in** on the Startup page.
 - **See what is running:** `winshell list`. `winshell log` prints the log of the running instance.

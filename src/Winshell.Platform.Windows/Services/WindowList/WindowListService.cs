@@ -112,7 +112,7 @@ public sealed class AppWindow : QObject
 
     [Qml] public string Title { get { Track(); return _info?.Title ?? ""; } }
 
-    /// <summary>The AppUserModelID the window carries, or its program's name in lower case.</summary>
+    /// <summary>The AppUserModelID the window carries, or its process package's, or its program's name in lower case.</summary>
     [Qml] public string AppId { get { Track(); return _info?.AppId ?? ""; } }
 
     /// <summary>The full path of the program that owns the window, or empty when it cannot be read.</summary>
