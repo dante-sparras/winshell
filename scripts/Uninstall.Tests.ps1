@@ -192,5 +192,16 @@ Describe 'failed invocation' {
         $file.ExitCode | Should -Be 1
         $file.Error | Should -Match 'WINSHELL_USER_PATH_FILE'
     }
+
+    It 'says what to do instead under Constrained Language Mode' {
+        $quoted = $script:UninstallFile.Replace("'", "''")
+        # WINSHELL_INSTALL_TEST with no fake profile makes the script refuse if the check ever stops it running.
+        $inline = "`$env:WINSHELL_INSTALL_TEST = '1'; `$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'; & '$quoted'; exit `$LASTEXITCODE"
+        $result = Invoke-WinshellScriptFile -Command $inline
+        $result.ExitCode | Should -Be 1
+        $result.Error | Should -Match 'full language mode'
+        $result.Error | Should -Match 'Delete'
+        $result.Error | Should -Not -Match 'Cannot invoke method'
+    }
 }
 }
