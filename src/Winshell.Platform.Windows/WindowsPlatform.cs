@@ -12,6 +12,8 @@ namespace Winshell.Platform.Windows;
 /// <summary>Winshell on Windows: monitors, windows, the clipboard, the theme and the system's notices.</summary>
 public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatformServices, IDisposable
 {
+    public bool NotificationsAreQuiet => Win32.SHQueryUserNotificationState(out var state) == 0 && ShellNotices.QuietState(state);
+
     private readonly List<Win32Window> _windows = [];
     private readonly HashSet<Win32Window> _grabbing = [];
     private List<ScreenInfo> _screens = [];

@@ -162,6 +162,9 @@ public interface IWindowClient
 /// <summary>The platform: screens and windows.</summary>
 public interface IShellPlatform
 {
+    /// <summary>Whether the system is holding notifications back, as in a presentation. The default is no.</summary>
+    bool NotificationsAreQuiet => false;
+
     IReadOnlyList<ScreenInfo> Screens { get; }
 
     event Action? ScreensChanged;
