@@ -1,5 +1,6 @@
 import Winshell.Theme
 import QtQuick
+import QtQuick.Controls
 
 // One app's icon in the notification area. Clicks reach the app the way Explorer sends them; a right click asks
 // the app for its menu at the icon.
@@ -36,6 +37,9 @@ MouseArea {
   Accessible.role: Accessible.Button
   Accessible.name: item ? (item.tooltip || item.appName).split("\n")[0] : ""
   Accessible.onPressAction: item.click()
+
+  ToolTip.text: item ? item.tooltip || item.appName : ""
+  ToolTip.visible: containsMouse && ToolTip.text !== ""
 
   onClicked: mouse => {
     if (mouse.button === Qt.RightButton) {
