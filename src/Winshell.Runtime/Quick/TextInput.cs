@@ -428,7 +428,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         if (VisualLayout() is not { } layout)
             return new QRect(x, y, 1, lineHeight);
         var caret = layout.CaretBox(ToVisual(position));
-        return new QRect(x + caret.X, y + caret.Y, 1, caret.Height);
+        return new QRect(x + caret.X, y + caret.Y, 1, caret.Height > 0 ? caret.Height : lineHeight);
     }
 
     internal IReadOnlyList<QRect> VisibleRectangles(int start, int end)
