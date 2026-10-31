@@ -55,7 +55,7 @@ public sealed partial class FatalCrashTests : IDisposable
         Assert.Contains("Winshell closed: yes", report, StringComparison.Ordinal);
         Assert.Contains("Where: Winshell", report, StringComparison.Ordinal);
         Assert.Contains("System.InvalidOperationException: WINSHELL_TEST_CRASH asked Winshell to crash after its config loaded.", report, StringComparison.Ordinal);
-        Assert.Contains("INFO: Launching config", stderr, StringComparison.Ordinal);
+        Assert.Contains("INFO shell: Launching config", stderr, StringComparison.Ordinal);
         Assert.DoesNotContain("ObjectDisposedException", stderr, StringComparison.Ordinal);
         // The crash and its report are in the log, written before the log file closed.
         var log = LogLine().Match(report).Groups["path"].Value;

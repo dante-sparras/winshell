@@ -67,18 +67,16 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Context2D.createPattern()` | Makes a pattern from a color only; for an image it returns null. |
 | `Context2D.fillText()` | Draws with the one typeface `font` names, without fallback or shaping: characters that typeface lacks don't draw, and scripts that need shaping, such as Arabic or Devanagari, draw wrong. `strokeText()` and `measureText()` work the same way. |
 | `Canvas.loadImage()` | Loads local images only, before it returns, so `isImageLoading()` is always false. An `http` or `https` image never loads, and `isImageError()` turns true. |
-| `Canvas.toDataURL()` | Always returns a PNG, whatever `mimeType` names. |
-| `Canvas.save()` | Always writes a PNG, whatever the file name's extension. |
+| `Canvas.toDataURL()` | Encodes `image/png` and `image/jpeg` only. Any other type, such as `image/bmp`, returns `data:,`. |
+| `Canvas.save()` | Writes `.png`, `.jpg` and `.jpeg` only, and returns false for any other extension, such as `.bmp`. |
 | `Shape.horizontalAlignment` | Ignored, as is `verticalAlignment`: content scaled by `fillMode` sits at the top left. |
 | `ShapePath.fillItem` | Ignored. |
 | `ShapePath.fillTransform` | Ignored. |
-| `PathRectangle.bevel` | Ignored; corners are always rounded. |
 | `MenuItem.subMenu` | Always null: menus don't nest, and `arrow` is never shown. |
 | `Menu.cascade` | Ignored, as is `overlap`. |
-| `Menu.currentIndex` | Not updated by the highlight or the keys. |
 | `Popup.enter` | Ignored, as is `exit`: popups open and close without a transition. |
-| `Popup.closePolicy` | `Popup.CloseOnReleaseOutside` and `Popup.CloseOnReleaseOutsideParent` are ignored: only a press outside closes a popup. |
 | `Popup.popupType` | Ignored: a popup is always an item in its window, as with `Popup.Item`. |
+| `Popup.closePolicy` | `Popup.CloseOnReleaseOutside` and `Popup.CloseOnReleaseOutsideParent` are ignored on a popup that is not modal: the release goes to the item under the pointer. |
 | `Menu.delegate` | Ignored. |
 | `ToolTip.delay` | Defaults to 500 ms, not 0, as Windows tool tips wait. The attached `ToolTip.delay` does too. |
 | `StackView.busy` | Always false. |
@@ -91,10 +89,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Dial.wrap` | Ignored: the handle stops at `from` and `to`. |
 | `Dial.inputMode` | Ignored: the handle always follows the pointer's angle, as with `Dial.Circular`. |
 | `Dial.live` | Ignored, as on `RangeSlider`: `value` changes during the drag. |
-| `RangeSlider.snapMode` | `RangeSlider.SnapOnRelease` snaps during the drag, as `RangeSlider.SnapAlways` does, here and on `Dial`. |
-| `CheckBox.nextCheckStateFunction` | Never called. Qt names this `nextCheckState`. |
 | `AbstractButton.action` | Ignored. |
-| `ScrollIndicator.active` | Ignored: the indicator shows whenever the content is larger than the view. |
 | `ToolBar.position` | Ignored: a footer tool bar looks like a header one. |
 | `ApplicationWindow.menuBar` | Not shown. |
 | `ApplicationWindow.flags` | Ignored, as are `visibility`, `minimumWidth`, `minimumHeight`, `maximumWidth` and `maximumHeight`: an `ApplicationWindow` is a page in a shell window, not a window. |
@@ -109,18 +104,12 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Text.renderType` | Ignored. |
 | `TextInput.validator` | Ignored; `acceptableInput` is always true. |
 | `TextInput.inputMask` | Ignored. |
-| `TextInput.undo()` | Each typed character is its own undo step. Qt undoes a run of typing at once. |
 | `TextInput.cursorDelegate` | Ignored; the built-in caret is drawn. |
-| `TextInput.overwriteMode` | Ignored, as is `wrapMode`. |
-| `TextInput.echoMode` | `TextInput.PasswordEchoOnEdit` masks the text while it's edited too, as `TextInput.Password` does. |
+| `TextInput.wrapMode` | Ignored. |
 | `TextInput.passwordMaskDelay` | Ignored: a typed character is masked at once. |
-| `TextInput.autoScroll` | Ignored: the text always scrolls to keep the cursor in view. |
-| `TextInput.canPaste` | Always true, even when the clipboard holds no text. |
 | `Flickable.flicking` | Always false. Content stops when the pointer lets go: `flickStarted` and `flickEnded` aren't emitted, `horizontalVelocity` and `verticalVelocity` are 0, and `flickDeceleration` and `maximumFlickVelocity` aren't used. |
-| `Flickable.boundsBehavior` | Ignored: dragging stops at the bounds, with no overshoot. |
-| `Flickable.boundsMovement` | Ignored. |
+| `Flickable.boundsBehavior` | A drag follows the value, and on release the view goes back to its bounds at once, with no rebound. A flick does not overshoot the bounds. `ScrollView`'s own flickable stops at the bounds. |
 | `Flickable.pressDelay` | Ignored: a press reaches the content at once. |
-| `Flickable.pixelAligned` | Ignored. |
 | `Flickable.originX` | Always 0, as is `originY`. |
 | `ListView.section` | Ignored: there are no section headers. |
 | `ListView.cacheBuffer` | Ignored, as is `reuseItems`: a delegate is made for every row in the model, in view or not. |
@@ -129,34 +118,20 @@ These members are there, so a document that uses them loads, but they don't do w
 | `ListView.highlightMoveDuration` | Ignored, as is `highlightMoveVelocity`: the highlight jumps to the current item. |
 | `ListView.populate` | Ignored, as are `add`, `remove`, `move`, `displaced`, `addDisplaced`, `removeDisplaced` and `moveDisplaced`: there are no view transitions. The attached `add` and `remove` signals aren't emitted. |
 | `Row.add` | Ignored, as are `move` and `populate`, here and on `Column`, `Grid` and `Flow`. |
-| `Grid.layoutDirection` | Ignored, as on `Flow`: items are placed left to right. |
 | `AnimatedImage.frameCount` | Always 1: only the first frame is shown, and `playing`, `paused`, `currentFrame` and `speed` aren't used. |
 | `Image.source` | Fetches `https` URLs only, and gives up on a body over 8 MiB. An `http` URL isn't fetched: `status` turns to `Image.Error` and the log says why. |
-| `Image.mirrorVertically` | Ignored. |
-| `Image.sourceClipRect` | Ignored. |
 | `Image.autoTransform` | Ignored: a photo's EXIF orientation is never applied. |
-| `Image.cache` | Ignored when `asynchronous` is true or the source is remote: the image is always cached. |
 | `Rectangle.border` | `border.pixelAligned` is ignored: the border isn't snapped to whole pixels. |
 | `GaussianBlur.cached` | Ignored, on every effect: the source is drawn and filtered again on each paint. |
 | `GaussianBlur.samples` | Ignored, as on `DropShadow` and `Glow`. |
 | `DropShadow.transparentBorder` | Ignored, as on `Glow`: the shadow always spreads past the source's edges. |
-| `MultiEffect.blurMultiplier` | Ignored. |
 | `MultiEffect.autoPaddingEnabled` | Ignored, as is `paddingRect`: the shadow and blur always spread past the item's edges. |
 | `RectangularShadow.material` | Ignored: the built-in shadow is drawn. |
 | `Keys.forwardTo` | Ignored. A key event's `matches()` is always false. |
 | `MouseArea.propagateComposedEvents` | Ignored. |
-| `TapHandler.gesturePolicy` | Ignored: a release inside the item is a tap. |
-| `TapHandler.timeHeld` | Always 0. |
-| `TapHandler.acceptedModifiers` | Ignored, on every pointer handler. |
-| `DragHandler.translation` | Always (0, 0). |
 | `DragHandler.xAxis` | Ignored, as is `yAxis`: no axis lock or limits. |
-| `State.extend` | Ignored. |
-| `PropertyChanges.restoreEntryValues` | Ignored: leaving the state always restores the values. |
-| `PropertyChanges.explicitChanges` | Ignored. Qt names this `explicit`, which does nothing here. |
-| `PropertyAnimation.alwaysRunToEnd` | Ignored, on every animation. |
 | `SpringAnimation.spring` | Not a spring: the value eases out to its target over a fixed time that `spring` and `damping` set. There is no overshoot, and `mass`, `velocity`, `epsilon` and `modulus` are ignored. |
 | `RowLayout.uniformCellSizes` | Ignored, as on `ColumnLayout` and `GridLayout`. |
-| `Binding.delayed` | Ignored. |
 | `Text.font` | `font.styleName`, `font.kerning`, `font.wordSpacing`, `font.hintingPreference`, `font.preferShaping`, `font.features` and `font.variableAxes` are ignored, and `Font.SmallCaps` leaves the text as it is, here and on every item and control with a `font`. |
 | `Loader.asynchronous` | Ignored. The component is still created on this thread before the property assignment returns. |
 | `BusyIndicator.running` | Defaults to false, so an indicator turns only once a document sets it. Qt's defaults to true. |

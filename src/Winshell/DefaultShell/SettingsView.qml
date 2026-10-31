@@ -121,6 +121,7 @@ Item {
     }
 
     ListView {
+      boundsBehavior: Flickable.StopAtBounds
       id: nav
       objectName: "navigation"
       x: 8

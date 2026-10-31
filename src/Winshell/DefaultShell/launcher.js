@@ -122,6 +122,18 @@ function move(index, key, count, pinnedCount, columns) {
   return index
 }
 
+// Moves id past the entry offset steps away in visible. Entries visible does not contain keep their place.
+function reorder(keys, visible, id, offset) {
+  const at = visible.findIndex(k => sameId(k, id))
+  const neighbour = visible[at + offset]
+  if (at < 0 || !neighbour)
+    return null
+  const list = keys.filter(k => !sameId(k, id))
+  const to = list.findIndex(k => sameId(k, neighbour))
+  list.splice(offset > 0 ? to + 1 : to, 0, id)
+  return list
+}
+
 // Windows Settings pages this shell already opens, from QuickSettingsContent and settings.js.
 // Start search does not add pages of its own, and it does not search the web.
 var settingsPages = [

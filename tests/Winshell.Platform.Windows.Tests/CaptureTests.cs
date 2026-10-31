@@ -202,7 +202,8 @@ public class CaptureTests
             Assert.True(session.Start());
             loop.Advance(TimeSpan.FromMilliseconds(33));
             Assert.True(session.SaveToFile("test.png"));
-            using var png = SKBitmap.Decode(Path.Combine(directory, "test.png"));
+            // Decode a copy. Opening the path keeps it mapped until a finalizer, and deleting it then fails.
+            using var png = SKBitmap.Decode(File.ReadAllBytes(Path.Combine(directory, "test.png")));
             Assert.Equal(8, png.Width);
             Assert.Equal(6, png.Height);
             Assert.Equal(SKColors.Red, png.GetPixel(0, 0));
@@ -214,7 +215,14 @@ public class CaptureTests
         finally
         {
             session.Destroy();
-            Directory.Delete(directory, recursive: true);
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // The indexer can still have the new file open after this process has closed it.
+            }
         }
     }
 

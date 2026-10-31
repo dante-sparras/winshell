@@ -1,7 +1,7 @@
-import Winshell.Io
 import Winshell.Theme
 import QtQuick
 import QtQuick.Controls
+import "launcher.js" as Launcher
 import "settings.js" as Settings
 
 // Quick settings: the tiles in order, to move, remove and add back. They are quick settings' own file, which it
@@ -18,47 +18,30 @@ Column {
   spacing: 4
 
   function read() {
-    if (Array.isArray(layout.pinned))
-      keys = layout.pinned.filter(k => typeof k === "string")
+    if (Array.isArray(file.pinned))
+      keys = file.pinned.filter(k => typeof k === "string")
   }
 
   function write(next) {
     keys = next
     if (layoutPath === "")
       return
-    layout.pinned = next
+    file.pinned = next
     file.writeAdapter()
   }
 
   // Moves a tile past the one next to it in the list; keys quick settings does not know keep their place.
   function reorder(key, offset) {
-    const at = pinned.findIndex(t => t.key === key)
-    const neighbour = pinned[at + offset]
-    if (at < 0 || !neighbour)
-      return
-    const list = keys.filter(k => k !== key)
-    const to = list.indexOf(neighbour.key)
-    list.splice(offset > 0 ? to + 1 : to, 0, key)
-    write(list)
+    const next = Launcher.reorder(keys, pinned.map(t => t.key), key, offset)
+    if (next)
+      write(next)
   }
 
-  FileView {
+  QuickSettingsLayout {
     id: file
     path: root.layoutPath
-    blockLoading: true
-    blockWrites: true
-    atomicWrites: true
-    watchChanges: true
     printErrors: false
-    onFileChanged: reload()
     onLoaded: root.read()
-
-    TomlAdapter {
-      id: layout
-      comments: ({ pinned: "The quick settings tiles, in order: wifi, bluetooth, airplaneMode, energySaver, powerMode, nightLight,\naccessibility. A tile left out is not shown until quick settings or Winshell Settings adds it back." })
-      // null until the file has tiles.
-      property var pinned: null
-    }
   }
 
   SettingsCard { key: "quickSettingsTiles" }

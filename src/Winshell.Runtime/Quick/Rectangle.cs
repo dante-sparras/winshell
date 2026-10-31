@@ -208,7 +208,7 @@ public sealed class BorderGroup(Item owner) : QObject
             var first = !_widthSet;
             _widthSet = true;
             if (SetField(ref _width, value) || first)
-                owner.Update();
+                NotifyOwner();
         }
     }
 
@@ -221,8 +221,17 @@ public sealed class BorderGroup(Item owner) : QObject
             var first = !_colorSet;
             _colorSet = true;
             if (SetField(ref _color, value) || first)
-                owner.Update();
+                NotifyOwner();
         }
+    }
+
+    /// <summary>Runs after the width or color changes, including the first assignment of the current value.</summary>
+    internal Action? LayoutChanged { get; set; }
+
+    private void NotifyOwner()
+    {
+        owner.Update();
+        LayoutChanged?.Invoke();
     }
 
     [Qml]

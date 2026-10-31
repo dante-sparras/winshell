@@ -33,6 +33,6 @@ internal static class WindowManagerModules
             .Uncreatable<WinlandEvent>("WinlandEvent")
             .Uncreatable<WinlandMonitor>("WinlandMonitor")
             .Uncreatable<WinlandWorkspace>("WinlandWorkspace")
-            .Uncreatable<WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels, or as an attached object of an AppWindow", attached: WinlandWindow.Attach, attachedType: typeof(WinlandWindow));
+            .Uncreatable<WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels");
     }
 }
