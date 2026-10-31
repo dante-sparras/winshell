@@ -467,7 +467,7 @@ A menu a service gives, such as `SystemTrayItem.menu` from `Winshell.Tray`. A tr
 
 ## Retainable
 
-An attached object that keeps an object alive after it would have been destroyed, so it can finish an exit transition. Only retainable objects have it, and no Winshell type is retainable in this release, so attaching `Retainable` reports an error.
+An attached object that keeps an object alive after it would have been destroyed, so it can finish an exit transition. A [Notification](winshell-notifications.md#notification) is retainable. Attaching `Retainable` to any other object reports an error.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -480,7 +480,7 @@ An attached object that keeps an object alive after it would have been destroyed
 
 ## RetainableLock
 
-Holds a lock on one retainable object while `locked` is true, as `RetainableLock { object: x; locked: true }`. See [Retainable](#retainable): no Winshell type is retainable in this release, so setting `object` logs an error.
+Holds a lock on one retainable object while `locked` is true, as `RetainableLock { object: x; locked: true }`. A [Notification](winshell-notifications.md#notification) can be held this way. Setting `object` to anything else logs an error.
 
 | Member | Type | Description |
 | --- | --- | --- |

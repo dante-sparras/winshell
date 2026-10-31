@@ -51,7 +51,7 @@ A button on a toast. Create it inside `ToastMessage.actions` with `ToastAction {
 
 ## Notification
 
-A notification in Notification Center, reached from a listener's `notifications` or a group's `notifications`. The object stays the same while its content changes.
+A notification in Notification Center, reached from a listener's `notifications` or a group's `notifications`. The object stays the same while its content changes. It is [retainable](winshell.md#retainable): `RetainableLock { object: notification; locked: true }` keeps it after it leaves the center, so it can finish an exit transition.
 
 | Member | Type | Description |
 | --- | --- | --- |
