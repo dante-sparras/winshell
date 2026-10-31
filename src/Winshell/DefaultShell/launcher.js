@@ -1,29 +1,29 @@
 .pragma library
 
 // Windows 11 Start, in logical pixels. The runtime scales these by the screen's DPI.
-var menuWidth = 640
-var menuHeight = 720
-var margin = 22
-var contentWidth = 596
-var searchX = 22
-var searchY = 16
-var searchWidth = 596
-var searchHeight = 32
-var columns = 6
-var tileWidth = 96
-var tileHeight = 76
-var gap = 4
-var pinnedViewport = 3 * 76 + 2 * 4
-var recommendedRow = 48
-var recommendedLimit = 6
-var allRow = 40
-var pinnedIcon = 32
-var rowIcon = 32
-var allIcon = 24
+const menuWidth = 640
+const menuHeight = 720
+const margin = 22
+const contentWidth = 596
+const searchX = 22
+const searchY = 16
+const searchWidth = 596
+const searchHeight = 32
+const columns = 6
+const tileWidth = 96
+const tileHeight = 76
+const gap = 4
+const pinnedViewport = 3 * 76 + 2 * 4
+const recommendedRow = 48
+const recommendedLimit = 6
+const allRow = 40
+const pinnedIcon = 32
+const rowIcon = 32
+const allIcon = 24
 
 // One pin per row. An AppUserModelID matches before a display name, so a non-English Windows still pins
 // these apps. Names stay as a fallback when the index has no id for them.
-var preferred = [
+const preferred = [
   { ids: ["MSEdge", "Microsoft.MicrosoftEdge.Stable_8wekyb3d8bbwe!App"], names: ["Edge", "Microsoft Edge"] },
   { ids: ["Microsoft.Windows.Explorer"], names: ["File Explorer", "Windows Explorer", "Explorer"] },
   { ids: ["windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel"], names: ["Settings"] },
@@ -37,161 +37,55 @@ var preferred = [
   { ids: ["Microsoft.WindowsAlarms_8wekyb3d8bbwe!App"], names: ["Clock", "Alarms & Clock"] }
 ]
 
-function asArray(value) {
-  if (value === null || value === undefined)
-    return []
-  if (Array.isArray(value))
-    return value
-  if (typeof value.length === "number") {
-    var out = []
-    for (var i = 0; i < value.length; i++)
-      out.push(value[i])
-    return out
-  }
-  return []
-}
-
+// App ids, and the names default pins fall back to, match without regard to case.
 function sameId(a, b) {
-  if (a === null || a === undefined || b === null || b === undefined)
-    return false
-  return String(a).toLowerCase() === String(b).toLowerCase()
+  return a != null && b != null && String(a).toLowerCase() === String(b).toLowerCase()
 }
 
 function isPinned(ids, id) {
-  var keys = asArray(ids)
-  for (var i = 0; i < keys.length; i++) {
-    if (sameId(keys[i], id))
-      return true
-  }
-  return false
+  return (ids || []).some(k => sameId(k, id))
 }
 
 function visibleApps(apps) {
-  var list = asArray(apps)
-  var out = []
-  for (var i = 0; i < list.length; i++) {
-    if (list[i] && !list[i].hidden)
-      out.push(list[i])
-  }
-  return out
+  return (apps || []).filter(a => a && !a.hidden)
 }
 
 function pinned(apps, ids) {
-  var list = visibleApps(apps)
-  var keys = asArray(ids)
-  var out = []
-  for (var i = 0; i < keys.length; i++) {
-    for (var j = 0; j < list.length; j++) {
-      if (sameId(list[j].id, keys[i])) {
-        out.push(list[j])
-        break
-      }
-    }
-  }
-  return out
+  const list = visibleApps(apps)
+  return (ids || []).map(id => list.find(a => sameId(a.id, id))).filter(a => a)
 }
 
 function recommended(recent, ids, limit) {
-  var list = asArray(recent)
-  var cap = limit > 0 ? limit : recommendedLimit
-  var out = []
-  for (var i = 0; i < list.length && out.length < cap; i++) {
-    if (!list[i] || list[i].hidden || isPinned(ids, list[i].id))
-      continue
-    out.push(list[i])
-  }
-  return out
+  return visibleApps(recent).filter(a => !isPinned(ids, a.id)).slice(0, limit > 0 ? limit : recommendedLimit)
 }
 
 function homeEntries(apps, recent, ids) {
-  var pins = pinned(apps, ids)
-  var rest = recommended(recent, ids, recommendedLimit)
-  var out = []
-  for (var i = 0; i < pins.length; i++)
-    out.push(pins[i])
-  for (var j = 0; j < rest.length; j++)
-    out.push(rest[j])
-  return out
-}
-
-function nameHit(app, names) {
-  var name = app && app.name ? String(app.name).toLowerCase() : ""
-  for (var i = 0; i < names.length; i++) {
-    if (name === String(names[i]).toLowerCase())
-      return true
-  }
-  return false
-}
-
-function idHit(app, ids) {
-  var id = app && app.id ? String(app.id) : ""
-  var appId = app && app.appId ? String(app.appId) : ""
-  for (var i = 0; i < ids.length; i++) {
-    if (sameId(id, ids[i]) || sameId(appId, ids[i]))
-      return true
-  }
-  return false
-}
-
-function matchPreferred(list, slot) {
-  var i
-  for (i = 0; i < list.length; i++) {
-    if (idHit(list[i], slot.ids))
-      return list[i]
-  }
-  for (i = 0; i < list.length; i++) {
-    if (nameHit(list[i], slot.names))
-      return list[i]
-  }
-  return null
+  return [...pinned(apps, ids), ...recommended(recent, ids, recommendedLimit)]
 }
 
 function defaultPins(apps) {
-  var list = visibleApps(apps)
-  var ids = []
-  for (var p = 0; p < preferred.length && ids.length < 12; p++) {
-    var match = matchPreferred(list, preferred[p])
+  const list = visibleApps(apps)
+  const ids = []
+  for (const slot of preferred) {
+    const match = list.find(a => slot.ids.some(id => sameId(a.id, id) || sameId(a.appId, id)))
+      ?? list.find(a => slot.names.some(name => sameId(a.name, name)))
     if (match && !isPinned(ids, match.id))
       ids.push(match.id)
   }
-  if (ids.length === 0) {
-    for (var j = 0; j < list.length && ids.length < 8; j++)
-      ids.push(list[j].id)
-  }
-  return ids
+  return ids.length > 0 ? ids : list.slice(0, 8).map(a => a.id)
 }
 
 function togglePin(ids, id) {
-  var keys = asArray(ids)
-  var out = []
-  var found = false
-  for (var i = 0; i < keys.length; i++) {
-    if (sameId(keys[i], id))
-      found = true
-    else
-      out.push(keys[i])
-  }
-  if (!found)
-    out.push(id)
-  return out
+  const keys = ids || []
+  return isPinned(keys, id) ? keys.filter(k => !sameId(k, id)) : [...keys, id]
 }
 
-function startsWith(value, prefix) {
-  var text = value ? String(value) : ""
-  var head = String(prefix).toLowerCase()
-  return text.length >= head.length && text.substring(0, head.length).toLowerCase() === head
-}
-
+// A packaged app has no file to show, so its location is the Apps folder.
 function locationCommand(app) {
-  var folder = ["explorer.exe", "shell:AppsFolder"]
-  if (!app)
-    return folder
-  var icon = app.icon ? String(app.icon) : ""
-  var target = app.target ? String(app.target) : ""
-  if (app.packaged || startsWith(icon, "shell:AppsFolder") || startsWith(target, "shell:AppsFolder"))
-    return folder
-  var path = icon || target
-  if (!path)
+  const folder = ["explorer.exe", "shell:AppsFolder"]
+  const inFolder = path => String(path || "").toLowerCase().startsWith("shell:appsfolder")
+  const path = app ? String(app.icon || app.target || "") : ""
+  if (!path || app.packaged || inFolder(app.icon) || inFolder(app.target))
     return folder
   return ["explorer.exe", "/select," + path]
 }
@@ -200,45 +94,30 @@ function locationCommand(app) {
 function move(index, key, count, pinnedCount, columns) {
   if (count <= 0)
     return 0
-  if (index < 0)
-    index = 0
-  if (index >= count)
-    index = count - 1
-  var cols = columns > 0 ? columns : 6
-  var inPins = pinnedCount > 0 && index < pinnedCount
-  if (key === "left") {
-    if (!inPins || index % cols === 0)
-      return index
-    return index - 1
-  }
-  if (key === "right") {
-    if (!inPins || index % cols === cols - 1 || index + 1 >= pinnedCount)
-      return index
-    return index + 1
-  }
+  index = Math.min(Math.max(index, 0), count - 1)
+  const cols = columns > 0 ? columns : 6
+  const inPins = pinnedCount > 0 && index < pinnedCount
+  if (key === "left")
+    return inPins && index % cols !== 0 ? index - 1 : index
+  if (key === "right")
+    return inPins && index % cols !== cols - 1 && index + 1 < pinnedCount ? index + 1 : index
   if (key === "down") {
-    if (pinnedCount <= 0)
+    if (!inPins)
       return Math.min(count - 1, index + 1)
-    if (inPins) {
-      var next = index + cols
-      if (next < pinnedCount)
-        return next
-      // The cell below is empty, but the next row still has pins: land on its first one.
-      var nextRow = Math.floor(index / cols) * cols + cols
-      if (nextRow < pinnedCount)
-        return nextRow
-      return pinnedCount < count ? pinnedCount : index
-    }
-    return Math.min(count - 1, index + 1)
+    if (index + cols < pinnedCount)
+      return index + cols
+    // The cell below is empty, but the next row still has pins: land on its first one.
+    const nextRow = Math.floor(index / cols) * cols + cols
+    if (nextRow < pinnedCount)
+      return nextRow
+    return pinnedCount < count ? pinnedCount : index
   }
   if (key === "up") {
     if (pinnedCount > 0 && index === pinnedCount)
       return Math.floor((pinnedCount - 1) / cols) * cols
-    if (pinnedCount <= 0)
-      return Math.max(0, index - 1)
     if (inPins)
       return index - cols >= 0 ? index - cols : index
-    return index - 1
+    return Math.max(0, index - 1)
   }
   return index
 }

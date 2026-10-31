@@ -39,8 +39,8 @@ Item {
   readonly property var pinnedApps: Launcher.pinned(apps, pinIds)
   readonly property var recommendedApps: showRecommended ? Launcher.recommended(recent, pinIds, Launcher.recommendedLimit) : []
   readonly property var allApps: Launcher.visibleApps(apps)
-  readonly property var shown: searching ? Launcher.asArray(searchResults) : page === "all" ? allApps : Launcher.homeEntries(apps, showRecommended ? recent : [], pinIds)
-  readonly property int pinnedCount: searching || page === "all" ? 0 : Launcher.asArray(pinnedApps).length
+  readonly property var shown: searching ? searchResults : page === "all" ? allApps : Launcher.homeEntries(apps, showRecommended ? recent : [], pinIds)
+  readonly property int pinnedCount: searching || page === "all" ? 0 : pinnedApps.length
 
   implicitWidth: Launcher.menuWidth
   implicitHeight: Launcher.menuHeight
@@ -106,17 +106,11 @@ Item {
   }
 
   function clampSelection() {
-    var count = Launcher.asArray(shown).length
-    if (count === 0)
-      selected = 0
-    else if (selected >= count)
-      selected = count - 1
-    else if (selected < 0)
-      selected = 0
+    selected = Math.max(0, Math.min(selected, shown.length - 1))
   }
 
   function moveSelection(key) {
-    selected = Launcher.move(selected, key, Launcher.asArray(shown).length, pinnedCount, Launcher.columns)
+    selected = Launcher.move(selected, key, shown.length, pinnedCount, Launcher.columns)
     reveal(selected)
     const app = currentApp()
     selectionName = app ? app.name : ""
@@ -142,10 +136,7 @@ Item {
   }
 
   function currentApp() {
-    var entries = Launcher.asArray(shown)
-    if (selected < 0 || selected >= entries.length)
-      return null
-    return entries[selected]
+    return shown[selected] ?? null
   }
 
   function activateSelection() {
@@ -297,7 +288,7 @@ Item {
 
     Text {
       objectName: "emptyPins"
-      visible: Launcher.asArray(root.pinnedApps).length === 0
+      visible: root.pinnedApps.length === 0
       width: Launcher.contentWidth
       text: "Nothing pinned"
       font: Theme.typography.caption
@@ -324,58 +315,13 @@ Item {
         Repeater {
           id: pinRepeater
           model: root.pinnedApps
-          delegate: MouseArea {
-            id: tile
-            required property int index
-            required property var modelData
+          delegate: AppButton {
             objectName: "pinTile"
-            property string appId: modelData.id
-            property string appName: modelData.name
-            property int entryIndex: index
-            readonly property bool chosen: root.selected === entryIndex
             width: Launcher.tileWidth
             height: Launcher.tileHeight
-            hoverEnabled: true
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
-            Accessible.role: Accessible.Button
-            Accessible.name: modelData.name
-            Accessible.description: "Pinned"
-            onClicked: mouse => {
-              root.selected = entryIndex
-              if (mouse.button === Qt.RightButton)
-                root.showMenu(modelData, tile)
-              else
-                root.activateSelection()
-            }
-
-            Rectangle {
-              objectName: "pinFill"
-              anchors.fill: parent
-              radius: Theme.controlCornerRadius
-              color: tile.pressed ? Theme.subtleFillColorTertiary : tile.chosen || tile.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
-              Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
-            }
-
-            Image {
-              visible: (modelData.icon || "") !== ""
-              source: root.iconSource(modelData.icon)
-              sourceSize: Qt.size(Launcher.pinnedIcon, Launcher.pinnedIcon)
-              x: (Launcher.tileWidth - Launcher.pinnedIcon) / 2
-              y: 8
-              width: Launcher.pinnedIcon
-              height: Launcher.pinnedIcon
-            }
-
-            Text {
-              x: 4
-              y: 44
-              width: Launcher.tileWidth - 8
-              text: modelData.name
-              horizontalAlignment: Text.AlignHCenter
-              elide: Text.ElideRight
-              font: Theme.typography.caption
-              color: Theme.textFillColorPrimary
-            }
+            tile: true
+            iconSize: Launcher.pinnedIcon
+            section: "Pinned"
           }
         }
       }
@@ -383,7 +329,7 @@ Item {
 
     Text {
       objectName: "recommendedHeader"
-      visible: Launcher.asArray(root.recommendedApps).length > 0
+      visible: root.recommendedApps.length > 0
       width: Launcher.contentWidth
       text: "Recommended"
       font: Theme.typography.bodyStrong
@@ -396,64 +342,17 @@ Item {
       id: recommendedList
       objectName: "recommendedList"
       width: Launcher.contentWidth
-      height: Launcher.asArray(root.recommendedApps).length * Launcher.recommendedRow
+      height: root.recommendedApps.length * Launcher.recommendedRow
       interactive: false
       keyNavigationEnabled: false
       clip: true
       model: root.recommendedApps
-      delegate: MouseArea {
-        id: row
-        required property int index
-        required property var modelData
+      delegate: AppButton {
         objectName: "appRow"
-        property string appId: modelData.id
-        property string appName: modelData.name
-        property int entryIndex: root.pinnedCount + index
-        readonly property bool chosen: root.selected === entryIndex
+        entryIndex: root.pinnedCount + index
         width: Launcher.contentWidth
         height: Launcher.recommendedRow
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        Accessible.role: Accessible.Button
-        Accessible.name: modelData.name
-        Accessible.description: "Recommended"
-        onClicked: mouse => {
-          root.selected = entryIndex
-          if (mouse.button === Qt.RightButton)
-            root.showMenu(modelData, row)
-          else
-            root.activateSelection()
-        }
-
-        Rectangle {
-          objectName: "rowFill"
-          anchors.fill: parent
-          radius: Theme.controlCornerRadius
-          color: row.pressed ? Theme.subtleFillColorTertiary : row.chosen || row.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
-          Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
-        }
-
-        Image {
-          objectName: "rowIcon"
-          visible: (modelData.icon || "") !== ""
-          source: root.iconSource(modelData.icon)
-          sourceSize: Qt.size(Launcher.rowIcon, Launcher.rowIcon)
-          x: 8
-          y: (Launcher.recommendedRow - Launcher.rowIcon) / 2
-          width: Launcher.rowIcon
-          height: Launcher.rowIcon
-        }
-
-        Text {
-          x: 48
-          width: Launcher.contentWidth - 60
-          height: Launcher.recommendedRow
-          verticalAlignment: Text.AlignVCenter
-          text: modelData.name
-          elide: Text.ElideRight
-          font: Theme.typography.body
-          color: Theme.textFillColorPrimary
-        }
+        section: "Recommended"
       }
     }
 
@@ -560,57 +459,12 @@ Item {
       keyNavigationEnabled: false
       clip: true
       model: root.allApps
-      delegate: MouseArea {
-        id: allRow
-        required property int index
-        required property var modelData
+      delegate: AppButton {
         objectName: "allRow"
-        property string appId: modelData.id
-        property string appName: modelData.name
-        property int entryIndex: index
-        readonly property bool chosen: root.selected === entryIndex
         width: Launcher.contentWidth
         height: Launcher.allRow
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        Accessible.role: Accessible.Button
-        Accessible.name: modelData.name
-        Accessible.description: "All apps"
-        onClicked: mouse => {
-          root.selected = entryIndex
-          if (mouse.button === Qt.RightButton)
-            root.showMenu(modelData, allRow)
-          else
-            root.activateSelection()
-        }
-
-        Rectangle {
-          anchors.fill: parent
-          radius: Theme.controlCornerRadius
-          color: allRow.pressed ? Theme.subtleFillColorTertiary : allRow.chosen || allRow.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
-          Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
-        }
-
-        Image {
-          visible: (modelData.icon || "") !== ""
-          source: root.iconSource(modelData.icon)
-          sourceSize: Qt.size(Launcher.allIcon, Launcher.allIcon)
-          x: 8
-          y: (Launcher.allRow - Launcher.allIcon) / 2
-          width: Launcher.allIcon
-          height: Launcher.allIcon
-        }
-
-        Text {
-          x: 40
-          width: Launcher.contentWidth - 52
-          height: Launcher.allRow
-          verticalAlignment: Text.AlignVCenter
-          text: modelData.name
-          elide: Text.ElideRight
-          font: Theme.typography.body
-          color: Theme.textFillColorPrimary
-        }
+        iconSize: Launcher.allIcon
+        section: "All apps"
       }
     }
   }
@@ -620,7 +474,7 @@ Item {
     x: Launcher.margin
     y: Launcher.searchY + Launcher.searchHeight + 24
     width: Launcher.contentWidth
-    visible: root.searching && Launcher.asArray(root.searchResults).length === 0
+    visible: root.searching && root.searchResults.length === 0
     text: "No results"
     font: Theme.typography.body
     color: Theme.textFillColorSecondary
@@ -633,62 +487,15 @@ Item {
     y: Launcher.searchY + Launcher.searchHeight + 12
     width: Launcher.contentWidth
     height: root.height - y - 16
-    visible: root.searching && Launcher.asArray(root.searchResults).length > 0
+    visible: root.searching && root.searchResults.length > 0
     keyNavigationEnabled: false
     clip: true
     model: root.searchResults
-    delegate: MouseArea {
-      id: hit
-      required property int index
-      required property var modelData
+    delegate: AppButton {
       objectName: "searchRow"
-      property string appId: modelData.id
-      property string appName: modelData.name
-      property int entryIndex: index
-      readonly property bool chosen: root.selected === entryIndex
       width: Launcher.contentWidth
       height: Launcher.recommendedRow
-      hoverEnabled: true
-      acceptedButtons: Qt.LeftButton | Qt.RightButton
-      Accessible.role: Accessible.Button
-      Accessible.name: modelData.name
-      Accessible.description: "Search"
-      onClicked: mouse => {
-        root.selected = entryIndex
-        if (mouse.button === Qt.RightButton)
-          root.showMenu(modelData, hit)
-        else
-          root.activateSelection()
-      }
-
-      Rectangle {
-        objectName: "searchFill"
-        anchors.fill: parent
-        radius: Theme.controlCornerRadius
-        color: hit.pressed ? Theme.subtleFillColorTertiary : hit.chosen || hit.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
-        Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
-      }
-
-      Image {
-        visible: (modelData.icon || "") !== ""
-        source: root.iconSource(modelData.icon)
-        sourceSize: Qt.size(Launcher.rowIcon, Launcher.rowIcon)
-        x: 8
-        y: (Launcher.recommendedRow - Launcher.rowIcon) / 2
-        width: Launcher.rowIcon
-        height: Launcher.rowIcon
-      }
-
-      Text {
-        x: 48
-        width: Launcher.contentWidth - 60
-        height: Launcher.recommendedRow
-        verticalAlignment: Text.AlignVCenter
-        text: modelData.name
-        elide: Text.ElideRight
-        font: Theme.typography.body
-        color: Theme.textFillColorPrimary
-      }
+      section: "Search"
     }
   }
 
@@ -723,5 +530,64 @@ Item {
     color: "transparent"
     border.width: 2
     border.color: Theme.focusStrokeColorOuter
+  }
+
+  // An app in Start: a pinned tile, or a row with its icon before its name.
+  component AppButton: MouseArea {
+    id: entry
+    required property int index
+    required property var modelData
+    property int entryIndex: index
+    property bool tile: false
+    property int iconSize: Launcher.rowIcon
+    // Where the app is shown, for assistive technology.
+    property string section
+    readonly property string appId: modelData.id
+    readonly property string appName: modelData.name
+    readonly property bool chosen: root.selected === entryIndex
+    hoverEnabled: true
+    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    Accessible.role: Accessible.Button
+    Accessible.name: modelData.name
+    Accessible.description: section
+    onClicked: mouse => {
+      root.selected = entryIndex
+      if (mouse.button === Qt.RightButton)
+        root.showMenu(modelData, entry)
+      else
+        root.activateSelection()
+    }
+
+    Rectangle {
+      objectName: entry.tile ? "pinFill" : "rowFill"
+      anchors.fill: parent
+      radius: Theme.controlCornerRadius
+      color: entry.pressed ? Theme.subtleFillColorTertiary : entry.chosen || entry.containsMouse ? Theme.subtleFillColorSecondary : "transparent"
+      Behavior on color { ColorAnimation { duration: Theme.controlFasterAnimationDuration } }
+    }
+
+    Image {
+      objectName: entry.tile ? "pinIcon" : "rowIcon"
+      visible: (entry.modelData.icon || "") !== ""
+      source: root.iconSource(entry.modelData.icon)
+      sourceSize: Qt.size(entry.iconSize, entry.iconSize)
+      x: entry.tile ? (entry.width - entry.iconSize) / 2 : 8
+      y: entry.tile ? 8 : (entry.height - entry.iconSize) / 2
+      width: entry.iconSize
+      height: entry.iconSize
+    }
+
+    Text {
+      x: entry.tile ? 4 : entry.iconSize + 16
+      y: entry.tile ? 44 : 0
+      width: entry.width - x - (entry.tile ? 4 : 12)
+      height: entry.tile ? implicitHeight : entry.height
+      verticalAlignment: Text.AlignVCenter
+      horizontalAlignment: entry.tile ? Text.AlignHCenter : Text.AlignLeft
+      text: entry.modelData.name
+      elide: Text.ElideRight
+      font: entry.tile ? Theme.typography.caption : Theme.typography.body
+      color: Theme.textFillColorPrimary
+    }
   }
 }
