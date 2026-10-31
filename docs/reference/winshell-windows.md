@@ -20,7 +20,7 @@ A top-level window of another program. Windows are in `WindowList.windows`; QML 
 | Member | Type | Description |
 | --- | --- | --- |
 | `title` | string, read-only | The window's title. |
-| `appId` | string, read-only | The AppUserModelID the window carries, or its program's name in lower case. `Apps.find(window.appId)` in [Winshell.Apps](winshell-apps.md#apps) finds its app. |
+| `appId` | string, read-only | The AppUserModelID the window carries. When the window sets none, the application user model id of its process's package, or its program's name in lower case. `Apps.find(window.appId)` in [Winshell.Apps](winshell-apps.md#apps) finds its app. |
 | `executable` | string, read-only | The full path of the program that owns the window, or empty when it cannot be read. |
 | `icon` | string, read-only | A path the icon provider draws: a packaged app's Start icon, or the program's own icon. Use it as an `Image` source. |
 | `desktopId` | string, read-only | The id of the virtual desktop this window is on, or empty when Windows does not report one. This works on every Windows build, also when `VirtualDesktops.supported` is false. |

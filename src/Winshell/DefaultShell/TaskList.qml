@@ -1,4 +1,5 @@
 import Winshell
+import Winshell.Theme
 import QtQuick
 import "tasks.js" as Tasks
 
@@ -26,6 +27,8 @@ Item {
 
   signal pinRequested(string id)
   signal unpinRequested(string id)
+  // Dragging one pinned app onto another. The ids are the ones TaskbarPins keeps.
+  signal moveRequested(string id, string target)
   // The button the keyboard was on has gone. The taskbar focuses one that is still there, never this one.
   signal keyboardDisplaced()
 
@@ -126,6 +129,48 @@ Item {
       id: row
       anchors.verticalCenter: parent.verticalCenter
       spacing: 4
+      // The pinned button being dragged and the one it would land on, as indexes into the buttons, or -1.
+      // Nothing is drawn from these until the pointer has moved onto another pin.
+      property int dragIndex: -1
+      property int dropIndex: -1
+      property string dragName: ""
+      // That release reorders, so it must not also be the button's click.
+      property bool suppressClick: false
+
+      function buttons() {
+        return children.filter(c => c.objectName && c.objectName.startsWith("task:"))
+      }
+
+      function buttonAt(i) {
+        const items = buttons()
+        return i >= 0 && i < items.length ? items[i] : null
+      }
+
+      // Where this button sits. Read from the row, because a delegate's index stays at the place it was made.
+      function indexOf(button) {
+        const items = buttons()
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].objectName === button.objectName)
+            return i
+        }
+        return -1
+      }
+
+      // The pin under a point in this row. Pins are the buttons at the start, each the same width.
+      function indexAt(x) {
+        const button = buttonAt(0)
+        if (!button)
+          return -1
+        let pinnedCount = 0
+        for (let i = 0; i < root.tasks.length; i++) {
+          if (root.tasks[i].pinned)
+            pinnedCount++
+        }
+        if (pinnedCount < 1)
+          return -1
+        const at = Math.floor((x + spacing / 2) / (button.width + spacing))
+        return Math.max(0, Math.min(pinnedCount - 1, at))
+      }
 
       // One button per app, kept by the app's key, so a window that comes or goes regroups the apps without
       // replacing the buttons a preview or a menu is anchored to.
@@ -137,7 +182,9 @@ Item {
           required property string modelData
           objectName: "task:" + modelData
           task: root.taskFor(modelData)
-          onInvoked: root.invoke(task)
+          opacity: row.dragName === objectName && row.dropIndex !== row.dragIndex ? 0.5 : 1
+          // A drag that lands on another pin is not also a click. A press that stays put still is.
+          onInvoked: if (!row.suppressClick) root.invoke(task)
           onLaunchRequested: root.launch(task)
           onMenuRequested: {
             preview.hide()
@@ -149,10 +196,59 @@ Item {
           // otherwise stay scrolled to where the button used to be.
           onXChanged: if (activeFocus) Qt.callLater(() => { if (button.activeFocus) root.reveal(button) })
           onContainsMouseChanged: {
+            if (row.dragIndex >= 0 && row.dropIndex !== row.dragIndex)
+              return
             if (containsMouse && !menu.visible)
               preview.hoverStarted(button, modelData)
             else if (!containsMouse)
               preview.hoverEnded()
+          }
+          onPressed: mouse => {
+            if (!task || !task.pinned || mouse.button !== Qt.LeftButton || (mouse.modifiers & Qt.ShiftModifier))
+              return
+            // The strip scrolls by dragging too. A pin keeps the press, or the scroll would take the reorder.
+            button.preventStealing = true
+            row.dragName = button.objectName
+            row.dragIndex = row.dropIndex = row.indexOf(button)
+          }
+          onPositionChanged: mouse => {
+            if (row.dragName !== button.objectName)
+              return
+            const p = button.mapToItem(row, mouse.x, mouse.y)
+            const at = row.indexAt(p.x)
+            if (at === row.dropIndex)
+              return
+            row.dropIndex = at
+            if (at !== row.dragIndex)
+              preview.hide()
+          }
+          onReleased: {
+            button.preventStealing = false
+            if (row.dragName !== button.objectName)
+              return
+            const from = row.dragIndex
+            const to = row.dropIndex
+            const source = root.tasks[from]
+            const target = root.tasks[to]
+            const sourceId = source ? source.pin : ""
+            const targetId = target ? target.pin : ""
+            row.dragName = ""
+            row.dragIndex = row.dropIndex = -1
+            if (from === to || !sourceId || !targetId)
+              return
+            row.suppressClick = true
+            // The buttons are made again for the new order, so not while this one handles its release.
+            Qt.callLater(() => {
+              row.suppressClick = false
+              root.moveRequested(sourceId, targetId)
+            })
+          }
+          onCanceled: {
+            button.preventStealing = false
+            if (row.dragName === button.objectName) {
+              row.dragName = ""
+              row.dragIndex = row.dropIndex = -1
+            }
           }
           // The app is gone: what was open from its button closes with it. Read before hide(): closing drops
           // the keyboard flag, and the button is not a place focus can return to.
@@ -169,6 +265,31 @@ Item {
           }
         }
       }
+    }
+  }
+
+  // Where the dragged pin would land. Hidden until a drag has moved onto another pin, so a resting taskbar
+  // draws the same as before.
+  Rectangle {
+    objectName: "taskDrop"
+    visible: row.dragIndex >= 0 && row.dropIndex >= 0 && row.dropIndex !== row.dragIndex
+    width: 2
+    radius: 1
+    color: Theme.accentFillColorDefault
+    height: {
+      const mark = row.buttonAt(row.dropIndex)
+      return mark && visible ? mark.height : 0
+    }
+    x: {
+      const mark = row.buttonAt(row.dropIndex)
+      if (!mark)
+        return 0
+      const before = row.dropIndex < row.dragIndex
+      return mark.mapToItem(root, before ? -7 : mark.width + 5, 0).x
+    }
+    y: {
+      const mark = row.buttonAt(row.dropIndex)
+      return mark ? mark.mapToItem(root, 0, 0).y : 0
     }
   }
 
