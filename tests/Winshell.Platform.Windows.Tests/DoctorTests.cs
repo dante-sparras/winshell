@@ -485,6 +485,33 @@ public sealed class DoctorTests : IDisposable
         Assert.DoesNotContain(checks, c => c.Message.Contains(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void A_downloaded_config_fails_and_says_how_to_unblock_it()
+    {
+        var check = Config(@"C:\c\shell.qml", null, new ConfigScan(0, []), null, downloaded: true);
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Equal(@"C:\c\shell.qml was downloaded from the internet, so Winshell does not run it. It would run as you.", check.Message);
+        Assert.Contains("Unblock-File", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_doctor_reads_the_zone_of_a_config_and_not_its_files()
+    {
+        var config = Path.Combine(_dir, "downloaded");
+        Directory.CreateDirectory(config);
+        var root = Path.Combine(config, "shell.qml");
+        // A syntax error the doctor would report if it parsed the file.
+        File.WriteAllText(root, "import Winshell\nShellRoot {\n");
+        File.WriteAllText(root + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
+
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, root, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
+
+        var check = checks.Single(c => c.Id == "config");
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.EndsWith("shell.qml was downloaded from the internet, so Winshell does not run it. It would run as you.", check.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>Makes a junction, which needs no administrator, as <c>mklink /J</c> does.</summary>
     private static void Junction(string link, string target)
     {

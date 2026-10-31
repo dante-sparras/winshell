@@ -295,6 +295,9 @@ public sealed class ShellHost : IShellHost, IDisposable
         // keeps running the generation it had, or nothing, until the files change.
         try
         {
+            // A downloaded configuration runs as the user, so it waits until the user unblocks it.
+            if (ZoneIdentifier.IsDownloaded(_rootFile))
+                throw new QmlException(ZoneIdentifier.Blocked(_rootFile));
             root = engine.CreateRoot(_rootFile);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
