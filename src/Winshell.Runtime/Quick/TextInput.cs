@@ -25,6 +25,10 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private bool _selectByMouse = true;
     private string _passwordCharacter = "●";
     private double _scrollX;
+    private bool _autoScroll = true;
+    private bool _echoEditing;
+    private bool _coalesceTyping;
+    private IClipboard? _clipboardWatch;
     private IDisposable? _blink;
     private bool _blinkOn = true;
     private long _blinkElapsed;
@@ -80,7 +84,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     protected void SetText(string value, bool fromUser) => SetText(value, fromUser, clearHistory: false);
 
     /// <summary>Sets the text. A user edit is an undo step; any other change clears redo, and setting <c>text</c> clears undo too, as in Qt.</summary>
-    private void SetText(string value, bool fromUser, bool clearHistory)
+    private void SetText(string value, bool fromUser, bool clearHistory, bool recordUndo = true)
     {
         if (value.Length > _maximumLength)
             value = TextClusters.Limit(value, _maximumLength);
@@ -92,12 +96,14 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         if (clearHistory)
         {
             _undo.Clear();
+            _coalesceTyping = false;
         }
-        else if (fromUser)
+        else if (fromUser && recordUndo)
         {
             _undo.Add((_text, _cursorPosition));
             if (_undo.Count > 100)
                 _undo.RemoveAt(0);
+            _coalesceTyping = false;
         }
         _redo.Clear();
         _text = value;
@@ -122,12 +128,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         get
         {
             Track("text");
-            return _echoMode switch
-            {
-                1 => "",
-                2 or 3 => Mask(_text),
-                _ => _text,
-            };
+            return Shown(_text);
         }
     }
 
@@ -189,6 +190,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
             value = TextClusters.Snap(_text, value);
             if (SetField(ref _cursorPosition, value))
             {
+                _coalesceTyping = false;
                 if (_composition.Length > 0)
                     _visualDirty = true;
                 RestartBlink();
@@ -223,13 +225,13 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         }
     }
 
-    [Qml] public int EchoMode { get { Track(); return _echoMode; } set { if (SetField(ref _echoMode, value)) { NotifyChanged("displayText"); UpdateImplicit(); } } }
+    [Qml] public int EchoMode { get { Track(); return _echoMode; } set { if (SetField(ref _echoMode, value)) { _echoEditing = false; NotifyChanged("displayText"); UpdateImplicit(); } } }
 
     [Qml] public string PasswordCharacter { get { Track(); return _passwordCharacter; } set { if (SetField(ref _passwordCharacter, string.IsNullOrEmpty(value) ? "●" : TextClusters.First(value))) UpdateImplicit(); } }
 
     [Qml] public int PasswordMaskDelay { get; set; }
 
-    [Qml] public bool ReadOnly { get { Track(); return _readOnly; } set => SetField(ref _readOnly, value); }
+    [Qml] public bool ReadOnly { get { Track(); return _readOnly; } set { if (SetField(ref _readOnly, value)) NotifyChanged("canPaste"); } }
 
     [Qml] public int MaximumLength { get { Track(); return _maximumLength; } set => SetField(ref _maximumLength, Math.Max(0, value)); }
 
@@ -243,7 +245,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public bool PersistentSelection { get; set; }
 
-    [Qml] public bool AutoScroll { get; set; } = true;
+    [Qml] public bool AutoScroll { get { Track(); return _autoScroll; } set { if (SetField(ref _autoScroll, value)) { EnsureCursorVisible(); NotifyChanged("cursorRectangle"); Update(); } } }
 
     [Qml] public int InputMethodHints { get; set; }
 
@@ -263,7 +265,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     [Qml] public bool CanRedo { get { Track(); return _redo.Count > 0; } }
 
-    [Qml] public bool CanPaste => true;
+    [Qml] public bool CanPaste { get { Track(); return !_readOnly && !string.IsNullOrEmpty(Engine?.GetService<IClipboard>()?.GetText()); } }
 
     [Qml] public double ContentWidth { get { Track("text"); return OffsetOf(_text.Length); } }
 
@@ -306,6 +308,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public void Select(int start, int end)
     {
+        _coalesceTyping = false;
         _selectionStart = Math.Clamp(start, 0, _text.Length);
         _selectionEnd = Math.Clamp(end, 0, _text.Length);
         _cursorPosition = _selectionEnd;
@@ -315,6 +318,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     [Qml]
     public void Deselect()
     {
+        _coalesceTyping = false;
         _selectionStart = _selectionEnd = _cursorPosition;
         NotifySelection();
     }
@@ -369,6 +373,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     {
         if (_readOnly || from.Count == 0)
             return;
+        _coalesceTyping = false;
         var (text, cursor) = from[^1];
         from.RemoveAt(from.Count - 1);
         to.Add((_text, _cursorPosition));
@@ -529,7 +534,15 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     /// <summary>How many layouts this input has built to measure its line height.</summary>
     internal int LineHeightBuilds { get; private set; }
 
-    private bool Masked => _echoMode is 2 or 3;
+    private bool Masked => _echoMode == 2 || (_echoMode == 3 && !_echoEditing);
+
+    private string Shown(string text) => _echoMode switch
+    {
+        1 => "",
+        2 => Mask(text),
+        3 => _echoEditing ? text : Mask(text),
+        _ => text,
+    };
 
     private string Mask(string text) => TextClusters.Repeat(_passwordCharacter, TextClusters.Count(text));
 
@@ -553,12 +566,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private int Insertion => Math.Clamp(TextToMask(_cursorPosition), 0, DisplayTextRaw.Length);
 
-    private string DisplayTextRaw => _echoMode switch
-    {
-        1 => "",
-        2 or 3 => Mask(_text),
-        _ => _text,
-    };
+    private string DisplayTextRaw => Shown(_text);
 
     /// <summary>Committed echo with the preedit inserted at the caret. Password fields show the preedit as typed.</summary>
     private string VisualText()
@@ -674,8 +682,12 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
     private void EnsureCursorVisible()
     {
         var available = Width - _leftPadding - _rightPadding - ReservedRight;
-        if (available <= 0)
+        // Qt keeps the caret in view only while autoScroll is on, and not for NoEcho. Otherwise the scroll is 0.
+        if (!_autoScroll || _echoMode == 1 || available <= 0)
+        {
+            _scrollX = 0;
             return;
+        }
         var x = OffsetOf(_cursorPosition);
         if (x - _scrollX > available)
             _scrollX = x - available + 1;
@@ -688,6 +700,12 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     protected override void OnActiveFocusChanged(bool focused)
     {
+        if (!focused && _echoEditing)
+        {
+            _echoEditing = false;
+            NotifyChanged("displayText");
+            UpdateImplicit();
+        }
         _cursorVisible = focused;
         NotifyChanged("cursorVisible");
         if (focused)
@@ -743,23 +761,56 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         }
     }
 
-    public void InsertText(string text)
+    public void InsertText(string text) => InsertUserText(text, recordUndo: true, overwrite: false);
+
+    /// <summary>Text from the keyboard. A run of it is one undo step, and overwrite and password echo apply.</summary>
+    internal void TypeText(string text)
+    {
+        if (_readOnly || string.IsNullOrEmpty(text))
+            return;
+        if (_echoMode == (int)EchoModeValue.PasswordEchoOnEdit && !_echoEditing)
+        {
+            // Qt clears the masked password on the first edit, then shows what is typed until focus leaves.
+            _echoEditing = true;
+            _coalesceTyping = false;
+            if (_text.Length > 0)
+            {
+                SetText("", fromUser: true);
+                _selectionStart = _selectionEnd = _cursorPosition = 0;
+                NotifySelection();
+            }
+            else
+            {
+                NotifyChanged("displayText");
+            }
+        }
+        var record = !_coalesceTyping || SelectionEnd > SelectionStart;
+        InsertUserText(text, record, OverwriteMode);
+        _coalesceTyping = SelectionEnd == SelectionStart;
+    }
+
+    private void InsertUserText(string text, bool recordUndo, bool overwrite)
     {
         if (_readOnly || text.Length == 0)
             return;
         // A tab or other control in a paste used to drop the whole string.
         if (text.Any(char.IsControl))
             text = new string(text.Select(c => char.IsControl(c) ? ' ' : c).ToArray());
-        DeleteSelection(fromUser: true);
-        var room = _maximumLength - _text.Length;
+        var replacing = SelectionEnd > SelectionStart;
+        if (replacing)
+            DeleteSelection(fromUser: true);
+        var pos = TextClusters.Snap(_text, _cursorPosition);
+        var current = overwrite && !replacing && pos < _text.Length
+            ? _text.Remove(pos, TextClusters.Next(_text, pos) - pos)
+            : _text;
+        var room = _maximumLength - current.Length;
         if (room <= 0)
             return;
         if (text.Length > room)
             text = TextClusters.Limit(text, room);
         if (text.Length == 0)
             return;
-        var pos = _cursorPosition;
-        SetText(_text.Insert(pos, text), fromUser: true);
+        SetText(current.Insert(pos, text), fromUser: true, clearHistory: false, recordUndo);
         _selectionStart = _selectionEnd = pos + text.Length;
         CursorPosition = pos + text.Length;
         NotifySelection();
@@ -767,6 +818,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private bool DeleteSelection(bool fromUser)
     {
+        _coalesceTyping = false;
         var s = SelectionStart;
         var e = SelectionEnd;
         if (e <= s)
@@ -811,6 +863,7 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
 
     private void MoveCursor(int to, bool select)
     {
+        _coalesceTyping = false;
         to = TextClusters.Snap(_text, to);
         if (select)
         {
@@ -1002,8 +1055,21 @@ public class TextInput : Item, IKeyTarget, ITextTarget, IFocusOnPress, IPointerT
         canvas.Restore();
     }
 
+    public override void ComponentComplete()
+    {
+        base.ComponentComplete();
+        if (Engine?.GetService<IClipboard>() is not { } clip)
+            return;
+        _clipboardWatch = clip;
+        clip.Changed += ClipboardChanged;
+    }
+
+    private void ClipboardChanged() { if (!IsDestroyed) NotifyChanged("canPaste"); }
+
     protected override void OnDestroy()
     {
+        if (_clipboardWatch is not null)
+            _clipboardWatch.Changed -= ClipboardChanged;
         _visual?.Dispose();
         _visual = null;
         _blink?.Dispose();
