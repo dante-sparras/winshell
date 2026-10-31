@@ -19,6 +19,8 @@ internal static class WindowManagerModules
         registry.Module("Winshell.Apps")
             .Singleton(e => new AppsService(e), "Apps")
             .Uncreatable<AppEntry>("AppEntry", "AppEntry comes from Apps")
+            .Singleton(e => new JumpListService(e), "JumpLists")
+            .Uncreatable<AppJumpList>("AppJumpList", "AppJumpList comes from JumpLists.forApp")
             .Singleton(_ => new RecentDocuments(), "RecentDocuments");
 
         registry.Module("Winshell.Windows")
