@@ -38,6 +38,13 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     /// </summary>
     [Qml] public object? Check { get; set; }
 
+    /// <summary>Bytes, values and nesting <see cref="Deserialize"/> will accept. Past any one, the file is left as it is.</summary>
+    internal int MaxFileBytes { get; set; } = DataLimits.MaxFileBytes;
+
+    internal int MaxNodes { get; set; } = DataLimits.MaxNodes;
+
+    internal int MaxDepth { get; set; } = DataLimits.MaxDepth;
+
     public override void ComponentComplete()
     {
         foreach (var p in DynamicProperties)
@@ -138,7 +145,25 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         if (Engine is null)
             return "";
         var buffer = View?.Text ?? "";
-        var document = SyntaxParser.Parse(buffer);
+        if (OverBudget(buffer) is { } refused)
+        {
+            PreserveFile = true;
+            Error = refused;
+            Warn($"failed to parse {refused}; the file was left unchanged");
+            return "";
+        }
+        DocumentSyntax document;
+        try
+        {
+            document = SyntaxParser.Parse(buffer);
+        }
+        catch (TomlException e)
+        {
+            PreserveFile = true;
+            Error = $"{Where}: {e.Message}";
+            Warn($"failed to parse {Error}; the file was left unchanged");
+            return "";
+        }
         if (!Recover(ref document))
         {
             PreserveFile = true;
@@ -206,17 +231,29 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         {
             try
             {
-                var again = SyntaxParser.Parse(File.ReadAllText(path));
-                if (!again.HasErrors && LoadClean(again))
+                var length = new FileInfo(path).Length;
+                if (DataLimits.FileBytes(length, MaxFileBytes) is { } sized)
+                    detail = $"{Where}: {sized}";
+                else
                 {
-                    document = again;
-                    Error = "";
-                    return true;
+                    var againText = File.ReadAllText(path);
+                    if (OverBudget(againText) is { } refused)
+                        detail = refused;
+                    else
+                    {
+                        var again = SyntaxParser.Parse(againText);
+                        if (!again.HasErrors && LoadClean(again))
+                        {
+                            document = again;
+                            Error = "";
+                            return true;
+                        }
+                        if (again.HasErrors && again.Diagnostics.Count > 0)
+                            detail = Locate(again.Diagnostics[0]);
+                    }
                 }
-                if (again.HasErrors && again.Diagnostics.Count > 0)
-                    detail = Locate(again.Diagnostics[0]);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or TomlException)
             {
                 detail = $"{Where}: {e.Message}";
             }
@@ -236,15 +273,45 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         return string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {diagnostic.Message}");
     }
 
-    private bool TryParse(string text, out TomlTable table, out string error) => TryLoad(Where, text, out table, out error);
+    /// <summary><c>path: why</c> when <paramref name="text"/> is past a limit, or null.</summary>
+    private string? OverBudget(string text) =>
+        DataLimits.Toml(text, MaxFileBytes, MaxNodes, MaxDepth) is { } why ? $"{Where}: {why}" : null;
+
+    private bool TryParse(string text, out TomlTable table, out string error)
+    {
+        if (OverBudget(text) is { } refused)
+        {
+            table = [];
+            error = refused;
+            return false;
+        }
+        return TryLoad(Where, text, out table, out error);
+    }
 
     /// <summary>
-    /// Whether <paramref name="text"/> loads. <paramref name="error"/> is <c>path[line:column]: message</c> when it
-    /// does not. This is the parse <see cref="Deserialize"/> uses: the syntax tree, then the table.
+    /// Whether <paramref name="text"/> loads. <paramref name="error"/> is <c>path[line:column]: message</c>, or
+    /// <c>path: message</c> for a limit, when it does not. This is the parse <see cref="Deserialize"/> uses: the
+    /// syntax tree, then the table. A file past the byte, value or nesting limit does not load.
     /// </summary>
     internal static bool TryLoad(string where, string text, out TomlTable table, out string error)
     {
-        var document = SyntaxParser.Parse(text);
+        if (DataLimits.Toml(text, DataLimits.MaxFileBytes, DataLimits.MaxNodes, DataLimits.MaxDepth) is { } why)
+        {
+            table = [];
+            error = $"{where}: {why}";
+            return false;
+        }
+        DocumentSyntax document;
+        try
+        {
+            document = SyntaxParser.Parse(text);
+        }
+        catch (TomlException e)
+        {
+            table = [];
+            error = $"{where}: {e.Message}";
+            return false;
+        }
         if (document.HasErrors)
         {
             table = [];
