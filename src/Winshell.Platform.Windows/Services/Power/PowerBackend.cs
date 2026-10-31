@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Windows.Devices.Enumeration;
 using Windows.System.Power;
+using Winshell.Platform.Windows.Native;
 using WinBattery = Windows.Devices.Power.Battery;
 using WinBatteryReport = Windows.Devices.Power.BatteryReport;
 
@@ -90,7 +91,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
     protected override Task<PowerSnapshot> ReadAsync()
     {
         var status = default(SYSTEM_POWER_STATUS);
-        var hasStatus = GetSystemPowerStatus(ref status);
+        var hasStatus = Win32.GetSystemPowerStatus(out status);
         // Bit 128 of BatteryFlag: "no system battery".
         var noSystemBattery = hasStatus && (status.BatteryFlag & 128) != 0;
 
@@ -206,19 +207,4 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             _ => "battery-missing",
         };
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SYSTEM_POWER_STATUS
-    {
-        public byte ACLineStatus;
-        public byte BatteryFlag;
-        public byte BatteryLifePercent;
-        public byte SystemStatusFlag;
-        public uint BatteryLifeTime;
-        public uint BatteryFullLifeTime;
-    }
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetSystemPowerStatus(ref SYSTEM_POWER_STATUS status);
 }

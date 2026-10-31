@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
+using Winshell.Platform.Windows.Native;
 using Winshell.Platform.Windows.Services.Notifications;
 using Winshell.Platform.Windows.Services.Session;
 using Winshell.Platform.Windows.Services.WindowList;
@@ -198,26 +199,26 @@ internal static unsafe partial class DoctorProbe
     /// </summary>
     public static bool IsElevated(int pid)
     {
-        var process = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, (uint)pid);
+        var process = Win32.OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, (uint)pid);
         if (process == 0)
             return false;
         try
         {
-            if (!OpenProcessToken(process, 0x0008 /* TOKEN_QUERY */, out var token))
+            if (!Win32.OpenProcessToken(process, 0x0008 /* TOKEN_QUERY */, out var token))
                 return Marshal.GetLastPInvokeError() == 5 && !Environment.IsPrivilegedProcess;
             try
             {
                 int elevated;
-                return GetTokenInformation(token, 20 /* TokenElevation */, &elevated, sizeof(int), out _) && elevated != 0;
+                return Win32.GetTokenInformation(token, 20 /* TokenElevation */, &elevated, sizeof(int), out _) && elevated != 0;
             }
             finally
             {
-                CloseHandle(token);
+                Win32.CloseHandle(token);
             }
         }
         finally
         {
-            CloseHandle(process);
+            Win32.CloseHandle(process);
         }
     }
 
@@ -251,10 +252,10 @@ internal static unsafe partial class DoctorProbe
         var name = stackalloc char[256];
         foreach (var hwnd in handles)
         {
-            if (!NativeMethods.IsWindowVisible(hwnd) || NativeMethods.IsIconic(hwnd) || NativeMethods.IsCloaked(hwnd) || !NativeMethods.GetWindowRect(hwnd, out var rect))
+            if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || NativeMethods.IsCloaked(hwnd) || !Win32.GetWindowRect(hwnd, out var rect))
                 continue;
             var length = NativeMethods.GetClassName(hwnd, name, 256);
-            NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            Win32.GetWindowThreadProcessId(hwnd, out var pid);
             result.Add(new Doctor.WindowFacts(new string(name, 0, Math.Max(0, length)), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
         }
         return result;
@@ -339,7 +340,7 @@ internal static unsafe partial class DoctorProbe
     {
         if (string.IsNullOrWhiteSpace(command))
             return [];
-        var argv = CommandLineToArgvW(command, out var count);
+        var argv = Win32.CommandLineToArgvW(command, out var count);
         if (argv == 0)
             return [];
         try
@@ -351,7 +352,7 @@ internal static unsafe partial class DoctorProbe
         }
         finally
         {
-            LocalFree(argv);
+            Win32.LocalFree(argv);
         }
     }
 
@@ -425,31 +426,10 @@ internal static unsafe partial class DoctorProbe
 
     // Native
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint pid);
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CloseHandle(nint handle);
-
-    [LibraryImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool OpenProcessToken(nint process, uint access, out nint token);
-
-    [LibraryImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetTokenInformation(nint token, int infoClass, void* info, int length, out int returned);
-
     [LibraryImport("user32.dll")]
     private static partial nint GetThreadDpiAwarenessContext();
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AreDpiAwarenessContextsEqual(nint a, nint b);
-
-    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint CommandLineToArgvW(string command, out int count);
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint LocalFree(nint memory);
 }

@@ -138,7 +138,7 @@ internal static unsafe class WindowTracker
         // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
         if (eventType == EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
             return;
-        var isRoot = hwnd != 0 && eventType != EVENT_OBJECT_DESTROY && GetAncestor(hwnd, GA_ROOT) == hwnd;
+        var isRoot = hwnd != 0 && eventType != EVENT_OBJECT_DESTROY && Win32.GetAncestor(hwnd, GA_ROOT) == hwnd;
         var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);
         if (!marksWindow && !WindowRules.MarksForeground(eventType))
             return;
@@ -185,7 +185,7 @@ internal static unsafe class WindowTracker
         if (_foregroundDirty)
         {
             _foregroundDirty = false;
-            var active = ActiveOf(GetForegroundWindow());
+            var active = ActiveOf(Win32.GetForegroundWindow());
             if (active != Active)
             {
                 Active = active;
@@ -212,7 +212,7 @@ internal static unsafe class WindowTracker
 
     private static nint ActiveOf(nint foreground)
     {
-        var hwnd = foreground == 0 ? 0 : GetAncestor(foreground, GA_ROOT);
+        var hwnd = foreground == 0 ? 0 : Win32.GetAncestor(foreground, GA_ROOT);
         for (var depth = 0; hwnd != 0 && depth < 16; depth++)
         {
             if (Tracked.ContainsKey(hwnd))
@@ -228,11 +228,11 @@ internal static unsafe class WindowTracker
     /// </summary>
     private static bool IsTaskbarWindow(nint hwnd)
     {
-        var style = (long)GetWindowLongPtr(hwnd, GWL_STYLE);
-        var ex = (long)GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        var style = (long)Win32.GetWindowLongPtr(hwnd, GWL_STYLE);
+        var ex = (long)Win32.GetWindowLongPtr(hwnd, GWL_EXSTYLE);
         return WindowRules.ShowsOnTaskbar(new TaskbarWindowFacts(
-            IsWindow(hwnd),
-            IsWindowVisible(hwnd),
+            Win32.IsWindow(hwnd),
+            Win32.IsWindowVisible(hwnd),
             hwnd == GetShellWindow(),
             (style & WS_CHILD) != 0,
             (ex & WS_EX_APPWINDOW) != 0,
@@ -245,16 +245,16 @@ internal static unsafe class WindowTracker
 
     private static WindowInfo Describe(nint hwnd, WindowInfo? old)
     {
-        var minimized = IsIconic(hwnd);
-        var maximized = !minimized && IsZoomed(hwnd);
-        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var minimized = Win32.IsIconic(hwnd);
+        var maximized = !minimized && Win32.IsZoomed(hwnd);
+        var monitor = Win32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         var mi = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
         var device = monitor != 0 && Win32.GetMonitorInfo(monitor, ref mi) ? new string(mi.szDevice).TrimEnd('\0') : "";
         var fullscreen = false;
-        if (!minimized && device.Length > 0 && GetWindowRect(hwnd, out var rect))
+        if (!minimized && device.Length > 0 && Win32.GetWindowRect(hwnd, out var rect))
         {
             // No title bar and covering the whole monitor, as a game or a video player in fullscreen does.
-            var style = (long)GetWindowLongPtr(hwnd, GWL_STYLE);
+            var style = (long)Win32.GetWindowLongPtr(hwnd, GWL_STYLE);
             var screen = mi.rcMonitor;
             fullscreen = (style & WS_CAPTION) != WS_CAPTION && rect.Left <= screen.Left && rect.Top <= screen.Top && rect.Right >= screen.Right && rect.Bottom >= screen.Bottom;
         }
@@ -284,22 +284,22 @@ internal static unsafe class WindowTracker
     /// </summary>
     public static void MoveToMonitor(nint hwnd, string deviceName)
     {
-        if (deviceName.Length == 0 || !IsWindow(hwnd))
+        if (deviceName.Length == 0 || !Win32.IsWindow(hwnd))
             return;
         var monitors = Screens.Enumerate();
         var target = monitors.FirstOrDefault(m => m.Info.Id == deviceName);
         if (target is null)
             return;
-        var sourceHandle = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var sourceHandle = Win32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         var source = sourceHandle == 0 ? null : Screens.Describe(sourceHandle);
         if (source is null || source.Info.Id == target.Info.Id)
             return;
-        if (!GetWindowRect(hwnd, out var current))
+        if (!Win32.GetWindowRect(hwnd, out var current))
             return;
         var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
         var hasPlacement = GetWindowPlacement(hwnd, ref placement);
-        var minimized = IsIconic(hwnd);
-        var maximized = !minimized && IsZoomed(hwnd);
+        var minimized = Win32.IsIconic(hwnd);
+        var maximized = !minimized && Win32.IsZoomed(hwnd);
         // The placement is in workspace coordinates and the monitor frames are in screen coordinates. A restored
         // window shows the difference as a constant. A minimized or maximized one does not, so it takes the offset
         // of the primary monitor's work area.
@@ -307,7 +307,7 @@ internal static unsafe class WindowTracker
         if (hasPlacement && !minimized && !maximized)
             bias = (current.Left - placement.Normal.Left, current.Top - placement.Normal.Top);
         else if (hasPlacement && monitors.FirstOrDefault(m => m.Info.IsPrimary) is { } primary)
-            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, ((long)GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0);
+            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, ((long)Win32.GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0);
         var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current, WindowRules.Shift(placement.Normal, bias.X, bias.Y));
         if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
             return;
@@ -337,35 +337,35 @@ internal static unsafe class WindowTracker
     /// </summary>
     public static void Activate(nint hwnd)
     {
-        if (IsIconic(hwnd))
+        if (Win32.IsIconic(hwnd))
             ShowWindowAsync(hwnd, SW_RESTORE);
-        if (SetForegroundWindow(hwnd) && GetForegroundWindow() == hwnd)
+        if (Win32.SetForegroundWindow(hwnd) && Win32.GetForegroundWindow() == hwnd)
             return;
-        var foreground = GetForegroundWindow();
-        var current = GetCurrentThreadId();
-        var other = foreground == 0 ? 0 : GetWindowThreadProcessId(foreground, out _);
-        if (other != 0 && other != current && AttachThreadInput(current, other, true))
+        var foreground = Win32.GetForegroundWindow();
+        var current = Win32.GetCurrentThreadId();
+        var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, out _);
+        if (other != 0 && other != current && Win32.AttachThreadInput(current, other, true))
         {
             try
             {
                 Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
-                SetForegroundWindow(hwnd);
+                Win32.SetForegroundWindow(hwnd);
             }
             finally
             {
-                AttachThreadInput(current, other, false);
+                Win32.AttachThreadInput(current, other, false);
             }
         }
-        if (GetForegroundWindow() != hwnd)
+        if (Win32.GetForegroundWindow() != hwnd)
         {
             // A key press makes this process the one that had the last input, which may take the foreground.
             KeyMask.Tap();
-            SetForegroundWindow(hwnd);
+            Win32.SetForegroundWindow(hwnd);
         }
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
-    public static void Close(nint hwnd) => PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+    public static void Close(nint hwnd) => Win32.PostMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
 
     public static void SetMaximized(nint hwnd, bool maximized) => ShowWindowAsync(hwnd, maximized ? SW_MAXIMIZE : SW_RESTORE);
 

@@ -127,25 +127,10 @@ internal sealed partial class PowerModeBackend : SnapshotSource<PowerModeSnapsho
     private static bool OnBattery()
     {
         var status = default(SYSTEM_POWER_STATUS);
-        return GetSystemPowerStatus(ref status) && status.ACLineStatus == 0;
+        return Win32.GetSystemPowerStatus(out status) && status.ACLineStatus == 0;
     }
 
     private const uint EffectivePowerModeV2 = 2;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SYSTEM_POWER_STATUS
-    {
-        public byte ACLineStatus;
-        public byte BatteryFlag;
-        public byte BatteryLifePercent;
-        public byte SystemStatusFlag;
-        public uint BatteryLifeTime;
-        public uint BatteryFullLifeTime;
-    }
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetSystemPowerStatus(ref SYSTEM_POWER_STATUS status);
 
     [LibraryImport("powrprof.dll")]
     private static partial uint PowerGetUserConfiguredACPowerMode(out Guid powerModeGuid);

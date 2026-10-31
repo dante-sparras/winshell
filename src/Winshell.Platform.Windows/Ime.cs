@@ -118,7 +118,7 @@ internal sealed class ImeSession
 }
 
 /// <summary>IMM32 calls that place the candidate window and read the composition string.</summary>
-internal static class ImeNative
+internal static partial class ImeNative
 {
     /// <summary>Associates the window with the thread's default input context, or with none.</summary>
     public static void SetEnabled(nint hwnd, bool enabled) =>
@@ -178,27 +178,27 @@ internal static class ImeNative
         }
     }
 
-    [DllImport("imm32.dll")]
+    [LibraryImport("imm32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ImmAssociateContextEx(nint hwnd, nint himc, uint flags);
+    private static partial bool ImmAssociateContextEx(nint hwnd, nint himc, uint flags);
 
-    [DllImport("imm32.dll")]
-    private static extern nint ImmGetContext(nint hwnd);
+    [LibraryImport("imm32.dll")]
+    private static partial nint ImmGetContext(nint hwnd);
 
-    [DllImport("imm32.dll")]
+    [LibraryImport("imm32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ImmReleaseContext(nint hwnd, nint himc);
+    private static partial bool ImmReleaseContext(nint hwnd, nint himc);
 
-    [DllImport("imm32.dll", EntryPoint = "ImmGetCompositionStringW")]
-    private static extern int ImmGetCompositionStringW(nint himc, int index, byte[]? buffer, int length);
+    [LibraryImport("imm32.dll", EntryPoint = "ImmGetCompositionStringW")]
+    private static partial int ImmGetCompositionStringW(nint himc, int index, [Out] byte[]? buffer, int length);
 
-    [DllImport("imm32.dll")]
+    [LibraryImport("imm32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ImmSetCompositionWindow(nint himc, ref CompositionForm form);
+    private static partial bool ImmSetCompositionWindow(nint himc, ref CompositionForm form);
 
-    [DllImport("imm32.dll")]
+    [LibraryImport("imm32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ImmSetCandidateWindow(nint himc, ref CandidateForm form);
+    private static partial bool ImmSetCandidateWindow(nint himc, ref CandidateForm form);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CompositionForm

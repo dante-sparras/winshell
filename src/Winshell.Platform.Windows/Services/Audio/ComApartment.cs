@@ -6,7 +6,7 @@ namespace Winshell.Platform.Windows.Services.Audio;
 /// Moves a COM object onto the thread that will use it. Core Audio callbacks arrive on the engine's
 /// thread, and the shell reads those objects on its own thread.
 /// </summary>
-internal static class ComApartment
+internal static partial class ComApartment
 {
     private static readonly Guid IUnknown = new("00000000-0000-0000-C000-000000000046");
 
@@ -41,9 +41,9 @@ internal static class ComApartment
         }
     }
 
-    [DllImport("ole32", ExactSpelling = true)]
-    private static extern int CoMarshalInterThreadInterfaceInStream(ref Guid iid, nint unknown, out nint stream);
+    [LibraryImport("ole32")]
+    private static partial int CoMarshalInterThreadInterfaceInStream(ref Guid iid, nint unknown, out nint stream);
 
-    [DllImport("ole32", ExactSpelling = true)]
-    private static extern int CoGetInterfaceAndReleaseStream(nint stream, ref Guid iid, out nint unknown);
+    [LibraryImport("ole32")]
+    private static partial int CoGetInterfaceAndReleaseStream(nint stream, ref Guid iid, out nint unknown);
 }

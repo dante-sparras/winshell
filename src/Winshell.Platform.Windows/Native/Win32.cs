@@ -155,6 +155,18 @@ internal struct SYSTEM_POWER_STATUS
     public uint BatteryFullLifeTime;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct BITMAP
+{
+    public int bmType;
+    public int bmWidth;
+    public int bmHeight;
+    public int bmWidthBytes;
+    public ushort bmPlanes;
+    public ushort bmBitsPixel;
+    public nint bmBits;
+}
+
 internal static partial class Win32
 {
     public const uint WS_POPUP = 0x80000000;
@@ -409,6 +421,14 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindow(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetLayeredWindowAttributes(nint hwnd, uint key, byte alpha, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetClientRect(nint hwnd, out RECT rect);
 
     [LibraryImport("user32.dll")]
@@ -524,6 +544,9 @@ internal static partial class Win32
     [LibraryImport("user32.dll", EntryPoint = "LoadImageW", SetLastError = true)]
     public static partial nint LoadImageW(nint instance, nint name, uint type, int width, int height, uint flags);
 
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint LoadImageW(nint instance, string name, uint type, int width, int height, uint flags);
+
     [LibraryImport("user32.dll")]
     public static partial nint SetCursor(nint cursor);
 
@@ -582,6 +605,9 @@ internal static partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DeleteObject(nint obj);
 
+    [LibraryImport("gdi32.dll")]
+    public static partial int GetObjectW(nint handle, int size, out BITMAP bitmap);
+
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetWindowAttribute(nint hwnd, int attribute, in int value, int size);
 
@@ -613,6 +639,26 @@ internal static partial class Win32
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseHandle(nint handle);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    public static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool OpenProcessToken(nint process, uint access, out nint token);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool GetTokenInformation(nint token, int infoClass, void* info, int length, out int returned);
+
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint CommandLineToArgvW(string commandLine, out int count);
+
+    [LibraryImport("kernel32.dll")]
+    public static partial nint LocalFree(nint memory);
+
+    [LibraryImport("combase.dll")]
+    public static partial int WindowsDeleteString(nint value);
 
     [LibraryImport("kernel32.dll")]
     public static partial uint GetTickCount();

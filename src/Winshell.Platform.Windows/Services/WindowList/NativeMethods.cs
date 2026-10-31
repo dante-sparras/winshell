@@ -61,35 +61,13 @@ internal static unsafe partial class NativeMethods
     public static partial bool EnumWindows(delegate* unmanaged<nint, nint, int> callback, nint data);
 
     [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool IsWindow(nint hwnd);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool IsWindowVisible(nint hwnd);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool IsIconic(nint hwnd);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool IsZoomed(nint hwnd);
-
-    [LibraryImport("user32.dll")]
     public static partial nint GetWindow(nint hwnd, uint command);
-
-    [LibraryImport("user32.dll")]
-    public static partial nint GetAncestor(nint hwnd, uint flags);
 
     [LibraryImport("user32.dll")]
     public static partial nint GetShellWindow();
 
     [LibraryImport("user32.dll")]
     public static partial nint GetForegroundWindow();
-
-    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-    public static partial nint GetWindowLongPtr(nint hwnd, int index);
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
     public static partial int GetWindowTextLength(nint hwnd);
@@ -99,16 +77,6 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
     public static partial int GetClassName(nint hwnd, char* text, int max);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool GetWindowRect(nint hwnd, out Native.RECT rect);
-
-    [LibraryImport("user32.dll")]
-    public static partial uint GetWindowThreadProcessId(nint hwnd, out uint processId);
-
-    [LibraryImport("user32.dll")]
-    public static partial nint MonitorFromWindow(nint hwnd, uint flags);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -131,21 +99,6 @@ internal static unsafe partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetWindowPlacement(nint hwnd, in WINDOWPLACEMENT placement);
 
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool SetForegroundWindow(nint hwnd);
-
-    [LibraryImport("user32.dll", EntryPoint = "PostMessageW")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool PostMessage(nint hwnd, uint message, nint wParam, nint lParam);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool doAttach);
-
-    [LibraryImport("kernel32.dll")]
-    public static partial uint GetCurrentThreadId();
-
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int attribute, out int value, int size);
 
@@ -167,8 +120,8 @@ internal static unsafe partial class NativeMethods
     [DllImport("shell32.dll")]
     public static extern int SHGetPropertyStoreForWindow(nint hwnd, in Guid riid, [MarshalAs(UnmanagedType.Interface)] out IPropertyStore store);
 
-    [DllImport("ole32.dll")]
-    public static extern int PropVariantClear(ref PROPVARIANT value);
+    [LibraryImport("ole32.dll")]
+    public static partial int PropVariantClear(ref PROPVARIANT value);
 
     public static string WindowText(nint hwnd)
     {
@@ -190,7 +143,7 @@ internal static unsafe partial class NativeMethods
     /// <summary>The full path of the program that owns a window, or empty when it cannot be read.</summary>
     public static string ExePath(nint hwnd)
     {
-        GetWindowThreadProcessId(hwnd, out var pid);
+        Win32.GetWindowThreadProcessId(hwnd, out var pid);
         return ProcessImage.TryRead(pid) ?? "";
     }
 

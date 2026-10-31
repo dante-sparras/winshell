@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
+using Winshell.Platform.Windows.Native;
 using Winshell.Platform.Windows.Services.WindowList;
 
 namespace Winshell.Platform.Windows.Services.Apps;
@@ -82,7 +83,7 @@ internal static partial class ShellLink
         if (string.IsNullOrWhiteSpace(arguments))
             return [];
         // The first word is read as a program name, by other rules, so a placeholder takes its place.
-        var argv = CommandLineToArgvW("x " + arguments, out var count);
+        var argv = Win32.CommandLineToArgvW("x " + arguments, out var count);
         if (argv == 0)
             return [];
         try
@@ -94,15 +95,9 @@ internal static partial class ShellLink
         }
         finally
         {
-            LocalFree(argv);
+            Win32.LocalFree(argv);
         }
     }
-
-    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint CommandLineToArgvW(string commandLine, out int count);
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint LocalFree(nint memory);
 
     [ComImport]
     [Guid("000214F9-0000-0000-C000-000000000046")]
