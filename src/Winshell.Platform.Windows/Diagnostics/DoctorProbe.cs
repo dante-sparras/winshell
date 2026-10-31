@@ -9,6 +9,7 @@ using Winshell.Platform.Windows.Services.Session;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Qml;
 using Winshell.Runtime;
+using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Diagnostics;
 
@@ -20,6 +21,7 @@ internal static unsafe partial class DoctorProbe
 {
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string LayersKey = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
+    private const string PersonalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
     // Windows and .NET
 
@@ -31,6 +33,30 @@ internal static unsafe partial class DoctorProbe
         && type.StartsWith("Server", StringComparison.OrdinalIgnoreCase);
 
     public static string? WindowsDisplayVersion() => CurrentVersionValue("DisplayVersion") as string;
+
+    /// <summary>
+    /// Whether transparency effects are off: <c>EnableTransparency</c> is 0. Anything else, including a missing or
+    /// unreadable value, is left unmentioned.
+    /// </summary>
+    public static bool TransparencyEffectsOff()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(PersonalizeKey);
+            return key?.GetValue("EnableTransparency") is int value && value == 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether a contrast theme is on, the same read the theme uses.</summary>
+    public static bool ContrastThemeOn()
+    {
+        var hc = new HIGHCONTRASTW { cbSize = (uint)sizeof(HIGHCONTRASTW) };
+        return Win32.SystemParametersInfoW(Win32.SPI_GETHIGHCONTRAST, hc.cbSize, &hc, 0) && (hc.dwFlags & Win32.HCF_HIGHCONTRASTON) != 0;
+    }
 
     private static object? CurrentVersionValue(string name)
     {
@@ -178,6 +204,118 @@ internal static unsafe partial class DoctorProbe
                 error = null;
         }
         return error;
+    }
+
+    /// <summary>
+    /// Why <c>preferences.toml</c>, <c>launcher.toml</c> or <c>quick-settings.toml</c> cannot be loaded, at the paths
+    /// this shell loads them from. A missing file is left out. The text is parsed by <see cref="TomlAdapter.TryLoad"/>.
+    /// </summary>
+    public static IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot)
+    {
+        var problems = new List<string>();
+        foreach (var path in new[] { PreferencesPath(configFile, configRoot), LauncherPath(configFile, localRoot), QuickSettingsPath(configFile, configRoot, localRoot) })
+        {
+            if (UserFileProblem(path) is { Length: > 0 } problem)
+                problems.Add(problem);
+        }
+        return problems;
+    }
+
+    /// <summary>
+    /// Beside <c>shell.qml</c> when that shell lives in the config folder, and in the config folder for the default
+    /// shell, which lives outside it. No config folder means the choices are not stored.
+    /// </summary>
+    private static string? PreferencesPath(string? configFile, string configRoot)
+    {
+        if (string.IsNullOrEmpty(configRoot))
+            return null;
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configRoot));
+        if (configFile is null)
+            return Path.Combine(root, "preferences.toml");
+        var shellDir = Path.GetDirectoryName(Path.GetFullPath(configFile));
+        if (string.IsNullOrEmpty(shellDir))
+            return null;
+        var shell = shellDir.Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+        var config = root.Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+        var folder = shell == config || shell.StartsWith(config + "/", StringComparison.Ordinal) ? shellDir : root;
+        return Path.Combine(folder, "preferences.toml");
+    }
+
+    /// <summary>Beside <c>shell.qml</c>, or beside the default shell when Winshell would run that.</summary>
+    private static string? LauncherPath(string? configFile, string localRoot)
+    {
+        if (configFile is not null)
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(configFile));
+            return string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, "launcher.toml");
+        }
+        return string.IsNullOrEmpty(localRoot) ? null : Path.Combine(localRoot, "default-shell", "launcher.toml");
+    }
+
+    /// <summary>The shell's state folder, named the way <see cref="ShellHost"/> names it, then <c>quick-settings.toml</c>.</summary>
+    private static string? QuickSettingsPath(string? configFile, string configRoot, string localRoot)
+    {
+        if (string.IsNullOrEmpty(localRoot))
+            return null;
+        var rootFile = configFile is not null
+            ? Path.GetFullPath(configFile)
+            : Path.Combine(localRoot, "default-shell", "shell.qml");
+        string id;
+        string? statePragma = null;
+        try
+        {
+            var pragmas = ShellPragmas.Read(rootFile);
+            statePragma = pragmas.StateDir;
+            // The shipped default shell's id, used when that copy has not been written out yet.
+            id = pragmas.ShellId ?? (configFile is null && !File.Exists(rootFile) ? "winshell-default" : ShellHost.DefaultShellId(rootFile, configRoot));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            id = configFile is null ? "winshell-default" : ShellHost.DefaultShellId(rootFile, configRoot);
+        }
+        var shellDir = Path.GetDirectoryName(rootFile) ?? "";
+        var stateDir = ExpandState(statePragma, shellDir, Path.Combine(localRoot, "state"))
+            ?? Path.Combine(localRoot, "state", "by-shell", id);
+        return Path.Combine(stateDir, "quick-settings.toml");
+    }
+
+    /// <summary>The same expansion <see cref="ShellHost"/> uses for a <c>StateDir</c> pragma. A bad path is ignored.</summary>
+    private static string? ExpandState(string? pragma, string shellDir, string baseDir)
+    {
+        if (pragma is null)
+            return null;
+        try
+        {
+            var text = Environment.ExpandEnvironmentVariables(pragma.Replace("$BASE", baseDir, StringComparison.Ordinal));
+            if (text.Length == 0)
+                return Path.GetFullPath(text);
+            if (!Path.IsPathRooted(text))
+                text = Path.Combine(shellDir, text);
+            return Path.GetFullPath(text);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Why this file cannot be loaded, or null when it is missing or loads.</summary>
+    private static string? UserFileProblem(string? path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            return null;
+        string text;
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            text = reader.ReadToEnd();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"{path}: could not be read: {e.Message}";
+        }
+        return TomlAdapter.TryLoad(path, text, out _, out var error) ? null : error;
     }
 
     // Folders
