@@ -17,6 +17,21 @@ BeforeAll {
         WINSHELL_INSTALL_TEST   = $env:WINSHELL_INSTALL_TEST
     }
 
+    function script:Invoke-WinshellUninstallCapture {
+        $writer = [IO.StringWriter]::new()
+        $previous = [Console]::Out
+        $text = ''
+        try {
+            [Console]::SetOut($writer)
+            Uninstall-Winshell
+            $text = $writer.ToString()
+        } finally {
+            [Console]::SetOut($previous)
+            $writer.Dispose()
+        }
+        return $text
+    }
+
     function script:Restore-WinshellTestEnv {
         foreach ($name in $script:OriginalEnv.Keys) {
             $value = $script:OriginalEnv[$name]
@@ -168,6 +183,79 @@ Describe 'uninstall' {
         { Uninstall-Winshell } | Should -Throw '*link*'
         Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
         Read-WinshellTestPath | Should -Be 'C:\Windows'
+    }
+
+    It 'removes a staged update and says logs and state stay' {
+        $ctx = Enter-WinshellInstallTest
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshell.exe'), 'exe', $script:Utf8)
+        [IO.File]::WriteAllText($ctx.PathFile, 'C:\Windows', $script:Utf8)
+        $staged = Join-Path $ctx.Local 'winshell\updates\9.9.9\winshell.exe'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $staged) | Out-Null
+        [IO.File]::WriteAllText($staged, 'staged', $script:Utf8)
+        $log = Join-Path $ctx.Local 'winshell\run\log.txt'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $log) | Out-Null
+        [IO.File]::WriteAllText($log, 'log', $script:Utf8)
+        $config = Join-Path $ctx.Roaming 'winshell\preferences.toml'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $config) | Out-Null
+        [IO.File]::WriteAllText($config, 'keep', $script:Utf8)
+        $text = Invoke-WinshellUninstallCapture
+        Test-Path -LiteralPath (Join-Path $ctx.Local 'winshell\updates') | Should -BeFalse
+        Test-Path -LiteralPath $log | Should -BeTrue
+        Test-Path -LiteralPath $config | Should -BeTrue
+        $text | Should -Match 'Logs and state stay in %LOCALAPPDATA%\\winshell'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $staged) | Out-Null
+        [IO.File]::WriteAllText($staged, 'again', $script:Utf8)
+        Invoke-WinshellUninstallCapture | Out-Null
+        Test-Path -LiteralPath (Join-Path $ctx.Local 'winshell\updates') | Should -BeFalse
+        Test-Path -LiteralPath $log | Should -BeTrue
+    }
+
+    It 'leaves a staged update while Winshell is running' {
+        $ctx = Enter-WinshellInstallTest
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshell.exe'), 'exe', $script:Utf8)
+        [IO.File]::WriteAllText($ctx.PathFile, 'C:\Windows', $script:Utf8)
+        $staged = Join-Path $ctx.Local 'winshell\updates\9.9.9\winshell.exe'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $staged) | Out-Null
+        [IO.File]::WriteAllText($staged, 'staged', $script:Utf8)
+        { Uninstall-Winshell -ProcessesUnder { 5151 } } | Should -Throw '*Nothing was changed*'
+        [IO.File]::ReadAllText($staged) | Should -Be 'staged'
+    }
+
+    It 'leaves a staged update link and says where it is' {
+        $ctx = Enter-WinshellInstallTest
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshell.exe'), 'exe', $script:Utf8)
+        [IO.File]::WriteAllText($ctx.PathFile, 'C:\Windows', $script:Utf8)
+        $target = Join-Path $TestDrive 'staged-target'
+        New-Item -ItemType Directory -Path $target | Out-Null
+        [IO.File]::WriteAllText((Join-Path $target 'winshell.exe'), 'staged', $script:Utf8)
+        $updates = Join-Path $ctx.Local 'winshell\updates'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $updates) | Out-Null
+        New-Item -ItemType Junction -Path $updates -Target $target | Out-Null
+        $text = Invoke-WinshellUninstallCapture
+        Test-Path -LiteralPath $updates | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $target 'winshell.exe') | Should -BeTrue
+        $text | Should -Match ([regex]::Escape($updates))
+    }
+
+    It 'says where a staged update stays when a file in it is locked' {
+        $ctx = Enter-WinshellInstallTest
+        New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ctx.Bin 'winshell.exe'), 'exe', $script:Utf8)
+        [IO.File]::WriteAllText($ctx.PathFile, 'C:\Windows', $script:Utf8)
+        $staged = Join-Path $ctx.Local 'winshell\updates\9.9.9\winshell.exe'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $staged) | Out-Null
+        [IO.File]::WriteAllText($staged, 'staged', $script:Utf8)
+        $held = [IO.File]::Open($staged, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+        try {
+            $text = Invoke-WinshellUninstallCapture
+            Test-Path -LiteralPath $staged | Should -BeTrue
+            $text | Should -Match ([regex]::Escape((Split-Path -Parent (Split-Path -Parent $staged))))
+        } finally {
+            $held.Dispose()
+        }
     }
 }
 
