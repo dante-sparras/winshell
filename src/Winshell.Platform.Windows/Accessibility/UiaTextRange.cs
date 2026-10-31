@@ -128,15 +128,18 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
 
     int ITextRangeProvider.GetBoundingRectangles(out double[]? rectangles) => Get(() =>
     {
-        // One line: from the left edge of the first character to the right edge of the last, or the caret.
         var input = Input;
-        var a = input.PositionToRectangle(_start);
-        var b = input.PositionToRectangle(_end);
-        var left = Math.Max(0, a.X);
-        var right = Math.Min(input.Width, Math.Max(left, b.X));
-        var origin = input.MapToScene(left, a.Y);
-        var rect = owner.Automation.ToScreen(new Runtime.QRect(origin.X, origin.Y, right - left, a.Height));
-        return new[] { rect.Left, rect.Top, rect.Width, rect.Height };
+        var pieces = input.VisibleRectangles(_start, _end);
+        var values = new double[pieces.Count * 4];
+        for (var i = 0; i < pieces.Count; i++)
+        {
+            var piece = pieces[i];
+            var origin = input.MapToScene(piece.X, piece.Y);
+            var rect = owner.Automation.ToScreen(new Runtime.QRect(origin.X, origin.Y, piece.Width, piece.Height));
+            (values[i * 4], values[i * 4 + 1], values[i * 4 + 2], values[i * 4 + 3]) =
+                (rect.Left, rect.Top, rect.Width, rect.Height);
+        }
+        return values;
     }, out rectangles);
 
     int ITextRangeProvider.GetEnclosingElement(out IRawElementProviderSimple? element)
