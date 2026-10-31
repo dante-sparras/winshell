@@ -39,6 +39,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _frameScheduled;
     private TimeSpan _lastFrame;
     private int _buttons;
+
+    /// <summary>Scan code of a handled Alt key. The following <c>WM_SYSCHAR</c> with that scan is eaten, so it does not beep.</summary>
+    private int _sysCharScan = -1;
     private bool _clickThrough;
     private bool _focusable;
     private QPoint _origin;
@@ -863,26 +866,43 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 {
                     // The IME already has this key. Forwarding it would also fire a shortcut.
                     if ((int)wParam == ImeSession.VkProcessKey)
-                        return 0;
-                    _ime.ClearPending();
-                    var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers(), IsAutoRepeat = ((long)lParam & (1L << 30)) != 0, NativeScanCode = (int)(((long)lParam >> 16) & 0xff) };
-                    if (scene.KeyPress(e))
-                        return 0;
-                    if (e.Key == 0x01000000 && _kind == WindowKind.Popup && _popup?.GrabFocus == true)
                     {
-                        _client.OnDismissed();
+                        if (msg == Win32.WM_SYSKEYDOWN)
+                            _sysCharScan = -1;
                         return 0;
                     }
-                    return msg == Win32.WM_SYSKEYDOWN ? null : 0;
+                    _ime.ClearPending();
+                    var extended = ((long)lParam & (1L << 24)) != 0;
+                    var scan = (int)(((long)lParam >> 16) & 0xff);
+                    var key = Keys.Translate((int)wParam, extended, Keys.ReadHeld());
+                    var e = new KeyEvent { Key = key.Key, Modifiers = key.Modifiers, IsAutoRepeat = ((long)lParam & (1L << 30)) != 0, NativeScanCode = scan };
+                    var handled = scene.KeyPress(e);
+                    if (!handled && e.Key == 0x01000000 && _kind == WindowKind.Popup && _popup?.GrabFocus == true)
+                    {
+                        _client.OnDismissed();
+                        handled = true;
+                    }
+                    if (msg == Win32.WM_SYSKEYDOWN)
+                        _sysCharScan = handled ? scan : -1;
+                    return handled || msg != Win32.WM_SYSKEYDOWN ? 0 : null;
                 }
             case Win32.WM_KEYUP or Win32.WM_SYSKEYUP:
                 {
                     if ((int)wParam == ImeSession.VkProcessKey)
                         return 0;
-                    var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers() };
+                    var extended = ((long)lParam & (1L << 24)) != 0;
+                    var key = Keys.Translate((int)wParam, extended, Keys.ReadHeld());
+                    var e = new KeyEvent { Key = key.Key, Modifiers = key.Modifiers };
                     scene.KeyRelease(e);
                     return msg == Win32.WM_SYSKEYUP ? null : 0;
                 }
+            case Win32.WM_SYSCHAR:
+                if (Keys.EatSysChar(_sysCharScan, (int)(((long)lParam >> 16) & 0xff)))
+                {
+                    _sysCharScan = -1;
+                    return 0;
+                }
+                return null;
             case ImeSession.WmImeSetContext:
                 return Win32.DefWindowProcW(Handle, msg, wParam, ImeSession.HideDefaultCompositionWindow(lParam));
             case ImeSession.WmImeNotify:
