@@ -21,11 +21,11 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 | Nothing, and it exits at once | `--no-duplicate` found this configuration already running, or a second start overlapped the first. `winshell list` shows the one that is running. |
 | `Unknown command "<name>". Run winshell --help.` | The first word isn't a command. Options start with `-`. |
 
-Nothing printed and nothing on screen? Run `winshell` from a terminal, not with `-d`, so you see the log.
+Started from Start or at sign-in, and Winshell cannot start? It shows a dialog with the same text as the table, because those starts have no console window. **Open config folder** opens the folder the message is about. A console, including `winshell -d` from a terminal, prints the text and shows no dialog. Nothing in the dialog and nothing on screen means the shell is already running (`--no-duplicate`) or it started and the failure is in the log.
 
 ## My configuration has an error
 
-A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The log has an `ERROR` line with the same error:
+A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`. The log has an `ERROR` line with the same error:
 
 ```text
 ERROR scene: Failed to load configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
