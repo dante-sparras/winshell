@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -41,9 +42,11 @@ internal sealed class IpcServer : IDisposable
 
     // A client that never ends its line, and a listener that never reads, must not grow without a limit.
     // The signal callback runs on the UI thread, so a full queue drops the oldest value instead of waiting.
-    internal const int MaxRequestBytes = 16 * 1024;
-    internal const int MaxClients = 8;
-    internal const int MaxQueuedSignals = 8;
+    // A command line holds at most 32767 characters, so a request from winshell is well under this once encoded.
+    internal const int MaxRequestBytes = 256 * 1024;
+    // A listener holds its client for as long as it runs, so this has to leave room for `winshell kill`.
+    internal const int MaxClients = 64;
+    internal const int MaxQueuedSignals = 1024;
 
     private readonly object _firstGate = new();
     private readonly object _limit = new();
@@ -395,22 +398,29 @@ internal sealed class IpcServer : IDisposable
     /// <summary>Reads one request line, or reports that it passed <see cref="MaxRequestBytes"/> with no newline.</summary>
     private static async Task<(string? Line, bool TooLong)> ReadRequest(Stream stream, CancellationToken cancel)
     {
-        var bytes = new byte[MaxRequestBytes + 1];
-        var count = 0;
-        while (true)
+        var bytes = ArrayPool<byte>.Shared.Rent(MaxRequestBytes + 1);
+        try
         {
-            var n = await stream.ReadAsync(bytes.AsMemory(count, 1), cancel).ConfigureAwait(false);
-            if (n == 0)
-                return (null, false);
-            if (bytes[count] == (byte)'\n')
+            var count = 0;
+            while (true)
             {
-                if (count > 0 && bytes[count - 1] == (byte)'\r')
-                    count--;
-                return (Encoding.UTF8.GetString(bytes, 0, count), false);
+                var n = await stream.ReadAsync(bytes.AsMemory(count, 1), cancel).ConfigureAwait(false);
+                if (n == 0)
+                    return (null, false);
+                if (bytes[count] == (byte)'\n')
+                {
+                    if (count > 0 && bytes[count - 1] == (byte)'\r')
+                        count--;
+                    return (Encoding.UTF8.GetString(bytes, 0, count), false);
+                }
+                count++;
+                if (count > MaxRequestBytes)
+                    return (null, true);
             }
-            count++;
-            if (count > MaxRequestBytes)
-                return (null, true);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bytes);
         }
     }
 
