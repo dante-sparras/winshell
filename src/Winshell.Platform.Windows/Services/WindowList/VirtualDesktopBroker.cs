@@ -10,6 +10,9 @@ internal interface IVirtualDesktopSource
 {
     DesktopContract Contract { get; }
 
+    /// <summary>Changes when a desktop is added or removed. Reading it makes no call into Explorer.</summary>
+    string ListStamp { get; }
+
     bool TryRead(out IReadOnlyList<DesktopRecord> desktops, out Guid current, out string error);
 
     bool SwitchTo(Guid id);
@@ -151,6 +154,11 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
             return false;
         }
     }
+
+    public string ListStamp =>
+        Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops", "VirtualDesktopIDs", null) is byte[] ids
+            ? Convert.ToHexString(ids)
+            : "";
 
     public bool TryRead(out IReadOnlyList<DesktopRecord> desktops, out Guid current, out string error)
     {
