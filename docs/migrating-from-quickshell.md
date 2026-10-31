@@ -145,7 +145,7 @@ Types not listed keep their names in the new module.
 | `Toplevel.setRectangle`, `Toplevel.unsetRectangle` | Removed. Windows does not take a rectangle for the minimize animation |
 | `Toplevel.fullscreen` writable | `AppWindow.fullscreen` is read-only. Windows has no request that puts another program's window into fullscreen |
 
-`AppWindow` also has `executable`, the program's path, and `icon`, a path the icon provider can draw. `appId` is unchanged: the window's AppUserModelID, or the program's file name in lower case.
+`AppWindow` also has `executable`, the program's path, and `icon`, a path the icon provider can draw. `appId` is the window's AppUserModelID, the application user model id of its process's package when the window sets none, or the program's file name in lower case.
 
 ### Apps
 

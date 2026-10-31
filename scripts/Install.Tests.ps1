@@ -181,6 +181,46 @@ Describe 'PATH entries' {
         Remove-WinshellPathEntry 'C:\Winshell\bin' | Should -BeFalse
         Read-WinshellTestPath | Should -Be 'C:\Windows;C:\Tools'
     }
+
+    It 'adds and removes only the bin folder on the session PATH' {
+        $saved = $env:Path
+        try {
+            $env:Path = 'C:\Windows;C:\OnlyThisSession\venv;C:\Tools'
+            Add-WinshellSessionPathEntry 'C:\Winshell\bin'
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv;C:\Tools;C:\Winshell\bin'
+            Add-WinshellSessionPathEntry 'C:\Winshell\bin\'
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv;C:\Tools;C:\Winshell\bin'
+            Remove-WinshellSessionPathEntry 'c:\winshell\BIN'
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv;C:\Tools'
+            Remove-WinshellSessionPathEntry 'C:\Winshell\bin'
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv;C:\Tools'
+        } finally {
+            $env:Path = $saved
+        }
+    }
+
+    It 'leaves the session PATH alone while the test path file is set' {
+        Enter-WinshellInstallTest | Out-Null
+        [IO.File]::WriteAllText($env:WINSHELL_USER_PATH_FILE, 'C:\Windows', $script:Utf8)
+        $saved = $env:Path
+        try {
+            $env:Path = 'C:\Windows;C:\OnlyThisSession\venv'
+            Add-WinshellPathEntry 'C:\Winshell\bin' | Should -BeTrue
+            Remove-WinshellPathEntry 'C:\Winshell\bin' | Should -BeTrue
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv'
+        } finally {
+            $env:Path = $saved
+        }
+    }
+
+    It 'tells this session to run winshell and a script file to open a terminal' {
+        Test-WinshellSessionKeepsPath '' '' | Should -BeTrue
+        Test-WinshellSessionKeepsPath $null '&' | Should -BeTrue
+        Test-WinshellSessionKeepsPath 'C:\install.ps1' '&' | Should -BeTrue
+        Test-WinshellSessionKeepsPath 'C:\install.ps1' 'C:\install.ps1' | Should -BeFalse
+        Get-WinshellInstalledLine '0.6.0' $true | Should -Be 'Winshell 0.6.0 is installed. Run winshell.'
+        Get-WinshellInstalledLine '0.6.0' $false | Should -Be 'Winshell 0.6.0 is installed. Open a new terminal and run winshell.'
+    }
 }
 
 Describe 'quoting' {
@@ -355,6 +395,61 @@ Describe 'install' {
         Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $target 'bin') | Should -BeFalse
     }
+
+    It 'removes a leftover bin.old folder once nothing from the install is running' {
+        $ctx = Enter-WinshellInstallTest
+        $root = $ctx.Root
+        New-Item -ItemType Directory -Force -Path $root | Out-Null
+        $stale = Join-Path $root 'bin.old-deadbeef'
+        $locked = Join-Path $root 'bin.old-locked'
+        $near = Join-Path $root 'bin.oldest'
+        $notes = Join-Path $root 'notes'
+        foreach ($dir in @($stale, $locked, $near, $notes)) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        }
+        [IO.File]::WriteAllText((Join-Path $stale 'winshell.exe'), 'stale', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $locked 'winshell.exe'), 'locked', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $near 'keep.txt'), 'near', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $notes 'keep.txt'), 'notes', $script:Utf8)
+        $stage = Join-Path $TestDrive 'stage-old-bin'
+        New-Item -ItemType Directory -Force -Path $stage | Out-Null
+        [IO.File]::WriteAllText((Join-Path $stage 'winshell.exe'), 'new', $script:Utf8)
+        $held = [IO.File]::Open(
+            (Join-Path $locked 'winshell.exe'),
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::None)
+        try {
+            { Install-WinshellBin $stage $ctx.Bin { 4242 } } | Should -Throw '*4242*'
+            Test-Path -LiteralPath (Join-Path $stale 'winshell.exe') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $locked 'winshell.exe') | Should -BeTrue
+            Install-WinshellBin $stage $ctx.Bin { @() }
+            Test-Path -LiteralPath $stale | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $locked 'winshell.exe') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $near 'keep.txt') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $notes 'keep.txt') | Should -BeTrue
+            [IO.File]::ReadAllText((Join-Path $ctx.Bin 'winshell.exe')) | Should -Be 'new'
+            @(Get-ChildItem -LiteralPath $root -Force -Directory -Filter 'bin.old-*').Name | Should -Be @('bin.old-locked')
+        } finally {
+            $held.Dispose()
+        }
+    }
+
+    It 'leaves a bin.old link and what it points to alone' {
+        $ctx = Enter-WinshellInstallTest
+        $root = $ctx.Root
+        New-Item -ItemType Directory -Force -Path $root | Out-Null
+        $target = Join-Path $TestDrive 'not-the-install'
+        New-Item -ItemType Directory -Force -Path $target | Out-Null
+        [IO.File]::WriteAllText((Join-Path $target 'keep.txt'), 'keep', $script:Utf8)
+        $link = Join-Path $root 'bin.old-link'
+        New-Item -ItemType Junction -Path $link -Target $target | Out-Null
+
+        Remove-WinshellOldBin $root
+
+        Test-Path -LiteralPath $link | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
+    }
 }
 
 Describe 'script safety' {
@@ -463,6 +558,51 @@ Describe 'end to end' {
             }
             $again.ExitCode | Should -Be 0
             $again.Output | Should -Match 'not installed'
+        } finally {
+            Stop-WinshellFakeRelease $server
+        }
+    }
+
+    It 'prints a closing line that is true for iex and for a script file' {
+        $work = Join-Path $TestDrive 'closing'
+        $serve = Join-Path $work 'serve'
+        New-Item -ItemType Directory -Path $serve | Out-Null
+        $arch = Get-WinshellArchitecture
+        $name = "winshell-0.6.0-win-$arch.zip"
+        $zip = Join-Path $serve $name
+        New-WinshellTestZip -Path $zip -Marker 'marker'
+        $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText((Join-Path $serve 'SHA256SUMS.txt'), "$hash  $name", $script:Utf8)
+        $server = Start-WinshellFakeRelease $serve
+        try {
+            $fileLocal = Join-Path $work 'file'
+            $blockLocal = Join-Path $work 'block'
+            New-Item -ItemType Directory -Force -Path $fileLocal, (Join-Path $fileLocal 'Roaming'), $blockLocal, (Join-Path $blockLocal 'Roaming') | Out-Null
+            $file = Invoke-WinshellScriptFile -File $script:InstallFile -Environment @{
+                WINSHELL_INSTALL_TEST   = '1'
+                LOCALAPPDATA            = $fileLocal
+                APPDATA                 = Join-Path $fileLocal 'Roaming'
+                WINSHELL_USER_PATH_FILE = Join-Path $work 'file-path.txt'
+                WINSHELL_AUTOSTART_FILE = Join-Path $work 'file-autostart.txt'
+                WINSHELL_RELEASE_BASE   = $server.Base
+            }
+            $file.ExitCode | Should -Be 0
+            $file.Output | Should -CMatch 'Open a new terminal and run winshell\.'
+            $file.Output | Should -Not -CMatch 'is installed\. Run winshell\.'
+
+            $quoted = $script:InstallFile.Replace("'", "''")
+            $inline = "& ([scriptblock]::Create([IO.File]::ReadAllText('$quoted')))"
+            $block = Invoke-WinshellScriptFile -Command $inline -Environment @{
+                WINSHELL_INSTALL_TEST   = '1'
+                LOCALAPPDATA            = $blockLocal
+                APPDATA                 = Join-Path $blockLocal 'Roaming'
+                WINSHELL_USER_PATH_FILE = Join-Path $work 'block-path.txt'
+                WINSHELL_AUTOSTART_FILE = Join-Path $work 'block-autostart.txt'
+                WINSHELL_RELEASE_BASE   = $server.Base
+            }
+            $block.ExitCode | Should -Be 0
+            $block.Output | Should -CMatch 'is installed\. Run winshell\.'
+            $block.Output | Should -Not -CMatch 'Open a new terminal'
         } finally {
             Stop-WinshellFakeRelease $server
         }

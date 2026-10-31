@@ -47,7 +47,7 @@ public sealed class DiagnosticsService : QObject
         {
             return doctor.Run();
         }
-        catch (Exception e) when (e is not OutOfMemoryException)
+        catch (Exception e)
         {
             return [new DoctorCheck("doctor", "Diagnostics", CheckStatus.Fail, $"Could not run: {e.GetType().Name}: {e.Message}", $"Report it at {Doctor.BugReports}.")];
         }
