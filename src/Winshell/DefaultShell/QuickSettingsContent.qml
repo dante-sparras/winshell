@@ -363,6 +363,7 @@ Item {
     }
 
     Flickable {
+      boundsBehavior: Flickable.StopAtBounds
       width: parent.width
       height: parent.height - parent.topPadding - outputHeader.height - appVolume.height - moreVolume.height - 3 * parent.spacing - 12
       contentHeight: outputList.height
@@ -413,6 +414,7 @@ Item {
     PageHeader { id: volumeHeader; title: "App volume" }
 
     Flickable {
+      boundsBehavior: Flickable.StopAtBounds
       width: parent.width
       height: parent.height - parent.topPadding - volumeHeader.height - moreAppVolume.height - 2 * parent.spacing - 12
       contentHeight: sessionList.height

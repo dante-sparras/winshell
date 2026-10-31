@@ -268,6 +268,7 @@ These did nothing on Windows, or repeated what another type does.
 | `WlrLayershell.namespace` | Nothing |
 | `BackgroundEffect.blurRegion` | `WindowEffects.backdrop: WindowEffects.Acrylic` |
 | `HyprlandWindow` | Nothing |
+| `HyprlandToplevel` attached to a toplevel | `Winland.toplevels`. `WinlandWindow` is not attached to an `AppWindow` |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
 | `ShortcutInhibitor` | Nothing |
 | `Quickshell.Services.Greetd`, `Quickshell.Services.Polkit`, `Quickshell.I3`, `Quickshell.DBusMenu`, `Quickshell.WindowManager` | Nothing |

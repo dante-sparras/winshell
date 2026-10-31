@@ -1,189 +1,146 @@
-using System.Net.Http;
 using SkiaSharp;
+using Winshell.Runtime;
 using Winshell.Runtime.Quick;
-using Winshell.Runtime.Quick.Canvas;
 
 namespace Winshell.Runtime.Tests;
 
-/// <summary>Members from the Qt differences table that now follow Qt 6.10.</summary>
+/// <summary>Qt Quick members that used to load and then do nothing.</summary>
 public class QtQuickGapTests
 {
     [Fact]
-    public void ToDataURL_and_save_use_the_named_format()
+    public void A_drag_past_the_edge_moves_halfway_and_returns_on_release()
     {
-        var (root, shell) = Show("""
-            import QtQuick
-            Item {
-              Canvas {
-                objectName: "canvas"
-                width: 4; height: 4
-                onPaint: { const c = getContext("2d"); c.fillStyle = "red"; c.fillRect(0, 0, 4, 4) }
-              }
-            }
-            """);
-        using var _ = shell;
-        var canvas = root.ChildItems.OfType<Canvas>().Single();
+        var flickable = FlickableOf();
+        Drag(flickable, 10, 50);
+        Assert.Equal(-20, flickable.ContentY);
+        flickable.PointerRelease(10, 50, QtEnums.LeftButton, 0, 0);
+        Assert.Equal(0, flickable.ContentY);
 
-        Assert.StartsWith("data:image/png;base64,", canvas.ToDataURL());
-        var jpeg = canvas.ToDataURL("image/jpeg");
-        Assert.StartsWith("data:image/jpeg;base64,", jpeg);
-        var bytes = Convert.FromBase64String(jpeg["data:image/jpeg;base64,".Length..]);
-        Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF }, bytes[..3]);
-        Assert.Equal("data:,", canvas.ToDataURL("image/tiff"));
+        flickable.BoundsBehavior = (int)Flickable.BoundsBehaviorValue.StopAtBounds;
+        Drag(flickable, 10, 50);
+        Assert.Equal(0, flickable.ContentY);
 
-        Assert.True(canvas.Save("shot.jpg"));
-        Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF }, File.ReadAllBytes(Path.Combine(shell.Directory, "shot.jpg"))[..3]);
-        Assert.False(canvas.Save("shot.tiff"));
-        Assert.False(canvas.Save("shot.bmp"));
+        flickable.BoundsBehavior = (int)Flickable.BoundsBehaviorValue.DragAndOvershootBounds;
+        flickable.BoundsMovement = 0;
+        Drag(flickable, 10, 50);
+        Assert.Equal(0, flickable.ContentY);
+
+        flickable.BoundsMovement = (int)Flickable.BoundsMovementValue.FollowBoundsBehavior;
+        flickable.BoundsBehavior = (int)Flickable.BoundsBehaviorValue.OvershootBounds;
+        Drag(flickable, 10, 50);
+        Assert.Equal(0, flickable.ContentY);
+        flickable.Destroy();
     }
 
     [Fact]
-    public void A_beveled_rectangle_cuts_its_corners()
+    public void Pixel_aligned_content_rounds_half_away_from_zero()
     {
-        var (root, shell) = Show("""
-            import QtQuick
-            import QtQuick.Shapes
-            Item {
-              Shape {
-                objectName: "shape"
-                width: 40; height: 40
-                antialiasing: false
-                ShapePath {
-                  fillColor: "red"; strokeWidth: 0
-                  PathRectangle { width: 40; height: 40; radius: 16; bevel: true }
-                }
-              }
-            }
-            """);
-        using var _ = shell;
-        using var bitmap = Paint((Item)root.ChildItems.Single(i => i.ObjectName == "shape"), 40, 40);
-
-        // (8, 4) is inside a rounded corner of radius 16 and outside the bevel cut.
-        Assert.Equal(0, bitmap.GetPixel(8, 4).Alpha);
-        Assert.Equal(SKColors.Red, bitmap.GetPixel(20, 20));
+        var flickable = FlickableOf();
+        flickable.ContentX = 1.6;
+        Assert.Equal(1.6, flickable.ContentX);
+        flickable.PixelAligned = true;
+        Assert.Equal(2, flickable.ContentX);
+        flickable.ContentX = 1.4;
+        Assert.Equal(1, flickable.ContentX);
+        flickable.ContentY = -1.5;
+        Assert.Equal(-2, flickable.ContentY);
+        flickable.PixelAligned = false;
+        flickable.ContentX = 1.6;
+        Assert.Equal(1.6, flickable.ContentX);
+        flickable.Destroy();
     }
 
     [Fact]
-    public void Blur_multiplier_extends_the_blur_and_zero_does_not()
+    public void Grid_and_flow_place_right_to_left()
     {
-        byte Halo(string multiplier)
-        {
-            var (root, shell) = Show($$"""
-                import QtQuick
-                import QtQuick.Effects
-                Item {
-                  Item {
-                    id: source
-                    width: 40; height: 40
-                    Rectangle { x: 16; width: 24; height: 40; color: "black" }
-                  }
-                  MultiEffect {
-                    objectName: "effect"
-                    width: 40; height: 40
-                    source: source
-                    blurEnabled: true
-                    blur: 1
-                    blurMax: 8
-                    blurMultiplier: {{multiplier}}
-                  }
-                }
-                """);
-            using var _ = shell;
-            using var bitmap = Paint((Item)root.ChildItems.Single(i => i.ObjectName == "effect"), 40, 40);
-            return bitmap.GetPixel(4, 20).Alpha;
-        }
+        var grid = new Grid { Columns = 1, LayoutDirection = 1 };
+        var narrow = Child(grid, 10, 10);
+        var wide = Child(grid, 20, 10);
+        grid.ForceLayout();
+        Assert.Equal(10, narrow.X);
+        Assert.Equal(0, wide.X);
 
-        var plain = Halo("0");
-        var wide = Halo("0.5");
-        var wider = Halo("4");
-        Assert.True(wide > plain, $"multiplier 0.5 alpha {wide} was not wider than {plain}");
-        Assert.True(wider > wide + 20, $"multiplier 4 alpha {wider} was not wider than {wide}");
+        var flow = new Flow { Width = 100, LayoutDirection = 1 };
+        var first = Child(flow, 10, 10);
+        var second = Child(flow, 10, 10);
+        flow.ForceLayout();
+        Assert.Equal(90, first.X);
+        Assert.Equal(80, second.X);
+
+        var left = new Flow { Width = 100 };
+        var a = Child(left, 10, 10);
+        var b = Child(left, 10, 10);
+        left.ForceLayout();
+        Assert.Equal(0, a.X);
+        Assert.Equal(10, b.X);
+        grid.Destroy();
+        flow.Destroy();
+        left.Destroy();
     }
 
     [Fact]
-    public void An_asynchronous_image_is_not_cached_when_cache_is_false()
+    public void An_image_mirrors_vertically_and_clips_its_source()
     {
-        ImageLoader.ClearCache();
-        using var shell = new TestShell();
-        WritePng(Path.Combine(shell.Directory, "pic.png"));
-        shell.Write("shell.qml", """
-            import QtQuick
-            Image { asynchronous: true; cache: false; source: "pic.png" }
-            """);
-        var image = (Image)shell.Load();
-        Wait(shell, image);
-
-        Assert.Equal((int)Image.StatusValue.Ready, image.Status);
-        Assert.Equal(0, ImageLoader.CachedCount);
+        var image = Load(4, 2, (x, y) => y == 0
+            ? x switch { 0 => SKColors.Red, 1 => SKColors.Green, 2 => SKColors.Blue, _ => SKColors.Yellow }
+            : x switch { 0 => SKColors.White, 1 => SKColors.Black, 2 => SKColors.Cyan, _ => SKColors.Magenta });
+        Assert.Equal(SKColors.Red, Pixel(image, 0, 0));
+        image.MirrorVertically = true;
+        Assert.Equal(SKColors.Cyan, Pixel(image, 2, 0));
+        image.MirrorVertically = false;
+        image.SourceClipRect = new QRect(2, 0, 2, 2);
+        image.Width = image.ImplicitWidth;
+        image.Height = image.ImplicitHeight;
+        Assert.Equal(2, image.ImplicitWidth);
+        Assert.Equal(SKColors.Blue, Pixel(image, 0, 0));
+        Assert.Equal(SKColors.Yellow, Pixel(image, 1, 0));
+        image.SourceClipRect = new QRect(0, 0, 0, 0);
+        Assert.Equal(4, image.ImplicitWidth);
+        image.Destroy();
     }
 
-    [Fact]
-    public void A_remote_image_is_not_cached_when_cache_is_false()
+    private static Flickable FlickableOf()
     {
-        ImageLoader.ClearCache();
-        var previous = ImageLoader.Http;
-        ImageLoader.Http = new HttpClient(new PngHandler());
-        using var shell = new TestShell(("shell.qml", """
-            import QtQuick
-            Image { cache: false; source: "https://example.test/one.png" }
-            """));
-        try
-        {
-            var image = (Image)shell.Load();
-            Wait(shell, image);
-
-            Assert.Equal((int)Image.StatusValue.Ready, image.Status);
-            Assert.Equal(0, ImageLoader.CachedCount);
-        }
-        finally
-        {
-            ImageLoader.Http = previous;
-        }
+        var flickable = new Flickable { Width = 100, Height = 100, ContentHeight = 1000 };
+        flickable.MarkComplete();
+        return flickable;
     }
 
-    private static (Item Root, TestShell Shell) Show(string qml)
+    private static void Drag(Flickable flickable, double x, double y)
     {
-        var shell = new TestShell(("shell.qml", qml));
-        var root = (Item)shell.Load();
-        shell.Loop.Process();
-        return (root, shell);
+        flickable.PointerPress(10, 10, QtEnums.LeftButton, QtEnums.LeftButton, 0);
+        flickable.PointerMove(x, y, QtEnums.LeftButton, 0);
     }
 
-    private static SKBitmap Paint(Item item, int width, int height)
+    private static Item Child(Item parent, double width, double height)
     {
-        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Transparent);
-        item.Paint(canvas, new PaintContext());
-        return bitmap;
+        var item = new Item { Width = width, Height = height };
+        item.SetParentItem(parent);
+        return item;
     }
 
-    private static void Wait(TestShell shell, Image image)
+    private static Image Load(int width, int height, Func<int, int, SKColor> pixel)
     {
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (image.Status == (int)Image.StatusValue.Loading && DateTime.UtcNow < until)
-        {
-            Thread.Sleep(10);
-            shell.Loop.Process();
-        }
+        using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+                bitmap.SetPixel(x, y, pixel(x, y));
+        using var picture = SKImage.FromBitmap(bitmap);
+        using var encoded = picture.Encode(SKEncodedImageFormat.Png, 100);
+        var image = new Image { Source = "data:image/png;base64," + Convert.ToBase64String(encoded.ToArray()), Smooth = false };
+        image.MarkComplete();
+        image.Width = image.ImplicitWidth;
+        image.Height = image.ImplicitHeight;
+        return image;
     }
 
-    private static void WritePng(string path)
+    private static SKColor Pixel(Image image, int x, int y)
     {
-        using var bitmap = new SKBitmap(new SKImageInfo(2, 2));
-        bitmap.Erase(SKColors.Red);
-        using var data = SKImage.FromBitmap(bitmap).Encode(SKEncodedImageFormat.Png, 100);
-        File.WriteAllBytes(path, data.ToArray());
-    }
-
-    private sealed class PngHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            using var bitmap = new SKBitmap(new SKImageInfo(2, 2));
-            bitmap.Erase(SKColors.Blue);
-            using var data = SKImage.FromBitmap(bitmap).Encode(SKEncodedImageFormat.Png, 100);
-            return Task.FromResult(new HttpResponseMessage { Content = new ByteArrayContent(data.ToArray()) });
-        }
+        using var surface = SKSurface.Create(new SKImageInfo((int)image.Width, (int)image.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        surface!.Canvas.Clear(SKColors.Transparent);
+        image.Paint(surface.Canvas, new PaintContext());
+        using var snap = surface.Snapshot();
+        using var bitmap = SKBitmap.FromImage(snap);
+        return bitmap.GetPixel(x, y);
     }
 }

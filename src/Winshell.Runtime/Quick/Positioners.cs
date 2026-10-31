@@ -134,6 +134,16 @@ public abstract class Positioner : Item, IPolishable, IPropertyObserver
     protected List<Item> Placed() =>
         ChildItems.Where(c => c.IsVisibleFlag && c.Width > 0 && c.Height > 0).ToList();
 
+    /// <summary>Qt's right-to-left layout is the left-to-right one mirrored, which also swaps left and right alignment.</summary>
+    protected void ApplyLayoutDirection(IReadOnlyList<Item> items)
+    {
+        if (LayoutDirection != 1)
+            return;
+        var end = HasExplicitWidth ? Width : ImplicitWidth;
+        foreach (var item in items)
+            item.SetLayoutX(end - RightPadding - (item.X - LeftPadding) - item.Width);
+    }
+
     protected abstract void Arrange();
 }
 
@@ -241,6 +251,7 @@ public sealed class Grid : Positioner
         }
         var colWidths = new double[Math.Max(columns, 1)];
         var rowHeights = new double[Math.Max(rows, 1)];
+        var placed = new List<Item>(count);
         for (var i = 0; i < count; i++)
         {
             var (r, c) = Cell(i, rows, columns);
@@ -267,9 +278,11 @@ public sealed class Grid : Positioner
                 y += rowHeights[r] - item.Height;
             item.SetLayoutX(x);
             item.SetLayoutY(y);
+            placed.Add(item);
         }
         ImplicitWidth = LeftPadding + colWidths.Sum() + ColumnSpacing * Math.Max(0, columns - 1) + RightPadding;
         ImplicitHeight = TopPadding + rowHeights.Sum() + RowSpacing * Math.Max(0, rows - 1) + BottomPadding;
+        ApplyLayoutDirection(placed);
     }
 
     private (int Row, int Column) Cell(int index, int rows, int columns) =>
@@ -335,5 +348,6 @@ public sealed class Flow : Positioner
             ImplicitWidth = x + lineSize + RightPadding;
             ImplicitHeight = maxY + BottomPadding;
         }
+        ApplyLayoutDirection(items);
     }
 }
