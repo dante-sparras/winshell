@@ -28,6 +28,7 @@ public sealed class CalendarMonth : QObject
     [Qml] public string MonthLabel { get { Track(); return Shown.ToString("Y", _culture); } }
     [Qml] public string DateLabel { get { Track(); return _date.ToString("D", _culture); } }
     [Qml] public string TimeLabel { get { Track(); return _date.ToString("t", _culture); } }
+    [Qml] public string LongTimeLabel { get { Track(); return _date.ToString("T", _culture); } }
     [Qml] public string ShortDateLabel { get { Track(); return _date.ToString("d", _culture); } }
     [Qml] public DateTime SelectedDate { get { Track(); return _selectedDate; } }
 

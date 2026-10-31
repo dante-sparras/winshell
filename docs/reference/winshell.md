@@ -360,6 +360,7 @@ A Gregorian month grid that uses the user's regional weekday order and week numb
 | `monthLabel` | string, read-only | The shown month and year, such as `October 2026`. |
 | `dateLabel` | string, read-only | `date` as a long date. |
 | `timeLabel` | string, read-only | `date` as a short time. |
+| `longTimeLabel` | string, read-only | `date` as a long time, with seconds. |
 | `shortDateLabel` | string, read-only | `date` as a short date. |
 | `selectedDate` | date, read-only | The selected day. Today when the object is created. |
 | `date` | date | Today: the local date and time the grid marks as today. The day the object is created, unless bound. |
