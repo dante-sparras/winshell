@@ -332,6 +332,14 @@ The `Updates` singleton: Winshell's own updates. A portable Winshell, the zip fr
 | `check()` | method | Checks now, whether or not `automatic` is on, and downloads a newer release. Warns in the log when this Winshell does not update itself. |
 | `restart()` | method | Starts Winshell over to install a `Ready` update. While another Winshell runs it does not restart and sets `error`. Warns in the log when no update is ready. |
 
+## ExplorerTaskbar
+
+The `ExplorerTaskbar` singleton. The default shell sets `hidden` from `Preferences.hideExplorerTaskbar`. That key is false until `preferences.toml` says true, and Winshell Settings has no switch for it. See [the taskbar](../taskbar.md) and [troubleshooting](../guide/troubleshooting.md#explorers-taskbar-is-missing).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `hidden` | bool | Whether Explorer's taskbar window is hidden and the screen edge it reserved is released. False until set. Setting it true hides the window and releases the edge. Setting it false puts both back, and so does Winshell exiting. |
+
 ## SystemClock
 
 The time of day, updated at the start of each second, minute or hour, as `SystemClock { precision: SystemClock.Minutes }`. A clock that shows minutes wakes the shell once a minute.

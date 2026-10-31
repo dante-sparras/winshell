@@ -41,6 +41,7 @@ Everything the window chooses applies at once, without a reload, and is kept in 
 | `startRecommended` | `true` | |
 | `calendarWeekNumbers` | `false` | `true` shows week numbers beside the calendar |
 | `clockSeconds` | `false` | `true` shows seconds on the taskbar clock. It wakes the shell every second, so it is off by default. Not in Winshell Settings. |
+| `hideExplorerTaskbar` | `false` | `true` hides Explorer's taskbar and releases the screen edge it reserved, while Winshell is running. Winshell puts the window and the edge back when it exits. Not in Winshell Settings. See [troubleshooting](guide/troubleshooting.md#explorers-taskbar-is-missing) if the taskbar is still gone after Winshell has closed. |
 | `hiddenNotificationApps` | `[]` | `{ id = "<AppUserModelID>", name = "<app name>" }` for each app turned off |
 | `startHotkey` | `"Win"` | a sequence as `Hotkey.sequence` takes it, or `""` |
 | `settingsHotkey` | `""` | the same |
@@ -48,7 +49,7 @@ Everything the window chooses applies at once, without a reload, and is kept in 
 
 Start pins and quick settings tiles stay in the files those surfaces already keep: `launcher.toml` next to the shell, with the app ids in order as `pins = [...]`, and `quick-settings.toml` in its state folder, with the tile keys in order as `pinned = [...]`. Start and quick settings follow those files as they change, and keep their comments the same way. The unpackaged sign-in entry is the `Winshell` value under the user's `Run` key. A packaged Winshell uses its startup task. See [where files live](development.md#where-files-live).
 
-In QML, `Preferences` is the singleton that reads and writes `preferences.toml`, through a `TomlAdapter`. Surfaces bind to it: `centered: Preferences.taskbarCentered`, `WindowEffects.backdrop: Preferences.material`. It sets `Theme.colorScheme`, `Theme.accentColor` and `Updates.automatic`, and `Shell.configRoot`, `Shell.logPath` and `Shell.version` fill the About page.
+In QML, `Preferences` is the singleton that reads and writes `preferences.toml`, through a `TomlAdapter`. Surfaces bind to it: `centered: Preferences.taskbarCentered`, `WindowEffects.backdrop: Preferences.material`. It sets `Theme.colorScheme`, `Theme.accentColor`, `Updates.automatic` and `ExplorerTaskbar.hidden` (from `hideExplorerTaskbar`), and `Shell.configRoot`, `Shell.logPath` and `Shell.version` fill the About page.
 
 ## Checks only a live session can do
 

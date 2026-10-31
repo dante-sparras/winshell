@@ -43,7 +43,28 @@ Check names against the [reference](../reference/index.md). A Quickshell name, s
 
 ## There are two taskbars
 
-Winshell doesn't hide or replace Explorer's taskbar, and never restarts Explorer. Both reserve the bottom of the screen, so they stack. To see only Winshell's, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar for Explorer's taskbar. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`.
+By default Winshell does not hide or replace Explorer's taskbar, and it never restarts Explorer. Both reserve the bottom of the screen, so they stack. To leave Explorer's taskbar where it is and only get it out of the way, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar.
+
+To make Winshell the only bar, set this in `preferences.toml` and save:
+
+```toml
+hideExplorerTaskbar = true
+```
+
+There is no switch for it in Winshell Settings. Winshell then hides Explorer's taskbar window and releases the screen edge it reserved. It puts both back when it exits: quitting, Ctrl+C, `winshell kill`, or a crash that still runs Winshell's exit. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`.
+
+## Explorer's taskbar is missing
+
+This is `hideExplorerTaskbar`. While Winshell is still running, set the key back to `false` and save, or quit Winshell. It puts Explorer's taskbar window back and reserves its edge again.
+
+If Winshell was killed before that code could run, the window stays hidden and the edge stays released. Winshell cannot run anything in that case. Bring the taskbar back yourself:
+
+1. Press Ctrl+Shift+Esc to open Task Manager.
+2. Find **Windows Explorer**, right-click it and choose **Restart**.
+
+Explorer builds its taskbar again. Set `hideExplorerTaskbar` to `false` before you start Winshell if you want that taskbar to stay. Signing out and back in also starts Explorer again, which brings the taskbar back.
+
+A kill that skips the exit code is Task Manager's **End task**, `taskkill /F`, or `winshell kill --force` when the shell did not exit on its own. The same is true of a native crash that never reaches Winshell's handler, such as a stack overflow. A normal exit, `winshell kill` without `--force`, Ctrl+C, and a managed crash that still runs the exit or the unhandled-exception handler all put the taskbar back.
 
 ## A hotkey doesn't work
 

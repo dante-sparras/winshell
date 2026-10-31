@@ -332,5 +332,6 @@ public static class ServiceModules
         Services.Capture.CaptureModule.Register(registry);
         Services.Input.InputModule.Register(registry);
         Services.Updates.UpdatesService.Register(registry);
+        Services.ExplorerTaskbar.ExplorerTaskbarService.Register(registry);
     }
 }
