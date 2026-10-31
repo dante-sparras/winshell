@@ -27,7 +27,11 @@ public static class Names
     }
 }
 
-public sealed record SignalDefinition(string Name, IReadOnlyList<string> Parameters);
+/// <summary>
+/// A signal. <see cref="Parameters"/> are the names the script sees.
+/// <see cref="ParameterTypes"/> is each parameter's QML type, in the same order, when the document gave one.
+/// </summary>
+public sealed record SignalDefinition(string Name, IReadOnlyList<string> Parameters, IReadOnlyList<string?>? ParameterTypes = null);
 
 /// <summary>A C# property exposed to QML.</summary>
 public sealed class MetaProperty

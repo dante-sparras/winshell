@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
-using Winshell.Platform.Windows.Services.Session;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Winshell.Platform.Windows.Services.Session;
+using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Diagnostics;
@@ -486,7 +486,7 @@ public static class Doctor
     {
         using var stream = new MemoryStream();
         // Read by people too: paths and messages are written as they are, not escaped for HTML.
-        using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+        using (var json = new Utf8JsonWriter(stream, JsonText.IndentedWriter))
         {
             json.WriteStartObject();
             json.WriteString("version", version);
