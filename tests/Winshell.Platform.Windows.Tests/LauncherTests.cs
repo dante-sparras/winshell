@@ -579,6 +579,130 @@ public sealed class LauncherTests
         }
     }
 
+    [Fact]
+    public void Search_lists_settings_and_recent_documents_after_apps()
+    {
+        using var view = Open(_ => $$"""
+            LauncherView {
+              apps: [ {{App("alarms", "Alarms")}}, {{App("r0", "Recent One")}} ]
+              recent: [ {{App("r0", "Recent One")}} ]
+              pinIds: []
+              recentFiles: [
+                { name: "Agenda.docx", path: "C:/Docs/Agenda.docx.lnk" },
+                { name: "Notes", path: "C:/Agenda/Notes.lnk" }
+              ]
+            }
+            """);
+        Assert.Equal("Search apps", One(view.Root, "searchField").ReadProperty("placeholderText"));
+        Assert.False(One(view.Root, "webAbsent").Visible);
+        Assert.Empty(Named(view.Root, "settingsRow"));
+        Assert.Empty(Named(view.Root, "fileRow"));
+        Assert.Equal(["Recent One"], Named(view.Root, "appRow").Select(AppName));
+
+        const string prefixHits = """
+            searchResults = (function () {
+              var q = String(query || "").toLowerCase()
+              var out = []
+              for (var i = 0; i < apps.length; i++) {
+                var name = String(apps[i].name || "").toLowerCase()
+                if (!apps[i].hidden && q.length > 0 && name.indexOf(q) === 0)
+                  out.push(apps[i])
+              }
+              return out
+            })()
+            """;
+        void Type(string text)
+        {
+            view.Scene.TextInput(text);
+            view.Loop.Process();
+            view.Eval(prefixHits);
+            view.Loop.Process();
+            PolishQueue.Flush();
+        }
+
+        Type("a");
+        Assert.Equal(
+            [
+                "Alarms",
+                "Airplane mode", "Accessibility", "All settings", "Energy saver", "Other system tray icons",
+                "Startup apps in Windows", "More volume settings", "Colors in Windows",
+                "Agenda.docx",
+            ],
+            Strings(view.Eval("""
+                (function () {
+                  var names = []
+                  for (var i = 0; i < shown.length; i++)
+                    names.push(String(shown[i].name))
+                  return names
+                })()
+                """)));
+        Assert.Equal(["Alarms"], Named(view.Root, "searchRow").Select(AppName));
+        Assert.Equal(
+            [
+                "Airplane mode", "Accessibility", "All settings", "Energy saver", "Other system tray icons",
+                "Startup apps in Windows", "More volume settings", "Colors in Windows",
+            ],
+            Named(view.Root, "settingsRow").Select(AppName));
+        Assert.Equal(["Agenda.docx"], Named(view.Root, "fileRow").Select(AppName));
+        Assert.Equal("Apps", One(view.Root, "appsHeader").ReadProperty("text"));
+        Assert.Equal("Settings", One(view.Root, "settingsHeader").ReadProperty("text"));
+        Assert.Equal("Files", One(view.Root, "filesHeader").ReadProperty("text"));
+        var web = One(view.Root, "webAbsent");
+        Assert.True(web.Visible);
+        Assert.Equal("Web results aren't included", web.ReadProperty("text"));
+        double Top(Item item) => item.MapToScene(0, 0).Y;
+        var searchRow = One(view.Root, "searchRow");
+        var settingsRows = Named(view.Root, "settingsRow");
+        var fileRow = One(view.Root, "fileRow");
+        Assert.True(Top(One(view.Root, "appsHeader")) < Top(searchRow));
+        Assert.True(Top(searchRow) < Top(One(view.Root, "settingsHeader")));
+        Assert.True(Top(One(view.Root, "settingsHeader")) < Top(settingsRows[0]));
+        Assert.True(Top(settingsRows[^1]) < Top(One(view.Root, "filesHeader")));
+        Assert.True(Top(One(view.Root, "filesHeader")) < Top(fileRow));
+
+        Press(view, Down);
+        Assert.Equal(1, Selected(view));
+        Assert.Equal("Airplane mode", view.Eval("selectionName"));
+        Press(view, Return);
+        Assert.Equal("ms-settings:network-airplanemode", view.Eval("lastLink"));
+        Assert.Null(view.Eval("lastLaunched"));
+
+        Press(view, Escape);
+        Assert.Equal("", view.Eval("query"));
+        Assert.False(One(view.Root, "webAbsent").Visible);
+        Assert.Empty(Named(view.Root, "settingsRow"));
+        Assert.Empty(Named(view.Root, "fileRow"));
+        Assert.True(One(view.Root, "homeColumn").Visible);
+        Assert.Equal(["Recent One"], Named(view.Root, "appRow").Select(AppName));
+
+        Type("night");
+        Assert.Empty(Named(view.Root, "searchRow"));
+        Assert.Equal(["Night light"], Named(view.Root, "settingsRow").Select(AppName));
+        Assert.Empty(Named(view.Root, "fileRow"));
+        Assert.False(One(view.Root, "emptySearch").Visible);
+        Assert.True(One(view.Root, "webAbsent").Visible);
+        Press(view, Return);
+        Assert.Equal("ms-settings:nightlight", view.Eval("lastLink"));
+        Assert.Null(view.Eval("lastLaunched"));
+
+        Press(view, Escape);
+        Type("agenda");
+        Assert.Empty(Named(view.Root, "searchRow"));
+        Assert.Empty(Named(view.Root, "settingsRow"));
+        Assert.Equal(["Agenda.docx"], Named(view.Root, "fileRow").Select(AppName));
+        Press(view, Return);
+        Assert.Equal("C:/Docs/Agenda.docx.lnk", view.Eval("lastLink"));
+        Assert.Null(view.Eval("lastLaunched"));
+
+        Press(view, Escape);
+        Type("zzzzzz");
+        Assert.Empty(Named(view.Root, "searchRow"));
+        Assert.Empty(Named(view.Root, "settingsRow"));
+        Assert.Empty(Named(view.Root, "fileRow"));
+        Assert.True(One(view.Root, "emptySearch").Visible);
+        Assert.Empty(view.Messages);
+    }
+
     private const string Filter = """
         searchResults = (function () {
           var q = String(query || "").toLowerCase()
