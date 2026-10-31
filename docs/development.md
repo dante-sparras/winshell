@@ -97,7 +97,7 @@ A running shell reads these. None is needed to build or test.
 | Winshell Settings choices | `preferences.toml` next to a config's `shell.qml`, or in the user configurations folder for the default shell; see [Winshell Settings](settings.md) |
 | Start pins | `launcher.toml` next to the default shell |
 | Quick settings tiles | `quick-settings.toml` in the default shell's state folder |
-| Run at sign-in | The `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens. A failure before the shell starts shows a dialog. The entry uses the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. `winshell.exe` and `winshellw.exe` in the same folder are one install: an entry for either reads as this Winshell. An entry that starts a Winshell in another folder, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. |
+| Run at sign-in | An unpackaged Winshell writes the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens. A failure before the shell starts shows a dialog. The entry uses the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. `winshell.exe` and `winshellw.exe` in the same folder are one install: an entry for either reads as this Winshell. An entry that starts a Winshell in another folder, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. A packaged Winshell does not write that value. It enables the package's `windows.startupTask` (task id `Winshell`, declared off) which starts `winshellw.exe --no-duplicate`. Windows owns that launch, so a Store update does not leave a path, and `registeredElsewhere` stays false. |
 
 The first launch that uses the default config folder copies `%USERPROFILE%\.config\winshell` into `%APPDATA%\winshell` when the old folder exists. The copy leaves the old folder in place, and it does not replace a file already in the new folder.
 
@@ -129,17 +129,16 @@ A **published** release with missing files is not repaired by this workflow. In 
 
 ### Microsoft Store
 
-The Store package is not published. Publishing waits on Partner Center setup: the identity variables below, and [#142](https://github.com/dante-sparras/winshell/issues/142) before the first submission. Until then it is not an install option.
+The Store package is not published. Publishing waits on Partner Center setup: the identity variables below. Until then it is not an install option.
 
 The Package workflow also builds `winshell-<version>.msixbundle` (x64 and arm64) from `packaging/msix/AppxManifest.xml` and keeps it as the run's `store-package` artifact. It is not attached to the release: it is unsigned, and the Store signs it. Each run also test-signs the x64 package with a certificate only that runner trusts, installs it there and runs the `winshell` alias.
 
-- The Store build reads and writes the same `%APPDATA%\winshell` config folder as every other build, and its sign-in entry goes in the user's real `Run` key: the manifest turns off file and registry write virtualization (`unvirtualizedResources`). That entry names the package's versioned folder, so it stops working at the first Store update, until #142 moves the Store build to a startup task. The package declares `userNotificationListener`, `wiFiControl`, `bluetooth` and `location`. Start runs `winshellw.exe --no-duplicate`, so a second click starts no second shell; `winshellw.exe` is a copy of `winshell.exe` that opens no console, made when the build is published, and the portable zips have it too. `winshell` in a terminal is the command line.
+- The Store build reads and writes the same `%APPDATA%\winshell` config folder as every other build. The manifest turns off file and registry write virtualization (`unvirtualizedResources`), so those writes are the real ones. Sign-in is the package's startup task, declared off, not the user's `Run` key: Windows starts `winshellw.exe --no-duplicate`, which keeps working after a Store update. The package declares `userNotificationListener`, `wiFiControl`, `bluetooth` and `location`. Start runs `winshellw.exe --no-duplicate`, so a second click starts no second shell; `winshellw.exe` is a copy of `winshell.exe` that opens no console, made when the build is published, and the portable zips have it too. `winshell` in a terminal is the command line.
 - The Store takes no 0 as the first part of a package version and installs the highest, so Winshell x.y.z is package version (x+1).y.z.0.
 - The repository variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME` are the identity Partner Center shows under **Product identity**. Without them, the package is `Winshell.Test` by `CN=Winshell Test`, which the Store refuses.
 - To submit a release:
-  1. Before the first submission, make sure #142 is merged, so **Run Winshell when I sign in** survives Store updates.
-  2. Download `store-package` from the release's Package run and upload the `.msixbundle` in Partner Center.
-  3. Paste the listing from `packaging/store/listing.md`. Its privacy policy is [docs/privacy.md](privacy.md).
+  1. Download `store-package` from the release's Package run and upload the `.msixbundle` in Partner Center.
+  2. Paste the listing from `packaging/store/listing.md`. Its privacy policy is [docs/privacy.md](privacy.md).
 
 Other release tasks:
 
@@ -182,7 +181,7 @@ Remove-Item Env:WINSHELL_TEST_CAPTURE
 
 ## Run at sign-in
 
-`StartupTests` use a fake, or a key of their own under `HKCU\Software\Winshell\Tests` that they delete. They never write the user's `Run` or `StartupApproved` keys.
+`StartupTests` use a fake, or a key of their own under `HKCU\Software\Winshell\Tests` that they delete. They never write the user's `Run` or `StartupApproved` keys. The startup task is a fake as well: the tests never call `StartupTask.GetAsync`, and they do not install a package.
 
 ## Hotkeys
 

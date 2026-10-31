@@ -71,6 +71,7 @@ public class MonitorSurvivalTests
 
         await service.RefreshAsync();
         Assert.Equal(1, backend.Reads);
+        // Resumes the read on this thread, so the refresh finishes without a pool thread.
         backend.Gate.SetResult();
         await first.WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -88,7 +89,12 @@ public class MonitorSurvivalTests
         var loop = new ManualEventLoop();
         using var engine = new QmlEngine(StandardModules.Create(), loop);
         var service = new BluetoothService(engine, backend);
-        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        // IsCompleted, not await: the signal completes on the monitor thread, and awaiting it queues a
+        // continuation on the thread pool that a busy pool never ran.
+        var untilStarted = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!backend.Started.Task.IsCompleted && DateTime.UtcNow < untilStarted)
+            Thread.Sleep(10);
+        Assert.True(backend.Started.Task.IsCompleted);
 
         var started = DateTime.UtcNow;
         service.Destroy();
@@ -208,7 +214,9 @@ public class MonitorSurvivalTests
         private int _reads;
         public int Reads => Volatile.Read(ref _reads);
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Completing the gate resumes the read on this thread. Queuing that resume on the thread pool
+        // left the refresh unfinished when the pool was busy.
+        public TaskCompletionSource Gate { get; } = new();
         public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
         public async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {

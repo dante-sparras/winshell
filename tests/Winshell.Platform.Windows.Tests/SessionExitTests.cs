@@ -12,7 +12,7 @@ public class SessionExitTests
         using var process = Process.Start(new ProcessStartInfo
         {
             FileName = "cmd.exe",
-            Arguments = "/c ping -n 2 127.0.0.1 >nul",
+            Arguments = "/c ping -n 60 127.0.0.1 >nul",
             CreateNoWindow = true,
             UseShellExecute = false,
         });
@@ -23,6 +23,15 @@ public class SessionExitTests
         process.Exited += handler;
 
         SessionNode.StopWatching(process, handler);
+        // End it here. On a busy runner ping -n 2 was still alive when the 8 second wait gave up, so the
+        // callback check never ran. Killing is the exit the callback must ignore.
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+        }
 
         Assert.True(process.WaitForExit(8000));
         Thread.Sleep(200);

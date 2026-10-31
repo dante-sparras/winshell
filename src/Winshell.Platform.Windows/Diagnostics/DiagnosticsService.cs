@@ -38,7 +38,18 @@ public sealed class DiagnosticsService : QObject
         if (_doctor is not { } doctor || _running || Engine is not { } engine)
             return;
         SetField(ref _running, true, "running");
-        _ = Task.Run(() => Attempt(doctor)).ContinueWith(t => engine.Loop.Post(() => Show(t.Result)), TaskScheduler.Default);
+        // Off the loop, because the doctor can be slow. This thread posts the result itself: a ContinueWith
+        // on the thread pool never ran while that pool was busy, so Running stayed true.
+        var thread = new Thread(() =>
+        {
+            var checks = Attempt(doctor);
+            engine.Loop.Post(() => Show(checks));
+        })
+        {
+            IsBackground = true,
+            Name = "Diagnostics",
+        };
+        thread.Start();
     }
 
     private static IReadOnlyList<DoctorCheck> Attempt(IDoctor doctor)

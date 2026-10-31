@@ -10,6 +10,8 @@ PopupWindow {
   property date date: new Date()
   property var listener: null
   property alias showWeekNumbers: calendar.showWeekNumbers
+  // The same groups the center lists, so the clock can say how many are waiting.
+  property alias visibleGroups: center.visibleGroups
   implicitWidth: Math.min(384, screen ? screen.workArea.width : 384)
   implicitHeight: Math.min(780, screen ? screen.workArea.height - 16 : 780)
   color: Theme.highContrast ? Theme.solidBackgroundFillColorBase : "transparent"
@@ -33,7 +35,7 @@ PopupWindow {
       Text { Layout.fillWidth: true; text: "Notification center"; font.weight: Font.DemiBold; color: Theme.textFillColorPrimary }
       Button { id: closeButton; text: "Close"; flat: true; onClicked: root.close() }
     }
-    NotificationCenter { Layout.fillWidth: true; Layout.fillHeight: true; listener: root.listener }
+    NotificationCenter { id: center; Layout.fillWidth: true; Layout.fillHeight: true; listener: root.listener }
     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.controlStrokeColorDefault }
     // A second scroll view keeps the calendar reachable on small or highly scaled monitors.
     FocusScrollView {
