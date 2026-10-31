@@ -708,7 +708,10 @@ public sealed class Scene : IItemHost
     /// <summary>Text typed on the keyboard, after the key press that made it.</summary>
     public void TextInput(string text)
     {
-        if (_focusItem is ITextTarget target)
+        // Typed text, not a paste: one undo step per run, and overwrite and password echo apply.
+        if (_focusItem is TextInput field)
+            field.TypeText(text);
+        else if (_focusItem is ITextTarget target)
             target.InsertText(text);
     }
 

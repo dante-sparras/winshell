@@ -109,13 +109,9 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Text.renderType` | Ignored. |
 | `TextInput.validator` | Ignored; `acceptableInput` is always true. |
 | `TextInput.inputMask` | Ignored. |
-| `TextInput.undo()` | Each typed character is its own undo step. Qt undoes a run of typing at once. |
 | `TextInput.cursorDelegate` | Ignored; the built-in caret is drawn. |
-| `TextInput.overwriteMode` | Ignored, as is `wrapMode`. |
-| `TextInput.echoMode` | `TextInput.PasswordEchoOnEdit` masks the text while it's edited too, as `TextInput.Password` does. |
+| `TextInput.wrapMode` | Ignored. |
 | `TextInput.passwordMaskDelay` | Ignored: a typed character is masked at once. |
-| `TextInput.autoScroll` | Ignored: the text always scrolls to keep the cursor in view. |
-| `TextInput.canPaste` | Always true, even when the clipboard holds no text. |
 | `Flickable.flicking` | Always false. Content stops when the pointer lets go: `flickStarted` and `flickEnded` aren't emitted, `horizontalVelocity` and `verticalVelocity` are 0, and `flickDeceleration` and `maximumFlickVelocity` aren't used. |
 | `Flickable.boundsBehavior` | Ignored: dragging stops at the bounds, with no overshoot. |
 | `Flickable.boundsMovement` | Ignored. |
