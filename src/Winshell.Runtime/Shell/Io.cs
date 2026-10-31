@@ -384,7 +384,7 @@ public sealed class ProcessObject : QObject
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            Engine.Log.Warn("process", $"Failed to start process {string.Join(' ', _command)}: {e.Message}");
+            Engine.Log.Warn("process", $"Failed to start process {_command[0]}: {e.Message}");
             loop.Post(() =>
             {
                 if (generation != _generation || IsDestroyed)
