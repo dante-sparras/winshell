@@ -631,15 +631,27 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
     }
 
+    /// <summary>How long focusing waits to see that the app in front still answers, in milliseconds.</summary>
+    private const uint ForegroundAnswerMilliseconds = 200;
+
     /// <summary>
     /// Takes the keyboard for a UI Automation client that focused an item here, as Narrator does, and returns
     /// whether the window has it. It asks once and never joins another thread's input to force it: a client that may
     /// give the foreground (a screen reader the user is driving) has already focused the hosting window, and one that
-    /// may not hears that focusing failed. Only a window that takes the keyboard for its focused item asks.
+    /// may not hears that focusing failed. An app in front that has stopped answering is left in front, so focusing
+    /// does not wait for it. Only a window that takes the keyboard for its focused item asks.
     /// </summary>
     internal bool TryTakeKeyboardForAutomation()
     {
         if (!_visible || (_kind == WindowKind.Panel && !_focusable) || (_kind == WindowKind.Popup && _popup?.GrabFocus != true))
+            return false;
+        // SetForegroundWindow waits out the system foreground lock when the thread in front has stopped answering.
+        // A short ping fails that case first, so a screen reader is not stuck for that wait.
+        var foreground = Win32.GetForegroundWindow();
+        if (foreground != 0 && foreground != Handle
+            && Win32.SendMessageTimeoutW(
+                foreground, Win32.WM_NULL, 0, 0,
+                Win32.SMTO_ABORTIFHUNG | Win32.SMTO_BLOCK, ForegroundAnswerMilliseconds, out _) == 0)
             return false;
         if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))
             return false;
