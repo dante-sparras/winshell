@@ -555,7 +555,13 @@ function Install-Winshell {
     $checksums = ConvertFrom-WinshellChecksumMap $sumsText
     $package = Select-WinshellPackageName $checksums $arch $resolved
     $expected = $checksums[$package]
-    $packageUrl = Get-WinshellDownloadUrl $base $resolved $package
+    # latest/download changes when a release is published. The checksum line names one version, so the zip
+    # comes from that release instead of a second request to latest/download.
+    $packageVersion = $resolved
+    if ([string]::IsNullOrWhiteSpace($packageVersion) -and $package -match '^winshell-(\d+\.\d+\.\d+)-win-') {
+        $packageVersion = $Matches[1]
+    }
+    $packageUrl = Get-WinshellDownloadUrl $base $packageVersion $package
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('winshell-install-' + [guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $temp | Out-Null
     try {
