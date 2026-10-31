@@ -927,9 +927,6 @@ public sealed class FileView : QObject
     [Qml]
     public void Reload() => Load(sync: _blockLoading || _blockAllReads);
 
-    [Qml]
-    public bool WaitForJob() => true;
-
     private void Load(bool sync)
     {
         if (_path.Length == 0 || Engine is null)
@@ -981,6 +978,13 @@ public sealed class FileView : QObject
             return (null, false, FileViewError.Unknown, e.Message);
         }
     }
+
+    private static FileViewError WriteError(Exception exception) => exception switch
+    {
+        UnauthorizedAccessException => FileViewError.PermissionDenied,
+        FileNotFoundException or DirectoryNotFoundException => FileViewError.FileNotFound,
+        _ => FileViewError.Unknown,
+    };
 
     private static void WriteText(string path, string text, bool bom)
     {
@@ -1395,66 +1399,76 @@ public sealed class FileView : QObject
         var path = save.Path;
         var text = save.Text;
         var maxFileBytes = MaxFileBytes;
-        string? error = null;
+        FileViewError? failure = null;
+        var message = "";
         var handSaveWon = false;
         var destination = path;
         try
         {
             destination = DestinationForSave(path, out var hardLink);
-            var directory = System.IO.Path.GetDirectoryName(destination);
-            if (directory is not null)
-                Directory.CreateDirectory(directory);
-            DeleteStaleTemps(destination);
-            // Captured before the temporary file exists. A hand save during that write changes the destination
-            // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
-            // recovers from it and the text above already includes it.
-            var diskAtStart = Read(destination, maxFileBytes).Text;
-            // A hard link shares its bytes with another name. Replacing the name would break that link.
-            if (save.Atomic && !hardLink)
+            if (Directory.Exists(destination))
             {
-                var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
-                WriteText(temp, text, save.Bom);
-                try
-                {
-                    // A slow scan of the temporary file is when a hand save usually lands.
-                    _beforeReplace?.Invoke(destination);
-                    if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
-                        handSaveWon = true;
-                    else
-                        MoveReplacing(temp, destination);
-                }
-                finally
-                {
-                    try
-                    {
-                        // A successful replace has already moved the temp away. A hand save or a failed
-                        // replace leaves it, and the next save must not see it.
-                        if (File.Exists(temp))
-                            File.Delete(temp);
-                    }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                    {
-                    }
-                }
-            }
-            else if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
-            {
-                handSaveWon = true;
+                failure = FileViewError.NotAFile;
+                message = "not a file";
             }
             else
             {
-                WriteText(destination, text, save.Bom);
+                var directory = System.IO.Path.GetDirectoryName(destination);
+                if (directory is not null)
+                    Directory.CreateDirectory(directory);
+                DeleteStaleTemps(destination);
+                // Captured before the temporary file exists. A hand save during that write changes the destination
+                // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
+                // recovers from it and the text above already includes it.
+                var diskAtStart = Read(destination, maxFileBytes).Text;
+                // A hard link shares its bytes with another name. Replacing the name would break that link.
+                if (save.Atomic && !hardLink)
+                {
+                    var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
+                    WriteText(temp, text, save.Bom);
+                    try
+                    {
+                        // A slow scan of the temporary file is when a hand save usually lands.
+                        _beforeReplace?.Invoke(destination);
+                        if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
+                            handSaveWon = true;
+                        else
+                            MoveReplacing(temp, destination);
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            // A successful replace has already moved the temp away. A hand save or a failed
+                            // replace leaves it, and the next save must not see it.
+                            if (File.Exists(temp))
+                                File.Delete(temp);
+                        }
+                        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                        {
+                        }
+                    }
+                }
+                else if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
+                {
+                    handSaveWon = true;
+                }
+                else
+                {
+                    WriteText(destination, text, save.Bom);
+                }
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            error = e.Message;
+            failure = WriteError(e);
+            message = e.Message;
         }
         void Report()
         {
             if (IsDestroyed)
                 return;
-            if (error is null)
+            if (failure is null)
             {
                 // ReadDirectoryChangesW watches the directory, so a rename-replace does not detach it.
                 // Arm only when the directory has just appeared, then read once: a hand save that landed
@@ -1467,8 +1481,8 @@ public sealed class FileView : QObject
             else
             {
                 if (_printErrors)
-                    Engine?.Log.Warn("io", $"FileView: failed to write {path}: {error}");
-                Emit("saveFailed", 1);
+                    Engine?.Log.Warn("io", $"FileView: failed to write {path}: {message}");
+                Emit("saveFailed", (int)failure.Value);
             }
         }
         if (save.Loop is null)
