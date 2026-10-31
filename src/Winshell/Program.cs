@@ -771,7 +771,7 @@ namespace Winshell
                 engine.AddService(taskbar);
             });
             log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
-            log.Info("", $"Launching config: \"{root}\"");
+            log.Info("shell", $"Launching config: \"{root}\"");
             log.Info("shell", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
             log.Info("shell", $"Saving logs to \"{logPath}\"");
             var pipe = $"winshell-{id}";
