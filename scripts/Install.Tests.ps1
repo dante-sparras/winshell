@@ -355,6 +355,45 @@ Describe 'install' {
         Test-Path -LiteralPath (Join-Path $target 'keep.txt') | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $target 'bin') | Should -BeFalse
     }
+
+    It 'removes a leftover bin.old folder once nothing from the install is running' {
+        $ctx = Enter-WinshellInstallTest
+        $root = $ctx.Root
+        New-Item -ItemType Directory -Force -Path $root | Out-Null
+        $stale = Join-Path $root 'bin.old-deadbeef'
+        $locked = Join-Path $root 'bin.old-locked'
+        $near = Join-Path $root 'bin.oldest'
+        $notes = Join-Path $root 'notes'
+        foreach ($dir in @($stale, $locked, $near, $notes)) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        }
+        [IO.File]::WriteAllText((Join-Path $stale 'winshell.exe'), 'stale', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $locked 'winshell.exe'), 'locked', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $near 'keep.txt'), 'near', $script:Utf8)
+        [IO.File]::WriteAllText((Join-Path $notes 'keep.txt'), 'notes', $script:Utf8)
+        $stage = Join-Path $TestDrive 'stage-old-bin'
+        New-Item -ItemType Directory -Force -Path $stage | Out-Null
+        [IO.File]::WriteAllText((Join-Path $stage 'winshell.exe'), 'new', $script:Utf8)
+        $held = [IO.File]::Open(
+            (Join-Path $locked 'winshell.exe'),
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::None)
+        try {
+            { Install-WinshellBin $stage $ctx.Bin { 4242 } } | Should -Throw '*4242*'
+            Test-Path -LiteralPath (Join-Path $stale 'winshell.exe') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $locked 'winshell.exe') | Should -BeTrue
+            Install-WinshellBin $stage $ctx.Bin { @() }
+            Test-Path -LiteralPath $stale | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $locked 'winshell.exe') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $near 'keep.txt') | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $notes 'keep.txt') | Should -BeTrue
+            [IO.File]::ReadAllText((Join-Path $ctx.Bin 'winshell.exe')) | Should -Be 'new'
+            @(Get-ChildItem -LiteralPath $root -Force -Directory -Filter 'bin.old-*').Name | Should -Be @('bin.old-locked')
+        } finally {
+            $held.Dispose()
+        }
+    }
 }
 
 Describe 'script safety' {
