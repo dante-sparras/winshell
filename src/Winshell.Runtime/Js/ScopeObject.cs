@@ -22,7 +22,7 @@ public sealed class ScopeObject : ObjectInstance
         "AggregateError", "Array", "ArrayBuffer", "Atomics", "BigInt", "BigInt64Array", "BigUint64Array", "Boolean",
         "DataView", "Date", "Error", "EvalError", "FinalizationRegistry", "Float32Array", "Float64Array", "Function",
         "Infinity", "Int16Array", "Int32Array", "Int8Array", "Intl", "JSON", "Map", "Math", "NaN", "Number", "Object",
-        "Promise", "Proxy", "Qt", "RangeError", "ReferenceError", "Reflect", "RegExp", "Set", "SharedArrayBuffer",
+        "Promise", "Proxy", "RangeError", "ReferenceError", "Reflect", "RegExp", "Set", "SharedArrayBuffer",
         "String", "Symbol", "SyntaxError", "TypeError", "URIError", "Uint16Array", "Uint32Array", "Uint8Array",
         "Uint8ClampedArray", "WeakMap", "WeakRef", "WeakSet", "console", "decodeURI", "decodeURIComponent",
         "encodeURI", "encodeURIComponent", "escape", "eval", "globalThis", "isFinite", "isNaN", "parseFloat",
@@ -45,6 +45,12 @@ public sealed class ScopeObject : ObjectInstance
     private bool TryResolve(string name, out JsValue value, out QObject? owner)
     {
         owner = null;
+        // Qt.resolvedUrl resolves against the file the code is written in, so each file has its own Qt.
+        if (name == "Qt")
+        {
+            value = _runtime.QtFor(_context);
+            return true;
+        }
         var first = true;
         for (var ctx = _context; ctx is not null; ctx = ctx.Parent)
         {
@@ -96,6 +102,8 @@ public sealed class ScopeObject : ObjectInstance
     /// <summary>Whether this scope has the name. This does not read the value, and it does not load a script import.</summary>
     private bool Declares(string name)
     {
+        if (name == "Qt")
+            return true;
         var first = true;
         for (var ctx = _context; ctx is not null; ctx = ctx.Parent)
         {

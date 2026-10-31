@@ -178,7 +178,11 @@ internal static class Globals
             CallLater.Schedule(qml, fn, rest);
             return JsValue.Undefined;
         });
-        Set("resolvedUrl", a => a.Length > 0 ? a[0] : "");
+        // Code written in a QML file sees that document's Qt (MakeDocumentQt). Anything else, such as a
+        // .pragma library script, resolves against the shell's folder.
+        string ShellDir() => qml.ShellDir ?? Environment.CurrentDirectory;
+        Set("resolvedUrl", a => Resolve(Str(a, 0, ""), ShellDir()));
+        Set("createComponent", a => CreateComponent(runtime, qml, Resolve(Str(a, 0, ""), ShellDir())));
         Set("openUrlExternally", a =>
         {
             if (a.Length > 0)
@@ -202,21 +206,6 @@ internal static class Globals
         Set("btoa", a => Convert.ToBase64String(Encoding.UTF8.GetBytes(Str(a, 0, ""))));
         Set("atob", a => Encoding.UTF8.GetString(Convert.FromBase64String(Str(a, 0, ""))));
         Set("isQtObject", a => a.Length > 0 && a[0] is QObjectWrapper);
-        Set("createComponent", a =>
-        {
-            var url = Str(a, 0, "");
-            if (url.StartsWith("file:///", StringComparison.Ordinal))
-                url = Uri.UnescapeDataString(url[8..]);
-            var path = Path.IsPathRooted(url) ? url : Path.Combine(qml.ShellDir ?? Environment.CurrentDirectory, url);
-            try
-            {
-                return runtime.Wrap(new QmlComponent(qml, qml.LoadDocument(path)));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or Qml.QmlSyntaxException or QmlCompileException)
-            {
-                return runtime.Wrap(new QmlComponent(qml, e.Message));
-            }
-        });
         Set("createQmlObject", a =>
         {
             var text = Str(a, 0, "");
@@ -248,6 +237,42 @@ internal static class Globals
         colorScheme.Set("Dark", 2);
         qt.Set("ColorScheme", colorScheme);
         return qt;
+    }
+
+    /// <summary>
+    /// The <c>Qt</c> that code written in <paramref name="file"/> sees: the global one, except that
+    /// <c>resolvedUrl</c> and <c>createComponent</c> resolve a relative URL against that file's folder.
+    /// </summary>
+    internal static ObjectInstance MakeDocumentQt(JsRuntime runtime, QmlEngine qml, ObjectInstance qt, string file)
+    {
+        var engine = runtime.Engine;
+        var dir = Path.GetDirectoryName(Path.GetFullPath(file))!;
+        var documentQt = (ObjectInstance)engine.Call(engine.Intrinsics.Object.Get("create"), qt);
+        documentQt.Set("resolvedUrl", Fn(engine, "resolvedUrl", a => Resolve(Str(a, 0, ""), dir)));
+        documentQt.Set("createComponent", Fn(engine, "createComponent", a => CreateComponent(runtime, qml, Resolve(Str(a, 0, ""), dir))));
+        return documentQt;
+    }
+
+    /// <summary>An absolute path or a URL with a scheme is returned as given. <c>file:///</c> is turned into a path.</summary>
+    private static string Resolve(string url, string dir)
+    {
+        if (url.StartsWith("file:///", StringComparison.Ordinal))
+            url = Uri.UnescapeDataString(url[8..]);
+        if (url.Length == 0 || Path.IsPathRooted(url) || url.Contains("://", StringComparison.Ordinal))
+            return url;
+        return Path.GetFullPath(Path.Combine(dir, url));
+    }
+
+    private static JsValue CreateComponent(JsRuntime runtime, QmlEngine qml, string path)
+    {
+        try
+        {
+            return runtime.Wrap(new QmlComponent(qml, qml.LoadDocument(path)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Qml.QmlSyntaxException or QmlCompileException)
+        {
+            return runtime.Wrap(new QmlComponent(qml, e.Message));
+        }
     }
 
     private static JsValue FormatDate(JsValue[] args, string defaultFormat, LocalePart part)
