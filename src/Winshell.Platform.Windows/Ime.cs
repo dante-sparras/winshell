@@ -17,6 +17,9 @@ internal enum ImeActionKind
 
 internal readonly record struct ImeAction(ImeActionKind Kind, string Text);
 
+/// <summary>The caret rectangle the candidate list must stay outside, in window pixels.</summary>
+internal readonly record struct ImeCandidateWindow(int Style, int Left, int Top, int Right, int Bottom);
+
 /// <summary>
 /// IMM32 composition for one window. A result string commits once, and the WM_IME_CHAR messages that repeat
 /// it are swallowed. A WM_IME_CHAR with no result string still inserts. The pending result survives
@@ -35,7 +38,7 @@ internal sealed class ImeSession
     public const int ImnOpenCandidate = 5;
     public const int ImnChangeCandidate = 3;
     public const int CfsPoint = 2;
-    public const int CfsCandidatePos = 0x40;
+    public const int CfsExclude = 0x80;
 
     /// <summary>The virtual key the IME uses while it is composing. It is not a shortcut.</summary>
     public const int VkProcessKey = 0xE5;
@@ -107,6 +110,19 @@ internal sealed class ImeSession
     /// <summary>Clears the bit that would show the default composition window. The candidate window stays.</summary>
     public static nint HideDefaultCompositionWindow(nint lParam) => (nint)((long)lParam & ~0x80000000L);
 
+    /// <summary>
+    /// The candidate list excludes the caret. CFS_EXCLUDE gives the IME that rectangle, so the list can open
+    /// above a field on a bottom bar instead of past the screen.
+    /// </summary>
+    public static ImeCandidateWindow CandidateWindow(double x, double y, double width, double height, double scale)
+    {
+        var left = (int)Math.Round(x * scale);
+        var top = (int)Math.Round(y * scale);
+        var right = (int)Math.Round((x + width) * scale);
+        var bottom = (int)Math.Round((y + height) * scale);
+        return new ImeCandidateWindow(CfsExclude, left, top, right, bottom);
+    }
+
     private ImeAction CancelPreedit()
     {
         if (Preedit.Length == 0 && !Composing)
@@ -136,16 +152,27 @@ internal static partial class ImeNative
 
     private const uint IaceDefault = 0x0010;
 
-    public static void Place(nint hwnd, int x, int y)
+    /// <summary>The composition point stays at the caret bottom. The candidate list excludes the caret rectangle.</summary>
+    public static void Place(nint hwnd, ImeCandidateWindow window)
     {
         var himc = ImmGetContext(hwnd);
         if (himc == 0)
             return;
         try
         {
-            var comp = new CompositionForm { Style = ImeSession.CfsPoint, CurrentPos = new POINT { X = x, Y = y } };
+            var comp = new CompositionForm
+            {
+                Style = ImeSession.CfsPoint,
+                CurrentPos = new POINT { X = window.Left, Y = window.Bottom },
+            };
             ImmSetCompositionWindow(himc, ref comp);
-            var cand = new CandidateForm { Index = 0, Style = ImeSession.CfsCandidatePos, CurrentPos = new POINT { X = x, Y = y } };
+            var cand = new CandidateForm
+            {
+                Index = 0,
+                Style = window.Style,
+                CurrentPos = new POINT { X = window.Left, Y = window.Top },
+                Area = new RECT(window.Left, window.Top, window.Right, window.Bottom),
+            };
             ImmSetCandidateWindow(himc, ref cand);
         }
         finally
