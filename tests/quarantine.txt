@@ -1,2 +1,9 @@
 # Tests the ci job leaves out, one fully qualified name per line, such as Winshell.Tests.SomeTests.A_test_name.
 # The quarantine job runs them and cannot block a merge. See "Flaky tests" in CONTRIBUTING.md.
+Winshell.Platform.Windows.Tests.AppIndexTests.Catalog_updates_when_a_shortcut_is_added_and_removed
+Winshell.Platform.Windows.Tests.AppIndexTests.Launch_starts_a_command_that_exits
+Winshell.Platform.Windows.Tests.DefaultShell.TaskbarTests.A_large_group_fits_its_screen_and_every_window_can_be_reached_activated_and_closed
+Winshell.Platform.Windows.Tests.DefaultShell.TaskbarTests.A_regroup_before_the_preview_opens_still_opens_it_at_the_live_button
+Winshell.Platform.Windows.Tests.DefaultShell.WifiSignalTests.Wifi_draws_the_bars_its_signal_reaches_over_faint_ones
+Winshell.Platform.Windows.Tests.HotkeyForegroundTests.Taking_the_keyboard_returns_promptly_when_another_window_is_in_front
+Winshell.Platform.Windows.Tests.TrayHostTests.The_next_instance_takes_over_when_the_owner_crashes

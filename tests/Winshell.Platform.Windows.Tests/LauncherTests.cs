@@ -824,7 +824,7 @@ public sealed class LauncherTests
     private static Shell Open(Func<string, string> qml)
     {
         var dir = TempDir();
-        foreach (var name in new[] { "launcher.js", "LauncherView.qml" })
+        foreach (var name in new[] { "launcher.js", "LauncherView.qml", "StartPins.qml" })
             File.Copy(Path.Combine(DefaultShellDir(), name), Path.Combine(dir, name));
         var body = "import QtQuick\nimport Winshell.Theme\n" + qml(dir);
         File.WriteAllText(Path.Combine(dir, "shell.qml"), body);
