@@ -347,11 +347,11 @@ public sealed class MultiEffect : EffectItem
     }
 
     /// <summary>
-    /// Blur radius in pixels. <c>blurMultiplier</c> of 0 means not multiplied, which is Qt's default, so a blur
-    /// that does not set it stays as wide as it is today.
+    /// Blur radius in pixels. <c>blurMultiplier</c> of 0 means not multiplied, which is Qt's default, and raising
+    /// it only ever extends the blur.
     /// </summary>
     private float EffectSigma(double amount) =>
-        (float)Math.Max(0, amount * _blurMax * 0.5 * (_blurMultiplier > 0 ? _blurMultiplier : 1));
+        (float)Math.Max(0, amount * _blurMax * 0.5 * (1 + Math.Max(0, _blurMultiplier)));
 
     private static double SmoothStep(double e0, double e1, double x)
     {

@@ -262,9 +262,9 @@ public sealed class Canvas : Item
         var mime = string.IsNullOrEmpty(mimeType) ? "image/png" : mimeType;
         var slash = mime.IndexOf('/');
         if (!TryFormat(slash >= 0 ? mime[(slash + 1)..] : mime, out var format))
-            return "";
+            return "data:,";
         using var data = Encode(format);
-        return data is null ? "" : "data:" + mime + ";base64," + Convert.ToBase64String(data.ToArray());
+        return data is null ? "data:," : "data:" + mime + ";base64," + Convert.ToBase64String(data.ToArray());
     }
 
     private SKData? Encode(SKEncodedImageFormat format)
@@ -273,7 +273,7 @@ public sealed class Canvas : Item
         return image.Encode(format, 100);
     }
 
-    /// <summary>The formats Qt's canvas writes with <c>QImage</c>: png, jpeg and bmp.</summary>
+    /// <summary>The formats of Qt's canvas that Skia can encode: png and jpeg.</summary>
     private static bool TryFormat(string name, out SKEncodedImageFormat format)
     {
         switch (name.ToLowerInvariant())
@@ -281,7 +281,6 @@ public sealed class Canvas : Item
             case "png": format = SKEncodedImageFormat.Png; return true;
             case "jpg":
             case "jpeg": format = SKEncodedImageFormat.Jpeg; return true;
-            case "bmp": format = SKEncodedImageFormat.Bmp; return true;
             default: format = default; return false;
         }
     }

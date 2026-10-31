@@ -29,11 +29,12 @@ public class QtQuickGapTests
         Assert.StartsWith("data:image/jpeg;base64,", jpeg);
         var bytes = Convert.FromBase64String(jpeg["data:image/jpeg;base64,".Length..]);
         Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF }, bytes[..3]);
-        Assert.Equal("", canvas.ToDataURL("image/tiff"));
+        Assert.Equal("data:,", canvas.ToDataURL("image/tiff"));
 
         Assert.True(canvas.Save("shot.jpg"));
         Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF }, File.ReadAllBytes(Path.Combine(shell.Directory, "shot.jpg"))[..3]);
         Assert.False(canvas.Save("shot.tiff"));
+        Assert.False(canvas.Save("shot.bmp"));
     }
 
     [Fact]
@@ -93,9 +94,10 @@ public class QtQuickGapTests
         }
 
         var plain = Halo("0");
-        Assert.Equal(plain, Halo("1"));
-        var wide = Halo("4");
-        Assert.True(wide > plain + 20, $"multiplier 4 alpha {wide} was not wider than {plain}");
+        var wide = Halo("0.5");
+        var wider = Halo("4");
+        Assert.True(wide > plain, $"multiplier 0.5 alpha {wide} was not wider than {plain}");
+        Assert.True(wider > wide + 20, $"multiplier 4 alpha {wider} was not wider than {wide}");
     }
 
     [Fact]
