@@ -605,6 +605,14 @@ function Install-Winshell {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
+    # WDAC and AppLocker can hold a session in Constrained Language Mode, where the .NET calls in this file fail,
+    # including the one that reports an error below.
+    $languageMode = $ExecutionContext.SessionState.LanguageMode
+    if ($languageMode -ne 'FullLanguage') {
+        Write-Error -ErrorAction Continue "install.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $languageMode. Download the portable zip from https://github.com/dante-sparras/winshell/releases instead."
+        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
+        exit 1
+    }
     try {
         Install-Winshell -Version $Version -AutoStart:$AutoStart
     } catch {

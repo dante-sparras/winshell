@@ -309,6 +309,14 @@ function Uninstall-Winshell {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
+    # WDAC and AppLocker can hold a session in Constrained Language Mode, where the .NET calls in this file fail,
+    # including the one that reports an error below.
+    $languageMode = $ExecutionContext.SessionState.LanguageMode
+    if ($languageMode -ne 'FullLanguage') {
+        Write-Error -ErrorAction Continue "uninstall.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $languageMode. Delete %LOCALAPPDATA%\Programs\winshell by hand, then remove its PATH entry and Start menu shortcut."
+        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
+        exit 1
+    }
     try {
         Uninstall-Winshell
     } catch {
