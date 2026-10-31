@@ -41,12 +41,6 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     /// <summary>Bytes <see cref="Deserialize"/> will read. Past this, the file is left as it is. 1 MiB.</summary>
     internal int MaxFileBytes { get; set; } = DataLimits.MaxTextBytes;
 
-    /// <summary>
-    /// Containers the conversion into a property will walk. Tomlyn already refuses a document past 64, and this stops
-    /// the recursive walk at the same point. Past this, the properties already loaded stay.
-    /// </summary>
-    internal int MaxDepth { get; set; } = 64;
-
     public override void ComponentComplete()
     {
         foreach (var p in DynamicProperties)
@@ -83,59 +77,11 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         _dirty.Clear();
     }
 
-    /// <summary>True when a property value is nested past <see cref="MaxDepth"/>. The walk returns at the limit.</summary>
-    private bool PastDepth(TomlTable table, bool skipDirty)
-    {
-        foreach (var p in DynamicProperties)
-        {
-            if (p.IsReadonly || (skipDirty && _dirty.Contains(p.Name)))
-                continue;
-            if (table.TryGetValue(p.Name, out var value) && DeeperThan(value, 0))
-                return true;
-        }
-        return false;
-    }
-
-    private bool DeeperThan(object? value, int depth)
-    {
-        if (value is not (TomlArray or TomlTable or TomlTableArray))
-            return false;
-        if (depth >= MaxDepth)
-            return true;
-        switch (value)
-        {
-            case TomlArray array:
-                foreach (var item in array)
-                    if (DeeperThan(item, depth + 1))
-                        return true;
-                return false;
-            case TomlTable nested:
-                foreach (var pair in nested)
-                    if (DeeperThan(pair.Value, depth + 1))
-                        return true;
-                return false;
-            case TomlTableArray tables:
-                foreach (var child in tables)
-                    foreach (var pair in child)
-                        if (DeeperThan(pair.Value, depth + 1))
-                            return true;
-                return false;
-            default:
-                return false;
-        }
-    }
-
     /// <summary>Loads <paramref name="table"/> into the properties. A recovery skips properties assigned since the last good read.</summary>
     private void Apply(TomlTable table, bool skipDirty)
     {
         if (Engine is null)
             return;
-        if (PastDepth(table, skipDirty))
-        {
-            Error = string.Create(CultureInfo.InvariantCulture, $"{Where}: nested deeper than {MaxDepth}");
-            Warn($"failed to parse {Error}");
-            return;
-        }
         _loading = true;
         try
         {
@@ -396,7 +342,7 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         try
         {
             Apply(TomlSerializer.Deserialize<TomlTable>(document.ToString()) ?? [], skipDirty: true);
-            return string.IsNullOrEmpty(Error);
+            return true;
         }
         catch (TomlException)
         {
@@ -1035,23 +981,14 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
     private static bool NumbersEqual(double left, double right) =>
         double.IsNaN(left) ? double.IsNaN(right) : left == right;
 
-    /// <summary>
-    /// A container at <see cref="MaxDepth"/> is not walked. Tomlyn will not hand over a deeper document; the bound is
-    /// what keeps this recursion off the stack when a value is that deep.
-    /// </summary>
-    private bool HasUnsafeInteger(object? value, int depth = 0)
+    private static bool HasUnsafeInteger(object? value) => value switch
     {
-        if (value is TomlArray or TomlTable or TomlTableArray && depth >= MaxDepth)
-            return false;
-        return value switch
-        {
-            long l => !IsExactLong(l),
-            TomlArray array => array.Any(item => HasUnsafeInteger(item, depth + 1)),
-            TomlTable table => table.Any(pair => HasUnsafeInteger(pair.Value, depth + 1)),
-            TomlTableArray tables => tables.Any(child => child.Any(pair => HasUnsafeInteger(pair.Value, depth + 1))),
-            _ => false,
-        };
-    }
+        long l => !IsExactLong(l),
+        TomlArray array => array.Any(HasUnsafeInteger),
+        TomlTable table => table.Any(pair => HasUnsafeInteger(pair.Value)),
+        TomlTableArray tables => tables.Any(table => table.Any(pair => HasUnsafeInteger(pair.Value))),
+        _ => false,
+    };
 
     private static bool IsExactLong(long value)
     {
@@ -1087,29 +1024,24 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
 
     private string Where => string.IsNullOrEmpty(View?.Path) ? "the file" : View!.Path!;
 
-    private JsValue ToJs(object? value, Jint.Engine engine, int depth = 0)
+    private static JsValue ToJs(object? value, Jint.Engine engine) => value switch
     {
-        if (value is TomlArray or TomlTable or TomlTableArray && depth >= MaxDepth)
-            return JsValue.Null;
-        return value switch
-        {
-            string s => s,
-            bool b => b,
-            long l => l,
-            double d => d,
-            TomlTable table => Object(table, engine, depth),
-            TomlArray array => new JsArray(engine, array.Select(v => ToJs(v, engine, depth + 1)).ToArray()),
-            TomlTableArray tables => new JsArray(engine, tables.Select(t => Object(t, engine, depth)).ToArray()),
-            null => JsValue.Null,
-            _ => value.ToString() ?? "",
-        };
-    }
+        string s => s,
+        bool b => b,
+        long l => l,
+        double d => d,
+        TomlTable table => Object(table, engine),
+        TomlArray array => new JsArray(engine, array.Select(v => ToJs(v, engine)).ToArray()),
+        TomlTableArray tables => new JsArray(engine, tables.Select(t => Object(t, engine)).ToArray()),
+        null => JsValue.Null,
+        _ => value.ToString() ?? "",
+    };
 
-    private JsObject Object(TomlTable table, Jint.Engine engine, int depth)
+    private static JsObject Object(TomlTable table, Jint.Engine engine)
     {
         var obj = new JsObject(engine);
         foreach (var (key, value) in table)
-            obj.Set(key, ToJs(value, engine, depth + 1));
+            obj.Set(key, ToJs(value, engine));
         return obj;
     }
 

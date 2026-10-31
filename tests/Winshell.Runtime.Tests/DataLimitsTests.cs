@@ -28,7 +28,6 @@ public class DataLimitsTests
             TomlAdapter {
               id: adapter
               property string name: "default"
-              property var hidden: []
             }
           }
         }
@@ -110,23 +109,6 @@ public class DataLimitsTests
         File.WriteAllText(path, "name = \"kept\"");
         view.Reload();
         Assert.Equal("kept", shell.Eval(root, "settings.name"));
-        settings.MaxDepth = 1;
-        var nested = "name = \"other\"\nhidden = [{ id = \"a\", name = \"b\" }]\n"u8.ToArray();
-        File.WriteAllBytes(path, nested);
-        view.Reload();
-        Assert.Equal("kept", shell.Eval(root, "settings.name"));
-        Assert.Contains("nested deeper than 1", settings.Error, StringComparison.Ordinal);
-        Assert.Equal(nested, File.ReadAllBytes(path));
-
-        settings.MaxDepth = 2;
-        view.Reload();
-        Assert.True(string.IsNullOrEmpty(settings.Error), settings.Error);
-        Assert.Equal("other", shell.Eval(root, "settings.name"));
-        Assert.Equal("a,b", shell.Eval(root, "settings.hidden.map(a => a.id + ',' + (a.name ?? '')).join('|')"));
-
-        settings.MaxDepth = 64;
-        File.WriteAllText(path, "name = \"kept\"");
-        view.Reload();
         var bomb = Encoding.UTF8.GetBytes("bomb = " + new string('[', 64) + "1" + new string(']', 64) + "\n");
         Assert.InRange(bomb.Length, 1, 4096);
         File.WriteAllBytes(path, bomb);
