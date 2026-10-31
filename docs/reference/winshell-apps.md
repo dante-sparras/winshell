@@ -1,6 +1,6 @@
 # Winshell.Apps
 
-`import Winshell.Apps`. The apps Start lists: the Start menu shortcuts for all users and the current user, and the packaged apps Windows has installed. A shell uses it for its own Start, for search, and to match an app window to its app with `Apps.find(window.appId)`, as the default [taskbar](../taskbar.md#apps) does.
+`import Winshell.Apps`. The apps Start lists: the Start menu shortcuts for all users and the current user, and the packaged apps Windows has installed. A shell uses it for its own Start, for search, and to match an app window to its app with `Apps.find(window.appId)`, as the default [taskbar](../taskbar.md#apps) does. `JumpLists` reads the recent and frequent documents Windows will give for an app.
 
 A shortcut in the user's Programs folder replaces the all-users shortcut with the same path, and the Startup folder is not listed. An app whose windows carry an AppUserModelID that a packaged app has is listed once, as the packaged app. The list updates when apps are installed or removed. [Migrating from Quickshell](../migrating-from-quickshell.md#apps) has more on search ranking and maps the `DesktopEntries` names onto these.
 
@@ -40,6 +40,23 @@ One app of Start: a shortcut or a packaged app. You get entries from `Apps`; QML
 | `runCount` | int, read-only | How many times Windows, or `launch()`, has run the app. |
 | `lastUsed` | real, read-only | When the app was last used, in Unix milliseconds, or 0 when Windows has no record. |
 | `launch()` | method | Opens the app as Start does, through its shortcut or its AppUserModelID. A launch counts as a use once the app has started, in `runCount`, `lastUsed`, `recent` and `frequent`. A packaged app starts in the background, so `launch()` returns before it is up. When it fails, a warning goes to the log. |
+
+## JumpLists
+
+The `JumpLists` singleton. Reach it as `JumpLists`, for example `JumpLists.forApp(app.appId)`.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `forApp(appId)` | method, returns [AppJumpList](#appjumplist) | The recent and frequent documents for that AppUserModelID. A blank id is not read. Calling it does not open a document or change the list. |
+
+## AppJumpList
+
+One read of an app's jump list. You get one from `JumpLists.forApp`; QML cannot create one.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `available` | bool, read-only | False when the recent and frequent lists cannot be read. |
+| `destinations` | list of string, read-only | The document names, recent first, a name that is in both lists once, at most 10 from each. Empty when `available` is false, or when the lists were read and have no documents. Pinned items and custom tasks are not included. |
 
 ## Examples
 

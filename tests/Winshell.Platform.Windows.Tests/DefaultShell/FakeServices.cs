@@ -250,6 +250,7 @@ public sealed class FakeServices
     public FakeMedia Media { get; } = new();
     public FakeWindowList WindowList { get; } = new();
     public FakeApps Apps { get; } = new();
+    public FakeJumpLists JumpLists { get; } = new();
     public FakeSystemTray SystemTray { get; } = new();
 
     /// <summary>The real type each fake stands for, so their QML names can be compared.</summary>
@@ -275,6 +276,7 @@ public sealed class FakeServices
         (typeof(FakeAppWindow), typeof(AppWindow)),
         (typeof(FakeApps), typeof(AppsService)),
         (typeof(FakeAppEntry), typeof(AppEntry)),
+        (typeof(FakeJumpLists), typeof(JumpListService)),
         (typeof(FakeSystemTray), typeof(SystemTray)),
         (typeof(FakeTrayItem), typeof(SystemTrayItem)),
     ];
@@ -290,7 +292,9 @@ public sealed class FakeServices
         registry.Module("Winshell.Audio").Singleton(_ => Audio, "Audio");
         registry.Module("Winshell.Media").Singleton(_ => Media, "Media");
         registry.Module("Winshell.Windows").Singleton(_ => WindowList, "WindowList");
-        registry.Module("Winshell.Apps").Singleton(_ => Apps, "Apps");
+        registry.Module("Winshell.Apps")
+            .Singleton(_ => Apps, "Apps")
+            .Singleton(_ => JumpLists, "JumpLists");
         registry.Module("Winshell.Tray").Singleton(_ => SystemTray, "SystemTray");
     }
 }
