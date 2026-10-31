@@ -82,6 +82,8 @@ public sealed partial class TextLayout : IDisposable
     /// <summary>The horizontal offset of a caret at a UTF-16 index, in DIPs.</summary>
     public double CaretX(int position) => _native?.CaretX(position) ?? 0;
 
+    internal (double X, double Y, double Height) CaretBox(int position) => _native?.CaretBox(position) ?? (0, 0, 0);
+
     /// <summary>The UTF-16 index closest to a point in the layout, in DIPs.</summary>
     public int PositionAt(double x, double y = 0) => _native?.PositionAt(x, y) ?? 0;
 

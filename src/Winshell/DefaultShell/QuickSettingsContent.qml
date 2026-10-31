@@ -10,12 +10,12 @@ import QtQuick.Controls
 
 // What quick settings shows: the media playing, the tiles, the volume and brightness sliders, and a footer with the
 // battery. A tile whose setting Winshell cannot change opens its page in Settings instead; values only change when
-// the user moves a slider or picks a power mode or an output. In edit mode the user unpins, adds and reorders tiles,
-// and the order is saved to layoutPath.
+// the user moves a slider or picks a power mode, an output, or an app's volume. In edit mode the user unpins, adds
+// and reorders tiles, and the order is saved to layoutPath.
 Item {
   id: root
 
-  // The page shown instead of the tiles, "powerMode", "output" or "add", or "" for the tiles.
+  // The page shown instead of the tiles, "powerMode", "output", "volume" or "add", or "" for the tiles.
   property string page: ""
   property bool editing: false
   // The TOML file the pinned tiles are kept in. Empty keeps them for this run only.
@@ -24,6 +24,21 @@ Item {
   property var pinned: ["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"]
   readonly property var mediaSession: Media.sessions.values.find(s => s.isPlaying) ?? Media.sessions.values[0] ?? null
   readonly property var outputs: Audio.nodes.values.filter(n => n.isPlayback && !n.isSession)
+  readonly property var sessions: Audio.nodes.values.filter(n => n.isSession)
+
+  // The Segoe Fluent Icons glyph for one session's volume, the same steps as the master slider.
+  function sessionGlyph(node) {
+    const volume = node.audio.volume
+    if (node.audio.muted)
+      return ""
+    if (volume === 0)
+      return ""
+    if (volume < 1 / 3)
+      return ""
+    if (volume < 2 / 3)
+      return ""
+    return ""
+  }
   readonly property var tiles: [wifiTile, bluetoothTile, airplaneTile, energySaverTile, powerModeTile, nightLightTile, accessibilityTile]
   // A parent that sets pinned leaves it null while the parent is made.
   readonly property var shownTiles: (pinned ?? []).map(key => tiles.find(t => t.key === key)).filter(t => t !== undefined && t.available)
@@ -350,9 +365,18 @@ Item {
 
     PageHeader { id: outputHeader; title: "Sound output" }
 
+    Button {
+      id: appVolume
+      objectName: "appVolume"
+      x: 4
+      flat: true
+      text: "App volume"
+      onClicked: root.page = "volume"
+    }
+
     Flickable {
       width: parent.width
-      height: parent.height - parent.topPadding - outputHeader.height - moreVolume.height - 2 * parent.spacing - 12
+      height: parent.height - parent.topPadding - outputHeader.height - appVolume.height - moreVolume.height - 3 * parent.spacing - 12
       contentHeight: outputList.height
       clip: true
       ScrollBar.vertical: ScrollBar {}
@@ -381,6 +405,58 @@ Item {
     Button {
       id: moreVolume
       objectName: "moreVolume"
+      x: 4
+      flat: true
+      text: "More volume settings"
+      onClicked: root.openSettings("ms-settings:apps-volume")
+    }
+  }
+
+  // Each audio session, in the same page as the output list: a heading, a scrolling row per session, and Settings.
+  Column {
+    objectName: "volumePage"
+    visible: root.page === "volume"
+    x: 12
+    width: parent.width - 24
+    height: body.height
+    topPadding: 12
+    spacing: 4
+
+    PageHeader { id: volumeHeader; title: "App volume" }
+
+    Flickable {
+      width: parent.width
+      height: parent.height - parent.topPadding - volumeHeader.height - moreAppVolume.height - 2 * parent.spacing - 12
+      contentHeight: sessionList.height
+      clip: true
+      ScrollBar.vertical: ScrollBar {}
+
+      Column {
+        id: sessionList
+        x: 12
+        width: parent.width - 24
+
+        Repeater {
+          model: root.sessions
+
+          SliderRow {
+            required property var modelData
+            required property int index
+            objectName: "session:" + index
+            glyph: root.sessionGlyph(modelData)
+            label: modelData.description
+            glyphLabel: modelData.audio.muted ? "Unmute" : "Mute"
+            value: modelData.audio.volume
+            onMoved: value => modelData.audio.volume = value
+            onGlyphClicked: modelData.audio.muted = !modelData.audio.muted
+          }
+        }
+      }
+    }
+
+    Button {
+      id: moreAppVolume
+      objectName: "moreAppVolume"
       x: 4
       flat: true
       text: "More volume settings"

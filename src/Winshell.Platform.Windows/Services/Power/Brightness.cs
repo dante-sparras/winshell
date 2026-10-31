@@ -427,7 +427,7 @@ public sealed class BrightnessService : QObject
         _monitorObjects.Clear();
         _monitorObjects.AddRange(next);
         _monitors.Set([.. next]);
-        SetField(ref _ready, snapshot.Ready);
+        SetField(ref _ready, snapshot.Ready, nameof(Ready));
     }
 
     protected override void OnDestroy() => _subscription.Dispose();

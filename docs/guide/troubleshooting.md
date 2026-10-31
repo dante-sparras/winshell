@@ -25,7 +25,7 @@ Started from Start or at sign-in, and Winshell cannot start? It shows a dialog w
 
 ## My configuration has an error
 
-A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The log has an `ERROR` line with the same error:
+A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`. The log has an `ERROR` line with the same error:
 
 ```text
 ERROR scene: Failed to load configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
@@ -38,12 +38,33 @@ Check names against the [reference](../reference/index.md). A Quickshell name, s
 ## Saving a file doesn't reload
 
 - Winshell watches the folders the configuration loaded files from, not their subfolders, and only `.qml`, `.js` and `qmldir` files. A file in a folder nothing has imported yet is seen once something imports it and you save again.
-- `settings.watchFiles: false` on the `ShellRoot`, or the `WINSHELL_DISABLE_FILE_WATCHER` environment variable, turns reloading off.
+- `settings.watchFiles: false` on the `ShellRoot`, or the `WINSHELL_DISABLE_FILE_WATCHER` environment variable, turns reloading off. `winshell reload` still reloads by hand.
 - You are editing `%LOCALAPPDATA%\winshell\default-shell`. Winshell writes that folder again when it runs the default shell and no other instance is running it; [copy it](getting-started.md#make-the-default-shell-your-own) and edit the copy.
 
 ## There are two taskbars
 
-Winshell doesn't hide or replace Explorer's taskbar, and never restarts Explorer. Both reserve the bottom of the screen, so they stack. To see only Winshell's, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar for Explorer's taskbar. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`. `Alt+Tab`, `Win+Tab`, `Win+D` and `Win+X` stay with Windows unless `desktopChords` is true in `preferences.toml`, and while Explorer holds one it can still report `taken`.
+By default Winshell does not hide or replace Explorer's taskbar, and it never restarts Explorer. Both reserve the bottom of the screen, so they stack. To leave Explorer's taskbar where it is and only get it out of the way, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar. `Alt+Tab`, `Win+Tab`, `Win+D` and `Win+X` stay with Windows unless `desktopChords` is true in `preferences.toml`, and while Explorer holds one it can still report `taken`.
+
+To make Winshell the only bar, set this in `preferences.toml` and save:
+
+```toml
+hideExplorerTaskbar = true
+```
+
+There is no switch for it in Winshell Settings. Winshell then hides Explorer's taskbar window and releases the screen edge it reserved. It puts both back when it exits: quitting, Ctrl+C, `winshell kill`, or a crash that still runs Winshell's exit. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`.
+
+## Explorer's taskbar is missing
+
+This is `hideExplorerTaskbar`. While Winshell is still running, set the key back to `false` and save, or quit Winshell. It puts Explorer's taskbar window back and reserves its edge again.
+
+If Winshell was killed before that code could run, the window stays hidden and the edge stays released. Winshell cannot run anything in that case. Bring the taskbar back yourself:
+
+1. Press Ctrl+Shift+Esc to open Task Manager.
+2. Find **Windows Explorer**, right-click it and choose **Restart**.
+
+Explorer builds its taskbar again. Set `hideExplorerTaskbar` to `false` before you start Winshell if you want that taskbar to stay. Signing out and back in also starts Explorer again, which brings the taskbar back.
+
+A kill that skips the exit code is Task Manager's **End task**, `taskkill /F`, or `winshell kill --force` when the shell did not exit on its own. The same is true of a native crash that never reaches Winshell's handler, such as a stack overflow. A normal exit, `winshell kill` without `--force`, Ctrl+C, and a managed crash that still runs the exit or the unhandled-exception handler all put the taskbar back.
 
 ## A hotkey doesn't work
 
@@ -77,10 +98,10 @@ See [the notification area](../tray.md).
 
 Winshell Settings' Startup page shows the switch as off when:
 
-- **Windows' Startup apps page turned it off.** Only that page (Windows Settings > Apps > Startup) can turn it back on.
-- **The entry starts another `winshell.exe`**, as after unzipping an update into a new folder, or other options. Turn the switch on to point it at the Winshell you are running.
+- **Windows' Startup apps page turned it off.** Only that page (Windows Settings > Apps > Startup) can turn it back on. A Windows policy that keeps a packaged Winshell off is the same: the switch stays off.
+- **The unpackaged entry starts another `winshell.exe`**, as after unzipping an update into a new folder, or other options. Turn the switch on to point it at the Winshell you are running. A packaged Winshell has no path to rewrite: Windows starts the package.
 
-The entry runs Winshell with the options it was started with. `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for your user account.
+The unpackaged entry runs Winshell with the options it was started with. The packaged task starts `winshellw.exe --no-duplicate`. `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for your user account.
 
 ## Winshell crashed, or a surface closed
 

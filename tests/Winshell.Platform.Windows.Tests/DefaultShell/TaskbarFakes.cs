@@ -195,6 +195,21 @@ public sealed class FakeAppEntry(string id, string name, string appId, string? i
     [Qml] public void Launch() => Launches++;
 }
 
+/// <summary>
+/// Recent documents are absent. A test that wants one sets <c>recentFiles</c> on the view,
+/// so a harness never reads this PC's Recent folder.
+/// </summary>
+public sealed class FakeRecentDocuments : QObject
+{
+    [Qml]
+    public IReadOnlyList<Dictionary<string, object?>> Search(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return [];
+        return [];
+    }
+}
+
 public sealed class FakeSystemTray : QObject
 {
     public FakeSystemTray() => Items = FakeModel.Of(this);

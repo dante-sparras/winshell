@@ -508,8 +508,8 @@ public sealed class ProcessObject : QObject
         {
             if (signal is 9 or 15 or 2 or 1)
             {
-                _killed = signal == 9;
-                if (signal == 9 || !process.CloseMainWindow())
+                _killed = signal == 9 || !process.CloseMainWindow();
+                if (_killed)
                     process.Kill(entireProcessTree: true);
             }
         }
@@ -624,7 +624,11 @@ public class JsonObject : QObject, IPropertyObserver
     public override void ComponentComplete()
     {
         foreach (var p in DynamicProperties)
+        {
             AddObserver(p.Name, this);
+            if (p.Read() is JsonObject nested)
+                nested.Changed = () => Changed?.Invoke();
+        }
     }
 
     public void OnPropertyChanged(QObject sender, string property)

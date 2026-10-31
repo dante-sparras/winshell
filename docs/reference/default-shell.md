@@ -41,7 +41,7 @@ With `desktopChords` on, Alt+Tab opens a popup over the main taskbar. It lists `
 
 ## Taskbar
 
-A Windows 11 taskbar along the bottom of each screen, or of the main screen only: Start, Search and the apps in the middle or on the left, then the hidden icons chevron, the tray icons, the network, volume and battery icons, and the clock. It reserves the bottom edge, so maximized windows stop above it, unless it hides itself. Explorer's taskbar stays, and the two stack.
+A Windows 11 taskbar along the bottom of each screen, or of the main screen only: Start, Search and the apps in the middle or on the left, then the hidden icons chevron, the tray icons, the network, volume and battery icons, and the clock. It reserves the bottom edge, so maximized windows stop above it, unless it hides itself. Explorer's taskbar stays, and the two stack, unless `hideExplorerTaskbar` is true. That key is false until `preferences.toml` sets it. Winshell Settings has no switch for it. Winshell puts Explorer's taskbar and its edge back when it exits.
 
 [The taskbar](../taskbar.md) explains its settings (`centered`, `autoHide`, `appsOn`), pinned apps, previews, the keyboard and Narrator, and the hooks other surfaces plug into: `startRequested`, `searchRequested`, `trayArea` and `clockArea`. Pins are in `taskbar.json` in the shell's data folder.
 
@@ -49,7 +49,7 @@ Right-click an empty part of the taskbar for **Taskbar settings**. Search opens 
 
 ## Start
 
-A popup window over the taskbar, opened by the Start button or the Windows key, on the material chosen in Winshell Settings. It has a search box, the pinned apps, and up to six recommended apps: the ones used most recently that aren't pinned. **All apps** lists every app. Typing searches every app Start lists ([`Apps.search`](winshell-apps.md#apps)). The arrow keys move between apps, Enter opens the selected one, and Escape or the Windows key closes Start.
+A popup window over the taskbar, opened by the Start button or the Windows key, on the material chosen in Winshell Settings. It has a search box, the pinned apps, and up to six recommended apps: the ones used most recently that aren't pinned. **All apps** lists every app. Typing searches apps first ([`Apps.search`](winshell-apps.md#apps)), then the Windows Settings pages this shell already opens, then recent documents ([`RecentDocuments.search`](winshell-apps.md#recentdocuments)). The box still says Search apps. While you are typing, Start says that web results aren't included. The arrow keys move through those results, Enter opens the selected app, settings page, or document, and Escape or the Windows key closes Start. Recommended stays apps.
 
 Pins are in `launcher.toml` next to the shell's `shell.qml`: for the default shell, `%LOCALAPPDATA%\winshell\default-shell\launcher.toml`. Until you pin or unpin something, Start shows its default pins. Winshell Settings' Start page turns recommended apps off and moves or unpins pins.
 
@@ -59,14 +59,14 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 - **The media playing**, with play, pause, previous and next for that [media session](winshell-media.md).
 - **Tiles**: Wi-Fi, Bluetooth, Airplane mode, Energy saver, Power mode, Night light and Accessibility. A tile shows the setting's state where Winshell can read it. Power mode opens a page that changes the [power mode](winshell-power.md#powermode). The other tiles open their page in Windows Settings, because Winshell doesn't change radios or Windows settings. A tile for hardware the PC doesn't have is hidden.
-- **Sliders**: the volume of the default playback device, with a page to pick the output, and the brightness of a monitor that reports one.
+- **Sliders**: the volume of the default playback device, with a page to pick the output. **App volume** on that page sets the volume and mute of each audio session. The brightness slider is a monitor that reports one.
 - **The battery**, on a PC that has one.
 
 **Edit quick settings** edits the tiles: unpin, add back and reorder them, with the mouse or the keyboard. They are kept in `quick-settings.toml` in the shell's state folder.
 
 ## Notification center and calendar
 
-The clock on the taskbar opens one popup window with the notifications above a month calendar. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
+The clock on the taskbar opens one popup window with the notifications above a month calendar. Its accessible name includes how many of those notifications are showing, and the time and date it draws stay as they are. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
 
 [Windows notifications](../notifications.md#default-notification-center-and-calendar) explains access, grouping, the calendar's regional formats and the keyboard.
 

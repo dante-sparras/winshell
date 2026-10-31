@@ -18,7 +18,8 @@ internal static class WindowManagerModules
 
         registry.Module("Winshell.Apps")
             .Singleton(e => new AppsService(e), "Apps")
-            .Uncreatable<AppEntry>("AppEntry", "AppEntry comes from Apps");
+            .Uncreatable<AppEntry>("AppEntry", "AppEntry comes from Apps")
+            .Singleton(_ => new RecentDocuments(), "RecentDocuments");
 
         registry.Module("Winshell.Windows")
             .Singleton(e => new WindowListService(e), "WindowList")

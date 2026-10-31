@@ -39,6 +39,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private bool _frameScheduled;
     private TimeSpan _lastFrame;
     private int _buttons;
+
+    /// <summary>Scan code of a handled Alt key. The following <c>WM_SYSCHAR</c> with that scan is eaten, so it does not beep.</summary>
+    private int _sysCharScan = -1;
     private bool _clickThrough;
     private bool _focusable;
     private QPoint _origin;
@@ -631,15 +634,27 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
     }
 
+    /// <summary>How long focusing waits to see that the app in front still answers, in milliseconds.</summary>
+    private const uint ForegroundAnswerMilliseconds = 200;
+
     /// <summary>
     /// Takes the keyboard for a UI Automation client that focused an item here, as Narrator does, and returns
     /// whether the window has it. It asks once and never joins another thread's input to force it: a client that may
     /// give the foreground (a screen reader the user is driving) has already focused the hosting window, and one that
-    /// may not hears that focusing failed. Only a window that takes the keyboard for its focused item asks.
+    /// may not hears that focusing failed. An app in front that has stopped answering is left in front, so focusing
+    /// does not wait for it. Only a window that takes the keyboard for its focused item asks.
     /// </summary>
     internal bool TryTakeKeyboardForAutomation()
     {
         if (!_visible || (_kind == WindowKind.Panel && !_focusable) || (_kind == WindowKind.Popup && _popup?.GrabFocus != true))
+            return false;
+        // SetForegroundWindow waits out the system foreground lock when the thread in front has stopped answering.
+        // A short ping fails that case first, so a screen reader is not stuck for that wait.
+        var foreground = Win32.GetForegroundWindow();
+        if (foreground != 0 && foreground != Handle
+            && Win32.SendMessageTimeoutW(
+                foreground, Win32.WM_NULL, 0, 0,
+                Win32.SMTO_ABORTIFHUNG | Win32.SMTO_BLOCK, ForegroundAnswerMilliseconds, out _) == 0)
             return false;
         if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))
             return false;
@@ -863,26 +878,43 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 {
                     // The IME already has this key. Forwarding it would also fire a shortcut.
                     if ((int)wParam == ImeSession.VkProcessKey)
-                        return 0;
-                    _ime.ClearPending();
-                    var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers(), IsAutoRepeat = ((long)lParam & (1L << 30)) != 0, NativeScanCode = (int)(((long)lParam >> 16) & 0xff) };
-                    if (scene.KeyPress(e))
-                        return 0;
-                    if (e.Key == 0x01000000 && _kind == WindowKind.Popup && _popup?.GrabFocus == true)
                     {
-                        _client.OnDismissed();
+                        if (msg == Win32.WM_SYSKEYDOWN)
+                            _sysCharScan = -1;
                         return 0;
                     }
-                    return msg == Win32.WM_SYSKEYDOWN ? null : 0;
+                    _ime.ClearPending();
+                    var extended = ((long)lParam & (1L << 24)) != 0;
+                    var scan = (int)(((long)lParam >> 16) & 0xff);
+                    var key = Keys.Translate((int)wParam, extended, Keys.ReadHeld());
+                    var e = new KeyEvent { Key = key.Key, Modifiers = key.Modifiers, IsAutoRepeat = ((long)lParam & (1L << 30)) != 0, NativeScanCode = scan };
+                    var handled = scene.KeyPress(e);
+                    if (!handled && e.Key == 0x01000000 && _kind == WindowKind.Popup && _popup?.GrabFocus == true)
+                    {
+                        _client.OnDismissed();
+                        handled = true;
+                    }
+                    if (msg == Win32.WM_SYSKEYDOWN)
+                        _sysCharScan = handled ? scan : -1;
+                    return handled || msg != Win32.WM_SYSKEYDOWN ? 0 : null;
                 }
             case Win32.WM_KEYUP or Win32.WM_SYSKEYUP:
                 {
                     if ((int)wParam == ImeSession.VkProcessKey)
                         return 0;
-                    var e = new KeyEvent { Key = Keys.ToQt((int)wParam), Modifiers = Keys.Modifiers() };
+                    var extended = ((long)lParam & (1L << 24)) != 0;
+                    var key = Keys.Translate((int)wParam, extended, Keys.ReadHeld());
+                    var e = new KeyEvent { Key = key.Key, Modifiers = key.Modifiers };
                     scene.KeyRelease(e);
                     return msg == Win32.WM_SYSKEYUP ? null : 0;
                 }
+            case Win32.WM_SYSCHAR:
+                if (Keys.EatSysChar(_sysCharScan, (int)(((long)lParam >> 16) & 0xff)))
+                {
+                    _sysCharScan = -1;
+                    return 0;
+                }
+                return null;
             case ImeSession.WmImeSetContext:
                 return Win32.DefWindowProcW(Handle, msg, wParam, ImeSession.HideDefaultCompositionWindow(lParam));
             case ImeSession.WmImeNotify:

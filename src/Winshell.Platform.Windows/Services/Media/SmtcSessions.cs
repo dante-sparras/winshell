@@ -785,7 +785,7 @@ internal sealed class SmtcSession
 }
 
 /// <summary>
-/// The names of the apps behind media sessions, looked up on the thread pool and kept for the life of the
+/// The names of the apps behind media sessions, looked up off the loop and kept for the life of the
 /// process. Lives on the UI thread.
 /// </summary>
 internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> describe, Action named)
@@ -800,28 +800,39 @@ internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> de
         if (_names.TryGetValue(appId, out var name))
             return name;
         _names[appId] = null;
-        _ = LookUp(appId);
+        LookUp(appId);
         return null;
     }
 
-    private async Task LookUp(string appId)
+    private void LookUp(string appId)
     {
-        var name = appId;
-        try
+        // Not the thread pool. A lookup that had already failed still waited for a pool thread to publish
+        // the id, and a busy pool left the session unnamed.
+        var thread = new Thread(() =>
         {
-            name = await Task.Run(() => describe(appId)).ConfigureAwait(false);
-        }
+            var name = appId;
+            try
+            {
+                name = describe(appId);
+            }
 #pragma warning disable CA1031 // A failed lookup still names the app, by its id.
-        catch (Exception e)
+            catch (Exception e)
 #pragma warning restore CA1031
+            {
+                var message = e.Message;
+                loop.Post(() => log.Warn("media", $"Cannot name {appId}: {message}"));
+            }
+            loop.Post(() =>
+            {
+                _names[appId] = name;
+                named();
+            });
+        })
         {
-            loop.Post(() => log.Warn("media", $"Cannot name {appId}: {e.Message}"));
-        }
-        loop.Post(() =>
-        {
-            _names[appId] = name;
-            named();
-        });
+            IsBackground = true,
+            Name = "Media app name",
+        };
+        thread.Start();
     }
 }
 

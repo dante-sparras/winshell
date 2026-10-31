@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Winshell.Platform.Windows.Accessibility;
 using Winshell.Platform.Windows.Native;
 using Winshell.Platform.Windows.Services.WindowList;
@@ -67,6 +68,7 @@ public class UiaRunMessageTests
                     done.Set();
                 }
             });
+            var started = 0L;
             loop.Schedule(TimeSpan.FromMilliseconds(200), () =>
             {
                 var worker = new Thread(() =>
@@ -85,18 +87,22 @@ public class UiaRunMessageTests
                     }
                 })
                 { IsBackground = true };
+                started = Stopwatch.GetTimestamp();
                 worker.Start();
             });
             void Watch()
             {
                 if (done.IsSet)
                     loop.Quit(0);
+                // Longer than the call's own timeout, so a call that times out fails on its result.
+                // This only stops a call that never returns.
+                else if (started != 0 && Stopwatch.GetElapsedTime(started) > TimeSpan.FromSeconds(45))
+                    loop.Quit(1);
                 else
                     loop.Schedule(TimeSpan.FromMilliseconds(50), Watch);
             }
             loop.Schedule(TimeSpan.FromMilliseconds(250), Watch);
-            loop.Schedule(TimeSpan.FromMilliseconds(3000), () => loop.Quit(0));
-            loop.Run();
+            Assert.Equal(0, loop.Run());
 
             Assert.Null(failure);
             Assert.True(done.IsSet);
