@@ -278,7 +278,8 @@ public sealed class SocketObject : DataStream
         var generation = ++_generation;
         var loop = Engine.Loop;
         var path = _path;
-        Task.Run(async () =>
+        // A thread of its own. Task.Run waits for a pool worker, and a saturated pool holds the connect past the peer.
+        RunOffPool("Socket connect", () =>
         {
             try
             {
@@ -286,13 +287,13 @@ public sealed class SocketObject : DataStream
                 if (path.StartsWith(@"\\.\pipe\", StringComparison.OrdinalIgnoreCase))
                 {
                     var pipe = new System.IO.Pipes.NamedPipeClientStream(".", path[9..], System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous);
-                    await pipe.ConnectAsync(3000).ConfigureAwait(false);
+                    pipe.Connect(3000);
                     stream = pipe;
                 }
                 else
                 {
                     var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                    await socket.ConnectAsync(new UnixDomainSocketEndPoint(path)).ConfigureAwait(false);
+                    socket.Connect(new UnixDomainSocketEndPoint(path));
                     stream = new NetworkStream(socket, ownsSocket: true);
                 }
                 loop.Post(() =>
@@ -344,7 +345,8 @@ public sealed class SocketObject : DataStream
     {
         var stream = _stream!;
         var loop = Engine!.Loop;
-        Task.Run(async () =>
+        // Same reason as connect: the read has to start even when every pool worker is busy.
+        RunOffPool("Socket read", () =>
         {
             var buffer = new byte[8192];
             var decoder = Encoding.UTF8.GetDecoder();
@@ -354,7 +356,7 @@ public sealed class SocketObject : DataStream
             {
                 while (true)
                 {
-                    var n = await stream.ReadAsync(buffer).ConfigureAwait(false);
+                    var n = stream.Read(buffer, 0, buffer.Length);
                     if (n <= 0)
                         break;
                     var c = decoder.GetChars(buffer, 0, n, chars, 0);
@@ -377,6 +379,12 @@ public sealed class SocketObject : DataStream
                 Disconnect();
             });
         });
+    }
+
+    private static void RunOffPool(string name, Action work)
+    {
+        var thread = new Thread(() => work()) { IsBackground = true, Name = name };
+        thread.Start();
     }
 
     private void Disconnect()

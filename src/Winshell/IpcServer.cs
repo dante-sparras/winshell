@@ -1,7 +1,9 @@
+using System.Buffers;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Microsoft.Win32.SafeHandles;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
@@ -39,8 +41,20 @@ internal sealed class IpcServer : IDisposable
     private const int WaitingInstances = 2;
     private const int OpenAttempts = 3;
 
+    // A client that never ends its line, and a listener that never reads, must not grow without a limit.
+    // The signal callback runs on the UI thread, so a full queue drops the oldest value instead of waiting.
+    // A command line holds at most 32767 characters, so a request from winshell is well under this once encoded.
+    internal const int MaxRequestBytes = 256 * 1024;
+    // A listener holds its client for as long as it runs, so this has to leave room for `winshell kill`.
+    internal const int MaxClients = 64;
+    internal const int MaxQueuedSignals = 1024;
+
     private readonly object _firstGate = new();
+    private readonly object _limit = new();
+    private readonly List<NamedPipeServerStream> _serving = [];
     private NamedPipeServerStream? _first;
+    private int _clients;
+    private bool _disposed;
 
     /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
     /// <param name="dismissNotice">
@@ -125,8 +139,25 @@ internal sealed class IpcServer : IDisposable
                     return;
                 }
                 OpenInstances(waiting);
-                if (finished.IsCompletedSuccessfully)
-                    _ = Task.Run(() => Serve(stream!));
+                // A client that never finishes its line holds a slot until it leaves or the shell stops.
+                // Past the cap the connection is closed, so the wait does not grow with every connect.
+                if (finished.IsCompletedSuccessfully && TryTakeClient())
+                {
+                    var taken = stream!;
+                    Track(taken);
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Serve(taken).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            Untrack(taken);
+                            ReleaseClient();
+                        }
+                    });
+                }
                 else
                     stream!.Dispose();
             }
@@ -181,15 +212,19 @@ internal sealed class IpcServer : IDisposable
             var refusal = _refusal(stream.SafePipeHandle);
             if (refusal is not null)
                 Log.Default.Warn("ipc", $"Refused a control pipe client: {refusal}");
-            using var reader = new StreamReader(stream, Encoding.UTF8);
+            var (line, tooLong) = await ReadRequest(stream, _cancel.Token).ConfigureAwait(false);
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
-            var line = await reader.ReadLineAsync().ConfigureAwait(false);
+            if (tooLong)
+            {
+                await Send(writer, new IpcResponse(false, Error: "Request is too long"), _cancel.Token).ConfigureAwait(false);
+                return;
+            }
             if (line is null)
                 return;
             // Answered after the request is read, so the client has finished writing and reads the reason.
             if (refusal is not null)
             {
-                await Send(writer, new IpcResponse(false, Error: refusal)).ConfigureAwait(false);
+                await Send(writer, new IpcResponse(false, Error: refusal), _cancel.Token).ConfigureAwait(false);
                 return;
             }
             IpcRequest? request;
@@ -203,16 +238,16 @@ internal sealed class IpcServer : IDisposable
             }
             if (request is null)
             {
-                await Send(writer, new IpcResponse(false, Error: "Malformed request")).ConfigureAwait(false);
+                await Send(writer, new IpcResponse(false, Error: "Malformed request"), _cancel.Token).ConfigureAwait(false);
                 return;
             }
             if (request.Op is "listen" or "wait")
             {
-                await Listen(request, writer, once: request.Op == "wait").ConfigureAwait(false);
+                await Listen(request, writer, stream, once: request.Op == "wait").ConfigureAwait(false);
                 return;
             }
             var response = await OnUiThread(() => Handle(request)).ConfigureAwait(false);
-            await Send(writer, response).ConfigureAwait(false);
+            await Send(writer, response, _cancel.Token).ConfigureAwait(false);
         }
         catch (IOException)
         {
@@ -220,6 +255,10 @@ internal sealed class IpcServer : IDisposable
         }
         catch (ObjectDisposedException)
         {
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown cancelled the pending read.
         }
     }
 
@@ -274,9 +313,14 @@ internal sealed class IpcServer : IDisposable
         ? new IpcResponse(true)
         : new IpcResponse(false, Error: "The configuration did not load. Run winshell log to see why.");
 
-    private async Task Listen(IpcRequest request, StreamWriter writer, bool once)
+    private async Task Listen(IpcRequest request, StreamWriter writer, Stream stream, bool once)
     {
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<string>();
+        var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(MaxQueuedSignals)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+            SingleWriter = false,
+        });
         IDisposable? subscription = null;
         var error = await OnUiThread(() =>
         {
@@ -296,16 +340,38 @@ internal sealed class IpcServer : IDisposable
         }).ConfigureAwait(false);
         if (error is not null)
         {
-            await Send(writer, new IpcResponse(false, Error: error)).ConfigureAwait(false);
+            await Send(writer, new IpcResponse(false, Error: error), _cancel.Token).ConfigureAwait(false);
             return;
         }
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token);
+        Task<bool>? waiting = null;
         try
         {
-            await foreach (var value in channel.Reader.ReadAllAsync(_cancel.Token).ConfigureAwait(false))
+            while (true)
             {
-                await Send(writer, new IpcResponse(true, value)).ConfigureAwait(false);
-                if (once)
+                // The read is cancelled before a response is written. A pipe does not take a read and a write at once,
+                // and a client that leaves without another signal would otherwise sit here until shutdown.
+                using var pause = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+                var gone = WaitForDisconnect(stream, pause.Token);
+                waiting = channel.Reader.WaitToReadAsync(stop.Token).AsTask();
+                var done = await Task.WhenAny(gone, waiting).ConfigureAwait(false);
+                if (gone.IsCompletedSuccessfully || done == gone)
+                {
+                    await Finish(gone).ConfigureAwait(false);
                     break;
+                }
+                pause.Cancel();
+                await Finish(gone).ConfigureAwait(false);
+                var signal = waiting;
+                waiting = null;
+                if (!await signal.ConfigureAwait(false))
+                    break;
+                while (channel.Reader.TryRead(out var value))
+                {
+                    await Send(writer, new IpcResponse(true, value), _cancel.Token).ConfigureAwait(false);
+                    if (once)
+                        return;
+                }
             }
         }
         catch (IOException)
@@ -314,10 +380,99 @@ internal sealed class IpcServer : IDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (ObjectDisposedException)
+        {
+        }
         finally
         {
+            stop.Cancel();
+            if (waiting is not null)
+                await Finish(waiting).ConfigureAwait(false);
             _loop.Post(() => subscription?.Dispose());
         }
+    }
+
+    /// <summary>Reads one request line, or reports that it passed <see cref="MaxRequestBytes"/> with no newline.</summary>
+    private static async Task<(string? Line, bool TooLong)> ReadRequest(Stream stream, CancellationToken cancel)
+    {
+        var bytes = ArrayPool<byte>.Shared.Rent(MaxRequestBytes + 1);
+        try
+        {
+            var count = 0;
+            while (true)
+            {
+                var n = await stream.ReadAsync(bytes.AsMemory(count, MaxRequestBytes + 1 - count), cancel).ConfigureAwait(false);
+                if (n == 0)
+                    return (null, false);
+                // A client sends one line, so nothing after the newline is lost. A listener sees a disconnect by a read of 0.
+                var newline = Array.IndexOf(bytes, (byte)'\n', count, n);
+                if (newline >= 0)
+                {
+                    if (newline > 0 && bytes[newline - 1] == (byte)'\r')
+                        newline--;
+                    return (Encoding.UTF8.GetString(bytes, 0, newline), false);
+                }
+                count += n;
+                if (count > MaxRequestBytes)
+                    return (null, true);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bytes);
+        }
+    }
+
+    /// <summary>Completes when the client closes its end. Bytes it still sends are discarded.</summary>
+    private static async Task WaitForDisconnect(Stream stream, CancellationToken cancel)
+    {
+        var one = new byte[1];
+        while (true)
+        {
+            var n = await stream.ReadAsync(one.AsMemory(), cancel).ConfigureAwait(false);
+            if (n == 0)
+                return;
+        }
+    }
+
+    private static async Task Finish(Task task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+        }
+    }
+
+    private bool TryTakeClient()
+    {
+        lock (_limit)
+        {
+            if (_clients >= MaxClients)
+                return false;
+            _clients++;
+            return true;
+        }
+    }
+
+    private void ReleaseClient()
+    {
+        lock (_limit)
+            _clients--;
+    }
+
+    private void Track(NamedPipeServerStream stream)
+    {
+        lock (_limit)
+            _serving.Add(stream);
+    }
+
+    private void Untrack(NamedPipeServerStream stream)
+    {
+        lock (_limit)
+            _serving.Remove(stream);
     }
 
     private Task<T> OnUiThread<T>(Func<T> work)
@@ -337,12 +492,28 @@ internal sealed class IpcServer : IDisposable
         return tcs.Task;
     }
 
-    private static Task Send(StreamWriter writer, IpcResponse response) =>
-        writer.WriteLineAsync(JsonSerializer.Serialize(response, IpcJson.Default.IpcResponse));
+    private static Task Send(StreamWriter writer, IpcResponse response, CancellationToken cancel) =>
+        writer.WriteLineAsync(JsonSerializer.Serialize(response, IpcJson.Default.IpcResponse).AsMemory(), cancel);
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
         _cancel.Cancel();
+        NamedPipeServerStream[] open;
+        lock (_limit)
+            open = [.. _serving];
+        foreach (var stream in open)
+        {
+            try
+            {
+                stream.Dispose();
+            }
+            catch (Exception e) when (e is IOException or ObjectDisposedException)
+            {
+            }
+        }
         lock (_firstGate)
         {
             _first?.Dispose();
