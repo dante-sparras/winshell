@@ -1,13 +1,15 @@
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Winshell.Runtime;
+using global::Windows.ApplicationModel;
 
 namespace Winshell.Platform.Windows.Services.Session;
 
 /// <summary>
-/// The <c>Startup</c>: whether Winshell runs when the current user signs in. It is a <c>Winshell</c> value under the
-/// user's <c>Run</c> key, which Windows' Startup apps page lists and can turn off. Nothing is registered until the
-/// shell sets <see cref="RunAtSignIn"/>, and Winshell never changes what that page chose.
+/// The <c>Startup</c>: whether Winshell runs when the current user signs in. An unpackaged Winshell is a
+/// <c>Winshell</c> value under the user's <c>Run</c> key. A packaged Winshell is the package's startup task.
+/// Windows' Startup apps page lists either and can turn it off. Nothing is registered until the shell sets
+/// <see cref="RunAtSignIn"/>, and Winshell never changes what that page chose.
 /// </summary>
 public sealed class StartupService : QObject
 {
@@ -74,7 +76,10 @@ public sealed class StartupService : QObject
     }
 }
 
-/// <summary>The sign-in entry. Tests use a fake, or a key of their own, and never touch the user's Run key.</summary>
+/// <summary>
+/// The sign-in entry. Tests use a fake, or a key of their own, and never touch the user's Run key. A packaged task
+/// is faked the same way: tests never call <see cref="WindowsStartupTasks.Open"/>.
+/// </summary>
 internal interface IStartupRegistry
 {
     bool IsRegistered();
@@ -224,4 +229,100 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
 
     private static string NormalizeSignInExe(string command) =>
         Regex.Replace(command, @"winshellw\.exe(?=$|[\s""])", "winshell.exe", RegexOptions.IgnoreCase);
+}
+
+/// <summary>
+/// The package's <c>windows.startupTask</c>. Windows starts the package, so there is no path to go stale and
+/// nothing points elsewhere. Tests pass a fake. <see cref="WindowsStartupTasks.Open"/> is the real task.
+/// </summary>
+internal sealed class StartupTaskRegistry(IStartupTask task) : IStartupRegistry
+{
+    public bool IsRegistered() => Try(() => task.State is not StartupTaskState.Disabled);
+
+    public bool PointsElsewhere() => false;
+
+    public bool TurnedOffInWindows() => Try(() => task.State is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy);
+
+    public bool Register() => Try(() =>
+    {
+        var state = task.State;
+        if (state is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy)
+            return true;
+        // DisabledByUser and DisabledByPolicy stay as Windows left them. RequestEnable would not change that.
+        if (state is not StartupTaskState.Disabled)
+            return false;
+        var next = task.RequestEnable();
+        return next is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy;
+    });
+
+    public bool Unregister() => Try(() =>
+    {
+        if (task.State is StartupTaskState.Disabled)
+            return true;
+        // Only a task this shell enabled can be disabled here. Policy and the Startup apps page are Windows'.
+        if (task.State is not StartupTaskState.Enabled)
+            return false;
+        return task.Disable();
+    });
+
+    private static bool Try(Func<bool> action)
+    {
+        try
+        {
+            return action();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return false;
+        }
+    }
+}
+
+/// <summary>What <see cref="StartupTaskRegistry"/> asks Windows. A test fakes it. The real calls are <see cref="WindowsStartupTasks"/>.</summary>
+internal interface IStartupTask
+{
+    StartupTaskState State { get; }
+
+    /// <summary>Asks Windows to enable the task. Returns the state afterwards.</summary>
+    StartupTaskState RequestEnable();
+
+    /// <summary>Turns the task off. Returns whether it is now disabled.</summary>
+    bool Disable();
+}
+
+/// <summary>
+/// The real <c>StartupTask</c> for task id <c>Winshell</c>. Only a packaged process calls <see cref="Open"/>, and
+/// that call has no test: it would need an installed package and would change that package's sign-in.
+/// </summary>
+internal static class WindowsStartupTasks
+{
+    public const string TaskId = "Winshell";
+
+    public static IStartupTask? Open()
+    {
+        try
+        {
+            var task = Task.Run(static async () => await StartupTask.GetAsync(TaskId).AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
+            return task is null ? null : new Real(task);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    private sealed class Real(StartupTask task) : IStartupTask
+    {
+        public StartupTaskState State => task.State;
+
+        // Off the caller. Completing a WinRT async call on the shell's thread can deadlock it.
+        public StartupTaskState RequestEnable() =>
+            Task.Run(async () => await task.RequestEnableAsync().AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
+
+        public bool Disable()
+        {
+            task.Disable();
+            return task.State is StartupTaskState.Disabled;
+        }
+    }
 }

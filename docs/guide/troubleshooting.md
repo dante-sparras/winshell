@@ -77,10 +77,10 @@ See [the notification area](../tray.md).
 
 Winshell Settings' Startup page shows the switch as off when:
 
-- **Windows' Startup apps page turned it off.** Only that page (Windows Settings > Apps > Startup) can turn it back on.
-- **The entry starts another `winshell.exe`**, as after unzipping an update into a new folder, or other options. Turn the switch on to point it at the Winshell you are running.
+- **Windows' Startup apps page turned it off.** Only that page (Windows Settings > Apps > Startup) can turn it back on. A Windows policy that keeps a packaged Winshell off is the same: the switch stays off.
+- **The unpackaged entry starts another `winshell.exe`**, as after unzipping an update into a new folder, or other options. Turn the switch on to point it at the Winshell you are running. A packaged Winshell has no path to rewrite: Windows starts the package.
 
-The entry runs Winshell with the options it was started with. `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for your user account.
+The unpackaged entry runs Winshell with the options it was started with. The packaged task starts `winshellw.exe --no-duplicate`. `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for your user account.
 
 ## Winshell crashed, or a surface closed
 

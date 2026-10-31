@@ -3,8 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Winshell.Platform.Windows.Services.Session;
+using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
+using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Platform.Windows.Diagnostics;
 
@@ -81,7 +83,9 @@ public static class Doctor
                 Environment.IsPrivilegedProcess)),
             Guard("appBars", "App bars", () => AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
             Guard("dpi", "DPI", () => Dpi(DoctorProbe.PerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath), DoctorProbe.Monitors())),
-            Guard("signIn", "Sign-in", () => SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
+            Guard("signIn", "Sign-in", () => Packaging.IsPackaged
+                ? SignIn(WindowsStartupTasks.Open())
+                : SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(DoctorProbe.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes", () => CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now, DoctorProbe.PeekCrash)),
@@ -377,6 +381,23 @@ public static class Doctor
         if (turnedOff)
             return new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup.");
         return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in");
+    }
+
+    /// <summary>Sign-in for a packaged Winshell: the startup task, which names no executable path.</summary>
+    internal static DoctorCheck SignIn(IStartupTask? task)
+    {
+        if (task is null)
+            return new("signIn", "Sign-in", CheckStatus.Warn, "This package has no startup task, so Winshell cannot run when you sign in.");
+        return task.State switch
+        {
+            StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy =>
+                new("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"),
+            StartupTaskState.DisabledByUser =>
+                new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup."),
+            StartupTaskState.DisabledByPolicy =>
+                new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Windows policy turned it off.", "A Windows policy controls this. Startup apps in Settings cannot turn it on."),
+            _ => new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on."),
+        };
     }
 
     // Notifications
