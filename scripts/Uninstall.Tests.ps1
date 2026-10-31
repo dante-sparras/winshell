@@ -120,6 +120,32 @@ Describe 'uninstall' {
         Read-WinshellTestPath | Should -Be 'C:\Windows;C:\Tools'
     }
 
+    It 'removes only the bin folder from the session PATH' {
+        $saved = $env:Path
+        try {
+            $env:Path = 'C:\Windows;C:\Winshell\bin;C:\OnlyThisSession\venv'
+            Remove-WinshellSessionPathEntry 'C:\WINSHELL\bin\'
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv'
+            Remove-WinshellSessionPathEntry 'C:\Winshell\bin'
+            $env:Path | Should -Be 'C:\Windows;C:\OnlyThisSession\venv'
+        } finally {
+            $env:Path = $saved
+        }
+    }
+
+    It 'leaves the session PATH alone while the test path file is set' {
+        Enter-WinshellInstallTest | Out-Null
+        [IO.File]::WriteAllText($env:WINSHELL_USER_PATH_FILE, 'C:\Windows;C:\Winshell\bin', $script:Utf8)
+        $saved = $env:Path
+        try {
+            $env:Path = 'C:\Windows;C:\Winshell\bin;C:\OnlyThisSession\venv'
+            Remove-WinshellPathEntry 'C:\Winshell\bin' | Should -BeTrue
+            $env:Path | Should -Be 'C:\Windows;C:\Winshell\bin;C:\OnlyThisSession\venv'
+        } finally {
+            $env:Path = $saved
+        }
+    }
+
     It 'removes nothing while Winshell is running from the install folder' {
         $ctx = Enter-WinshellInstallTest
         New-Item -ItemType Directory -Path $ctx.Bin | Out-Null
