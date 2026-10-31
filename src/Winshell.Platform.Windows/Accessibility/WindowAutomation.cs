@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
@@ -14,8 +15,11 @@ namespace Winshell.Platform.Windows.Accessibility;
 /// </summary>
 internal sealed class WindowAutomation : IDisposable
 {
-    /// <summary>The message that runs a UI Automation call on the window's thread.</summary>
-    public static readonly uint RunMessage = Win32.WM_APP + 2;
+    /// <summary>
+    /// The registered message that runs a UI Automation call on the window's thread. <c>WM_APP+2</c> is only private
+    /// by convention, so a posted or stray <c>lParam</c> must not be read as a GCHandle.
+    /// </summary>
+    public static readonly uint RunMessage = Win32.RegisterWindowMessageW("Winshell.UiaRun");
 
     private readonly Win32Window _window;
     private readonly Scene _scene;
@@ -26,6 +30,8 @@ internal sealed class WindowAutomation : IDisposable
     private readonly HashSet<AccessibleNode> _announced = [];
     private readonly HashSet<Item> _shown = [];
     private readonly HashSet<Item> _shownNow = [];
+    private readonly ConcurrentDictionary<int, Work> _pending = new();
+    private int _nextCall;
     private AccessibleTree? _tree;
     private bool _stale;
     private bool _focusPending;
@@ -124,29 +130,33 @@ internal sealed class WindowAutomation : IDisposable
         if (Environment.CurrentManagedThreadId == _thread)
             return RunHere(call);
         var handle = Handle;
-        if (handle == 0)
+        if (handle == 0 || RunMessage == 0)
             return Uia.ElementNotAvailable;
         var work = new Work(call);
-        var gc = GCHandle.Alloc(work);
+        var key = Interlocked.Increment(ref _nextCall);
+        _pending[key] = work;
         try
         {
-            Win32.SendMessageW(handle, RunMessage, 0, GCHandle.ToIntPtr(gc));
+            // The key is not a pointer. Only this send, matched in RunPosted, may run the call.
+            Win32.SendMessageW(handle, RunMessage, 0, key);
         }
         finally
         {
-            gc.Free();
+            _pending.TryRemove(key, out _);
         }
         return work.Ran ? work.Result : Uia.ElementNotAvailable;
     }
 
-    /// <summary>Runs the call a RunMessage carries.</summary>
+    /// <summary>Runs the call a sent RunMessage carries. A posted message, or a key this window did not issue, is ignored.</summary>
     public void RunPosted(nint lParam)
     {
-        if (GCHandle.FromIntPtr(lParam).Target is Work work)
-        {
-            work.Result = RunHere(work.Call);
-            work.Ran = true;
-        }
+        // PostMessage is never how Run reaches the window, and a broadcast must not run a call.
+        if ((Win32.InSendMessageEx(0) & Win32.ISMEX_SEND) == 0)
+            return;
+        if (!_pending.TryRemove((int)lParam, out var work))
+            return;
+        work.Result = RunHere(work.Call);
+        work.Ran = true;
     }
 
     /// <summary>
