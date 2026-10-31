@@ -137,22 +137,29 @@ public class MonitorSurvivalTests
     }
 
     [Fact]
-    public async Task Destroying_the_listener_ends_the_monitor_before_the_token_source_is_disposed()
+    public void Destroying_the_listener_ends_the_monitor_before_the_token_source_is_disposed()
     {
         var backend = new BlockingNotifications();
         var loop = new ManualEventLoop();
         using var engine = new QmlEngine(StandardModules.Create(), loop);
         var listener = new NotificationListener(backend, monitor: true) { Engine = engine };
         listener.ComponentComplete();
-        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        // IsCompleted, not await: the signal completes on the monitor thread, and awaiting it queues a
+        // continuation on the thread pool that a busy pool never ran.
+        var untilStarted = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!backend.Started.Task.IsCompleted && DateTime.UtcNow < untilStarted)
+            Thread.Sleep(10);
+        Assert.True(backend.Started.Task.IsCompleted);
 
         var started = DateTime.UtcNow;
         listener.Destroy();
         var elapsed = DateTime.UtcNow - started;
 
         Assert.True(elapsed < TimeSpan.FromSeconds(1.5), $"destroy waited {elapsed}");
-        await listener.MonitorTask!.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(listener.MonitorTask.IsCompletedSuccessfully);
+        var untilEnded = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (listener.MonitorTask is { IsCompleted: false } && DateTime.UtcNow < untilEnded)
+            Thread.Sleep(10);
+        Assert.True(listener.MonitorTask!.IsCompletedSuccessfully);
         Assert.True(backend.Cancelled);
     }
 

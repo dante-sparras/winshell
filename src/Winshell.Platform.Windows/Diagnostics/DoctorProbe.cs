@@ -82,8 +82,10 @@ internal static unsafe partial class DoctorProbe
     /// error in the config's own folder is in <see cref="Doctor.ConfigScan.Errors"/>; one further down, which only
     /// matters if the config imports it, in <see cref="Doctor.ConfigScan.SubfolderErrors"/>. Hidden folders,
     /// installed packages, links and folders with a <c>shell.qml</c> of their own, which are other configs, are left out.
+    /// A file larger than <paramref name="maxFileBytes"/> is named and not read. The default is 1 MiB.
+    /// The parser already refuses a file nested more than 256 levels.
     /// </summary>
-    public static Doctor.ConfigScan ParseConfig(string? rootFile)
+    public static Doctor.ConfigScan ParseConfig(string? rootFile, int maxFileBytes = DataLimits.MaxTextBytes)
     {
         if (rootFile is null || Path.GetDirectoryName(rootFile) is not { } dir || !Directory.Exists(dir))
             return new(0, []);
@@ -103,9 +105,15 @@ internal static unsafe partial class DoctorProbe
             var sink = folder == dir ? errors : elsewhere;
             foreach (var file in List(folder, f => Directory.EnumerateFiles(f, "*.qml"), sink))
             {
-                files++;
                 try
                 {
+                    var length = new FileInfo(file).Length;
+                    if (DataLimits.FileBytes(length, maxFileBytes) is { } why)
+                    {
+                        sink.Add($"{file}: {why}");
+                        continue;
+                    }
+                    files++;
                     QmlParser.Parse(Preprocessor.Run(File.ReadAllText(file)), file);
                 }
                 catch (QmlSyntaxException e)
@@ -308,6 +316,8 @@ internal static unsafe partial class DoctorProbe
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (DataLimits.FileBytes(stream.Length, DataLimits.MaxTextBytes) is { } why)
+                return $"{path}: {why}";
             using var reader = new StreamReader(stream);
             text = reader.ReadToEnd();
         }
