@@ -280,7 +280,7 @@ public sealed class MultiEffect : EffectItem
 
         if (_shadowEnabled && _shadowOpacity > 0 && _shadowColor.A > 0)
         {
-            var sigma = (float)Math.Max(0, _shadowBlur * _blurMax * 0.5);
+            var sigma = EffectSigma(_shadowBlur);
             var color = _shadowColor.WithAlpha(_shadowColor.A * Math.Clamp(_shadowOpacity, 0, 1));
             using var tint = SKColorFilter.CreateBlendMode(color.ToSk(), SKBlendMode.SrcIn);
             using var blur = sigma > 0 ? SKImageFilter.CreateBlur(sigma, sigma) : null;
@@ -296,7 +296,7 @@ public sealed class MultiEffect : EffectItem
 
         using (var colorFilter = ColorFilter())
         {
-            var sigma = _blurEnabled ? (float)Math.Max(0, _blur * _blurMax * 0.5) : 0;
+            var sigma = _blurEnabled ? EffectSigma(_blur) : 0;
             using var blur = sigma > 0 ? SKImageFilter.CreateBlur(sigma, sigma) : null;
             using var paint = new SKPaint { ImageFilter = blur, ColorFilter = colorFilter };
             DrawPicture(canvas, source, sourceMatrix, blur is null && colorFilter is null ? null : paint);
@@ -345,6 +345,13 @@ public sealed class MultiEffect : EffectItem
         }
         return SKColorFilter.CreateTable(table, null, null, null);
     }
+
+    /// <summary>
+    /// Blur radius in pixels. <c>blurMultiplier</c> of 0 means not multiplied, which is Qt's default, so a blur
+    /// that does not set it stays as wide as it is today.
+    /// </summary>
+    private float EffectSigma(double amount) =>
+        (float)Math.Max(0, amount * _blurMax * 0.5 * (_blurMultiplier > 0 ? _blurMultiplier : 1));
 
     private static double SmoothStep(double e0, double e1, double x)
     {

@@ -232,15 +232,16 @@ public sealed class Canvas : Item
     [Qml]
     public bool IsImageError(string url) => _images.TryGetValue(url, out var i) && i is null;
 
-    /// <summary>Writes what has been drawn as a PNG. A relative path is next to the QML file, as an image source is.</summary>
+    /// <summary>Writes what has been drawn. The suffix picks the format, as Qt's <c>save</c> does. A relative path is next to the QML file.</summary>
     [Qml]
     public bool Save(string filename)
     {
         var path = ImageLoader.LocalPath(filename ?? "", CreationContext?.Imports?.Directory ?? Engine?.ShellDir);
-        if (_surface is null || path is null)
+        if (_surface is null || path is null || !TryFormat(Path.GetExtension(path).TrimStart('.'), out var format))
             return false;
-        using var image = _surface.Snapshot();
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var data = Encode(format);
+        if (data is null)
+            return false;
         try
         {
             File.WriteAllBytes(path, data.ToArray());
@@ -252,14 +253,37 @@ public sealed class Canvas : Item
         }
     }
 
+    /// <summary>A data URL of what has been drawn. The default type is <c>image/png</c>, as in Qt.</summary>
     [Qml]
     public string ToDataURL(string mimeType = "image/png")
     {
         if (_surface is null)
             return "data:,";
-        using var image = _surface.Snapshot();
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return "data:image/png;base64," + Convert.ToBase64String(data.ToArray());
+        var mime = string.IsNullOrEmpty(mimeType) ? "image/png" : mimeType;
+        var slash = mime.IndexOf('/');
+        if (!TryFormat(slash >= 0 ? mime[(slash + 1)..] : mime, out var format))
+            return "";
+        using var data = Encode(format);
+        return data is null ? "" : "data:" + mime + ";base64," + Convert.ToBase64String(data.ToArray());
+    }
+
+    private SKData? Encode(SKEncodedImageFormat format)
+    {
+        using var image = _surface!.Snapshot();
+        return image.Encode(format, 100);
+    }
+
+    /// <summary>The formats Qt's canvas writes with <c>QImage</c>: png, jpeg and bmp.</summary>
+    private static bool TryFormat(string name, out SKEncodedImageFormat format)
+    {
+        switch (name.ToLowerInvariant())
+        {
+            case "png": format = SKEncodedImageFormat.Png; return true;
+            case "jpg":
+            case "jpeg": format = SKEncodedImageFormat.Jpeg; return true;
+            case "bmp": format = SKEncodedImageFormat.Bmp; return true;
+            default: format = default; return false;
+        }
     }
 
     /// <summary>A snapshot of what has been drawn, for drawing one canvas onto another.</summary>
