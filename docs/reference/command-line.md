@@ -67,6 +67,8 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 
 The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
 
+An IPC request longer than 16 KiB is refused. `winshell ipc listen` keeps the latest signals when the client falls behind, and the shell releases that subscription when the client disconnects, even if the signal never fires.
+
 A `--` ends options. Words after it are arguments, so `winshell log -- -f` prints the file `-f`. `ipc call` and `msg` do the same after the function name, with no `--`: `winshell ipc call notes add -v` passes `-v` to `add`. `--after <pid>` is removed while options are still being read, which is where an update's restart puts it. After `--`, and after an `ipc call` or `msg` function name, those words stay arguments.
 
 Output sent to a pipe or a file is UTF-8 without a byte order mark. In a console window it follows the console's code page. To read it in PowerShell, set `[Console]::OutputEncoding = [Text.UTF8Encoding]::new()` first, or PowerShell decodes it with the console's code page.
