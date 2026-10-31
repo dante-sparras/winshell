@@ -77,6 +77,7 @@ These members are there, so a document that uses them loads, but they don't do w
 | `Menu.cascade` | Ignored, as is `overlap`. |
 | `Popup.enter` | Ignored, as is `exit`: popups open and close without a transition. |
 | `Popup.popupType` | Ignored: a popup is always an item in its window, as with `Popup.Item`. |
+| `Popup.closePolicy` | `Popup.CloseOnReleaseOutside` and `Popup.CloseOnReleaseOutsideParent` are ignored on a popup that is not modal: the release goes to the item under the pointer. |
 | `Menu.delegate` | Ignored. |
 | `ToolTip.delay` | Defaults to 500 ms, not 0, as Windows tool tips wait. The attached `ToolTip.delay` does too. |
 | `StackView.busy` | Always false. |

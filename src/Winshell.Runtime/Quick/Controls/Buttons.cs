@@ -719,7 +719,7 @@ public sealed class CheckBox : IndicatorButton
         }
     }
 
-    [Qml]
+    [Qml("nextCheckState")]
     public object? NextCheckStateFunction { get; set; }
 
     protected override void OnCheckedChanged()
@@ -739,8 +739,7 @@ public sealed class CheckBox : IndicatorButton
             try
             {
                 var result = Engine.Js.CallFunction(fn, Engine.Js.Wrap(this), []);
-                var next = result.IsNumber() ? (int)result.AsNumber() : result.IsBoolean() && result.AsBoolean() ? 1 : 0;
-                ApplyCheckedState(next);
+                ApplyCheckedState(result.IsNumber() ? (int)result.AsNumber() : 0);
             }
             catch (Jint.Runtime.JavaScriptException e)
             {

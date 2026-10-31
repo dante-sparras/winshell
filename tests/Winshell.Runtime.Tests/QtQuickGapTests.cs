@@ -35,13 +35,13 @@ public class QtQuickGapTests
     }
 
     [Fact]
-    public void Next_check_state_uses_the_function()
+    public void Next_check_state_is_called_on_a_click()
     {
         var (root, _, shell) = Show("""
             import QtQuick
             import QtQuick.Controls
             CheckBox { objectName: "box"; tristate: true; checkState: 0
-              nextCheckStateFunction: function() { return checkState === 0 ? 2 : 0 } }
+              nextCheckState: function() { return checkState === 0 ? 2 : 0 } }
             """);
         using var _ = shell;
         var box = (CheckBox)Find(root, "box");
@@ -118,6 +118,8 @@ public class QtQuickGapTests
         var at = (QPoint)second.MapToItem(scene.Root, second.Width / 2, second.Height / 2);
         scene.PointerMove(at.X, at.Y);
         Assert.Equal(1, menu.CurrentIndex);
+        menu.Close();
+        Assert.Equal(-1, menu.CurrentIndex);
         Assert.True(second.Highlighted);
     }
 

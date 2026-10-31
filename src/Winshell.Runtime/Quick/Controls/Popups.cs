@@ -1151,7 +1151,11 @@ public sealed class Menu : Popup
         Reposition();
     }
 
-    protected override void OnClosed() => _atPoint = false;
+    protected override void OnClosed()
+    {
+        _atPoint = false;
+        Select(-1, false);
+    }
 
     /// <summary>
     /// A menu opened at a point that does not fit right of it or below it opens left of it or above it, as Windows
