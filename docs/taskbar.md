@@ -14,12 +14,13 @@ Set these on `Taskbar` in `shell.qml`. They match Settings > Personalization > T
 
 ## Apps
 
-Pinned apps come first, in the order they were pinned, then every other running app in the order it opened. Each app's windows are grouped on one button. The apps take the room between Search and the tray area; when they need more, they scroll sideways with the mouse wheel or a drag. Windows are matched to apps through the app index (`Apps.find(window.appId)`). An app the index does not have is grouped by its app id.
+Pinned apps come first, in the order they are pinned, then every other running app in the order it opened. Each app's windows are grouped on one button. The apps take the room between Search and the tray area; when they need more, they scroll sideways with the mouse wheel or a drag. Windows are matched to apps through the app index (`Apps.find(window.appId)`). An app the index does not have is grouped by its app id.
 
 - **Click.** Launches a pinned app that is not running. It brings the app's window forward, or minimizes the window when it is already in front. With several windows, it goes to the next window when one is in front, and otherwise to the one used last.
 - **Middle click or Shift+click.** Opens a new window of the app.
 - **Hover.** After 400 ms, live previews (`WindowThumbnail`) of the app's windows appear, each with its title and a close button. For an app that isn't running, only the app's name appears.
 - **Right click.** Opens a menu with the app, Pin to taskbar or Unpin from taskbar, and Close window or Close all windows. Windows has no supported API to read another app's jump list, so recent and pinned files are not shown.
+- **Drag.** Drag a pinned app onto another pinned app to move it. It lands before that app when you drag it back, and after it when you drag it on. The order is kept in `taskbar.json`, and it is the order Win+1 through Win+0 count. A press that stays on the button is still a click. An app that is not pinned stays where the running apps are.
 - **Indicators.** A grey line marks a running app, and a longer accent line marks the app in front. A window that flashes for attention (`AppWindow.attention`) turns its button red until it is activated.
 
 ## Keyboard
