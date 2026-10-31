@@ -192,7 +192,7 @@ A function is reachable when its parameters and its return value are annotated w
 
 The commands run against the instance chosen with `-i`, `--pid`, `-p` or `-c`, as `winshell kill` does:
 
-- `winshell ipc show` lists every target with its reachable functions and properties.
+- `winshell ipc show` lists every target with its reachable functions and properties, and the signals `wait` and `listen` can use.
 - `winshell ipc call <target> <function> [args...]` calls a function and prints what it returns. Each argument is parsed as its parameter's type: an `int` or `real` in invariant culture, a `bool` as `true`, `false` or a number, a `color` as a name or hex, with or without `#`. A `bool` result prints `true` or `false`, and a `color` result prints `#aarrggbb`.
 - `winshell ipc prop get <target> <property>` prints a property.
 - `winshell ipc wait <target> <signal>` waits for the signal once, prints its first argument, and exits. `winshell ipc listen <target> <signal>` prints the first argument each time the signal fires, until it is stopped. A change signal such as `visibleChanged` works too.
