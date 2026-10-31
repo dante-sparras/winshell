@@ -6,6 +6,7 @@ using Winshell.Runtime.Quick.Canvas;
 namespace Winshell.Runtime.Tests;
 
 /// <summary>Members from the Qt differences table that now follow Qt 6.10.</summary>
+[Collection(ThemeCollection.Name)]
 public class QtPaintGapTests
 {
     [Fact]
