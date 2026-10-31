@@ -69,6 +69,7 @@ public readonly record struct Elevation(float Blur, float OffsetY, QColor Color)
 /// for a page, as the Windows mouse settings say. <see cref="DragThreshold"/> is how far a press moves before it drags,
 /// and a second tap within <see cref="DoubleClickTime"/> milliseconds and inside a <see cref="DoubleClickWidth"/> by
 /// <see cref="DoubleClickHeight"/> rectangle centered on the first is a double tap, in logical pixels.
+/// <see cref="AutoHideScrollBars"/> is false when the user turned on "Always show scrollbars", and scroll bars then stay wide.
 /// The text caret blinks every <see cref="CaretBlinkTime"/> milliseconds,
 /// or not at all when it is <see cref="CaretNoBlink"/>, stops blinking after <see cref="CaretTimeout"/> milliseconds
 /// without input, and is <see cref="CaretWidth"/> logical pixels wide, as the Windows keyboard and text cursor settings say.
@@ -88,7 +89,8 @@ public sealed record Theme(
     double DragThreshold = 4,
     uint DoubleClickTime = 500,
     double DoubleClickWidth = 4,
-    double DoubleClickHeight = 4)
+    double DoubleClickHeight = 4,
+    bool AutoHideScrollBars = true)
 {
     /// <summary>The <see cref="WheelScrollLines"/> that scrolls a page a notch, Win32's <c>WHEEL_PAGESCROLL</c>.</summary>
     public const uint WheelPageScroll = uint.MaxValue;

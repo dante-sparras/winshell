@@ -15,6 +15,7 @@ A singleton, reached as `Theme`. Every color token is a read-only `color` proper
 | `accentColor` | color | The shell's own accent, from which the accent tokens and their shades are made. Default transparent, which follows the accent picked in Windows. |
 | `highContrast` | bool, read-only | Whether a contrast theme is on. Every color token is then one of the eight system colors, and the shadows are transparent. |
 | `animationsEnabled` | bool, read-only | Whether Windows animation effects are on. Skip motion when this is false. A contrast theme does not turn it off. |
+| `autoHideScrollBars` | bool, read-only | False when "Always show scrollbars" is on in Windows' Accessibility settings. Scroll bars then stay wide, with their track and arrows. |
 | `fontFamily` | string, read-only | The Windows 11 text font, `"Segoe UI Variable"`. |
 | `iconFontFamily` | string, read-only | The Windows 11 icon font, `"Segoe Fluent Icons"`. |
 | `typography` | [Typography](#typography), read-only | The Windows 11 type ramp, as fonts to assign whole: `font: Theme.typography.subtitle`. |

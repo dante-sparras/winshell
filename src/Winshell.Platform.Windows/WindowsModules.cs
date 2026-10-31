@@ -70,7 +70,7 @@ public sealed class WindowsTheme : QObject
         .Select(p => (Names.ToQml(p.Name), (Func<Theme, QColor>)p.GetMethod!.CreateDelegate(typeof(Func<Theme, QColor>))))
         .ToArray();
 
-    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "colorScheme", "accentColor", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
+    private static readonly string[] ThemeProps = ["dark", "highContrast", "animationsEnabled", "autoHideScrollBars", "colorScheme", "accentColor", "cardShadow", "tooltipShadow", "flyoutShadow", "dialogShadow"];
 
     public WindowsTheme()
     {
@@ -143,6 +143,9 @@ public sealed class WindowsTheme : QObject
 
     /// <summary>Whether Windows animation effects are on. Shells skip motion when this is false.</summary>
     [Qml] public bool AnimationsEnabled { get { Track(); return Theme.Current.AnimationsEnabled; } }
+
+    /// <summary>False when "Always show scrollbars" is on in Windows. Scroll bars then stay wide.</summary>
+    [Qml] public bool AutoHideScrollBars { get { Track(); return Theme.Current.AutoHideScrollBars; } }
 
     [Qml] public string FontFamily => FontSpec.DefaultFamily;
 
