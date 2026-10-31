@@ -100,7 +100,11 @@ internal class UiaElement : IRawElementProviderSimple, IRawElementProviderFragme
         // The window's HWND says whether it is enabled and has the keyboard.
         Uia.IsEnabledProperty or Uia.IsKeyboardFocusableProperty or Uia.HasKeyboardFocusProperty when Node.IsRoot => null,
         Uia.ControlTypeProperty => ControlType(Node.Role),
-        Uia.LocalizedControlTypeProperty when Node.Role == Role.Switch => "toggle switch",
+        Uia.HeadingLevelProperty when Node.Role == Role.Heading => Uia.HeadingLevelValue(Node.HeadingLevel),
+        Uia.PositionInSetProperty when Node.PlaceInSet is { } place => place.Position,
+        Uia.SizeOfSetProperty when Node.PlaceInSet is { } place => place.Size,
+        Uia.IsDialogProperty when Node.Role == Role.Dialog => true,
+        Uia.LiveSettingProperty when Node.Role == Role.Notification => Uia.LiveSettingAssertive,
         Uia.NameProperty => Node.Name is { Length: > 0 } name ? name : Node.IsRoot ? null : "",
         Uia.HelpTextProperty => Node.Description is { Length: > 0 } help ? help : null,
         Uia.AutomationIdProperty when Node.Item.ObjectName is { Length: > 0 } objectName => objectName,

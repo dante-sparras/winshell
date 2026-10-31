@@ -198,6 +198,16 @@ internal static partial class Uia
     public const int ExpandCollapseStateProperty = 30070;
     public const int IsSelectedProperty = 30079;
     public const int ToggleStateProperty = 30086;
+    public const int HeadingLevelProperty = 30173;
+    public const int PositionInSetProperty = 30152;
+    public const int SizeOfSetProperty = 30153;
+    public const int IsDialogProperty = 30174;
+    public const int LiveSettingProperty = 30135;
+
+    /// <summary>UI Automation's heading-level value. Level 1 is 80051.</summary>
+    public static int HeadingLevelValue(int level) => 80050 + level;
+
+    public const int LiveSettingAssertive = 2;
 
     // Events
     public const int StructureChangedEvent = 20002;
