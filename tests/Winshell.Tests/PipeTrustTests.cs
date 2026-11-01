@@ -81,17 +81,17 @@ public class PipeTrustTests
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         await using var first = IpcServer.OpenFirst(name);
-        var firstWait = first.WaitForConnectionAsync();
+        var firstWait = first.WaitForConnectionAsync(TestContext.Current.CancellationToken);
         await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
-        await client.ConnectAsync(3000);
+        await client.ConnectAsync(3000, TestContext.Current.CancellationToken);
         await firstWait;
         await using var second = IpcServer.OpenNext(name);
         var label = PipeTrust.MandatoryLabel(second.SafePipeHandle);
         Assert.Contains("ME", label, StringComparison.Ordinal);
         Assert.Contains("NW", label, StringComparison.Ordinal);
-        var secondWait = second.WaitForConnectionAsync();
+        var secondWait = second.WaitForConnectionAsync(TestContext.Current.CancellationToken);
         await using var next = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
-        await next.ConnectAsync(3000);
+        await next.ConnectAsync(3000, TestContext.Current.CancellationToken);
         await secondWait;
         Assert.True(PipeTrust.ClientMayUseShell(second.SafePipeHandle));
     }
@@ -101,9 +101,9 @@ public class PipeTrustTests
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         await using var server = IpcServer.OpenFirst(name);
-        var waiting = server.WaitForConnectionAsync();
+        var waiting = server.WaitForConnectionAsync(TestContext.Current.CancellationToken);
         await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
-        await client.ConnectAsync(3000);
+        await client.ConnectAsync(3000, TestContext.Current.CancellationToken);
         await waiting;
         Assert.True(PipeTrust.ClientMayUseShell(server.SafePipeHandle));
     }
@@ -113,10 +113,10 @@ public class PipeTrustTests
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         await using var server = IpcServer.OpenFirst(name);
-        var waiting = server.WaitForConnectionAsync();
+        var waiting = server.WaitForConnectionAsync(TestContext.Current.CancellationToken);
         var error = await Assert.ThrowsAsync<IOException>(async () =>
         {
-            await foreach (var _ in IpcServer.Request(name, new IpcRequest("show")))
+            await foreach (var _ in IpcServer.Request(name, new IpcRequest("show"), TestContext.Current.CancellationToken))
                 break;
         });
         Assert.Contains("not owned by Winshell", error.Message, StringComparison.Ordinal);
@@ -153,7 +153,7 @@ public class PipeTrustTests
             else
             {
                 await using var quick = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
-                await quick.ConnectAsync(3000);
+                await quick.ConnectAsync(3000, TestContext.Current.CancellationToken);
             }
             Assert.Throws<IOException>(() => IpcServer.OpenFirst(name).Dispose());
         }

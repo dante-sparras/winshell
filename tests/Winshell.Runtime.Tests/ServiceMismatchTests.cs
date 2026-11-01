@@ -36,7 +36,7 @@ public class ServiceMismatchTests
 
         using (var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous))
         {
-            await client.ConnectAsync(3000);
+            await client.ConnectAsync(3000, TestContext.Current.CancellationToken);
             await Pump(shell, () => Number(root, "accepted") == 1);
             Assert.Equal(1, Number(root, "accepted"));
             Assert.Equal(0, Number(root, "gone"));

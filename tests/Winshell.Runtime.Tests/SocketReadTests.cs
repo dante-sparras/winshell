@@ -20,35 +20,35 @@ public class SocketReadTests
         socket.Parser = parser;
         socket.Connected = true;
 
-        var connected = server.WaitForConnectionAsync();
+        var connected = server.WaitForConnectionAsync(TestContext.Current.CancellationToken);
         var until = DateTime.UtcNow.AddSeconds(5);
         while (!socket.Connected && DateTime.UtcNow < until)
         {
             shell.Loop.Process();
-            await Task.Delay(20);
+            await Task.Delay(20, TestContext.Current.CancellationToken);
         }
         await connected;
         Assert.True(socket.Connected);
 
         var emoji = Encoding.UTF8.GetBytes("🎵");
         Assert.Equal(4, emoji.Length);
-        await server.WriteAsync(emoji.AsMemory(0, 3));
-        await server.FlushAsync();
-        await Task.Delay(150);
+        await server.WriteAsync(emoji.AsMemory(0, 3), TestContext.Current.CancellationToken);
+        await server.FlushAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(150, TestContext.Current.CancellationToken);
         shell.Loop.Process();
 
         var chunk = new byte[8192];
         chunk[0] = emoji[3];
         Array.Fill(chunk, (byte)'x', 1, 8191);
-        await server.WriteAsync(chunk);
-        await server.FlushAsync();
+        await server.WriteAsync(chunk, TestContext.Current.CancellationToken);
+        await server.FlushAsync(TestContext.Current.CancellationToken);
 
         var expect = "🎵" + new string('x', 8191);
         until = DateTime.UtcNow.AddSeconds(5);
         while (received.Length < expect.Length && DateTime.UtcNow < until)
         {
             shell.Loop.Process();
-            await Task.Delay(20);
+            await Task.Delay(20, TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(expect, received.ToString());

@@ -398,7 +398,7 @@ public class ShellTests
         shell.Start();
         for (var i = 0; i < 100 && (int)shell.Host.Root!.ReadProperty("code")! != 0; i++)
         {
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
             shell.Files.Loop.Process();
         }
         Assert.Equal("hello", shell.Host.Root!.ReadProperty("out"));

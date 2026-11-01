@@ -72,7 +72,7 @@ public class WinlandProtocolTests
     public async Task A_short_reply_is_one_line()
     {
         var reader = new WinlandReader(Stream("ok\n"));
-        Assert.Equal("ok", await reader.ReadReplyAsync());
+        Assert.Equal("ok", await reader.ReadReplyAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -80,17 +80,17 @@ public class WinlandProtocolTests
     {
         var body = "1\n\twindows: 2\nü";
         var reader = new WinlandReader(Stream($"#{Encoding.UTF8.GetByteCount(body)}\n{body}"));
-        Assert.Equal(body, await reader.ReadReplyAsync());
+        Assert.Equal(body, await reader.ReadReplyAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task The_event_stream_reads_line_by_line()
     {
         var reader = new WinlandReader(Stream("openwindow>>a,1,M,c,t\r\nclosewindow>>a\nlast"));
-        Assert.Equal("openwindow>>a,1,M,c,t", await reader.ReadLineAsync());
-        Assert.Equal("closewindow>>a", await reader.ReadLineAsync());
-        Assert.Equal("last", await reader.ReadLineAsync());
-        Assert.Null(await reader.ReadLineAsync());
+        Assert.Equal("openwindow>>a,1,M,c,t", await reader.ReadLineAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("closewindow>>a", await reader.ReadLineAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("last", await reader.ReadLineAsync(TestContext.Current.CancellationToken));
+        Assert.Null(await reader.ReadLineAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

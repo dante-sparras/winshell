@@ -26,8 +26,8 @@ public sealed class IpcSyntaxTests : IDisposable
             info.ArgumentList.Add(word);
         info.Environment["WINSHELL_LOCAL_DIR"] = _root;
         using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
+        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
         Assert.True(process.WaitForExit(30000), "winshell did not exit");
         var text = await output + await error;
 
