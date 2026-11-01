@@ -98,6 +98,15 @@ public interface IWindowBackend : IDisposable
     /// <summary>The areas that take input, in logical window coordinates; null means everywhere.</summary>
     void SetInputRegion(IReadOnlyList<QRect>? rects);
 
+    /// <summary>Multiplies the opacity of the window content, from 0 to 1. 1 leaves a new window unchanged.</summary>
+    void SetOpacity(double opacity);
+
+    /// <summary>
+    /// Clips drawing to this rectangle in logical window coordinates, or null to draw the whole window.
+    /// It does not change <see cref="SetInputRegion"/>.
+    /// </summary>
+    void SetVisibleMask(QRect? bounds);
+
     void SetCursor(int shape);
 
     void SetBackdrop(WindowBackdrop backdrop, WindowCorners corners, bool darkFrame);

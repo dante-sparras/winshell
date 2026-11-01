@@ -51,6 +51,10 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private int _sysCharScan = -1;
     private bool _clickThrough;
     private bool _focusable;
+    private bool _opacityApplied;
+    private float _opacity = 1;
+    private bool _clipApplied;
+    private float _clipLeft, _clipTop, _clipRight, _clipBottom;
     private QPoint _origin;
     private string _screenId = "";
     private bool _placing;
@@ -854,6 +858,51 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
         // The window owns the region once it is set.
         Win32.SetWindowRgn(Handle, region, true);
+    }
+
+    /// <summary>
+    /// Fades the composition visual, which is the window's content. The Desktop Window Manager draws Mica, Acrylic
+    /// and Mica Alt behind that visual, and <c>DWMWA_SYSTEMBACKDROP_TYPE</c> has no opacity. <c>SetLayeredWindowAttributes</c>
+    /// fades a redirection bitmap; this window is <c>WS_EX_NOREDIRECTIONBITMAP</c> and has none. 1 is the visual's
+    /// default, so it is not sent and a fresh window is left untouched.
+    /// </summary>
+    public void SetOpacity(double opacity)
+    {
+        var next = (float)opacity;
+        if (_opacityApplied ? next == _opacity : next == 1f)
+            return;
+        _surface?.SetOpacity(next);
+        _opacity = next;
+        _opacityApplied = next != 1f;
+    }
+
+    /// <summary>
+    /// Clips the composition visual to the bounding rectangle, in logical window coordinates. Null removes the clip.
+    /// DirectComposition takes one rectangle here. This does not call <c>SetWindowRgn</c>.
+    /// </summary>
+    public void SetVisibleMask(QRect? bounds)
+    {
+        if (bounds is null)
+        {
+            if (!_clipApplied)
+                return;
+            _clipApplied = false;
+            _surface?.ClearClip();
+            return;
+        }
+        // Cover every logical pixel of the hint: a partial physical pixel rounds outward.
+        var left = (float)Math.Floor(bounds.Value.X * _scale);
+        var top = (float)Math.Floor(bounds.Value.Y * _scale);
+        var right = (float)Math.Ceiling(bounds.Value.Right * _scale);
+        var bottom = (float)Math.Ceiling(bounds.Value.Bottom * _scale);
+        if (_clipApplied && left == _clipLeft && top == _clipTop && right == _clipRight && bottom == _clipBottom)
+            return;
+        _surface?.SetClip(left, top, right, bottom);
+        _clipApplied = true;
+        _clipLeft = left;
+        _clipTop = top;
+        _clipRight = right;
+        _clipBottom = bottom;
     }
 
     private void SetClickThrough(bool on)
