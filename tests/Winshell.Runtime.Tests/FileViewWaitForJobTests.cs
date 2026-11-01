@@ -135,6 +135,46 @@ public class FileViewWaitForJobTests
     }
 
     [Fact]
+    public void A_result_later_in_the_batch_that_called_waitForJob_still_arrives()
+    {
+        // A hang here would stop the whole test run, so the shell runs on a thread this test can give up on.
+        var guard = TimeSpan.FromSeconds(60);
+        Exception? failure = null;
+        var runner = new Thread(() =>
+        {
+            try
+            {
+                using var shell = new TestShell(("shell.qml", Qml));
+                var view = (FileView)shell.Load();
+                var path = Path.Combine(shell.Directory, "note.txt");
+                File.WriteAllText(path, "hello");
+                using var release = new ManualResetEventSlim(false);
+                view.SetJobGateForTests(_ => release.Wait(guard));
+                view.Path = path;
+                view.Reload();
+
+                // Queue the caller, then the job's result behind it, so one batch holds both.
+                object? waited = null;
+                shell.Loop.Post(() => waited = shell.Eval(view, "waitForJob()"));
+                release.Set();
+                Assert.True(view.JoinJobsForTests(guard), "The file job did not finish.");
+                shell.Loop.Process();
+
+                Assert.Equal(true, waited);
+                Assert.Equal("hello", shell.Eval(view, "text()"));
+            }
+            catch (Exception e)
+            {
+                failure = e;
+            }
+        })
+        { IsBackground = true };
+        runner.Start();
+        Assert.True(runner.Join(guard), "waitForJob never reached a result in its own batch.");
+        Assert.Null(failure);
+    }
+
+    [Fact]
     public void A_job_whose_completion_needs_the_loop_does_not_deadlock()
     {
         using var shell = new TestShell(("shell.qml", Qml));
