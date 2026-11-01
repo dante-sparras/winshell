@@ -245,9 +245,9 @@ public sealed class AppIndexTests
             await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             var link = Path.Combine(folder, "Probe.lnk");
             ShellLink.Write(link, Cmd(), "", "", "probe");
-            Assert.True(Wait(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Probe")));
+            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Probe")));
             File.Delete(link);
-            Assert.True(Wait(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "Probe")));
+            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "Probe")));
         }
         finally
         {
@@ -287,7 +287,7 @@ public sealed class AppIndexTests
             Assert.NotNull(probe);
             Assert.Equal(0, probe.RunCount);
             probe.Launch();
-            Assert.True(WaitFor(marker));
+            Wait.Until(() => File.Exists(marker), "the command to write its file");
             Assert.Equal(1, probe.RunCount);
             Assert.True(probe.LastUsed > 0);
             Assert.Contains(apps.Recent.Values, value => value is AppEntry entry && entry.Id == "Probe");
@@ -482,7 +482,7 @@ public sealed class AppIndexTests
 
     private static string Cmd() => Path.Combine(Environment.SystemDirectory, "cmd.exe");
 
-    private static bool Wait(ManualResetEventSlim changed, Func<bool> ready)
+    private static bool Changed(ManualResetEventSlim changed, Func<bool> ready)
     {
         var until = Environment.TickCount64 + 10_000;
         while (Environment.TickCount64 < until)
@@ -500,18 +500,6 @@ public sealed class AppIndexTests
         return ready();
     }
 
-    private static bool WaitFor(string path)
-    {
-        var until = Environment.TickCount64 + 15_000;
-        while (Environment.TickCount64 < until)
-        {
-            if (File.Exists(path))
-                return true;
-            Thread.Sleep(50);
-        }
-        return File.Exists(path);
-    }
-
     private static string Temp()
     {
         var path = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
@@ -519,23 +507,19 @@ public sealed class AppIndexTests
         return path;
     }
 
-    private static void Delete(string path)
+    private static void Delete(string path) => Wait.Until(() => Deleted(path), $"{path} to be deleted");
+
+    private static bool Deleted(string path)
     {
-        for (var attempt = 0; attempt < 5 && Directory.Exists(path); attempt++)
+        try
         {
-            try
-            {
+            if (Directory.Exists(path))
                 Directory.Delete(path, true);
-                return;
-            }
-            catch (IOException) when (attempt < 4)
-            {
-                Thread.Sleep(100);
-            }
-            catch (UnauthorizedAccessException) when (attempt < 4)
-            {
-                Thread.Sleep(100);
-            }
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 }

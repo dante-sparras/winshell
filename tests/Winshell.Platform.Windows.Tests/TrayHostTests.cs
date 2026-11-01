@@ -308,16 +308,12 @@ public sealed class TrayHostTests : IDisposable
         Assert.True(Above(host.Window, explorer.Window));
 
         Win32.SetWindowPos(explorer.Window, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        while (!Above(host.Window, explorer.Window) && watch.Elapsed < TimeSpan.FromSeconds(2))
+        Wait.Until(() => Above(host.Window, explorer.Window), "the host to go back above Explorer", () =>
         {
             while (Win32.PeekMessageW(out var msg, 0, 0, 0, Win32.PM_REMOVE))
                 Win32.DispatchMessageW(msg);
             _loop.Process();
-            Thread.Sleep(5);
-        }
-
-        Assert.True(Above(host.Window, explorer.Window));
+        });
     }
 
     /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>

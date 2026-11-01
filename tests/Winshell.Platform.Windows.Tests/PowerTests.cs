@@ -75,7 +75,7 @@ public sealed class PowerTests : IDisposable
         Assert.True((bool)_root.ReadProperty("respectKeepAwake")!);
 
         var display = (PowerDevice)_root.ReadProperty("display")!;
-        Assert.True(await Wait(() => display.Ready), "Power did not become ready.");
+        await Wait.UntilAsync(() => display.Ready, "Power did not become ready.", _loop.Process);
         _output.WriteLine(
             $"battery present {display.IsPresent} state {display.State} charge {display.Percentage:0.###} " +
             $"remaining {display.RemainingCapacity} full {display.FullChargeCapacity} rate {display.ChargeRate} " +
@@ -90,14 +90,14 @@ public sealed class PowerTests : IDisposable
         }
 
         var mode = (PowerModeService)_root.ReadProperty("mode")!;
-        Assert.True(await Wait(() => mode.Ready), "The power mode did not become ready.");
+        await Wait.UntilAsync(() => mode.Ready, "The power mode did not become ready.", _loop.Process);
         _output.WriteLine($"power mode {mode.Mode} effective {mode.Effective} available {mode.Available}");
         Assert.True(mode.Available);
         Assert.True(Enum.IsDefined(mode.Mode));
         Assert.True(Enum.IsDefined(mode.Effective));
 
         var brightness = (BrightnessService)_root.ReadProperty("brightness")!;
-        Assert.True(await Wait(() => brightness.Ready), "Brightness did not become ready.");
+        await Wait.UntilAsync(() => brightness.Ready, "Brightness did not become ready.", _loop.Process);
         foreach (var monitor in brightness.Monitors.Values.Cast<BrightnessMonitor>())
         {
             _output.WriteLine(
@@ -107,19 +107,6 @@ public sealed class PowerTests : IDisposable
             Assert.True(monitor.Maximum >= monitor.Minimum);
             Assert.False(string.IsNullOrWhiteSpace(monitor.DeviceName));
         }
-    }
-
-    private async Task<bool> Wait(Func<bool> ready)
-    {
-        for (var i = 0; i < 50; i++)
-        {
-            _loop.Process();
-            if (ready())
-                return true;
-            await Task.Delay(100);
-        }
-        _loop.Process();
-        return ready();
     }
 
     public void Dispose()

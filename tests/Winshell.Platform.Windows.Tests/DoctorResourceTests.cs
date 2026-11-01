@@ -71,15 +71,8 @@ public sealed class DoctorResourceTests : IDisposable
         return DoctorProbe.LastLoadError(path);
     }
 
-    private static void WaitUntilIdle(DiagnosticsService diagnostics, ManualEventLoop loop)
-    {
-        var watch = Stopwatch.StartNew();
-        while (diagnostics.Running && watch.Elapsed < TimeSpan.FromSeconds(5))
-        {
-            Thread.Sleep(10);
-            loop.Process();
-        }
-    }
+    private static void WaitUntilIdle(DiagnosticsService diagnostics, ManualEventLoop loop) =>
+        Wait.Until(() => !diagnostics.Running, "the run to finish", loop.Process);
 
     private sealed class OutOfMemoryDoctor : IDoctor
     {

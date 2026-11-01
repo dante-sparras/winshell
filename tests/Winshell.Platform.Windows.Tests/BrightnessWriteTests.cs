@@ -43,7 +43,7 @@ public class BrightnessWriteTests
         Assert.Equal(80, monitor.Brightness);
 
         release.Set();
-        Assert.True(SpinWait.SpinUntil(() => !writer.IsWriting("DISPLAY1"), TimeSpan.FromSeconds(5)), "The writes did not finish.");
+        Wait.Until(() => !writer.IsWriting("DISPLAY1"), "The writes did not finish.");
         lock (written)
             Assert.Equal([50, 80], written);
 
