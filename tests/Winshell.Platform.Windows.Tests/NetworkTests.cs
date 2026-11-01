@@ -188,13 +188,15 @@ public sealed class NetworkTests(ITestOutputHelper output)
         Assert.Equal(expected, NetworkBackend.MapAirplaneMode(value));
 
     [Fact]
-    public void State_is_read_only_and_linux_members_are_removed()
+    public void Wifi_radio_is_writable_and_other_state_stays_read_only()
     {
         var service = new NetworkingService(new FakeBackend(), new ManualEventLoop());
         service.Apply(Snapshot(Wifi()));
         var device = Assert.IsType<WifiDevice>(Assert.Single(service.Devices.Rows));
         var network = Assert.IsType<WifiNetwork>(Assert.Single(device.Networks.Rows));
-        foreach (var name in new[] { "wifiEnabled", "airplaneMode", "accessStatus", "connectivity" })
+        // wifiEnabled used to be read-only. The other state stays read-only.
+        Assert.True(service.Meta.Properties["wifiEnabled"].CanWrite);
+        foreach (var name in new[] { "airplaneMode", "accessStatus", "connectivity" })
             Assert.False(service.Meta.Properties[name].CanWrite);
         Assert.False(device.HasMember("nmManaged"));
         Assert.False(device.HasMember("autoconnect"));
@@ -265,6 +267,105 @@ public sealed class NetworkTests(ITestOutputHelper output)
         }
     }
 
+    [Fact]
+    public async Task Setting_wifi_follows_the_snapshot_and_a_refusal_stays_until_the_radios_change()
+    {
+        var backend = new FakeBackend();
+        var loop = new ManualEventLoop();
+        var service = new NetworkingService(backend, loop);
+        var off = Snapshot() with { WifiEnabled = false, WifiState = WifiRadioState.Off };
+        service.Apply(off);
+        string? signal = null;
+        service.Connect("operationFailed", args => signal = (string)args[0]!);
+
+        await service.SetWifiEnabledAsync(false);
+        Assert.Empty(backend.Calls);
+
+        await service.SetWifiEnabledAsync(true);
+        Assert.False(service.WifiEnabled);
+        loop.Process();
+        Assert.True(service.WifiEnabled);
+        Assert.Equal("", service.Error);
+        Assert.Null(signal);
+        Assert.Equal("wifi-on", Assert.Single(backend.Calls));
+
+        backend.Calls.Clear();
+        backend.KeepRadioSnapshot = true;
+        await service.SetWifiEnabledAsync(false);
+        loop.Process();
+        Assert.True(service.WifiEnabled);
+        Assert.Equal("", service.Error);
+
+        backend.RadioError = "Windows or its policy denied radio control.";
+        await service.SetWifiEnabledAsync(false);
+        loop.Process();
+        Assert.True(service.WifiEnabled);
+        Assert.Equal(backend.RadioError, service.Error);
+        Assert.Equal(backend.RadioError, signal);
+
+        backend.RadioError = null;
+        backend.RadioException = new UnauthorizedAccessException("Access revoked");
+        await service.SetWifiEnabledAsync(false);
+        loop.Process();
+        Assert.True(service.WifiEnabled);
+        Assert.Equal("Access revoked", service.Error);
+
+        service.Apply(off);
+        Assert.False(service.WifiEnabled);
+        Assert.Equal("", service.Error);
+        service.Destroy();
+    }
+
+    [Fact]
+    public async Task A_wifi_request_in_flight_ignores_another()
+    {
+        var gate = new TaskCompletionSource<string?>();
+        var backend = new FakeBackend { RadioGate = gate };
+        var loop = new ManualEventLoop();
+        var service = new NetworkingService(backend, loop);
+        service.Apply(Snapshot() with { WifiEnabled = false, WifiState = WifiRadioState.Off });
+        var first = service.SetWifiEnabledAsync(true);
+        await service.SetWifiEnabledAsync(false);
+        Assert.Equal("wifi-on", Assert.Single(backend.Calls));
+        service.Destroy();
+        gate.SetResult("too late");
+        await first;
+        loop.Process();
+    }
+
+    [Fact]
+    public void Qml_can_assign_the_wifi_value_the_radio_already_has()
+    {
+        var backend = new FakeBackend();
+        var loop = new ManualEventLoop();
+        var service = new NetworkingService(backend, loop);
+        var directory = Path.Combine(Path.GetTempPath(), "winshell-radio-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            service.Apply(Snapshot() with { WifiEnabled = false, WifiState = WifiRadioState.Off });
+            File.WriteAllText(Path.Combine(directory, "shell.qml"), """
+                import QtQml
+                import Winshell.Network
+                QtObject {
+                    Component.onCompleted: TestNetwork.wifiEnabled = false
+                }
+                """);
+            var registry = StandardModules.Create();
+            NetworkingModule.Register(registry);
+            registry.Module("Winshell.Network").Singleton(_ => service, "TestNetwork");
+            using var engine = new QmlEngine(registry, loop, new Log(), directory);
+            engine.CreateRoot(Path.Combine(directory, "shell.qml"));
+            Assert.Empty(backend.Calls);
+            Assert.False(service.WifiEnabled);
+        }
+        finally
+        {
+            service.Destroy();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private sealed class FakeBackend : INetworkBackend
     {
         public NetworkSnapshot Current { get; private set; } = NetworkSnapshot.Initial;
@@ -275,11 +376,31 @@ public sealed class NetworkTests(ITestOutputHelper output)
         public ConnectionFailReason? ConnectResult { get; set; }
         public Task<ConnectionFailReason?>? ConnectTask { get; init; }
         public Task AccessTask { get; init; } = Task.CompletedTask;
+        public string? RadioError { get; set; }
+        public Exception? RadioException { get; set; }
+        public bool KeepRadioSnapshot { get; set; }
+        public TaskCompletionSource<string?>? RadioGate { get; init; }
         public bool Unsubscribed { get; private set; }
         public IDisposable Subscribe(Action<NetworkSnapshot> listener) { _listener = listener; return new Subscription(this); }
         public void Publish(NetworkSnapshot snapshot) { Current = snapshot; _listener?.Invoke(snapshot); }
         public void Refresh() => Calls.Add("refresh");
         public Task RequestAccessAsync() { Calls.Add("access"); return Failure is { } e ? Task.FromException(e) : AccessTask; }
+        public Task<string?> SetWifiEnabledAsync(bool enabled)
+        {
+            Calls.Add(enabled ? "wifi-on" : "wifi-off");
+            if (RadioGate is { } gate)
+                return FinishRadio(gate.Task, enabled);
+            if (RadioException is { } exception)
+                return Task.FromException<string?>(exception);
+            return Task.FromResult(ApplyRadio(enabled, RadioError));
+        }
+        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled) => ApplyRadio(enabled, await pending.ConfigureAwait(false));
+        private string? ApplyRadio(bool enabled, string? error)
+        {
+            if (error is null && !KeepRadioSnapshot)
+                Current = Current with { WifiEnabled = enabled, WifiHardwareEnabled = true, WifiState = enabled ? WifiRadioState.On : WifiRadioState.Off };
+            return error;
+        }
         public Task ScanAsync(Guid device) { Calls.Add("scan"); Assert.Equal(AdapterId, device); return Failure is { } e ? Task.FromException(e) : Task.CompletedTask; }
         public Task<ConnectionFailReason?> ConnectAsync(Guid device, string ssid, string? password)
         {
