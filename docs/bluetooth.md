@@ -35,7 +35,32 @@ The adapter has a Windows device `id`, `name`, MAC `address`, and read-only `sta
 
 The device models share object identity. `pairedDevices` contains paired devices, including absent ones; `nearbyDevices` contains present unpaired devices found during explicit discovery. Nearby membership is Windows' cached `System.Devices.Aep.IsPresent` report, not a guarantee that a device can be reached. `devices` contains both sets. `discovering` is read-only; `startDiscovery()` and `stopDiscovery()` own classic/LE DeviceWatchers. Starting requires an On adapter. Adapter removal/replacement or an Off/Disabled radio stops discovery. Stopping clears unpaired discovery results; paired devices remain.
 
-A device exposes its Windows association-endpoint `id`, `adapter`, `name`, `address`, `paired`, `present`, `canPair`, `connected`, `state`, `batteryAvailable` and `battery`. Endpoints sharing a Windows container (or an address when there is no container) are one device. Identity is retained while that grouping key remains stable, even if the preferred endpoint ID changes. Adapter replacement, removal, or a disappearing device destroys the old QML objects. `unpair()` explicitly unpairs all paired endpoints in the merged device, stopping and reporting the first failure.
+A device exposes its Windows association-endpoint `id`, `adapter`, `name`, `icon`, `address`, `paired`, `present`, `canPair`, `connected`, `state`, `batteryAvailable` and `battery`. Endpoints sharing a Windows container (or an address when there is no container) are one device. Identity is retained while that grouping key remains stable, even if the preferred endpoint ID changes. Adapter replacement, removal, or a disappearing device destroys the old QML objects. `unpair()` explicitly unpairs all paired endpoints in the merged device, stopping and reporting the first failure.
+
+`icon` is a device-type name in BlueZ's vocabulary, so a configuration ported from Quickshell can branch on the same string. It comes from the same association-endpoint enumeration as the rest of the device. Winshell does not open a Bluetooth device or a GATT handle to read it. The properties are `System.Devices.Aep.Bluetooth.Cod.Major`, `System.Devices.Aep.Bluetooth.Cod.Minor` and `System.Devices.Aep.Bluetooth.Le.Appearance`. Each one is a UInt16. When the raw appearance is missing, Winshell uses `System.Devices.Aep.Bluetooth.Le.Appearance.Category` and `.Subcategory`, which are also UInt16. A missing property leaves that part out. A property that is not a UInt16 does not fail the enumeration. An unreadable class stays empty and does not fall through to the appearance.
+
+A classic class is preferred when a class and an appearance are both present. That includes a class BlueZ does not name: the icon stays empty and does not fall through to the appearance. An appearance is used only when Windows reports no classic class. A major and minor of zero are no class. An appearance of zero is an empty icon. The names are the ones BlueZ derives, such as `audio-headset`, `audio-headphones`, `audio-card`, `input-keyboard`, `input-mouse`, `input-gaming`, `input-tablet`, `phone`, `computer`, `printer`, `camera-photo`, `camera-video`, `video-display` and `network-wireless`. BlueZ also uses `modem`, `multimedia-player`, `scanner` and `unknown`. Winshell does not invent a name for a class BlueZ has none for.
+
+`Shell.iconPath` and `IconImage` draw a name only when Winshell already has a glyph for it. `audio-headset` does. `camera-video`, `input-tablet`, `modem`, `scanner` and `unknown` do not. There is no icon theme to add. A configuration uses the string to pick its own icon:
+
+```qml
+import QtQuick
+import Winshell
+import Winshell.Bluetooth
+import Winshell.Widgets
+
+Repeater {
+    model: Bluetooth.devices
+    IconImage {
+        required property var modelData
+        implicitSize: 16
+        source: modelData.icon === "camera-video" || modelData.icon === "input-tablet"
+            || modelData.icon === "modem" || modelData.icon === "scanner" || modelData.icon === "unknown"
+            ? Shell.iconPath("bluetooth")
+            : Shell.iconPath(modelData.icon, true)
+    }
+}
+```
 
 Battery is a fraction from 0–1, read only from the cached Windows Bluetooth battery device property, and cached for up to 30 seconds. It is available only for connected devices when a container exposes a valid level. Unknown/missing values stay unavailable rather than looking like an empty battery. Winshell never opens a GATT connection to obtain battery data. Driver support varies, including on devices that expose battery data over GATT but not through Windows' device property.
 

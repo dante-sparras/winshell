@@ -358,7 +358,7 @@ See [Windows Bluetooth](bluetooth.md) for state, discovery, battery and action l
 | `BluetoothAdapter.discovering`, `devices` | Singleton `Bluetooth.discovering`, `startDiscovery()`, `stopDiscovery()`, `devices`, `pairedDevices`, `nearbyDevices` |
 | `BluetoothDevice.deviceName`, writable `name` | Read-only `name` |
 | `bonded`, writable `trusted`, `blocked`, `wakeAllowed` | Removed BlueZ/device-manager flags; use `paired` and Windows Settings |
-| `icon` (BlueZ icon names) | Removed; configurations can use their own Fluent icons |
+| `icon` | `icon`, the same BlueZ device-type name. `Shell.iconPath` draws names Winshell already knows, such as `audio-headset`. `camera-video`, `input-tablet`, `modem`, `scanner` and `unknown` do not resolve; branch on the string |
 | Writable `connected`, pending `state` values | Read-only Windows-reported `connected`/`state`; explicit `connect()`/`disconnect()` calls and separate `operation`/`busy` |
 | `cancelPair()`, `forget()` | `cancelPairing()`, `unpair()` |
 
