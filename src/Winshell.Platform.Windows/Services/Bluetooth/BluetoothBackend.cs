@@ -170,7 +170,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
 
     private async Task<double?> ReadBatteryAsync(Guid container, CancellationToken cancellation)
     {
-        if (_batteries.TryGetValue(container, out var cached) && DateTimeOffset.UtcNow - cached.Read < TimeSpan.FromSeconds(30))
+        if (_batteries.TryGetValue(container, out var cached) && TimeProvider.System.GetUtcNow() - cached.Read < TimeSpan.FromSeconds(30))
             return cached.Level;
         double? level = null;
         try
@@ -179,7 +179,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             level = nodes.Select(n => BatteryLevel(n.Properties.GetValueOrDefault(BatteryKey))).FirstOrDefault(n => n.HasValue);
         }
         catch (Exception e) when (IsExpectedFailure(e)) { }
-        _batteries[container] = (level, DateTimeOffset.UtcNow);
+        _batteries[container] = (level, TimeProvider.System.GetUtcNow());
         return level;
     }
 

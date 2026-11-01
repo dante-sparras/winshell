@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 
 namespace Winshell.Runtime;
 
@@ -29,13 +28,13 @@ public class EventQueue : IEventLoop
     private readonly Queue<Action> _batch = new();
     private readonly PriorityQueue<TimerEntry, (TimeSpan, long)> _timers = new();
     private readonly List<Action> _frameCallbacks = [];
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly long _started = TimeProvider.System.GetTimestamp();
     private long _sequence;
     private int _cancelled;
 
     public event Action? Woken;
 
-    public virtual TimeSpan Now => _clock.Elapsed;
+    public virtual TimeSpan Now => TimeProvider.System.GetElapsedTime(_started);
 
     public Log Log { get; set; } = Log.Default;
 

@@ -122,7 +122,7 @@ internal static partial class AppUsageReader
             try
             {
                 var time = DateTimeOffset.FromFileTime(fileTime);
-                if (time.Year >= 2000 && time < DateTimeOffset.UtcNow.AddDays(2))
+                if (time.Year >= 2000 && time < TimeProvider.System.GetUtcNow().AddDays(2))
                     last = time.ToUnixTimeMilliseconds();
             }
             catch (ArgumentOutOfRangeException)

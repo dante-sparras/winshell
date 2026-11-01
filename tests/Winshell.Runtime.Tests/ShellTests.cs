@@ -359,7 +359,7 @@ public class ShellTests
     public void SystemClock_reads_the_engines_time_provider()
     {
         var now = new DateTimeOffset(new DateTime(2026, 10, 29, 9, 41, 7, DateTimeKind.Local));
-        using var shell = new Shell(e => e.AddService<TimeProvider>(new FixedTime(now)), ("shell.qml", """
+        using var shell = new Shell(e => e.AddService<TimeProvider>(new FakeTimeProvider(now.ToUniversalTime())), ("shell.qml", """
             import Winshell
             import QtQuick
             Scope {
@@ -371,9 +371,28 @@ public class ShellTests
         Assert.Equal("2026-10-29 09:41:00", shell.Host.Root!.ReadProperty("shown"));
     }
 
-    private sealed class FixedTime(DateTimeOffset now) : TimeProvider
+    [Fact]
+    public void ElapsedTimer_reads_the_engines_time_provider()
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        var time = new FakeTimeProvider();
+        using var shell = new TestShell(("shell.qml", """
+            import Winshell
+            import QtQuick
+            Scope {
+              ElapsedTimer { id: timer }
+            }
+            """));
+        shell.Engine.AddService<TimeProvider>(time);
+        var root = shell.Load();
+
+        time.Advance(TimeSpan.FromSeconds(1.5));
+        Assert.Equal(1.5, shell.Eval(root, "timer.elapsed()"));
+        Assert.Equal(1500d, shell.Eval(root, "timer.elapsedMs()"));
+
+        Assert.Equal(1.5, shell.Eval(root, "timer.restart()"));
+        time.Advance(TimeSpan.FromMilliseconds(250));
+        Assert.Equal(250d, shell.Eval(root, "timer.restartMs()"));
+        Assert.Equal(0d, shell.Eval(root, "timer.elapsed()"));
     }
 
     [Fact]

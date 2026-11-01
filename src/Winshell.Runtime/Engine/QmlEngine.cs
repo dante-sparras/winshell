@@ -116,6 +116,9 @@ public sealed class QmlEngine : IDisposable
 
     public T? GetService<T>() where T : class => _services.TryGetValue(typeof(T), out var s) ? (T)s : null;
 
+    /// <summary>The clock of everything in this engine. A test adds a <see cref="TimeProvider"/> service to set it.</summary>
+    public TimeProvider Time => GetService<TimeProvider>() ?? TimeProvider.System;
+
     public T RequireService<T>() where T : class =>
         GetService<T>() ?? throw new QmlException($"{typeof(T).Name} is not available");
 

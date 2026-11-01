@@ -56,7 +56,7 @@ public sealed partial class CrashReports(string folder)
     public Log? Log { get; set; }
 
     /// <summary>The time a report is written at. Tests set it.</summary>
-    internal Func<DateTimeOffset> Clock { get; init; } = () => DateTimeOffset.Now;
+    internal TimeProvider Time { get; init; } = TimeProvider.System;
 
     /// <summary>Raised after a report is written, on the thread that wrote it.</summary>
     public event Action<CrashReport>? Written;
@@ -139,7 +139,7 @@ public sealed partial class CrashReports(string folder)
     {
         try
         {
-            var now = Clock();
+            var now = Time.GetLocalNow();
             var text = Format(now, where, error, fatal, recovery);
             Directory.CreateDirectory(Folder);
             var ticks = NextTicks(now.UtcTicks);

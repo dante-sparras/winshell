@@ -147,7 +147,7 @@ internal static class NotificationAppIcons
             var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
             foreach (var file in Directory.EnumerateFiles(root, "*", options))
             {
-                if (File.GetLastWriteTimeUtc(file) < DateTime.UtcNow.AddDays(-1))
+                if (File.GetLastWriteTimeUtc(file) < TimeProvider.System.GetUtcNow().UtcDateTime.AddDays(-1))
                     File.Delete(file);
             }
             foreach (var dir in Directory.EnumerateDirectories(root, "*", new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))

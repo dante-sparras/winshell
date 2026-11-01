@@ -5,8 +5,8 @@ namespace Winshell.Runtime.Shell;
 /// <summary>A Gregorian month grid using the user's regional weekday order and week numbering rule.</summary>
 public sealed class CalendarMonth : QObject
 {
-    private DateTime _date = DateTime.Today;
-    private DateTime _selectedDate = DateTime.Today;
+    private DateTime _date = TimeProvider.System.GetLocalNow().LocalDateTime.Date;
+    private DateTime _selectedDate = TimeProvider.System.GetLocalNow().LocalDateTime.Date;
     private int _monthOffset;
     private CultureInfo _culture = GregorianCulture(CultureInfo.CurrentCulture);
     private readonly CalendarDay[] _days = Enumerable.Range(0, 42).Select(_ => new CalendarDay()).ToArray();

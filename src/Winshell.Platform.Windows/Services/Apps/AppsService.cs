@@ -64,7 +64,7 @@ public sealed class AppsService : QObject
     public IReadOnlyList<AppEntry> Search(string query)
     {
         TrackQml("apps");
-        var now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        var now = _engine.Time.GetUtcNow().ToUnixTimeMilliseconds();
         return AppIndex.Search(_entries, query ?? "", UsageFor, now)
             .Select(entry => _byId.GetValueOrDefault(entry.Id))
             .OfType<AppEntry>()
@@ -115,7 +115,7 @@ public sealed class AppsService : QObject
     private void OnLaunched(AppRecord entry)
     {
         var shown = UsageFor(entry);
-        _bumps[entry.Id] = new AppUsage(shown.RunCount + 1, DateTimeOffset.Now.ToUnixTimeMilliseconds());
+        _bumps[entry.Id] = new AppUsage(shown.RunCount + 1, _engine.Time.GetUtcNow().ToUnixTimeMilliseconds());
         if (_byId.TryGetValue(entry.Id, out var obj))
             obj.Update(entry, UsageFor(entry));
         Publish();

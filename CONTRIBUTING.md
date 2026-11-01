@@ -26,6 +26,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 A test waits on a real signal: an event, a task's completion, or a fake clock.
 
 - **No sleeps or fixed timeouts as a way to wait.** A timeout can stop a test that hung, but a passing test must never depend on how long something took.
+- **Time comes through a `TimeProvider`.** `DateTime.Now`, `Stopwatch` and their relatives don't build in `src/`. Code in an engine reads `QmlEngine.Time`, and a test sets it with a `FakeTimeProvider` service, given a UTC time. `TimeProvider.System` is for what only real time can drive: a file's write time, a Windows object, the CLI's own process.
 - **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
 
 ## Flaky tests
