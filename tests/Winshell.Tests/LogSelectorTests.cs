@@ -71,24 +71,6 @@ public sealed class LogSelectorTests : IDisposable
         }
     }
 
-    private (int Code, string Output, string Error) Run(string[] args)
-    {
-        var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "winshell.exe"))
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        info.Environment["WINSHELL_LOCAL_DIR"] = _root;
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(30000))
-        {
-            process.Kill();
-            throw new TimeoutException("winshell did not exit");
-        }
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private (int Code, string Output, string Error) Run(string[] args) =>
+        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", _root));
 }

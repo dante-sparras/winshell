@@ -221,16 +221,7 @@ public class IpcBoundsTests
 
         public SignalSlot Ping { get; }
 
-        public async Task WaitUntil(Func<bool> ready, string why)
-        {
-            var until = DateTime.UtcNow.AddSeconds(20);
-            while (!ready())
-            {
-                Loop.Process();
-                Assert.True(DateTime.UtcNow < until, why);
-                await Task.Delay(15);
-            }
-        }
+        public Task WaitUntil(Func<bool> ready, string why) => Wait.UntilAsync(ready, why, Loop.Process);
 
         public void Dispose()
         {

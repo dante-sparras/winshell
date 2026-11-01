@@ -8,7 +8,6 @@ namespace Winshell.Tests;
 public sealed class IpcCallFailureTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
@@ -37,7 +36,7 @@ public sealed class IpcCallFailureTests : IDisposable
         Assert.Equal(1, result.Code);
         Assert.Equal("", result.Output);
         Assert.Contains("x", result.Error, StringComparison.Ordinal);
-        Thread.Sleep(400);
+        Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(400));
         if (File.Exists(log))
             Assert.DoesNotContain("background task", Read(log), StringComparison.Ordinal);
     }
@@ -57,7 +56,7 @@ public sealed class IpcCallFailureTests : IDisposable
         _started.Add(process);
         process.ErrorDataReceived += (_, _) => { };
         process.BeginErrorReadLine();
-        WaitFor(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -72,39 +71,14 @@ public sealed class IpcCallFailureTests : IDisposable
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
-    {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private static (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args);
 
     private static string Read(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
-    }
-
-    private static void WaitFor(Func<bool> condition, string what)
-    {
-        var watch = Stopwatch.StartNew();
-        while (!condition())
-        {
-            Assert.True(watch.Elapsed < Patience, $"Timed out waiting for {what}");
-            Thread.Sleep(100);
-        }
     }
 
     public void Dispose()

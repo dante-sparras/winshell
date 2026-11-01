@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -10,20 +9,8 @@ public class VersionTests
     public void The_cli_prints_the_release_please_version()
     {
         var manifest = ManifestVersion();
-        var exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-        var info = new ProcessStartInfo(exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.ArgumentList.Add("--version");
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.Equal(0, process.ExitCode);
+        var (code, output, error) = WinshellCli.Run(["--version"]);
+        Assert.Equal(0, code);
         Assert.Equal("", error);
         Assert.Matches($"^winshell {Regex.Escape(manifest)}(\\+\\S+)?\\r?\\n$", output);
     }

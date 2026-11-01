@@ -12,7 +12,6 @@ namespace Winshell.Tests;
 public sealed class NoDuplicateTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
@@ -60,7 +59,7 @@ public sealed class NoDuplicateTests : IDisposable
         var first = Launch(config, duplicate: true);
         var second = Launch(config, duplicate: true);
 
-        WaitFor(() => first.HasExited || second.HasExited, "one of the two starts to exit");
+        Wait.Until(() => first.HasExited || second.HasExited, "one of the two starts to exit");
         var loser = first.HasExited ? first : second;
         var winner = ReferenceEquals(loser, first) ? second : first;
         Assert.True(loser.WaitForExit(15_000));
@@ -68,7 +67,7 @@ public sealed class NoDuplicateTests : IDisposable
         Assert.Equal(0, loser.ExitCode);
         Assert.Equal("", Errors(loser));
 
-        WaitFor(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == winner.Id), $"instance {winner.Id}");
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == winner.Id), $"instance {winner.Id}");
         Assert.False(winner.HasExited);
         Assert.DoesNotContain(Listed(), i => i.GetProperty("pid").GetInt32() == loser.Id);
     }
@@ -82,7 +81,7 @@ public sealed class NoDuplicateTests : IDisposable
         Assert.Equal(0, parent);
 
         var shell = ShellFile(config);
-        WaitFor(() => Listed().Any(i => SameConfig(i, shell)), "the background shell");
+        Wait.Until(() => Listed().Any(i => SameConfig(i, shell)), "the background shell");
         var pid = Listed().Single(i => SameConfig(i, shell)).GetProperty("pid").GetInt32();
         _started.Add(Process.GetProcessById(pid));
         AssertHeld(shell);
@@ -113,7 +112,7 @@ public sealed class NoDuplicateTests : IDisposable
     private Process Start(string configDir, bool duplicate)
     {
         var process = Launch(configDir, duplicate);
-        WaitFor(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -195,38 +194,8 @@ public sealed class NoDuplicateTests : IDisposable
         return process.ExitCode;
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
-    {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(20_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            throw new TimeoutException("winshell did not exit");
-        }
-        return (process.ExitCode, output.Result, error.Result);
-    }
-
-    private static void WaitFor(Func<bool> condition, string what)
-    {
-        var watch = Stopwatch.StartNew();
-        while (!condition())
-        {
-            Assert.True(watch.Elapsed < Patience, $"Timed out waiting for {what}");
-            Thread.Sleep(100);
-        }
-    }
+    private static (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args);
 
     public void Dispose()
     {

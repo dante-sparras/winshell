@@ -14,24 +14,12 @@ public sealed class IpcSyntaxTests : IDisposable
     [InlineData("prop", "get", "foo")]
     [InlineData("wait", "foo")]
     [InlineData("nonsense")]
-    public async Task A_wrong_ipc_command_exits_2_with_nothing_running(params string[] words)
+    public void A_wrong_ipc_command_exits_2_with_nothing_running(params string[] words)
     {
-        var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "winshell.exe"))
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.ArgumentList.Add("ipc");
-        foreach (var word in words)
-            info.ArgumentList.Add(word);
-        info.Environment["WINSHELL_LOCAL_DIR"] = _root;
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
-        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
-        Assert.True(process.WaitForExit(30000), "winshell did not exit");
-        var text = await output + await error;
+        var (code, output, error) = WinshellCli.Run(["ipc", .. words], ("WINSHELL_LOCAL_DIR", _root));
+        var text = output + error;
 
-        Assert.Equal(2, process.ExitCode);
+        Assert.Equal(2, code);
         Assert.Contains("Usage: winshell ipc", text);
         Assert.DoesNotContain("No running instances", text);
     }
