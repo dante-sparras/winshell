@@ -1,8 +1,8 @@
 # Winshell.Input
 
-`import Winshell.Input`. The module has `Hotkey`: a chord, or a short sequence of chords, that works anywhere in Windows, even when no shell window is focused.
+`import Winshell.Input`. The module has `Hotkey`, a chord or a short sequence of chords that works anywhere in Windows, and `ShortcutInhibitor`, which gives one shell window the keyboard while that window is in front.
 
-[Windows hotkeys](../hotkeys.md) explains how a sequence is written, how Windows registers it, and when the Windows key alone uses a keyboard hook.
+[Windows hotkeys](../hotkeys.md) explains how a sequence is written, how Windows registers it, when the keyboard hook is installed, and what an inhibitor holds back.
 
 ## Hotkey
 
@@ -29,6 +29,40 @@ ShellRoot {
         sequence: "Ctrl+Alt+T"
         onPressed: console.log("open a terminal")
         onReleased: console.log("keys up")
+    }
+}
+```
+
+## ShortcutInhibitor
+
+Sends keys to one shell window, the way a remote desktop client or a game takes the keyboard. Quickshell's `ShortcutInhibitor` lives in `Quickshell.Wayland` and asks the compositor. On Windows the same object lives in `Winshell.Input` and uses the keyboard hook from [Windows hotkeys](../hotkeys.md). There is one hook. It is installed only while a hotkey, a waiting sequence, or an inhibitor needs it.
+
+`active` is true only while `enabled` is true, `window` is the foreground window, and Windows has installed the hook. `enabled` defaults to false. Losing the foreground makes `active` false at once, and the next key is left for Windows. Gaining the foreground makes `active` true again while `enabled` stays true. While `active` is true, Winshell `Hotkey` objects do not run. The hook posts each key to the shell window and holds it back from Windows. A key that cannot be posted is left for Windows and for hotkeys. Shift, Ctrl, Alt and the lock keys stay with Windows, because the window reads them from its own key state. The Windows key is posted as a key of its own, so a key pressed with it does not report the `Meta` modifier. A key that went down before capture started comes up through Windows.
+
+`cancelled` means the hook's thread ended without Winshell asking it to stop. Winshell sets `enabled` to false, which is what Quickshell does when the compositor withdraws the inhibitor. Losing the foreground pauses capture and does not cancel it. Windows can also remove a hook that missed its timeout and leave the thread running. Winshell cannot see that, so `cancelled` does not fire. The hook is already gone, so keys are not held back. If Windows refuses the hook, `active` stays false, `enabled` stays true, and `cancelled` does not fire. A warning uses the `hotkey` category.
+
+Ctrl+Alt+Del and Win+L cannot be blocked. Windows does not deliver Ctrl+Alt+Del to a user-mode hook. When L is pressed with the Windows key down, the hook passes that key on and does not give it to a Winshell hotkey.
+
+Capture stops when the shell exits, the shell reloads, or the window is destroyed. Exiting does not fire `cancelled`, because Winshell asked for the stop.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `enabled` | bool | Asks to capture keys when true. Default `false`. Set to false by `cancelled`. |
+| `window` | `ShellWindow` | The shell window the keys are posted to. Capture requires it to be the foreground window. |
+| `active` | bool, read-only | True while `enabled` is true, `window` is the foreground window, and the hook is installed. |
+| `cancelled()` | signal | The hook thread ended on its own. `enabled` is now false. |
+
+```qml
+import QtQuick
+import Winshell
+import Winshell.Input
+
+ShellRoot {
+    FloatingWindow { id: game }
+    ShortcutInhibitor {
+        window: game
+        enabled: true
+        onCancelled: enabled = false
     }
 }
 ```
