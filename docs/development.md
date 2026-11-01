@@ -36,9 +36,9 @@ pwsh scripts/dev.ps1
 | `dotnet tool restore`, then `dotnet docfx docs/docfx.json --serve` | Builds the docs site into `docs/_site/` and serves it at `http://localhost:8080`. See [Docs](#docs). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
-Before opening a PR, run `pwsh scripts/check.ps1`. The required `ci` job runs only its `-Quick` part on a PR. The ruleset also requires `installer`, `pr-title`, and the docs `build` job. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI turns on for itself.
+Before opening a PR, build with warnings as errors and run the focused tests for what you changed. Add `dotnet test .\tests\Winshell.Qml.Tests -c Release --filter Category=Corpus` when you touch the parser, `dotnet test .\winshell.slnx --filter Category=Leak` when you touch reload, and `dotnet test .\tests\Winshell.Runtime.Tests --filter Category=Performance` when you touch Jint. The required `ci` job runs `check.ps1 -Quick` on a PR. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI turns on for itself.
 
-`check.ps1` runs the PowerShell 7 Pester suites when Pester 5.6.1 is installed. The installer job also runs the Windows PowerShell 5.1 pass and PSScriptAnalyzer, which `check.ps1` does not. Of the jobs below, only `installer` is required:
+`check.ps1` runs the PowerShell 7 Pester suites when Pester 5.6.1 is installed. The installer job also runs the Windows PowerShell 5.1 pass and PSScriptAnalyzer, which `check.ps1` does not. Of the jobs below, `installer` and `actionlint` are required:
 
 | Job | When it runs | How to run it locally |
 | --- | --- | --- |
