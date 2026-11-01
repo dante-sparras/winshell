@@ -33,7 +33,8 @@ internal static class BluetoothIcon
         var appearanceUnreadable = false;
         foreach (var report in reports)
         {
-            if (major is null && report.Major is ushort found)
+            // A zero class is no class, so it must not hide a real one on a later endpoint.
+            if (major is null && report.Major is ushort found && (found != 0 || (report.Minor ?? 0) != 0))
             {
                 major = found;
                 minor = report.Minor;

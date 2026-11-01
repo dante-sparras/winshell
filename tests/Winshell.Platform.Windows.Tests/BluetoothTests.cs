@@ -621,6 +621,9 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         Assert.Equal("phone", Assert.Single(BluetoothBackend.MergeEndpoints([
             ClassEndpoint("zero", paired: true, new BluetoothClassReport(0, 0, null)),
             ClassEndpoint("zero-le", paired: false, phone)])).Icon);
+        Assert.Equal("audio-headset", Assert.Single(BluetoothBackend.MergeEndpoints([
+            ClassEndpoint("zero-first", paired: true, new BluetoothClassReport(0, 0, null)),
+            ClassEndpoint("headset", paired: false, new BluetoothClassReport(0x04, 0x01, null))])).Icon);
     }
 
     [Fact]
