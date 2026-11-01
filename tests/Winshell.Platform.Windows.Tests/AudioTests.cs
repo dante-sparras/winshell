@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Winshell.Platform.Windows.Services.Audio;
 using Winshell.Runtime;
@@ -11,6 +12,9 @@ namespace Winshell.Platform.Windows.Tests;
 /// </summary>
 public sealed class AudioTests : IDisposable
 {
+    // The graph is one per process and posts to the loop it was made with, so every test here starts without one.
+    private static readonly FieldInfo Graph = typeof(AudioGraph).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static)!;
+
     private readonly ITestOutputHelper _output;
     private readonly string _directory;
     private readonly ManualEventLoop _loop = new();
@@ -20,6 +24,7 @@ public sealed class AudioTests : IDisposable
 
     public AudioTests(ITestOutputHelper output)
     {
+        Graph.SetValue(null, null);
         _output = output;
         _directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_directory);
@@ -258,34 +263,27 @@ public sealed class AudioTests : IDisposable
     [Fact]
     public async Task A_recording_meter_does_not_list_this_process_as_a_recording_session()
     {
-        // The graph is one per process and posts to the loop it was made with, so this test makes its own.
-        var instance = typeof(AudioGraph).GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-        instance.SetValue(null, null);
-        try
+        // This test makes the graph with a log of its own.
+        Graph.SetValue(null, null);
+        var graph = AudioGraph.Get(_loop, new Log());
+        if (graph.DefaultRecording is not { } recording)
         {
-            var graph = AudioGraph.Get(_loop, new Log());
-            if (graph.DefaultRecording is not { } recording)
-            {
-                _output.WriteLine("no recording device");
-                return;
-            }
-            using var keepRunning = recording.KeepRunning();
-            for (var i = 0; i < 10; i++)
-            {
-                _loop.Process();
-                Assert.DoesNotContain(recording.Sessions, s => s.Properties["processId"] == Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-                Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(50));
-            }
+            _output.WriteLine("no recording device");
+            return;
         }
-        finally
+        using var keepRunning = recording.KeepRunning();
+        for (var i = 0; i < 10; i++)
         {
-            instance.SetValue(null, null);
+            _loop.Process();
+            Assert.DoesNotContain(recording.Sessions, s => s.Properties["processId"] == Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(50));
         }
     }
 
     public void Dispose()
     {
         _engine.Dispose();
+        Graph.SetValue(null, null);
         try
         {
             Directory.Delete(_directory, true);

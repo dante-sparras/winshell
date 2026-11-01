@@ -12,12 +12,11 @@ public class StaleTempFileTests
         var dir = Path.Combine(Path.GetTempPath(), "winshell-tests", "temps-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, "preferences.toml");
-        var deadPid = DeadPid();
-        var dead = path + ".tmp-" + deadPid;
-        var deadGuid = path + ".tmp-" + deadPid + "-" + Guid.NewGuid().ToString("N");
+                var dead = path + ".tmp-" + DeadPid;
+        var deadGuid = path + ".tmp-" + DeadPid + "-" + Guid.NewGuid().ToString("N");
         var live = path + ".tmp-" + Environment.ProcessId;
         var liveGuid = path + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
-        var other = Path.Combine(dir, "other.toml.tmp-" + DeadPid());
+        var other = Path.Combine(dir, "other.toml.tmp-" + DeadPid);
         var junk = path + ".tmp-not-a-pid";
         File.WriteAllText(dead, "dead");
         File.WriteAllText(deadGuid, "dead-guid");
@@ -42,22 +41,6 @@ public class StaleTempFileTests
         }
     }
 
-    private static int DeadPid()
-    {
-        var start = Random.Shared.Next(100_000, 1_000_000);
-        for (var n = 0; n < 64; n++)
-        {
-            var pid = start + n;
-            try
-            {
-                using var process = Process.GetProcessById(pid);
-            }
-            catch (ArgumentException)
-            {
-                return pid;
-            }
-        }
-
-        throw new InvalidOperationException("No unused process id was found.");
-    }
+    // Process ids are multiples of four, so this one is never in use.
+    private const int DeadPid = 999_999;
 }
