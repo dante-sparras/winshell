@@ -60,7 +60,7 @@ internal sealed class CompositionSurface : IDisposable
     private readonly GraphicsDevice _gpu = GraphicsDevice.Shared;
     private readonly IDCompositionTarget _target;
     private readonly IDCompositionVisual _visual;
-    private IDCompositionVisual3? _opacity;
+    private IDCompositionEffectGroup? _fade;
     private IDXGISwapChain1? _swapChain;
     private SKBitmap? _bitmap;
     private SKSurface? _canvas;
@@ -132,13 +132,22 @@ internal sealed class CompositionSurface : IDisposable
     }
 
     /// <summary>
-    /// Fades the visual that holds the swap chain. The frame path commits only when that chain is first created,
-    /// so a later change commits itself. Called only when the opacity is not already the visual's default of 1.
+    /// Fades the visual that holds the swap chain. This device's visuals have no opacity of their own, so an effect
+    /// group does it, and 1 removes the group, because an effect draws through an intermediate surface.
+    /// The frame path commits only when the chain is first created, so a later change commits itself.
     /// </summary>
     public void SetOpacity(float opacity)
     {
-        _opacity ??= _visual.QueryInterface<IDCompositionVisual3>();
-        _opacity.SetOpacity(opacity).CheckError();
+        if (opacity == 1f)
+        {
+            _visual.SetEffect(null).CheckError();
+        }
+        else
+        {
+            _fade ??= _gpu.Composition.CreateEffectGroup();
+            _fade.SetOpacity(opacity).CheckError();
+            _visual.SetEffect(_fade).CheckError();
+        }
         _gpu.Composition.Commit();
     }
 
@@ -177,7 +186,7 @@ internal sealed class CompositionSurface : IDisposable
         _canvas?.Dispose();
         _bitmap?.Dispose();
         _swapChain?.Dispose();
-        _opacity?.Dispose();
+        _fade?.Dispose();
         _visual.Dispose();
         _target.Dispose();
         _gpu.Composition.Commit();
