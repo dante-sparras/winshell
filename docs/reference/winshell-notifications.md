@@ -58,6 +58,7 @@ A notification in Notification Center, reached from a listener's `notifications`
 | `id` | real, read-only | The Windows notification id, a full unsigned 32-bit number. |
 | `appId` | string, read-only | The AppUserModelID of the app that sent it. Can be empty. |
 | `appName` | string, read-only | The sending app's display name. |
+| `appIcon` | string, read-only | A `file:///` url of the sending app's logo, for an `Image` source. Empty when Windows gives none. It can stay empty for a moment and then change. One temporary file per app, deleted when that app's notifications are gone. A logo over 8 MiB or 4096 by 4096 pixels, or not a PNG, JPEG, GIF, BMP or WebP picture, is ignored. |
 | `title` | string, read-only | The first line of text. |
 | `body` | string, read-only | The rest of the text. |
 | `createdAt` | real, read-only | When it arrived, in Unix milliseconds for `new Date(createdAt)`. |
