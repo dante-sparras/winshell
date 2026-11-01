@@ -415,11 +415,7 @@ public class ShellTests
             }
             """));
         shell.Start();
-        for (var i = 0; i < 100 && (int)shell.Host.Root!.ReadProperty("code")! != 0; i++)
-        {
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-            shell.Files.Loop.Process();
-        }
+        await Wait.UntilAsync(() => (int)shell.Host.Root!.ReadProperty("code")! == 0, "the process to exit", shell.Files.Loop.Process);
         Assert.Equal("hello", shell.Host.Root!.ReadProperty("out"));
         Assert.Equal(0, shell.Host.Root.ReadProperty("code"));
     }
@@ -498,15 +494,8 @@ public class ShellTests
         Assert.True(File.Exists(file));
 
         // A change made by hand afterwards is followed.
-        Thread.Sleep(300);
         File.WriteAllText(file, """{ "name": "by hand" }""");
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while ((string?)root.ReadProperty("name") != "by hand")
-        {
-            Assert.True(DateTime.UtcNow < until, "The FileView did not follow the file.");
-            Thread.Sleep(20);
-            shell.Files.Loop.Process();
-        }
+        Wait.Until(() => (string?)root.ReadProperty("name") == "by hand", "The FileView did not follow the file.", shell.Files.Loop.Process);
         Assert.Equal(1, root.ReadProperty("writes"));
     }
 

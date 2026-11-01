@@ -5,6 +5,8 @@ namespace Winshell.Runtime.Tests;
 /// <summary>Replacing the shell folder must not leave hot reload dead.</summary>
 public class HotReloadWatchTests
 {
+    private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(30);
+
     [Fact]
     public void Replacing_the_shell_folder_reloads_when_the_folder_returns()
     {
@@ -26,7 +28,7 @@ public class HotReloadWatchTests
         Pump(shell, TimeSpan.FromSeconds(1));
         Directory.CreateDirectory(shell.Directory);
         File.WriteAllText(Path.Combine(shell.Directory, "shell.qml"), after);
-        Pump(shell, TimeSpan.FromSeconds(4));
+        Reloaded(shell, host);
 
         Assert.Contains(shell.Messages, line => line.Contains("Configuration Loaded", StringComparison.Ordinal));
         Assert.True(reloads > 1);
@@ -47,19 +49,27 @@ public class HotReloadWatchTests
         Pump(shell, TimeSpan.FromSeconds(1));
         Directory.CreateDirectory(inside);
         File.WriteAllText(Path.Combine(inside, "shell.qml"), "import Winshell; ShellRoot { property int marker: 2 }");
-        Pump(shell, TimeSpan.FromSeconds(4));
+        Reloaded(shell, host);
 
         Assert.Equal(2, host.Root!.ReadProperty("marker"));
     }
 
-    private static void Pump(TestShell shell, TimeSpan budget)
+    /// <summary>Runs the loop for a while. A watch must recover whether it saw the folder go before it came back or not.</summary>
+    private static void Pump(TestShell shell, TimeSpan time)
     {
-        var deadline = DateTime.UtcNow + budget;
-        while (DateTime.UtcNow < deadline)
+        for (var pumped = TimeSpan.Zero; pumped < time; pumped += Step)
         {
-            shell.Loop.Process();
-            shell.Loop.Advance(TimeSpan.FromMilliseconds(150));
-            Thread.Sleep(30);
+            Wait.ForNothingToHappen(Step);
+            RunLoop(shell);
         }
+    }
+
+    private static void Reloaded(TestShell shell, ShellHost host) =>
+        Wait.Until(() => Equals(host.Root?.ReadProperty("marker"), 2), "the reload", () => RunLoop(shell));
+
+    private static void RunLoop(TestShell shell)
+    {
+        shell.Loop.Process();
+        shell.Loop.Advance(TimeSpan.FromMilliseconds(150));
     }
 }

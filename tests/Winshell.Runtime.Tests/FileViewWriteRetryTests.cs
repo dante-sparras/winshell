@@ -30,9 +30,10 @@ public class FileViewWriteRetryTests
         var root = shell.Load();
         var path = Path.Combine(shell.Directory, "settings.toml");
         var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        // The save writes its temporary file first, so once that is there it is about to find the lock.
         var releaser = new Thread(() =>
         {
-            Thread.Sleep(40);
+            Wait.Until(() => Directory.GetFiles(shell.Directory, "*.tmp-*").Length > 0, "the save to start");
             locked.Dispose();
         });
         releaser.Start();

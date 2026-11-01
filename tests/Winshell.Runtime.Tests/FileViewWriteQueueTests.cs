@@ -34,33 +34,22 @@ public class FileViewWriteQueueTests
             for (var i = 0; i < 40; i++)
                 setText.Invoke(view, ["value-" + i]);
 
-            var until = DateTime.UtcNow.AddSeconds(5);
-            while (true)
+            Wait.Until(() =>
             {
-                files.Loop.Process();
-                string? text = null;
-                var temps = Array.Empty<string>();
                 try
                 {
-                    if (File.Exists(file))
-                        text = File.ReadAllText(file);
-                    temps = Directory.GetFiles(files.Directory, "*.tmp-*");
+                    return File.Exists(file) && File.ReadAllText(file) == "value-39" && Directory.GetFiles(files.Directory, "*.tmp-*").Length == 0;
                 }
                 catch (IOException)
                 {
+                    return false;
                 }
-                if (text == "value-39" && temps.Length == 0)
-                {
-                    Thread.Sleep(150);
-                    files.Loop.Process();
-                    Assert.Equal("value-39", File.ReadAllText(file));
-                    Assert.Empty(Directory.GetFiles(files.Directory, "*.tmp-*"));
-                    return;
-                }
-                Assert.True(DateTime.UtcNow < until,
-                    $"exists={File.Exists(file)} files=[{string.Join(", ", Directory.GetFiles(files.Directory))}] logs=[{string.Join(" | ", files.Messages)}]");
-                Thread.Sleep(20);
-            }
+            }, "the last save, alone", files.Loop.Process);
+
+            Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(150));
+            files.Loop.Process();
+            Assert.Equal("value-39", File.ReadAllText(file));
+            Assert.Empty(Directory.GetFiles(files.Directory, "*.tmp-*"));
         }
         finally
         {
