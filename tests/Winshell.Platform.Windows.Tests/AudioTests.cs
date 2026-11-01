@@ -165,19 +165,17 @@ public sealed class AudioTests : IDisposable
     private async Task<AudioNode?> WaitForSession(AudioService audio)
     {
         var pid = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
-        for (var i = 0; i < 50; i++)
+        AudioNode? session = null;
+        await Wait.UntilAsync(() =>
         {
-            _loop.Process();
             // Another test in this process can leave an inactive session with the same pid. Use the one that is playing.
-            var session = audio.Nodes.Values.OfType<AudioNode>().FirstOrDefault(n =>
+            session = audio.Nodes.Values.OfType<AudioNode>().FirstOrDefault(n =>
                 n.IsSession && n.IsPlayback
                 && n.Properties.TryGetValue("processId", out var id) && (string?)id == pid
                 && audio.Links.Values.OfType<AudioLink>().FirstOrDefault(l => ReferenceEquals(l.Source, n)) is { State: 1 });
-            if (session is not null)
-                return session;
-            await Task.Delay(100);
-        }
-        return null;
+            return session is not null;
+        }, "the session to play", _loop.Process);
+        return session;
     }
 
     /// <summary>A shared playback stream of silence, so this process owns one audio session.</summary>
@@ -276,7 +274,7 @@ public sealed class AudioTests : IDisposable
             {
                 _loop.Process();
                 Assert.DoesNotContain(recording.Sessions, s => s.Properties["processId"] == Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-                await Task.Delay(50, TestContext.Current.CancellationToken);
+                Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(50));
             }
         }
         finally

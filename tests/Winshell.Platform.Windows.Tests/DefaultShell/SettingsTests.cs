@@ -456,16 +456,8 @@ public class SettingsTests
         Show(shell, "start", "pins");
         Assert.Equal(["Notepad"], Titles(shell, "pinList"));
 
-        // Past the time a FileView takes its own writes to be.
-        Thread.Sleep(300);
         File.Delete(Path.Combine(shell.Directory, "launcher.toml"));
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (!Titles(shell, "pinList").SequenceEqual(["Microsoft Edge", "Notepad", "Calculator"]))
-        {
-            Assert.True(DateTime.UtcNow < until, "The page kept the pins of the deleted file.");
-            Thread.Sleep(20);
-            shell.Settle();
-        }
+        Wait.Until(() => Titles(shell, "pinList").SequenceEqual(["Microsoft Edge", "Notepad", "Calculator"]), "The page kept the pins of the deleted file.", shell.Settle);
         AssertQuiet(shell);
     }
 
@@ -813,9 +805,7 @@ public class SettingsTests
         Assert.Equal("Check for updates", button.ReadProperty("text"));
 
         shell.Click(button);
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (updates.Updater.State.Status != UpdateStatus.Failed && DateTime.UtcNow < until)
-            Thread.Sleep(20);
+        Wait.Until(() => updates.Updater.State.Status == UpdateStatus.Failed, "the check to fail");
         shell.Settle();
         Assert.Equal("Winshell could not check for updates: No such host is known.", Card(shell, "winshellUpdates").ReadProperty("description"));
         Assert.True(button.Enabled);

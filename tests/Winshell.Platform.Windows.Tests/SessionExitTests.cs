@@ -34,7 +34,7 @@ public class SessionExitTests
         }
 
         Assert.True(process.WaitForExit(8000));
-        Thread.Sleep(200);
+        Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(200));
         Assert.Equal(0, Volatile.Read(ref ran));
     }
 }

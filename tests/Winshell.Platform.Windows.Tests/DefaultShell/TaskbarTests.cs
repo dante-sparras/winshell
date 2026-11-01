@@ -1742,7 +1742,7 @@ public class TaskbarTests
         // Another copy of the shell changes the file; the watcher's news is still queued when this one pins.
         File.WriteAllText(path, """{ "pinned": ["Saved.App", "Other.App"] }""");
         shell.Root.WriteProperty("pinNext", "New.App");
-        Thread.Sleep(200);
+        Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(200));
         shell.Settle();
 
         // The last write wins, and what is shown is what is in the file.
