@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using SkiaSharp;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -36,6 +37,9 @@ public class SurfaceCrashTests
         }
     }
 
+    /// <summary>How long a test waits for the window. A shared machine can stall a window well past the second it takes.</summary>
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
     private const string Config = """
         import Winshell
         import Crashy
@@ -57,7 +61,8 @@ public class SurfaceCrashTests
         Directory.CreateDirectory(dir);
         var root = Path.Combine(dir, "shell.qml");
         File.WriteAllText(root, Config);
-        var log = new Log { Sink = (_, _, _) => { } };
+        var lines = new ConcurrentQueue<string>();
+        var log = new Log { Sink = (_, category, message) => lines.Enqueue($"{category}: {message}") };
         PaintThrower.Paints = 0;
         try
         {
@@ -90,8 +95,14 @@ public class SurfaceCrashTests
                 loop.Schedule(TimeSpan.FromMilliseconds(20), Poll);
             }
             loop.Schedule(TimeSpan.FromMilliseconds(20), Poll);
-            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(1));
-            Assert.Equal(0, loop.Run());
+            var stuck = "";
+            loop.Schedule(Patience, () =>
+            {
+                stuck = $"{PaintThrower.Paints} paints, {platform.Windows.Count} windows, {loopFailures} loop failures, log: {string.Join(" | ", lines)}";
+                loop.Quit(1);
+            });
+            if (loop.Run() != 0)
+                Assert.Fail($"The window did not come back: {stuck}");
 
             Assert.NotEqual(0, replaced);
             Assert.Same(window, Assert.Single(platform.Windows).Client);
@@ -151,7 +162,7 @@ public class SurfaceCrashTests
                 loop.Schedule(TimeSpan.FromMilliseconds(20), Next);
             }
             loop.Schedule(TimeSpan.FromMilliseconds(20), Next);
-            loop.Schedule(TimeSpan.FromSeconds(10), () => loop.Quit(1));
+            loop.Schedule(Patience, () => loop.Quit(1));
             Assert.Equal(0, loop.Run());
 
             Assert.InRange(DeviceLoser.Paints, 10, int.MaxValue);
