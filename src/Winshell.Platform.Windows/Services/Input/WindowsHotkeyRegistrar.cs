@@ -16,8 +16,16 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private const uint LlkhfExtended = 0x01;
     private const uint LlkhfAltDown = 0x20;
     private const uint LlkhfUp = 0x80;
+    private const int VkShift = 0x10;
+    private const int VkControl = 0x11;
+    private const int VkAlt = 0x12;
+    private const int VkCapsLock = 0x14;
     private const int VkDelete = 0x2E;
     private const int VkL = 0x4C;
+    private const int VkNumLock = 0x90;
+    private const int VkScrollLock = 0x91;
+    private const int VkLeftShift = 0xA0;
+    private const int VkRightAlt = 0xA5;
     private const int MaxTrackedWindows = 16;
     private const string ClassName = "WinshellHotkey";
 
@@ -53,6 +61,9 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     /// <summary>Whether <paramref name="hwnd"/> is the foreground window. Tests substitute a window that is not really in front.</summary>
     internal Func<nint, bool> IsForeground { get; set; } = static hwnd => hwnd != 0 && Win32.GetForegroundWindow() == hwnd;
+
+    /// <summary>Whether Windows saw this key go down and has not seen it come up. Tests substitute it so the real keyboard is not read.</summary>
+    internal Func<int, bool> HeldByWindows { get; set; } = Down;
 
     /// <summary>Posts one captured key to the shell window. Tests record the key instead of posting it.</summary>
     internal Func<PostedKey, bool> ForwardKey { get; set; } = PostToWindow;
@@ -717,7 +728,12 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         }
         if (target == 0)
         {
-            Interlocked.Exchange(ref _captureLive, 0);
+            // Windows gets the key-ups from here on, so nothing held now is the window's to release.
+            if (Interlocked.Exchange(ref _captureLive, 0) == 1)
+            {
+                lock (_bookLock)
+                    Array.Clear(_down);
+            }
             PostForegroundRecheck();
             return InhibitDecision.None;
         }
@@ -725,27 +741,45 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         if (Interlocked.Exchange(ref _captureLive, 1) == 0)
             PostForegroundRecheck();
         // Ctrl+Alt+Del and Win+L still reach Windows. Eating them would claim a block Windows does not allow.
-        if (IsUnblockable(virtualKey, modifiers))
+        // The window reads these from its own key state, which a posted key does not change.
+        // Held back, Shift+A would arrive as a and Ctrl+C as c.
+        if (IsUnblockable(virtualKey, modifiers) || IsKeyStateKey(virtualKey))
             return InhibitDecision.Pass;
-        return TryForward(target, virtualKey, isUp, scanCode, flags) ? InhibitDecision.Swallow : InhibitDecision.None;
+        var captured = false;
+        if ((uint)virtualKey < (uint)_down.Length)
+        {
+            lock (_bookLock)
+                captured = _down[virtualKey];
+        }
+        // Windows saw this key go down, so it has to see the key come up, or the key stays held for every app.
+        if (!captured && isUp)
+            return InhibitDecision.None;
+        if (!captured && HeldByWindows(virtualKey))
+            return InhibitDecision.Pass;
+        return TryForward(target, virtualKey, isUp, captured, scanCode, flags) ? InhibitDecision.Swallow : InhibitDecision.None;
     }
 
-    private static bool IsUnblockable(int virtualKey, HotkeyModifiers modifiers)
+    private bool IsUnblockable(int virtualKey, HotkeyModifiers modifiers)
     {
         if (virtualKey == VkDelete && (modifiers & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt)) == (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt))
             return true;
-        return virtualKey == VkL && (modifiers & HotkeyModifiers.Win) != 0;
+        if (virtualKey != VkL)
+            return false;
+        // A captured Windows key never reached Windows, so the modifiers read in the hook do not show it.
+        if ((modifiers & HotkeyModifiers.Win) != 0)
+            return true;
+        lock (_bookLock)
+            return _down[VirtualKeys.LeftWin] || _down[VirtualKeys.RightWin];
     }
 
-    private bool TryForward(nint hwnd, int virtualKey, bool isUp, uint scanCode, uint flags)
+    private static bool IsKeyStateKey(int virtualKey) =>
+        virtualKey is VkShift or VkControl or VkAlt or VkCapsLock or VkNumLock or VkScrollLock
+            or >= VkLeftShift and <= VkRightAlt;
+
+    private bool TryForward(nint hwnd, int virtualKey, bool isUp, bool captured, uint scanCode, uint flags)
     {
         var known = (uint)virtualKey < (uint)_down.Length;
-        var repeat = false;
-        if (known)
-        {
-            lock (_bookLock)
-                repeat = !isUp && _down[virtualKey];
-        }
+        var repeat = !isUp && captured;
         var alt = (flags & LlkhfAltDown) != 0;
         var extended = (flags & LlkhfExtended) != 0;
         uint message;

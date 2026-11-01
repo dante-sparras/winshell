@@ -6,6 +6,7 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Tests;
 
+[Collection(ThemeCollection.Name)]
 public sealed class ShortcutInhibitorTests : IDisposable
 {
     public void Dispose()
@@ -110,6 +111,82 @@ public sealed class ShortcutInhibitorTests : IDisposable
         Assert.True(registrar.HandleKey(0x2E, isUp: false, HotkeyModifiers.Ctrl));
         Assert.Equal(2, posts.Count);
         Assert.Equal(0, probe.Presses);
+    }
+
+    [Theory]
+    [InlineData(0xA0)] // Left Shift
+    [InlineData(0xA3)] // Right Ctrl
+    [InlineData(0xA4)] // Left Alt
+    [InlineData(0xA5)] // Right Alt, also AltGr
+    [InlineData(0x14)] // Caps Lock
+    [InlineData(0x90)] // Num Lock
+    public void Keys_a_window_reads_from_its_key_state_stay_with_windows(int virtualKey)
+    {
+        var loop = new ManualEventLoop();
+        var posts = new List<PostedKey>();
+        using var registrar = Registrar(loop, posts);
+        var probe = new Probe(loop);
+        Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(probe, Parse("Win")).Status);
+        Assert.True(registrar.SetInhibition(new Client(), 0x42));
+
+        Assert.False(registrar.HandleKey(virtualKey, isUp: false, HotkeyModifiers.None));
+        Assert.False(registrar.HandleKey(virtualKey, isUp: true, HotkeyModifiers.None));
+        Assert.Empty(posts);
+        Assert.Equal(0, probe.Presses);
+    }
+
+    [Fact]
+    public void A_key_windows_saw_go_down_comes_up_through_windows()
+    {
+        var loop = new ManualEventLoop();
+        var posts = new List<PostedKey>();
+        using var registrar = Registrar(loop, posts);
+        var held = new HashSet<int> { 0x09 };
+        registrar.HeldByWindows = held.Contains;
+        Assert.True(registrar.SetInhibition(new Client(), 0x42));
+
+        Assert.False(registrar.HandleKey(0x09, isUp: false, HotkeyModifiers.None));
+        Assert.False(registrar.HandleKey(0x09, isUp: true, HotkeyModifiers.None));
+        Assert.False(registrar.HandleKey(VirtualKeys.LeftWin, isUp: true, HotkeyModifiers.None));
+        Assert.Empty(posts);
+
+        held.Clear();
+        Assert.True(registrar.HandleKey(0x09, isUp: false, HotkeyModifiers.None));
+        Assert.True(registrar.HandleKey(0x09, isUp: true, HotkeyModifiers.None));
+        Assert.Equal(2, posts.Count);
+    }
+
+    [Fact]
+    public void A_key_the_window_stopped_tracking_at_foreground_loss_comes_up_through_windows()
+    {
+        var loop = new ManualEventLoop();
+        var posts = new List<PostedKey>();
+        using var registrar = Registrar(loop, posts);
+        var front = true;
+        registrar.IsForeground = _ => front;
+        Assert.True(registrar.SetInhibition(new Client(), 0x42));
+
+        Assert.True(registrar.HandleKey((int)'A', isUp: false, HotkeyModifiers.None));
+        front = false;
+        Assert.False(registrar.HandleKey((int)'A', isUp: true, HotkeyModifiers.None));
+        Assert.False(registrar.HandleKey((int)'A', isUp: false, HotkeyModifiers.None));
+        front = true;
+        Assert.False(registrar.HandleKey((int)'A', isUp: true, HotkeyModifiers.None));
+        Assert.Single(posts);
+    }
+
+    [Fact]
+    public void Win_L_is_passed_on_while_the_window_holds_the_windows_key()
+    {
+        var loop = new ManualEventLoop();
+        var posts = new List<PostedKey>();
+        using var registrar = Registrar(loop, posts);
+        Assert.True(registrar.SetInhibition(new Client(), 0x42));
+
+        // Windows does not report a key it never saw, so the modifiers read in the hook say None here.
+        Assert.True(registrar.HandleKey(VirtualKeys.LeftWin, isUp: false, HotkeyModifiers.None));
+        Assert.False(registrar.HandleKey(0x4C, isUp: false, HotkeyModifiers.None));
+        Assert.Single(posts);
     }
 
     [Fact]
@@ -306,6 +383,7 @@ public sealed class ShortcutInhibitorTests : IDisposable
     {
         var registrar = new WindowsHotkeyRegistrar(loop) { InstallNativeHook = false };
         registrar.IsForeground = hwnd => hwnd == 0x42;
+        registrar.HeldByWindows = _ => false;
         registrar.ForwardKey = key =>
         {
             posts?.Add(key);
@@ -368,6 +446,7 @@ public sealed class ShortcutInhibitorTests : IDisposable
                 AllowHookInstall = allowHookInstall,
             };
             Registrar.IsForeground = hwnd => Front && hwnd == Hwnd;
+            Registrar.HeldByWindows = _ => false;
             Registrar.ForwardKey = key =>
             {
                 Posts.Add(key);

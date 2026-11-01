@@ -22,6 +22,8 @@ A sequence waits one second for the next chord. A different key cancels it. Modi
 
 `ShortcutInhibitor` posts keys to one shell window while `enabled` is true and that window is in front. `active` is true only then, and only while this same hook is installed. Losing the foreground stops capture on the next key. Gaining it starts capture again with `enabled` left as it is. Winshell hotkeys stay idle while `active` is true. A key that cannot be posted is left for Windows and for hotkeys.
 
+Shift, Ctrl, Alt, Caps Lock, Num Lock and Scroll Lock stay with Windows, because the window reads them from its own key state. A chord of only those keys, such as Alt+Shift for the keyboard layout, still reaches Windows. The Windows key is posted as a key of its own, so a key pressed with it does not report the `Meta` modifier. A key that went down before capture started comes up through Windows, so it does not stay held.
+
 Ctrl+Alt+Del and Win+L cannot be blocked. Windows does not deliver Ctrl+Alt+Del to a user-mode hook. When L is pressed with the Windows key down, the hook passes that key on and does not give it to a Winshell hotkey.
 
 `cancelled` means the hook's thread ended without Winshell asking it to stop, and `enabled` becomes false. Losing the foreground does not cancel. Windows can remove a hook that missed its timeout and leave the thread running. Winshell cannot see that, so `cancelled` does not fire, and keys are not held back because the hook is already gone. If Windows refuses the hook, `active` stays false and `enabled` stays true. Capture also stops when the shell exits, the shell reloads, or the window is destroyed. See [ShortcutInhibitor](reference/winshell-input.md#shortcutinhibitor).
