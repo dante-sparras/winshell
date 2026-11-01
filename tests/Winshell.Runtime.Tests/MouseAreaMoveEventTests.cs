@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -50,13 +51,13 @@ public class MouseAreaMoveEventTests
         using var _ = shell;
 
         scene.PointerMove(30, 24);
-        Assert.Equal(20, Convert.ToDouble(root.ReadProperty("seenX")));
-        Assert.Equal(14, Convert.ToDouble(root.ReadProperty("seenY")));
+        Assert.Equal(20, Convert.ToDouble(root.ReadProperty("seenX"), CultureInfo.InvariantCulture));
+        Assert.Equal(14, Convert.ToDouble(root.ReadProperty("seenY"), CultureInfo.InvariantCulture));
 
         scene.PointerPress(30, 24, QtEnums.LeftButton);
         scene.PointerMove(45, 50);
-        Assert.Equal(35, Convert.ToDouble(root.ReadProperty("seenX")));
-        Assert.Equal(40, Convert.ToDouble(root.ReadProperty("seenY")));
+        Assert.Equal(35, Convert.ToDouble(root.ReadProperty("seenX"), CultureInfo.InvariantCulture));
+        Assert.Equal(40, Convert.ToDouble(root.ReadProperty("seenY"), CultureInfo.InvariantCulture));
         scene.PointerRelease(45, 50, QtEnums.LeftButton);
     }
 

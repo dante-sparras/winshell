@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -75,6 +76,6 @@ public class ControlsTests
         shell.Loop.Process();
         var popup = (QObject)((QObject)root.ReadProperty("box")!).ReadProperty("popup")!;
         Assert.True((bool)popup.ReadProperty("visible")!);
-        Assert.True(Convert.ToDouble(popup.ReadProperty("height")) >= 3 * 32);
+        Assert.True(Convert.ToDouble(popup.ReadProperty("height"), CultureInfo.InvariantCulture) >= 3 * 32);
     }
 }

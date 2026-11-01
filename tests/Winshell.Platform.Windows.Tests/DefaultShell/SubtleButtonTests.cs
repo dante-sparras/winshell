@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 
@@ -57,7 +58,7 @@ public class SubtleButtonTests
     private const int Return = 0x01000004, Enter = 0x01000005, Space = 0x20, Left = 0x01000012;
 
     private static int Number(DefaultShellHarness shell, string name, string property) =>
-        Convert.ToInt32(shell.Find(name).ReadProperty(property));
+        Convert.ToInt32(shell.Find(name).ReadProperty(property), CultureInfo.InvariantCulture);
 
     private static void Press(DefaultShellHarness shell, string name, int key, int modifiers = 0)
     {

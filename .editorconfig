@@ -14,6 +14,10 @@ trim_trailing_whitespace = false
 [*.{py,rs,cs,ps1}]
 indent_size = 4
 
+[*.cs]
+# A number or date in a file, a log or a test must not change with the user's region. Say which culture is meant.
+dotnet_diagnostic.CA1305.severity = warning
+
 [{*.go,Makefile,*.mk}]
 indent_style = tab
 

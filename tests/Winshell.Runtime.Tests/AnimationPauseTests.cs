@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Winshell.Runtime.Tests;
 
 public class AnimationPauseTests
@@ -24,15 +26,15 @@ public class AnimationPauseTests
             """));
         var root = shell.Load();
         shell.Loop.Advance(TimeSpan.FromMilliseconds(200));
-        var before = Convert.ToDouble(root.ReadProperty("place"));
+        var before = Convert.ToDouble(root.ReadProperty("place"), CultureInfo.InvariantCulture);
         Assert.InRange(before, 15, 25);
 
         shell.Eval(root, "hold = true");
         shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.InRange(Convert.ToDouble(root.ReadProperty("place")), before - 1, before + 1);
+        Assert.InRange(Convert.ToDouble(root.ReadProperty("place"), CultureInfo.InvariantCulture), before - 1, before + 1);
 
         shell.Eval(root, "hold = false");
         shell.Loop.Advance(TimeSpan.FromMilliseconds(200));
-        Assert.InRange(Convert.ToDouble(root.ReadProperty("place")), before + 15, before + 25);
+        Assert.InRange(Convert.ToDouble(root.ReadProperty("place"), CultureInfo.InvariantCulture), before + 15, before + 25);
     }
 }

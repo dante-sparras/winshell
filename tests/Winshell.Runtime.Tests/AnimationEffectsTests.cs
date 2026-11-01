@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -43,9 +44,9 @@ public class AnimationEffectsTests
                 """));
             var root = shell.Load();
             shell.Loop.Process();
-            Assert.Equal(100, Convert.ToDouble(root.ReadProperty("place")));
+            Assert.Equal(100, Convert.ToDouble(root.ReadProperty("place"), CultureInfo.InvariantCulture));
             Assert.False((bool)root.ReadProperty("stillRunning")!);
-            Assert.Equal(40, Convert.ToDouble(root.ReadProperty("lap")));
+            Assert.Equal(40, Convert.ToDouble(root.ReadProperty("lap"), CultureInfo.InvariantCulture));
             Assert.False((bool)root.ReadProperty("loopRunning")!);
         }
         finally

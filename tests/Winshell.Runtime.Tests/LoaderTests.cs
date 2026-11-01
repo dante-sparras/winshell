@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -47,15 +48,15 @@ public class LoaderTests
             """);
         using var _ = shell;
         var loader = (Loader)Find(root, "loader");
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("seenStatus")));
-        Assert.Equal(1.0, Convert.ToDouble(root.ReadProperty("seenProgress")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("seenStatus"), CultureInfo.InvariantCulture));
+        Assert.Equal(1.0, Convert.ToDouble(root.ReadProperty("seenProgress"), CultureInfo.InvariantCulture));
         loader.Item_!.Destroy();
         shell.Loop.Process();
         Assert.Null(loader.Item_);
         Assert.Equal((int)Loader.StatusValue.Null, loader.Status);
         Assert.Equal(0.0, loader.Progress);
-        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("seenStatus")));
-        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("seenProgress")));
+        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("seenStatus"), CultureInfo.InvariantCulture));
+        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("seenProgress"), CultureInfo.InvariantCulture));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -70,9 +71,9 @@ public class PointerHandlerEventTests
         scene.Wheel(50, 50, -120, 0);
         shell.Loop.Advance(TimeSpan.FromSeconds(2));
 
-        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("value")));
-        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("wheels")));
-        Assert.True(Convert.ToDouble(root.ReadProperty("contentX")) > 0);
+        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("value"), CultureInfo.InvariantCulture));
+        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("wheels"), CultureInfo.InvariantCulture));
+        Assert.True(Convert.ToDouble(root.ReadProperty("contentX"), CultureInfo.InvariantCulture) > 0);
     }
 
     [Fact]
@@ -94,10 +95,10 @@ public class PointerHandlerEventTests
         var (root, scene) = Show(shell);
 
         scene.Wheel(50, 50, 0, 120);
-        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("value")));
+        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("value"), CultureInfo.InvariantCulture));
 
         scene.Wheel(50, 50, 120, 0);
-        Assert.Equal(15.0, Convert.ToDouble(root.ReadProperty("value")));
+        Assert.Equal(15.0, Convert.ToDouble(root.ReadProperty("value"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -117,7 +118,7 @@ public class PointerHandlerEventTests
 
         scene.Wheel(50, 50, 0, 120, pixelY: 7);
 
-        Assert.Equal(7.0, Convert.ToDouble(root.ReadProperty("value")));
+        Assert.Equal(7.0, Convert.ToDouble(root.ReadProperty("value"), CultureInfo.InvariantCulture));
     }
 
     private static (Item Root, Scene Scene) Show(TestShell shell)

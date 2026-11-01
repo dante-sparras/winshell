@@ -1,3 +1,4 @@
+using System.Globalization;
 using SkiaSharp;
 using Winshell.Runtime.Shell;
 
@@ -560,7 +561,7 @@ public class ShellTests
             """));
         shell.Start();
         var root = shell.Host.Root!;
-        Assert.Equal(1440.0, Convert.ToDouble(root.ReadProperty("workHeight")));
+        Assert.Equal(1440.0, Convert.ToDouble(root.ReadProperty("workHeight"), CultureInfo.InvariantCulture));
 
         // The taskbar moves to the top of the second screen, its scale goes to 200%, and it runs at 60 Hz.
         shell.Platform.ScreenList[1] = shell.Platform.ScreenList[1] with
@@ -572,10 +573,10 @@ public class ShellTests
         };
         shell.Platform.ChangeScreens();
         shell.Files.Loop.Process();
-        Assert.Equal(24.0, Convert.ToDouble(root.ReadProperty("workY")));
-        Assert.Equal(1056.0, Convert.ToDouble(root.ReadProperty("workHeight")));
-        Assert.Equal(2.0, Convert.ToDouble(root.ReadProperty("ratio")));
-        Assert.Equal(60, Convert.ToInt32(root.ReadProperty("rate")));
+        Assert.Equal(24.0, Convert.ToDouble(root.ReadProperty("workY"), CultureInfo.InvariantCulture));
+        Assert.Equal(1056.0, Convert.ToDouble(root.ReadProperty("workHeight"), CultureInfo.InvariantCulture));
+        Assert.Equal(2.0, Convert.ToDouble(root.ReadProperty("ratio"), CultureInfo.InvariantCulture));
+        Assert.Equal(60, Convert.ToInt32(root.ReadProperty("rate"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -619,16 +620,16 @@ public class ShellTests
         client.OnActiveChanged(true);
         shell.Files.Loop.Process();
         Assert.True((bool)root.ReadProperty("activeNow")!);
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("changes")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("changes"), CultureInfo.InvariantCulture));
 
         client.OnActiveChanged(true);
         shell.Files.Loop.Process();
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("changes")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("changes"), CultureInfo.InvariantCulture));
 
         client.OnActiveChanged(false);
         shell.Files.Loop.Process();
         Assert.False((bool)root.ReadProperty("activeNow")!);
-        Assert.Equal(2, Convert.ToInt32(root.ReadProperty("changes")));
+        Assert.Equal(2, Convert.ToInt32(root.ReadProperty("changes"), CultureInfo.InvariantCulture));
     }
 
     [Fact]

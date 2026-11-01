@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Winshell.Runtime.Tests;
 
 /// <summary>One animation that throws must not clear the process-wide clock.</summary>
@@ -29,11 +31,11 @@ public class AnimationClockTests
         var root = shell.Load();
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(200));
-        var midway = Convert.ToDouble(root.ReadProperty("x"));
+        var midway = Convert.ToDouble(root.ReadProperty("x"), CultureInfo.InvariantCulture);
         Assert.True(midway > 1, $"x was {midway}");
         Assert.Contains(shell.Messages, m => m.Contains("boom", StringComparison.Ordinal));
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(200));
-        Assert.True(Convert.ToDouble(root.ReadProperty("x")) > midway);
+        Assert.True(Convert.ToDouble(root.ReadProperty("x"), CultureInfo.InvariantCulture) > midway);
     }
 }
