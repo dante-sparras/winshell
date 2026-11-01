@@ -193,7 +193,9 @@ public sealed class NetworkingService : QObject
     private readonly Dictionary<string, NetworkProfile> _profiles = new(StringComparer.Ordinal);
     private NetworkSnapshot _snapshot = NetworkSnapshot.Initial;
     private string _error = "";
+    private string _radioError = "";
     private bool _requesting;
+    private bool _settingWifi;
     internal NetworkingService(QmlEngine engine) : this(NetworkBackend.Instance, engine.Loop) { Engine = engine; }
     internal NetworkingService(INetworkBackend backend, IEventLoop loop)
     {
@@ -205,7 +207,7 @@ public sealed class NetworkingService : QObject
     [Qml] public ObjectModel Devices { get; } = new();
     [Qml] public ObjectModel Profiles { get; } = new();
     [Qml] public bool Ready { get { Track(); return _snapshot.Ready; } }
-    [Qml] public bool WifiEnabled { get { Track(); return _snapshot.WifiEnabled; } }
+    [Qml] public bool WifiEnabled { get { Track(); return _snapshot.WifiEnabled; } set => _ = SetWifiEnabledAsync(value); }
     [Qml] public WifiRadioState WifiState { get { Track(); return _snapshot.WifiState; } }
     [Qml] public bool WifiHardwareEnabled { get { Track(); return _snapshot.WifiHardwareEnabled; } }
     [Qml] public NetworkAccessStatus AccessStatus { get { Track(); return _snapshot.Access; } }
@@ -225,17 +227,56 @@ public sealed class NetworkingService : QObject
         _loop.Post(() =>
         {
             if (IsDestroyed) return;
+            _radioError = "";
             SetField(ref _requesting, false, nameof(RequestingAccess));
             Apply(_backend.Current);
             SetField(ref _error, error, nameof(Error));
             if (error.Length > 0) Emit("operationFailed", error);
         });
     }
+
+    // Returns before Windows answers. The property changes only when a snapshot reports the radios did.
+    internal async Task SetWifiEnabledAsync(bool enabled)
+    {
+        if (_settingWifi || IsDestroyed || _snapshot.WifiEnabled == enabled)
+            return;
+        _settingWifi = true;
+        var error = "";
+        var report = false;
+        try
+        {
+            error = await _backend.SetWifiEnabledAsync(enabled).ConfigureAwait(false) ?? "";
+            report = true;
+        }
+        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
+        {
+            error = e.Message;
+            report = true;
+        }
+        finally
+        {
+            var message = error;
+            var shouldReport = report;
+            _loop.Post(() =>
+            {
+                _settingWifi = false;
+                if (!shouldReport || IsDestroyed)
+                    return;
+                _radioError = message;
+                Apply(_backend.Current);
+                if (message.Length > 0)
+                    Emit("operationFailed", message);
+            });
+        }
+    }
     internal void Apply(NetworkSnapshot snapshot)
     {
         if (IsDestroyed) return;
+        // A radio refusal stays until the radios change or a read fails. Reaching the new state clears it.
+        if (snapshot.Error.Length > 0 || _snapshot.WifiEnabled != snapshot.WifiEnabled)
+            _radioError = "";
         _snapshot = snapshot;
-        SetField(ref _error, snapshot.Error, nameof(Error));
+        SetField(ref _error, snapshot.Error.Length > 0 ? snapshot.Error : _radioError, nameof(Error));
         foreach (var property in new[] { "ready", "wifiEnabled", "wifiHardwareEnabled", "wifiState", "connectivity", "accessStatus", "airplaneMode" }) NotifyChanged(property);
         Devices.Engine = Profiles.Engine = Engine;
         foreach (var gone in _devices.Keys.Except(snapshot.Devices.Select(d => d.Id)).ToArray())

@@ -339,10 +339,10 @@ See [Windows networking](network.md) for the native models, permissions and expl
 | `Network.known`, `stateChanging`, `onConnectionFailed` | `saved`, `busy`, `onOperationFailed(message)` and `error` |
 | `WifiNetwork.connectWithPsk()` | `connectWithPassword()` |
 | `WifiDevice.scannerEnabled`, `mode`, `WifiDeviceMode` | Removed; call `scan()` for one scan and observe `scanning` |
-| Writable `Networking.wifiEnabled` | Read-only `wifiEnabled` and `wifiState`; use Windows Settings to control radios |
+| Writable `Networking.wifiEnabled` | Writable `wifiEnabled`. Quickshell updates the value, then sets an rfkill software block. Winshell asks Windows and leaves the property on what Windows reports. `wifiState` stays read-only |
 | `NetworkDevice.disconnect()`, `WiredDevice.network` | Use the `networks` model; Wi-Fi network objects provide `disconnect()`; wired connections are managed by Windows |
 
-Wi-Fi permission is requested only through `Networking.requestAccess()`. All state is read-only; connection changes require method calls. `airplaneMode` is a best-effort persisted Windows state with an explicit Unknown value, independent of individual radios.
+Wi-Fi scan permission is requested only through `Networking.requestAccess()`. Radio control is a separate request, made only when a configuration sets `wifiEnabled` to a different value. Connection changes require method calls. `airplaneMode` is a best-effort persisted Windows state with an explicit Unknown value, independent of individual radios.
 
 ## Bluetooth
 
@@ -351,7 +351,7 @@ See [Windows Bluetooth](bluetooth.md) for state, discovery, battery and action l
 | Former member | Windows API |
 | --- | --- |
 | `BluetoothAdapter.adapterId` (`hci0`), adapter/device `dbusPath` | Windows device `id`; no D-Bus or HCI aliases |
-| Writable adapter `enabled`, `discoverable`, `discoverableTimeout`, `pairable`, `pairableTimeout` | Removed setters/unsupported flags; read `state`/`enabled` and control radios in Windows Settings |
+| Writable adapter `enabled`, `discoverable`, `discoverableTimeout`, `pairable`, `pairableTimeout` | `enabled` asks Windows to change the radio and keeps the value Windows reports. `discoverable`, `discoverableTimeout`, `pairable` and `pairableTimeout` are removed |
 | `BluetoothAdapterState.Enabled`, `Disabled`, `Blocked`, `Enabling`, `Disabling` | `On`, `Off`, `Disabled`, `Unknown`; pending device work is reported separately by `operation` |
 | `BluetoothAdapter.discovering`, `devices` | Singleton `Bluetooth.discovering`, `startDiscovery()`, `stopDiscovery()`, `devices`, `pairedDevices`, `nearbyDevices` |
 | `BluetoothDevice.deviceName`, writable `name` | Read-only `name` |

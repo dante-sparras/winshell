@@ -83,8 +83,8 @@ The notification center is empty until you allow access: click **Allow notificat
 ## Wi-Fi networks or Bluetooth devices are missing
 
 - **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.requestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](../network.md).
-- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. Winshell doesn't turn radios on or off; use Windows Settings. See [Bluetooth](../bluetooth.md).
-- **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings, because Winshell doesn't change radios.
+- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `Bluetooth.defaultAdapter.enabled`. The quick settings tile does not. See [Bluetooth](../bluetooth.md).
+- **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings. A configuration can set `Networking.wifiEnabled` and `BluetoothAdapter.enabled`. These tiles do not.
 
 ## Tray icons are missing
 
