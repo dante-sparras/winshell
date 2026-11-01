@@ -39,4 +39,25 @@ public class MonitorSizeTests(ITestOutputHelper output)
             }
         }
     }
+
+    [Fact]
+    public void A_monitor_is_asked_once_and_only_the_first_read_waits_for_it()
+    {
+        var answer = new TaskCompletionSource<(double, double)>();
+        var queries = 0;
+        var cache = new MonitorSizeCache(_ =>
+        {
+            queries++;
+            return answer.Task;
+        }, TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal((0d, 0d), cache.Read("monitor"));
+        Assert.Equal((0d, 0d), cache.Read("monitor"));
+        answer.SetResult((697, 393));
+        Assert.Equal((697d, 393d), cache.Read("monitor"));
+        Assert.Equal(1, queries);
+
+        Assert.Equal((0d, 0d), cache.Read(""));
+        Assert.Equal(1, queries);
+    }
 }

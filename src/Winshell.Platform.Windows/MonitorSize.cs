@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Windows.Devices.Display;
 
 namespace Winshell.Platform.Windows;
@@ -8,33 +9,21 @@ namespace Winshell.Platform.Windows;
 /// </summary>
 internal static class MonitorSize
 {
-    private static readonly TimeSpan Wait = TimeSpan.FromMilliseconds(250);
+    private static readonly MonitorSizeCache Cache = new(Query, TimeSpan.FromMilliseconds(250));
 
-    internal static (double WidthMm, double HeightMm) Read(string interfaceId)
+    internal static (double WidthMm, double HeightMm) Read(string interfaceId) => Cache.Read(interfaceId);
+
+    private static async Task<(double WidthMm, double HeightMm)> Query(string interfaceId)
     {
-        if (string.IsNullOrEmpty(interfaceId))
-            return (0, 0);
-        // A test synchronization context would resume this call on the thread that is waiting for it.
-        var previous = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(null);
         try
         {
-            var task = DisplayMonitor.FromInterfaceIdAsync(interfaceId).AsTask();
-            if (!task.Wait(Wait))
-            {
-                task.ContinueWith(static t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
-                return (0, 0);
-            }
-            var size = task.GetAwaiter().GetResult()?.PhysicalSizeInInches;
+            var monitor = await DisplayMonitor.FromInterfaceIdAsync(interfaceId).AsTask().ConfigureAwait(false);
+            var size = monitor?.PhysicalSizeInInches;
             return FromInches(size?.Width, size?.Height);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             return (0, 0);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(previous);
         }
     }
 
@@ -44,5 +33,24 @@ internal static class MonitorSize
         if (widthInches is not > 0 || heightInches is not > 0)
             return (0, 0);
         return (widthInches.Value * 25.4, heightInches.Value * 25.4);
+    }
+}
+
+/// <summary>
+/// Asks Windows once for each monitor. The screen list is read on the loop whenever a window is placed, and a
+/// monitor's size does not change, so only the first read waits, and a query that is late reports 0 until it answers.
+/// </summary>
+internal sealed class MonitorSizeCache(Func<string, Task<(double WidthMm, double HeightMm)>> query, TimeSpan wait)
+{
+    private readonly ConcurrentDictionary<string, Task<(double WidthMm, double HeightMm)>> _queries = new(StringComparer.Ordinal);
+
+    internal (double WidthMm, double HeightMm) Read(string interfaceId)
+    {
+        if (string.IsNullOrEmpty(interfaceId))
+            return (0, 0);
+        if (_queries.TryGetValue(interfaceId, out var known))
+            return known.IsCompletedSuccessfully ? known.Result : (0, 0);
+        var started = _queries.GetOrAdd(interfaceId, query);
+        return started.Wait(wait) ? started.Result : (0, 0);
     }
 }
