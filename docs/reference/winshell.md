@@ -434,11 +434,15 @@ Signals when anything that places two items relative to each other changes, as `
 
 ## BoundComponent
 
-An item that loads a QML file, as `BoundComponent { source: "Card.qml" }`. The properties declared on the `BoundComponent` are passed to the loaded object and kept in sync, and functions named after the object's signal handlers, such as `function onClicked()`, are connected to its signals. A loaded item fills the `BoundComponent`, whose implicit size follows the item's. It is an Item.
+An item that loads a QML file or a component, as `BoundComponent { source: "Card.qml" }` or `BoundComponent { sourceComponent: card }`. The properties declared on the `BoundComponent` are passed to the loaded object, including required ones. They stay in sync when `bindValues` is true, which is the default, and they are set once when it is false. Functions named after the object's signal handlers, such as `function onClicked()`, are connected to its signals either way. A loaded item fills the `BoundComponent`, whose implicit size follows the item's. It is an Item.
+
+When both `source` and `sourceComponent` are set, the one set last is what loads. A `source` that cannot be opened does not replace a component already set, and it does not change `source`. After the object has loaded, a change to `source`, `sourceComponent`, or `bindValues` is ignored. `sourceComponent` is null once the object has loaded; `source` keeps the url that was set.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `source` | string | The QML file, relative to the file that declares it. Changing it loads the new file. |
+| `source` | string | The QML file, relative to the file that declares it. |
+| `sourceComponent` | Component | A component to load instead of a file. Null once the object has loaded. |
+| `bindValues` | bool | When true, the default, the declared properties stay in sync with the loaded object. When false, they are set once. |
 | `item` | object, read-only | The loaded object, or null. |
 
 ## ObjectModel

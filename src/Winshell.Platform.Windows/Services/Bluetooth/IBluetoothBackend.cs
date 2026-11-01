@@ -11,4 +11,8 @@ internal interface IBluetoothBackend : IDisposable
     Task<string?> PairAsync(string id, CancellationToken cancellation);
     Task<string?> UnpairAsync(string id);
     Task<bool> SetAudioConnectionAsync(Guid container, bool connect);
+
+    /// <summary>Asks Windows to turn the adapter's radio on or off. Null when it reports <paramref name="enabled"/>.</summary>
+    Task<string?> SetRadioEnabledAsync(bool enabled) =>
+        throw new NotSupportedException("This Bluetooth backend does not change radios.");
 }

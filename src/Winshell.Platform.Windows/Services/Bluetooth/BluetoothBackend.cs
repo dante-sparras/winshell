@@ -42,6 +42,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private readonly Dictionary<Guid, (double? Level, DateTimeOffset Read)> _batteries = [];
     private string? _adapterId;
     private string _discoveryError = "";
+    private bool _hasRadio;
     private bool _disposed;
 
     public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
@@ -57,12 +58,14 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             if (adapter is null)
             {
                 StopDiscovery();
+                lock (_lock) _hasRadio = false;
                 return new(true, null, []);
             }
             var name = (await DeviceInformation.CreateFromIdAsync(adapter.DeviceId).AsTask(cancellation).ConfigureAwait(false))?.Name ?? "Bluetooth";
             Radio? radio = null;
             try { radio = await adapter.GetRadioAsync().AsTask(cancellation).ConfigureAwait(false); }
             catch (Exception e) when (IsExpectedFailure(e)) { }
+            lock (_lock) _hasRadio = radio is not null;
             var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
                 ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State));
             if ((_adapterId is not null && _adapterId != adapter.DeviceId) ||
@@ -163,6 +166,22 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         catch (Exception e) when (IsExpectedFailure(e)) { }
         _batteries[container] = (level, DateTimeOffset.UtcNow);
         return level;
+    }
+
+    /// <summary>
+    /// Asks Windows to set the Bluetooth radios. Null when they report <paramref name="enabled"/>.
+    /// An adapter whose own radio is missing fails before any request, so another radio is left alone.
+    /// Tests use a fake backend and do not call this.
+    /// </summary>
+    public async Task<string?> SetRadioEnabledAsync(bool enabled)
+    {
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_hasRadio)
+                return RadioSwitch.NoAdapterRadio;
+        }
+        return await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, enabled, WindowsRadioSource.Instance).ConfigureAwait(false);
     }
 
     public void StartDiscovery()
