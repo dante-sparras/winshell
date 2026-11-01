@@ -1,4 +1,5 @@
 using SkiaSharp;
+using Vortice;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DirectComposition;
@@ -59,6 +60,7 @@ internal sealed class CompositionSurface : IDisposable
     private readonly GraphicsDevice _gpu = GraphicsDevice.Shared;
     private readonly IDCompositionTarget _target;
     private readonly IDCompositionVisual _visual;
+    private IDCompositionVisual3? _opacity;
     private IDXGISwapChain1? _swapChain;
     private SKBitmap? _bitmap;
     private SKSurface? _canvas;
@@ -129,6 +131,31 @@ internal sealed class CompositionSurface : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fades the visual that holds the swap chain. The frame path commits only when that chain is first created,
+    /// so a later change commits itself. Called only when the opacity is not already the visual's default of 1.
+    /// </summary>
+    public void SetOpacity(float opacity)
+    {
+        _opacity ??= _visual.QueryInterface<IDCompositionVisual3>();
+        _opacity.SetOpacity(opacity).CheckError();
+        _gpu.Composition.Commit();
+    }
+
+    /// <summary>Clips the visual to one rectangle in physical pixels.</summary>
+    public void SetClip(float left, float top, float right, float bottom)
+    {
+        _visual.SetClip(new RawRectF(left, top, right, bottom)).CheckError();
+        _gpu.Composition.Commit();
+    }
+
+    /// <summary>Removes the clip. A null clip is the default and is slightly cheaper than a rectangle.</summary>
+    public void ClearClip()
+    {
+        _visual.SetClip((IDCompositionClip?)null).CheckError();
+        _gpu.Composition.Commit();
+    }
+
     /// <summary>Lets go of the swap chain and the bitmap, as for a hidden window. The next frame makes them again.</summary>
     public void Release()
     {
@@ -150,6 +177,7 @@ internal sealed class CompositionSurface : IDisposable
         _canvas?.Dispose();
         _bitmap?.Dispose();
         _swapChain?.Dispose();
+        _opacity?.Dispose();
         _visual.Dispose();
         _target.Dispose();
         _gpu.Composition.Commit();
