@@ -38,7 +38,7 @@ public class UtilityTests
         var root = shell.Load();
         for (var i = 0; i < 100 && ((List<object?>)root.ReadProperty("colors")!).Count == 0; i++)
         {
-            await Task.Delay(20);
+            await Task.Delay(20, TestContext.Current.CancellationToken);
             shell.Loop.Process();
         }
         var colors = ((List<object?>)root.ReadProperty("colors")!).Cast<QColor>().Select(c => c.ToString()).Order().ToList();

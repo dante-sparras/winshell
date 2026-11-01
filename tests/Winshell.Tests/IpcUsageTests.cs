@@ -15,8 +15,8 @@ public sealed class IpcUsageTests
         };
         info.ArgumentList.Add("ipc");
         using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
+        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
         Assert.True(process.WaitForExit(30000), "winshell did not exit");
 
         Assert.Equal(2, process.ExitCode);

@@ -15,7 +15,7 @@ public class MonitorCancellationTests
         var loop = new ManualEventLoop();
         using var engine = new QmlEngine(StandardModules.Create(), loop);
         var service = new BluetoothService(engine, backend);
-        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var started = DateTime.UtcNow;
         service.Destroy();
@@ -24,7 +24,7 @@ public class MonitorCancellationTests
         Assert.True(elapsed < TimeSpan.FromMilliseconds(500), $"destroy waited {elapsed}");
         Assert.False(backend.Disposed);
         backend.Finish.TrySetResult(ReadyBluetooth());
-        await service.MonitorTask!.WaitAsync(TimeSpan.FromSeconds(5));
+        await service.MonitorTask!.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.True(backend.Disposed);
         Assert.False(backend.DisposedDuringRead);
     }
@@ -36,12 +36,12 @@ public class MonitorCancellationTests
         var loop = new ManualEventLoop();
         var service = new BluetoothService(backend, loop);
         var read = service.RefreshAsync();
-        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         service.Destroy();
         Assert.False(backend.Disposed);
         backend.Finish.TrySetResult(ReadyBluetooth());
-        await read.WaitAsync(TimeSpan.FromSeconds(5));
+        await read.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         loop.Process();
 
         Assert.True(backend.Disposed);

@@ -34,8 +34,8 @@ public sealed partial class FatalCrashTests : IDisposable
         info.Environment["WINSHELL_TEST_CRASH"] = crashes;
 
         using var process = Process.Start(info)!;
-        var error = process.StandardError.ReadToEndAsync();
-        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
         using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
         {
             try

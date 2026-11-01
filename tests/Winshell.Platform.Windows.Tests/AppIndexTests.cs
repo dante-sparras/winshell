@@ -242,7 +242,7 @@ public sealed class AppIndexTests
         try
         {
             catalog.Start();
-            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10));
+            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             var link = Path.Combine(folder, "Probe.lnk");
             ShellLink.Write(link, Cmd(), "", "", "probe");
             Assert.True(Wait(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Probe")));
@@ -273,7 +273,7 @@ public sealed class AppIndexTests
 
             catalog = new AppCatalog([programs], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromHours(1), false, false);
             catalog.Start();
-            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10));
+            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
             var registry = StandardModules.Create();
             WindowsModules.Register(registry);
@@ -330,7 +330,7 @@ public sealed class AppIndexTests
         Assert.False(posted.Task.IsCompleted);
 
         activating.Set();
-        await posted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await posted.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.Empty(warnings);
         Assert.Null(fallbackThread);
         Assert.Equal(0, started);
@@ -409,7 +409,7 @@ public sealed class AppIndexTests
             var loop = new ManualEventLoop();
             var engine = new QmlEngine(registry, loop, new Log(), root);
             var item = engine.CreateRoot(Path.Combine(root, "shell.qml"));
-            await AppCatalog.Shared.Ready.WaitAsync(TimeSpan.FromSeconds(90));
+            await AppCatalog.Shared.Ready.WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
             loop.Process();
 
             var service = (AppsService)item.ReadProperty("appsService")!;

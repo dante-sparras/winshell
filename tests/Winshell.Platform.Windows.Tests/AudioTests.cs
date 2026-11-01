@@ -276,7 +276,7 @@ public sealed class AudioTests : IDisposable
             {
                 _loop.Process();
                 Assert.DoesNotContain(recording.Sessions, s => s.Properties["processId"] == Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-                await Task.Delay(50);
+                await Task.Delay(50, TestContext.Current.CancellationToken);
             }
         }
         finally

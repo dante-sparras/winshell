@@ -31,7 +31,7 @@ public class BrightnessWriteTests
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"Setting the brightness took {clock.Elapsed}.");
         Assert.Equal(50, monitor.Brightness);
 
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "The first write did not start.");
+        Assert.True(started.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken), "The first write did not start.");
         clock.Restart();
         for (var value = 51; value <= 80; value++)
             monitor.Brightness = value;

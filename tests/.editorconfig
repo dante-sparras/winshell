@@ -1,4 +1,0 @@
-[*.cs]
-# Rules xUnit v3 adds. These are turned on with the cancellation token work.
-dotnet_diagnostic.xUnit1051.severity = none
-dotnet_diagnostic.xUnit1069.severity = none

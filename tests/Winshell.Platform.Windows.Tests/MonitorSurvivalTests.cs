@@ -17,13 +17,13 @@ public class MonitorSurvivalTests
         var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
         using var engine = new QmlEngine(StandardModules.Create(), loop, log);
         var service = new BluetoothService(engine, backend);
-        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var until = DateTime.UtcNow + TimeSpan.FromSeconds(2);
         while (backend.Reads < 2 && DateTime.UtcNow < until)
         {
             await service.RefreshAsync();
-            await Task.Delay(10);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
         }
 
         Assert.True(backend.Reads >= 2, $"reads stayed at {backend.Reads}");
@@ -34,7 +34,7 @@ public class MonitorSurvivalTests
         Assert.False(service.MonitorTask.IsCompleted);
         service.Destroy();
         Assert.True(backend.Disposed);
-        await service.MonitorTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await service.MonitorTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.True(service.MonitorTask.IsCompletedSuccessfully);
     }
 
@@ -45,7 +45,7 @@ public class MonitorSurvivalTests
         var loop = new ManualEventLoop();
         using var engine = new QmlEngine(StandardModules.Create(), loop);
         var service = new BluetoothService(engine, backend);
-        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         service.StopMonitoring();
         var before = backend.Finished;
 
@@ -53,7 +53,7 @@ public class MonitorSurvivalTests
         while (backend.Finished == before && DateTime.UtcNow < until)
         {
             await service.RefreshAsync();
-            await Task.Delay(10);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
         }
 
         Assert.True(backend.Finished > before, "A refresh was cancelled along with the monitor.");
@@ -67,17 +67,17 @@ public class MonitorSurvivalTests
         var loop = new ManualEventLoop();
         var service = new BluetoothService(backend, loop);
         var first = service.RefreshAsync();
-        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await service.RefreshAsync();
         Assert.Equal(1, backend.Reads);
         // Resumes the read on this thread, so the refresh finishes without a pool thread.
         backend.Gate.SetResult();
-        await first.WaitAsync(TimeSpan.FromSeconds(5));
+        await first.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var until = DateTime.UtcNow + TimeSpan.FromSeconds(2);
         while (backend.Reads < 2 && DateTime.UtcNow < until)
-            await Task.Delay(10);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
         Assert.Equal(2, backend.Reads);
         service.Destroy();
     }
@@ -101,7 +101,7 @@ public class MonitorSurvivalTests
         var elapsed = DateTime.UtcNow - started;
 
         Assert.True(elapsed < TimeSpan.FromSeconds(1.5), $"destroy waited {elapsed}");
-        await service.MonitorTask!.WaitAsync(TimeSpan.FromSeconds(5));
+        await service.MonitorTask!.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.True(backend.Disposed);
         Assert.True(service.MonitorTask.IsCompletedSuccessfully);
     }
@@ -116,13 +116,13 @@ public class MonitorSurvivalTests
         using var engine = new QmlEngine(StandardModules.Create(), loop, log);
         var listener = new NotificationListener(backend, monitor: true) { Engine = engine };
         listener.ComponentComplete();
-        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var until = DateTime.UtcNow + TimeSpan.FromSeconds(2);
         while (backend.Reads < 2 && DateTime.UtcNow < until)
         {
             await listener.RefreshAsync();
-            await Task.Delay(10);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
         }
 
         Assert.True(backend.Reads >= 2, $"reads stayed at {backend.Reads}");
@@ -132,7 +132,7 @@ public class MonitorSurvivalTests
         Assert.False(listener.MonitorTask!.IsFaulted);
         Assert.False(listener.MonitorTask.IsCompleted);
         listener.Destroy();
-        await listener.MonitorTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await listener.MonitorTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.True(listener.MonitorTask.IsCompletedSuccessfully);
     }
 

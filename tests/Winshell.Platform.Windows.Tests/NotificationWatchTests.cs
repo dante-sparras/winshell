@@ -12,18 +12,18 @@ public sealed class NotificationWatchTests
         try
         {
             listener.ComponentComplete();
-            await backend.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await backend.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
             Assert.NotNull(backend.Changed);
             backend.Changed();
-            await backend.SecondRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await backend.SecondRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         }
         finally
         {
             listener.Destroy();
         }
 
-        await backend.Unwatched.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.Unwatched.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Null(backend.Changed);
     }
 

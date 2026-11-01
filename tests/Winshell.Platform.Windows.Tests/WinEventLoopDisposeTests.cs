@@ -14,7 +14,7 @@ public class WinEventLoopDisposeTests
         var handle = Win32.CreateEventW(0, false, false, 0);
         using var other = new ManualResetEvent(false) { SafeWaitHandle = new SafeWaitHandle(handle, true) };
 
-        await Task.Run(() => loop.Post(() => { }));
+        await Task.Run(() => loop.Post(() => { }), TestContext.Current.CancellationToken);
 
         Assert.False(other.WaitOne(0));
     }

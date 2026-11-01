@@ -21,7 +21,7 @@ public sealed class DirectoryWatchTests : IDisposable
 
         File.WriteAllText(Path.Combine(_directory, "made.qml"), "");
 
-        Assert.True(seen.Wait(TimeSpan.FromSeconds(10)), "The new file was not reported.");
+        Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The new file was not reported.");
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class DirectoryWatchTests : IDisposable
 
             File.WriteAllText(Path.Combine(_directory, "made.qml"), "");
 
-            Assert.True(seen.Wait(TimeSpan.FromSeconds(10)), "The new file was not reported.");
+            Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The new file was not reported.");
         }
     }
 
@@ -55,7 +55,7 @@ public sealed class DirectoryWatchTests : IDisposable
 
         Directory.Delete(_directory, true);
 
-        Assert.True(lost.Wait(TimeSpan.FromSeconds(10)), "The watch did not report that it ended.");
+        Assert.True(lost.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The watch did not report that it ended.");
     }
 
     [Fact]
