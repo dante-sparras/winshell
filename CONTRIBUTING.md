@@ -75,10 +75,9 @@ CI checks the PR title. It also checks the branch name, but only as a reminder; 
 
 Fill in the PR template:
 
-- **Problem**: what's wrong or missing, and how to reproduce it.
-- **Change**: how your PR solves it.
-- **Scope and approval**: the issue it comes from, if any.
-- **Verification**: how you checked that it works, and what you saw. Name the tests or manual steps you ran, and anything you couldn't check. "Tests pass" on its own isn't enough. For visible changes, add before/after screenshots, or a short recording when motion matters. Attach them to the PR; don't commit them to the repo.
+- **Summary**: the issue it comes from, if any, and the smallest diagram, diff sketch, or tree that shows the change.
+- **Evidence**: a before and after, from the tests or manual steps you ran. "Tests pass" on its own isn't enough. Add **Not verified** for anything you couldn't check. For visible changes, add before/after screenshots, or a short recording when motion matters. Attach them to the PR; don't commit them to the repo.
+- **Merge Danger**: whether this is a one-way or two-way **Door**, and its **Blast Radius**, the one word for what it can affect.
 
 If an AI agent did the work, end the description with the model and the tool you used, such as "Claude Opus 5.5 in Claude Code".
 
