@@ -37,7 +37,8 @@ internal sealed record NetworkDeviceInfo(
     ConnectionState State,
     bool HasLink,
     uint LinkSpeed,
-    IReadOnlyList<NetworkInfo> Networks);
+    IReadOnlyList<NetworkInfo> Networks,
+    WifiDeviceMode Mode = WifiDeviceMode.Unknown);
 
 internal sealed record NetworkProfileInfo(string Id, string Name, Guid AdapterId, NetworkConnectivity Connectivity,
     NetworkCost Cost, bool Roaming, bool OverDataLimit, double? SignalStrength);
@@ -150,6 +151,19 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         }
     }
 
+    /// <summary>
+    /// Maps the ULONG from <c>wlan_intf_opcode_current_operation_mode</c>. Extensible station is
+    /// <c>Station</c> and extensible AP is <c>AccessPoint</c>. Windows 11 does not report an ad-hoc
+    /// BSS, and nothing reports 802.11s, so <c>AdHoc</c> and <c>Mesh</c> are never returned.
+    /// Null and every other operation mode are <c>Unknown</c>.
+    /// </summary>
+    internal static WifiDeviceMode MapDeviceMode(uint? operationMode) => operationMode switch
+    {
+        0x00000004 => WifiDeviceMode.Station, // windot11.h DOT11_OPERATION_MODE_EXTENSIBLE_STATION
+        0x00000008 => WifiDeviceMode.AccessPoint, // windot11.h DOT11_OPERATION_MODE_EXTENSIBLE_AP
+        _ => WifiDeviceMode.Unknown,
+    };
+
     internal static NetworkAccessStatus MapAccess(WiFiAccessStatus status) => status switch
     {
         WiFiAccessStatus.Allowed => NetworkAccessStatus.Allowed,
@@ -215,7 +229,8 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                         _ => ConnectionState.Unknown,
                     }
                     : up ? ConnectionState.Connected : ConnectionState.Disconnected;
-                devices.Add(new NetworkDeviceInfo(id, type, nic.Name, address, state, false, 0, ReadWifiNetworks(id, state, profile)));
+                devices.Add(new NetworkDeviceInfo(id, type, nic.Name, address, state, false, 0,
+                    ReadWifiNetworks(id, state, profile), MapDeviceMode(OperationMode(id))));
             }
         }
 

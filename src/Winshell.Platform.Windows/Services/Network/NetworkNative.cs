@@ -160,6 +160,43 @@ internal static unsafe partial class NetworkNative
         return result;
     }
 
+    // wlanapi.h: wlan_intf_opcode_autoconf_start is 0, so wlan_intf_opcode_current_operation_mode is 12.
+    // ppData is a ULONG, one DOT11_OPERATION_MODE_* value. wlan_intf_opcode_bss_type is not queried:
+    // Windows 11 can answer it with dot11_BSS_type_any for a connected station, which does not
+    // separate an ad-hoc network from infrastructure, and IBSS is unsupported. AdHoc stays unreached.
+    private const uint OpcodeCurrentOperationMode = 12;
+
+    /// <summary>
+    /// The interface operation mode, or null when Windows does not answer. A failure does not throw.
+    /// The buffer <c>WlanQueryInterface</c> returns is freed on every path, including failure.
+    /// </summary>
+    public static uint? OperationMode(Guid interfaceGuid)
+    {
+        var handle = Handle;
+        if (handle == 0)
+            return null;
+        nint data = 0;
+        try
+        {
+            uint size = 0;
+            if (WlanQueryInterface(handle, &interfaceGuid, OpcodeCurrentOperationMode, 0, &size, &data, null) != 0
+                || data == 0 || size < sizeof(uint))
+                return null;
+            return *(uint*)data;
+        }
+#pragma warning disable CA1031 // A failed mode query is Unknown and must not fail the snapshot.
+        catch (Exception e) when (e is not OutOfMemoryException)
+#pragma warning restore CA1031
+        {
+            return null;
+        }
+        finally
+        {
+            if (data != 0)
+                WlanFreeMemory(data);
+        }
+    }
+
     /// <summary>Deletes a saved WLAN profile. Returns the Windows error, or 0.</summary>
     public static uint DeleteProfile(Guid interfaceGuid, string profileName)
     {
@@ -266,6 +303,10 @@ internal static unsafe partial class NetworkNative
 
     [LibraryImport("wlanapi.dll")]
     private static partial uint WlanGetProfileList(nint clientHandle, Guid* interfaceGuid, nint reserved, out nint profileList);
+
+    [LibraryImport("wlanapi.dll")]
+    private static partial uint WlanQueryInterface(
+        nint clientHandle, Guid* interfaceGuid, uint opCode, nint reserved, uint* dataSize, nint* data, uint* opcodeValueType);
 
     [LibraryImport("wlanapi.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial uint WlanDeleteProfile(nint clientHandle, Guid* interfaceGuid, string profileName, nint reserved);

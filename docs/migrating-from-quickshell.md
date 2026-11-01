@@ -348,7 +348,8 @@ See [Windows networking](network.md) for the native models, permissions and expl
 | `ConnectionFailReason.NoSecrets`, `WifiAuthTimeout`, `WifiNetworkLost`, `WifiClientFailed` | Action `error`: `InvalidPassword`, `Timeout`, `NetworkUnavailable`, `UnsupportedAuthentication` |
 | `Network.known`, `stateChanging`, `onConnectionFailed` | `saved`, `busy`, `onOperationFailed(message)` and `error` |
 | `WifiNetwork.connectWithPsk()` | `connectWithPassword()` |
-| `WifiDevice.scannerEnabled`, `mode`, `WifiDeviceMode` | Removed; call `scan()` for one scan and observe `scanning` |
+| `WifiDevice.scannerEnabled` | Removed; call `scan()` for one scan and observe `scanning` |
+| `WifiDevice.mode`, `WifiDeviceMode` | Read-only `mode`. `Station` is an extensible station and `AccessPoint` is an extensible access point. Windows 11 does not report ad hoc, so `AdHoc` is never returned. `Mesh` is kept and never returned. Anything else is `Unknown`. `toString` returns the value name |
 | Writable `Networking.wifiEnabled` | Writable `wifiEnabled`. Quickshell updates the value, then sets an rfkill software block. Winshell asks Windows and leaves the property on what Windows reports. `wifiState` stays read-only |
 | `NetworkDevice.disconnect()`, `WiredDevice.network` | Use the `networks` model; Wi-Fi network objects provide `disconnect()`; wired connections are managed by Windows |
 
