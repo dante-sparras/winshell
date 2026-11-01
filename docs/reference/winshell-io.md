@@ -94,6 +94,8 @@ A file the shell reads, watches and writes, created with `FileView { }`. Its def
 
 Use a full path, such as one built from `Shell.dataDir`. A relative path is taken from winshell's current folder, not from the config folder. Reads and writes happen off the UI thread unless `blockLoading` or `blockWrites` says otherwise.
 
+`waitForJob()` blocks on the UI thread until a load or save that is already running finishes. It returns true when that job finished, and false when nothing was running. A save already queued behind the current one finishes too, and its signal is raised after the earlier one. `loaded`, `loadFailed`, `saved` or `saveFailed` runs before the call returns, through the same callback the loop would run. Work already posted on the loop runs first, in the order it was posted, including the rest of the batch that called it. Work posted from that signal, and timers, stay queued until the call returns. The shell does not handle input while it waits. If the view is destroyed before the call returns, it returns false.
+
 A file larger than 64 MiB (67,108,864 bytes) is left unread. The text already loaded stays, the properties stay, and the file on disk stays. `loadFailed` is `FileView.Unknown`, and the adapter's `error` says how many bytes the file was. `writeAdapter()` leaves a file of that size unchanged and raises `saveFailed`.
 
 | Member | Type | Description |
@@ -111,6 +113,7 @@ A file larger than 64 MiB (67,108,864 bytes) is left unread. The text already lo
 | `text()` | method, returns string | The file's text. If it was not read yet, reads it now. Returns an empty string when the file cannot be read. |
 | `data()` | method, returns string | The same text as `text()`. |
 | `reload()` | method | Reads the file again. Call it from `onFileChanged` to follow changes on disk. |
+| `waitForJob()` | method, returns bool | Blocks until the load or save in progress finishes, so `text()` is current when it returns. Returns false when nothing is running, or the view is destroyed before the call returns. |
 | `setText(text)` | method | Replaces the file's contents with `text`. Creates missing folders. |
 | `setData(data)` | method | Replaces the file's contents with `data`, as text. |
 | `writeAdapter()` | method | Writes what the adapter's properties hold to the file. When the file on disk does not parse, or is larger than 64 MiB, nothing is written and `saveFailed` is raised with `FileView.Unknown`. |

@@ -26,6 +26,7 @@ public interface IEventLoop
 public class EventQueue : IEventLoop
 {
     private readonly ConcurrentQueue<Action> _posted = new();
+    private readonly Queue<Action> _batch = new();
     private readonly PriorityQueue<TimerEntry, (TimeSpan, long)> _timers = new();
     private readonly List<Action> _frameCallbacks = [];
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -104,15 +105,7 @@ public class EventQueue : IEventLoop
     /// </summary>
     public bool RunDue()
     {
-        var ran = false;
-        var posted = new List<Action>();
-        while (_posted.TryDequeue(out var action))
-            posted.Add(action);
-        foreach (var action in posted)
-        {
-            Run(action);
-            ran = true;
-        }
+        var ran = RunPosted();
 
         var now = Now;
         var dueNow = new List<TimerEntry>();
@@ -138,6 +131,24 @@ public class EventQueue : IEventLoop
 
         if (HasQueuedWork(now))
             Woken?.Invoke();
+        return ran;
+    }
+
+    /// <summary>
+    /// Runs the posted work queued so far and leaves timers for <see cref="RunDue"/>. Work posted by this batch
+    /// waits for the next pass, so a handler that posts itself cannot starve the caller. A handler that calls
+    /// back in, as <c>waitForJob</c> does, runs the rest of its own batch in order: a result it waits for may be there.
+    /// </summary>
+    internal bool RunPosted()
+    {
+        if (_batch.Count == 0)
+        {
+            while (_posted.TryDequeue(out var queued))
+                _batch.Enqueue(queued);
+        }
+        var ran = _batch.Count > 0;
+        while (_batch.TryDequeue(out var action))
+            Run(action);
         return ran;
     }
 

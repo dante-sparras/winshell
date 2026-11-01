@@ -198,8 +198,10 @@ A normal desktop window with a title bar, created as `FloatingWindow { }`. It op
 | `title` | string | The title in the title bar and on the taskbar. |
 | `minimumSize` | size | The smallest size the user can resize to, in logical pixels. 0 means no limit, as by default. |
 | `maximumSize` | size | The largest size the user can resize to, in logical pixels. 0 means no limit, as by default. |
-| `maximized` | bool | Whether the window is maximized. Setting it maximizes or restores the window; it follows the user. |
-| `minimized` | bool | Whether the window is minimized. Setting it minimizes or restores the window; it follows the user. |
+| `maximized` | bool | Whether the window is maximized. Setting it maximizes or restores the window; it follows the user. While `fullscreen` is on, this reads false. Setting it to true then leaves fullscreen and maximizes, and a later restore uses the size from before fullscreen. |
+| `minimized` | bool | Whether the window is minimized. Setting it minimizes or restores the window; it follows the user. Minimizing a fullscreen window leaves `fullscreen` on, and restoring it shows the fullscreen window again. |
+| `fullscreen` | bool | Whether the window has no frame and covers the monitor it is on, including the taskbar. Setting it true saves the place and frame, then fills that monitor. A minimized window is shown, so it opens to fullscreen, and setting this false minimizes it again. A window that was maximized is maximized again. The saved place is logical pixels from the monitor's corner, so a DPI change or a moved monitor restores it at the new scale, on that monitor, or on the monitor the window is on when the old one is gone. It stays true while that fullscreen window is minimized. |
+| `parentWindow` | [ShellWindow](#shellwindow) | The shell window that owns this one, or null. An owned window stays above its owner. It is not clipped to the owner and it keeps its own place. Minimizing the owner hides it, and restoring the owner shows it again. Its own `minimized` stays false, because Windows hides an owned window instead of minimizing it. Closing the owner closes it. It can be set before the native window exists, and changed or cleared later. Quickshell's type is `QtObject`, and Quickshell ignores a change after the window is visible. A window cannot own itself, or a window that already owns it. |
 | `activate()` | method | Shows the window, restores it when it is minimized, and brings it to the front with keyboard focus. Windows allows this after a click or hotkey in the shell; asked from elsewhere, Windows may only flash its taskbar button. |
 | `startSystemMove()` | method | Starts moving the window with the mouse, as dragging its title bar does. Call it from a mouse press. |
 | `startSystemResize(edges)` | method | Starts resizing the window with the mouse from `edges`, an [Edges](#edges) value such as `Edges.Bottom \| Edges.Right`. Call it from a mouse press. |
@@ -432,11 +434,15 @@ Signals when anything that places two items relative to each other changes, as `
 
 ## BoundComponent
 
-An item that loads a QML file, as `BoundComponent { source: "Card.qml" }`. The properties declared on the `BoundComponent` are passed to the loaded object and kept in sync, and functions named after the object's signal handlers, such as `function onClicked()`, are connected to its signals. A loaded item fills the `BoundComponent`, whose implicit size follows the item's. It is an Item.
+An item that loads a QML file or a component, as `BoundComponent { source: "Card.qml" }` or `BoundComponent { sourceComponent: card }`. The properties declared on the `BoundComponent` are passed to the loaded object, including required ones. They stay in sync when `bindValues` is true, which is the default, and they are set once when it is false. Functions named after the object's signal handlers, such as `function onClicked()`, are connected to its signals either way. A loaded item fills the `BoundComponent`, whose implicit size follows the item's. It is an Item.
+
+When both `source` and `sourceComponent` are set, the one set last is what loads. A `source` that cannot be opened does not replace a component already set, and it does not change `source`. After the object has loaded, a change to `source`, `sourceComponent`, or `bindValues` is ignored. `sourceComponent` is null once the object has loaded; `source` keeps the url that was set.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `source` | string | The QML file, relative to the file that declares it. Changing it loads the new file. |
+| `source` | string | The QML file, relative to the file that declares it. |
+| `sourceComponent` | Component | A component to load instead of a file. Null once the object has loaded. |
+| `bindValues` | bool | When true, the default, the declared properties stay in sync with the loaded object. When false, they are set once. |
 | `item` | object, read-only | The loaded object, or null. |
 
 ## ObjectModel

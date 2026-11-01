@@ -30,6 +30,18 @@ internal struct RECT
     }
 }
 
+/// <summary>The restored position of a window. The rectangle is in workspace coordinates, not the screen pixels of <c>GetWindowRect</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct WINDOWPLACEMENT
+{
+    public uint Length;
+    public uint Flags;
+    public uint ShowCmd;
+    public POINT MinPosition;
+    public POINT MaxPosition;
+    public RECT Normal;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal struct MSG
 {
@@ -182,6 +194,7 @@ internal static partial class Win32
 {
     public const uint WS_POPUP = 0x80000000;
     public const uint WS_VISIBLE = 0x10000000;
+    public const uint WS_CAPTION = 0x00C00000;
     public const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
     public const uint WS_CLIPCHILDREN = 0x02000000;
     public const uint WS_MAXIMIZEBOX = 0x00010000;
@@ -202,7 +215,13 @@ internal static partial class Win32
 
     public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
+    public const int GWLP_HWNDPARENT = -8;
     public const int GWLP_USERDATA = -21;
+
+    public const uint GW_HWNDNEXT = 2;
+    public const uint GW_HWNDPREV = 3;
+    public const uint GW_OWNER = 4;
+    public const uint WPF_RESTORETOMAXIMIZED = 0x0002;
 
     public const uint WM_NULL = 0x0000;
     public const uint WM_CREATE = 0x0001;
@@ -427,6 +446,17 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowPlacement(nint hwnd, ref WINDOWPLACEMENT placement);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowPlacement(nint hwnd, in WINDOWPLACEMENT placement);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetWindow(nint hwnd, uint command);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
