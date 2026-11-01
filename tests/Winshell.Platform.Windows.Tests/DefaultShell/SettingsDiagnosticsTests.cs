@@ -47,14 +47,11 @@ public class SettingsDiagnosticsTests
     /// <summary>Settles until the run, which happens off the loop, has come back.</summary>
     private static void WaitForRun(DefaultShellHarness shell, QObject diagnostics)
     {
-        var watch = Stopwatch.StartNew();
-        do
+        Wait.Until(() =>
         {
-            Thread.Sleep(10);
             shell.Settle();
-        }
-        while ((bool)diagnostics.ReadProperty("running")! && watch.Elapsed < TimeSpan.FromSeconds(10));
-        Assert.False((bool)diagnostics.ReadProperty("running")!);
+            return !(bool)diagnostics.ReadProperty("running")!;
+        }, "the run to finish");
     }
 
     private static QObject Diagnostics(DefaultShellHarness shell) =>

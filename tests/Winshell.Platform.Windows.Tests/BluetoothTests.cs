@@ -413,9 +413,7 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         var reads = watched.Reads;
         service.StopMonitoring();
         service.StartMonitoring();
-        var until = DateTime.UtcNow.AddSeconds(2);
-        while (watched.Reads == reads && DateTime.UtcNow < until)
-            await Task.Delay(10, TestContext.Current.CancellationToken);
+        await Wait.UntilAsync(() => watched.Reads != reads, "the monitor to read again");
         Assert.True(watched.Reads > reads);
         service.Destroy();
         loop.Process();
@@ -926,7 +924,7 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         {
             PairThread = Environment.CurrentManagedThreadId;
             Calls.Add("pair"); Paired.Add(id);
-            if (WaitForPairCancellation) await Task.Delay(Timeout.Infinite, cancellation);
+            if (WaitForPairCancellation) await new TaskCompletionSource().Task.WaitAsync(cancellation);
             if (Failure is { } e) throw e;
             return PairError;
         }

@@ -58,8 +58,6 @@ public class SettingsShellTests
         using var run = new RunningShell("taskbarCentered = true");
         Assert.All(run.Taskbars, t => Assert.True((bool)t.ReadProperty("centered")!));
 
-        // Past the time FileView takes its own writes to be.
-        Thread.Sleep(300);
         File.WriteAllText(run.PreferencesPath, "taskbarCentered = false\ntaskbarAppsOn = \"where\"\n");
         run.Until(() => run.Taskbars.All(t => !(bool)t.ReadProperty("centered")!));
         Assert.All(run.Taskbars, t => Assert.Equal("where", t.ReadProperty("appsOn")));
@@ -75,7 +73,6 @@ public class SettingsShellTests
         run.Click(run.Control<Switch>("taskbarAutoHide"));
         Assert.True(run.Saved().GetProperty("taskbarAutoHide").GetBoolean());
 
-        Thread.Sleep(300);
         File.WriteAllText(run.PreferencesPath, "taskbarAutoHide = false\ntaskbarCentered = false\n");
         run.Until(() => run.Taskbars.All(t => !(bool)t.ReadProperty("centered")!));
         Assert.All(run.Taskbars, t => Assert.False((bool)t.ReadProperty("autoHide")!));
@@ -309,16 +306,7 @@ public class SettingsShellTests
         }
 
         /// <summary>Runs the loop until a file change has come through, or fails after five seconds.</summary>
-        public void Until(Func<bool> done)
-        {
-            var until = DateTime.UtcNow.AddSeconds(5);
-            while (!done())
-            {
-                Assert.True(DateTime.UtcNow < until, "The change did not come through.");
-                Thread.Sleep(20);
-                Settle();
-            }
-        }
+        public void Until(Func<bool> done) => Wait.Until(done, "The change did not come through.", Settle);
 
         public void Click(Item item) => Click(Settings, item);
 

@@ -32,7 +32,15 @@ internal static class Wait
     }
 
     /// <summary><see cref="Until"/> for a test that must not block its thread, so what it awaits can run.</summary>
-    internal static async Task UntilAsync(Func<bool> done, string what, Action? between = null)
+    internal static Task UntilAsync(Func<bool> done, string what, Action? between = null) =>
+        UntilAsync(done, what, () =>
+        {
+            between?.Invoke();
+            return Task.CompletedTask;
+        });
+
+    /// <summary><see cref="Until"/> with something to await between checks.</summary>
+    internal static async Task UntilAsync(Func<bool> done, string what, Func<Task> between)
     {
         var token = TestContext.Current.CancellationToken;
         var started = Stopwatch.GetTimestamp();
@@ -42,7 +50,7 @@ internal static class Wait
             Assert.True(Stopwatch.GetElapsedTime(started) < Patience, $"Timed out: {what}");
             await Task.Delay(pause, token);
             pause = Next(pause);
-            between?.Invoke();
+            await between();
         }
     }
 
