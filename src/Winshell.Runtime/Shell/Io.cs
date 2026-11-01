@@ -785,7 +785,14 @@ public sealed class FileView : QObject
     private string? _watchedPath;
     private bool _watchingParent;
     private int _generation;
+    private int _loadSettled;
+    private int _writeSerial;
+    private int _writeSettled;
     private bool _bom;
+    // Tests only. The load or save thread calls this after the file work and before it posts the result.
+    private Action<IEventLoop>? _jobGate;
+    private Thread? _loadThread;
+    private Thread? _writeThread;
     // One save at a time, on a thread of its own, so a later save cannot finish before an earlier one and a burst
     // does not take a thread pool thread per save. Saves still waiting are kept as the latest text.
     private readonly object _writeGate = new();
@@ -807,6 +814,23 @@ public sealed class FileView : QObject
     private static Action<string>? _beforeReplace;
 
     internal static void SetBeforeReplaceForTests(Action<string>? probe) => _beforeReplace = probe;
+
+    /// <summary>
+    /// Tests only. The background load or save calls this after the file work and before it posts
+    /// <c>loaded</c>, <c>loadFailed</c>, <c>saved</c> or <c>saveFailed</c>. A test blocks here until another thread releases it.
+    /// </summary>
+    internal void SetJobGateForTests(Action<IEventLoop>? gate) => _jobGate = gate;
+
+    /// <summary>Tests only. Waits until the background load and save threads have exited.</summary>
+    internal bool JoinJobsForTests(TimeSpan timeout)
+    {
+        var ok = true;
+        if (_loadThread is { IsAlive: true } load)
+            ok &= load.Join(timeout);
+        if (_writeThread is { IsAlive: true } write)
+            ok &= write.Join(timeout);
+        return ok;
+    }
 
     /// <summary>
     /// A hand save landed during this write when the destination changed after the write started and is not the
@@ -927,6 +951,82 @@ public sealed class FileView : QObject
     [Qml]
     public void Reload() => Load(sync: _blockLoading || _blockAllReads);
 
+    /// <summary>
+    /// Blocks until the load or save already in progress finishes, so <see cref="GetText"/> is current when this returns.
+    /// Returns false when nothing is running, or this view is destroyed before the call returns.
+    /// The job raises <c>loaded</c>, <c>loadFailed</c>, <c>saved</c> or <c>saveFailed</c> before this returns.
+    /// </summary>
+    [Qml]
+    public bool WaitForJob()
+    {
+        var loadTarget = _generation;
+        var writeTarget = _writeSerial;
+        if (_loadSettled >= loadTarget && _writeSettled >= writeTarget)
+            return false;
+        return WaitUntil(loadTarget, writeTarget);
+    }
+
+    /// <summary>
+    /// The job posts its result to this loop, and that post is what raises the signal. Waiting without running
+    /// posted work would deadlock when the job's thread needs this thread to finish. Timers stay queued so they
+    /// do not fire early. Work the signal posts is not in the batch that raised it, so it waits until this returns.
+    /// </summary>
+    private bool WaitUntil(int loadTarget, int writeTarget)
+    {
+        if (Engine?.Loop is not EventQueue queue)
+            return false;
+        var gate = new object();
+        var signaled = false;
+        void OnWake()
+        {
+            lock (gate)
+            {
+                signaled = true;
+                Monitor.PulseAll(gate);
+            }
+        }
+        queue.Woken += OnWake;
+        try
+        {
+            while (!IsDestroyed && (_loadSettled < loadTarget || _writeSettled < writeTarget))
+            {
+                lock (gate)
+                    signaled = false;
+                if (queue.RunPosted())
+                {
+                    if (IsDestroyed)
+                        return false;
+                    continue;
+                }
+                if (IsDestroyed || (_loadSettled >= loadTarget && _writeSettled >= writeTarget))
+                    break;
+                lock (gate)
+                {
+                    if (signaled || IsDestroyed || _loadSettled >= loadTarget && _writeSettled >= writeTarget)
+                        continue;
+                    Monitor.Wait(gate);
+                }
+            }
+        }
+        finally
+        {
+            queue.Woken -= OnWake;
+        }
+        return !IsDestroyed && _loadSettled >= loadTarget && _writeSettled >= writeTarget;
+    }
+
+    private void SettleLoad(int generation)
+    {
+        if (generation > _loadSettled)
+            _loadSettled = generation;
+    }
+
+    private void SettleWrite(int serial)
+    {
+        if (serial > _writeSettled)
+            _writeSettled = serial;
+    }
+
     private void Load(bool sync)
     {
         if (_path.Length == 0 || Engine is null)
@@ -940,7 +1040,25 @@ public sealed class FileView : QObject
             return;
         }
         var loop = Engine.Loop;
-        Task.Run(() => Read(path, maxFileBytes)).ContinueWith(t => loop.Post(() => Apply(generation, t.Result)), TaskScheduler.Default);
+        // A pool thread can sit unscheduled while this thread waits for the read, which is the deadlock
+        // waitForJob has to avoid. One thread for this read posts the result and exits.
+        var thread = new Thread(() =>
+        {
+            (string? Text, bool Bom, FileViewError Error, string Message) result;
+            try
+            {
+                result = Read(path, maxFileBytes);
+                _jobGate?.Invoke(loop);
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                result = (null, false, FileViewError.Unknown, e.Message);
+            }
+            loop.Post(() => Apply(generation, result));
+        })
+        { IsBackground = true };
+        _loadThread = thread;
+        thread.Start();
     }
 
     private static (string? Text, bool Bom, FileViewError Error, string Message) Read(string path, int maxFileBytes)
@@ -1222,6 +1340,8 @@ public sealed class FileView : QObject
 
     private void Apply(int generation, (string? Text, bool Bom, FileViewError Error, string Message) result)
     {
+        // Before the signal, so a handler that calls waitForJob does not wait for this same load.
+        SettleLoad(generation);
         if (generation != _generation || IsDestroyed)
             return;
         if (result.Text is null)
@@ -1299,7 +1419,7 @@ public sealed class FileView : QObject
     {
         if (_path.Length == 0)
             return;
-        var save = new QueuedSave(_path, text, _atomicWrites, _bom, Engine?.Loop);
+        var save = new QueuedSave(_path, text, _atomicWrites, _bom, Engine?.Loop, ++_writeSerial);
         _text = text;
         NotifyChanged("text");
         // A blocking save runs on this thread, so a test probe set here still runs. Async saves share one thread
@@ -1320,7 +1440,7 @@ public sealed class FileView : QObject
             try
             {
                 WaitForSave(prior);
-                WriteQueued(save);
+                WriteQueued(save, background: false);
             }
             finally
             {
@@ -1366,7 +1486,7 @@ public sealed class FileView : QObject
                         next = _queued;
                         _queued = null;
                     }
-                    WriteQueued(next);
+                    WriteQueued(next, background: true);
                 }
             }
             finally
@@ -1380,6 +1500,7 @@ public sealed class FileView : QObject
             }
         })
         { IsBackground = true };
+        _writeThread = thread;
         thread.Start();
     }
 
@@ -1394,7 +1515,7 @@ public sealed class FileView : QObject
         }
     }
 
-    private void WriteQueued(QueuedSave save)
+    private void WriteQueued(QueuedSave save, bool background)
     {
         var path = save.Path;
         var text = save.Text;
@@ -1466,6 +1587,8 @@ public sealed class FileView : QObject
         }
         void Report()
         {
+            // Before the signal, so a handler that calls waitForJob does not wait for this same save.
+            SettleWrite(save.Serial);
             if (IsDestroyed)
                 return;
             if (failure is null)
@@ -1485,19 +1608,35 @@ public sealed class FileView : QObject
                 Emit("saveFailed", (int)failure.Value);
             }
         }
+        // The save thread is past the file work and has not posted the signal yet. A test holds it here.
+        // The signal is still posted if that gate throws, so a waiter is not left blocked.
+        try
+        {
+            if (background && save.Loop is not null)
+                _jobGate?.Invoke(save.Loop);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            if (failure is null)
+            {
+                failure = FileViewError.Unknown;
+                message = e.Message;
+            }
+        }
         if (save.Loop is null)
             Report();
         else
             save.Loop.Post(Report);
     }
 
-    private sealed class QueuedSave(string path, string text, bool atomic, bool bom, IEventLoop? loop)
+    private sealed class QueuedSave(string path, string text, bool atomic, bool bom, IEventLoop? loop, int serial)
     {
         public string Path { get; } = path;
         public string Text { get; } = text;
         public bool Atomic { get; } = atomic;
         public bool Bom { get; } = bom;
         public IEventLoop? Loop { get; } = loop;
+        public int Serial { get; } = serial;
     }
 
     private void AcceptHandSave(string path)

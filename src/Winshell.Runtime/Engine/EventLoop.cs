@@ -104,15 +104,7 @@ public class EventQueue : IEventLoop
     /// </summary>
     public bool RunDue()
     {
-        var ran = false;
-        var posted = new List<Action>();
-        while (_posted.TryDequeue(out var action))
-            posted.Add(action);
-        foreach (var action in posted)
-        {
-            Run(action);
-            ran = true;
-        }
+        var ran = RunPosted();
 
         var now = Now;
         var dueNow = new List<TimerEntry>();
@@ -139,6 +131,20 @@ public class EventQueue : IEventLoop
         if (HasQueuedWork(now))
             Woken?.Invoke();
         return ran;
+    }
+
+    /// <summary>
+    /// Runs the posted work queued so far and leaves timers for <see cref="RunDue"/>. Work posted by this batch
+    /// waits for the next pass, so a handler that posts itself cannot starve the caller.
+    /// </summary>
+    internal bool RunPosted()
+    {
+        var posted = new List<Action>();
+        while (_posted.TryDequeue(out var action))
+            posted.Add(action);
+        foreach (var action in posted)
+            Run(action);
+        return posted.Count > 0;
     }
 
     /// <summary>Whether a later pass still has posted work, or a timer that was due at <paramref name="now"/>.</summary>
