@@ -1,12 +1,12 @@
-- name: 1. Own QML parser and a Jint runtime
+- name: 1. Own QML parser and a Jint runtime (superseded)
   href: 0001-own-qml-parser-and-jint-runtime.md
-- name: 2. Draw the item tree with Skia
+- name: 2. Draw the item tree with Skia (superseded)
   href: 0002-draw-with-skia.md
-- name: 3. DirectComposition windows
+- name: 3. DirectComposition windows (partly superseded)
   href: 0003-directcomposition-windows.md
 - name: 4. Quickshell v0.3.2 API (superseded)
   href: 0004-quickshell-v0-3-2-api.md
-- name: 5. DirectWrite text and UI Automation
+- name: 5. DirectWrite text and UI Automation (superseded)
   href: 0005-directwrite-text-and-uia.md
 - name: 6. Screen coordinates
   href: 0006-screen-coordinates-keep-the-physical-corner.md
@@ -16,3 +16,5 @@
   href: 0008-windows-owns-the-lock-screen.md
 - name: 9. User config files are TOML
   href: 0009-user-config-files-are-toml.md
+- name: 10. A configuration is a WinUI 3 program
+  href: 0010-a-configuration-is-a-winui-program.md

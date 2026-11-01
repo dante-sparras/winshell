@@ -1,6 +1,6 @@
 # Draw text with DirectWrite and expose controls to UI Automation
 
-**Status:** accepted
+**Status:** superseded by ADR-0010
 
 ADR 0002 still paints the item tree with one Skia scene, and ADR 0003 still puts Mica, Acrylic, or nothing on the HWND. A XAML renderer stays rejected: it would split the QML tree from the pixels, and an island would sit in its own airspace over that scene. Text is the exception. Draw it with DirectWrite, grayscale where a backdrop shows through, and expose the built-in controls through UI Automation so Narrator can reach them. WinUI 3 is the visual reference for a later token pass, not the host.
 
