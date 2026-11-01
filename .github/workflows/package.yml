@@ -85,7 +85,7 @@ jobs:
           $sha = (git rev-parse HEAD).Trim()
           $deadline = (Get-Date).AddMinutes(40)
           do {
-            $state = Get-WinshellReleaseCiState -CheckRuns (Get-WinshellCheckRuns -Repository $env:GH_REPO -Sha $sha)
+            $state = Get-WinshellReleaseGateState -Repository $env:GH_REPO -Sha $sha
             if ($state -eq 'green') { Write-Output "ci succeeded on $sha"; exit 0 }
             if ($state -eq 'red') { throw "ci did not succeed on $sha, so this release stops" }
             if ((Get-Date) -ge $deadline) { throw "ci did not finish on $sha within 40 minutes" }
