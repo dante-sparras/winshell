@@ -10,7 +10,7 @@ public enum NotificationState { Unknown, Off, On }
 public enum NotificationMode { Unknown = -1, Unrestricted, PriorityOnly, AlarmsOnly }
 
 internal sealed record IncomingToast(uint Id, string AppId, string AppName, string Title, string Body,
-    DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt = null);
+    DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt = null, IAppLogoSource? Logo = null);
 internal sealed record NotificationSnapshot(NotificationAccessStatus AccessStatus, IReadOnlyList<IncomingToast> Notifications,
     NotificationState Focus, NotificationMode Mode, string Error = "");
 
@@ -65,6 +65,7 @@ public sealed class NotificationListener : QObject
     }
     [Qml] public string Error { get { Track(); return _error; } }
     internal Task? MonitorTask => _monitorTask;
+    internal CancellationToken Cancellation => _stop.Token;
 
     public override void ComponentComplete()
     {
@@ -207,6 +208,7 @@ public sealed class NotificationListener : QObject
                 item = new ShellNotification(this, toast) { Engine = Engine };
                 item.SetOwner(this);
                 _items.Add(toast.Id, item);
+                item.SyncIcon();
                 added.Add(item);
             }
         }
@@ -330,7 +332,13 @@ public sealed class NotificationListener : QObject
 public sealed class ShellNotification : QObject, IRetainable
 {
     private readonly NotificationListener _listener;
+    private readonly Lock _iconGate = new();
     private IncomingToast _toast;
+    private string _appIcon = "";
+    private string? _loadedKey;
+    private IconHold _hold;
+    private int _iconRequest;
+    private bool _holdingIcon;
     internal ShellNotification(NotificationListener listener, IncomingToast toast) { _listener = listener; _toast = toast; }
     RetainableHook? IRetainable.RetainHook { get; set; }
     void IRetainable.FinishRetain() => Destroy();
@@ -339,12 +347,106 @@ public sealed class ShellNotification : QObject, IRetainable
     [Qml] public double Id => NativeId;
     [Qml] public string AppId { get { Track(); return _toast.AppId; } }
     [Qml] public string AppName { get { Track(); return _toast.AppName; } }
+    /// <summary>A <c>file:///</c> url of the sending app's logo. Empty until the read finishes, and when Windows gives none.</summary>
+    [Qml] public string AppIcon { get { Track(); return _appIcon; } }
     [Qml] public string Title { get { Track(); return _toast.Title; } }
     [Qml] public string Body { get { Track(); return _toast.Body; } }
     [Qml] public double CreatedAt { get { Track(); return _toast.CreatedAt.ToUnixTimeMilliseconds(); } }
     [Qml] public double ExpiresAt { get { Track(); return _toast.ExpiresAt?.ToUnixTimeMilliseconds() ?? 0; } }
     [Qml] public bool CanInvoke => false;
     [Qml] public bool Dismiss() => _listener.Dismiss(this);
+
+    private string IconKey => _toast.AppId.Length > 0
+        ? _toast.AppId
+        : "id:" + _toast.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Starts a logo read when this notification's app does not already have one in flight.</summary>
+    internal void SyncIcon()
+    {
+        if (IsDestroyed || IsDestroying)
+            return;
+        var source = _toast.Logo;
+        var key = source is null ? null : IconKey;
+        if (string.Equals(key, _loadedKey, StringComparison.Ordinal))
+            return;
+        _loadedKey = key;
+        Abandon();
+        if (source is null || key is null)
+            return;
+        int request;
+        lock (_iconGate)
+            request = _iconRequest;
+        var label = _toast.AppName.Length > 0 ? _toast.AppName : _toast.AppId.Length > 0 ? _toast.AppId : "a notification";
+        var log = Engine?.Log ?? Log.Default;
+        var cancellation = _listener.Cancellation;
+        // Not the thread pool. Publishing the url has to run even when every pool thread is busy.
+        var thread = new Thread(() => Deliver(key, label, source, log, cancellation, request))
+        {
+            IsBackground = true,
+            Name = "Notification icon",
+        };
+        thread.Start();
+    }
+
+    private void Deliver(string key, string label, IAppLogoSource source, Log log, CancellationToken cancellation, int request)
+    {
+        var read = NotificationAppIcons.Read(key, label, source, log, cancellation);
+        PostIcon(() => ApplyIcon(read, request));
+    }
+
+    private void ApplyIcon(IconRead read, int request)
+    {
+        var changed = false;
+        lock (_iconGate)
+        {
+            // A read that finished after dismiss must not land on the dead object, and must not keep the file.
+            if (request != _iconRequest || IsDestroyed || IsDestroying)
+            {
+                NotificationAppIcons.Release(read.Hold);
+                return;
+            }
+            _holdingIcon = true;
+            _hold = read.Hold;
+            if (_appIcon != read.Url)
+            {
+                _appIcon = read.Url;
+                changed = true;
+            }
+        }
+        if (changed)
+            NotifyChanged("appIcon");
+    }
+
+    /// <summary>Drops a finished read, and makes an in-flight one release itself when it lands.</summary>
+    private void Abandon()
+    {
+        IconHold release = default;
+        var clear = false;
+        lock (_iconGate)
+        {
+            _iconRequest++;
+            if (_holdingIcon)
+            {
+                _holdingIcon = false;
+                release = _hold;
+                _hold = default;
+            }
+            clear = _appIcon.Length > 0;
+        }
+        if (release.Active)
+            NotificationAppIcons.Release(release);
+        if (clear && !IsDestroyed && !IsDestroying)
+            SetField(ref _appIcon, "", nameof(AppIcon));
+    }
+
+    private void PostIcon(Action action)
+    {
+        // Posted even after this listener is gone, so a finished read can still release its file.
+        if (_listener.Engine?.Loop is { } loop)
+            loop.Post(action);
+        else
+            action();
+    }
 
     /// <summary>UserNotificationListener exposes no activation arguments or actions for other apps.</summary>
     [Qml] public bool Invoke()
@@ -364,7 +466,10 @@ public sealed class ShellNotification : QObject, IRetainable
         if (old.Body != toast.Body) NotifyChanged("body");
         if (old.CreatedAt != toast.CreatedAt) NotifyChanged("createdAt");
         if (old.ExpiresAt != toast.ExpiresAt) NotifyChanged("expiresAt");
+        SyncIcon();
     }
+
+    protected override void OnDestroy() => Abandon();
 }
 
 public sealed class NotificationGroup : QObject
