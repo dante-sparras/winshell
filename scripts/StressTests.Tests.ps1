@@ -268,6 +268,13 @@ Describe 'Stressing the tests' {
         Get-Content -LiteralPath $report | Should -Be @('Ns.Class.Earlier', 'Ns.Class.One')
     }
 
+    It 'reports the round''s tests when a hang or crash names none' {
+        $report = Join-Path $TestDrive 'flaky-hang.txt'
+        Mock Invoke-StressRound { New-Run -Exit 7 -Passed @() -Complete $false }
+        Invoke-StressTest -Tests @((New-Test), (New-Test -Name 'Two')) -Rounds 30 -BudgetMinutes 15 -ReportPath $report | Should -Be 7
+        Get-Content -LiteralPath $report | Should -Be @('One', 'Two')
+    }
+
     It 'fails a run that crashed without naming a test' {
         Mock Invoke-StressRound { New-Run -Exit 7 -Passed @() -Complete $false }
         Invoke-StressTest -Tests @(New-Test) -Rounds 30 -BudgetMinutes 15 | Should -Be 7

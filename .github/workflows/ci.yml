@@ -9,8 +9,11 @@ on:
 permissions:
   contents: read
 
+# A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
+# a shared one would drop the ci run of a commit in a burst of merges, and with it that commit's stress run, and a
+# release commit would wait for a check that never comes.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -18,7 +21,7 @@ jobs:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 35
     outputs:
       flaky: ${{ steps.flaky.outputs.flaky }}
     steps:
@@ -40,8 +43,8 @@ jobs:
             throw "Could not turn animation effects on: error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
           }
       - name: Check
-        # A pull request waits for the build and the main tests. A push to main runs everything, and ReleaseGate.ps1 holds
-        # a release until that passes.
+        # A pull request waits for the build and the main tests. A push to main runs everything, and so does the release
+        # pull request: once its commit is tagged, a failure can't be fixed in that version.
         timeout-minutes: 10
         shell: pwsh
         env:
@@ -51,7 +54,7 @@ jobs:
           WINSHELL_SNAPSHOT_DIFFS: ${{ runner.temp }}/snapshot-diffs
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
-          ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request')
+          ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
       - name: Stress new and changed tests
         # After the merge, so no pull request waits for it. A failure files a flaky issue and blocks nothing. As in the
         # media job, continue-on-error is on the step.

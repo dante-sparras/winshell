@@ -130,6 +130,11 @@ Describe 'Running the main stage' {
         Invoke-MainTest -ReportPath $script:Report -ProjectCount 1 | Should -Be 1
     }
 
+    It 'fails a run that exits 0 with a test project missing' {
+        $script:Plan = @(@{ Exit = 0; Rows = @('Ns.Class.One=Passed') })
+        Invoke-MainTest -ReportPath $script:Report -ProjectCount 2 | Should -Be 1
+    }
+
     It 'passes and reports a test that passes on its rerun' {
         $script:Plan = @(
             @{ Exit = 1; Rows = @('Ns.Class.One=Failed', 'Ns.Class.Two=Passed') }

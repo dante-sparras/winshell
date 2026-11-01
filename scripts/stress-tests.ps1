@@ -111,7 +111,7 @@ function Invoke-StressRound {
         [Parameter(Mandatory)][string] $Filter,
         [Parameter(Mandatory)][string] $ResultsDirectory
     )
-    $output = dotnet test (Join-Path $script:Root $Project) --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory 2>&1
+    $output = dotnet test (Join-Path $script:Root $Project) --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none 2>&1
     $exit = $LASTEXITCODE
     [pscustomobject]@{ Exit = $exit; Output = $output; Result = Read-TestResult -Directory $ResultsDirectory -ProjectCount 1 }
 }
@@ -149,7 +149,9 @@ function Invoke-StressTest {
                 if ($run.Exit -ne 0 -or $run.Result.Failed.Count -gt 0 -or -not $run.Result.Complete) {
                     $run.Output | Out-Host
                     foreach ($name in $run.Result.Failed) { Write-Host "::error title=Flaky test::$name failed in round $round of $Rounds." }
-                    if ($ReportPath -and $run.Result.Failed.Count -gt 0) { Add-Content -LiteralPath $ReportPath -Value $run.Result.Failed }
+                    # A hang or a crash names no failed test, so it reports the tests that round was running.
+                    $reported = if ($run.Result.Failed.Count -gt 0) { $run.Result.Failed } else { $project.Group.Name }
+                    if ($ReportPath) { Add-Content -LiteralPath $ReportPath -Value $reported }
                     Write-Host "Round $round of $Rounds failed."
                     return $(if ($run.Exit -ne 0) { $run.Exit } else { 1 })
                 }

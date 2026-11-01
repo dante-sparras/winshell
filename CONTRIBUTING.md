@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the full check. The required `ci` job runs its `-Quick` part on a pull request and all of it on a push to `main`, where a failure holds back the next release. The ruleset also requires `installer`, `pr-title`, and the docs `build` job. The [commands](docs/development.md#commands) list `installer`, `links`, `actionlint`, `zizmor`, and `package`, and how to run each one locally. Run the ones your change can break.
+**Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the full check. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `pr-title`, and the docs `build` job. The [commands](docs/development.md#commands) list `installer`, `links`, `actionlint`, `zizmor`, and `package`, and how to run each one locally. Run the ones your change can break.
 
 ## Write tests that don't flake
 
@@ -28,7 +28,7 @@ A test waits on a real signal: an event, a task's completion, or a fake clock.
 - **No sleeps or fixed timeouts as a way to wait.** A timeout can stop a test that hung, but a passing test must never depend on how long something took.
 - **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
 
-After a merge, the `ci` job on `main` runs each test you added or changed 30 times with every core busy, and a failure files a `flaky` issue. It looks at the test's own lines, so a change to a helper, or to the code under test, doesn't stress the tests that use it. `pwsh scripts/stress-tests.ps1 -Base origin/main` does the same [locally](docs/development.md#commands), so run it before you open the PR.
+After a merge, the `ci` job on `main` runs each test you added or changed 30 times with every core busy, and a failure files a `flaky` issue. It looks at the test's own lines, so a change to a helper, or to the code under test, doesn't stress the tests that use it. `pwsh scripts/stress-tests.ps1 -Base origin/main` does the same [locally](docs/development.md#commands).
 
 ## Flaky tests
 
@@ -86,7 +86,7 @@ If an AI agent did the work, end the description with the model and the tool you
 
 ## Review and merge
 
-- Every change reaches `main` through a PR, and the required checks (`ci`, `installer`, and the PR title) must pass first.
+- Every change reaches `main` through a PR, and the required checks (`ci`, `installer`, the docs `build` job, and the PR title) must pass first.
 - PRs are squash-merged. Your PR title becomes the commit message on `main`, so make it readable on its own.
 - Releases are cut from those commits, so your PR title is also your line in the changelog.
 - A PR that doesn't follow this guide may be closed with a note saying what's missing. Fix it and ask for another look, or open a new PR.

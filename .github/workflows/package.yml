@@ -228,7 +228,8 @@ jobs:
   release:
     name: release
     if: ${{ inputs.tag != '' }}
-    needs: package
+    # A published release can't be repaired, so the arm64 build has to start before this runs.
+    needs: [package, arm64]
     runs-on: windows-2025
     timeout-minutes: 15
     permissions:
