@@ -6,14 +6,19 @@ namespace Winshell.Platform.Windows.Services.Input;
 
 /// <summary>
 /// Registers hotkeys with <c>RegisterHotKey</c>, and installs one low-level keyboard hook while a Windows-key
-/// hotkey is claimed or a key sequence is waiting for its next chord.
+/// hotkey is claimed, a key sequence is waiting for its next chord, or a shortcut inhibitor is capturing.
 /// </summary>
 internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
 {
     private const int ErrorAlreadyRegistered = 1409;
     private const int ErrorClassAlreadyExists = 1410;
     private const uint ModNoRepeat = 0x4000;
+    private const uint LlkhfExtended = 0x01;
+    private const uint LlkhfAltDown = 0x20;
     private const uint LlkhfUp = 0x80;
+    private const int VkDelete = 0x2E;
+    private const int VkL = 0x4C;
+    private const int MaxTrackedWindows = 16;
     private const string ClassName = "WinshellHotkey";
 
     private static readonly object Gate = new();
@@ -30,7 +35,11 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private GCHandle _self;
     private nint _hwnd;
     private int _nextId = 1;
+    private readonly Dictionary<IInhibitClient, nint> _clients = [];
+    private readonly bool[] _down = new bool[256];
     private int _syncPosted;
+    private int _recheckPosted;
+    private int _captureLive;
     private bool _classRegistered;
     private bool _disposed;
 
@@ -38,6 +47,15 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     /// <summary>When false, a sequence can arm without installing a hook. Tests use this so a hook is never left behind.</summary>
     internal bool InstallNativeHook { get; set; } = true;
+
+    /// <summary>When false, the hook is not installed. Tests use this to refuse a capture without calling Windows.</summary>
+    internal bool AllowHookInstall { get; set; } = true;
+
+    /// <summary>Whether <paramref name="hwnd"/> is the foreground window. Tests substitute a window that is not really in front.</summary>
+    internal Func<nint, bool> IsForeground { get; set; } = static hwnd => hwnd != 0 && Win32.GetForegroundWindow() == hwnd;
+
+    /// <summary>Posts one captured key to the shell window. Tests record the key instead of posting it.</summary>
+    internal Func<PostedKey, bool> ForwardKey { get; set; } = PostToWindow;
 
     internal TimeSpan SequenceTimeout
     {
@@ -57,7 +75,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
 
     internal bool NeedsHook
     {
-        get { lock (_bookLock) return _book.NeedsHook; }
+        get { lock (_bookLock) return _book.NeedsHook || _clients.Count > 0; }
     }
 
     internal static bool IsHookInstalled
@@ -69,6 +87,8 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     {
         get { lock (Gate) return Hook?.Thread; }
     }
+
+    internal bool IsDisposed => _disposed;
 
     public HotkeyClaim Claim(IHotkeyListener listener, HotkeySequence? sequence)
     {
@@ -127,17 +147,21 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         _disposed = true;
         int[] ids;
         IDisposable[] timers;
+        IInhibitClient[] clients;
         nint hwnd;
         GCHandle self;
         lock (_bookLock)
         {
             ids = [.. _ids.Values];
             timers = [.. _timers.Values];
+            clients = [.. _clients.Keys];
             _ids.Clear();
             _chords.Clear();
             _timers.Clear();
             _pendingUnregister.Clear();
             _book.Clear();
+            _clients.Clear();
+            Array.Clear(_down);
             hwnd = _hwnd;
             _hwnd = 0;
             self = _self;
@@ -155,6 +179,19 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         if (self.IsAllocated)
             self.Free();
         DetachHook();
+        // The hook is gone. Tell inhibitors so active does not stay true, and do not report cancelled:
+        // the shell asked for this stop.
+        foreach (var client in clients)
+        {
+            try
+            {
+                client.Recheck();
+            }
+            catch (Exception e)
+            {
+                Log.Default.Warn("hotkey", e.Message);
+            }
+        }
     }
 
     /// <summary>Removes this process's hotkey hook, whoever installed it. Tests call this if a registrar is abandoned.</summary>
@@ -194,8 +231,18 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     }
 
     /// <summary>Feeds one key into the book. Tests use this instead of injecting a keystroke.</summary>
-    internal bool HandleKey(int virtualKey, bool isUp, HotkeyModifiers modifiers)
+    internal bool HandleKey(int virtualKey, bool isUp, HotkeyModifiers modifiers, int scanCode = 0, bool altDown = false, bool extended = false)
     {
+        var flags = isUp ? LlkhfUp : 0;
+        if (altDown)
+            flags |= LlkhfAltDown;
+        if (extended)
+            flags |= LlkhfExtended;
+        var decision = Decide(virtualKey, isUp, modifiers, (uint)scanCode, flags);
+        if (decision == InhibitDecision.Swallow)
+            return true;
+        if (decision == InhibitDecision.Pass)
+            return false;
         BookResult result;
         var changed = false;
         lock (_bookLock)
@@ -453,6 +500,8 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     // The procedure can run before the hook is recorded here. Do not hold the book lock, or the static gate, while waiting for it.
     private bool AttachHook()
     {
+        if (!AllowHookInstall)
+            return false;
         lock (Gate)
         {
             if (HookOwner == this && Hook is not null)
@@ -461,7 +510,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
                 return false;
             HookOwner = this;
         }
-        var hook = HookThread.Start(Win32.WH_KEYBOARD_LL, &KeyboardProc, "Winshell keyboard hook");
+        var hook = HookThread.Start(Win32.WH_KEYBOARD_LL, &KeyboardProc, "Winshell keyboard hook", OnHookThreadExited);
         lock (Gate)
         {
             if (HookOwner == this && hook is not null)
@@ -491,9 +540,18 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     }
 
     // The procedure runs on the hook thread. Work for the loop is posted, and so is the unhook.
+    // Read the modifiers before taking the book lock: GetAsyncKeyState does not need it, and the lock stays short.
     private bool OnHook(nint lParam)
     {
         var info = (KbdLlHookStruct*)lParam;
+        var vk = (int)info->vkCode;
+        var up = (info->flags & LlkhfUp) != 0;
+        var mods = ReadModifiers();
+        var decision = Decide(vk, up, mods, info->scanCode, info->flags);
+        if (decision == InhibitDecision.Swallow)
+            return true;
+        if (decision == InhibitDecision.Pass)
+            return false;
         BookResult result;
         var changed = false;
         lock (_bookLock)
@@ -501,7 +559,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
             if (_disposed)
                 return false;
             var before = _book.NeedsHook;
-            result = _book.Hook((int)info->vkCode, (info->flags & LlkhfUp) != 0, ReadModifiers(), NowMs());
+            result = _book.Hook(vk, up, mods, NowMs());
             changed = before != _book.NeedsHook;
         }
         if (result.Pressed.Count > 0 || result.Armed.Count > 0)
@@ -535,6 +593,211 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
             Interlocked.Exchange(ref _syncPosted, 0);
             if (!_disposed)
                 SyncHook();
+        });
+    }
+
+    /// <summary>
+    /// Captures keys for <paramref name="hwnd"/> while it is the foreground window. A zero handle stops.
+    /// Returns false when Windows will not install the hook. The client is not left registered in that case.
+    /// </summary>
+    internal bool SetInhibition(IInhibitClient client, nint hwnd)
+    {
+        if (_disposed)
+            return false;
+        lock (_bookLock)
+        {
+            var had = _clients.Count > 0;
+            if (hwnd == 0)
+                _clients.Remove(client);
+            else
+                _clients[client] = hwnd;
+            if (had != (_clients.Count > 0))
+                _book.ForgetHeldKeys();
+            if (_clients.Count == 0)
+            {
+                Array.Clear(_down);
+                Interlocked.Exchange(ref _captureLive, 0);
+            }
+        }
+        SyncHook();
+        if (hwnd == 0 || !InstallNativeHook)
+            return true;
+        if (OwnsHook)
+            return true;
+        lock (_bookLock)
+        {
+            _clients.Remove(client);
+            if (_clients.Count == 0)
+            {
+                _book.ForgetHeldKeys();
+                Array.Clear(_down);
+                Interlocked.Exchange(ref _captureLive, 0);
+            }
+        }
+        SyncHook();
+        return false;
+    }
+
+    /// <summary>
+    /// The hook thread ended without being asked to. Windows does not report a hook it removed for a timeout
+    /// while leaving the thread running, so this is only the exit this process can see.
+    /// </summary>
+    internal void NoteHookLost()
+    {
+        if (_disposed)
+            return;
+        IInhibitClient[] clients;
+        lock (_bookLock)
+        {
+            clients = [.. _clients.Keys];
+            _clients.Clear();
+            Array.Clear(_down);
+            Interlocked.Exchange(ref _captureLive, 0);
+            if (clients.Length > 0)
+                _book.ForgetHeldKeys();
+        }
+        foreach (var client in clients)
+        {
+            try
+            {
+                client.Cancelled();
+            }
+            catch (Exception e)
+            {
+                Log.Default.Warn("hotkey", e.Message);
+            }
+        }
+        if (!_disposed)
+            SyncHook();
+    }
+
+    private void OnHookThreadExited()
+    {
+        lock (Gate)
+        {
+            if (!ReferenceEquals(HookOwner, this))
+                return;
+            Hook = null;
+            HookOwner = null;
+        }
+        _loop.Post(NoteHookLost);
+    }
+
+    private enum InhibitDecision
+    {
+        None,
+        Swallow,
+        Pass,
+    }
+
+    // Runs on the hook thread. No QML, no logging, and no wait: the system drops a hook that is slow.
+    private InhibitDecision Decide(int virtualKey, bool isUp, HotkeyModifiers modifiers, uint scanCode, uint flags)
+    {
+        Span<nint> windows = stackalloc nint[MaxTrackedWindows];
+        var count = 0;
+        lock (_bookLock)
+        {
+            if (_disposed || _clients.Count == 0)
+                return InhibitDecision.None;
+            foreach (var hwnd in _clients.Values)
+            {
+                if (count == windows.Length)
+                    break;
+                windows[count++] = hwnd;
+            }
+        }
+        nint target = 0;
+        for (var i = 0; i < count; i++)
+        {
+            if (IsForeground(windows[i]))
+            {
+                target = windows[i];
+                break;
+            }
+        }
+        if (target == 0)
+        {
+            Interlocked.Exchange(ref _captureLive, 0);
+            PostForegroundRecheck();
+            return InhibitDecision.None;
+        }
+        // The first key back in front asks the loop to set active again. Later keys stay on this thread.
+        if (Interlocked.Exchange(ref _captureLive, 1) == 0)
+            PostForegroundRecheck();
+        // Ctrl+Alt+Del and Win+L still reach Windows. Eating them would claim a block Windows does not allow.
+        if (IsUnblockable(virtualKey, modifiers))
+            return InhibitDecision.Pass;
+        return TryForward(target, virtualKey, isUp, scanCode, flags) ? InhibitDecision.Swallow : InhibitDecision.None;
+    }
+
+    private static bool IsUnblockable(int virtualKey, HotkeyModifiers modifiers)
+    {
+        if (virtualKey == VkDelete && (modifiers & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt)) == (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt))
+            return true;
+        return virtualKey == VkL && (modifiers & HotkeyModifiers.Win) != 0;
+    }
+
+    private bool TryForward(nint hwnd, int virtualKey, bool isUp, uint scanCode, uint flags)
+    {
+        var known = (uint)virtualKey < (uint)_down.Length;
+        var repeat = false;
+        if (known)
+        {
+            lock (_bookLock)
+                repeat = !isUp && _down[virtualKey];
+        }
+        var alt = (flags & LlkhfAltDown) != 0;
+        var extended = (flags & LlkhfExtended) != 0;
+        uint message;
+        if (isUp)
+            message = alt ? Win32.WM_SYSKEYUP : Win32.WM_KEYUP;
+        else
+            message = alt ? Win32.WM_SYSKEYDOWN : Win32.WM_KEYDOWN;
+        long lp = 1;
+        lp |= (long)(scanCode & 0xFF) << 16;
+        if (extended)
+            lp |= 1L << 24;
+        if (alt)
+            lp |= 1L << 29;
+        if (isUp || repeat)
+            lp |= 1L << 30;
+        if (isUp)
+            lp |= 1L << 31;
+        var posted = ForwardKey(new PostedKey(hwnd, message, virtualKey, (nint)lp));
+        if (known)
+        {
+            lock (_bookLock)
+                _down[virtualKey] = posted && !isUp;
+        }
+        return posted;
+    }
+
+    private static bool PostToWindow(PostedKey key) =>
+        key.Hwnd != 0 && Win32.PostMessageW(key.Hwnd, key.Message, key.WParam, key.LParam);
+
+    private void PostForegroundRecheck()
+    {
+        if (Interlocked.Exchange(ref _recheckPosted, 1) == 1)
+            return;
+        _loop.Post(() =>
+        {
+            Interlocked.Exchange(ref _recheckPosted, 0);
+            if (_disposed)
+                return;
+            IInhibitClient[] clients;
+            lock (_bookLock)
+                clients = [.. _clients.Keys];
+            foreach (var client in clients)
+            {
+                try
+                {
+                    client.Recheck();
+                }
+                catch (Exception e)
+                {
+                    Log.Default.Warn("hotkey", e.Message);
+                }
+            }
         });
     }
 

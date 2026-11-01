@@ -11,7 +11,7 @@ See also the [command line](command-line.md) and [the default shell](default-she
 | [Winshell.Io](winshell-io.md) | Running programs, reading and writing files, JSON files as properties, sockets and named pipes, and `IpcHandler` for `winshell ipc` |
 | [Winshell.Widgets](winshell-widgets.md) | Icons that stay sharp at every scale, clipping rectangles, and wrappers that size to their child |
 | [Winshell.Theme](winshell-theme.md) | Light or dark, the accent color, and the WinUI 3 tokens of the Windows 11 look |
-| [Winshell.Input](winshell-input.md) | Hotkeys that work anywhere in Windows |
+| [Winshell.Input](winshell-input.md) | Hotkeys that work anywhere in Windows, and key capture for one shell window |
 | [Winshell.Apps](winshell-apps.md) | The apps Start lists, search, launching them, and jump list documents |
 | [Winshell.Audio](winshell-audio.md) | Playback and recording devices, audio sessions, volume, mute and levels |
 | [Winshell.Media](winshell-media.md) | Media sessions: what is playing, and play, pause, skip and seek |

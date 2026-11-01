@@ -168,7 +168,7 @@ ShellRoot {
 | Bluetooth devices | [`Winshell.Bluetooth`](../reference/winshell-bluetooth.md) |
 | Notifications and toasts | [`Winshell.Notifications`](../reference/winshell-notifications.md) |
 | Tray icons | [`Winshell.Tray`](../reference/winshell-tray.md) |
-| Hotkeys | [`Winshell.Input`](../reference/winshell-input.md) |
+| Hotkeys and shortcut capture | [`Winshell.Input`](../reference/winshell-input.md) |
 | Screenshots and live captures | [`Winshell.Capture`](../reference/winshell-capture.md) |
 
 Reading never asks for permission or changes anything. Wi-Fi scanning, notification access and Bluetooth pairing ask Windows only when your configuration calls the method for it, from a user's action. Locking calls [`Session.lock()`](../reference/winshell.md#session), and Windows' own lock screen takes over.

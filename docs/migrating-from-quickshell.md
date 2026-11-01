@@ -12,7 +12,7 @@ The Qt Quick modules (`QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`, `QtQuick
 | `Quickshell.Io` | `Winshell.Io` |
 | `Quickshell.Widgets` | `Winshell.Widgets` |
 | `Quickshell.Windows` | `Winshell` for `WindowEffects`, `Winshell.Theme` for the theme |
-| `Quickshell.Wayland` | `Winshell.Power` for idle, `Winshell.Windows` for the window list; the session lock is [removed](#session-lock) |
+| `Quickshell.Wayland` | `Winshell.Power` for idle, `Winshell.Windows` for the window list, `Winshell.Input` for `ShortcutInhibitor`; the session lock is [removed](#session-lock) |
 | `Quickshell.Services.Pipewire` | `Winshell.Audio` |
 | `Quickshell.Services.Mpris` | `Winshell.Media` |
 | `Quickshell.Networking` | `Winshell.Network` |
@@ -54,6 +54,7 @@ Types not listed keep their names in the new module.
 | `Hyprland`, `HyprlandEvent`, `HyprlandMonitor`, `HyprlandWorkspace` | `Winland`, `WinlandEvent`, `WinlandMonitor`, `WinlandWorkspace` | `Winshell.Winland` |
 | `HyprlandToplevel` | `WinlandWindow` | `Winshell.Winland` |
 | `GlobalShortcut` | `Hotkey` | `Winshell.Input` |
+| `ShortcutInhibitor` | `ShortcutInhibitor` | `Winshell.Input` |
 
 ## Properties
 
@@ -236,7 +237,9 @@ Types not listed keep their names in the new module.
 
 ## Hotkeys
 
-`Winshell.Input` `Hotkey` registers a Windows hotkey. A normal chord, including `Win+E`, uses `RegisterHotKey`. The Windows key by itself, and the keys after the first chord of a sequence, use a low-level keyboard hook only while one of those hotkeys is enabled or a sequence is in progress. See [Windows hotkeys](hotkeys.md).
+`Winshell.Input` `Hotkey` registers a Windows hotkey. A normal chord, including `Win+E`, uses `RegisterHotKey`. The Windows key by itself, the keys after the first chord of a sequence, and an active `ShortcutInhibitor` use one low-level keyboard hook, and only while one of those needs it. See [Windows hotkeys](hotkeys.md).
+
+`ShortcutInhibitor` keeps its name and moves from `Quickshell.Wayland` to `Winshell.Input`. `enabled`, `window`, `active` and `cancelled` keep their roles. On Windows, `active` also requires the keyboard hook, and it follows the foreground window: losing the foreground pauses capture and gaining it resumes capture while `enabled` stays true. `cancelled` means the hook thread ended on its own, and `enabled` becomes false. A timeout that removes the hook and leaves the thread running is not reported. Winshell hotkeys stay idle while `active` is true. Ctrl+Alt+Del and Win+L cannot be blocked.
 
 | Quickshell | Winshell |
 | --- | --- |
@@ -270,7 +273,6 @@ These did nothing on Windows, or repeated what another type does.
 | `HyprlandWindow` | Nothing |
 | `HyprlandToplevel` attached to a toplevel | `Winland.toplevels`. `WinlandWindow` is not attached to an `AppWindow` |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
-| `ShortcutInhibitor` | Nothing |
 | `Quickshell.Services.Greetd`, `Quickshell.Services.Polkit`, `Quickshell.I3`, `Quickshell.DBusMenu`, `Quickshell.WindowManager` | Nothing |
 | `DesktopAction` | Removed. `AppEntry.launch()` opens the app |
 

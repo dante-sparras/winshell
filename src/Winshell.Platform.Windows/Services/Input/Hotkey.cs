@@ -204,5 +204,5 @@ public sealed class Hotkey : QObject, IHotkeyListener
 /// <summary>The <c>Winshell.Input</c> module.</summary>
 public static class InputModule
 {
-    public static void Register(ModuleRegistry registry) => registry.Module("Winshell.Input").Type<Hotkey>();
+    public static void Register(ModuleRegistry registry) => registry.Module("Winshell.Input").Type<Hotkey>().Type<ShortcutInhibitor>();
 }
