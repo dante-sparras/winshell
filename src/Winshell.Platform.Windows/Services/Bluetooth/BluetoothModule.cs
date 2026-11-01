@@ -8,23 +8,42 @@ public enum BluetoothAdapterState { Unknown, Off, On, Disabled }
 public enum BluetoothDeviceState { Disconnected, Connected }
 public enum BluetoothOperation { None, Connecting, Disconnecting, Pairing, Unpairing }
 
-/// <summary>The default Windows Bluetooth adapter. Windows controls its radio settings.</summary>
+/// <summary>The default Windows Bluetooth adapter. Setting <see cref="Enabled"/> asks Windows to change its radio.</summary>
+[QmlSignal("operationFailed", "message")]
 public sealed class BluetoothAdapter : QObject
 {
+    private readonly BluetoothService _service;
     private BluetoothAdapterInfo _info;
-    internal BluetoothAdapter(BluetoothAdapterInfo info) => _info = info;
+    private string _error = "";
+    internal BluetoothAdapter(BluetoothService service, BluetoothAdapterInfo info)
+    {
+        _service = service;
+        _info = info;
+    }
     [Qml] public string Id => _info.Id;
     [Qml] public string Name { get { Track(); return _info.Name; } }
     [Qml] public string Address { get { Track(); return _info.Address; } }
     [Qml] public BluetoothAdapterState State { get { Track(); return _info.State; } }
-    [Qml] public bool Enabled { get { Track(); return _info.State == BluetoothAdapterState.On; } }
+    [Qml] public bool Enabled { get { Track(); return ReportsOn; } set => _ = _service.SetAdapterEnabledAsync(this, value); }
+    [Qml] public string Error { get { Track(); return _error; } }
+    internal bool ReportsOn => _info.State == BluetoothAdapterState.On;
+    internal void Report(string error)
+    {
+        SetField(ref _error, error, nameof(Error));
+        if (error.Length > 0) Emit("operationFailed", error);
+    }
     internal void Update(BluetoothAdapterInfo info)
     {
         var old = _info;
         _info = info;
         if (old.Name != info.Name) NotifyChanged("name");
         if (old.Address != info.Address) NotifyChanged("address");
-        if (old.State != info.State) { NotifyChanged("state"); NotifyChanged("enabled"); }
+        if (old.State != info.State)
+        {
+            NotifyChanged("state");
+            NotifyChanged("enabled");
+            SetField(ref _error, "", nameof(Error));
+        }
     }
 }
 
@@ -172,6 +191,7 @@ public sealed class BluetoothService : QObject
     private int _monitoring;
     private int _monitorHolders;
     private bool _started;
+    private int _radioSet;
     private long _revision;
 
     internal BluetoothService(QmlEngine engine, IBluetoothBackend? backend = null)
@@ -358,6 +378,41 @@ public sealed class BluetoothService : QObject
         Refresh();
     }
 
+    // Returns before Windows answers. enabled changes only when a later read reports the radio did.
+    internal async Task SetAdapterEnabledAsync(BluetoothAdapter adapter, bool enabled)
+    {
+        if (IsDestroyed || adapter.IsDestroyed || !ReferenceEquals(adapter, _adapter) || adapter.ReportsOn == enabled)
+            return;
+        if (Interlocked.CompareExchange(ref _radioSet, 1, 0) != 0)
+            return;
+        var error = "";
+        var report = false;
+        try
+        {
+            Invalidate();
+            error = await Backend.SetRadioEnabledAsync(enabled).ConfigureAwait(false) ?? "";
+            report = true;
+            if (error.Length == 0)
+                await RefreshAsync().ConfigureAwait(false);
+        }
+        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        {
+            error = e.Message;
+            report = true;
+        }
+        finally
+        {
+            var message = error;
+            var shouldReport = report;
+            Post(() =>
+            {
+                Volatile.Write(ref _radioSet, 0);
+                if (shouldReport && !adapter.IsDestroyed)
+                    adapter.Report(message);
+            });
+        }
+    }
+
     internal void Apply(BluetoothSnapshot snapshot)
     {
         if (IsDestroyed) return;
@@ -373,7 +428,7 @@ public sealed class BluetoothService : QObject
             foreach (var device in _devices.Values) device.Destroy();
             _devices.Clear();
             _adapter?.Destroy();
-            _adapter = snapshot.Adapter is { } info ? new BluetoothAdapter(info) { Engine = Engine } : null;
+            _adapter = snapshot.Adapter is { } info ? new BluetoothAdapter(this, info) { Engine = Engine } : null;
             _adapter?.SetOwner(this);
             NotifyChanged("defaultAdapter");
         }

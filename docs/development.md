@@ -133,7 +133,7 @@ The Store package is not published. Publishing waits on Partner Center setup: th
 
 The Package workflow also builds `winshell-<version>.msixbundle` (x64 and arm64) from `packaging/msix/AppxManifest.xml` and keeps it as the run's `store-package` artifact. It is not attached to the release: it is unsigned, and the Store signs it. Each run also test-signs the x64 package with a certificate only that runner trusts, installs it there and runs the `winshell` alias.
 
-- The Store build reads and writes the same `%APPDATA%\winshell` config folder as every other build. The manifest turns off file and registry write virtualization (`unvirtualizedResources`), so those writes are the real ones. Sign-in is the package's startup task, declared off, not the user's `Run` key: Windows starts `winshellw.exe --no-duplicate`, which keeps working after a Store update. The package declares `userNotificationListener`, `wiFiControl`, `bluetooth` and `location`. Start runs `winshellw.exe --no-duplicate`, so a second click starts no second shell; `winshellw.exe` is a copy of `winshell.exe` that opens no console, made when the build is published, and the portable zips have it too. `winshell` in a terminal is the command line.
+- The Store build reads and writes the same `%APPDATA%\winshell` config folder as every other build. The manifest turns off file and registry write virtualization (`unvirtualizedResources`), so those writes are the real ones. Sign-in is the package's startup task, declared off, not the user's `Run` key: Windows starts `winshellw.exe --no-duplicate`, which keeps working after a Store update. The package declares `userNotificationListener`, `wiFiControl`, `bluetooth`, `location` and `radios`. Start runs `winshellw.exe --no-duplicate`, so a second click starts no second shell; `winshellw.exe` is a copy of `winshell.exe` that opens no console, made when the build is published, and the portable zips have it too. `winshell` in a terminal is the command line.
 - The Store takes no 0 as the first part of a package version and installs the highest, so Winshell x.y.z is package version (x+1).y.z.0.
 - The repository variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME` are the identity Partner Center shows under **Product identity**. Without them, the package is `Winshell.Test` by `CN=Winshell Test`, which the Store refuses.
 - To submit a release:
@@ -159,11 +159,11 @@ The Docs workflow builds the site on every PR and on `main`. It does not publish
 
 ## Network permissions
 
-Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires Windows Wi-Fi/location access and an explicit `Networking.requestAccess()` call; packaged deployments also need `wiFiControl`. No network or radio changes are made by the automated tests: actions use a fake backend, and native smoke tests only read state. See [Windows networking](network.md).
+Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires Windows Wi-Fi/location access and an explicit `Networking.requestAccess()` call; packaged deployments also need `wiFiControl`. Setting `wifiEnabled` is a separate radio-control request, and a packaged app declares the `radios` device capability. Automated tests use a fake backend and never call `Radio.SetStateAsync` or `Radio.RequestAccessAsync`. Native smoke tests only read state. See [Windows networking](network.md).
 
 ## Bluetooth permissions
 
-Reading Bluetooth state uses Windows adapter and device-enumeration properties, without requesting control of radios or opening remote device handles. Packaged deployments need the `bluetooth` capability. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are exposed to QML. Automated native validation only reads, while discovery and device actions use a fake backend. See [Windows Bluetooth](bluetooth.md).
+Reading Bluetooth state uses Windows adapter and device-enumeration properties and does not request control of radios or open remote device handles. Packaged deployments need the `bluetooth` capability. Setting `BluetoothAdapter.enabled` requests radio control, and a packaged app also needs the `radios` capability. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are exposed to QML. Automated native validation only reads. Discovery, device actions and radio changes use a fake backend and never call `Radio.SetStateAsync`. See [Windows Bluetooth](bluetooth.md).
 
 ## Capture validation
 

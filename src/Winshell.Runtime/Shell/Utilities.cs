@@ -230,12 +230,17 @@ public sealed class TransformWatcher : QObject
 }
 
 /// <summary>
-/// The <c>BoundComponent</c>: loads a component with this object's declared properties applied to it, kept
-/// in sync, and this object's <c>onSignal</c> functions connected to its signals.
+/// The <c>BoundComponent</c>: loads a component with this object's declared properties applied to it.
+/// <c>source</c> is a file and <c>sourceComponent</c> is a component; the one set last is loaded. With
+/// <c>bindValues</c> (the default) those properties stay in sync, and this object's <c>onSignal</c> functions
+/// are connected to the loaded object's signals. A change after the object has loaded is ignored.
 /// </summary>
 public sealed class BoundComponent : Item
 {
     private string _source = "";
+    private QmlComponent? _component;
+    private bool _ownsComponent;
+    private bool _bindValues = true;
     private QObject? _item;
     private readonly List<IDisposable> _links = [];
 
@@ -243,10 +248,35 @@ public sealed class BoundComponent : Item
     public string Source
     {
         get { Track(); return _source; }
+        set => SetSource(value ?? "");
+    }
+
+    /// <summary>The component to load. Null once the object has loaded: the component is released then, as in Quickshell.</summary>
+    [Qml]
+    public QmlComponent? SourceComponent
+    {
+        get { Track(); return _component; }
+        set => SetSourceComponent(value);
+    }
+
+    [Qml]
+    public bool BindValues
+    {
+        get { Track(); return _bindValues; }
         set
         {
-            if (SetField(ref _source, value ?? ""))
-                Reload();
+            // Quickshell rejects the write after creation even when the value is unchanged, and before that
+            // it keeps the new value. The same value before creation has nothing to report.
+            if (IsComplete)
+            {
+                Engine?.Log.Warn("scene", "BoundComponent: bindValues cannot be set after creation");
+                return;
+            }
+            if (_bindValues != value)
+            {
+                _bindValues = value;
+                NotifyChanged("bindValues");
+            }
         }
     }
 
@@ -255,42 +285,108 @@ public sealed class BoundComponent : Item
     public override void ComponentComplete()
     {
         base.ComponentComplete();
-        Reload();
+        CreateItem();
     }
 
-    private void Reload()
+    private void SetSource(string source)
     {
-        if (!IsComplete || Engine is not { } engine)
+        if (source == _source)
             return;
-        Unload();
-        if (_source.Length == 0)
+        if (IsComplete)
+        {
+            Engine?.Log.Warn("scene", "BoundComponent: source cannot be set after creation");
             return;
-        var path = ImageLoader.LocalPath(_source, CreationContext?.Imports?.Directory ?? engine.ShellDir);
+        }
+        if (Engine is not { } engine)
+            return;
+        var path = ImageLoader.LocalPath(source, CreationContext?.Imports?.Directory ?? engine.ShellDir);
         if (path is null || !File.Exists(path))
         {
-            engine.Log.Warn("scene", $"BoundComponent: Cannot open: {_source}");
+            engine.Log.Warn("scene", $"BoundComponent: Cannot open: {source}");
+            return;
+        }
+        QmlComponent component;
+        try
+        {
+            component = new QmlComponent(engine, engine.LoadDocument(path));
+        }
+        catch (Exception e) when (e is QmlException or QmlCompileException or Winshell.Qml.QmlSyntaxException or IOException)
+        {
+            engine.Log.Warn("scene", $"BoundComponent: Cannot open: {source}");
+            return;
+        }
+        // A failed open leaves the previous component and the previous url in place.
+        component.SetOwner(this);
+        DropComponent();
+        _component = component;
+        _ownsComponent = true;
+        _source = source;
+        NotifyChanged("source");
+        NotifyChanged("sourceComponent");
+    }
+
+    private void SetSourceComponent(QmlComponent? component)
+    {
+        if (ReferenceEquals(component, _component))
+            return;
+        if (IsComplete)
+        {
+            Engine?.Log.Warn("scene", "BoundComponent: sourceComponent cannot be set after creation");
+            return;
+        }
+        // The caller's component stays theirs. Setting this does not clear source.
+        DropComponent();
+        _component = component;
+        _ownsComponent = false;
+        NotifyChanged("sourceComponent");
+    }
+
+    private void CreateItem()
+    {
+        if (Engine is not { } engine)
+            return;
+        if (_component is null || _component.IsDestroyed)
+        {
+            engine.Log.Warn("scene", "BoundComponent has no component");
             return;
         }
         var props = DynamicProperties.ToDictionary(p => p.Name, p => p.Read());
+        QObject target;
         try
         {
-            _item = new QmlComponent(engine, engine.LoadDocument(path)).Create(null, props, null, o =>
-            {
-                o.SetOwner(this);
-                if (o is Item item)
-                    item.SetParentItem(this);
-            });
+            // The parent owns the item, so the engine does not root it for the life of the shell.
+            target = _component.Create(this, props, null);
         }
-        catch (Exception e) when (e is QmlException or QmlCompileException)
+        catch (Exception e) when (e is QmlException or QmlCompileException or Winshell.Qml.QmlSyntaxException or IOException)
         {
             engine.Log.Warn("scene", e.Message);
+            DropComponent();
+            NotifyChanged("sourceComponent");
             return;
         }
-        var target = _item;
-        foreach (var p in DynamicProperties)
+        // Quickshell releases the component once incubation finishes. An owned file component is destroyed;
+        // a caller's component is only dropped from this property.
+        DropComponent();
+        _item = target;
+        if (_bindValues)
         {
-            var name = p.Name;
-            _links.Add(new PropertyWatch(this, () => target.WriteProperty(name, p.Read()), name));
+            foreach (var property in DynamicProperties)
+            {
+                var name = property.Name;
+                if (!target.HasProperty(name))
+                {
+                    engine.Log.Warn("scene", $"property {name} defined on BoundComponent but not on its contained object.");
+                    continue;
+                }
+                if (!CanWrite(target, name))
+                {
+                    engine.Log.Warn("scene", $"property {name} defined on BoundComponent is not writable for its contained object.");
+                    continue;
+                }
+                var captured = property;
+                _links.Add(new PropertyWatch(this, () => WriteToTarget(target, name, captured.Read()), name));
+                WriteToTarget(target, name, property.Read());
+            }
         }
         var thisValue = engine.Js.Wrap(this);
         foreach (var name in FunctionNames)
@@ -300,12 +396,34 @@ public sealed class BoundComponent : Item
         }
         if (target is Item child)
         {
-            _links.Add(new PropertyWatch(this, () => FitChild(child), "width", "height"));
-            _links.Add(new PropertyWatch(child, () => FollowImplicitSize(child), "implicitWidth", "implicitHeight"));
+            _links.Add(new PropertyWatch(this, () =>
+            {
+                if (!child.IsDestroyed && !child.IsDestroying)
+                    FitChild(child);
+            }, "width", "height"));
+            _links.Add(new PropertyWatch(child, () =>
+            {
+                if (!IsDestroyed && !IsDestroying)
+                    FollowImplicitSize(child);
+            }, "implicitWidth", "implicitHeight"));
             FollowImplicitSize(child);
             FitChild(child);
         }
         NotifyChanged("item");
+        NotifyChanged("sourceComponent");
+    }
+
+    private static void WriteToTarget(QObject target, string name, object? value)
+    {
+        if (!target.IsDestroyed && !target.IsDestroying)
+            target.WriteProperty(name, value);
+    }
+
+    private static bool CanWrite(QObject target, string name)
+    {
+        if (target.GetDynamicProperty(name) is { } dynamic)
+            return !dynamic.IsReadonly;
+        return target.Meta.Properties.TryGetValue(name, out var meta) && (meta.CanWrite || meta.IsList);
     }
 
     private void FitChild(Item child)
@@ -320,18 +438,32 @@ public sealed class BoundComponent : Item
         ImplicitHeight = child.ImplicitHeight;
     }
 
+    /// <summary>Drops the watches and signal connections before the loaded object goes, so they cannot keep it.</summary>
     private void Unload()
     {
         foreach (var link in _links)
             link.Dispose();
         _links.Clear();
-        _item?.Destroy();
+        var item = _item;
         _item = null;
+        if (item is not null && !item.IsDestroyed && !item.IsDestroying)
+            item.Destroy();
+    }
+
+    private void DropComponent()
+    {
+        var component = _component;
+        var owns = _ownsComponent;
+        _component = null;
+        _ownsComponent = false;
+        if (owns && component is not null && !component.IsDestroyed)
+            component.Destroy();
     }
 
     protected override void OnDestroy()
     {
         Unload();
+        DropComponent();
         base.OnDestroy();
     }
 }
