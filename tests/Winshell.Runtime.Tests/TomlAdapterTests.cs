@@ -428,15 +428,9 @@ public class TomlAdapterTests
         var root = shell.Load();
         shell.Eval(root, "settings.on = false");
         shell.Loop.Process();
-        Thread.Sleep(50);
+        Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(50));
         File.WriteAllText(FileOf(shell), "name = \"by hand\"\n");
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (shell.Eval(root, "settings.name") is not "by hand")
-        {
-            Assert.True(DateTime.UtcNow < until, "The file written 50ms later was not read.");
-            Thread.Sleep(20);
-            shell.Loop.Process();
-        }
+        Wait.Until(() => shell.Eval(root, "settings.name") is "by hand", "The file written 50ms later was not read.", shell.Loop.Process);
     }
 
     [Fact]
@@ -447,7 +441,7 @@ public class TomlAdapterTests
         shell.Eval(root, "settings.name = 'next'");
         shell.Loop.Process();
         // The watch event is delivered on another thread. Let it run, then read on the loop.
-        Thread.Sleep(200);
+        Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(200));
         shell.Loop.Process();
 
         Assert.Contains("name = \"next\"", File.ReadAllText(FileOf(shell)), StringComparison.Ordinal);

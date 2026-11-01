@@ -17,15 +17,8 @@ public sealed class ImageRemoteTests : IDisposable
         Image { source: "{{source}}" }
         """, out shell);
 
-    private static void WaitForStatus(TestShell shell, Image image)
-    {
-        var until = DateTime.UtcNow.AddSeconds(10);
-        while (image.Status == (int)Image.StatusValue.Loading && DateTime.UtcNow < until)
-        {
-            Thread.Sleep(10);
-            shell.Loop.Process();
-        }
-    }
+    private static void WaitForStatus(TestShell shell, Image image) =>
+        Wait.Until(() => image.Status != (int)Image.StatusValue.Loading, "the image to load", shell.Loop.Process);
 
     private static byte[] Png()
     {

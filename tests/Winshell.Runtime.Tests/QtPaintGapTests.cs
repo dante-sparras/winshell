@@ -112,7 +112,7 @@ public class QtPaintGapTests
             Image { asynchronous: true; cache: false; source: "pic.png" }
             """);
         var image = (Image)shell.Load();
-        Wait(shell, image);
+        Loaded(shell, image);
 
         Assert.Equal((int)Image.StatusValue.Ready, image.Status);
         Assert.Equal(0, ImageLoader.CachedCount);
@@ -131,7 +131,7 @@ public class QtPaintGapTests
         try
         {
             var image = (Image)shell.Load();
-            Wait(shell, image);
+            Loaded(shell, image);
 
             Assert.Equal((int)Image.StatusValue.Ready, image.Status);
             Assert.Equal(0, ImageLoader.CachedCount);
@@ -159,15 +159,8 @@ public class QtPaintGapTests
         return bitmap;
     }
 
-    private static void Wait(TestShell shell, Image image)
-    {
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (image.Status == (int)Image.StatusValue.Loading && DateTime.UtcNow < until)
-        {
-            Thread.Sleep(10);
-            shell.Loop.Process();
-        }
-    }
+    private static void Loaded(TestShell shell, Image image) =>
+        Wait.Until(() => image.Status != (int)Image.StatusValue.Loading, "the image to load", shell.Loop.Process);
 
     private static void WritePng(string path)
     {

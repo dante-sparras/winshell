@@ -77,13 +77,5 @@ public class ServiceMismatchTests
 
     private static int Number(QObject root, string name) => Convert.ToInt32(root.ReadProperty(name), System.Globalization.CultureInfo.InvariantCulture);
 
-    private static async Task Pump(TestShell shell, Func<bool> done)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!done() && DateTime.UtcNow < deadline)
-        {
-            shell.Loop.Process();
-            await Task.Delay(10);
-        }
-    }
+    private static Task Pump(TestShell shell, Func<bool> done) => Wait.UntilAsync(done, "the client", shell.Loop.Process);
 }
