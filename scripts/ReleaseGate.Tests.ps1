@@ -45,3 +45,16 @@ Describe 'Get-WinshellReleaseCiState' {
         Get-WinshellReleaseCiState -CheckRuns $runs | Should -Be 'pending'
     }
 }
+
+Describe 'Get-WinshellReleaseGateState' {
+    It 'waits when the check runs cannot be read' {
+        Mock Get-WinshellCheckRuns { throw 'Could not read check runs for abc' }
+        Mock Write-Warning { }
+        Get-WinshellReleaseGateState -Repository 'o/r' -Sha 'abc' | Should -Be 'pending'
+    }
+
+    It 'gives the state of the check runs it can read' {
+        Mock Get-WinshellCheckRuns { @(New-CiRun 'completed' 'failure' '2026-10-29T12:00:00Z') }
+        Get-WinshellReleaseGateState -Repository 'o/r' -Sha 'abc' | Should -Be 'red'
+    }
+}
