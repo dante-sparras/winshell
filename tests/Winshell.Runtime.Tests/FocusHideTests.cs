@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 
@@ -57,10 +58,10 @@ public class FocusHideTests
             """);
         using var _ = shell;
         var child = (Item)root.ReadProperty("child")!;
-        var before = Convert.ToInt32(child.ReadProperty("notes"));
+        var before = Convert.ToInt32(child.ReadProperty("notes"), CultureInfo.InvariantCulture);
         root.Enabled = false;
         Assert.False(child.Enabled);
-        Assert.True(Convert.ToInt32(child.ReadProperty("notes")) > before);
+        Assert.True(Convert.ToInt32(child.ReadProperty("notes"), CultureInfo.InvariantCulture) > before);
     }
 
     [Fact]

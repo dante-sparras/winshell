@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -41,11 +42,11 @@ public class SystemInputMetricsTests
             Tap(scene, 20, 20);
             shell.Loop.Advance(TimeSpan.FromMilliseconds(250));
             Tap(scene, 20, 20);
-            Assert.Equal(0, Convert.ToInt32(root.ReadProperty("doubles")));
+            Assert.Equal(0, Convert.ToInt32(root.ReadProperty("doubles"), CultureInfo.InvariantCulture));
 
             shell.Loop.Advance(TimeSpan.FromMilliseconds(150));
             Tap(scene, 20, 20);
-            Assert.Equal(1, Convert.ToInt32(root.ReadProperty("doubles")));
+            Assert.Equal(1, Convert.ToInt32(root.ReadProperty("doubles"), CultureInfo.InvariantCulture));
         }
         finally
         {
@@ -65,13 +66,13 @@ public class SystemInputMetricsTests
 
             Tap(scene, 20, 20);
             Tap(scene, 26, 20);
-            Assert.Equal(0, Convert.ToInt32(root.ReadProperty("doubles")));
+            Assert.Equal(0, Convert.ToInt32(root.ReadProperty("doubles"), CultureInfo.InvariantCulture));
 
             Tap(scene, 30, 24);
-            Assert.Equal(0, Convert.ToInt32(root.ReadProperty("doubles")));
+            Assert.Equal(0, Convert.ToInt32(root.ReadProperty("doubles"), CultureInfo.InvariantCulture));
 
             Tap(scene, 34, 22);
-            Assert.Equal(1, Convert.ToInt32(root.ReadProperty("doubles")));
+            Assert.Equal(1, Convert.ToInt32(root.ReadProperty("doubles"), CultureInfo.InvariantCulture));
         }
         finally
         {

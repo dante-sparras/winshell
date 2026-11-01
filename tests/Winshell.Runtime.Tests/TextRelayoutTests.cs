@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -79,8 +80,8 @@ public class TextRelayoutTests
         using var _ = shell;
         var before = text.ImplicitWidth;
 
-        var after = Convert.ToDouble(shell.Eval(text, "(text = 'A much longer line of text', implicitWidth)"));
-        var width = Convert.ToDouble(shell.Eval(text, "width"));
+        var after = Convert.ToDouble(shell.Eval(text, "(text = 'A much longer line of text', implicitWidth)"), CultureInfo.InvariantCulture);
+        var width = Convert.ToDouble(shell.Eval(text, "width"), CultureInfo.InvariantCulture);
         PolishQueue.Flush();
 
         Assert.True(after > before);
@@ -148,7 +149,7 @@ public class TextRelayoutTests
         var inner = (Text)root.ChildItems.Last();
 
         Assert.True(inner.ImplicitWidth > 0);
-        Assert.Equal(inner.ImplicitWidth, Convert.ToDouble(shell.Eval(root, "seen")));
+        Assert.Equal(inner.ImplicitWidth, Convert.ToDouble(shell.Eval(root, "seen"), CultureInfo.InvariantCulture));
     }
 
     [Fact]

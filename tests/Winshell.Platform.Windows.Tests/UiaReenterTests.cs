@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Winshell.Platform.Windows.Accessibility;
 using Winshell.Runtime;
@@ -87,7 +88,7 @@ public class UiaReenterTests
             Assert.Equal(Uia.S_OK, selected);
             Assert.Equal(Uia.S_OK, scrolled);
             Assert.Equal(10d, slider.Value);
-            Assert.Equal(0d, Convert.ToDouble(shell.ReadProperty("moves")));
+            Assert.Equal(0d, Convert.ToDouble(shell.ReadProperty("moves"), CultureInfo.InvariantCulture));
             Assert.Equal(0, field.SelectionEnd);
             Assert.Equal(0d, pane.ContentY);
             return false;
@@ -99,7 +100,7 @@ public class UiaReenterTests
             var field = (TextInput)Find(root, "field");
             var pane = (Flickable)Find(root, "pane");
             Assert.Equal(40d, slider.Value);
-            Assert.Equal(1d, Convert.ToDouble(shell.ReadProperty("moves")));
+            Assert.Equal(1d, Convert.ToDouble(shell.ReadProperty("moves"), CultureInfo.InvariantCulture));
             Assert.Equal(4, field.SelectionEnd);
             Assert.Equal(48d, pane.ContentY);
         });
