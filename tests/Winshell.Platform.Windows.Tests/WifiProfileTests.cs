@@ -358,7 +358,7 @@ public sealed class WifiProfileTests
     public async Task Profile_writes_run_one_at_a_time()
     {
         var queue = new ProfileWriteQueue();
-        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var hold = new ManualResetEventSlim();
         var firstInside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var secondInside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var inFlight = 0;
@@ -368,7 +368,7 @@ public sealed class WifiProfileTests
         await firstInside.Task;
         var second = queue.RunAsync(() => Enter(secondInside));
         Assert.Equal(1, Volatile.Read(ref inFlight));
-        hold.SetResult();
+        hold.Set();
         Assert.Equal(1, await first);
         await secondInside.Task;
         Assert.Equal(1, await second);
@@ -384,7 +384,7 @@ public sealed class WifiProfileTests
             }
             while (now > seen && Interlocked.CompareExchange(ref max, now, seen) != seen);
             inside.SetResult();
-            hold.Task.GetAwaiter().GetResult();
+            hold.Wait(TestContext.Current.CancellationToken);
             Interlocked.Decrement(ref inFlight);
             return now;
         }
