@@ -318,7 +318,8 @@ Stopping clears the preview and all retained pixels. Export with `saveToFile()` 
 | `keepOnReload`, `lastGeneration` | Removed; every listener reads the current Windows snapshot |
 | Writable `*Supported` flags, `extraHints` | Removed; Windows determines listener capabilities |
 | `NotificationAction`, incoming `actions`, `sendInlineReply()` | Removed; Windows exposes no incoming toast actions or activation arguments; `canInvoke` is false and `invoke()` reports this limitation |
-| `appIcon`, `image`, `urgency`, `transient`, `resident`, `hasActionIcons`, `hasInlineReply`, `inlineReplyPlaceholder`, `hints` | Removed; the listener does not supply these fields |
+| `appIcon` | `appIcon`, a `file:///` url of the logo Windows returns for the sending app. Empty when Windows gives none. It can fill in after the notification appears. Quickshell also tries the desktop entry's icon; Windows has no desktop entry, so there is no second lookup |
+| `image`, `urgency`, `transient`, `resident`, `hasActionIcons`, `hasInlineReply`, `inlineReplyPlaceholder`, `hints` | Removed; the listener does not supply these fields |
 | `expire()`, `NotificationCloseReason`, `NotificationUrgency`, `closed(reason)` | Removed; use `dismiss()` and observe model removals or `destroyed` |
 
 `NotificationListener.requestAccess()` explicitly requests Windows permission. Importing or constructing the type never prompts. Read-only `accessStatus` and `error` distinguish cancellation, denial and unavailable access. Focus and Do Not Disturb are read-only states, with `Unknown` for unsupported Windows APIs. `ToastMessage` and `ToastAction` send native toasts with protocol activation under an installed Windows identity; this does not require listener access.
