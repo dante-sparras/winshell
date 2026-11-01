@@ -70,8 +70,9 @@ function Invoke-DotnetTest {
         [Parameter(Mandatory)][string] $Filter,
         [Parameter(Mandatory)][string] $ResultsDirectory
     )
+    # -m:1 runs one test assembly at a time. It is a trial for 30 ci runs, to see whether assemblies competing causes flakes.
     # The hang timeout ends the run and names the test, which the ci step's own time limit can't do.
-    dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none | Out-Host
+    dotnet test (Join-Path $script:Root 'winshell.slnx') -m:1 --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none | Out-Host
     $LASTEXITCODE
 }
 
