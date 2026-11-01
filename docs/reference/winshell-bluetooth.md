@@ -1,6 +1,6 @@
 # Winshell.Bluetooth
 
-The default Windows Bluetooth adapter, paired devices, and devices found nearby. Reading the module never pairs, connects or changes a radio. Setting `BluetoothAdapter.enabled` asks Windows to change that adapter's radio. Setting `discoverable` or `pairable` asks Windows to change whether it can be found or accepts incoming connections. While monitoring is on, state is read again every three seconds. [Windows Bluetooth](../bluetooth.md) explains discovery, pairing, battery, discoverable, pairable and what connect can do.
+The default Windows Bluetooth adapter, paired devices, and devices found nearby. Reading the module never pairs, connects or changes a radio. Setting `BluetoothAdapter.enabled` asks Windows to change that adapter's radio. Setting `discoverable` or `pairable` asks Windows to change whether it can be found or accepts incoming connections. While monitoring is on, state is read again every three seconds. [Windows Bluetooth](../bluetooth.md) explains discovery, pairing, battery, the device icon, discoverable, pairable and what connect can do.
 
 `import Winshell.Bluetooth`
 
@@ -51,6 +51,7 @@ A paired or nearby device, reached from the `Bluetooth` device lists. Endpoints 
 | `adapter` | [BluetoothAdapter](#bluetoothadapter), read-only | The adapter the device was found on. |
 | `address` | string, read-only | The Bluetooth address. |
 | `name` | string, read-only | The device's name. |
+| `icon` | string, read-only | A BlueZ device-type name, such as `audio-headset` or `input-mouse`. Empty when Windows reports no class, or a class BlueZ does not name. `Shell.iconPath` draws only names Winshell already knows. See [Windows Bluetooth](../bluetooth.md). |
 | `paired` | bool, read-only | Whether the device is paired. |
 | `present` | bool, read-only | Whether Windows' cached report says the device is in range. It does not guarantee the device can be reached. |
 | `canPair` | bool, read-only | Whether the device is unpaired and Windows says it can be paired. |

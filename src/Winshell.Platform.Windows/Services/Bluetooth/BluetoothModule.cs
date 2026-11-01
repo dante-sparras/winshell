@@ -74,6 +74,8 @@ public sealed class BluetoothDevice : QObject
     [Qml] public BluetoothAdapter Adapter { get; }
     [Qml] public string Address { get { Track(); return _info.Address; } }
     [Qml] public string Name { get { Track(); return _info.Name; } }
+    /// <summary>A BlueZ device-type icon name. Empty when Windows reports no class, or a class BlueZ does not name.</summary>
+    [Qml] public string Icon { get { Track(); return _info.Icon; } }
     [Qml] public bool Paired { get { Track(); return _info.Paired; } }
     [Qml] public bool Present { get { Track(); return _info.Present; } }
     [Qml] public bool CanPair { get { Track(); return !_info.Paired && _info.CanPair; } }
@@ -93,6 +95,7 @@ public sealed class BluetoothDevice : QObject
         if (old.Id != info.Id) NotifyChanged("id");
         if (old.Address != info.Address) NotifyChanged("address");
         if (old.Name != info.Name) NotifyChanged("name");
+        if (!string.Equals(old.Icon, info.Icon, StringComparison.Ordinal)) NotifyChanged("icon");
         if (old.Paired != info.Paired) NotifyChanged("paired");
         if (old.Paired != info.Paired || old.CanPair != info.CanPair) NotifyChanged("canPair");
         if (old.Present != info.Present) NotifyChanged("present");

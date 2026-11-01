@@ -11,9 +11,9 @@ namespace Winshell.Platform.Windows.Services.Bluetooth;
 internal sealed record BluetoothAdapterInfo(string Id, string Name, string Address, BluetoothAdapterState State,
     bool Discoverable = false, bool Pairable = false);
 internal sealed record BluetoothEndpointInfo(string Id, string Address, string Name, bool Connected, bool Paired,
-    bool Present, bool CanPair, Guid? Container);
+    bool Present, bool CanPair, Guid? Container, BluetoothClassReport Class = default);
 internal sealed record BluetoothDeviceInfo(string Key, string Id, string Address, string Name, bool Connected,
-    bool Paired, bool Present, bool CanPair, double? Battery, Guid? Container, IReadOnlyList<string> PairedIds);
+    bool Paired, bool Present, bool CanPair, double? Battery, Guid? Container, IReadOnlyList<string> PairedIds, string Icon = "");
 internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapter, IReadOnlyList<BluetoothDeviceInfo> Devices,
     bool Discovering = false, string Error = "")
 {
@@ -24,6 +24,7 @@ internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapt
 /// Reads only Windows adapter and enumeration properties. In particular, reading state never opens
 /// BluetoothDevice/BluetoothLEDevice or GATT handles, which can prompt or affect a device connection.
 /// Discoverable and incoming-connection state come from BluetoothIsDiscoverable and BluetoothIsConnectable.
+/// The device icon is the class and appearance on that same enumeration.
 /// Each shell generation owns and stops its own nearby-device watchers.
 /// </summary>
 internal sealed partial class BluetoothBackend : IBluetoothBackend
@@ -34,7 +35,10 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private const string PresentKey = "System.Devices.Aep.IsPresent";
     private const string ContainerKey = "System.Devices.Aep.ContainerId";
     private const string BatteryKey = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
-    private static readonly string[] EndpointProperties = [AddressKey, ConnectedKey, PairedKey, PresentKey, ContainerKey];
+    private static readonly string[] EndpointProperties = [
+        AddressKey, ConnectedKey, PairedKey, PresentKey, ContainerKey,
+        BluetoothIcon.MajorKey, BluetoothIcon.MinorKey, BluetoothIcon.AppearanceKey, BluetoothIcon.CategoryKey, BluetoothIcon.SubcategoryKey,
+    ];
     private readonly object _lock = new();
     private readonly SemaphoreSlim _readGate = new(1, 1);
     private readonly Dictionary<string, BluetoothEndpointInfo> _nearby = new(StringComparer.Ordinal);
@@ -122,7 +126,8 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             info.Properties.GetValueOrDefault(ConnectedKey) is true,
             info.Properties.GetValueOrDefault(PairedKey) is true || info.Pairing.IsPaired,
             info.Properties.GetValueOrDefault(PresentKey) is true, info.Pairing.CanPair,
-            info.Properties.GetValueOrDefault(ContainerKey) is Guid container && container != Guid.Empty ? container : null);
+            info.Properties.GetValueOrDefault(ContainerKey) is Guid container && container != Guid.Empty ? container : null,
+            BluetoothIcon.Read(info.Properties));
 
     internal static BluetoothAdapterState MapRadioState(RadioState? state) => state switch
     {
@@ -141,13 +146,15 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
                 StringComparer.Ordinal)
             .Select(group =>
             {
-                var first = group.OrderByDescending(e => e.Paired).ThenByDescending(e => e.CanPair)
-                    .ThenBy(e => e.Id, StringComparer.Ordinal).First();
+                var ordered = group.OrderByDescending(e => e.Paired).ThenByDescending(e => e.CanPair)
+                    .ThenBy(e => e.Id, StringComparer.Ordinal).ToArray();
+                var first = ordered[0];
                 var name = group.Select(e => e.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)) ?? first.Address;
                 return new BluetoothDeviceInfo(group.Key, first.Id, first.Address.ToUpperInvariant(), name,
                     group.Any(e => e.Connected), group.Any(e => e.Paired), group.Any(e => e.Present),
                     group.Any(e => e.CanPair), null, first.Container,
-                    group.Where(e => e.Paired).Select(e => e.Id).ToArray());
+                    group.Where(e => e.Paired).Select(e => e.Id).ToArray(),
+                    BluetoothIcon.FromReports(ordered.Select(e => e.Class)));
             }).OrderByDescending(d => d.Connected).ThenByDescending(d => d.Paired)
             .ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
