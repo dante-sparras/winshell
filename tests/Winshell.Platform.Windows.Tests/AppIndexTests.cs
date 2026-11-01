@@ -257,6 +257,34 @@ public sealed class AppIndexTests
     }
 
     [Fact(Timeout = 30_000)]
+    public async Task A_folder_that_comes_back_is_watched_again()
+    {
+        var root = Temp();
+        var folder = Path.Combine(root, "programs");
+        Directory.CreateDirectory(folder);
+        ShellLink.Write(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
+        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500), false, false);
+        var changed = new ManualResetEventSlim(false);
+        catalog.Changed += () => changed.Set();
+        try
+        {
+            catalog.Start();
+            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.Contains(catalog.Snapshot.Entries, app => app.Id == "First");
+            Directory.Delete(folder, true);
+            Directory.CreateDirectory(folder);
+            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "First")));
+            ShellLink.Write(Path.Combine(folder, "Second.lnk"), Cmd(), "", "", "second");
+            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Second")));
+        }
+        finally
+        {
+            changed.Dispose();
+            Delete(root);
+        }
+    }
+
+    [Fact(Timeout = 30_000)]
     public async Task Launch_starts_a_command_that_exits()
     {
         var root = Temp();

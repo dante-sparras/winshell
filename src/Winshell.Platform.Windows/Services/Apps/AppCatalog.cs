@@ -67,7 +67,8 @@ internal sealed class AppCatalog : IDisposable
     private readonly bool _watchPackages;
     private readonly bool _registerIcons;
     private readonly Log _log;
-    private readonly List<DirectoryWatch> _watches = [];
+    private readonly Dictionary<string, DirectoryWatch> _watches = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _lost = new(StringComparer.OrdinalIgnoreCase);
     private readonly AutoResetEvent _wake = new(false);
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private PackageCatalog? _packages;
@@ -147,10 +148,11 @@ internal sealed class AppCatalog : IDisposable
         }
         _stop = true;
         _wake.Set();
-        foreach (var watch in _watches)
+        // The scan thread arms watches, so it stops first.
+        _scanThread?.Join();
+        foreach (var watch in _watches.Values)
             watch.Dispose();
         _watches.Clear();
-        _scanThread?.Join();
         if (_packages is not null)
         {
             _packages.PackageInstalling -= OnInstalling;
@@ -176,10 +178,41 @@ internal sealed class AppCatalog : IDisposable
             folder,
             DirectoryWatch.FileChanges | DirectoryWatch.NameChanges,
             _ => Poke(Debounce),
-            () => Poke(Debounce),
+            () => Lost(folder),
             subtree: true);
-        if (watch is not null)
-            _watches.Add(watch);
+        if (watch is null)
+            return;
+        DirectoryWatch? old;
+        lock (_gate)
+        {
+            _watches.Remove(folder, out old);
+            _watches[folder] = watch;
+        }
+        old?.Dispose();
+    }
+
+    private void Lost(string folder)
+    {
+        lock (_gate)
+            _lost.Add(folder);
+        Poke(Debounce);
+    }
+
+    /// <summary>
+    /// A watch ends when its folder goes away or its buffer overflows, and reports nothing after that. A scan arms it
+    /// again first, so that scan sees whatever the old watch missed. A folder still missing waits for a later scan.
+    /// </summary>
+    private void RearmLost()
+    {
+        string[] folders;
+        lock (_gate)
+            folders = [.. _lost];
+        foreach (var folder in folders.Where(Directory.Exists))
+        {
+            lock (_gate)
+                _lost.Remove(folder);
+            Arm(folder);
+        }
     }
 
     private void OnInstalling(PackageCatalog sender, PackageInstallingEventArgs args)
@@ -249,6 +282,7 @@ internal sealed class AppCatalog : IDisposable
     {
         try
         {
+            RearmLost();
             var snapshot = Take();
             var changed = !_snapshot.SameAs(snapshot);
             _snapshot = snapshot;
