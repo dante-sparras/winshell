@@ -5,11 +5,11 @@ using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
 using Winshell.Native;
 using Winshell.Platform.Windows.Services.Notifications;
-using Winshell.Platform.Windows.Services.Session;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Qml;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
+using Winshell.Session;
 
 namespace Winshell.Platform.Windows.Diagnostics;
 
