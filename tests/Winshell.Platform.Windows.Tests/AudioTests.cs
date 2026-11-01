@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Winshell.Platform.Windows.Services.Audio;
 using Winshell.Runtime;
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 

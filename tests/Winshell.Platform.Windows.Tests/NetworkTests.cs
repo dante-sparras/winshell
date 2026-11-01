@@ -4,7 +4,6 @@ using Winshell.Platform.Windows.Services.Network;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 

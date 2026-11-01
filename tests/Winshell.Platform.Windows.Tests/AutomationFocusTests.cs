@@ -4,7 +4,6 @@ using Winshell.Platform.Windows.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 

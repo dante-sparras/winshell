@@ -1,4 +1,3 @@
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 
