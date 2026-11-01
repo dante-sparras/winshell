@@ -42,5 +42,8 @@ TestResults/
 src/Winshell/DefaultShell/launcher.toml
 src/Winshell/DefaultShell/preferences.toml
 
+# Status files agent tooling writes.
+out/
+
 # Release builds from scripts/package.ps1
 artifacts/
