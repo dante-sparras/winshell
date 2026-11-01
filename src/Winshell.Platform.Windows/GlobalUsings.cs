@@ -11,3 +11,8 @@ global using Winshell.Tray;
 global using Winshell.Updates;
 global using Winshell.Windows;
 global using Winshell.Winland;
+global using AppEntry = Winshell.Platform.Windows.Services.Apps.AppEntry;
+global using AppJumpList = Winshell.Platform.Windows.Services.Apps.AppJumpList;
+global using AppsService = Winshell.Platform.Windows.Services.Apps.AppsService;
+global using JumpListService = Winshell.Platform.Windows.Services.Apps.JumpListService;
+global using RecentDocuments = Winshell.Platform.Windows.Services.Apps.RecentDocuments;

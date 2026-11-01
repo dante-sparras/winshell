@@ -1,4 +1,3 @@
-global using Winshell.Apps;
 global using Winshell.Audio;
 global using Winshell.Bluetooth;
 global using Winshell.ExplorerTaskbar;
@@ -24,3 +23,13 @@ global using BrightnessSnapshot = Winshell.Power.BrightnessSnapshot;
 global using PowerSnapshot = Winshell.Power.PowerSnapshot;
 global using PowerModeSnapshot = Winshell.Power.PowerModeSnapshot;
 global using PowerDeviceInfo = Winshell.Power.PowerDeviceInfo;
+global using AppCatalog = Winshell.Apps.AppCatalog;
+global using AppIndex = Winshell.Apps.AppIndex;
+global using AppLaunch = Winshell.Apps.AppLaunch;
+global using AppRank = Winshell.Apps.AppRank;
+global using AppRecord = Winshell.Apps.AppRecord;
+global using AppUsage = Winshell.Apps.AppUsage;
+global using AppUsageReader = Winshell.Apps.AppUsageReader;
+global using IJumpListReader = Winshell.Apps.IJumpListReader;
+global using JumpListRead = Winshell.Apps.JumpListRead;
+global using ShellLink = Winshell.Apps.ShellLink;
