@@ -4,28 +4,29 @@ Title: a conventional commit in plain language, such as "fix(api): retries no lo
 Branch: <type>/<short-description>, such as "fix/duplicate-orders".
 -->
 
-## Problem
+## Summary
 
-<!-- Explain the problem in a sentence or two. Include expected behavior and
-reproduction steps or environment where relevant. -->
+<!-- Link the issue that agreed on the direction and scope. For a very small, focused fix of an obvious bug,
+explain why it needs no prior issue.
 
-## Change
+Then show the smallest view that makes the point: a diagram, a diff sketch, or a tree. Keep prose brief. -->
 
-<!-- Explain how this fixes the problem. If it spans several parts of the project,
-explain why they are needed for the same fix. Split independent fixes. -->
+## Evidence
 
-## Scope and approval
+<!-- A before and after: the tests or manual checks you ran and what you observed. "Tests pass" alone is not enough.
 
-<!-- Link the issue that agreed on the direction and scope.
-For a very small, focused fix of an obvious bug, explain why it needs no prior
-issue. -->
+For UI changes, include before/after screenshots, and a short recording when motion or interaction matters.
+Upload evidence to GitHub; never commit PR-only assets. -->
 
-## Verification
+- **Before:**
+  **After:**
 
-<!-- Describe the focused tests or manual checks you ran and what you observed.
-State anything you could not check. "Tests pass" alone is not enough.
+**Not verified:** <!-- Anything you could not check. -->
 
-For UI changes, include before/after screenshots, and a short recording when
-motion or interaction matters. Upload evidence to GitHub; never commit PR-only assets. -->
+## Merge Danger
+
+**Door:** <!-- One-way or two-way: can this be walked back? -->
+
+**Blast Radius:** <!-- One word for what this can affect, then any ramifications. -->
 
 <!-- If an AI agent did the work, end with the model and the tool you used, such as "Claude Opus 5.5 in Claude Code". -->
