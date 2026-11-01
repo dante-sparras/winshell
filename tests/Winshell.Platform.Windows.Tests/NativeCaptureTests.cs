@@ -5,7 +5,6 @@ using Winshell.Platform.Windows.Services.Capture;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 
