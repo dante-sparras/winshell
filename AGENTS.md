@@ -34,6 +34,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   └── store/                       # The Store listing text and its app tile
 ├── scripts/                         # Check, test, package, install and release scripts; docs/development.md lists them
 ├── src/
+│   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
 │   ├── Winshell.Qml/                # The QML parser
 │   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Winshell modules

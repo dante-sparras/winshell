@@ -112,7 +112,7 @@ internal sealed class SnapshotShell : IDisposable
                 return registry;
             }, engine =>
             {
-                engine.AddService<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(Now, TimeZoneInfo.Local.GetUtcOffset(Now))));
+                engine.AddService<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(Now, TimeZoneInfo.Local.GetUtcOffset(Now)).ToUniversalTime()));
                 engine.AddService<IIconLookup>(IconProvider.Instance);
             })
             { ConfigRoot = Path.Combine(_directory, "config") };

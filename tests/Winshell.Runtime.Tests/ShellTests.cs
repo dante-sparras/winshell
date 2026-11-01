@@ -359,7 +359,7 @@ public class ShellTests
     public void SystemClock_reads_the_engines_time_provider()
     {
         var now = new DateTimeOffset(new DateTime(2026, 10, 29, 9, 41, 7, DateTimeKind.Local));
-        using var shell = new Shell(e => e.AddService<TimeProvider>(new FakeTimeProvider(now)), ("shell.qml", """
+        using var shell = new Shell(e => e.AddService<TimeProvider>(new FakeTimeProvider(now.ToUniversalTime())), ("shell.qml", """
             import Winshell
             import QtQuick
             Scope {

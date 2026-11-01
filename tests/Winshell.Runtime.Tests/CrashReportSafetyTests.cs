@@ -236,12 +236,12 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Retention_follows_the_utc_instant_across_a_clock_change()
     {
         // Daylight saving ends: 02:30 at +02:00 is 00:30 UTC; twenty minutes on the wall later it is 02:10 at +01:00, 01:10 UTC.
-        var time = new FakeTimeProvider(new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2)));
+        var time = new FakeTimeProvider(new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2)).ToUniversalTime());
         time.SetLocalTimeZone(ZoneAt(2));
         var crashes = new CrashReports(Folder()) { Keep = 1, Time = time };
 
         crashes.Write("before", new InvalidOperationException("x"));
-        time.SetUtcNow(new DateTimeOffset(2031, 10, 26, 2, 10, 0, TimeSpan.FromHours(1)));
+        time.SetUtcNow(new DateTimeOffset(2031, 10, 26, 2, 10, 0, TimeSpan.FromHours(1)).ToUniversalTime());
         time.SetLocalTimeZone(ZoneAt(1));
         var later = crashes.Write("after", new InvalidOperationException("x"))!.Path;
 

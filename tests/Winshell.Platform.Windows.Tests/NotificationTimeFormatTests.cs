@@ -67,7 +67,7 @@ public sealed class NotificationTimeFormatTests
 
     private static DateTimeOffset At(DateTime local) => new(local, TimeZoneInfo.Local.GetUtcOffset(local));
 
-    private static FakeTimeProvider FixedClock(DateTime local) => new(At(local));
+    private static FakeTimeProvider FixedClock(DateTime local) => new(At(local).ToUniversalTime());
 
     private static IEnumerable<AccessibleNode> Nodes(AccessibleNode node) => node.Children.SelectMany(n => new[] { n }.Concat(Nodes(n)));
 

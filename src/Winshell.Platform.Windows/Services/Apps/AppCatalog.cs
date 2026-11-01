@@ -72,7 +72,7 @@ internal sealed class AppCatalog : IDisposable
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private PackageCatalog? _packages;
     private Thread? _scanThread;
-    private readonly long _started = TimeProvider.System.GetTimestamp();
+    private readonly long _made = TimeProvider.System.GetTimestamp();
     private long _quietUntil = long.MinValue;
     private bool _started, _disposed;
     private volatile bool _stop;
@@ -201,7 +201,7 @@ internal sealed class AppCatalog : IDisposable
     }
 
     /// <summary>Milliseconds since this catalog was made. The scan thread sleeps on a real wait handle, so this is real time too.</summary>
-    private long Clock => (long)TimeProvider.System.GetElapsedTime(_started).TotalMilliseconds;
+    private long Clock => (long)TimeProvider.System.GetElapsedTime(_made).TotalMilliseconds;
 
     // Installers write many files at once, so a scan waits until they have been quiet.
     private void Poke(TimeSpan delay)
