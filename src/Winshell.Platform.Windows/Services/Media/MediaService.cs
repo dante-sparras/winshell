@@ -103,7 +103,7 @@ public sealed class MediaSession : QObject
     [Qml] public bool CanGoPrevious { get { Track(); return _session.CanGoPrevious; } }
 
     /// <summary>True when the session accepts at least one playback command.</summary>
-    [Qml] public bool CanControl { get { Track(); return AcceptsControl(); } }
+    [Qml] public bool CanControl { get { Track(); return _canControl = AcceptsControl(); } }
 
     // Windows reports each command on its own. Quickshell's canControl is the player's single flag.
     private bool AcceptsControl() =>

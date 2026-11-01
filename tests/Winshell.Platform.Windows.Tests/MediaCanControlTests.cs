@@ -35,4 +35,19 @@ public class MediaCanControlTests
         Assert.True(session.CanControl);
         Assert.Equal(3, changes);
     }
+
+    [Fact]
+    public void Can_control_reports_the_loss_of_a_command_the_session_started_with()
+    {
+        var native = SmtcSession.CreateForTests();
+        native.SetControls(canPlay: true);
+        var session = new MediaSession(native);
+        var changes = 0;
+        session.Connect("canControlChanged", _ => changes++);
+        Assert.True(session.CanControl);
+
+        native.SetControls();
+        Assert.False(session.CanControl);
+        Assert.Equal(1, changes);
+    }
 }
