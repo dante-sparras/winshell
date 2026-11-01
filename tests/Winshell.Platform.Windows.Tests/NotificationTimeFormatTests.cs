@@ -37,7 +37,7 @@ public sealed class NotificationTimeFormatTests
         CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = format;
         var earlier = new DateTime(2026, 11, 14, 23, 50, 0, DateTimeKind.Local);
         var earlierText = format.DateTimeFormat.GetAbbreviatedDayName(earlier.DayOfWeek) + " " + earlier.ToString("t", format);
-        using var surface = new Surface(new FixedClock(Clock));
+        using var surface = new Surface(FixedClock(Clock));
         surface.Listener.Apply(new NotificationSnapshot(NotificationAccessStatus.Allowed,
         [
             new(1, "mail", "Mail", "Afternoon", "Hello", At(new DateTime(2026, 11, 15, 15, 45, 0, DateTimeKind.Local))),
@@ -67,12 +67,9 @@ public sealed class NotificationTimeFormatTests
 
     private static DateTimeOffset At(DateTime local) => new(local, TimeZoneInfo.Local.GetUtcOffset(local));
 
-    private static IEnumerable<AccessibleNode> Nodes(AccessibleNode node) => node.Children.SelectMany(n => new[] { n }.Concat(Nodes(n)));
+    private static FakeTimeProvider FixedClock(DateTime local) => new(At(local));
 
-    private sealed class FixedClock(DateTime local) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUniversalTime();
-    }
+    private static IEnumerable<AccessibleNode> Nodes(AccessibleNode node) => node.Children.SelectMany(n => new[] { n }.Concat(Nodes(n)));
 
     private sealed class Backend : INotificationBackend
     {

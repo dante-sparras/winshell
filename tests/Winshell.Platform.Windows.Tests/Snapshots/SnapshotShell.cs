@@ -112,7 +112,7 @@ internal sealed class SnapshotShell : IDisposable
                 return registry;
             }, engine =>
             {
-                engine.AddService<TimeProvider>(new FixedTime(Now));
+                engine.AddService<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(Now, TimeZoneInfo.Local.GetUtcOffset(Now))));
                 engine.AddService<IIconLookup>(IconProvider.Instance);
             })
             { ConfigRoot = Path.Combine(_directory, "config") };
@@ -250,12 +250,6 @@ internal sealed class SnapshotShell : IDisposable
         catch (IOException)
         {
         }
-    }
-
-    /// <summary>A clock that always reads the same local time.</summary>
-    private sealed class FixedTime(DateTime local) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUniversalTime();
     }
 
     /// <summary>Three notifications from two apps, received this morning.</summary>

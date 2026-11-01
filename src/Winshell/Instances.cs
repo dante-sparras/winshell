@@ -58,7 +58,7 @@ internal static class Instances
                 return;
             if (info.ExitedAt is not null)
                 return;
-            File.WriteAllText(file, JsonSerializer.Serialize(info with { ExitedAt = DateTime.Now }, InstanceJson.Default.InstanceInfo));
+            File.WriteAllText(file, JsonSerializer.Serialize(info with { ExitedAt = TimeProvider.System.GetLocalNow().LocalDateTime }, InstanceJson.Default.InstanceInfo));
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -273,7 +273,7 @@ internal static class Instances
         return File.Exists(log) ? File.GetLastWriteTime(log) : info.LaunchTime;
     }
 
-    private static bool OlderThanADay(DateTime stamp) => DateTime.Now - stamp > TimeSpan.FromDays(1);
+    private static bool OlderThanADay(DateTime stamp) => TimeProvider.System.GetLocalNow().LocalDateTime - stamp > TimeSpan.FromDays(1);
 
     private static void TryDelete(string dir)
     {

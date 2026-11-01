@@ -777,7 +777,7 @@ public sealed class SystemClock : QObject
 {
     private bool _enabled = true;
     private int _precision = (int)Precision.Seconds;
-    private DateTime _date = DateTime.Now;
+    private DateTime _date = TimeProvider.System.GetLocalNow().LocalDateTime;
     private IDisposable? _timer;
 
     [QmlEnum]
@@ -831,7 +831,7 @@ public sealed class SystemClock : QObject
         _ => new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind),
     };
 
-    private DateTime Now() => (Engine?.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow().LocalDateTime;
+    private DateTime Now() => (Engine?.Time ?? TimeProvider.System).GetUtcNow().LocalDateTime;
 
     private void Tick()
     {
@@ -873,35 +873,41 @@ public sealed class SystemClock : QObject
 /// <summary>The <c>ElapsedTimer</c>.</summary>
 public sealed class ElapsedTimer : QObject
 {
-    private readonly Stopwatch _watch = Stopwatch.StartNew();
+    private long _started = TimeProvider.System.GetTimestamp();
 
-    [Qml] public double Elapsed() => _watch.Elapsed.TotalSeconds;
+    private TimeProvider Time => Engine?.Time ?? TimeProvider.System;
 
-    [Qml] public double ElapsedMs() => _watch.Elapsed.TotalMilliseconds;
+    private TimeSpan Running => Time.GetElapsedTime(_started);
 
-    [Qml] public double ElapsedNs() => _watch.Elapsed.Ticks * 100.0;
+    public override void ComponentComplete() => _started = Time.GetTimestamp();
+
+    [Qml] public double Elapsed() => Running.TotalSeconds;
+
+    [Qml] public double ElapsedMs() => Running.TotalMilliseconds;
+
+    [Qml] public double ElapsedNs() => Running.Ticks * 100.0;
 
     [Qml]
     public double Restart()
     {
-        var s = _watch.Elapsed.TotalSeconds;
-        _watch.Restart();
+        var s = Running.TotalSeconds;
+        _started = Time.GetTimestamp();
         return s;
     }
 
     [Qml]
     public double RestartMs()
     {
-        var s = _watch.Elapsed.TotalMilliseconds;
-        _watch.Restart();
+        var s = Running.TotalMilliseconds;
+        _started = Time.GetTimestamp();
         return s;
     }
 
     [Qml]
     public double RestartNs()
     {
-        var s = _watch.Elapsed.Ticks * 100.0;
-        _watch.Restart();
+        var s = Running.Ticks * 100.0;
+        _started = Time.GetTimestamp();
         return s;
     }
 }

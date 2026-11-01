@@ -57,7 +57,7 @@ public static class Doctor
 
     public static IReadOnlyList<DoctorCheck> Run(DoctorContext context)
     {
-        var now = DateTime.UtcNow;
+        var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var instance = context.ConfigFile is { } file
             ? context.Instances.FirstOrDefault(i => string.Equals(i.ConfigPath, file, StringComparison.OrdinalIgnoreCase))
             : null;

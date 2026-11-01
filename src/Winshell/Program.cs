@@ -671,7 +671,7 @@ namespace Winshell
                     try
                     {
                         if (!logClosed)
-                            instanceLog.Write(level, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
+                            instanceLog.Write(level, $"{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
                     }
                     catch (Exception e) when (e is IOException or ObjectDisposedException)
                     {
@@ -802,7 +802,7 @@ namespace Winshell
                 log.Warn("shell", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
             using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0), dismissNotice: () => notices.Hide());
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
-            Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, DateTime.Now, pipe, logPath, processStart));
+            Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, TimeProvider.System.GetLocalNow().LocalDateTime, pipe, logPath, processStart));
             Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
@@ -844,7 +844,7 @@ namespace Winshell
             finally
             {
                 if (fatal is null)
-                    Quietly(() => CrashFollowUp.MarkClean(exitState, DateTimeOffset.Now));
+                    Quietly(() => CrashFollowUp.MarkClean(exitState, TimeProvider.System.GetLocalNow()));
                 host.Dispose();
                 // After the shell is gone, so a binding cannot hide the taskbar again. This runs when the loop
                 // returns and when an exception leaves this try, because the filter above does not swallow it.

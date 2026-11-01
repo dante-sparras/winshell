@@ -25,7 +25,7 @@ internal sealed class SmtcSessions
     private Timer? _refresh;
     private int _syncPosted;
     private global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>? _pending;
-    private int _pendingSince;
+    private long _pendingSince;
     private int _pendingThread = -1;
     private int _nextId = 1;
 
@@ -88,7 +88,7 @@ internal sealed class SmtcSessions
                 return;
             }
             if (pending.Status == global::Windows.Foundation.AsyncStatus.Started
-                && unchecked(Environment.TickCount - _pendingSince) < 1000)
+                && TimeProvider.System.GetElapsedTime(_pendingSince) < TimeSpan.FromSeconds(1))
                 return;
         }
         _pending = null;
@@ -112,9 +112,9 @@ internal sealed class SmtcSessions
             SynchronizationContext.SetSynchronizationContext(previous);
         }
 
-        var started = Environment.TickCount;
+        var started = TimeProvider.System.GetTimestamp();
         while (operation.Status == global::Windows.Foundation.AsyncStatus.Started
-            && unchecked(Environment.TickCount - started) < 50)
+            && TimeProvider.System.GetElapsedTime(started) < TimeSpan.FromMilliseconds(50))
             Thread.Yield();
 
         if (operation.Status == global::Windows.Foundation.AsyncStatus.Completed)
@@ -128,7 +128,7 @@ internal sealed class SmtcSessions
             return;
         }
         _pending = operation;
-        _pendingSince = Environment.TickCount;
+        _pendingSince = TimeProvider.System.GetTimestamp();
         _pendingThread = Environment.CurrentManagedThreadId;
     }
 
@@ -242,7 +242,7 @@ internal sealed class SmtcSession
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>? _mediaChanged;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs>? _playbackChanged;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs>? _timelineChanged;
-    private DateTimeOffset _positionTime = DateTimeOffset.UtcNow;
+    private DateTimeOffset _positionTime = TimeProvider.System.GetUtcNow();
     private double _position;
 
     public SmtcSession(SmtcSessions owner, GlobalSystemMediaTransportControlsSession session, int id, string appName)
@@ -378,7 +378,7 @@ internal sealed class SmtcSession
             return 0;
         var position = _position;
         if (PlaybackState == MediaPlaybackStates.Playing)
-            position += (DateTimeOffset.UtcNow - _positionTime).TotalSeconds * Rate;
+            position += (TimeProvider.System.GetUtcNow() - _positionTime).TotalSeconds * Rate;
         return Length > 0 ? Math.Clamp(position, 0, Length) : Math.Max(0, position);
     }
 
@@ -463,7 +463,7 @@ internal sealed class SmtcSession
         Run(Session.TryChangePlaybackPositionAsync((StartTime + TimeSpan.FromSeconds(seconds)).Ticks), "set position");
         // Show the new position now, as the app may report it late or not at all.
         _position = seconds;
-        _positionTime = DateTimeOffset.UtcNow;
+        _positionTime = TimeProvider.System.GetUtcNow();
         Seeked?.Invoke();
     }
 
@@ -640,7 +640,7 @@ internal sealed class SmtcSession
         {
             // Count the position up to now with the old state, then from now with the new one.
             _position = PositionNow();
-            _positionTime = DateTimeOffset.UtcNow;
+            _positionTime = TimeProvider.System.GetUtcNow();
             seeked = true;
         }
         Set(state, PlaybackState, v => PlaybackState = v, "playbackState", changed);
@@ -674,7 +674,7 @@ internal sealed class SmtcSession
         try
         {
             var timeline = sender.GetTimelineProperties();
-            var received = DateTimeOffset.UtcNow;
+            var received = TimeProvider.System.GetUtcNow();
             _owner.Post(() => ApplyTimeline(timeline, received));
         }
         catch (COMException)
@@ -993,7 +993,7 @@ internal static class ArtCache
             var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
             foreach (var file in Directory.EnumerateFiles(root, "*", options))
             {
-                if (File.GetLastWriteTimeUtc(file) < DateTime.UtcNow.AddDays(-1))
+                if (File.GetLastWriteTimeUtc(file) < TimeProvider.System.GetUtcNow().UtcDateTime.AddDays(-1))
                     File.Delete(file);
             }
             foreach (var dir in Directory.EnumerateDirectories(root, "*", new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))

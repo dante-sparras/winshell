@@ -83,7 +83,7 @@ public sealed class ShellHost : IShellHost, IDisposable
         Pragmas = pragmas;
         _declared = pragmas;
         AppId = string.IsNullOrEmpty(pragmas.AppId) ? (string.IsNullOrEmpty(appFromEnv) ? "winshell" : appFromEnv) : pragmas.AppId;
-        LaunchTime = DateTime.Now;
+        LaunchTime = TimeProvider.System.GetLocalNow().LocalDateTime;
         InstanceId = Base36(Environment.ProcessId) + Base36(new DateTimeOffset(LaunchTime).ToUnixTimeSeconds());
         Identify();
         foreach (var (k, v) in pragmas.Env)
@@ -277,7 +277,8 @@ public sealed class ShellHost : IShellHost, IDisposable
         // Each load starts with the popup allowed; the old generation's reloadFailed handler can inhibit it.
         _inhibitPopup = false;
         Log.ClearFirstScriptError();
-        _loadStarted = DateTime.UtcNow;
+        // Compared with the files' own write times, so this is always the machine's clock.
+        _loadStarted = TimeProvider.System.GetUtcNow().UtcDateTime;
         var oldEngine = _engine;
         var oldRoot = _root;
         var engine = new QmlEngine(_modules(), _loop, Log, ShellDir);

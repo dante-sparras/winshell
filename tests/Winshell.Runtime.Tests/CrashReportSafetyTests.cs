@@ -223,7 +223,7 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Reports_written_in_the_same_instant_are_kept_newest_first()
     {
         var instant = new DateTimeOffset(2031, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        var crashes = new CrashReports(Folder()) { Keep = 1, Clock = () => instant };
+        var crashes = new CrashReports(Folder()) { Keep = 1, Time = new FakeTimeProvider(instant) };
 
         for (var i = 0; i < 20; i++)
         {
@@ -236,26 +236,27 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Retention_follows_the_utc_instant_across_a_clock_change()
     {
         // Daylight saving ends: 02:30 at +02:00 is 00:30 UTC; twenty minutes on the wall later it is 02:10 at +01:00, 01:10 UTC.
-        var times = new Queue<DateTimeOffset>(
-        [
-            new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2)),
-            new DateTimeOffset(2031, 10, 26, 2, 10, 0, TimeSpan.FromHours(1)),
-        ]);
-        var crashes = new CrashReports(Folder()) { Keep = 1, Clock = times.Dequeue };
+        var time = new FakeTimeProvider(new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2)));
+        time.SetLocalTimeZone(ZoneAt(2));
+        var crashes = new CrashReports(Folder()) { Keep = 1, Time = time };
 
         crashes.Write("before", new InvalidOperationException("x"));
+        time.SetUtcNow(new DateTimeOffset(2031, 10, 26, 2, 10, 0, TimeSpan.FromHours(1)));
+        time.SetLocalTimeZone(ZoneAt(1));
         var later = crashes.Write("after", new InvalidOperationException("x"))!.Path;
 
         Assert.Equal([later], Directory.GetFiles(Folder()));
         Assert.Contains("Time: 2031-10-26 02:10:00.000 +01:00", File.ReadAllText(later), StringComparison.Ordinal);
     }
 
+    private static TimeZoneInfo ZoneAt(int hours) => TimeZoneInfo.CreateCustomTimeZone($"UTC+{hours}", TimeSpan.FromHours(hours), null, null);
+
     [Fact]
     public void Two_writers_sharing_the_folder_never_overwrite_each_other()
     {
         // As two instances would: separate writers, each with its own lock, on one folder at one instant.
         var instant = new DateTimeOffset(2032, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var writers = Enumerable.Range(0, 4).Select(_ => new CrashReports(Folder()) { Keep = 1000, Clock = () => instant }).ToList();
+        var writers = Enumerable.Range(0, 4).Select(_ => new CrashReports(Folder()) { Keep = 1000, Time = new FakeTimeProvider(instant) }).ToList();
         using var start = new Barrier(writers.Count);
 
         var paths = writers.AsParallel().WithDegreeOfParallelism(writers.Count).SelectMany((writer, w) =>
