@@ -40,6 +40,12 @@ public sealed class ShellScreen : QObject
             NotifyChanged("devicePixelRatio");
         if (old.WorkArea != info.WorkArea) NotifyChanged("workArea");
         if (old.RefreshRate != info.RefreshRate) NotifyChanged("refreshRate");
+        var widthChanged = old.Geometry.Width != info.Geometry.Width;
+        var sizeChanged = old.PhysicalWidthMm != info.PhysicalWidthMm;
+        if (widthChanged || sizeChanged || old.DevicePixelRatio != info.DevicePixelRatio)
+            NotifyChanged("physicalPixelDensity");
+        if (widthChanged || sizeChanged)
+            NotifyChanged("logicalPixelDensity");
     }
 
     [Qml] public string Name { get { Track(); return _info.Name; } }
@@ -65,6 +71,22 @@ public sealed class ShellScreen : QObject
     [Qml] public QRect WorkArea { get { Track(); return _info.WorkArea; } }
 
     [Qml] public double DevicePixelRatio { get { Track(); return _info.DevicePixelRatio; } }
+
+    /// <summary>Physical pixels per millimeter across the monitor's width, or 0 when Windows reports no size.</summary>
+    [Qml]
+    public double PhysicalPixelDensity
+    {
+        get { Track(); return PixelsPerMillimeter(_info.Geometry.Width * _info.DevicePixelRatio, _info.PhysicalWidthMm); }
+    }
+
+    /// <summary>Device-independent pixels per millimeter: <see cref="Width"/> over the same physical width, or 0 when that width is missing.</summary>
+    [Qml]
+    public double LogicalPixelDensity
+    {
+        get { Track(); return PixelsPerMillimeter(_info.Geometry.Width, _info.PhysicalWidthMm); }
+    }
+
+    private static double PixelsPerMillimeter(double pixels, double millimeters) => millimeters > 0 ? pixels / millimeters : 0;
 
     [Qml] public int Orientation { get { Track(); return _info.Geometry.Width >= _info.Geometry.Height ? 2 : 1; } }
 

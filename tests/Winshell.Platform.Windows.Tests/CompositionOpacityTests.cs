@@ -19,7 +19,7 @@ public class CompositionOpacityTests
         Assert.NotEqual(0, hwnd);
         try
         {
-            using var surface = new CompositionSurface(hwnd);
+            using var surface = new CompositionSurface(hwnd, null);
             surface.Render(100, 100, c => c.Clear(SKColors.Red));
             surface.SetOpacity(0.5f);
             surface.SetClip(0, 0, 50, 50);

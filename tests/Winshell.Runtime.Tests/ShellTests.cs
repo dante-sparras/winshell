@@ -26,11 +26,16 @@ public sealed class FakePlatform : IShellPlatform
     /// <summary>How many of the next panel placements throw.</summary>
     public int FailPlacements { get; set; }
 
+    /// <summary>The next native windows fail as a swap chain that cannot be created, and are not tried again.</summary>
+    public bool FailResourceLoss { get; set; }
+
     public int Creations { get; private set; }
 
     public IWindowBackend CreateWindow(WindowKind kind, IWindowClient client)
     {
         Creations++;
+        if (FailResourceLoss)
+            throw new SurfaceResourcesException("the swap chain could not be created");
         if (FailCreations > 0)
         {
             FailCreations--;
@@ -48,6 +53,9 @@ public sealed class FakeWindow(WindowKind kind, IWindowClient client, FakePlatfo
 
     public IWindowClient Client { get; private set; } = client;
 
+    /// <summary>What the window was asked for. Null means the configuration did not set <c>surfaceFormat.opaque</c>.</summary>
+    public bool? SurfaceOpaque { get; private set; } = client.SurfaceOpaque;
+
     public PanelPlacement? Panel { get; private set; }
 
     public PopupPlacement? Popup { get; private set; }
@@ -62,7 +70,11 @@ public sealed class FakeWindow(WindowKind kind, IWindowClient client, FakePlatfo
 
     public int Frames { get; set; }
 
-    public void Rebind(IWindowClient client) => Client = client;
+    public void Rebind(IWindowClient client)
+    {
+        Client = client;
+        SurfaceOpaque = client.SurfaceOpaque;
+    }
 
     public void SetPanel(PanelPlacement placement)
     {

@@ -52,6 +52,7 @@ internal static unsafe partial class Screens
         Win32.GetDpiForMonitor(handle, 0, out var dpi, out _);
         var scale = DesktopSpace.Scale(dpi);
         var (model, id) = MonitorName(device);
+        var size = MonitorSize.Read(id);
         var name = device.Replace(@"\\.\", "", StringComparison.Ordinal);
         var info = new ScreenInfo(
             device,
@@ -62,8 +63,8 @@ internal static unsafe partial class Screens
             DesktopSpace.ToLogical(mi.rcMonitor, mi.rcMonitor, scale),
             DesktopSpace.ToLogical(mi.rcWork, mi.rcMonitor, scale),
             scale,
-            0,
-            0,
+            size.WidthMm,
+            size.HeightMm,
             RefreshRate(device),
             (mi.dwFlags & Win32.MONITORINFOF_PRIMARY) != 0);
         return new Monitor(handle, info, mi.rcMonitor, mi.rcWork, scale);

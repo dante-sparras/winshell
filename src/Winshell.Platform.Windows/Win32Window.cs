@@ -93,7 +93,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, 1, 4);
                 Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, Win32.DWMWA_COLOR_NONE, 4);
             }
-            _surface = new CompositionSurface(Handle);
+            _surface = new CompositionSurface(Handle, _client.SurfaceOpaque);
             _cursor = Win32.LoadCursorW(0, Win32.IDC_ARROW);
             _client.Scene.FocusChanged += OnImeFocus;
             UpdateIme(_client.Scene.FocusItem);
@@ -124,6 +124,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         // A reload brings a new scene: its items are a new tree.
         _automation.Dispose();
         _automation = new WindowAutomation(this, client.Scene, _platform.Loop, _platform.Log);
+        _surface?.ApplyFormat(client.SurfaceOpaque);
         RequestFrame();
     }
 
@@ -1142,6 +1143,12 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         {
             surface.Render(_physicalWidth, _physicalHeight, canvas => _client.OnPaint(canvas));
         }
+        catch (SurfaceResourcesException e)
+        {
+            // The surface is gone. The client closes this window and does not open it again.
+            LoseResources(e);
+            return;
+        }
         catch (SharpGen.Runtime.SharpGenException e)
         {
             _platform.Log.Error("render", $"Could not draw a frame: {e.Message}");
@@ -1163,6 +1170,19 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         }
         if (!_disposePending)
             _automation.AfterFrame();
+    }
+
+    /// <summary>The surface cannot be created or the device is gone. The client closes this window and does not open it again.</summary>
+    private void LoseResources(Exception error)
+    {
+        if (_failed)
+            return;
+        _failed = true;
+        _platform.Loop.Post(() =>
+        {
+            if (Handle != 0)
+                _client.OnResourcesLost(error);
+        });
     }
 
     /// <summary>

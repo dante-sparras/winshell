@@ -5,14 +5,13 @@ namespace Winshell.Runtime.Tests;
 
 /// <summary>
 /// Members that used to be present and do nothing are either gone, so a configuration that names them fails to
-/// load, or they do what their name says. <c>FloatingWindow.fullscreen</c> and <c>FloatingWindow.parentWindow</c>
-/// work again, so this test no longer names them.
+/// load, or they do what their name says. <c>FloatingWindow.fullscreen</c>, <c>FloatingWindow.parentWindow</c>,
+/// <c>ShellWindow.surfaceFormat</c>, <c>ShellWindow.resourcesLost</c> and the screen pixel densities work again,
+/// so this test no longer names them.
 /// </summary>
 public class DeadMemberTests
 {
     [Theory]
-    [InlineData("FloatingWindow { surfaceFormat.opaque: true }", "surfaceFormat")]
-    [InlineData("FloatingWindow { onResourcesLost: true }", "onResourcesLost")]
     [InlineData("MenuEntry { }", "MenuEntry")]
     [InlineData("MenuOpener { }", "MenuOpener")]
     [InlineData("MenuAnchor { }", "MenuAnchor")]
@@ -24,25 +23,11 @@ public class DeadMemberTests
     }
 
     [Fact]
-    public void A_screen_has_no_pixel_density()
+    public void A_screen_reports_its_manufacturer_and_serial()
     {
         var props = MetaType.Of(typeof(ShellScreen)).Properties;
-        Assert.False(props.ContainsKey("physicalPixelDensity"));
-        Assert.False(props.ContainsKey("logicalPixelDensity"));
         Assert.True(props.ContainsKey("manufacturer"));
         Assert.True(props.ContainsKey("serialNumber"));
-
-        using var shell = new TestShell(("shell.qml", """
-            import QtQml
-            import Winshell
-            QtObject { property var screen }
-            """));
-        var root = shell.Load();
-        root.WriteProperty("screen", new ShellScreen(new ScreenInfo(
-            "1", "DISPLAY1", "Monitor", "AUS", "5&1",
-            new QRect(0, 0, 100, 100), new QRect(0, 0, 100, 100), 1, 0, 0, 60, true)));
-        Assert.Null(shell.Eval(root, "screen.physicalPixelDensity"));
-        Assert.Null(shell.Eval(root, "screen.logicalPixelDensity"));
     }
 
     [Fact]
