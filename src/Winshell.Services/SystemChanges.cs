@@ -1,7 +1,7 @@
 using Microsoft.Win32;
 using Winshell.Native;
 
-namespace Winshell.Platform.Windows;
+namespace Winshell;
 
 /// <summary>What the shell redoes after a system change.</summary>
 [Flags]
