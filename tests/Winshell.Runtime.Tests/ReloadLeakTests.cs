@@ -80,7 +80,12 @@ public class ReloadLeakTests
         Assert.Equal(3, windows);
         Assert.Equal(windows, platform.Windows.Count(w => !w.Disposed));
 
-        Collect();
+        // Another thread can still be finishing with a generation, so what holds it may let go after a collection.
+        Wait.Until(() =>
+        {
+            Collect();
+            return !generations.Exists(g => g.IsAlive);
+        }, "the old generations to be released");
         Assert.Equal(0, generations.Count(g => g.IsAlive));
     }
 
