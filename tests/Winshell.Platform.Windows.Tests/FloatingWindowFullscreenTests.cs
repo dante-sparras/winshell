@@ -267,11 +267,11 @@ public class FloatingWindowFullscreenTests
             child.ParentWindow = owner;
             owner.Minimized = true;
             Assert.True(Win32.IsIconic(ownerHwnd));
-            Assert.False(Win32.IsWindowVisible(childHwnd));
+            Wait.Until(() => !Win32.IsWindowVisible(childHwnd), "the owned window to hide with its owner", Pump);
             Assert.False(child.Minimized);
             owner.Minimized = false;
             Assert.False(Win32.IsIconic(ownerHwnd));
-            Assert.True(Win32.IsWindowVisible(childHwnd));
+            Wait.Until(() => Win32.IsWindowVisible(childHwnd), "the owned window to show with its owner", Pump);
             Assert.False(child.Minimized);
         });
     }
@@ -338,6 +338,12 @@ public class FloatingWindowFullscreenTests
         var style = Style(hwnd);
         Assert.NotEqual(0u, style & Win32.WS_CAPTION);
         Assert.NotEqual(0u, style & Win32.WS_THICKFRAME);
+    }
+
+    private static void Pump()
+    {
+        while (Win32.PeekMessageW(out var message, 0, 0, 0, Win32.PM_REMOVE))
+            Win32.DispatchMessageW(message);
     }
 
     private static void AssertAbove(nint upper, nint lower)
