@@ -254,6 +254,34 @@ internal sealed class SmtcSession
         AppName = appName;
     }
 
+    /// <summary>No Windows session. Tests change the command flags this object already stores.</summary>
+    internal static SmtcSession CreateForTests() => new("test");
+
+    private SmtcSession(string appId)
+    {
+        _owner = null!;
+        Session = null!;
+        AppId = appId;
+        AppName = appId;
+    }
+
+    /// <summary>Sets the playback commands this session accepts and reports which of them changed.</summary>
+    internal void SetControls(bool canPlay = false, bool canPause = false, bool canStop = false,
+        bool canGoNext = false, bool canGoPrevious = false, bool canSeek = false)
+    {
+        var changed = new List<string>();
+        Set(canPlay, CanPlay, v => CanPlay = v, "canPlay", changed);
+        Set(canPause, CanPause, v => CanPause = v, "canPause", changed);
+        Set(canStop, CanStop, v => CanStop = v, "canStop", changed);
+        Set(canGoNext, CanGoNext, v => CanGoNext = v, "canGoNext", changed);
+        Set(canGoPrevious, CanGoPrevious, v => CanGoPrevious = v, "canGoPrevious", changed);
+        Set(canSeek, CanSeek, v => CanSeek = v, "canSeek", changed);
+        if (changed.Count == 0)
+            return;
+        changed.Add("canTogglePlaying");
+        Changed?.Invoke(changed, false);
+    }
+
     public GlobalSystemMediaTransportControlsSession Session { get; private set; }
 
     /// <summary>The app id Windows reports for a session. The same session gets a new object on every list.</summary>
