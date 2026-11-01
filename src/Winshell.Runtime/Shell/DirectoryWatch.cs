@@ -8,7 +8,8 @@ namespace Winshell.Runtime.Shell;
 /// <summary>
 /// Watches one folder on a thread of its own. FileSystemWatcher delivers on thread pool workers, so a busy pool
 /// holds a change back. The first read starts before <see cref="Start"/> returns, so a change made after that is
-/// not missed. Callbacks run on the watch thread and must not block.
+/// not missed. That thread makes every read, because Windows cancels a read when the thread that made it ends.
+/// Callbacks run on the watch thread and must not block.
 /// </summary>
 internal sealed class DirectoryWatch : IDisposable
 {
@@ -28,9 +29,11 @@ internal sealed class DirectoryWatch : IDisposable
     private readonly Action<string> _changed;
     private readonly Action _lost;
     private readonly ManualResetEvent _completed = new(false);
+    private readonly ManualResetEventSlim _started = new(false);
     private readonly nint _buffer = Marshal.AllocHGlobal(BufferSize);
     private readonly nint _overlapped = Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
     private readonly Thread _thread;
+    private bool _reading;
     private volatile bool _stopped;
 
     private DirectoryWatch(SafeFileHandle handle, uint filter, bool subtree, Action<string> changed, Action lost)
@@ -60,12 +63,13 @@ internal sealed class DirectoryWatch : IDisposable
             return null;
         }
         var watch = new DirectoryWatch(handle, filter, subtree, changed, lost);
-        if (!watch.Read())
+        watch._thread.Start();
+        watch._started.Wait();
+        if (!watch._reading)
         {
             watch.Dispose();
             return null;
         }
-        watch._thread.Start();
         return watch;
     }
 
@@ -73,6 +77,10 @@ internal sealed class DirectoryWatch : IDisposable
 
     private void Run()
     {
+        _reading = Read();
+        _started.Set();
+        if (!_reading)
+            return;
         while (true)
         {
             var ok = GetOverlappedResult(_handle, _overlapped, out var returned, true);
@@ -123,6 +131,7 @@ internal sealed class DirectoryWatch : IDisposable
         }
         _handle.Dispose();
         _completed.Dispose();
+        _started.Dispose();
         Marshal.FreeHGlobal(_buffer);
         Marshal.FreeHGlobal(_overlapped);
     }
