@@ -1,6 +1,5 @@
 #requires -Version 7.0
-# Files an issue labeled flaky for each test that run-tests.ps1 or stress-tests.ps1 reported, or comments on the one
-# already open.
+# Files an issue labeled flaky for each test in a run-tests.ps1 report, or comments on the one already open.
 # See "Flaky tests" in CONTRIBUTING.md.
 param(
     [string] $ReportPath,
