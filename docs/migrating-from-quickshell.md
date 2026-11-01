@@ -12,7 +12,7 @@ The Qt Quick modules (`QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`, `QtQuick
 | `Quickshell.Io` | `Winshell.Io` |
 | `Quickshell.Widgets` | `Winshell.Widgets` |
 | `Quickshell.Windows` | `Winshell` for `WindowEffects`, `Winshell.Theme` for the theme |
-| `Quickshell.Wayland` | `Winshell.Power` for idle, `Winshell.Windows` for the window list; the session lock is [removed](#session-lock) |
+| `Quickshell.Wayland` | `Winshell.Power` for idle, `Winshell.Windows` for the window list, `Winshell.Input` for `ShortcutInhibitor`; the session lock is [removed](#session-lock) |
 | `Quickshell.Services.Pipewire` | `Winshell.Audio` |
 | `Quickshell.Services.Mpris` | `Winshell.Media` |
 | `Quickshell.Networking` | `Winshell.Network` |
@@ -54,6 +54,7 @@ Types not listed keep their names in the new module.
 | `Hyprland`, `HyprlandEvent`, `HyprlandMonitor`, `HyprlandWorkspace` | `Winland`, `WinlandEvent`, `WinlandMonitor`, `WinlandWorkspace` | `Winshell.Winland` |
 | `HyprlandToplevel` | `WinlandWindow` | `Winshell.Winland` |
 | `GlobalShortcut` | `Hotkey` | `Winshell.Input` |
+| `ShortcutInhibitor` | `ShortcutInhibitor` | `Winshell.Input` |
 
 ## Properties
 
@@ -116,7 +117,7 @@ Types not listed keep their names in the new module.
 | `MprisPlayer.dbusName` | Removed. Windows has no bus name for a session. |
 | `MprisPlayer.canRaise`, `raise()` | `canSwitchTo`, `switchTo()` |
 | `MprisPlayer.canQuit`, `quit()` | Removed. Windows cannot ask the app to quit. |
-| `MprisPlayer.canControl` | Removed. |
+| `MprisPlayer.canControl` | `canControl`. True when the session accepts at least one playback command. Windows has no separate flag. |
 | `MprisPlayer.volume`, `volumeSupported` | Removed. Change the app's audio session instead. |
 | `MprisPlayer.fullscreen`, `canSetFullscreen` | Removed. |
 | `MprisPlayer.openUri()`, `supportedUriSchemes`, `supportedMimeTypes` | Removed. |
@@ -236,7 +237,9 @@ Types not listed keep their names in the new module.
 
 ## Hotkeys
 
-`Winshell.Input` `Hotkey` registers a Windows hotkey. A normal chord, including `Win+E`, uses `RegisterHotKey`. The Windows key by itself, and the keys after the first chord of a sequence, use a low-level keyboard hook only while one of those hotkeys is enabled or a sequence is in progress. See [Windows hotkeys](hotkeys.md).
+`Winshell.Input` `Hotkey` registers a Windows hotkey. A normal chord, including `Win+E`, uses `RegisterHotKey`. The Windows key by itself, the keys after the first chord of a sequence, and an active `ShortcutInhibitor` use one low-level keyboard hook, and only while one of those needs it. See [Windows hotkeys](hotkeys.md).
+
+`ShortcutInhibitor` keeps its name and moves from `Quickshell.Wayland` to `Winshell.Input`. `enabled`, `window`, `active` and `cancelled` keep their roles. On Windows, `active` also requires the keyboard hook, and it follows the foreground window: losing the foreground pauses capture and gaining it resumes capture while `enabled` stays true. `cancelled` means the hook thread ended on its own, and `enabled` becomes false. A timeout that removes the hook and leaves the thread running is not reported. Winshell hotkeys stay idle while `active` is true. Ctrl+Alt+Del and Win+L cannot be blocked.
 
 | Quickshell | Winshell |
 | --- | --- |
@@ -270,7 +273,6 @@ These did nothing on Windows, or repeated what another type does.
 | `HyprlandWindow` | `ShellWindow.opacity` and `ShellWindow.visibleMask`, on the window itself. There is no attached object. Opacity fades the content only; the Windows backdrop does not fade with it. Values outside 0 to 1 are clamped. `visibleMask` is a hint that clips drawing to the region's bounding rectangle and does not change clicks. |
 | `HyprlandToplevel` attached to a toplevel | `Winland.toplevels`. `WinlandWindow` is not attached to an `AppWindow` |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
-| `ShortcutInhibitor` | Nothing |
 | `Quickshell.Services.Greetd`, `Quickshell.Services.Polkit`, `Quickshell.I3`, `Quickshell.DBusMenu`, `Quickshell.WindowManager` | Nothing |
 | `DesktopAction` | Removed. `AppEntry.launch()` opens the app |
 
@@ -348,7 +350,8 @@ See [Windows networking](network.md) for the native models, permissions and expl
 | `ConnectionFailReason.NoSecrets`, `WifiAuthTimeout`, `WifiNetworkLost`, `WifiClientFailed` | Action `error`: `InvalidPassword`, `Timeout`, `NetworkUnavailable`, `UnsupportedAuthentication` |
 | `Network.known`, `stateChanging`, `onConnectionFailed` | `saved`, `busy`, `onOperationFailed(message)` and `error` |
 | `WifiNetwork.connectWithPsk()` | `connectWithPassword()` |
-| `WifiDevice.scannerEnabled`, `mode`, `WifiDeviceMode` | Removed; call `scan()` for one scan and observe `scanning` |
+| `WifiDevice.scannerEnabled` | Removed; call `scan()` for one scan and observe `scanning` |
+| `WifiDevice.mode`, `WifiDeviceMode` | Read-only `mode`. `Station` is an extensible station and `AccessPoint` is an extensible access point. Windows 11 does not report ad hoc, so `AdHoc` is never returned. `Mesh` is kept and never returned. Anything else is `Unknown`. `toString` returns the value name |
 | Writable `Networking.wifiEnabled` | Writable `wifiEnabled`. Quickshell updates the value, then sets an rfkill software block. Winshell asks Windows and leaves the property on what Windows reports. `wifiState` stays read-only |
 | `NetworkDevice.disconnect()`, `WiredDevice.network` | Use the `networks` model; Wi-Fi network objects provide `disconnect()`; wired connections are managed by Windows |
 
@@ -361,7 +364,9 @@ See [Windows Bluetooth](bluetooth.md) for state, discovery, battery and action l
 | Former member | Windows API |
 | --- | --- |
 | `BluetoothAdapter.adapterId` (`hci0`), adapter/device `dbusPath` | Windows device `id`; no D-Bus or HCI aliases |
-| Writable adapter `enabled`, `discoverable`, `discoverableTimeout`, `pairable`, `pairableTimeout` | `enabled` asks Windows to change the radio and keeps the value Windows reports. `discoverable`, `discoverableTimeout`, `pairable` and `pairableTimeout` are removed |
+| Writable adapter `enabled` | Asks Windows to change the radio and keeps the value Windows reports |
+| Writable `discoverable` and `pairable` | `discoverable` asks Windows to change whether the radio can be found. `pairable` asks Windows to change incoming connections, which is wider than BlueZ pairing. Both keep the value a later read reports |
+| `discoverableTimeout`, `pairableTimeout` | Removed. Windows has no discoverable or pairable timeout |
 | `BluetoothAdapterState.Enabled`, `Disabled`, `Blocked`, `Enabling`, `Disabling` | `On`, `Off`, `Disabled`, `Unknown`; pending device work is reported separately by `operation` |
 | `BluetoothAdapter.discovering`, `devices` | Singleton `Bluetooth.discovering`, `startDiscovery()`, `stopDiscovery()`, `devices`, `pairedDevices`, `nearbyDevices` |
 | `BluetoothDevice.deviceName`, writable `name` | Read-only `name` |

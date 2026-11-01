@@ -207,6 +207,79 @@ public sealed class NetworkTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData(0x00000004u, WifiDeviceMode.Station)]
+    [InlineData(0x00000008u, WifiDeviceMode.AccessPoint)]
+    [InlineData(0x00000000u, WifiDeviceMode.Unknown)]
+    [InlineData(0x00000001u, WifiDeviceMode.Unknown)]
+    [InlineData(0x00000002u, WifiDeviceMode.Unknown)]
+    [InlineData(0x00000010u, WifiDeviceMode.Unknown)]
+    [InlineData(0x00000020u, WifiDeviceMode.Unknown)]
+    [InlineData(0x00000040u, WifiDeviceMode.Unknown)]
+    [InlineData(0x40000000u, WifiDeviceMode.Unknown)]
+    [InlineData(0x80000000u, WifiDeviceMode.Unknown)]
+    public void Operation_mode_maps_extensible_station_and_access_point(uint operationMode, WifiDeviceMode expected)
+    {
+        var mode = NetworkBackend.MapDeviceMode(operationMode);
+        Assert.Equal(expected, mode);
+        Assert.NotEqual(WifiDeviceMode.AdHoc, mode);
+        Assert.NotEqual(WifiDeviceMode.Mesh, mode);
+    }
+
+    [Fact]
+    public void A_failed_operation_mode_query_is_unknown()
+    {
+        var mode = NetworkBackend.MapDeviceMode(null);
+        Assert.Equal(WifiDeviceMode.Unknown, mode);
+        Assert.NotEqual(WifiDeviceMode.AdHoc, mode);
+        Assert.NotEqual(WifiDeviceMode.Mesh, mode);
+    }
+
+    [Fact]
+    public void Wifi_mode_is_read_only_and_signals_only_when_it_changes()
+    {
+        var service = new NetworkingService(new FakeBackend(), new ManualEventLoop());
+        var wiredId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var wired = new NetworkDeviceInfo(wiredId, DeviceType.Wired, "Ethernet", "aa:bb:cc:dd:ee:ff",
+            ConnectionState.Connected, true, 1000, []);
+        var station = Adapter() with { Mode = WifiDeviceMode.Station };
+        NetworkSnapshot Shot(NetworkDeviceInfo wifi) =>
+            new(true, [wifi, wired], NetworkConnectivity.InternetAccess, true, true);
+        service.Apply(Shot(station));
+        var device = Assert.IsType<WifiDevice>(Assert.Single(service.Devices.Rows, d => d is WifiDevice));
+        var ethernet = Assert.IsType<WiredDevice>(Assert.Single(service.Devices.Rows, d => d is WiredDevice));
+        Assert.Equal(WifiDeviceMode.Station, device.Mode);
+        Assert.False(device.Meta.Properties["mode"].CanWrite);
+        Assert.False(ethernet.HasMember("mode"));
+        var changes = 0;
+        device.Connect("modeChanged", _ => changes++);
+        service.Apply(Shot(station with { Name = "Wi-Fi 2" }));
+        Assert.Equal(0, changes);
+        Assert.Equal("Wi-Fi 2", device.Name);
+        Assert.Equal(WifiDeviceMode.Station, device.Mode);
+        service.Apply(Shot(station with { Mode = WifiDeviceMode.AccessPoint }));
+        Assert.Equal(1, changes);
+        Assert.Equal(WifiDeviceMode.AccessPoint, device.Mode);
+        service.Apply(Shot(station with { Mode = WifiDeviceMode.AccessPoint, State = ConnectionState.Connected }));
+        Assert.Equal(1, changes);
+        service.Destroy();
+    }
+
+    [Fact]
+    public void WifiDeviceMode_toString_returns_the_value_name()
+    {
+        var registry = StandardModules.Create();
+        NetworkingModule.Register(registry);
+        Assert.True(registry.TryGetModule("Winshell.Network", out var module));
+        var toString = module.Types["WifiDeviceMode"].EnumToString;
+        Assert.NotNull(toString);
+        Assert.Equal("Unknown", toString((int)WifiDeviceMode.Unknown));
+        Assert.Equal("AccessPoint", toString((int)WifiDeviceMode.AccessPoint));
+        Assert.Equal("Mesh", toString((int)WifiDeviceMode.Mesh));
+        Assert.Equal("Station", toString((int)WifiDeviceMode.Station));
+        Assert.Equal("AdHoc", toString((int)WifiDeviceMode.AdHoc));
+    }
+
+    [Theory]
     [InlineData(NetworkCostType.Unknown, NetworkCost.Unknown)]
     [InlineData(NetworkCostType.Unrestricted, NetworkCost.Unrestricted)]
     [InlineData(NetworkCostType.Fixed, NetworkCost.Fixed)]

@@ -15,4 +15,12 @@ internal interface IBluetoothBackend : IDisposable
     /// <summary>Asks Windows to turn the adapter's radio on or off. Null when it reports <paramref name="enabled"/>.</summary>
     Task<string?> SetRadioEnabledAsync(bool enabled) =>
         throw new NotSupportedException("This Bluetooth backend does not change radios.");
+
+    /// <summary>Asks Windows to change discovery. Null when it reports <paramref name="discoverable"/>. Tests use a fake.</summary>
+    Task<string?> SetDiscoverableAsync(bool discoverable) =>
+        throw new NotSupportedException("This Bluetooth backend does not change discovery.");
+
+    /// <summary>Asks Windows to change incoming connections, exposed as pairable. Null when it reports <paramref name="pairable"/>. Tests use a fake.</summary>
+    Task<string?> SetPairableAsync(bool pairable) =>
+        throw new NotSupportedException("This Bluetooth backend does not change incoming connections.");
 }

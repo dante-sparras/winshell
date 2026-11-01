@@ -94,6 +94,7 @@ A Wi-Fi adapter, reached from `Networking.devices`. Has the members of [NetworkD
 
 | Member | Type | Description |
 | --- | --- | --- |
+| `mode` | [WifiDeviceMode](#wifidevicemode), read-only | The 802.11 mode the adapter is in. |
 | `scanning` | bool, read-only | True while `scan()` runs. |
 | `error` | string, read-only | Why the last scan failed. Empty when it succeeded. |
 | `scan()` | method | Scans once and updates `networks`. Needs `Networking.requestAccess()` first. No scan runs in the background. |
@@ -166,6 +167,12 @@ Values: `Unknown`, `None`, `CaptivePortal`, `LocalAccess`, `InternetAccess`
 The values of `NetworkProfile.cost`.
 
 Values: `Unknown`, `Unrestricted`, `Fixed`, `Variable`
+
+## WifiDeviceMode
+
+The values of `WifiDevice.mode`. `Station` is an extensible station, the usual client. `AccessPoint` is an extensible access point, a local hotspot. Windows has no 802.11s mesh mode, so `Mesh` is never reported. Windows 11 does not report an ad-hoc BSS, so `AdHoc` is never reported. Any other operation mode, and a query Windows does not answer, is `Unknown`. `WifiDeviceMode.toString(mode)` returns the value's name.
+
+Values: `Unknown`, `AccessPoint`, `Mesh`, `Station`, `AdHoc`
 
 ## WifiRadioState
 

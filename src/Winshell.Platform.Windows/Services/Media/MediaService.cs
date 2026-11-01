@@ -68,6 +68,7 @@ public sealed class MediaSession : QObject
     private const string PositionKey = "position:tick";
 
     private readonly SmtcSession _session;
+    private bool _canControl;
     private bool _canSwitchTo;
 
     internal MediaSession(SmtcSession session)
@@ -100,6 +101,14 @@ public sealed class MediaSession : QObject
     [Qml] public bool CanGoNext { get { Track(); return _session.CanGoNext; } }
 
     [Qml] public bool CanGoPrevious { get { Track(); return _session.CanGoPrevious; } }
+
+    /// <summary>True when the session accepts at least one playback command.</summary>
+    [Qml] public bool CanControl { get { Track(); return _canControl = AcceptsControl(); } }
+
+    // Windows reports each command on its own. Quickshell's canControl is the player's single flag.
+    private bool AcceptsControl() =>
+        _session.CanPlay || _session.CanPause || _session.CanStop
+        || _session.CanSeek || _session.CanGoNext || _session.CanGoPrevious;
 
     /// <summary>True when Windows can bring the app's window forward.</summary>
     [Qml] public bool CanSwitchTo { get { Track(); return _canSwitchTo = FindCanSwitchTo(); } }
@@ -398,6 +407,7 @@ public sealed class MediaSession : QObject
             Emit("trackChanged");
         foreach (var name in names)
             NotifyChanged(name);
+        SetField(ref _canControl, AcceptsControl(), nameof(CanControl));
         SetField(ref _canSwitchTo, FindCanSwitchTo(), nameof(CanSwitchTo));
         if (trackChanged)
             Emit("postTrackChanged");

@@ -86,6 +86,17 @@ internal sealed class HotkeyBook
     public void Disarm(IHotkeyListener listener, long token) =>
         _armed.RemoveAll(armed => armed.Listener == listener && armed.Token == token);
 
+    /// <summary>
+    /// Drops a Windows-key press and any sequence that was waiting. Inhibition ate the keys those were tracking,
+    /// so a later key-up must not count as a tap.
+    /// </summary>
+    public void ForgetHeldKeys()
+    {
+        _armed.Clear();
+        _leftDown = _rightDown = false;
+        _leftUsed = _rightUsed = true;
+    }
+
     public BookResult Hook(int virtualKey, bool isUp, HotkeyModifiers modifiers, long nowMs)
     {
         var result = new BookResult();
