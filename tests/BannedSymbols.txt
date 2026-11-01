@@ -1,0 +1,10 @@
+M:System.Threading.Thread.Sleep(System.Int32);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Thread.Sleep(System.TimeSpan);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Tasks.Task.Delay(System.Int32);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Tasks.Task.Delay(System.Int32,System.Threading.CancellationToken);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan,System.Threading.CancellationToken);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan,System.TimeProvider);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan,System.TimeProvider,System.Threading.CancellationToken);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.SpinWait.SpinUntil(System.Func{System.Boolean},System.Int32);Wait on a signal, or use Wait in tests/TestSupport
+M:System.Threading.SpinWait.SpinUntil(System.Func{System.Boolean},System.TimeSpan);Wait on a signal, or use Wait in tests/TestSupport
