@@ -13,4 +13,13 @@ internal interface INetworkBackend
     Task<ConnectionFailReason?> ConnectAsync(Guid device, string ssid, string? password);
     bool Disconnect(Guid device);
     uint Forget(Guid device, string profileName);
+
+    /// <summary>Sets the profile's connection mode. Null when Windows accepted it or it was already that mode.</summary>
+    Task<string?> SetProfileAutoConnectAsync(Guid device, string profileName, bool autoConnect);
+
+    /// <summary>Removes the profile's key element. Null when Windows accepted it or there was no key.</summary>
+    Task<string?> ClearProfilePasswordAsync(Guid device, string profileName);
+
+    /// <summary>Connects with a saved profile. Null when Windows accepts the request.</summary>
+    Task<string?> ConnectProfileAsync(Guid device, string profileName, bool hidden);
 }

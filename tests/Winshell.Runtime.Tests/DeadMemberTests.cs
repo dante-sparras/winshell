@@ -5,13 +5,12 @@ namespace Winshell.Runtime.Tests;
 
 /// <summary>
 /// Members that used to be present and do nothing are either gone, so a configuration that names them fails to
-/// load, or they do what their name says.
+/// load, or they do what their name says. <c>FloatingWindow.fullscreen</c> and <c>FloatingWindow.parentWindow</c>
+/// work again, so this test no longer names them.
 /// </summary>
 public class DeadMemberTests
 {
     [Theory]
-    [InlineData("FloatingWindow { fullscreen: true }", "fullscreen")]
-    [InlineData("FloatingWindow { parentWindow: null }", "parentWindow")]
     [InlineData("FloatingWindow { surfaceFormat.opaque: true }", "surfaceFormat")]
     [InlineData("FloatingWindow { onResourcesLost: true }", "onResourcesLost")]
     [InlineData("MenuEntry { }", "MenuEntry")]

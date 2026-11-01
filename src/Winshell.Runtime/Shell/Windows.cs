@@ -27,6 +27,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     private IWindowBackend? _backend;
     private SurfaceRestarts? _restarts;
     private IDisposable? _restartTimer;
+    private bool _rebuildOnShow;
     private readonly QObject _windowTransform = new();
     private WindowBackdrop _backdrop;
     private WindowCorners _corners;
@@ -322,7 +323,23 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     protected void UpdateVisibility()
     {
         if (_backend is null)
+        {
+            // The owner closed and Windows destroyed this window. Showing it again makes a new one.
+            if (_rebuildOnShow && ShouldShow && _restartTimer is null && !IsDestroyed)
+            {
+                _rebuildOnShow = false;
+                try
+                {
+                    CreateBackend();
+                    OnBackendCreated();
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                    OnFailed(e);
+                }
+            }
             return;
+        }
         var show = ShouldShow;
         if (_backend.IsVisible != show)
         {
@@ -477,6 +494,20 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 
     public virtual void OnStateChanged(bool maximized, bool minimized)
     {
+    }
+
+    public virtual void OnFullscreenChanged(bool fullscreen)
+    {
+    }
+
+    /// <summary>Windows destroyed the native window. The shell window stays, hidden, until it is shown again.</summary>
+    public void OnBackingDestroyed()
+    {
+        if (IsDestroyed)
+            return;
+        _backend = null;
+        _rebuildOnShow = true;
+        OnClosed();
     }
 
     /// <summary>
@@ -861,7 +892,11 @@ public sealed class FloatingWindow : ShellWindow
     private string _title = "";
     private QSize _minimumSize;
     private QSize _maximumSize;
-    private bool _maximized, _minimized;
+    private bool _maximized, _minimized, _fullscreen;
+    private ShellWindow? _parent;
+    private IDisposable? _ownerConnected;
+    private IDisposable? _ownerDestroyed;
+    private bool _stateRequested;
 
     public FloatingWindow()
     {
@@ -880,10 +915,49 @@ public sealed class FloatingWindow : ShellWindow
     public QSize MaximumSize { get { Track(); return _maximumSize; } set { if (SetField(ref _maximumSize, value)) OnPlacementChanged(); } }
 
     [Qml]
-    public bool Maximized { get { Track(); return _maximized; } set { if (SetField(ref _maximized, value)) OnPlacementChanged(); } }
+    public bool Maximized
+    {
+        get { Track(); return _maximized; }
+        set
+        {
+            if (!SetField(ref _maximized, value))
+                return;
+            // Fullscreen is borderless, so maximized is false while it is on. Setting it true leaves fullscreen.
+            if (value && _fullscreen)
+            {
+                _fullscreen = false;
+                NotifyChanged("fullscreen");
+                _stateRequested = true;
+            }
+            OnPlacementChanged();
+        }
+    }
 
     [Qml]
     public bool Minimized { get { Track(); return _minimized; } set { if (SetField(ref _minimized, value)) OnPlacementChanged(); } }
+
+    /// <summary>Whether the window is borderless and covering its monitor. A minimized fullscreen window stays fullscreen.</summary>
+    [Qml]
+    public bool Fullscreen { get { Track(); return _fullscreen; } set { if (SetField(ref _fullscreen, value)) OnPlacementChanged(); } }
+
+    /// <summary>The owning window. Set before the native window exists, or changed later. A closing owner is left linked so Windows closes this window with it.</summary>
+    [Qml]
+    public ShellWindow? ParentWindow
+    {
+        get { Track(); return _parent is { IsDestroyed: false } ? _parent : null; }
+        set
+        {
+            if (ReferenceEquals(_parent, value) || ReferenceEquals(value, this) || (value is not null && WouldOwn(value)))
+                return;
+            var previous = _parent;
+            WatchOwner(value);
+            _parent = value;
+            NotifyChanged("parentWindow");
+            if (value is null && previous is { IsDestroying: true })
+                return;
+            OnPlacementChanged();
+        }
+    }
 
     /// <summary>Shows the window, restores it when it is minimized, and brings it to the front with keyboard focus.</summary>
     [Qml]
@@ -906,11 +980,63 @@ public sealed class FloatingWindow : ShellWindow
         if (SetField(ref _minimized, minimized, nameof(Minimized))) { }
     }
 
+    public override void OnFullscreenChanged(bool fullscreen)
+    {
+        if (SetField(ref _fullscreen, fullscreen, nameof(Fullscreen))) { }
+    }
+
+    protected override void OnDestroy()
+    {
+        _ownerConnected?.Dispose();
+        _ownerDestroyed?.Dispose();
+        base.OnDestroy();
+    }
+
     protected override void OnPlacementChanged()
     {
         if (Backend is null)
             return;
         using var _ = DependencyTracker.Suspend();
-        Backend.SetFloating(new FloatingPlacement(Screen?.Info, _title, ImplicitWidth, ImplicitHeight, _minimumSize, _maximumSize, _maximized, _minimized));
+        var stateRequested = _stateRequested;
+        _stateRequested = false;
+        var owner = _parent is { IsDestroyed: false } ? _parent : null;
+        Backend.SetFloating(new FloatingPlacement(Screen?.Info, _title, ImplicitWidth, ImplicitHeight, _minimumSize, _maximumSize, _maximized, _minimized, _fullscreen, owner, stateRequested));
+    }
+
+    private void WatchOwner(ShellWindow? owner)
+    {
+        _ownerConnected?.Dispose();
+        _ownerDestroyed?.Dispose();
+        _ownerConnected = null;
+        _ownerDestroyed = null;
+        if (owner is null)
+            return;
+        _ownerConnected = owner.Connect("windowConnected", _ =>
+        {
+            if (!IsDestroyed)
+                OnPlacementChanged();
+        });
+        _ownerDestroyed = owner.Connect("destroyed", _ =>
+        {
+            if (IsDestroyed || !ReferenceEquals(_parent, owner))
+                return;
+            // Leave the native owner in place: Windows then closes this window, and the handle is dropped with it.
+            _parent = null;
+            _ownerConnected?.Dispose();
+            _ownerConnected = null;
+            NotifyChanged("parentWindow");
+        });
+    }
+
+    private bool WouldOwn(ShellWindow owner)
+    {
+        var hop = owner;
+        for (var n = 0; hop is not null && n < 16; n++)
+        {
+            if (ReferenceEquals(hop, this))
+                return true;
+            hop = hop is FloatingWindow floating ? floating._parent : null;
+        }
+        return false;
     }
 }

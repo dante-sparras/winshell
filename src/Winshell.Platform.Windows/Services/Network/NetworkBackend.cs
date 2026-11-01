@@ -9,7 +9,25 @@ using WinNetworkInformation = Windows.Networking.Connectivity.NetworkInformation
 
 namespace Winshell.Platform.Windows.Services.Network;
 
-internal sealed record NetworkInfo(string Name, ConnectionState State, bool Known, double SignalStrength, WifiSecurityType Security);
+internal sealed record NetworkInfo(
+    string Name,
+    ConnectionState State,
+    bool Known,
+    double SignalStrength,
+    WifiSecurityType Security,
+    IReadOnlyList<WifiProfileInfo>? SavedProfiles = null);
+
+/// <summary>A saved WLAN profile with the key left out. <see cref="Hidden"/> is the profile's nonBroadcast flag.</summary>
+internal sealed record WifiProfileInfo(
+    string Id,
+    string Name,
+    string Ssid,
+    bool AutoConnect,
+    WifiSecurityType Security,
+    bool HasPassword,
+    bool Loaded,
+    bool Hidden,
+    string Error);
 
 internal sealed record NetworkDeviceInfo(
     Guid Id,
@@ -54,6 +72,8 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     private NetworkAccessStatus _access;
     private readonly SemaphoreSlim _accessGate = new(1, 1);
     private readonly List<Radio> _radios = [];
+    private readonly ProfileWriteQueue _profileWrites = new();
+    private readonly IWlanProfileApi _profiles = WlanProfileApi.Instance;
 
 
     private NetworkBackend()
@@ -240,7 +260,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
 
     private List<NetworkInfo> ReadWifiNetworks(Guid id, ConnectionState deviceState, ConnectionProfile? profile)
     {
-        var known = ProfileNames(id);
+        var saved = ReadSavedProfiles(id);
         var connectedSsid = profile is null ? null : ConnectedSsid(profile);
         var networks = new Dictionary<string, NetworkInfo>(StringComparer.Ordinal);
         WiFiAdapter? adapter;
@@ -257,16 +277,45 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                 if (networks.TryGetValue(network.Ssid, out var seen) && seen.SignalStrength >= strength)
                     continue;
                 var state = network.Ssid == connectedSsid ? deviceState : ConnectionState.Disconnected;
-                networks[network.Ssid] = new NetworkInfo(network.Ssid, state, known.Contains(network.Ssid), strength, Security(network.SecuritySettings));
+                var profiles = ProfilesFor(saved, network.Ssid);
+                networks[network.Ssid] = new NetworkInfo(network.Ssid, state, profiles.Length > 0, strength, Security(network.SecuritySettings), profiles);
             }
         }
         if (connectedSsid is not null && !networks.ContainsKey(connectedSsid))
         {
             var bars = profile!.GetSignalBars() is { } b ? b / 5.0 : 0;
-            networks[connectedSsid] = new NetworkInfo(connectedSsid, deviceState, known.Contains(connectedSsid), bars, Security(profile.NetworkSecuritySettings));
+            var profiles = ProfilesFor(saved, connectedSsid);
+            networks[connectedSsid] = new NetworkInfo(connectedSsid, deviceState, profiles.Length > 0, bars, Security(profile.NetworkSecuritySettings), profiles);
         }
         return [.. networks.Values.OrderByDescending(n => n.State == ConnectionState.Connected).ThenByDescending(n => n.SignalStrength)];
     }
+
+    /// <summary>Reads each saved profile without asking for its key. A profile that cannot be read is kept, with <see cref="WifiProfileInfo.Loaded"/> false.</summary>
+    private List<WifiProfileInfo> ReadSavedProfiles(Guid id)
+    {
+        var saved = new List<WifiProfileInfo>();
+        foreach (var name in ProfileNames(id).Order(StringComparer.Ordinal))
+        {
+            if (name.Length == 0)
+                continue;
+            string? xml = null;
+            uint error;
+            try
+            {
+                error = GetProfile(id, name, out xml, out _);
+            }
+            catch (Exception e) when (IsExpectedFailure(e))
+            {
+                saved.Add(WifiProfiles.Describe(id, name, null, 0));
+                continue;
+            }
+            saved.Add(WifiProfiles.Describe(id, name, xml, error));
+        }
+        return saved;
+    }
+
+    private static WifiProfileInfo[] ProfilesFor(List<WifiProfileInfo> saved, string ssid) =>
+        saved.Where(p => WifiProfiles.Matches(p, ssid)).ToArray();
 
     private static string? ConnectedSsid(ConnectionProfile profile)
     {
@@ -349,6 +398,37 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         Refresh();
         return error;
     }
+
+    public Task<string?> SetProfileAutoConnectAsync(Guid device, string profileName, bool autoConnect) =>
+        ChangeProfile(() => WifiProfileEdit.SetAutoConnect(_profiles, device, profileName, autoConnect));
+
+    public Task<string?> ClearProfilePasswordAsync(Guid device, string profileName) =>
+        ChangeProfile(() => WifiProfileEdit.ClearPassword(_profiles, device, profileName));
+
+    /// <summary>Connects in profile mode. The call returns when Windows accepts the request, and the snapshot that follows reports the association.</summary>
+    public Task<string?> ConnectProfileAsync(Guid device, string profileName, bool hidden) =>
+        Task.Run(() =>
+        {
+            var error = _profiles.Connect(device, profileName, hidden);
+            Refresh();
+            return error == 0 ? null : WifiProfileEdit.WindowsMessage(error);
+        });
+
+    private Task<string?> ChangeProfile(Func<ProfileChange> change) =>
+        _profileWrites.RunAsync(() =>
+        {
+            try
+            {
+                var result = change();
+                if (result.Wrote)
+                    Refresh();
+                return result.Error;
+            }
+            catch (Exception e) when (IsExpectedFailure(e))
+            {
+                return e.Message;
+            }
+        });
 
     public async Task ScanAsync(Guid device)
     {
