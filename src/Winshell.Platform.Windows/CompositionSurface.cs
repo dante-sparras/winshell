@@ -1,4 +1,5 @@
 using SkiaSharp;
+using Vortice;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DirectComposition;
@@ -59,6 +60,7 @@ internal sealed class CompositionSurface : IDisposable
     private readonly GraphicsDevice _gpu = GraphicsDevice.Shared;
     private readonly IDCompositionTarget _target;
     private readonly IDCompositionVisual _visual;
+    private IDCompositionEffectGroup? _fade;
     private IDXGISwapChain1? _swapChain;
     private SKBitmap? _bitmap;
     private SKSurface? _canvas;
@@ -129,6 +131,40 @@ internal sealed class CompositionSurface : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fades the visual that holds the swap chain. This device's visuals have no opacity of their own, so an effect
+    /// group does it, and 1 removes the group, because an effect draws through an intermediate surface.
+    /// The frame path commits only when the chain is first created, so a later change commits itself.
+    /// </summary>
+    public void SetOpacity(float opacity)
+    {
+        if (opacity == 1f)
+        {
+            _visual.SetEffect(null).CheckError();
+        }
+        else
+        {
+            _fade ??= _gpu.Composition.CreateEffectGroup();
+            _fade.SetOpacity(opacity).CheckError();
+            _visual.SetEffect(_fade).CheckError();
+        }
+        _gpu.Composition.Commit();
+    }
+
+    /// <summary>Clips the visual to one rectangle in physical pixels.</summary>
+    public void SetClip(float left, float top, float right, float bottom)
+    {
+        _visual.SetClip(new RawRectF(left, top, right, bottom)).CheckError();
+        _gpu.Composition.Commit();
+    }
+
+    /// <summary>Removes the clip. A null clip is the default and is slightly cheaper than a rectangle.</summary>
+    public void ClearClip()
+    {
+        _visual.SetClip((IDCompositionClip?)null).CheckError();
+        _gpu.Composition.Commit();
+    }
+
     /// <summary>Lets go of the swap chain and the bitmap, as for a hidden window. The next frame makes them again.</summary>
     public void Release()
     {
@@ -150,6 +186,7 @@ internal sealed class CompositionSurface : IDisposable
         _canvas?.Dispose();
         _bitmap?.Dispose();
         _swapChain?.Dispose();
+        _fade?.Dispose();
         _visual.Dispose();
         _target.Dispose();
         _gpu.Composition.Commit();
