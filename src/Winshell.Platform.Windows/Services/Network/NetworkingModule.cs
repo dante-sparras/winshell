@@ -13,6 +13,9 @@ public enum ConnectionFailReason { Unknown, InvalidPassword, Timeout, NetworkUna
 public enum DeviceType { None, Wifi, Wired }
 public enum WifiSecurityType { Wpa3SuiteB192, Sae, Wpa2Eap, Wpa2Psk, WpaEap, WpaPsk, StaticWep, Owe, Open, Unknown }
 
+/// <summary>The 802.11 mode of a <see cref="WifiDevice"/>. Windows never reports <see cref="Mesh"/> or <see cref="AdHoc"/>.</summary>
+public enum WifiDeviceMode { Unknown, AccessPoint, Mesh, Station, AdHoc }
+
 /// <summary>A Windows connection profile reported by NetworkInformation, not a saved WLAN credential.</summary>
 public sealed class NetworkProfile : QObject
 {
@@ -130,6 +133,7 @@ public abstract class NetworkDevice : QObject
         if (old.Name != info.Name) NotifyChanged("name");
         if (old.Address != info.Address) NotifyChanged("address");
         if (old.State != info.State) { NotifyChanged("state"); NotifyChanged("connected"); }
+        if (Type == DeviceType.Wifi && old.Mode != info.Mode) NotifyChanged("mode");
         foreach (var gone in _networks.Keys.Except(info.Networks.Select(n => n.Name)).ToArray())
         {
             _networks[gone].Destroy(); _networks.Remove(gone);
@@ -155,6 +159,7 @@ public sealed class WifiDevice : NetworkDevice
     private bool _scanning;
     private string _error = "";
     internal WifiDevice(NetworkDeviceInfo info, IEventLoop loop, INetworkBackend backend) : base(info, loop, backend) { }
+    [Qml] public WifiDeviceMode Mode { get { Track(); return Info.Mode; } }
     [Qml] public bool Scanning { get { Track(); return _scanning; } }
     [Qml] public string Error { get { Track(); return _error; } }
     [Qml] public void Scan() => _ = ScanAsync();
@@ -331,6 +336,7 @@ internal static class NetworkingModule
             .Enum<ConnectionState>(s => s.ToString())
             .Enum<ConnectionFailReason>(s => s.ToString())
             .Enum<DeviceType>(s => s.ToString())
-            .Enum<WifiSecurityType>(s => s.ToString());
+            .Enum<WifiSecurityType>(s => s.ToString())
+            .Enum<WifiDeviceMode>(s => s.ToString());
     }
 }
