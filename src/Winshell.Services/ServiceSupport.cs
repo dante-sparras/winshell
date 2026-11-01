@@ -112,19 +112,24 @@ internal abstract class SnapshotSource<T>
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var next = await ReadAsync().ConfigureAwait(false);
-            Action<T>? listeners;
-            lock (_lock)
-            {
-                _current = next;
-                listeners = _listeners;
-            }
-            listeners?.Invoke(next);
+            Publish(await ReadAsync().ConfigureAwait(false));
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>Makes <paramref name="next"/> the current snapshot and tells the listeners.</summary>
+    protected void Publish(T next)
+    {
+        Action<T>? listeners;
+        lock (_lock)
+        {
+            _current = next;
+            listeners = _listeners;
+        }
+        listeners?.Invoke(next);
     }
 
     private sealed class Subscription(Action dispose) : IDisposable
