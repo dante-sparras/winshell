@@ -61,7 +61,7 @@ A push to `main` that changes only `docs/**` or Markdown does not run `package`.
 dotnet test tests/Winshell.Runtime.Tests --filter FullyQualifiedName~DirectoryWatchTests
 ```
 
-`--filter` takes a class or a test name. `Winshell.Qml.Tests` and `Winshell.Runtime.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Platform.Windows.Tests` and `Winshell.Tests` put windows and shells on your desktop.
+`--filter` takes a class or a test name. `Winshell.Qml.Tests`, `Winshell.Runtime.Tests` and `Winshell.Services.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Platform.Windows.Tests` and `Winshell.Tests` put windows and shells on your desktop.
 
 ## Run the shell from source
 

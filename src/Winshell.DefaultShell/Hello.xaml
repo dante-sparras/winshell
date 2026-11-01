@@ -1,0 +1,9 @@
+<UserControl
+    x:Class="Winshell.DefaultShell.Hello"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Content="Compiled XAML" />
+        <TextBlock Text="{x:Bind Message}" VerticalAlignment="Center" />
+    </StackPanel>
+</UserControl>
