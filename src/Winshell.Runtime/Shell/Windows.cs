@@ -9,6 +9,7 @@ namespace Winshell.Runtime.Shell;
 /// </summary>
 [QmlDefaultProperty("data")]
 [QmlSignal("closed")]
+[QmlSignal("resourcesLost")]
 [QmlSignal("windowConnected")]
 public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 {
@@ -31,9 +32,11 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     private readonly QObject _windowTransform = new();
     private WindowBackdrop _backdrop;
     private WindowCorners _corners;
+    private bool _resourcesLost;
 
     protected ShellWindow()
     {
+        SurfaceFormat = new SurfaceFormatGroup(this);
         Scene = new Scene(this);
         Scene.Root.SetLayoutWidth(_width);
         Scene.Root.SetLayoutHeight(_height);
@@ -117,13 +120,25 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         get { Track(); return _color; }
         set
         {
+            var wasOpaque = ColorIsOpaque;
             if (SetField(ref _color, value))
             {
                 ApplyBackdrop();
                 Scene.RequestUpdate();
+                SurfaceFormat.NoteColor(wasOpaque);
             }
         }
     }
+
+    /// <summary>True when <see cref="Color"/> has no transparency. An invalid color is not opaque.</summary>
+    internal bool ColorIsOpaque => _color.A8 == 255;
+
+    /// <summary>The <c>surfaceFormat</c> group. The group itself can't be replaced.</summary>
+    [Qml]
+    public SurfaceFormatGroup SurfaceFormat { get; }
+
+    /// <inheritdoc />
+    public bool? SurfaceOpaque => SurfaceFormat.Requested;
 
     [Qml]
     public Region? Mask
@@ -276,6 +291,10 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             OnBackendCreated();
             Emit("windowConnected");
         }
+        catch (SurfaceResourcesException e)
+        {
+            OnResourcesLost(e);
+        }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             OnFailed(e);
@@ -325,13 +344,17 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         if (_backend is null)
         {
             // The owner closed and Windows destroyed this window. Showing it again makes a new one.
-            if (_rebuildOnShow && ShouldShow && _restartTimer is null && !IsDestroyed)
+            if (_rebuildOnShow && !_resourcesLost && ShouldShow && _restartTimer is null && !IsDestroyed)
             {
                 _rebuildOnShow = false;
                 try
                 {
                     CreateBackend();
                     OnBackendCreated();
+                }
+                catch (SurfaceResourcesException e)
+                {
+                    OnResourcesLost(e);
                 }
                 catch (Exception e) when (e is not OutOfMemoryException)
                 {
@@ -503,7 +526,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     /// <summary>Windows destroyed the native window. The shell window stays, hidden, until it is shown again.</summary>
     public void OnBackingDestroyed()
     {
-        if (IsDestroyed)
+        if (IsDestroyed || _resourcesLost)
             return;
         _backend = null;
         _rebuildOnShow = true;
@@ -547,16 +570,48 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             engine.Log.Info("window", $"Wrote a crash report to \"{report.Path}\"");
     }
 
+    /// <summary>
+    /// The surface is gone and will not be made again. <c>resourcesLost</c> is sent first, then the window closes.
+    /// A second call does nothing, so a device that stays lost cannot open windows in a loop.
+    /// </summary>
+    public void OnResourcesLost(Exception error)
+    {
+        if (IsDestroyed || _resourcesLost)
+            return;
+        _resourcesLost = true;
+        Engine?.Log.Warn("window", $"The window lost the resources it draws with and closes: {error.Message}");
+        Emit("resourcesLost");
+        _restartTimer?.Dispose();
+        _restartTimer = null;
+        _rebuildOnShow = false;
+        var backend = _backend;
+        _backend = null;
+        OnClosed();
+        try
+        {
+            backend?.Dispose();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            Engine?.Log.Warn("window", $"Could not release the window after resourcesLost: {e.GetType().Name}: {e.Message}");
+        }
+        NotifyChanged("backingWindowVisible");
+    }
+
     private void Restart()
     {
         _restartTimer = null;
-        if (IsDestroyed || _backend is not null)
+        if (IsDestroyed || _backend is not null || _resourcesLost)
             return;
         try
         {
             CreateBackend();
             OnBackendCreated();
             Emit("windowConnected");
+        }
+        catch (SurfaceResourcesException e)
+        {
+            OnResourcesLost(e);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -688,6 +743,44 @@ public static class WindowRegistry
             if (windows.Remove(window) && windows.Count == 0)
                 _windows.Remove(key);
         }
+    }
+}
+
+/// <summary>The <c>surfaceFormat</c> group of a shell window. <see cref="Opaque"/> cannot be changed after the native window exists.</summary>
+public sealed class SurfaceFormatGroup(ShellWindow owner) : QObject
+{
+    private bool? _opaque;
+
+    /// <summary>The value QML set, or null when it set none. The platform keeps the premultiplied chain when this is null.</summary>
+    internal bool? Requested => _opaque;
+
+    [Qml]
+    public bool Opaque
+    {
+        get
+        {
+            Track();
+            return _opaque ?? owner.ColorIsOpaque;
+        }
+        set
+        {
+            if (owner.Backend is not null)
+            {
+                if (_opaque != value)
+                    owner.Engine?.Log.Warn("window", "Cannot set window surface format.");
+                return;
+            }
+            if (_opaque == value)
+                return;
+            _opaque = value;
+            NotifyChanged("opaque");
+        }
+    }
+
+    internal void NoteColor(bool wasOpaque)
+    {
+        if (_opaque is null && wasOpaque != owner.ColorIsOpaque)
+            NotifyChanged("opaque");
     }
 }
 

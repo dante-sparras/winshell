@@ -136,6 +136,8 @@ One screen. The object stays the same while the screen is connected. Reach it fr
 | `height` | real, read-only | The height in logical pixels. |
 | `workArea` | rect, read-only | A Windows extension: the part of the screen windows maximize into, without the taskbar and the zones other app bars reserve, in the same logical coordinates as `x` and `y`. |
 | `devicePixelRatio` | real, read-only | The screen's scale: physical pixels per logical pixel, such as 1.5 at 144 DPI. |
+| `physicalPixelDensity` | real, read-only | Physical pixels per millimeter across the monitor's width. Windows reports the width with the screen snapshot. It is 0 when Windows reports no physical size, as for a projector or a remote session. |
+| `logicalPixelDensity` | real, read-only | Device-independent pixels per millimeter: `width` divided by that same physical width. It is 0 when Windows reports no physical size. |
 | `orientation` | int, read-only | `Qt.LandscapeOrientation` (2) when the screen is at least as wide as it is tall, else `Qt.PortraitOrientation` (1). |
 | `primaryOrientation` | int, read-only | The same as `orientation`. |
 | `refreshRate` | int, read-only | The refresh rate in hertz, or 60 when Windows does not report one. |
@@ -159,7 +161,8 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `visible` | bool | Whether the window is shown. Default true. Closing the window, as with Alt+F4, sets it to false. |
 | `active` | bool, read-only | True while the native window is the foreground window. |
 | `backingWindowVisible` | bool, read-only | Whether the native window is on screen now. |
-| `color` | color | What the window clears to before drawing its items. Default white. Make it `"transparent"` or translucent to let a [WindowEffects](#windoweffects) backdrop show through. |
+| `color` | color | What the window clears to before drawing its items. Default white. Make it `"transparent"` or translucent to let a [WindowEffects](#windoweffects) backdrop show through. Changing it after the window exists does not change the swap chain. |
+| `surfaceFormat` | group: `opaque` (bool) | Whether the swap chain ignores alpha. Set `surfaceFormat.opaque`, as in `surfaceFormat.opaque: true`; the group itself can't be replaced. Left unset, `opaque` is true when `color` is opaque and false when it is not, and the swap chain stays premultiplied, which is the chain every window has used. Set it true for an opaque chain (`DXGI_ALPHA_MODE_IGNORE`) or false for a premultiplied chain. A change after the native window exists is ignored, and the window log warns. Quickshell locks an opaque color when the window is created, so that window cannot turn transparent later unless `opaque` was set false. Winshell locks the chain only when `opaque` is set, so a window that starts with an opaque color can turn transparent later. |
 | `mask` | [Region](#region) | The part of the window that takes clicks; clicks elsewhere go to the window below. Null, the default, is the whole window. An empty region lets every click through. Windows also clips drawing to a non-empty mask, so the parts outside it are not shown. |
 | `screen` | [ShellScreen](#shellscreen) | The screen the window is on. Setting it puts a panel or a new floating window on that screen. Unset, it is the screen the window is shown on, or the primary screen. |
 | `devicePixelRatio` | real, read-only | The scale of the screen the window is on. |
@@ -170,6 +173,7 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `itemRect(item)` | method, returns rect | The bounds of `item` in the window's coordinates. |
 | `mapFromItem(item, xOrPoint, y, width, height)` | method, returns var | Maps a point (`x, y`, or a point) or a rectangle (`x, y, width, height`, or a rect) from `item` to the window's coordinates. |
 | `closed()` | signal | Emitted when the window is closed, as with Alt+F4. The window hides; it is not destroyed. |
+| `resourcesLost()` | signal | Emitted when the swap chain or the composition surface cannot be created or resized, or the device reports removed, reset, or out of memory. `closed()` follows, and the window is not opened again. A drawing error that is none of those keeps the window: every window shares one device, and Winshell does not build a new one. |
 | `windowConnected()` | signal | Emitted when the window gets its native window, after each load or reload. |
 
 ## PanelWindow

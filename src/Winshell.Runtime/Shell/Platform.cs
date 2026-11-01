@@ -165,6 +165,35 @@ public interface IWindowClient
     /// since every window draws with the same device, so it stays; this is for the crash report. Called on the loop.
     /// </summary>
     void OnDrawFailed(Exception error);
+
+    /// <summary>
+    /// The swap chain or composition surface could not be created or resized, or the device was removed, reset, or
+    /// out of memory. The window emits <c>resourcesLost</c> and closes. It does not open again. Called on the loop.
+    /// </summary>
+    void OnResourcesLost(Exception error);
+
+    /// <summary>
+    /// Whether the configuration asked for an opaque surface. Null means it did not: the swap chain stays
+    /// premultiplied, which is the chain every window has used so far.
+    /// </summary>
+    bool? SurfaceOpaque => null;
+}
+
+/// <summary>
+/// The window cannot create or resize the surface it draws with, or the graphics device was removed, reset, or out
+/// of memory. The shell closes that window and does not try again.
+/// </summary>
+public sealed class SurfaceResourcesException : Exception
+{
+    public SurfaceResourcesException(string message)
+        : base(message)
+    {
+    }
+
+    public SurfaceResourcesException(string message, Exception inner)
+        : base(message, inner)
+    {
+    }
 }
 
 /// <summary>The platform: screens and windows.</summary>
