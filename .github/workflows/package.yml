@@ -61,7 +61,7 @@ jobs:
     # Always runs, and only the wait is conditional. A job that needs a skipped job is skipped too, even indirectly,
     # so a gate that ran only for a release would switch off package on every other run. It holds no Windows runner
     # while it waits, and its time doesn't come out of the budget package has for a signing approval.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -228,7 +228,8 @@ jobs:
   release:
     name: release
     if: ${{ inputs.tag != '' }}
-    needs: package
+    # A published release can't be repaired, so the arm64 build has to start before this runs.
+    needs: [package, arm64]
     runs-on: windows-2025
     timeout-minutes: 15
     permissions:

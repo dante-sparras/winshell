@@ -9,8 +9,11 @@ on:
 permissions:
   contents: read
 
+# A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
+# a shared one would drop the ci run of a commit in a burst of merges, and with it that commit's stress run, and a
+# release commit would wait for a check that never comes.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -18,7 +21,7 @@ jobs:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 35
     outputs:
       flaky: ${{ steps.flaky.outputs.flaky }}
     steps:
@@ -40,6 +43,9 @@ jobs:
             throw "Could not turn animation effects on: error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
           }
       - name: Check
+        # A pull request waits for the build and the main tests. A push to main runs everything, and so does the release
+        # pull request: once its commit is tagged, a failure can't be fixed in that version.
+        timeout-minutes: 10
         shell: pwsh
         env:
           WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
@@ -48,12 +54,16 @@ jobs:
           WINSHELL_SNAPSHOT_DIFFS: ${{ runner.temp }}/snapshot-diffs
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
-          pwsh scripts/check.ps1
+          ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
       - name: Stress new and changed tests
-        # In this job because it is the required check. A failure here has to block the merge.
-        if: github.event_name == 'pull_request'
+        # After the merge, so no pull request waits for it. A failure files a flaky issue and blocks nothing. As in the
+        # media job, continue-on-error is on the step.
+        if: github.event_name == 'push'
+        continue-on-error: true
         timeout-minutes: 20
         shell: pwsh
+        env:
+          WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
         run: pwsh scripts/stress-tests.ps1
       - name: Flaky tests
         if: always()
@@ -93,7 +103,7 @@ jobs:
           if-no-files-found: ignore
 
   flaky-report:
-    # Files or updates an issue for each test that passed only on its rerun. It is a separate job so that ci, which
+    # Files or updates an issue for each test in the flaky report. It is a separate job so that ci, which
     # runs the code under test, gets no write token. A fork's token can't write, so a failure here blocks nothing.
     name: flaky-report
     needs: ci
@@ -122,8 +132,10 @@ jobs:
 
   quarantine:
     # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing. As in the media job,
-    # continue-on-error is on the step.
+    # continue-on-error is on the step, and the job skips pull requests, where a check that can't fail would only look
+    # like a pass.
     name: quarantine
+    if: github.event_name == 'push'
     runs-on: windows-2025
     timeout-minutes: 15
     steps:
@@ -140,8 +152,10 @@ jobs:
 
   media:
     # Runners often don't publish Windows media sessions. A failed test shows in this job's log and blocks nothing.
-    # continue-on-error is on the step, so the failure doesn't put a red check on every pull request.
+    # continue-on-error is on the step, so the failure doesn't put a red check on main. The job skips pull requests,
+    # where a check that can't fail would only look like a pass.
     name: media
+    if: github.event_name == 'push'
     runs-on: windows-2025
     timeout-minutes: 15
     steps:

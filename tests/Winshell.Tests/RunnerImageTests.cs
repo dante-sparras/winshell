@@ -14,6 +14,13 @@ public class RunnerImageTests
         }
     }
 
+    [Fact]
+    public void No_job_follows_a_moving_runner_image()
+    {
+        foreach (var workflow in Directory.EnumerateFiles(Path.Combine(RepoRoot(), ".github", "workflows")))
+            Assert.DoesNotContain("-latest", File.ReadAllText(workflow));
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

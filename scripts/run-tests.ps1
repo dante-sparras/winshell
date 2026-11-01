@@ -70,7 +70,8 @@ function Invoke-DotnetTest {
         [Parameter(Mandatory)][string] $Filter,
         [Parameter(Mandatory)][string] $ResultsDirectory
     )
-    dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory | Out-Host
+    # The hang timeout ends the run and names the test, which the ci step's own time limit can't do.
+    dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none | Out-Host
     $LASTEXITCODE
 }
 
@@ -86,9 +87,9 @@ function Invoke-MainTest {
         $exit = Invoke-DotnetTest -Filter (Get-MainTestFilter -Quarantined $Quarantined) -ResultsDirectory $firstRun
         $first = Read-TestResult -Directory $firstRun -ProjectCount $ProjectCount
         if ($exit -eq 0) {
-            # dotnet test exits 0 for a filter it can't read, having run nothing.
-            if ($first.Passed.Count -gt 0) { return 0 }
-            Write-Host 'No test ran.'
+            # dotnet test exits 0 for a filter it can't read, having run nothing, and for a project it left out.
+            if ($first.Passed.Count -gt 0 -and $first.Complete) { return 0 }
+            Write-Host 'No test ran, or a test project wrote no results.'
             return 1
         }
         if (-not $first.Complete -or $first.Failed.Count -eq 0) {
