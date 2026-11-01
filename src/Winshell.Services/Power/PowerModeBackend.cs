@@ -4,7 +4,10 @@ using Winshell.Native;
 
 namespace Winshell.Power;
 
-internal sealed record PowerModeSnapshot(bool Ready, PowerModeLevel Mode, EffectivePowerMode Effective, bool Available);
+internal sealed record PowerModeSnapshot(bool Ready, PowerModeLevel Mode, EffectivePowerMode Effective, bool Available)
+{
+    public static readonly PowerModeSnapshot Initial = new(false, PowerModeLevel.Balanced, EffectivePowerMode.Balanced, false);
+}
 
 /// <summary>
 /// The Windows power mode (Settings, System, Power). The slider is the public user-configured AC or DC

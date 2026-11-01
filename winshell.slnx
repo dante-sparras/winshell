@@ -10,6 +10,7 @@
     <Project Path="tests/Winshell.Platform.Windows.Tests/Winshell.Platform.Windows.Tests.csproj" />
     <Project Path="tests/Winshell.Qml.Tests/Winshell.Qml.Tests.csproj" />
     <Project Path="tests/Winshell.Runtime.Tests/Winshell.Runtime.Tests.csproj" />
+    <Project Path="tests/Winshell.Services.Tests/Winshell.Services.Tests.csproj" />
     <Project Path="tests/Winshell.Tests/Winshell.Tests.csproj" />
   </Folder>
 </Solution>

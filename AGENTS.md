@@ -43,6 +43,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 ├── tests/
 │   ├── Winshell.Qml.Tests/
 │   ├── Winshell.Runtime.Tests/
+│   ├── Winshell.Services.Tests/     # The services, with no window and no QML
 │   ├── Winshell.Platform.Windows.Tests/
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
 │   ├── TestSupport/                 # Source files every test project links instead of copying
