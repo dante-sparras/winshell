@@ -37,3 +37,19 @@ function Get-WinshellCheckRuns {
     } while ($batch.Count -eq 100)
     return $runs
 }
+
+# One failed read is not a result, so the workflow asks again until its deadline.
+function Get-WinshellReleaseGateState {
+    param(
+        [Parameter(Mandatory)][string]$Repository,
+        [Parameter(Mandatory)][string]$Sha
+    )
+
+    try {
+        return Get-WinshellReleaseCiState -CheckRuns (Get-WinshellCheckRuns -Repository $Repository -Sha $Sha)
+    }
+    catch {
+        Write-Warning "Reading ci on $Sha failed, so this check waits: $_"
+        return 'pending'
+    }
+}
