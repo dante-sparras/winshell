@@ -418,16 +418,9 @@ public sealed class LauncherTests
                 """);
             Assert.Equal(["p0", "p1"], Strings(view.Eval("pinIds")));
 
-            // Winshell Settings moves and unpins in the same file. Past the time a FileView takes its own writes to be:
-            Thread.Sleep(300);
+            // Winshell Settings moves and unpins in the same file.
             File.WriteAllText(pins, """pins = ["p1"]""");
-            var until = DateTime.UtcNow.AddSeconds(5);
-            while (Strings(view.Eval("pinIds")).Count != 1)
-            {
-                Assert.True(DateTime.UtcNow < until, "Start did not follow the file.");
-                Thread.Sleep(20);
-                view.Loop.Process();
-            }
+            Wait.Until(() => Strings(view.Eval("pinIds")).Count == 1, "Start did not follow the file.", view.Loop.Process);
             Assert.Equal(["Pin 1"], Named(view.Root, "pinTile").Select(AppName));
         }
         finally

@@ -28,11 +28,7 @@ public class MediaAppNameTests
         Assert.Null(names.Get("Spotify.exe"));
         Assert.Null(names.Get("Spotify.exe"));
         lookupMayEnd.Set();
-        Assert.True(SpinWait.SpinUntil(() =>
-        {
-            loop.Process();
-            return named > 0;
-        }, TimeSpan.FromSeconds(10)));
+        Wait.Until(() => named > 0, "the app name", loop.Process);
 
         Assert.Equal("Spotify", names.Get("Spotify.exe"));
         Assert.Equal(1, lookups);
@@ -50,11 +46,7 @@ public class MediaAppNameTests
         var names = new AppNames(loop, log, _ => throw new InvalidOperationException("no shell"), () => named++);
 
         Assert.Null(names.Get("Player.exe"));
-        Assert.True(SpinWait.SpinUntil(() =>
-        {
-            loop.Process();
-            return named > 0;
-        }, TimeSpan.FromSeconds(10)));
+        Wait.Until(() => named > 0, "the app name", loop.Process);
 
         Assert.Equal("Player.exe", names.Get("Player.exe"));
         Assert.Contains(warnings, w => w.Contains("no shell", StringComparison.Ordinal));

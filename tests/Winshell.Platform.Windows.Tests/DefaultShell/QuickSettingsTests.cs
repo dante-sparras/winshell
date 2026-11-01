@@ -538,16 +538,8 @@ public class QuickSettingsTests
         shell.Settle();
         Assert.Equal(["wifi", "bluetooth"], Tiles(shell));
 
-        // Past the time a FileView takes its own writes to be.
-        Thread.Sleep(300);
         File.WriteAllText(Path.Combine(shell.Directory, "layout.toml"), """pinned = ["bluetooth", "nightLight"]""");
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (!Tiles(shell).SequenceEqual(["bluetooth", "nightLight"]))
-        {
-            Assert.True(DateTime.UtcNow < until, "Quick settings did not follow the file.");
-            Thread.Sleep(20);
-            shell.Settle();
-        }
+        Wait.Until(() => Tiles(shell).SequenceEqual(["bluetooth", "nightLight"]), "Quick settings did not follow the file.", shell.Settle);
         Assert.Empty(shell.Messages);
     }
 
