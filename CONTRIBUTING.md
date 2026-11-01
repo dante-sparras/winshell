@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Run the checks CI runs** before you open the PR, and make them pass. `pwsh scripts/check.ps1` is the full check. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `pr-title`, and the docs `build` job. The [commands](docs/development.md#commands) list `installer`, `links`, `actionlint`, `zizmor`, and `package`, and how to run each one locally. Run the ones your change can break.
+**Check your change** before you open the PR. Build with warnings as errors and run the focused tests for what you changed. Add the Corpus stage when you touch the parser, Leak when you touch reload, and Performance when you touch Jint; the [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job.
 
 ## Write tests that don't flake
 
@@ -83,7 +83,7 @@ If an AI agent did the work, end the description with the model and the tool you
 
 ## Review and merge
 
-- Every change reaches `main` through a PR, and the required checks (`ci`, `installer`, the docs `build` job, and the PR title) must pass first.
+- Every change reaches `main` through a PR, and the required checks (`ci`, `installer`, `actionlint`, the docs `build` job, and the PR title) must pass first.
 - PRs are squash-merged. Your PR title becomes the commit message on `main`, so make it readable on its own.
 - Releases are cut from those commits, so your PR title is also your line in the changelog.
 - A PR that doesn't follow this guide may be closed with a note saying what's missing. Fix it and ask for another look, or open a new PR.
