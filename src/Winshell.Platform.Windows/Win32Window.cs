@@ -31,6 +31,13 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private PopupPlacement? _popup;
     private FloatingPlacement? _floating;
     private bool _floatingPlaced;
+    private bool _fullscreen;
+    private bool _applying;
+    private SavedFloatingPlace? _saved;
+    private int _cornerPreference;
+    private bool _released;
+    private bool _externalDestroy;
+    private bool _toldClient;
     private bool _appBarRegistered;
     private readonly AppBarReservation _appBar = new();
     private bool _placePosted;
@@ -351,9 +358,54 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     public void SetFloating(FloatingPlacement placement)
     {
-        var first = !_floatingPlaced;
         _floating = placement;
-        Win32.SetWindowTextW(Handle, placement.Title);
+        if (Handle == 0 || _released)
+            return;
+        _applying = true;
+        try
+        {
+            Win32.SetWindowTextW(Handle, placement.Title);
+            ApplyOwner(placement.Owner);
+            if (_fullscreen && !placement.Fullscreen)
+                ExitFullscreen(placement);
+            else if (!_fullscreen && placement.Fullscreen)
+            {
+                ApplyFrame(placement);
+                EnterFullscreen();
+            }
+            else if (_fullscreen)
+            {
+                // A size change while fullscreen is part of the saved place, not a new one.
+                _lastFloatingWidth = placement.Width;
+                _lastFloatingHeight = placement.Height;
+                if (placement.Minimized && !Win32.IsIconic(Handle))
+                    Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
+                else if (!placement.Minimized && Win32.IsIconic(Handle))
+                {
+                    Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+                    FillMonitor();
+                }
+                else if (!Win32.IsIconic(Handle))
+                    FillMonitor();
+            }
+            else
+            {
+                ApplyFrame(placement);
+            }
+            // Showing or restoring the owner can put it above the windows it owns. Put those back above it.
+            if (!Win32.IsIconic(Handle))
+                RaiseOwnedWindows();
+            ReportFloatingState();
+        }
+        finally
+        {
+            _applying = false;
+        }
+    }
+
+    private void ApplyFrame(FloatingPlacement placement)
+    {
+        var first = !_floatingPlaced;
         if (first || placement.Width != _lastFloatingWidth || placement.Height != _lastFloatingHeight)
         {
             _lastFloatingWidth = placement.Width;
@@ -391,6 +443,300 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     }
 
     private double _lastFloatingWidth = -1, _lastFloatingHeight = -1;
+
+    private void EnterFullscreen()
+    {
+        _saved = CapturePlace();
+        _fullscreen = true;
+        SetStyle(BorderlessStyle());
+        // Square corners, so the window meets the monitor's corners instead of rounding inside them.
+        SetCorners(1);
+        if (Win32.IsIconic(Handle) || Win32.IsZoomed(Handle))
+            Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+        FillMonitor();
+    }
+
+    private void ExitFullscreen(FloatingPlacement placement)
+    {
+        var saved = _saved;
+        _fullscreen = false;
+        _saved = null;
+        _lastFloatingWidth = placement.Width;
+        _lastFloatingHeight = placement.Height;
+        SetCorners(_cornerPreference);
+        if (saved is null)
+        {
+            ApplyFrame(placement);
+            return;
+        }
+        SetStyle(saved.Style);
+        Reframe();
+        var monitor = Screens.Find(saved.MonitorId) ?? CurrentMonitor();
+        var scale = _scale > 0 ? _scale : saved.Scale;
+        if (monitor is not null && saved.Matches(monitor.Info.Id, monitor.Bounds, scale) && saved.HasPlacement)
+        {
+            var next = saved.Placement;
+            next.ShowCmd = placement.StateRequested
+                ? RequestedShow(placement)
+                : Shown(saved);
+            if (placement.StateRequested && !placement.Maximized)
+                next.Flags &= ~Win32.WPF_RESTORETOMAXIMIZED;
+            if (Win32.SetWindowPlacement(Handle, next))
+            {
+                UpdateSize();
+                return;
+            }
+        }
+        if (monitor is null)
+        {
+            ApplyFrame(placement);
+            return;
+        }
+        var rect = saved.RectOn(monitor.Bounds, scale);
+        PlaceOuter(rect);
+        if (!_visible)
+            return;
+        var maximized = placement.StateRequested ? placement.Maximized : saved.Maximized;
+        var minimized = placement.StateRequested ? placement.Minimized : saved.Minimized;
+        if (minimized)
+            Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
+        else if (maximized)
+            Win32.ShowWindow(Handle, Win32.SW_SHOWMAXIMIZED);
+        else if (Win32.IsZoomed(Handle) || Win32.IsIconic(Handle))
+            Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+    }
+
+    private uint Shown(SavedFloatingPlace saved)
+    {
+        if (!_visible)
+            return (uint)Win32.SW_HIDE;
+        if (saved.Minimized)
+            return (uint)Win32.SW_SHOWMINIMIZED;
+        if (saved.Maximized)
+            return (uint)Win32.SW_SHOWMAXIMIZED;
+        var show = saved.HasPlacement ? saved.Placement.ShowCmd : 0;
+        // A window that was never shown has no show command. Leaving fullscreen while it is visible shows it.
+        return show == 0 ? (uint)Win32.SW_SHOWNORMAL : show;
+    }
+
+    private static uint RequestedShow(FloatingPlacement placement) =>
+        (uint)(placement.Minimized ? Win32.SW_SHOWMINIMIZED : placement.Maximized ? Win32.SW_SHOWMAXIMIZED : Win32.SW_SHOWNORMAL);
+
+    private SavedFloatingPlace CapturePlace()
+    {
+        var monitor = CurrentMonitor();
+        var dpi = Win32.GetDpiForWindow(Handle);
+        var scale = dpi == 0 ? monitor?.Scale ?? _scale : dpi / 96.0;
+        if (scale <= 0)
+            scale = 1;
+        var bounds = monitor?.Bounds ?? default;
+        Win32.GetWindowRect(Handle, out var shown);
+        var maximized = Win32.IsZoomed(Handle);
+        var minimized = Win32.IsIconic(Handle);
+        var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
+        var hasPlacement = Win32.GetWindowPlacement(Handle, ref placement);
+        var normal = shown;
+        if ((maximized || minimized) && hasPlacement)
+            normal = RestoredScreenRect(placement, shown);
+        var logical = bounds.Width > 0 ? DesktopSpace.ToLogical(normal, bounds, scale) : new QRect(0, 0, normal.Width, normal.Height);
+        return new SavedFloatingPlace(
+            (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE),
+            scale,
+            bounds,
+            monitor?.Info.Id ?? "",
+            logical.X - bounds.Left,
+            logical.Y - bounds.Top,
+            logical.Width,
+            logical.Height,
+            maximized,
+            minimized,
+            placement,
+            hasPlacement);
+    }
+
+    /// <summary>
+    /// The restored rectangle in screen pixels. A normal window is already there. A minimized or maximized one
+    /// reports it in workspace coordinates, which start at the primary monitor's work area.
+    /// </summary>
+    private static RECT RestoredScreenRect(WINDOWPLACEMENT placement, RECT shown)
+    {
+        var primary = Screens.Enumerate().FirstOrDefault(m => m.Info.IsPrimary);
+        var bias = primary is null
+            ? (X: 0, Y: 0)
+            : Services.WindowList.WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, false);
+        var shifted = Services.WindowList.WindowRules.Shift(placement.Normal, bias.X, bias.Y);
+        return shifted.Width > 0 && shifted.Height > 0 ? shifted : shown;
+    }
+
+    private uint BorderlessStyle()
+    {
+        var style = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE);
+        var next = (style & ~Win32.WS_OVERLAPPEDWINDOW) | Win32.WS_POPUP | Win32.WS_CLIPCHILDREN;
+        if ((style & Win32.WS_VISIBLE) != 0)
+            next |= Win32.WS_VISIBLE;
+        return next;
+    }
+
+    private void SetStyle(uint style)
+    {
+        if (Handle == 0)
+            return;
+        var current = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE);
+        // Showing and hiding go through ShowWindow. A frame change keeps whichever of those the window is in.
+        if ((current & Win32.WS_VISIBLE) != 0)
+            style |= Win32.WS_VISIBLE;
+        else
+            style &= ~Win32.WS_VISIBLE;
+        if (current == style)
+            return;
+        Win32.SetWindowLongPtr(Handle, Win32.GWL_STYLE, (nint)style);
+    }
+
+    private void Reframe() =>
+        Win32.SetWindowPos(Handle, 0, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+
+    private void FillMonitor()
+    {
+        if (Handle == 0)
+            return;
+        var (_, bounds) = Screens.Of(Handle);
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
+        PlaceOuter(bounds);
+    }
+
+    private void PlaceOuter(RECT rect)
+    {
+        _placing = true;
+        try
+        {
+            Win32.SetWindowPos(Handle, 0, rect.Left, rect.Top, rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+        }
+        finally
+        {
+            _placing = false;
+        }
+        UpdateSize();
+    }
+
+    private void SetCorners(int preference) =>
+        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
+
+    private Monitor? CurrentMonitor()
+    {
+        if (Handle == 0)
+            return null;
+        var handle = Win32.MonitorFromWindow(Handle, Win32.MONITOR_DEFAULTTONEAREST);
+        return handle == 0 ? null : Screens.Describe(handle);
+    }
+
+    private void ApplyOwner(ShellWindow? owner)
+    {
+        if (Handle == 0 || _released)
+            return;
+        // The owner is closing. Leave the link so Windows destroys this window with it.
+        if (owner is { IsDestroying: true })
+            return;
+        var hwnd = owner is { IsDestroyed: false } ? OwnerHandle(owner) : 0;
+        if (hwnd == Handle || (hwnd != 0 && OwnerChainContains(hwnd, Handle)))
+            hwnd = 0;
+        if (hwnd == 0 && owner is { IsDestroyed: false })
+        {
+            // The new owner has no window yet. Drop the previous one so its close cannot destroy this window.
+            LinkOwner(0);
+            return;
+        }
+        LinkOwner(hwnd);
+    }
+
+    private nint OwnerHandle(ShellWindow owner)
+    {
+        foreach (var window in _platform.Windows)
+        {
+            if (ReferenceEquals(window.Client, owner) && window.Handle != 0 && Win32.IsWindow(window.Handle))
+                return window.Handle;
+        }
+        return 0;
+    }
+
+    private void LinkOwner(nint hwnd)
+    {
+        if (Handle == 0)
+            return;
+        if (hwnd != 0 && !Win32.IsWindow(hwnd))
+            hwnd = 0;
+        var current = Win32.GetWindowLongPtr(Handle, Win32.GWLP_HWNDPARENT);
+        if (current == hwnd)
+            return;
+        Win32.SetWindowLongPtr(Handle, Win32.GWLP_HWNDPARENT, hwnd);
+        if (hwnd != 0)
+            PlaceAboveOwner();
+    }
+
+    /// <summary>Puts this window just above its owner, and leaves every other window where it is.</summary>
+    private void PlaceAboveOwner()
+    {
+        var owner = Win32.GetWindowLongPtr(Handle, Win32.GWLP_HWNDPARENT);
+        if (owner == 0 || owner == Handle || !Win32.IsWindow(owner))
+            return;
+        // Already directly above the owner.
+        var above = Win32.GetWindow(owner, Win32.GW_HWNDPREV);
+        if (above == Handle)
+            return;
+        // InsertAfter is the window above this one. Nothing above the owner means the top of the z-order.
+        Win32.SetWindowPos(Handle, above == 0 ? Win32.HWND_TOP : above, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
+    }
+
+    private void RaiseOwnedWindows()
+    {
+        if (Handle == 0)
+            return;
+        foreach (var window in _platform.Windows)
+        {
+            if (window.Handle != 0 && Win32.GetWindowLongPtr(window.Handle, Win32.GWLP_HWNDPARENT) == Handle)
+                window.PlaceAboveOwner();
+        }
+    }
+
+    private static bool OwnerChainContains(nint owner, nint window)
+    {
+        for (var hop = 0; owner != 0 && hop < 16; hop++)
+        {
+            if (owner == window)
+                return true;
+            var next = Win32.GetWindowLongPtr(owner, Win32.GWLP_HWNDPARENT);
+            if (next == owner)
+                return false;
+            owner = next;
+        }
+        return false;
+    }
+
+    private void ReportFloatingState()
+    {
+        if (_kind != WindowKind.Floating || Handle == 0 || _released)
+            return;
+        var fullscreen = ReadsFullscreen();
+        _fullscreen = fullscreen;
+        _client.OnFullscreenChanged(fullscreen);
+        // A fullscreen window covers the monitor, not the work area, so it is not the framed maximized state.
+        _client.OnStateChanged(Win32.IsZoomed(Handle) && !fullscreen, Win32.IsIconic(Handle));
+    }
+
+    private bool ReadsFullscreen()
+    {
+        if (Win32.IsIconic(Handle))
+            return _fullscreen;
+        var style = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE);
+        if ((style & (Win32.WS_CAPTION | Win32.WS_THICKFRAME)) != 0)
+            return false;
+        if (!Win32.GetWindowRect(Handle, out var rect))
+            return _fullscreen;
+        var (_, bounds) = Screens.Of(Handle);
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return _fullscreen;
+        return rect.Left <= bounds.Left + 1 && rect.Top <= bounds.Top + 1 && rect.Right >= bounds.Right - 1 && rect.Bottom >= bounds.Bottom - 1;
+    }
 
     private void Replace()
     {
@@ -466,6 +812,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             RenderNow();
             var show = _kind == WindowKind.Floating ? Win32.SW_SHOW : (_kind == WindowKind.Popup && _popup?.GrabFocus == true ? Win32.SW_SHOW : Win32.SW_SHOWNOACTIVATE);
             Win32.ShowWindow(Handle, show);
+            if (_kind == WindowKind.Floating && !Win32.IsIconic(Handle))
+                RaiseOwnedWindows();
             if (_kind == WindowKind.Popup && _popup?.GrabFocus == true)
                 Win32.SetForegroundWindow(Handle);
         }
@@ -567,7 +915,9 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 _ => 1,
             },
         };
-        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, corner, 4);
+        _cornerPreference = corner;
+        // Fullscreen meets the monitor corners. The chosen corners come back when it leaves fullscreen.
+        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, _fullscreen ? 1 : corner, 4);
         if (_kind != WindowKind.Floating)
         {
             // A material window gets Windows' hairline border; a plain one gets none.
@@ -718,7 +1068,14 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         {
             _rendering = false;
             if (_disposePending)
-                Dispose();
+            {
+                _disposePending = false;
+                // The owner was destroyed while this frame was drawing. The native window is already going away.
+                if (_externalDestroy)
+                    FinishExternalDestroy();
+                else
+                    Dispose();
+            }
             else if (!_visible)
                 _surface?.Release();
         }
@@ -786,14 +1143,22 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             case Win32.WM_MOVE:
                 if (Handle != 0)
                     UpdateSize();
-                if (_kind == WindowKind.Floating)
-                    _client.OnStateChanged(Win32.IsZoomed(Handle), Win32.IsIconic(Handle));
+                if (_kind == WindowKind.Floating && !_applying && !_placing)
+                    ReportFloatingState();
                 return null;
             case Win32.WM_DPICHANGED:
                 {
-                    _scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
+                    // A size we apply from this message can send it again with the monitor's old scale. Keep the one that started it.
+                    if (!_placing)
+                        _scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
                     var suggested = *(RECT*)lParam;
-                    if (_kind == WindowKind.Floating)
+                    if (_kind == WindowKind.Floating && _fullscreen)
+                    {
+                        // The suggested rect is the old logical size. A fullscreen window keeps covering the monitor.
+                        if (!_placing)
+                            FillMonitor();
+                    }
+                    else if (_kind == WindowKind.Floating)
                     {
                         // The user dragged it to another monitor, or that monitor's scale changed: Windows' rect keeps the logical size.
                         Win32.SetWindowPos(Handle, 0, suggested.Left, suggested.Top, suggested.Width, suggested.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
@@ -966,6 +1331,21 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             case Win32.WM_KILLFOCUS:
                 scene.SetFocusItem(scene.FocusItem is { } focused && _kind == WindowKind.Floating ? focused : null);
                 return null;
+            case Win32.WM_GETMINMAXINFO when _fullscreen && Handle != 0:
+                {
+                    // The default maximum is the work area, which would stop the window short of the taskbar.
+                    var (_, bounds) = Screens.Of(Handle);
+                    if (bounds.Width <= 0 || bounds.Height <= 0)
+                        return null;
+                    var info = (MINMAXINFO*)lParam;
+                    info->ptMaxPosition.X = bounds.Left;
+                    info->ptMaxPosition.Y = bounds.Top;
+                    info->ptMaxSize.X = bounds.Width;
+                    info->ptMaxSize.Y = bounds.Height;
+                    info->ptMaxTrackSize.X = bounds.Width;
+                    info->ptMaxTrackSize.Y = bounds.Height;
+                    return 0;
+                }
             case Win32.WM_GETMINMAXINFO when _floating is { } f:
                 {
                     var info = (MINMAXINFO*)lParam;
@@ -983,12 +1363,18 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
                 _client.OnClosed();
                 SetVisible(false);
                 return 0;
+            case Win32.WM_DESTROY:
+                // The owner is closing, so Windows destroys this window. Drop the handle before it dangles.
+                NoteExternalDestroy();
+                return null;
             case Win32.WM_ERASEBKGND:
                 return 1;
             case Win32.WM_PAINT:
                 RenderNow();
                 return null;
             case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED or Win32.WM_SYSCOLORCHANGE or Win32.WM_THEMECHANGED:
+                if (msg == Win32.WM_DISPLAYCHANGE && _fullscreen && _kind == WindowKind.Floating)
+                    FillMonitor();
                 _platform.SystemChanged(msg, wParam);
                 return null;
             case Win32.WM_GETOBJECT:
@@ -1099,7 +1485,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
 
     public void Dispose()
     {
-        if (Handle == 0)
+        if (_released)
             return;
         // QML can destroy its window during layout or paint. The surface still owns the active canvas, and Render
         // still has to flush and present it, so keep the native resources until the outer frame returns.
@@ -1109,6 +1495,47 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
             _renderAgain = false;
             return;
         }
+        Cleanup(destroyWindow: true);
+    }
+
+    private void NoteExternalDestroy()
+    {
+        if (_released || _externalDestroy)
+            return;
+        _externalDestroy = true;
+        if (_rendering)
+        {
+            _disposePending = true;
+            _renderAgain = false;
+            DetachHandle();
+            return;
+        }
+        FinishExternalDestroy();
+    }
+
+    private void FinishExternalDestroy()
+    {
+        var client = _client;
+        Cleanup(destroyWindow: false);
+        if (_toldClient)
+            return;
+        _toldClient = true;
+        _platform.Loop.Post(() => client.OnBackingDestroyed());
+    }
+
+    private void DetachHandle()
+    {
+        var h = Handle;
+        Handle = 0;
+        if (h != 0)
+            Win32.SetWindowLongPtr(h, Win32.GWLP_USERDATA, 0);
+    }
+
+    private void Cleanup(bool destroyWindow)
+    {
+        if (_released)
+            return;
+        _released = true;
         _client.Scene.FocusChanged -= OnImeFocus;
         _platform.UpdatePopupGrab(this, false);
         RemoveAppBar();
@@ -1116,9 +1543,13 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         _surface?.Dispose();
         _surface = null;
         var h = Handle;
-        Win32.SetWindowLongPtr(h, Win32.GWLP_USERDATA, 0);
         Handle = 0;
-        Win32.DestroyWindow(h);
+        if (h != 0)
+        {
+            Win32.SetWindowLongPtr(h, Win32.GWLP_USERDATA, 0);
+            if (destroyWindow)
+                Win32.DestroyWindow(h);
+        }
         if (_self.IsAllocated)
             _self.Free();
         _platform.Forget(this);
