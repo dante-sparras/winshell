@@ -58,7 +58,7 @@ Pins are in `launcher.toml` next to the shell's `shell.qml`: for the default she
 The popup window the network, volume and battery icons open, as on Windows 11. It has:
 
 - **The media playing**, with play, pause, previous and next for that [media session](winshell-media.md).
-- **Tiles**: Wi-Fi, Bluetooth, Airplane mode, Energy saver, Power mode, Night light and Accessibility. A tile shows the setting's state where Winshell can read it. Power mode opens a page that changes the [power mode](winshell-power.md#powermode). The other tiles open their page in Windows Settings, because Winshell doesn't change radios or Windows settings. A tile for hardware the PC doesn't have is hidden.
+- **Tiles**: Wi-Fi, Bluetooth, Airplane mode, Energy saver, Power mode, Night light and Accessibility. A tile shows the setting's state where Winshell can read it. Power mode opens a page that changes the [power mode](winshell-power.md#powermode). The other tiles open their page in Windows Settings. A configuration can set `Networking.wifiEnabled` and `BluetoothAdapter.enabled`. These tiles do not, and they do not change the other Windows settings. A tile for hardware the PC doesn't have is hidden.
 - **Sliders**: the volume of the default playback device, with a page to pick the output. **App volume** on that page sets the volume and mute of each audio session. The brightness slider is a monitor that reports one.
 - **The battery**, on a PC that has one.
 

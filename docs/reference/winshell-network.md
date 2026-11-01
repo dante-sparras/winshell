@@ -1,6 +1,6 @@
 # Winshell.Network
 
-The PC's wired and Wi-Fi adapters, the Wi-Fi networks in range, Windows connection profiles, and connectivity. Loading the module reads state and follows Windows network notifications; it never asks for permission, changes a connection, or controls a radio. [Windows networking](../network.md) explains permissions, scanning and airplane mode.
+The PC's wired and Wi-Fi adapters, the Wi-Fi networks in range, Windows connection profiles, and connectivity. Loading the module reads state and follows Windows network notifications. It never asks for permission or changes a connection or a radio. Setting `wifiEnabled` asks Windows to change the Wi-Fi radios, and that request can show consent UI. [Windows networking](../network.md) explains permissions, scanning and airplane mode.
 
 `import Winshell.Network`
 
@@ -13,17 +13,17 @@ The singleton for the whole shell. It lists the adapters and connection profiles
 | `devices` | ObjectModel of [NetworkDevice](#networkdevice), read-only | The physical wired and Wi-Fi adapters, each a [WifiDevice](#wifidevice) or a [WiredDevice](#wireddevice). Virtual, VPN and Bluetooth adapters are left out. |
 | `profiles` | ObjectModel of [NetworkProfile](#networkprofile), read-only | The Windows connection profiles, including those on virtual adapters. |
 | `ready` | bool, read-only | Whether the first read of Windows state has completed. |
-| `wifiEnabled` | bool, read-only | Whether at least one Wi-Fi radio is on. False when radio state is unavailable. |
+| `wifiEnabled` | bool | Whether at least one Wi-Fi radio is on. False when radio state is unavailable. Setting it asks Windows to turn every Wi-Fi radio on or off. The value stays what Windows last reported until a later read shows the radios changed. |
 | `wifiState` | [WifiRadioState](#wifiradiostate), read-only | The state of the Wi-Fi radios together. |
 | `wifiHardwareEnabled` | bool, read-only | Whether at least one Wi-Fi radio is on or off, rather than disabled. False when radio state is unavailable. |
 | `accessStatus` | [NetworkAccessStatus](#networkaccessstatus), read-only | Whether Windows lets the shell scan and connect Wi-Fi. |
 | `airplaneMode` | [AirplaneModeState](#airplanemodestate), read-only | Airplane mode, read from the registry on a best-effort basis. Not a guaranteed real-time state. |
 | `connectivity` | [NetworkConnectivity](#networkconnectivity), read-only | The connectivity of the profile Windows uses for the internet. |
-| `error` | string, read-only | Why the last read or access request failed. Empty when it succeeded. |
+| `error` | string, read-only | Why the last read, access request or radio change failed. Empty when it succeeded. |
 | `requestingAccess` | bool, read-only | True while `requestAccess()` is running. |
 | `refresh()` | method | Reads the network state again, including airplane mode. |
 | `requestAccess()` | method | Asks Windows for Wi-Fi access, which may show Windows consent UI. Call it from a user action. Repeat it after an adapter is inserted. |
-| `operationFailed(message)` | signal | Emitted when an access request fails. |
+| `operationFailed(message)` | signal | Emitted when an access request or a radio change fails. |
 
 ## NetworkDevice
 

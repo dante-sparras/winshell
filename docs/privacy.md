@@ -5,7 +5,7 @@ Winshell collects no personal data and sends none to its developers or to anyone
 What it reads stays on your PC:
 
 - **Notifications.** The notification center reads the notifications Windows shows, once you allow it in Windows. The sending app's logo is a temporary file while one of that app's notifications is showing, and it is deleted when they are gone.
-- **Wi-Fi, Bluetooth and location.** Quick settings lists networks and devices. Windows asks for location access before it lets an app list Wi-Fi networks; Winshell uses that permission for nothing else.
+- **Wi-Fi, Bluetooth and location.** Quick settings lists networks and devices. Windows asks for location access before it lets an app list Wi-Fi networks; Winshell uses that permission for nothing else. The default shell does not turn radios on or off. A configuration that sets `Networking.wifiEnabled` or `BluetoothAdapter.enabled` can ask Windows for radio control the first time, and Windows may show its own consent. Starting Winshell does not ask.
 - **Apps and windows.** The taskbar and Start read your installed apps, running windows and recently used apps from Windows.
 - **Files Winshell writes.** Settings, pins, logs and crash reports stay in `%APPDATA%\winshell` and `%LOCALAPPDATA%\winshell`. Crash reports leave out passwords, tokens and keys that Winshell recognizes, and are never uploaded.
 
