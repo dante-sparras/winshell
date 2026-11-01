@@ -3,7 +3,7 @@ using System.Text.Json;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
-using static Winshell.Platform.Windows.Services.Winland.WinlandProtocol;
+using static Winshell.Winland.WinlandProtocol;
 
 namespace Winshell.Platform.Windows.Services.Winland;
 

@@ -3,17 +3,6 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Input;
 
-/// <summary>Told when Windows drops shortcut capture, or when the foreground window may have changed.</summary>
-internal interface IInhibitClient
-{
-    void Cancelled();
-
-    void Recheck();
-}
-
-/// <summary>One key the hook posted to a shell window. Tests read it instead of posting.</summary>
-internal readonly record struct PostedKey(nint Hwnd, uint Message, nint WParam, nint LParam);
-
 /// <summary>
 /// Gives one shell window the keyboard while that window is in front. Windows shortcuts and Winshell hotkeys
 /// do not take those keys. Ctrl+Alt+Del and Win+L still reach Windows.

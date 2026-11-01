@@ -1,18 +1,9 @@
-using NotificationModeValue = Winshell.Platform.Windows.Services.Notifications.NotificationMode;
+using NotificationModeValue = Winshell.Notifications.NotificationMode;
 using Winshell.Platform.Windows.Services;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Notifications;
-
-public enum NotificationAccessStatus { Unspecified, Allowed, Denied, Unavailable, Requesting }
-public enum NotificationState { Unknown, Off, On }
-public enum NotificationMode { Unknown = -1, Unrestricted, PriorityOnly, AlarmsOnly }
-
-internal sealed record IncomingToast(uint Id, string AppId, string AppName, string Title, string Body,
-    DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt = null, IAppLogoSource? Logo = null);
-internal sealed record NotificationSnapshot(NotificationAccessStatus AccessStatus, IReadOnlyList<IncomingToast> Notifications,
-    NotificationState Focus, NotificationMode Mode, string Error = "");
 
 /// <summary>A view of Windows Notification Center. Loading it never prompts for access.</summary>
 [QmlSignal("notificationAdded", "notification")]
@@ -114,7 +105,7 @@ public sealed class NotificationListener : QObject
 
     private async Task MonitorAsync(CancellationToken cancellation)
     {
-        var warning = new MonitorWarning(this, "notifications");
+        var warning = new MonitorWarning(() => Engine?.Log ?? Log.Default, "notifications");
         // Not disposed: a toast event can still arrive after the watch stops.
         var changed = new SemaphoreSlim(0);
         Action? unwatch = null;

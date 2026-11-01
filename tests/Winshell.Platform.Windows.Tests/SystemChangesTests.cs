@@ -1,5 +1,5 @@
 using Microsoft.Win32;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 
 namespace Winshell.Platform.Windows.Tests;
 

@@ -1,4 +1,4 @@
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows;
@@ -18,7 +18,7 @@ internal sealed record SavedFloatingPlace(
     double Height,
     bool Maximized,
     bool Minimized,
-    WINDOWPLACEMENT Placement,
+    Winshell.Native.WINDOWPLACEMENT Placement,
     bool HasPlacement)
 {
     /// <summary>True when this place can be put back with the saved placement, because the monitor and its scale are unchanged.</summary>

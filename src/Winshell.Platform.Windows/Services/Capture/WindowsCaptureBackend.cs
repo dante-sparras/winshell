@@ -7,7 +7,7 @@ using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Capture;

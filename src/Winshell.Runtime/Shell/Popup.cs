@@ -61,8 +61,8 @@ public sealed class PopupAnchor : QObject
 {
     private ShellWindow? _window;
     private Item? _item;
-    private int _edges = (int)(Shell.Edges.Top | Shell.Edges.Left);
-    private int _gravity = (int)(Shell.Edges.Bottom | Shell.Edges.Right);
+    private int _edges = (int)(Winshell.Edges.Top | Winshell.Edges.Left);
+    private int _gravity = (int)(Winshell.Edges.Bottom | Winshell.Edges.Right);
     private int _adjustment = (int)PopupAdjustment.All;
 
     private readonly Action _changed;

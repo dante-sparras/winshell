@@ -3,6 +3,7 @@
     <Project Path="src/Winshell.Platform.Windows/Winshell.Platform.Windows.csproj" />
     <Project Path="src/Winshell.Qml/Winshell.Qml.csproj" />
     <Project Path="src/Winshell.Runtime/Winshell.Runtime.csproj" />
+    <Project Path="src/Winshell.Services/Winshell.Services.csproj" />
     <Project Path="src/Winshell/Winshell.csproj" />
   </Folder>
   <Folder Name="/tests/">

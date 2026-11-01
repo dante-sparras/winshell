@@ -6,13 +6,6 @@ using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows.Services.Notifications;
 
-/// <summary>The sending app's logo, as Windows returns it. Opened off the UI thread.</summary>
-internal interface IAppLogoSource
-{
-    /// <summary>The logo, or null when Windows has none. May throw when the read fails.</summary>
-    Stream? Open(CancellationToken cancellation);
-}
-
 /// <summary>One read of a logo. Release <see cref="Hold"/> once, whether or not the url is kept.</summary>
 internal readonly record struct IconRead(string Url, IconHold Hold);
 

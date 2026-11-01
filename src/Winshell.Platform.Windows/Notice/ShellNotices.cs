@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 

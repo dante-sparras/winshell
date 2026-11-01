@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Platform.Windows.Services.Notifications;
 using Winshell.Platform.Windows.Services.Session;
 using Winshell.Platform.Windows.Services.WindowList;

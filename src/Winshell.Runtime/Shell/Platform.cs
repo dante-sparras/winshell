@@ -2,24 +2,6 @@ using SkiaSharp;
 
 namespace Winshell.Runtime.Shell;
 
-/// <summary>
-/// A monitor, as the platform reports it. Coordinates are logical pixels on the virtual desktop: a monitor keeps its
-/// physical top-left corner and its size is divided by its scale, so monitors of mixed DPI never overlap.
-/// </summary>
-public sealed record ScreenInfo(
-    string Id,
-    string Name,
-    string Model,
-    string Manufacturer,
-    string SerialNumber,
-    QRect Geometry,
-    QRect WorkArea,
-    double DevicePixelRatio,
-    double PhysicalWidthMm,
-    double PhysicalHeightMm,
-    int RefreshRate,
-    bool IsPrimary);
-
 /// <summary>How a window is put on the screen.</summary>
 public enum WindowKind
 {
@@ -32,25 +14,6 @@ public enum WindowKind
     /// <summary>A PopupWindow: no frame, placed next to its parent window.</summary>
     Popup,
 }
-
-/// <summary>Where and how a panel sits on its screen.</summary>
-public sealed record PanelPlacement(
-    ScreenInfo? Screen,
-    Edges Anchors,
-    double MarginLeft,
-    double MarginTop,
-    double MarginRight,
-    double MarginBottom,
-    double Width,
-    double Height,
-    int ExclusionMode,
-    double ExclusiveZone,
-    bool AboveWindows,
-    bool Focusable,
-    string Namespace);
-
-/// <summary>Where a popup sits, in screen coordinates.</summary>
-public sealed record PopupPlacement(ScreenInfo? Screen, QRect Rect, bool GrabFocus);
 
 /// <summary>A normal window's settings.</summary>
 public sealed record FloatingPlacement(
@@ -218,12 +181,3 @@ public interface IShellPlatform
     IWindowBackend CreateWindow(WindowKind kind, IWindowClient client);
 }
 
-[Flags]
-public enum Edges
-{
-    None = 0,
-    Top = 1,
-    Left = 2,
-    Right = 4,
-    Bottom = 8,
-}

@@ -1,5 +1,5 @@
 using SkiaSharp;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Platform.Windows.Services.Power;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;

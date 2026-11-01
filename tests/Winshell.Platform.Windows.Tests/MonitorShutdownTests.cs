@@ -12,7 +12,7 @@ public class MonitorShutdownTests
         using var engine = new QmlEngine(StandardModules.Create(), new ManualEventLoop(),
             new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") });
         var service = new QObject { Engine = engine };
-        var warning = new MonitorWarning(service, "bluetooth");
+        var warning = new MonitorWarning(() => service.Engine?.Log ?? Log.Default, "bluetooth");
 
         warning.Failed(new InvalidOperationException("radio broke"));
         warning.Failed(new InvalidOperationException("radio broke"));

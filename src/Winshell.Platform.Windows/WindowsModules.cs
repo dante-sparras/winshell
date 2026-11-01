@@ -267,6 +267,7 @@ public static class WindowsModules
     public static void Install(WindowsPlatform platform)
     {
         ImageLoader.AddProvider("icon", IconProvider.Instance);
+        AppCatalog.IconLookupReady = lookup => IconProvider.AppIconLookup = lookup;
         if (_installed)
             return;
         _installed = true;
@@ -290,7 +291,7 @@ public static class WindowsModules
     /// <summary>Gives a new engine the Windows services its singletons use.</summary>
     public static void AddServices(QmlEngine engine, WindowsPlatform platform)
     {
-        engine.AddService<Services.Input.IHotkeyRegistrar>(platform.Hotkeys);
+        engine.AddService<IHotkeyRegistrar>(platform.Hotkeys);
         engine.AddService<Services.Session.IWorkstationLock>(Services.Session.WindowsWorkstationLock.Instance);
     }
 
@@ -301,7 +302,7 @@ public static class WindowsModules
     /// </summary>
     public static void AddStartup(QmlEngine engine, string exe, IEnumerable<string> args)
     {
-        if (Services.Updates.Packaging.IsPackaged)
+        if (Winshell.Updates.Packaging.IsPackaged)
         {
             if (Services.Session.WindowsStartupTasks.Open() is { } task)
                 engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.StartupTaskRegistry(task));
@@ -312,7 +313,7 @@ public static class WindowsModules
     }
 
     /// <summary>Lets <c>Updates</c> follow the process's updater. Without one, <c>Updates.available</c> is false.</summary>
-    public static void AddUpdates(QmlEngine engine, Services.Updates.Updater updater) => engine.AddService(updater);
+    public static void AddUpdates(QmlEngine engine, Winshell.Updates.Updater updater) => engine.AddService(updater);
 }
 
 /// <summary>Where the service modules for Windows register.</summary>

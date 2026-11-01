@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Windows.Media;
 using Windows.Storage.Streams;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Platform.Windows.Services.Media;
 using Winshell.Runtime;
 

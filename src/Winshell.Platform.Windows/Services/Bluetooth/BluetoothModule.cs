@@ -4,7 +4,6 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Bluetooth;
 
-public enum BluetoothAdapterState { Unknown, Off, On, Disabled }
 public enum BluetoothDeviceState { Disconnected, Connected }
 public enum BluetoothOperation { None, Connecting, Disconnecting, Pairing, Unpairing }
 
@@ -302,7 +301,7 @@ public sealed class BluetoothService : QObject
     }
     private async Task MonitorAsync(CancellationToken cancellation)
     {
-        var warning = new MonitorWarning(this, "bluetooth");
+        var warning = new MonitorWarning(() => Engine?.Log ?? Log.Default, "bluetooth");
         while (!cancellation.IsCancellationRequested)
         {
             try

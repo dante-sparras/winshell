@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Platform.Windows;
@@ -163,15 +163,20 @@ internal static partial class ImeNative
             var comp = new CompositionForm
             {
                 Style = ImeSession.CfsPoint,
-                CurrentPos = new POINT { X = window.Left, Y = window.Bottom },
+                X = window.Left,
+                Y = window.Bottom,
             };
             ImmSetCompositionWindow(himc, ref comp);
             var cand = new CandidateForm
             {
                 Index = 0,
                 Style = window.Style,
-                CurrentPos = new POINT { X = window.Left, Y = window.Top },
-                Area = new RECT(window.Left, window.Top, window.Right, window.Bottom),
+                X = window.Left,
+                Y = window.Top,
+                Left = window.Left,
+                Top = window.Top,
+                Right = window.Right,
+                Bottom = window.Bottom,
             };
             ImmSetCandidateWindow(himc, ref cand);
         }
@@ -231,8 +236,8 @@ internal static partial class ImeNative
     private struct CompositionForm
     {
         public int Style;
-        public POINT CurrentPos;
-        public RECT Area;
+        public int X, Y;
+        public int Left, Top, Right, Bottom;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -240,7 +245,7 @@ internal static partial class ImeNative
     {
         public int Index;
         public int Style;
-        public POINT CurrentPos;
-        public RECT Area;
+        public int X, Y;
+        public int Left, Top, Right, Bottom;
     }
 }

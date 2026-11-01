@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using SkiaSharp;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
-using WinEvents = Winshell.Platform.Windows.Services.WindowList.NativeMethods;
+using WinEvents = Winshell.Windows.NativeMethods;
 
 namespace Winshell.Platform.Windows.Services.Tray;
 

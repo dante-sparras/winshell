@@ -3,42 +3,6 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Power;
 
-public enum PowerDeviceState
-{
-    Unknown = 0,
-    Charging = 1,
-    Discharging = 2,
-    Empty = 3,
-    FullyCharged = 4,
-    NotCharging = 5,
-}
-
-public enum PowerDeviceType
-{
-    Unknown = 0,
-    Battery = 2,
-}
-
-/// <summary>The three positions of the Windows power mode slider.</summary>
-public enum PowerModeLevel
-{
-    BestEfficiency = 0,
-    Balanced = 1,
-    BestPerformance = 2,
-}
-
-/// <summary>The power mode Windows is applying, including energy saver and game mode.</summary>
-public enum EffectivePowerMode
-{
-    EnergySaver = 0,
-    BetterBattery = 1,
-    Balanced = 2,
-    HighPerformance = 3,
-    MaxPerformance = 4,
-    GameMode = 5,
-    MixedReality = 6,
-}
-
 /// <summary>The <c>PowerDevice</c>: a battery, or the aggregate display device.</summary>
 public sealed class PowerDevice : QObject
 {
@@ -190,12 +154,12 @@ public sealed class PowerModeService : QObject
         {
             if (!Enum.IsDefined(value))
             {
-                ServiceSupport.Warn(this, "power", $"Cannot set the power mode to {(int)value}, which is not a PowerModeLevel.");
+                QmlServices.Warn(this, "power", $"Cannot set the power mode to {(int)value}, which is not a PowerModeLevel.");
                 return;
             }
             var error = PowerModeBackend.Instance.Set(value);
             if (error != 0)
-                ServiceSupport.Warn(this, "power", $"Windows did not set the power mode (error {error}).");
+                QmlServices.Warn(this, "power", $"Windows did not set the power mode (error {error}).");
         }
     }
 

@@ -413,7 +413,7 @@ public sealed class DoctorTests : IDisposable
     [InlineData("Unspecified", CheckStatus.Warn)]
     [InlineData("Unavailable", CheckStatus.Warn)]
     public void Notification_access_is_read_without_asking(string access, CheckStatus status) =>
-        Assert.Equal(status, Notifications(access).Status);
+        Assert.Equal(status, Doctor.Notifications(access).Status);
 
     [Fact]
     public void Running_instances_and_recent_crash_reports_are_listed()

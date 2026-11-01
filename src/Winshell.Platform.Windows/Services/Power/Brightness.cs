@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Management;
 using System.Runtime.InteropServices;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 

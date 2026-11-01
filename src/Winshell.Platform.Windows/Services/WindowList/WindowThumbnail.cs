@@ -1,9 +1,9 @@
 using SkiaSharp;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
-using static Winshell.Platform.Windows.Services.WindowList.NativeMethods;
+using static Winshell.Windows.NativeMethods;
 
 namespace Winshell.Platform.Windows.Services.WindowList;
 
