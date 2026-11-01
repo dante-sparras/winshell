@@ -97,24 +97,8 @@ public sealed class DoctorCommandTests : IDisposable
     private (int Code, string Output, string Error) Run(params string[] args) => RunIn(_root, args);
 
     /// <summary>Runs winshell.exe with the config folder overridden to a folder of this class's.</summary>
-    private static (int Code, string Output, string Error) RunIn(string configRoot, params string[] args)
-    {
-        var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "winshell.exe"))
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.Environment[ConfigPaths.OverrideVariable] = configRoot;
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private static (int Code, string Output, string Error) RunIn(string configRoot, params string[] args) =>
+        WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configRoot));
 
     public void Dispose()
     {

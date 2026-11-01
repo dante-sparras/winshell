@@ -127,26 +127,8 @@ public sealed class ConfigPathTests : IDisposable
     private static string ShellLocationsState() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "winshell", "state");
 
-    private static (int Code, string Output, string Error) Run(string configDir, string xdgHome, params string[] args)
-    {
-        var exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-        var info = new ProcessStartInfo(exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.Environment[ConfigPaths.OverrideVariable] = configDir;
-        info.Environment["XDG_CONFIG_HOME"] = xdgHome;
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private static (int Code, string Output, string Error) Run(string configDir, string xdgHome, params string[] args) =>
+        WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configDir), ("XDG_CONFIG_HOME", xdgHome));
 
     public void Dispose()
     {

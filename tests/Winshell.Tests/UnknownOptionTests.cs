@@ -33,27 +33,8 @@ public class UnknownOptionTests
         Assert.Equal(error + Environment.NewLine, err);
     }
 
-    private static (int Code, string Output, string Error) Run(string[] args)
-    {
-        var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "winshell.exe"))
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.Environment["WINSHELL_CONFIG_DIR"] = Path.Combine(Path.GetTempPath(), "winshell-unknown-option-absent");
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(15_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            throw new TimeoutException("winshell did not exit");
-        }
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private static (int Code, string Output, string Error) Run(string[] args) =>
+        WinshellCli.Run(
+            args,
+            ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-unknown-option-absent")));
 }

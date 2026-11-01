@@ -12,7 +12,6 @@ namespace Winshell.Tests;
 public sealed class CliJsonOutputTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
@@ -107,7 +106,7 @@ public sealed class CliJsonOutputTests : IDisposable
         _started.Add(process);
         process.ErrorDataReceived += (_, _) => { };
         process.BeginErrorReadLine();
-        WaitFor(() => ListedPids().Contains(process.Id), $"instance {process.Id} in winshell list");
+        Wait.Until(() => ListedPids().Contains(process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -120,35 +119,8 @@ public sealed class CliJsonOutputTests : IDisposable
         return json.RootElement.EnumerateArray().Select(i => i.GetProperty("pid").GetInt32()).ToHashSet();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
-    {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, output.Result, error.Result);
-    }
-
-    private static void WaitFor(Func<bool> condition, string what)
-    {
-        var watch = Stopwatch.StartNew();
-        while (!condition())
-        {
-            Assert.True(watch.Elapsed < Patience, $"Timed out waiting for {what}");
-            Thread.Sleep(100);
-        }
-    }
+    private static (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args);
 
     public void Dispose()
     {

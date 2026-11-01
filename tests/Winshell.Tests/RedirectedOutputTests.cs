@@ -9,7 +9,6 @@ namespace Winshell.Tests;
 public sealed class RedirectedOutputTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private Process? _shell;
@@ -45,7 +44,7 @@ public sealed class RedirectedOutputTests : IDisposable
     [Fact]
     public void Redirected_output_has_no_byte_order_mark()
     {
-        var info = StartInfo("--version");
+        var info = WinshellCli.StartInfo(["--version"]);
         using var process = Process.Start(info)!;
         using var bytes = new MemoryStream();
         process.StandardOutput.BaseStream.CopyTo(bytes);
@@ -67,12 +66,7 @@ public sealed class RedirectedOutputTests : IDisposable
         _shell = Process.Start(info)!;
         _shell.ErrorDataReceived += (_, _) => { };
         _shell.BeginErrorReadLine();
-        var watch = Stopwatch.StartNew();
-        while (!Listed().Any(i => i.GetProperty("pid").GetInt32() == _shell.Id))
-        {
-            Assert.True(watch.Elapsed < Patience, $"Timed out waiting for instance {_shell.Id} in winshell list");
-            Thread.Sleep(100);
-        }
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == _shell.Id), $"instance {_shell.Id} in winshell list");
     }
 
     private static List<JsonElement> Listed()
@@ -83,30 +77,7 @@ public sealed class RedirectedOutputTests : IDisposable
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private static ProcessStartInfo StartInfo(params string[] args)
-    {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        return info;
-    }
-
-    private static (int Code, string Output, string Error) Run(params string[] args)
-    {
-        using var process = Process.Start(StartInfo(args))!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private static (int Code, string Output, string Error) Run(params string[] args) => WinshellCli.Run(args);
 
     public void Dispose()
     {

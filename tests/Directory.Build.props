@@ -10,6 +10,7 @@
     <PackageReference Include="xunit.v3.mtp-off" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <Using Include="Xunit" />
+    <Using Include="Winshell.TestSupport" />
     <Compile Include="$(MSBuildThisFileDirectory)TestSupport\*.cs" Link="TestSupport\%(Filename)%(Extension)" />
     <None Include="$(MSBuildThisFileDirectory)xunit.runner.json" Link="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

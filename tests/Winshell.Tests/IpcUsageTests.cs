@@ -6,20 +6,11 @@ namespace Winshell.Tests;
 public sealed class IpcUsageTests
 {
     [Fact]
-    public async Task Ipc_with_no_command_prints_its_usage_and_exits_2()
+    public void Ipc_with_no_command_prints_its_usage_and_exits_2()
     {
-        var info = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "winshell.exe"))
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.ArgumentList.Add("ipc");
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
-        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
-        Assert.True(process.WaitForExit(30000), "winshell did not exit");
+        var (code, output, error) = WinshellCli.Run(["ipc"]);
 
-        Assert.Equal(2, process.ExitCode);
-        Assert.Contains("call <target> <function>", await output + await error);
+        Assert.Equal(2, code);
+        Assert.Contains("call <target> <function>", output + error);
     }
 }

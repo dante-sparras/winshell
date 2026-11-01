@@ -10,7 +10,6 @@ namespace Winshell.Tests;
 public sealed class InstanceIsolationTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
@@ -74,14 +73,14 @@ public sealed class InstanceIsolationTests : IDisposable
         var broken = Start(dir);
         var log = Info(broken).GetProperty("log").GetString()!;
 
-        WaitFor(() => File.Exists(log) && Read(log).Contains("Failed to load configuration", StringComparison.Ordinal), "the load error in the log");
+        Wait.Until(() => File.Exists(log) && Read(log).Contains("Failed to load configuration", StringComparison.Ordinal), "the load error in the log");
         Assert.Contains("shell.qml[7:5]: Cannot assign to non-existent property \"colour\"", Read(log), StringComparison.Ordinal);
         Assert.False(broken.HasExited);
         Assert.Equal("good", Ask(good));
 
         // Fixed, it loads where it is.
         File.WriteAllText(shell, text);
-        WaitFor(() => Read(log).Contains("Configuration Loaded", StringComparison.Ordinal), "the reload in the log");
+        Wait.Until(() => Read(log).Contains("Configuration Loaded", StringComparison.Ordinal), "the reload in the log");
         Assert.Equal("fixed", Ask(broken));
     }
 
@@ -161,7 +160,7 @@ public sealed class InstanceIsolationTests : IDisposable
         // Read the output so the instance never blocks on a full pipe.
         process.ErrorDataReceived += (_, _) => { };
         process.BeginErrorReadLine();
-        WaitFor(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -178,14 +177,8 @@ public sealed class InstanceIsolationTests : IDisposable
     /// <summary>Runs the winshell CLI and returns what it printed.</summary>
     private static string Winshell(params string[] args)
     {
-        var info = new ProcessStartInfo(Exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var error = process.StandardError.ReadToEndAsync();
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"winshell {string.Join(' ', args)} exited with {process.ExitCode}: {error.Result}");
+        var (code, output, error) = WinshellCli.Run(args);
+        Assert.True(code == 0, $"winshell {string.Join(' ', args)} exited with {code}: {error}");
         return output;
     }
 
@@ -194,16 +187,6 @@ public sealed class InstanceIsolationTests : IDisposable
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
-    }
-
-    private static void WaitFor(Func<bool> condition, string what)
-    {
-        var watch = Stopwatch.StartNew();
-        while (!condition())
-        {
-            Assert.True(watch.Elapsed < Patience, $"Timed out waiting for {what}");
-            Thread.Sleep(100);
-        }
     }
 
     public void Dispose()
@@ -217,7 +200,7 @@ public sealed class InstanceIsolationTests : IDisposable
                 {
                     Winshell("kill", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 }
-                catch (Xunit.Sdk.TrueException)
+                catch (Xunit.Sdk.XunitException)
                 {
                 }
                 if (!process.WaitForExit(5000))

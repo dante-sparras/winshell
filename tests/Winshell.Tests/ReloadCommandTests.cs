@@ -8,7 +8,6 @@ namespace Winshell.Tests;
 public sealed class ReloadCommandTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
@@ -32,12 +31,7 @@ public sealed class ReloadCommandTests : IDisposable
     // An instance is listed before its first load ends, and the file must not change until that load has read it.
     private void Loaded(string pid)
     {
-        var watch = Stopwatch.StartNew();
-        while (Version(pid) != "one")
-        {
-            Assert.True(watch.Elapsed < Patience, "Timed out waiting for the first load");
-            Thread.Sleep(100);
-        }
+        Wait.Until(() => Version(pid) == "one", "the first load");
     }
 
     [Theory]
@@ -102,12 +96,7 @@ public sealed class ReloadCommandTests : IDisposable
         _started.Add(process);
         process.ErrorDataReceived += (_, _) => { };
         process.BeginErrorReadLine();
-        var watch = Stopwatch.StartNew();
-        while (!Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id))
-        {
-            Assert.True(watch.Elapsed < Patience, $"Timed out waiting for instance {process.Id} in winshell list");
-            Thread.Sleep(100);
-        }
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -119,23 +108,8 @@ public sealed class ReloadCommandTests : IDisposable
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args)
-    {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    private static (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args);
 
     public void Dispose()
     {
