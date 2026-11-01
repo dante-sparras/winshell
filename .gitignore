@@ -38,5 +38,9 @@ obj/
 *.user
 TestResults/
 
+# What the default shell writes next to shell.qml when it runs from source.
+src/Winshell/DefaultShell/launcher.toml
+src/Winshell/DefaultShell/preferences.toml
+
 # Release builds from scripts/package.ps1
 artifacts/

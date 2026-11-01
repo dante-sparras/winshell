@@ -55,6 +55,28 @@ The docs `build` job is DocFX with warnings as errors, which `check.ps1` also ru
 
 A push to `main` that changes only `docs/**` or Markdown does not run `package`. A release still calls that workflow. The `store-package` artifact is kept for 14 days.
 
+## Run one test
+
+```powershell
+dotnet test tests/Winshell.Runtime.Tests --filter FullyQualifiedName~DirectoryWatchTests
+```
+
+`--filter` takes a class or a test name. `Winshell.Qml.Tests` and `Winshell.Runtime.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Platform.Windows.Tests` and `Winshell.Tests` put windows and shells on your desktop.
+
+## Run the shell from source
+
+```powershell
+dotnet run --project src/Winshell -- run -p src/Winshell/DefaultShell
+```
+
+`-p` takes any folder with a `shell.qml`, or the file. Saving a `.qml` file reloads the shell. The shell keeps `launcher.toml` and `preferences.toml` next to its `shell.qml`, and git ignores those two in `src/Winshell/DefaultShell`. From another terminal:
+
+```powershell
+dotnet run --project src/Winshell -- list
+dotnet run --project src/Winshell -- log -t 20
+dotnet run --project src/Winshell -- kill -i <id>
+```
+
 ## Environment variables
 
 A running shell reads these. None is needed to build or test.
