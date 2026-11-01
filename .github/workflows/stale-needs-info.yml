@@ -15,7 +15,7 @@ jobs:
       actions: write # saves the run state between runs
       issues: write # comments on and closes issues
     steps:
-      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+      - uses: actions/stale@main
         with:
           only-issue-labels: "needs-info"
           # A maintainer applies the label, so never auto-mark; close 7 days after it was added.
