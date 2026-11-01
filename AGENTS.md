@@ -8,7 +8,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
 - xUnit v3 for `tests/`, through VSTest.
-- PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`. `scripts/run-tests.ps1` and `scripts/report-flaky.ps1` run on PowerShell 7, and `scripts/FlakyTests.Tests.ps1` tests them with mocks.
+- PowerShell 7 for `scripts/`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1.
 
 ## Project Structure
 
@@ -18,10 +18,10 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 ├── docs/
 │   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
-│   │   └── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
+│   │   ├── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
+│   │   └── release-notes/           # Notes for a release, once that release exists
 │   ├── guide/                       # The docs site's guide section
 │   ├── reference/                   # A page per module, checked against the code by DocsTests
-│   ├── release-notes/               # Notes for a release, once that release exists
 │   ├── security/                    # The threat model
 │   ├── development.md               # Setup, environment, and every command
 │   ├── docfx.json                   # Builds docs/ into the docs site
@@ -32,25 +32,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
 │   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
-├── scripts/
-│   ├── check.ps1                    # Build with warnings as errors, build the docs, then test; -Quick is a PR's part of it
-│   ├── dev.ps1                      # Prepares a fresh clone
-│   ├── fetch-reference.cs           # Fetches the Quickshell manual as markdown
-│   ├── install.ps1                  # Per-user install from a GitHub release; published on the release
-│   ├── Install.Tests.ps1            # Pester tests for the installer, including a local fake release
-│   ├── Install.TestHelpers.ps1      # Temp profile and fake-release helpers for those tests
-│   ├── package.ps1                  # Builds the portable zips, winget manifests and Store package a release ships
-│   ├── publish-release.ps1          # Uploads the six release assets to a draft and publishes it after the hashes match
-│   ├── PublishRelease.Tests.ps1     # Pester tests for that publisher, with a mocked gh
-│   ├── ReleaseGate.ps1              # Decides whether a release may publish from the ci result on its commit
-│   ├── ReleaseGate.Tests.ps1        # Pester tests for that gate
-│   ├── uninstall.ps1                # Removes the per-user install; published on the release
-│   ├── Uninstall.Tests.ps1          # Pester tests for the uninstaller
-│   ├── render-logo.cs               # Renders packaging/logo.svg into the package's PNGs and winshell.ico
-│   ├── report-flaky.ps1             # Files or updates a flaky issue for each test in a report
-│   ├── run-tests.ps1                # The main test stage: quarantine list, then one rerun of failed tests
-│   ├── FlakyTests.Tests.ps1         # Pester tests for those two scripts
-│   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
+├── scripts/                         # Check, test, package, install and release scripts; docs/development.md lists them
 ├── src/
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
 │   ├── Winshell.Qml/                # The QML parser
