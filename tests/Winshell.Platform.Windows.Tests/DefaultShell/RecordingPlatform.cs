@@ -63,6 +63,14 @@ internal sealed class RecordingWindow(IWindowClient client, RecordingPlatform pl
     {
     }
 
+    public void SetOpacity(double opacity)
+    {
+    }
+
+    public void SetVisibleMask(QRect? bounds)
+    {
+    }
+
     public void SetCursor(int shape)
     {
     }

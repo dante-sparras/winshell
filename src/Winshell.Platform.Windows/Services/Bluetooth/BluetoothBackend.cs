@@ -8,11 +8,12 @@ using WinLeDevice = Windows.Devices.Bluetooth.BluetoothLEDevice;
 
 namespace Winshell.Platform.Windows.Services.Bluetooth;
 
-internal sealed record BluetoothAdapterInfo(string Id, string Name, string Address, BluetoothAdapterState State);
+internal sealed record BluetoothAdapterInfo(string Id, string Name, string Address, BluetoothAdapterState State,
+    bool Discoverable = false, bool Pairable = false);
 internal sealed record BluetoothEndpointInfo(string Id, string Address, string Name, bool Connected, bool Paired,
-    bool Present, bool CanPair, Guid? Container);
+    bool Present, bool CanPair, Guid? Container, BluetoothClassReport Class = default);
 internal sealed record BluetoothDeviceInfo(string Key, string Id, string Address, string Name, bool Connected,
-    bool Paired, bool Present, bool CanPair, double? Battery, Guid? Container, IReadOnlyList<string> PairedIds);
+    bool Paired, bool Present, bool CanPair, double? Battery, Guid? Container, IReadOnlyList<string> PairedIds, string Icon = "");
 internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapter, IReadOnlyList<BluetoothDeviceInfo> Devices,
     bool Discovering = false, string Error = "")
 {
@@ -22,6 +23,8 @@ internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapt
 /// <summary>
 /// Reads only Windows adapter and enumeration properties. In particular, reading state never opens
 /// BluetoothDevice/BluetoothLEDevice or GATT handles, which can prompt or affect a device connection.
+/// Discoverable and incoming-connection state come from BluetoothIsDiscoverable and BluetoothIsConnectable.
+/// The device icon is the class and appearance on that same enumeration.
 /// Each shell generation owns and stops its own nearby-device watchers.
 /// </summary>
 internal sealed partial class BluetoothBackend : IBluetoothBackend
@@ -32,7 +35,10 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private const string PresentKey = "System.Devices.Aep.IsPresent";
     private const string ContainerKey = "System.Devices.Aep.ContainerId";
     private const string BatteryKey = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
-    private static readonly string[] EndpointProperties = [AddressKey, ConnectedKey, PairedKey, PresentKey, ContainerKey];
+    private static readonly string[] EndpointProperties = [
+        AddressKey, ConnectedKey, PairedKey, PresentKey, ContainerKey,
+        BluetoothIcon.MajorKey, BluetoothIcon.MinorKey, BluetoothIcon.AppearanceKey, BluetoothIcon.CategoryKey, BluetoothIcon.SubcategoryKey,
+    ];
     private readonly object _lock = new();
     private readonly SemaphoreSlim _readGate = new(1, 1);
     private readonly Dictionary<string, BluetoothEndpointInfo> _nearby = new(StringComparer.Ordinal);
@@ -66,8 +72,14 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             try { radio = await adapter.GetRadioAsync().AsTask(cancellation).ConfigureAwait(false); }
             catch (Exception e) when (IsExpectedFailure(e)) { }
             lock (_lock) _hasRadio = radio is not null;
+            cancellation.ThrowIfCancellationRequested();
+            // These queries can block. Their own thread keeps them off the QML thread and off the pool.
+            var visibility = await OffUi(() => (
+                Discoverable: BluetoothIsDiscoverable(0),
+                Pairable: BluetoothIsConnectable(0))).ConfigureAwait(false);
             var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
-                ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State));
+                ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State),
+                visibility.Discoverable, visibility.Pairable);
             if ((_adapterId is not null && _adapterId != adapter.DeviceId) ||
                 adapterInfo.State is BluetoothAdapterState.Off or BluetoothAdapterState.Disabled)
                 StopDiscovery();
@@ -114,7 +126,8 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             info.Properties.GetValueOrDefault(ConnectedKey) is true,
             info.Properties.GetValueOrDefault(PairedKey) is true || info.Pairing.IsPaired,
             info.Properties.GetValueOrDefault(PresentKey) is true, info.Pairing.CanPair,
-            info.Properties.GetValueOrDefault(ContainerKey) is Guid container && container != Guid.Empty ? container : null);
+            info.Properties.GetValueOrDefault(ContainerKey) is Guid container && container != Guid.Empty ? container : null,
+            BluetoothIcon.Read(info.Properties));
 
     internal static BluetoothAdapterState MapRadioState(RadioState? state) => state switch
     {
@@ -133,13 +146,15 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
                 StringComparer.Ordinal)
             .Select(group =>
             {
-                var first = group.OrderByDescending(e => e.Paired).ThenByDescending(e => e.CanPair)
-                    .ThenBy(e => e.Id, StringComparer.Ordinal).First();
+                var ordered = group.OrderByDescending(e => e.Paired).ThenByDescending(e => e.CanPair)
+                    .ThenBy(e => e.Id, StringComparer.Ordinal).ToArray();
+                var first = ordered[0];
                 var name = group.Select(e => e.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)) ?? first.Address;
                 return new BluetoothDeviceInfo(group.Key, first.Id, first.Address.ToUpperInvariant(), name,
                     group.Any(e => e.Connected), group.Any(e => e.Paired), group.Any(e => e.Present),
                     group.Any(e => e.CanPair), null, first.Container,
-                    group.Where(e => e.Paired).Select(e => e.Id).ToArray());
+                    group.Where(e => e.Paired).Select(e => e.Id).ToArray(),
+                    BluetoothIcon.FromReports(ordered.Select(e => e.Class)));
             }).OrderByDescending(d => d.Connected).ThenByDescending(d => d.Paired)
             .ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
@@ -183,6 +198,44 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         }
         return await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, enabled, WindowsRadioSource.Instance).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Asks Windows to change discovery. Null when a radio already reports <paramref name="discoverable"/> or the call changes one.
+    /// The call can block, so it runs on its own thread. Tests use a fake and do not call this.
+    /// </summary>
+    public Task<string?> SetDiscoverableAsync(bool discoverable)
+    {
+        lock (_lock) ObjectDisposedException.ThrowIf(_disposed, this);
+        return OffUi(() =>
+        {
+            if (BluetoothIsDiscoverable(0) == discoverable)
+                return null;
+            return BluetoothEnableDiscovery(0, discoverable) ? null : DiscoveryUnchanged;
+        });
+    }
+
+    /// <summary>
+    /// Asks Windows to change incoming connections, which Winshell exposes as pairable.
+    /// Null when a radio already reports <paramref name="pairable"/> or the call changes one.
+    /// The call can block, so it runs on its own thread. Tests use a fake and do not call this.
+    /// </summary>
+    public Task<string?> SetPairableAsync(bool pairable)
+    {
+        lock (_lock) ObjectDisposedException.ThrowIf(_disposed, this);
+        return OffUi(() =>
+        {
+            if (BluetoothIsConnectable(0) == pairable)
+                return null;
+            return BluetoothEnableIncomingConnections(0, pairable) ? null : ConnectionsUnchanged;
+        });
+    }
+
+    private const string DiscoveryUnchanged = "Windows did not change Bluetooth discovery.";
+    private const string ConnectionsUnchanged = "Windows did not change incoming Bluetooth connections.";
+
+    private static Task<T> OffUi<T>(Func<T> call) =>
+        Task.Factory.StartNew(call, CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
 
     public void StartDiscovery()
     {
@@ -358,6 +411,22 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         var request = new KSPROPERTY { Set = new Guid("7fa06c40-b8f6-4c7e-8556-e8c33a12e54d"), Id = property, Flags = 1 };
         return DeviceIoControl(handle, 0x2F0003, &request, (uint)sizeof(KSPROPERTY), null, 0, out _, 0);
     }
+
+    [LibraryImport("bthprops.cpl")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool BluetoothIsDiscoverable(nint radio);
+
+    [LibraryImport("bthprops.cpl")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool BluetoothIsConnectable(nint radio);
+
+    [LibraryImport("bthprops.cpl")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool BluetoothEnableDiscovery(nint radio, [MarshalAs(UnmanagedType.Bool)] bool enabled);
+
+    [LibraryImport("bthprops.cpl")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool BluetoothEnableIncomingConnections(nint radio, [MarshalAs(UnmanagedType.Bool)] bool enabled);
 
     [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     private static partial SafeFileHandle CreateFileW(string fileName, uint access, uint share, nint security, uint creation, uint flags, nint template);

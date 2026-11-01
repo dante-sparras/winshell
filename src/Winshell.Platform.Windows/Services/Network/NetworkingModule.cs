@@ -13,6 +13,9 @@ public enum ConnectionFailReason { Unknown, InvalidPassword, Timeout, NetworkUna
 public enum DeviceType { None, Wifi, Wired }
 public enum WifiSecurityType { Wpa3SuiteB192, Sae, Wpa2Eap, Wpa2Psk, WpaEap, WpaPsk, StaticWep, Owe, Open, Unknown }
 
+/// <summary>The 802.11 mode of a <see cref="WifiDevice"/>. Windows never reports <see cref="Mesh"/> or <see cref="AdHoc"/>.</summary>
+public enum WifiDeviceMode { Unknown, AccessPoint, Mesh, Station, AdHoc }
+
 /// <summary>A Windows connection profile reported by NetworkInformation, not a saved WLAN credential.</summary>
 public sealed class NetworkProfile : QObject
 {
@@ -40,10 +43,17 @@ public sealed class NetworkProfile : QObject
 [QmlSignal("operationFailed", "message")]
 public class QmlNetwork : QObject
 {
+    private readonly Dictionary<string, WifiProfile> _saved = new(StringComparer.Ordinal);
+    private IReadOnlyList<WifiProfileInfo> _savedInfo = [];
     private NetworkInfo _info;
     private bool _busy;
     private string _error = "";
-    internal QmlNetwork(NetworkDevice device, NetworkInfo info) { Device = device; _info = info; }
+    internal QmlNetwork(NetworkDevice device, NetworkInfo info)
+    {
+        Device = device;
+        _info = info;
+        SavedProfiles.SetOwner(this);
+    }
     internal NetworkInfo Info => _info;
     [Qml] public string Name { get { Track(); return _info.Name; } }
     [Qml] public NetworkDevice Device { get; }
@@ -52,13 +62,75 @@ public class QmlNetwork : QObject
     [Qml] public ConnectionState State { get { Track(); return _info.State; } }
     [Qml] public bool Busy { get { Track(); return _busy; } }
     [Qml] public string Error { get { Track(); return _error; } }
+    [Qml] public ObjectModel SavedProfiles { get; } = new();
     internal void Update(NetworkInfo info)
     {
-        if (_info == info) return;
+        var previous = _info;
         _info = info;
-        foreach (var name in new[] { "name", "connected", "saved", "state", "signalStrength", "security" }) NotifyChanged(name);
+        if (previous.Name != info.Name) NotifyChanged("name");
+        if (previous.Known != info.Known) NotifyChanged("saved");
+        if (previous.State != info.State)
+        {
+            NotifyChanged("state");
+            NotifyChanged("connected");
+        }
+        if (previous.SignalStrength != info.SignalStrength) NotifyChanged("signalStrength");
+        if (previous.Security != info.Security) NotifyChanged("security");
+        SetSavedProfiles(info.SavedProfiles ?? []);
+    }
+
+    private void SetSavedProfiles(IReadOnlyList<WifiProfileInfo> profiles)
+    {
+        if (SameProfiles(_savedInfo, profiles))
+            return;
+        _savedInfo = profiles;
+        foreach (var gone in _saved.Keys.Except(profiles.Select(p => p.Id)).ToArray())
+        {
+            _saved[gone].Destroy();
+            _saved.Remove(gone);
+        }
+        foreach (var info in profiles)
+        {
+            if (!_saved.TryGetValue(info.Id, out var item))
+            {
+                item = new WifiProfile(this, info) { Engine = Engine };
+                item.SetOwner(this);
+                _saved.Add(info.Id, item);
+            }
+            else
+                item.Update(info);
+        }
+        SavedProfiles.Engine = Engine;
+        SavedProfiles.Set(profiles.Select(p => _saved[p.Id]).ToArray());
+    }
+
+    private static bool SameProfiles(IReadOnlyList<WifiProfileInfo> left, IReadOnlyList<WifiProfileInfo> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (left[i] != right[i])
+                return false;
+        }
+        return true;
     }
     [Qml("connect")] public void ConnectNetwork() => _ = ConnectAsync(null);
+    [Qml] public void ConnectWithProfile(WifiProfile? profile) => _ = ConnectProfileAsync(profile);
+    internal Task ConnectProfileAsync(WifiProfile? profile) => RunAsync(() =>
+    {
+        if (profile is null || profile.IsDestroyed || !ReferenceEquals(profile.Network, this))
+            throw new InvalidOperationException("That saved profile is not on this network.");
+        if (Device.Type != DeviceType.Wifi)
+            throw new NotSupportedException("Windows manages wired connections automatically.");
+        return FinishConnect(profile);
+    });
+    private async Task FinishConnect(WifiProfile profile)
+    {
+        var failure = await Device.Backend.ConnectProfileAsync(Device.NativeId, profile.Name, profile.Hidden).ConfigureAwait(false);
+        if (failure is { } message)
+            throw new InvalidOperationException(message);
+    }
     internal Task ConnectAsync(string? password) => RunAsync(async () =>
     {
         if (Device.Type != DeviceType.Wifi) throw new NotSupportedException("Windows manages wired connections automatically.");
@@ -104,6 +176,117 @@ public sealed class WifiNetwork : QmlNetwork
     [Qml] public void ConnectWithPassword(string password) => _ = ConnectAsync(password);
 }
 
+/// <summary>A saved WLAN profile for one network. It is not a Windows connection profile, and it never holds a key.</summary>
+[QmlSignal("operationFailed", "message")]
+public sealed class WifiProfile : QObject
+{
+    private readonly QmlNetwork _network;
+    private WifiProfileInfo _info;
+    private string _actionError = "";
+    private bool _writing;
+
+    internal WifiProfile(QmlNetwork network, WifiProfileInfo info)
+    {
+        _network = network;
+        _info = info;
+    }
+
+    internal QmlNetwork Network => _network;
+    internal bool Hidden => _info.Hidden;
+    [Qml] public string Id => _info.Id;
+    [Qml] public string Name { get { Track(); return _info.Name; } }
+    [Qml] public string Ssid { get { Track(); return _info.Ssid; } }
+    [Qml] public bool AutoConnect
+    {
+        get { Track(); return _info.AutoConnect; }
+        set
+        {
+            if (IsDestroyed || _writing || value == _info.AutoConnect)
+                return;
+            _ = SetAutoConnectAsync(value);
+        }
+    }
+    [Qml] public WifiSecurityType Security { get { Track(); return _info.Security; } }
+    [Qml] public bool HasPassword { get { Track(); return _info.HasPassword; } }
+    [Qml] public bool Loaded { get { Track(); return _info.Loaded; } }
+    [Qml] public string Error { get { Track(); return ShownError; } }
+    private string ShownError => _actionError.Length > 0 ? _actionError : _info.Error;
+
+    /// <summary>The profile's fields. There is no key in the result.</summary>
+    [Qml] public Dictionary<string, object?> Read() => new()
+    {
+        ["id"] = _info.Id,
+        ["name"] = _info.Name,
+        ["ssid"] = _info.Ssid,
+        ["autoConnect"] = _info.AutoConnect,
+        ["security"] = _info.Security.ToString(),
+        ["hasPassword"] = _info.HasPassword,
+        ["loaded"] = _info.Loaded,
+    };
+
+    [Qml] public void ClearPassword() => _ = ClearPasswordAsync();
+    [Qml] public void Forget() => _ = ForgetAsync();
+
+    internal Task SetAutoConnectAsync(bool value) =>
+        WriteAsync(() => _network.Device.Backend.SetProfileAutoConnectAsync(_network.Device.NativeId, _info.Name, value));
+
+    internal Task ClearPasswordAsync() =>
+        WriteAsync(() => _network.Device.Backend.ClearProfilePasswordAsync(_network.Device.NativeId, _info.Name));
+
+    internal Task ForgetAsync() => WriteAsync(() => Task.Run(() =>
+    {
+        var error = _network.Device.Backend.Forget(_network.Device.NativeId, _info.Name);
+        return error == 0 ? null : new System.ComponentModel.Win32Exception((int)error).Message;
+    }));
+
+    internal void Update(WifiProfileInfo info)
+    {
+        var previous = _info;
+        var previousError = ShownError;
+        _info = info;
+        if (previous.Name != info.Name) NotifyChanged("name");
+        if (previous.Ssid != info.Ssid) NotifyChanged("ssid");
+        if (previous.AutoConnect != info.AutoConnect) NotifyChanged("autoConnect");
+        if (previous.Security != info.Security) NotifyChanged("security");
+        if (previous.HasPassword != info.HasPassword) NotifyChanged("hasPassword");
+        if (previous.Loaded != info.Loaded) NotifyChanged("loaded");
+        if (ShownError != previousError) NotifyChanged("error");
+    }
+
+    private async Task WriteAsync(Func<Task<string?>> action)
+    {
+        if (_writing || IsDestroyed)
+            return;
+        _writing = true;
+        var previousError = ShownError;
+        _actionError = "";
+        if (ShownError != previousError)
+            NotifyChanged("error");
+        var message = "";
+        try
+        {
+            message = await action().ConfigureAwait(false) ?? "";
+        }
+        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
+        {
+            message = e.Message;
+        }
+        var error = message;
+        _network.Device.Loop.Post(() =>
+        {
+            _writing = false;
+            if (IsDestroyed)
+                return;
+            var before = ShownError;
+            _actionError = error;
+            if (ShownError != before)
+                NotifyChanged("error");
+            if (error.Length > 0)
+                Emit("operationFailed", error);
+        });
+    }
+}
+
 public abstract class NetworkDevice : QObject
 {
     private readonly Dictionary<string, QmlNetwork> _networks = new(StringComparer.Ordinal);
@@ -130,6 +313,7 @@ public abstract class NetworkDevice : QObject
         if (old.Name != info.Name) NotifyChanged("name");
         if (old.Address != info.Address) NotifyChanged("address");
         if (old.State != info.State) { NotifyChanged("state"); NotifyChanged("connected"); }
+        if (Type == DeviceType.Wifi && old.Mode != info.Mode) NotifyChanged("mode");
         foreach (var gone in _networks.Keys.Except(info.Networks.Select(n => n.Name)).ToArray())
         {
             _networks[gone].Destroy(); _networks.Remove(gone);
@@ -155,6 +339,7 @@ public sealed class WifiDevice : NetworkDevice
     private bool _scanning;
     private string _error = "";
     internal WifiDevice(NetworkDeviceInfo info, IEventLoop loop, INetworkBackend backend) : base(info, loop, backend) { }
+    [Qml] public WifiDeviceMode Mode { get { Track(); return Info.Mode; } }
     [Qml] public bool Scanning { get { Track(); return _scanning; } }
     [Qml] public string Error { get { Track(); return _error; } }
     [Qml] public void Scan() => _ = ScanAsync();
@@ -322,6 +507,7 @@ internal static class NetworkingModule
             .Uncreatable<WiredDevice>("WiredDevice")
             .Uncreatable<QmlNetwork>("Network")
             .Uncreatable<WifiNetwork>("WifiNetwork")
+            .Uncreatable<WifiProfile>("WifiProfile")
             .Uncreatable<NetworkProfile>("NetworkProfile")
             .Enum<NetworkConnectivity>(s => s.ToString())
             .Enum<NetworkCost>(s => s.ToString())
@@ -331,6 +517,7 @@ internal static class NetworkingModule
             .Enum<ConnectionState>(s => s.ToString())
             .Enum<ConnectionFailReason>(s => s.ToString())
             .Enum<DeviceType>(s => s.ToString())
-            .Enum<WifiSecurityType>(s => s.ToString());
+            .Enum<WifiSecurityType>(s => s.ToString())
+            .Enum<WifiDeviceMode>(s => s.ToString());
     }
 }

@@ -160,6 +160,43 @@ internal static unsafe partial class NetworkNative
         return result;
     }
 
+    // wlanapi.h: wlan_intf_opcode_autoconf_start is 0, so wlan_intf_opcode_current_operation_mode is 12.
+    // ppData is a ULONG, one DOT11_OPERATION_MODE_* value. wlan_intf_opcode_bss_type is not queried:
+    // Windows 11 can answer it with dot11_BSS_type_any for a connected station, which does not
+    // separate an ad-hoc network from infrastructure, and IBSS is unsupported. AdHoc stays unreached.
+    private const uint OpcodeCurrentOperationMode = 12;
+
+    /// <summary>
+    /// The interface operation mode, or null when Windows does not answer. A failure does not throw.
+    /// The buffer <c>WlanQueryInterface</c> returns is freed on every path, including failure.
+    /// </summary>
+    public static uint? OperationMode(Guid interfaceGuid)
+    {
+        var handle = Handle;
+        if (handle == 0)
+            return null;
+        nint data = 0;
+        try
+        {
+            uint size = 0;
+            if (WlanQueryInterface(handle, &interfaceGuid, OpcodeCurrentOperationMode, 0, &size, &data, null) != 0
+                || data == 0 || size < sizeof(uint))
+                return null;
+            return *(uint*)data;
+        }
+#pragma warning disable CA1031 // A failed mode query is Unknown and must not fail the snapshot.
+        catch (Exception e) when (e is not OutOfMemoryException)
+#pragma warning restore CA1031
+        {
+            return null;
+        }
+        finally
+        {
+            if (data != 0)
+                WlanFreeMemory(data);
+        }
+    }
+
     /// <summary>Deletes a saved WLAN profile. Returns the Windows error, or 0.</summary>
     public static uint DeleteProfile(Guid interfaceGuid, string profileName)
     {
@@ -167,6 +204,95 @@ internal static unsafe partial class NetworkNative
         if (handle == 0)
             return 1062; // ERROR_SERVICE_NOT_ACTIVE
         return WlanDeleteProfile(handle, &interfaceGuid, profileName, 0);
+    }
+
+    /// <summary>The only flags a profile read passes in. Zero, so the call never asks Windows for a key.</summary>
+    internal static uint ProfileReadFlags() => 0;
+
+    internal const uint ProfileUser = 0x2;
+    internal const uint ProfileGroupPolicy = 0x1;
+
+    /// <summary>Per-user and group-policy bits. A plaintext-key bit is not one of them and is not kept.</summary>
+    internal const uint ProfileFlagMask = ProfileUser | ProfileGroupPolicy;
+
+    internal static uint ProfileWriteFlags(uint flags) => flags & ProfileFlagMask;
+
+    /// <summary>
+    /// The profile XML Windows stored. <see cref="ProfileReadFlags"/> is the only value passed in, so the key stays out.
+    /// The returned flags are only the per-user and group-policy bits.
+    /// </summary>
+    public static uint GetProfile(Guid interfaceGuid, string profileName, out string? xml, out uint flags)
+    {
+        xml = null;
+        flags = 0;
+        var handle = Handle;
+        if (handle == 0)
+            return 1062;
+        nint xmlPtr = 0;
+        var requested = ProfileReadFlags();
+        uint granted = 0;
+        var error = WlanGetProfile(handle, &interfaceGuid, profileName, 0, &xmlPtr, &requested, &granted);
+        if (error != 0 || xmlPtr == 0)
+        {
+            if (xmlPtr != 0)
+                WlanFreeMemory(xmlPtr);
+            return error == 0 ? 1168 : error;
+        }
+        try
+        {
+            xml = Marshal.PtrToStringUni(xmlPtr);
+            flags = ProfileWriteFlags(requested);
+            return xml is null ? 1168u : 0u;
+        }
+        finally
+        {
+            WlanFreeMemory(xmlPtr);
+        }
+    }
+
+    /// <summary>Replaces a profile, keeping only its per-user or group-policy flag. Returns the Windows error, or 0.</summary>
+    public static uint SetProfile(Guid interfaceGuid, string profileXml, uint flags, out uint reason)
+    {
+        reason = 0;
+        var handle = Handle;
+        if (handle == 0)
+            return 1062;
+        if (string.IsNullOrEmpty(profileXml) || profileXml.Length > WifiProfileXml.MaxCharacters)
+            return 87;
+        return WlanSetProfile(handle, &interfaceGuid, ProfileWriteFlags(flags), profileXml, 0, 1, 0, out reason);
+    }
+
+    /// <summary>Connects with a saved profile (<c>wlan_connection_mode_profile</c>). Returns when Windows accepts the request.</summary>
+    public static uint ConnectProfile(Guid interfaceGuid, string profileName, bool hidden)
+    {
+        var handle = Handle;
+        if (handle == 0)
+            return 1062;
+        if (string.IsNullOrEmpty(profileName))
+            return 87;
+        fixed (char* name = profileName)
+        {
+            var parameters = new WlanConnectionParameters
+            {
+                Mode = 0,
+                Profile = (nint)name,
+                BssType = 3,
+                Flags = hidden ? 1u : 0u,
+            };
+            return WlanConnect(handle, &interfaceGuid, &parameters, 0);
+        }
+    }
+
+    /// <summary>WLAN_CONNECTION_PARAMETERS. Pointer-sized fields follow the native alignment.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WlanConnectionParameters
+    {
+        public int Mode;
+        public nint Profile;
+        public nint Ssid;
+        public nint BssidList;
+        public int BssType;
+        public uint Flags;
     }
 
     [LibraryImport("wlanapi.dll")]
@@ -178,8 +304,23 @@ internal static unsafe partial class NetworkNative
     [LibraryImport("wlanapi.dll")]
     private static partial uint WlanGetProfileList(nint clientHandle, Guid* interfaceGuid, nint reserved, out nint profileList);
 
+    [LibraryImport("wlanapi.dll")]
+    private static partial uint WlanQueryInterface(
+        nint clientHandle, Guid* interfaceGuid, uint opCode, nint reserved, uint* dataSize, nint* data, uint* opcodeValueType);
+
     [LibraryImport("wlanapi.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial uint WlanDeleteProfile(nint clientHandle, Guid* interfaceGuid, string profileName, nint reserved);
+
+    [LibraryImport("wlanapi.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial uint WlanGetProfile(
+        nint clientHandle, Guid* interfaceGuid, string profileName, nint reserved, nint* profileXml, uint* flags, uint* grantedAccess);
+
+    [LibraryImport("wlanapi.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial uint WlanSetProfile(
+        nint clientHandle, Guid* interfaceGuid, uint flags, string profileXml, nint allUserProfileSecurity, int overwrite, nint reserved, out uint reason);
+
+    [LibraryImport("wlanapi.dll")]
+    private static partial uint WlanConnect(nint clientHandle, Guid* interfaceGuid, WlanConnectionParameters* parameters, nint reserved);
 
     [LibraryImport("wlanapi.dll")]
     private static partial uint WlanRegisterNotification(
@@ -188,4 +329,22 @@ internal static unsafe partial class NetworkNative
 
     [LibraryImport("wlanapi.dll")]
     private static partial void WlanFreeMemory(nint memory);
+}
+
+/// <summary>The real WLAN profile calls. Tests use a fake <see cref="IWlanProfileApi"/> and do not construct this.</summary>
+internal sealed class WlanProfileApi : IWlanProfileApi
+{
+    public static readonly WlanProfileApi Instance = new();
+
+    public uint Get(Guid adapter, string profileName, out string? xml, out uint flags) =>
+        NetworkNative.GetProfile(adapter, profileName, out xml, out flags);
+
+    public uint Set(Guid adapter, string xml, uint flags, out uint reason) =>
+        NetworkNative.SetProfile(adapter, xml, flags, out reason);
+
+    public uint Connect(Guid adapter, string profileName, bool hidden) =>
+        NetworkNative.ConnectProfile(adapter, profileName, hidden);
+
+    public uint Delete(Guid adapter, string profileName) =>
+        NetworkNative.DeleteProfile(adapter, profileName);
 }

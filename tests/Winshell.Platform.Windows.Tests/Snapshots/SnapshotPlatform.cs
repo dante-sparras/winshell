@@ -77,6 +77,14 @@ internal sealed class SnapshotWindow(IWindowClient client, SnapshotPlatform plat
     {
     }
 
+    public void SetOpacity(double opacity)
+    {
+    }
+
+    public void SetVisibleMask(QRect? bounds)
+    {
+    }
+
     public void SetCursor(int shape)
     {
     }

@@ -230,7 +230,7 @@ public sealed class ScriptModel : ObjectModel
     }
 }
 
-/// <summary>The <c>Region</c>: a shape for a window's input mask.</summary>
+/// <summary>The <c>Region</c>: a shape for a window's <c>mask</c> or <c>visibleMask</c>.</summary>
 [QmlDefaultProperty("regions")]
 [QmlSignal("changed")]
 public sealed class Region : QObject, IPropertyObserver
