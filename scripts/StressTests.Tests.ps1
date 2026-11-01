@@ -260,6 +260,14 @@ Describe 'Stressing the tests' {
         Should -Invoke Write-Host -ParameterFilter { $Object -like '::error*Ns.Class.One failed in round 3 of 30*' }
     }
 
+    It 'adds a failed test to the report after what is already there' {
+        $report = Join-Path $TestDrive 'flaky-tests.txt'
+        Set-Content -LiteralPath $report -Value 'Ns.Class.Earlier'
+        Mock Invoke-StressRound { New-Run -Exit 1 -Failed @('Ns.Class.One') -Passed @() }
+        Invoke-StressTest -Tests @(New-Test) -Rounds 30 -BudgetMinutes 15 -ReportPath $report | Should -Be 1
+        Get-Content -LiteralPath $report | Should -Be @('Ns.Class.Earlier', 'Ns.Class.One')
+    }
+
     It 'fails a run that crashed without naming a test' {
         Mock Invoke-StressRound { New-Run -Exit 7 -Passed @() -Complete $false }
         Invoke-StressTest -Tests @(New-Test) -Rounds 30 -BudgetMinutes 15 | Should -Be 7

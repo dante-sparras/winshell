@@ -3,9 +3,10 @@
 # fails once in 30 gets past a single run and the rerun in run-tests.ps1.
 # Tests that ci runs alone or leaves out are not stressed: the categories run-tests.ps1 filters, and tests/quarantine.txt.
 # After BudgetMinutes it stops between rounds and warns, so a bulk edit can't time out the ci job.
-# Needs a build; the ci job runs it after check.ps1. See "Flaky tests" in CONTRIBUTING.md.
+# A failed test goes into the file WINSHELL_FLAKY_REPORT names, when that is set.
+# Needs a build; the ci job runs it after check.ps1 on a push to main. See "Flaky tests" in CONTRIBUTING.md.
 param(
-    # The default suits ci, which checks out the merge commit of a pull request. Locally, use -Base origin/main.
+    # The default suits ci, where HEAD is the commit a merge put on main. Locally, use -Base origin/main.
     [string] $Base = 'HEAD^1',
     [int] $Rounds = 30,
     [int] $BudgetMinutes = 15
@@ -120,7 +121,8 @@ function Invoke-StressTest {
         [object[]] $Tests = @(),
         [string[]] $Quarantined = @(),
         [Parameter(Mandatory)][int] $Rounds,
-        [Parameter(Mandatory)][int] $BudgetMinutes
+        [Parameter(Mandatory)][int] $BudgetMinutes,
+        [string] $ReportPath
     )
     $stressed = [Collections.Generic.List[object]]::new()
     foreach ($test in $Tests) {
@@ -147,6 +149,7 @@ function Invoke-StressTest {
                 if ($run.Exit -ne 0 -or $run.Result.Failed.Count -gt 0 -or -not $run.Result.Complete) {
                     $run.Output | Out-Host
                     foreach ($name in $run.Result.Failed) { Write-Host "::error title=Flaky test::$name failed in round $round of $Rounds." }
+                    if ($ReportPath -and $run.Result.Failed.Count -gt 0) { Add-Content -LiteralPath $ReportPath -Value $run.Result.Failed }
                     Write-Host "Round $round of $Rounds failed."
                     return $(if ($run.Exit -ne 0) { $run.Exit } else { 1 })
                 }
@@ -177,5 +180,5 @@ if ($MyInvocation.InvocationName -ne '.') {
     $ErrorActionPreference = 'Stop'
     Set-StrictMode -Version Latest
     $list = @(Get-QuarantinedTest -Path (Join-Path $script:Root 'tests\quarantine.txt'))
-    exit (Invoke-StressTest -Tests @(Get-ChangedTest -Base $Base) -Quarantined $list -Rounds $Rounds -BudgetMinutes $BudgetMinutes)
+    exit (Invoke-StressTest -Tests @(Get-ChangedTest -Base $Base) -Quarantined $list -Rounds $Rounds -BudgetMinutes $BudgetMinutes -ReportPath $env:WINSHELL_FLAKY_REPORT)
 }

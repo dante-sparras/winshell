@@ -16,10 +16,8 @@ public class QmlParserCorpusTests
         foreach (var file in files)
         {
             var text = File.ReadAllText(file);
-            for (var length = 0; length <= text.Length; length++)
-                Check(file, text[..length]);
-            for (var index = 0; index < text.Length; index++)
-                Check(file, string.Concat(text.AsSpan(0, index), text.AsSpan(index + 1)));
+            Parallel.For(0, text.Length + 1, length => Check(file, text[..length]));
+            Parallel.For(0, text.Length, index => Check(file, string.Concat(text.AsSpan(0, index), text.AsSpan(index + 1))));
         }
     }
 

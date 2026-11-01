@@ -33,7 +33,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
 ├── scripts/
-│   ├── check.ps1                    # Build with warnings as errors, build the docs, then test
+│   ├── check.ps1                    # Build with warnings as errors, build the docs, then test; -Quick is a PR's part of it
 │   ├── dev.ps1                      # Prepares a fresh clone
 │   ├── fetch-reference.cs           # Fetches the Quickshell manual as markdown
 │   ├── install.ps1                  # Per-user install from a GitHub release; published on the release
@@ -50,7 +50,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── report-flaky.ps1             # Files or updates a flaky issue for each test in a report
 │   ├── run-tests.ps1                # The main test stage: quarantine list, then one rerun of failed tests
 │   ├── FlakyTests.Tests.ps1         # Pester tests for those two scripts
-│   ├── stress-tests.ps1             # Runs the tests a pull request adds or changes 30 times under load
+│   ├── stress-tests.ps1             # Runs the tests a change adds or edits 30 times under load
 │   ├── StressTests.Tests.ps1        # Pester tests for that script
 │   └── update-snapshots.ps1         # Replaces the visual snapshot baselines on purpose
 ├── src/
@@ -74,7 +74,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Run `pwsh scripts/check.ps1`. That is the required `ci` job, and it must pass with 0 warnings. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1`, `StressTests.Tests.ps1` and `ReleaseGate.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`. The ruleset also requires the `installer` job and `pr-title`.
+- Run `pwsh scripts/check.ps1`, the full check, and it must pass with 0 warnings. The required `ci` job runs only its `-Quick` part on a PR, so the docs, leak, corpus and performance stages get their pre-merge run here. When Pester 5.6.1 is installed it also runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1`, `StressTests.Tests.ps1` and `ReleaseGate.Tests.ps1`, and otherwise prints that they were skipped. It does not run PSScriptAnalyzer, lychee, actionlint, zizmor, `package.ps1` or `stress-tests.ps1`. The ruleset also requires the `installer` job, `pr-title`, and the docs `build` job.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.
