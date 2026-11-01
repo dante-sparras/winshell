@@ -409,6 +409,21 @@ public sealed class NetworkTests(ITestOutputHelper output)
         }
         public bool Disconnect(Guid device) { Calls.Add("disconnect"); Assert.Equal(AdapterId, device); return true; }
         public uint Forget(Guid device, string profileName) { Calls.Add("forget"); Assert.Equal(AdapterId, device); Assert.Equal("Example", profileName); return 0; }
+        public Task<string?> SetProfileAutoConnectAsync(Guid device, string profileName, bool autoConnect)
+        {
+            Calls.Add("profile-auto");
+            return Task.FromResult<string?>(null);
+        }
+        public Task<string?> ClearProfilePasswordAsync(Guid device, string profileName)
+        {
+            Calls.Add("profile-clear");
+            return Task.FromResult<string?>(null);
+        }
+        public Task<string?> ConnectProfileAsync(Guid device, string profileName, bool hidden)
+        {
+            Calls.Add("profile-connect");
+            return Task.FromResult<string?>(null);
+        }
         private sealed class Subscription(FakeBackend owner) : IDisposable
         {
             public void Dispose() { owner.Unsubscribed = true; owner._listener = null; }
