@@ -1,3 +1,4 @@
+using System.Globalization;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
 using Winshell.Platform.Windows;
@@ -368,10 +369,10 @@ public sealed class BluetoothTests(ITestOutputHelper output)
             var root = engine.CreateRoot(path);
             service.Apply(Snapshot(Device())); loop.Process();
             Assert.Equal("Headphones", root.ReadProperty("name"));
-            Assert.Equal(.7, Convert.ToDouble(root.ReadProperty("battery")));
+            Assert.Equal(.7, Convert.ToDouble(root.ReadProperty("battery"), CultureInfo.InvariantCulture));
             Assert.True((bool)root.ReadProperty("enabled")!);
             service.Apply(Snapshot(Device(paired: false, battery: .2))); loop.Process();
-            Assert.Equal(.2, Convert.ToDouble(root.ReadProperty("battery")));
+            Assert.Equal(.2, Convert.ToDouble(root.ReadProperty("battery"), CultureInfo.InvariantCulture));
             Assert.Equal(0, root.ReadProperty("paired"));
             Assert.Equal(1, root.ReadProperty("nearby"));
             service.Apply(new(true, null, [])); loop.Process();

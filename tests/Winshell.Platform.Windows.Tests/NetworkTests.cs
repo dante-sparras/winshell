@@ -1,3 +1,4 @@
+using System.Globalization;
 using Windows.Devices.WiFi;
 using Windows.Networking.Connectivity;
 using Winshell.Platform.Windows.Services.Network;
@@ -325,9 +326,9 @@ public sealed class NetworkTests(ITestOutputHelper output)
             Assert.Equal(1, root.ReadProperty("count"));
             Assert.True((bool)root.ReadProperty("metered")!);
             Assert.True((bool)root.ReadProperty("internet")!);
-            Assert.Equal(.6, Convert.ToDouble(root.ReadProperty("strength")));
+            Assert.Equal(.6, Convert.ToDouble(root.ReadProperty("strength"), CultureInfo.InvariantCulture));
             service.Apply(Snapshot(Wifi(strength: .9))); loop.Process();
-            Assert.Equal(.9, Convert.ToDouble(root.ReadProperty("strength")));
+            Assert.Equal(.9, Convert.ToDouble(root.ReadProperty("strength"), CultureInfo.InvariantCulture));
             service.Apply(NetworkSnapshot.Initial); loop.Process();
             Assert.Equal(0, root.ReadProperty("count"));
             Assert.False((bool)root.ReadProperty("metered")!);

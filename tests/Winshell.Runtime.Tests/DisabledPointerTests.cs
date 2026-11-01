@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -44,8 +45,8 @@ public class DisabledPointerTests
         scene.PointerMove(30, 24);
         scene.PointerRelease(30, 24, QtEnums.LeftButton);
 
-        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("taps")));
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("under")));
+        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("taps"), CultureInfo.InvariantCulture));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("under"), CultureInfo.InvariantCulture));
         Assert.Equal(0, root.X);
         Assert.Equal(0, root.Y);
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Winshell.Platform.Windows.Native;
@@ -25,7 +26,7 @@ internal interface IVirtualDesktopSource
 /// <summary>The build Windows reports, from <c>RtlGetVersion</c> rather than the version a manifest can change.</summary>
 internal readonly record struct WindowsVersion(uint Build, uint Update)
 {
-    public override string ToString() => Update == 0 ? Build.ToString() : $"{Build}.{Update}";
+    public override string ToString() => Update == 0 ? Build.ToString(CultureInfo.InvariantCulture) : $"{Build}.{Update}";
 
     public static WindowsVersion Current => _current ??= Read();
 

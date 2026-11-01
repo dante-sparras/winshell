@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jint.Native;
 using SkiaSharp;
 using Winshell.Platform.Windows.Accessibility;
@@ -679,7 +680,7 @@ public class TaskbarTests
         Click(shell, bar, In(bar, "startButton"));
         Click(shell, bar, In(bar, "searchButton"));
         Assert.Equal(["startButton"], ((IEnumerable<object?>)shell.Root.ReadProperty("started")!).Select(o => o?.ToString()));
-        Assert.Equal(1, Convert.ToInt32(shell.Root.ReadProperty("searched")));
+        Assert.Equal(1, Convert.ToInt32(shell.Root.ReadProperty("searched"), CultureInfo.InvariantCulture));
 
         bar.WriteProperty("startOpen", true);
         shell.Settle();
@@ -1121,7 +1122,7 @@ public class TaskbarTests
         Assert.Equal(["startButton"], ((IEnumerable<object?>)shell.Root.ReadProperty("started")!).Select(o => o?.ToString()));
         In(bar, "searchButton").ForceActiveFocus(QtEnums.TabFocusReason);
         Key(shell, bar, KeyReturn);
-        Assert.Equal(1, Convert.ToInt32(shell.Root.ReadProperty("searched")));
+        Assert.Equal(1, Convert.ToInt32(shell.Root.ReadProperty("searched"), CultureInfo.InvariantCulture));
 
         // An app: Enter brings its window forward, Shift+Enter opens a new one.
         In(bar, "task:window:tool").ForceActiveFocus(QtEnums.TabFocusReason);

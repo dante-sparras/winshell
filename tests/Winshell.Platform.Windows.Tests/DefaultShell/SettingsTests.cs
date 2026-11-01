@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using SkiaSharp;
 using Tomlyn;
@@ -355,7 +356,7 @@ public class SettingsTests
             using var shell = Open(width: 680);
             Pick(shell, "accentColor", 1);
             var swatches = shell.Find("accentSwatches");
-            var columns = Convert.ToInt32(swatches.ReadProperty("columns"));
+            var columns = Convert.ToInt32(swatches.ReadProperty("columns"), CultureInfo.InvariantCulture);
             Assert.InRange(columns, 1, 7);
 
             var last = shell.Find("swatch:#7E735F");
