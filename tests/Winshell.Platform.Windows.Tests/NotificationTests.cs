@@ -3,7 +3,6 @@ using Windows.UI.Notifications.Management;
 using Winshell.Platform.Windows.Services.Notifications;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 

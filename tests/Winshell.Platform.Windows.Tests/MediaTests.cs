@@ -4,7 +4,6 @@ using Windows.Storage.Streams;
 using Winshell.Platform.Windows.Native;
 using Winshell.Platform.Windows.Services.Media;
 using Winshell.Runtime;
-using Xunit.Abstractions;
 
 namespace Winshell.Platform.Windows.Tests;
 

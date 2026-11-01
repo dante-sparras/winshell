@@ -3,8 +3,8 @@ using System.Runtime.CompilerServices;
 namespace Winshell.TestSupport;
 
 /// <summary>
-/// Deletes <c>%TEMP%\winshell-tests</c> folders left behind by a crashed run. A folder from today stays. Each test
-/// project that makes those folders links this file, so every test run prunes them once at startup.
+/// Deletes <c>%TEMP%\winshell-tests</c> folders left behind by a crashed run. A folder from today stays. Every test
+/// project links this file, so every test run prunes them once at startup.
 /// </summary>
 internal static class TempFolderCleanup
 {

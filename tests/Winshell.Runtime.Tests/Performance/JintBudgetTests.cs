@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using Xunit.Abstractions;
 
 namespace Winshell.Runtime.Tests.Performance;
 

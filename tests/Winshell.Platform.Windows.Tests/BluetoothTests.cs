@@ -6,7 +6,6 @@ using Winshell.Platform.Windows.Services.Bluetooth;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 using Xunit;
-using Xunit.Abstractions;
 using BtDevice = Winshell.Platform.Windows.Services.Bluetooth.BluetoothDevice;
 
 namespace Winshell.Platform.Windows.Tests;

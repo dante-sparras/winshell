@@ -7,7 +7,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - Windows 11. The host and the platform target `net10.0-windows10.0.22621.0`. The parser and the runtime target `net10.0`.
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
 - C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
-- xUnit for `tests/`.
+- xUnit v3 for `tests/`, through VSTest.
 - PowerShell 7 for `scripts/dev.ps1`, `scripts/check.ps1`, `scripts/package.ps1`, `scripts/publish-release.ps1`, `scripts/update-snapshots.ps1`, and the file-based apps `scripts/fetch-reference.cs` and `scripts/render-logo.cs`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1. `scripts/PublishRelease.Tests.ps1` tests the publisher with a mocked `gh`. `scripts/run-tests.ps1` and `scripts/report-flaky.ps1` run on PowerShell 7, and `scripts/FlakyTests.Tests.ps1` tests them with mocks.
 
 ## Project Structure
@@ -61,7 +61,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell.Runtime.Tests/
 │   ├── Winshell.Platform.Windows.Tests/
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
-│   ├── TestSupport/                 # Source files the test projects link instead of copying
+│   ├── TestSupport/                 # Source files every test project links instead of copying
+│   ├── Directory.Build.props        # What every test project shares
 │   └── quarantine.txt               # Flaky tests ci leaves out and the quarantine job runs
 ├── winshell.slnx                    # The solution the check builds
 ├── dotnet-tools.json                # DocFX, pinned
