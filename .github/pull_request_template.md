@@ -15,8 +15,7 @@ Then show the smallest view that makes the point: a diagram, a diff sketch, or a
 
 <!-- A before and after: the tests or manual checks you ran and what you observed. "Tests pass" alone is not enough.
 
-For UI changes, include before/after screenshots, and a short recording when motion or interaction matters.
-Upload evidence to GitHub; never commit PR-only assets. -->
+For a change to the settings or notification surfaces, link the settings-surface or notification-surface artifact from this PR's ci run. Upload evidence to GitHub; never commit PR-only assets. -->
 
 - **Before:**
   **After:**
