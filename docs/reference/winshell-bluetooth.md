@@ -1,6 +1,6 @@
 # Winshell.Bluetooth
 
-The default Windows Bluetooth adapter, paired devices, and devices found nearby. Reading the module never pairs, connects or changes a radio. While monitoring is on, state is read again every three seconds. [Windows Bluetooth](../bluetooth.md) explains discovery, pairing, battery and what connect can do.
+The default Windows Bluetooth adapter, paired devices, and devices found nearby. Reading the module never pairs, connects or changes a radio. Setting `BluetoothAdapter.enabled` asks Windows to change that adapter's radio. While monitoring is on, state is read again every three seconds. [Windows Bluetooth](../bluetooth.md) explains discovery, pairing, battery and what connect can do.
 
 `import Winshell.Bluetooth`
 
@@ -27,7 +27,7 @@ The singleton for the whole shell. It holds the default adapter and the devices,
 
 ## BluetoothAdapter
 
-The default Windows Bluetooth adapter, reached from `Bluetooth.defaultAdapter`. Windows Settings controls its radio.
+The default Windows Bluetooth adapter, reached from `Bluetooth.defaultAdapter`. Setting `enabled` asks Windows to turn its radio on or off.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -35,7 +35,9 @@ The default Windows Bluetooth adapter, reached from `Bluetooth.defaultAdapter`. 
 | `name` | string, read-only | The adapter's name. |
 | `address` | string, read-only | The MAC address. |
 | `state` | [BluetoothAdapterState](#bluetoothadapterstate), read-only | The radio's state. |
-| `enabled` | bool, read-only | Whether `state` is `On`. |
+| `enabled` | bool | Whether `state` is `On`. Setting it asks Windows to turn this adapter's radio on or off. The value stays what Windows last reported until a later read shows the radio changed. |
+| `error` | string, read-only | Why the last radio change failed. Empty when it succeeded, or when Windows later reports a different `state`. |
+| `operationFailed(message)` | signal | Emitted when a radio change fails, with the same text as `error`. |
 
 ## BluetoothDevice
 

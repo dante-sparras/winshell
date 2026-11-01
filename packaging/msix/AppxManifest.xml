@@ -73,5 +73,7 @@
     <DeviceCapability Name="wiFiControl" />
     <DeviceCapability Name="bluetooth" />
     <DeviceCapability Name="location" />
+    <!-- A configuration can ask Windows to turn Wi-Fi and Bluetooth radios on or off. Reading them needs no capability. -->
+    <DeviceCapability Name="radios" />
   </Capabilities>
 </Package>

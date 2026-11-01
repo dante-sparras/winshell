@@ -1,5 +1,6 @@
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
+using Winshell.Platform.Windows.Services;
 using Winshell.Platform.Windows.Services.Bluetooth;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
@@ -299,14 +300,16 @@ public sealed class BluetoothTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void State_is_read_only_and_BlueZ_properties_are_gone()
+    public void Adapter_radio_is_writable_and_BlueZ_properties_are_gone()
     {
         var service = new BluetoothService(new FakeBackend(), new ManualEventLoop());
         service.Apply(Snapshot(Device()));
         var adapter = service.DefaultAdapter!;
         var item = Item(service);
         Assert.Equal("WindowsAdapter", adapter.Id);
-        Assert.False(adapter.Meta.Properties["enabled"].CanWrite);
+        // enabled used to be read-only. Device properties stay read-only.
+        Assert.True(adapter.Meta.Properties["enabled"].CanWrite);
+        Assert.True(adapter.Meta.Properties.ContainsKey("error"));
         Assert.False(item.Meta.Properties["connected"].CanWrite);
         Assert.False(item.Meta.Properties["name"].CanWrite);
         foreach (var name in new[] { "dbusPath", "adapterId", "discoverable", "pairable", "pairableTimeout", "discoverableTimeout" }) Assert.False(adapter.HasMember(name));
@@ -412,6 +415,117 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         loop.Process();
     }
 
+    [Fact]
+    public async Task Setting_the_adapter_follows_a_read_and_reports_a_refusal()
+    {
+        var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        service.Apply(backend.Snapshot);
+        var adapter = service.DefaultAdapter!;
+        string? signal = null;
+        adapter.Connect("operationFailed", args => signal = (string)args[0]!);
+
+        await service.SetAdapterEnabledAsync(adapter, true);
+        Assert.Empty(backend.Calls);
+        Assert.True(adapter.Enabled);
+
+        await service.SetAdapterEnabledAsync(adapter, false);
+        Assert.True(adapter.Enabled);
+        Assert.Equal("", adapter.Error);
+        loop.Process();
+        Assert.False(adapter.Enabled);
+        Assert.Equal(BluetoothAdapterState.Off, adapter.State);
+        Assert.Null(signal);
+        Assert.Equal("radio-off", Assert.Single(backend.Calls));
+
+        backend.Calls.Clear();
+        backend.RadioError = RadioSwitch.NoAdapterRadio;
+        backend.RadioPresent = false;
+        await service.SetAdapterEnabledAsync(adapter, true);
+        loop.Process();
+        Assert.False(adapter.Enabled);
+        Assert.Equal(RadioSwitch.NoAdapterRadio, adapter.Error);
+        Assert.Equal(RadioSwitch.NoAdapterRadio, signal);
+
+        signal = null;
+        backend.RadioPresent = true;
+        backend.RadioError = null;
+        backend.KeepSnapshot = true;
+        await service.SetAdapterEnabledAsync(adapter, true);
+        loop.Process();
+        Assert.False(adapter.Enabled);
+        Assert.Equal("", adapter.Error);
+        Assert.Null(signal);
+
+        backend.KeepSnapshot = false;
+        backend.RadioException = new UnauthorizedAccessException("Access revoked");
+        await service.SetAdapterEnabledAsync(adapter, true);
+        loop.Process();
+        Assert.False(adapter.Enabled);
+        Assert.Equal("Access revoked", adapter.Error);
+
+        service.Apply(Snapshot(Device()));
+        Assert.True(service.DefaultAdapter!.Enabled);
+        Assert.Equal("", service.DefaultAdapter.Error);
+        service.Destroy();
+    }
+
+    [Fact]
+    public async Task An_adapter_request_in_flight_ignores_another_and_the_same_value_does_not_ask()
+    {
+        var gate = new TaskCompletionSource<string?>();
+        var backend = new FakeBackend { Snapshot = new(true, Adapter() with { State = BluetoothAdapterState.Off }, []), RadioGate = gate };
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        service.Apply(backend.Snapshot);
+        var adapter = service.DefaultAdapter!;
+        await service.SetAdapterEnabledAsync(adapter, false);
+        Assert.Empty(backend.Calls);
+
+        var first = service.SetAdapterEnabledAsync(adapter, true);
+        await service.SetAdapterEnabledAsync(adapter, false);
+        Assert.Equal("radio-on", Assert.Single(backend.Calls));
+        adapter.Destroy();
+        gate.SetResult(null);
+        await first;
+        loop.Process();
+        Assert.Equal("", adapter.Error);
+    }
+
+    [Fact]
+    public void Qml_can_assign_the_adapter_value_it_already_has()
+    {
+        var backend = new FakeBackend();
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        var directory = Path.Combine(Path.GetTempPath(), "winshell-radio-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            service.Apply(Snapshot(Device()));
+            File.WriteAllText(Path.Combine(directory, "shell.qml"), """
+                import QtQml
+                import Winshell.Bluetooth
+                QtObject {
+                    Component.onCompleted: TestBluetooth.defaultAdapter.enabled = true
+                }
+                """);
+            var registry = StandardModules.Create();
+            BluetoothModule.Register(registry);
+            registry.Module("Winshell.Bluetooth").Singleton(_ => service, "TestBluetooth");
+            using var engine = new QmlEngine(registry, loop, new Log(), directory);
+            engine.CreateRoot(Path.Combine(directory, "shell.qml"));
+            Assert.Empty(backend.Calls);
+            Assert.True(service.DefaultAdapter!.Enabled);
+        }
+        finally
+        {
+            service.Destroy();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private sealed class FakeBackend : IBluetoothBackend
     {
         public BluetoothSnapshot Snapshot { get; set; } = Snapshot();
@@ -430,6 +544,11 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         public int Stops { get; private set; }
         public int Reads { get; private set; }
         public bool Disposed { get; private set; }
+        public bool RadioPresent { get; set; } = true;
+        public string? RadioError { get; set; }
+        public Exception? RadioException { get; set; }
+        public bool KeepSnapshot { get; set; }
+        public TaskCompletionSource<string?>? RadioGate { get; init; }
         public TaskCompletionSource FirstRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task<BluetoothSnapshot> ReadAsync()
         {
@@ -456,6 +575,24 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         {
             Calls.Add(connect ? "connect" : "disconnect"); Connections.Add((container, connect));
             return Failure is { } e ? Task.FromException<bool>(e) : Task.FromResult(AudioAccepted);
+        }
+        public Task<string?> SetRadioEnabledAsync(bool enabled)
+        {
+            Calls.Add(enabled ? "radio-on" : "radio-off");
+            if (!RadioPresent)
+                return Task.FromResult<string?>(RadioSwitch.NoAdapterRadio);
+            if (RadioException is { } exception)
+                return Task.FromException<string?>(exception);
+            if (RadioGate is { } gate)
+                return FinishRadio(gate.Task, enabled);
+            return Task.FromResult(ApplyRadio(enabled, RadioError));
+        }
+        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled) => ApplyRadio(enabled, await pending.ConfigureAwait(false));
+        private string? ApplyRadio(bool enabled, string? error)
+        {
+            if (error is null && !KeepSnapshot && Snapshot.Adapter is { } adapter)
+                Snapshot = Snapshot with { Adapter = adapter with { State = enabled ? BluetoothAdapterState.On : BluetoothAdapterState.Off } };
+            return error;
         }
         public void Dispose() { Disposed = true; }
     }
