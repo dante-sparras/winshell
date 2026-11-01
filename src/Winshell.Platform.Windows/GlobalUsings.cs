@@ -15,6 +15,7 @@ global using AppEntry = Winshell.Platform.Windows.Services.Apps.AppEntry;
 global using AppJumpList = Winshell.Platform.Windows.Services.Apps.AppJumpList;
 global using AppsService = Winshell.Platform.Windows.Services.Apps.AppsService;
 global using AppWindow = Winshell.Platform.Windows.Services.WindowList.AppWindow;
+global using Hotkey = Winshell.Platform.Windows.Services.Input.Hotkey;
 global using JumpListService = Winshell.Platform.Windows.Services.Apps.JumpListService;
 global using RecentDocuments = Winshell.Platform.Windows.Services.Apps.RecentDocuments;
 global using VirtualDesktop = Winshell.Platform.Windows.Services.WindowList.VirtualDesktop;
