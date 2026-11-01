@@ -48,7 +48,9 @@ internal static class Wait
         while (!done())
         {
             Assert.True(Stopwatch.GetElapsedTime(started) < Patience, $"Timed out: {what}");
+#pragma warning disable RS0030 // This is the one place a test waits on time.
             await Task.Delay(pause, token);
+#pragma warning restore RS0030
             pause = Next(pause);
             await between();
         }
