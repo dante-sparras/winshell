@@ -1,6 +1,6 @@
 using Winshell.Native;
 
-namespace Winshell.Platform.Windows;
+namespace Winshell;
 
 /// <summary>
 /// The rectangle a panel's app bar holds, and when to ask Explorer for another. A reservation that moves the work
