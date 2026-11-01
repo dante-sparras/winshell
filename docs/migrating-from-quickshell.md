@@ -267,7 +267,7 @@ These did nothing on Windows, or repeated what another type does.
 | `WlrLayershell.keyboardFocus` | `PanelWindow.focusable` |
 | `WlrLayershell.namespace` | Nothing |
 | `BackgroundEffect.blurRegion` | `WindowEffects.backdrop: WindowEffects.Acrylic` |
-| `HyprlandWindow` | Nothing |
+| `HyprlandWindow` | `ShellWindow.opacity` and `ShellWindow.visibleMask`, on the window itself. There is no attached object. Opacity fades the content only; the Windows backdrop does not fade with it. Values outside 0 to 1 are clamped. `visibleMask` is a hint that clips drawing to the region's bounding rectangle and does not change clicks. |
 | `HyprlandToplevel` attached to a toplevel | `Winland.toplevels`. `WinlandWindow` is not attached to an `AppWindow` |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
 | `ShortcutInhibitor` | Nothing |

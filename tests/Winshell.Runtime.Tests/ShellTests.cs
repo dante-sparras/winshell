@@ -106,6 +106,32 @@ public sealed class FakeWindow(WindowKind kind, IWindowClient client, FakePlatfo
 
     public IReadOnlyList<QRect>? InputRegion { get; private set; }
 
+    /// <summary>The last opacity sent. 1 is the start, and sending 1 again is not counted.</summary>
+    public double Opacity { get; private set; } = 1;
+
+    public int OpacitySets { get; private set; }
+
+    public void SetOpacity(double opacity)
+    {
+        if (opacity == Opacity)
+            return;
+        Opacity = opacity;
+        OpacitySets++;
+    }
+
+    /// <summary>The clip rectangle, or null when the window draws everything. Sending the current value is not counted.</summary>
+    public QRect? VisibleMask { get; private set; }
+
+    public int VisibleMaskSets { get; private set; }
+
+    public void SetVisibleMask(QRect? bounds)
+    {
+        if (Nullable.Equals(bounds, VisibleMask))
+            return;
+        VisibleMask = bounds;
+        VisibleMaskSets++;
+    }
+
     public void SetCursor(int shape)
     {
     }

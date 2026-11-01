@@ -163,7 +163,9 @@ It is also an attached object on any item: `ShellWindow.window` is the window th
 | `backingWindowVisible` | bool, read-only | Whether the native window is on screen now. |
 | `color` | color | What the window clears to before drawing its items. Default white. Make it `"transparent"` or translucent to let a [WindowEffects](#windoweffects) backdrop show through. Changing it after the window exists does not change the swap chain. |
 | `surfaceFormat` | group: `opaque` (bool) | Whether the swap chain ignores alpha. Set `surfaceFormat.opaque`, as in `surfaceFormat.opaque: true`; the group itself can't be replaced. Left unset, `opaque` is true when `color` is opaque and false when it is not, and the swap chain stays premultiplied, which is the chain every window has used. Set it true for an opaque chain (`DXGI_ALPHA_MODE_IGNORE`) or false for a premultiplied chain. A change after the native window exists is ignored, and the window log warns. Quickshell locks an opaque color when the window is created, so that window cannot turn transparent later unless `opaque` was set false. Winshell locks the chain only when `opaque` is set, so a window that starts with an opaque color can turn transparent later. |
+| `opacity` | real | A multiplier for the whole window, from 1 down to 0. Default 1. A value below 0 becomes 0, and a value above 1 becomes 1. It fades the content the window draws. It does not fade a Mica, Acrylic or Mica Alt backdrop. Windows draws that backdrop behind the content, and documents no opacity for it. `SetLayeredWindowAttributes` fades a redirection bitmap, and these windows draw with DirectComposition instead, so they have no such bitmap. At 1 the window is left as it was. |
 | `mask` | [Region](#region) | The part of the window that takes clicks; clicks elsewhere go to the window below. Null, the default, is the whole window. An empty region lets every click through. Windows also clips drawing to a non-empty mask, so the parts outside it are not shown. |
+| `visibleMask` | [Region](#region) | A hint that only this part of the window needs drawing. Null, the default, draws the whole window and changes nothing. It does not change which pixels take clicks; `mask` does that. The hint should cover every pixel that is not fully transparent. Windows clips the composition visual to the region's bounding rectangle. DirectComposition can clip a visual to one rectangle or one rounded rectangle, and a region does not fit one rounded rectangle, so the clip is the bounds. A rounded corner, an ellipse or a hole inside that rectangle is still drawn. Pixels outside it are not drawn. |
 | `screen` | [ShellScreen](#shellscreen) | The screen the window is on. Setting it puts a panel or a new floating window on that screen. Unset, it is the screen the window is shown on, or the primary screen. |
 | `devicePixelRatio` | real, read-only | The scale of the screen the window is on. |
 | `updatesEnabled` | bool | Whether the window draws its items. Default true. While false, it shows only `color`. |
@@ -242,7 +244,7 @@ Where a popup window attaches to its parent window. Reach it as `PopupWindow.anc
 
 ## WindowEffects
 
-An attached object for a window, as `WindowEffects.backdrop: WindowEffects.Mica` on a `PanelWindow`, `FloatingWindow` or `PopupWindow`: the Windows 11 material behind it and the shape of its corners. It has no effect on an item that is not a window. A backdrop shows through where the window's `color` is transparent.
+An attached object for a window, as `WindowEffects.backdrop: WindowEffects.Mica` on a `PanelWindow`, `FloatingWindow` or `PopupWindow`: the Windows 11 material behind it and the shape of its corners. It has no effect on an item that is not a window. A backdrop shows through where the window's `color` is transparent. A window's `opacity` does not fade this backdrop.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -253,7 +255,7 @@ Enum values: `None`, `Mica`, `Acrylic`, `MicaAlt`, `DefaultCorners`, `SquareCorn
 
 ## Region
 
-A shape for a window's `mask`, created as `Region { }`. Child regions in `regions`, its default property, are combined with it in order, each by its own `intersection`. Coordinates are in the window's content item.
+A shape for a window's `mask` or `visibleMask`, created as `Region { }`. Child regions in `regions`, its default property, are combined with it in order, each by its own `intersection`. Coordinates are in the window's content item.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -263,7 +265,7 @@ A shape for a window's `mask`, created as `Region { }`. Child regions in `region
 | `width` | real | The width, when `item` is not set. Default 0. |
 | `height` | real | The height, when `item` is not set. Default 0. |
 | `shape` | [RegionShape](#regionshape) | `RegionShape.Rect`, the default, or `RegionShape.Ellipse`, which fills the bounds. |
-| `intersection` | [Intersection](#intersection) | How this region combines with its parent region. Default `Combine`. On the window's mask itself, anything but `Combine` applies the region to the whole window, so `Subtract` makes every part but the region take clicks. |
+| `intersection` | [Intersection](#intersection) | How this region combines with its parent region. Default `Combine`. On the window's `mask` or `visibleMask`, anything but `Combine` applies the region to the whole window. On `mask`, `Subtract` makes every part but the region take clicks. On `visibleMask`, Windows still clips to the bounding rectangle of that shape. |
 | `radius` | real | The corner radius, in logical pixels. A corner whose own radius is 0 uses this. All of them 0 is a sharp rectangle. An ellipse ignores it. |
 | `topLeftRadius` | real | That corner's radius. 0 uses `radius`. An ellipse ignores it. |
 | `topRightRadius` | real | That corner's radius. 0 uses `radius`. An ellipse ignores it. |

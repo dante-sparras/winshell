@@ -20,7 +20,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     private double _height = 100;
     private bool _visible = true;
     private QColor _color = QColor.White;
+    private double _opacity = 1;
     private Region? _mask;
+    private Region? _visibleMask;
     private ShellScreen? _screen;
     private string? _shownOnScreenId;
     private bool _updatesEnabled = true;
@@ -156,7 +158,46 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         }
     }
 
+    /// <summary>
+    /// A multiplier for the window's content, from 1 to 0. Values outside that range clamp.
+    /// The Desktop Window Manager backdrop does not fade with it.
+    /// </summary>
+    [Qml]
+    public double Opacity
+    {
+        get { Track(); return _opacity; }
+        set
+        {
+            // NaN is not a range to clamp, and DirectComposition rejects it.
+            if (double.IsNaN(value))
+                return;
+            if (SetField(ref _opacity, Math.Clamp(value, 0, 1)))
+                ApplyOpacity();
+        }
+    }
+
+    /// <summary>
+    /// A hint for which part of the window to draw. Null draws the whole window.
+    /// Windows clips to the region's bounding rectangle. This does not change <see cref="Mask"/>.
+    /// </summary>
+    [Qml]
+    public Region? VisibleMask
+    {
+        get { Track(); return _visibleMask; }
+        set
+        {
+            if (_visibleMask == value)
+                return;
+            _visibleMaskConnection?.Dispose();
+            _visibleMask = value;
+            _visibleMaskConnection = value?.Connect("changed", _ => ApplyVisibleMask());
+            NotifyChanged("visibleMask");
+            ApplyVisibleMask();
+        }
+    }
+
     private IDisposable? _maskConnection;
+    private IDisposable? _visibleMaskConnection;
 
     [Qml]
     public virtual ShellScreen? Screen
@@ -327,6 +368,8 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         ApplyBackdrop();
         OnPlacementChanged();
         UpdateMask();
+        ApplyOpacity();
+        ApplyVisibleMask();
         UpdateVisibility();
         Scene.RequestUpdate();
         _backend?.RequestFrame();
@@ -385,25 +428,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             _backend.SetInputRegion(null);
             return;
         }
-        using var region = _mask.ToSkRegion(Scene.Root);
+        using var region = Combined(_mask);
         var rects = new List<QRect>();
-        if (_mask.Intersection != 0)
-        {
-            // Not Combine: the mask applies on top of the whole window.
-            using var full = new SKRegion(SKRectI.Create(0, 0, (int)Math.Ceiling(_width), (int)Math.Ceiling(_height)));
-            var op = (Intersection)_mask.Intersection switch
-            {
-                Intersection.Subtract => SKRegionOperation.Difference,
-                Intersection.Intersect => SKRegionOperation.Intersect,
-                _ => SKRegionOperation.XOR,
-            };
-            full.Op(region, op);
-            Collect(full, rects);
-        }
-        else
-        {
-            Collect(region, rects);
-        }
+        Collect(region, rects);
         _backend.SetInputRegion(rects);
 
         static void Collect(SKRegion region, List<QRect> into)
@@ -412,6 +439,70 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             while (iterator.Next(out var r))
                 into.Add(new QRect(r.Left, r.Top, r.Width, r.Height));
         }
+    }
+
+    private void ApplyOpacity() => _backend?.SetOpacity(_opacity);
+
+    private void ApplyVisibleMask() => _backend?.SetVisibleMask(_visibleMask is null ? null : BoundsOf(_visibleMask));
+
+    /// <summary>The region as it applies to the whole window, when its own intersection is not Combine.</summary>
+    private SKRegion Combined(Region region)
+    {
+        var shape = region.ToSkRegion(Scene.Root);
+        if (region.Intersection == 0)
+            return shape;
+        // Not Combine: the region applies on top of the whole window.
+        var full = new SKRegion(SKRectI.Create(0, 0, (int)Math.Ceiling(_width), (int)Math.Ceiling(_height)));
+        var op = (Intersection)region.Intersection switch
+        {
+            Intersection.Subtract => SKRegionOperation.Difference,
+            Intersection.Intersect => SKRegionOperation.Intersect,
+            _ => SKRegionOperation.XOR,
+        };
+        full.Op(shape, op);
+        shape.Dispose();
+        return full;
+    }
+
+    /// <summary>
+    /// The bounding rectangle of the region. DirectComposition clips a visual to one rectangle or one rounded
+    /// rectangle, and a region does not fit one rounded rectangle, so the clip is these bounds. An empty region
+    /// is an empty rectangle, which draws nothing; null means no clip.
+    /// </summary>
+    private QRect BoundsOf(Region region)
+    {
+        using var combined = Combined(region);
+        using var iterator = combined.CreateRectIterator();
+        var any = false;
+        var left = 0;
+        var top = 0;
+        var right = 0;
+        var bottom = 0;
+        while (iterator.Next(out var rect))
+        {
+            var edgeRight = rect.Left + rect.Width;
+            var edgeBottom = rect.Top + rect.Height;
+            if (!any)
+            {
+                left = rect.Left;
+                top = rect.Top;
+                right = edgeRight;
+                bottom = edgeBottom;
+                any = true;
+            }
+            else
+            {
+                if (rect.Left < left)
+                    left = rect.Left;
+                if (rect.Top < top)
+                    top = rect.Top;
+                if (edgeRight > right)
+                    right = edgeRight;
+                if (edgeBottom > bottom)
+                    bottom = edgeBottom;
+            }
+        }
+        return any ? new QRect(left, top, right - left, bottom - top) : new QRect(0, 0, 0, 0);
     }
 
     /// <summary>The item in this window that has keyboard focus, or null.</summary>
@@ -437,7 +528,8 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     {
         if (IsDestroyed)
             return;
-        if (SetField(ref _devicePixelRatio, devicePixelRatio, nameof(DevicePixelRatio)))
+        var scaleChanged = SetField(ref _devicePixelRatio, devicePixelRatio, nameof(DevicePixelRatio));
+        if (scaleChanged)
             Scene.DevicePixelRatio = devicePixelRatio;
         var changed = false;
         if (_width != width)
@@ -459,6 +551,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             NotifyChanged("windowTransform");
             UpdateMask();
         }
+        // A fixed region still covers a different number of physical pixels when the scale changes.
+        if (_visibleMask is not null && (changed || scaleChanged))
+            ApplyVisibleMask();
         Scene.RequestUpdate();
     }
 
@@ -664,6 +759,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         Theme.Changed -= OnThemeChanged;
         _restartTimer?.Dispose();
         _maskConnection?.Dispose();
+        _visibleMaskConnection?.Dispose();
         WindowRegistry.Remove(this);
         Scene.Root.Destroy();
         _backend?.Dispose();
