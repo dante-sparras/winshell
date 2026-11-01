@@ -44,7 +44,7 @@ Types not listed keep their names in the new module.
 | `PwObjectTracker`, `PwNodeLinkTracker`, `PwNodePeakMonitor`, `PwAudioChannel` | `AudioObjectTracker`, `AudioLinkTracker`, `AudioPeakMonitor`, `AudioChannel` | `Winshell.Audio` |
 | `Mpris`, `MprisPlayer` | `Media`, `MediaSession` | `Winshell.Media` |
 | `MprisPlaybackState`, `MprisLoopState` | `MediaPlaybackState`, `MediaLoopState` | `Winshell.Media` |
-| `NMSettings` | `NetworkProfile` | `Winshell.Network` |
+| `NMSettings` | `WifiProfile` | `Winshell.Network` |
 | `UPower`, `UPowerDevice` | `Power`, `PowerDevice` | `Winshell.Power` |
 | `UPowerDeviceState`, `UPowerDeviceType` | `PowerDeviceState`, `PowerDeviceType` | `Winshell.Power` |
 | `PowerProfiles`, `PowerProfile` | `PowerMode`, `PowerModeLevel` | `Winshell.Power` |
@@ -267,7 +267,7 @@ These did nothing on Windows, or repeated what another type does.
 | `WlrLayershell.keyboardFocus` | `PanelWindow.focusable` |
 | `WlrLayershell.namespace` | Nothing |
 | `BackgroundEffect.blurRegion` | `WindowEffects.backdrop: WindowEffects.Acrylic` |
-| `HyprlandWindow` | Nothing |
+| `HyprlandWindow` | `ShellWindow.opacity` and `ShellWindow.visibleMask`, on the window itself. There is no attached object. Opacity fades the content only; the Windows backdrop does not fade with it. Values outside 0 to 1 are clamped. `visibleMask` is a hint that clips drawing to the region's bounding rectangle and does not change clicks. |
 | `HyprlandToplevel` attached to a toplevel | `Winland.toplevels`. `WinlandWindow` is not attached to an `AppWindow` |
 | `ScreencopyView` | `Winshell.Capture`: `CaptureSession` and `CaptureView`; see [Windows capture](capture.md) |
 | `ShortcutInhibitor` | Nothing |
@@ -300,7 +300,8 @@ Stopping clears the preview and all retained pixels. Export with `saveToFile()` 
 - The environment variables are `WINSHELL_CONFIG_DIR`, `WINSHELL_APP_ID`, `WINSHELL_DISABLE_FILE_WATCHER` and `WINSHELL_NO_RELOAD_POPUP`, not `XDG_CONFIG_HOME`, `QS_APP_ID`, `QS_DISABLE_FILE_WATCHER` and `QS_NO_RELOAD_POPUP`.
 - `Shell.appId` is `winshell` unless `//@ pragma AppId` or `WINSHELL_APP_ID` sets it.
 - `//@ pragma IconTheme` is not a shell setting. A configuration that contains it fails to load.
-- `ShellScreen.physicalPixelDensity`, `ShellScreen.logicalPixelDensity`, `FloatingWindow.fullscreen`, `FloatingWindow.parentWindow`, `ShellWindow.surfaceFormat` and `ShellWindow.resourcesLost` are removed. `Region` corner radii do clip the input mask: a corner above 0 replaces `radius`, and 0 uses `radius`. An ellipse ignores them.
+- `ShellScreen.physicalPixelDensity`, `ShellScreen.logicalPixelDensity`, `ShellWindow.surfaceFormat` and `ShellWindow.resourcesLost` are removed. `Region` corner radii do clip the input mask: a corner above 0 replaces `radius`, and 0 uses `radius`. An ellipse ignores them.
+- `FloatingWindow.fullscreen` covers the monitor, including the taskbar, and restores the previous place and frame. `FloatingWindow.parentWindow` is the owning window: the owned window stays above it, and is hidden and closed with it. It can be changed after the window is visible. Quickshell refuses that change. Quickshell's type is `QtObject`; here the owner is a shell window.
 - `Shell.hasVersion` and `//@ if hasVersion(...)` answer for the Winshell release stamped into the build from `.release-please-manifest.json`, not Quickshell 0.3. `hasVersion(0, 3)` is true on 0.3.0 and any later release. A feature list names unreleased features of that exact release; none are declared, so `hasVersion(0, 3, ["feature"])` is false on 0.3.0 and true on a later release. `Shell.hasQtVersion` and `//@ if hasQtVersion(...)` still check the Qt Quick language level this runtime implements, which is 6.10.
 - Log categories are short: `audio`, `media`, `power`, `hotkey`, `winland` and so on, not `pipewire`, `mpris`, `quickshell.service.upower` and `hyprland`.
 
@@ -330,8 +331,16 @@ See [Windows networking](network.md) for the native models, permissions and expl
 
 | Former member | Windows API |
 | --- | --- |
-| `Network.nmSettings`, `connectWithSettings()`, `NetworkProfile.uuid` | Removed; `Networking.profiles` exposes real Windows connection profiles and their `adapterId`, connectivity and cost |
-| `NetworkDevice.nmManaged`, `autoconnect` | Removed; Windows manages adapters and per-network reconnection |
+| `Network.nmSettings` | `savedProfiles`, an ObjectModel of `WifiProfile` |
+| `connectWithSettings()` | `connectWithProfile(profile)`. It reports on the network's `busy`, `error` and `operationFailed`. The call returns when Windows accepts it, and the next snapshot reports the association |
+| `NetworkProfile.uuid` | Removed. `WifiProfile.id` is the adapter id and the profile name. `Networking.profiles` is Windows' connection-profile list, not the saved WLAN profiles |
+| `NMSettings.id` | `name`, the WLAN profile name. `ssid` is the network name inside the profile |
+| `settingsChanged` | Property change signals, such as `autoConnectChanged`. There is no settings object and no `settingsChanged` signal |
+| `loaded` | `loaded` bool. A profile that could not be read has `loaded` false and an `error`. That does not emit `operationFailed` |
+| `clearSecrets()` | `clearPassword()`. It removes the key element. `read()` never returns a key |
+| `NMSettings` writes | Setting `autoConnect` changes only the profile's connection mode and keeps every other element |
+| `NetworkDevice.nmManaged` | Removed. Windows manages the adapter |
+| `NetworkDevice.autoconnect` | `WifiProfile.autoConnect` on each saved profile. There is no adapter-wide switch |
 | `NetworkBackendType`, `Networking.backend` | Removed; the backend is always Windows |
 | `ConnectivityCheckEnabled`, `canCheckConnectivity` | Removed; `connectivity` reports Windows NCSI without masking it |
 | `checkConnectivity()` | `refresh()` |
@@ -339,7 +348,8 @@ See [Windows networking](network.md) for the native models, permissions and expl
 | `ConnectionFailReason.NoSecrets`, `WifiAuthTimeout`, `WifiNetworkLost`, `WifiClientFailed` | Action `error`: `InvalidPassword`, `Timeout`, `NetworkUnavailable`, `UnsupportedAuthentication` |
 | `Network.known`, `stateChanging`, `onConnectionFailed` | `saved`, `busy`, `onOperationFailed(message)` and `error` |
 | `WifiNetwork.connectWithPsk()` | `connectWithPassword()` |
-| `WifiDevice.scannerEnabled`, `mode`, `WifiDeviceMode` | Removed; call `scan()` for one scan and observe `scanning` |
+| `WifiDevice.scannerEnabled` | Removed; call `scan()` for one scan and observe `scanning` |
+| `WifiDevice.mode`, `WifiDeviceMode` | Read-only `mode`. `Station` is an extensible station and `AccessPoint` is an extensible access point. Windows 11 does not report ad hoc, so `AdHoc` is never returned. `Mesh` is kept and never returned. Anything else is `Unknown`. `toString` returns the value name |
 | Writable `Networking.wifiEnabled` | Writable `wifiEnabled`. Quickshell updates the value, then sets an rfkill software block. Winshell asks Windows and leaves the property on what Windows reports. `wifiState` stays read-only |
 | `NetworkDevice.disconnect()`, `WiredDevice.network` | Use the `networks` model; Wi-Fi network objects provide `disconnect()`; wired connections are managed by Windows |
 
@@ -352,12 +362,14 @@ See [Windows Bluetooth](bluetooth.md) for state, discovery, battery and action l
 | Former member | Windows API |
 | --- | --- |
 | `BluetoothAdapter.adapterId` (`hci0`), adapter/device `dbusPath` | Windows device `id`; no D-Bus or HCI aliases |
-| Writable adapter `enabled`, `discoverable`, `discoverableTimeout`, `pairable`, `pairableTimeout` | `enabled` asks Windows to change the radio and keeps the value Windows reports. `discoverable`, `discoverableTimeout`, `pairable` and `pairableTimeout` are removed |
+| Writable adapter `enabled` | Asks Windows to change the radio and keeps the value Windows reports |
+| Writable `discoverable` and `pairable` | `discoverable` asks Windows to change whether the radio can be found. `pairable` asks Windows to change incoming connections, which is wider than BlueZ pairing. Both keep the value a later read reports |
+| `discoverableTimeout`, `pairableTimeout` | Removed. Windows has no discoverable or pairable timeout |
 | `BluetoothAdapterState.Enabled`, `Disabled`, `Blocked`, `Enabling`, `Disabling` | `On`, `Off`, `Disabled`, `Unknown`; pending device work is reported separately by `operation` |
 | `BluetoothAdapter.discovering`, `devices` | Singleton `Bluetooth.discovering`, `startDiscovery()`, `stopDiscovery()`, `devices`, `pairedDevices`, `nearbyDevices` |
 | `BluetoothDevice.deviceName`, writable `name` | Read-only `name` |
 | `bonded`, writable `trusted`, `blocked`, `wakeAllowed` | Removed BlueZ/device-manager flags; use `paired` and Windows Settings |
-| `icon` (BlueZ icon names) | Removed; configurations can use their own Fluent icons |
+| `icon` | `icon`, the same BlueZ device-type name. `Shell.iconPath` draws names Winshell already knows, such as `audio-headset`. `camera-video`, `input-tablet`, `modem`, `scanner` and `unknown` do not resolve; branch on the string |
 | Writable `connected`, pending `state` values | Read-only Windows-reported `connected`/`state`; explicit `connect()`/`disconnect()` calls and separate `operation`/`busy` |
 | `cancelPair()`, `forget()` | `cancelPairing()`, `unpair()` |
 

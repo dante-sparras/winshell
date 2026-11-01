@@ -19,7 +19,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     private double _height = 100;
     private bool _visible = true;
     private QColor _color = QColor.White;
+    private double _opacity = 1;
     private Region? _mask;
+    private Region? _visibleMask;
     private ShellScreen? _screen;
     private string? _shownOnScreenId;
     private bool _updatesEnabled = true;
@@ -27,6 +29,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     private IWindowBackend? _backend;
     private SurfaceRestarts? _restarts;
     private IDisposable? _restartTimer;
+    private bool _rebuildOnShow;
     private readonly QObject _windowTransform = new();
     private WindowBackdrop _backdrop;
     private WindowCorners _corners;
@@ -140,7 +143,46 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         }
     }
 
+    /// <summary>
+    /// A multiplier for the window's content, from 1 to 0. Values outside that range clamp.
+    /// The Desktop Window Manager backdrop does not fade with it.
+    /// </summary>
+    [Qml]
+    public double Opacity
+    {
+        get { Track(); return _opacity; }
+        set
+        {
+            // NaN is not a range to clamp, and DirectComposition rejects it.
+            if (double.IsNaN(value))
+                return;
+            if (SetField(ref _opacity, Math.Clamp(value, 0, 1)))
+                ApplyOpacity();
+        }
+    }
+
+    /// <summary>
+    /// A hint for which part of the window to draw. Null draws the whole window.
+    /// Windows clips to the region's bounding rectangle. This does not change <see cref="Mask"/>.
+    /// </summary>
+    [Qml]
+    public Region? VisibleMask
+    {
+        get { Track(); return _visibleMask; }
+        set
+        {
+            if (_visibleMask == value)
+                return;
+            _visibleMaskConnection?.Dispose();
+            _visibleMask = value;
+            _visibleMaskConnection = value?.Connect("changed", _ => ApplyVisibleMask());
+            NotifyChanged("visibleMask");
+            ApplyVisibleMask();
+        }
+    }
+
     private IDisposable? _maskConnection;
+    private IDisposable? _visibleMaskConnection;
 
     [Qml]
     public virtual ShellScreen? Screen
@@ -307,6 +349,8 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         ApplyBackdrop();
         OnPlacementChanged();
         UpdateMask();
+        ApplyOpacity();
+        ApplyVisibleMask();
         UpdateVisibility();
         Scene.RequestUpdate();
         _backend?.RequestFrame();
@@ -322,7 +366,23 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     protected void UpdateVisibility()
     {
         if (_backend is null)
+        {
+            // The owner closed and Windows destroyed this window. Showing it again makes a new one.
+            if (_rebuildOnShow && ShouldShow && _restartTimer is null && !IsDestroyed)
+            {
+                _rebuildOnShow = false;
+                try
+                {
+                    CreateBackend();
+                    OnBackendCreated();
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                    OnFailed(e);
+                }
+            }
             return;
+        }
         var show = ShouldShow;
         if (_backend.IsVisible != show)
         {
@@ -345,25 +405,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             _backend.SetInputRegion(null);
             return;
         }
-        using var region = _mask.ToSkRegion(Scene.Root);
+        using var region = Combined(_mask);
         var rects = new List<QRect>();
-        if (_mask.Intersection != 0)
-        {
-            // Not Combine: the mask applies on top of the whole window.
-            using var full = new SKRegion(SKRectI.Create(0, 0, (int)Math.Ceiling(_width), (int)Math.Ceiling(_height)));
-            var op = (Intersection)_mask.Intersection switch
-            {
-                Intersection.Subtract => SKRegionOperation.Difference,
-                Intersection.Intersect => SKRegionOperation.Intersect,
-                _ => SKRegionOperation.XOR,
-            };
-            full.Op(region, op);
-            Collect(full, rects);
-        }
-        else
-        {
-            Collect(region, rects);
-        }
+        Collect(region, rects);
         _backend.SetInputRegion(rects);
 
         static void Collect(SKRegion region, List<QRect> into)
@@ -372,6 +416,70 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             while (iterator.Next(out var r))
                 into.Add(new QRect(r.Left, r.Top, r.Width, r.Height));
         }
+    }
+
+    private void ApplyOpacity() => _backend?.SetOpacity(_opacity);
+
+    private void ApplyVisibleMask() => _backend?.SetVisibleMask(_visibleMask is null ? null : BoundsOf(_visibleMask));
+
+    /// <summary>The region as it applies to the whole window, when its own intersection is not Combine.</summary>
+    private SKRegion Combined(Region region)
+    {
+        var shape = region.ToSkRegion(Scene.Root);
+        if (region.Intersection == 0)
+            return shape;
+        // Not Combine: the region applies on top of the whole window.
+        var full = new SKRegion(SKRectI.Create(0, 0, (int)Math.Ceiling(_width), (int)Math.Ceiling(_height)));
+        var op = (Intersection)region.Intersection switch
+        {
+            Intersection.Subtract => SKRegionOperation.Difference,
+            Intersection.Intersect => SKRegionOperation.Intersect,
+            _ => SKRegionOperation.XOR,
+        };
+        full.Op(shape, op);
+        shape.Dispose();
+        return full;
+    }
+
+    /// <summary>
+    /// The bounding rectangle of the region. DirectComposition clips a visual to one rectangle or one rounded
+    /// rectangle, and a region does not fit one rounded rectangle, so the clip is these bounds. An empty region
+    /// is an empty rectangle, which draws nothing; null means no clip.
+    /// </summary>
+    private QRect BoundsOf(Region region)
+    {
+        using var combined = Combined(region);
+        using var iterator = combined.CreateRectIterator();
+        var any = false;
+        var left = 0;
+        var top = 0;
+        var right = 0;
+        var bottom = 0;
+        while (iterator.Next(out var rect))
+        {
+            var edgeRight = rect.Left + rect.Width;
+            var edgeBottom = rect.Top + rect.Height;
+            if (!any)
+            {
+                left = rect.Left;
+                top = rect.Top;
+                right = edgeRight;
+                bottom = edgeBottom;
+                any = true;
+            }
+            else
+            {
+                if (rect.Left < left)
+                    left = rect.Left;
+                if (rect.Top < top)
+                    top = rect.Top;
+                if (edgeRight > right)
+                    right = edgeRight;
+                if (edgeBottom > bottom)
+                    bottom = edgeBottom;
+            }
+        }
+        return any ? new QRect(left, top, right - left, bottom - top) : new QRect(0, 0, 0, 0);
     }
 
     /// <summary>The item in this window that has keyboard focus, or null.</summary>
@@ -397,7 +505,8 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
     {
         if (IsDestroyed)
             return;
-        if (SetField(ref _devicePixelRatio, devicePixelRatio, nameof(DevicePixelRatio)))
+        var scaleChanged = SetField(ref _devicePixelRatio, devicePixelRatio, nameof(DevicePixelRatio));
+        if (scaleChanged)
             Scene.DevicePixelRatio = devicePixelRatio;
         var changed = false;
         if (_width != width)
@@ -419,6 +528,9 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
             NotifyChanged("windowTransform");
             UpdateMask();
         }
+        // A fixed region still covers a different number of physical pixels when the scale changes.
+        if (_visibleMask is not null && (changed || scaleChanged))
+            ApplyVisibleMask();
         Scene.RequestUpdate();
     }
 
@@ -477,6 +589,20 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
 
     public virtual void OnStateChanged(bool maximized, bool minimized)
     {
+    }
+
+    public virtual void OnFullscreenChanged(bool fullscreen)
+    {
+    }
+
+    /// <summary>Windows destroyed the native window. The shell window stays, hidden, until it is shown again.</summary>
+    public void OnBackingDestroyed()
+    {
+        if (IsDestroyed)
+            return;
+        _backend = null;
+        _rebuildOnShow = true;
+        OnClosed();
     }
 
     /// <summary>
@@ -578,6 +704,7 @@ public abstract class ShellWindow : Reloadable, IWindowClient, IGlobalPosition
         Theme.Changed -= OnThemeChanged;
         _restartTimer?.Dispose();
         _maskConnection?.Dispose();
+        _visibleMaskConnection?.Dispose();
         WindowRegistry.Remove(this);
         Scene.Root.Destroy();
         _backend?.Dispose();
@@ -861,7 +988,11 @@ public sealed class FloatingWindow : ShellWindow
     private string _title = "";
     private QSize _minimumSize;
     private QSize _maximumSize;
-    private bool _maximized, _minimized;
+    private bool _maximized, _minimized, _fullscreen;
+    private ShellWindow? _parent;
+    private IDisposable? _ownerConnected;
+    private IDisposable? _ownerDestroyed;
+    private bool _stateRequested;
 
     public FloatingWindow()
     {
@@ -880,10 +1011,49 @@ public sealed class FloatingWindow : ShellWindow
     public QSize MaximumSize { get { Track(); return _maximumSize; } set { if (SetField(ref _maximumSize, value)) OnPlacementChanged(); } }
 
     [Qml]
-    public bool Maximized { get { Track(); return _maximized; } set { if (SetField(ref _maximized, value)) OnPlacementChanged(); } }
+    public bool Maximized
+    {
+        get { Track(); return _maximized; }
+        set
+        {
+            if (!SetField(ref _maximized, value))
+                return;
+            // Fullscreen is borderless, so maximized is false while it is on. Setting it true leaves fullscreen.
+            if (value && _fullscreen)
+            {
+                _fullscreen = false;
+                NotifyChanged("fullscreen");
+                _stateRequested = true;
+            }
+            OnPlacementChanged();
+        }
+    }
 
     [Qml]
     public bool Minimized { get { Track(); return _minimized; } set { if (SetField(ref _minimized, value)) OnPlacementChanged(); } }
+
+    /// <summary>Whether the window is borderless and covering its monitor. A minimized fullscreen window stays fullscreen.</summary>
+    [Qml]
+    public bool Fullscreen { get { Track(); return _fullscreen; } set { if (SetField(ref _fullscreen, value)) OnPlacementChanged(); } }
+
+    /// <summary>The owning window. Set before the native window exists, or changed later. A closing owner is left linked so Windows closes this window with it.</summary>
+    [Qml]
+    public ShellWindow? ParentWindow
+    {
+        get { Track(); return _parent is { IsDestroyed: false } ? _parent : null; }
+        set
+        {
+            if (ReferenceEquals(_parent, value) || ReferenceEquals(value, this) || (value is not null && WouldOwn(value)))
+                return;
+            var previous = _parent;
+            WatchOwner(value);
+            _parent = value;
+            NotifyChanged("parentWindow");
+            if (value is null && previous is { IsDestroying: true })
+                return;
+            OnPlacementChanged();
+        }
+    }
 
     /// <summary>Shows the window, restores it when it is minimized, and brings it to the front with keyboard focus.</summary>
     [Qml]
@@ -906,11 +1076,63 @@ public sealed class FloatingWindow : ShellWindow
         if (SetField(ref _minimized, minimized, nameof(Minimized))) { }
     }
 
+    public override void OnFullscreenChanged(bool fullscreen)
+    {
+        if (SetField(ref _fullscreen, fullscreen, nameof(Fullscreen))) { }
+    }
+
+    protected override void OnDestroy()
+    {
+        _ownerConnected?.Dispose();
+        _ownerDestroyed?.Dispose();
+        base.OnDestroy();
+    }
+
     protected override void OnPlacementChanged()
     {
         if (Backend is null)
             return;
         using var _ = DependencyTracker.Suspend();
-        Backend.SetFloating(new FloatingPlacement(Screen?.Info, _title, ImplicitWidth, ImplicitHeight, _minimumSize, _maximumSize, _maximized, _minimized));
+        var stateRequested = _stateRequested;
+        _stateRequested = false;
+        var owner = _parent is { IsDestroyed: false } ? _parent : null;
+        Backend.SetFloating(new FloatingPlacement(Screen?.Info, _title, ImplicitWidth, ImplicitHeight, _minimumSize, _maximumSize, _maximized, _minimized, _fullscreen, owner, stateRequested));
+    }
+
+    private void WatchOwner(ShellWindow? owner)
+    {
+        _ownerConnected?.Dispose();
+        _ownerDestroyed?.Dispose();
+        _ownerConnected = null;
+        _ownerDestroyed = null;
+        if (owner is null)
+            return;
+        _ownerConnected = owner.Connect("windowConnected", _ =>
+        {
+            if (!IsDestroyed)
+                OnPlacementChanged();
+        });
+        _ownerDestroyed = owner.Connect("destroyed", _ =>
+        {
+            if (IsDestroyed || !ReferenceEquals(_parent, owner))
+                return;
+            // Leave the native owner in place: Windows then closes this window, and the handle is dropped with it.
+            _parent = null;
+            _ownerConnected?.Dispose();
+            _ownerConnected = null;
+            NotifyChanged("parentWindow");
+        });
+    }
+
+    private bool WouldOwn(ShellWindow owner)
+    {
+        var hop = owner;
+        for (var n = 0; hop is not null && n < 16; n++)
+        {
+            if (ReferenceEquals(hop, this))
+                return true;
+            hop = hop is FloatingWindow floating ? floating._parent : null;
+        }
+        return false;
     }
 }

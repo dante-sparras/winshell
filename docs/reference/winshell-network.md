@@ -1,6 +1,6 @@
 # Winshell.Network
 
-The PC's wired and Wi-Fi adapters, the Wi-Fi networks in range, Windows connection profiles, and connectivity. Loading the module reads state and follows Windows network notifications. It never asks for permission or changes a connection or a radio. Setting `wifiEnabled` asks Windows to change the Wi-Fi radios, and that request can show consent UI. [Windows networking](../network.md) explains permissions, scanning and airplane mode.
+The PC's wired and Wi-Fi adapters, the Wi-Fi networks in range, Windows connection profiles, saved Wi-Fi profiles, and connectivity. Loading the module reads state and follows Windows network notifications. It never asks for permission or changes a connection or a radio. It also reads saved Wi-Fi profiles and does not change them. A configuration writes one only by setting `WifiProfile.autoConnect` or calling `clearPassword()`, and deletes one only by calling `forget()`. The password stays in Windows and is never read. Setting `wifiEnabled` asks Windows to change the Wi-Fi radios, and that request can show consent UI. [Windows networking](../network.md) explains permissions, scanning and airplane mode.
 
 `import Winshell.Network`
 
@@ -48,13 +48,15 @@ A network of an adapter, reached from `NetworkDevice.networks`. Wi-Fi networks a
 | `name` | string, read-only | The SSID of a Wi-Fi network. For a wired network, the connection profile's name, or the adapter's. |
 | `device` | [NetworkDevice](#networkdevice), read-only | The adapter that sees this network. |
 | `connected` | bool, read-only | Whether `state` is `Connected`. |
-| `saved` | bool, read-only | Whether a saved Wi-Fi profile has this SSID as its name, including a connected network the last scan did not report. True for a wired network. |
+| `saved` | bool, read-only | Whether a loaded saved profile's SSID matches this network, including a connected network the last scan did not report. A profile that could not be read matches by its profile name. True for a wired network. |
 | `state` | [ConnectionState](#connectionstate), read-only | The network's connection state. A Wi-Fi network the adapter is not on is `Disconnected`. |
-| `busy` | bool, read-only | True while `connect()`, `disconnect()` or `forget()` runs. Other calls are ignored until it ends. |
+| `busy` | bool, read-only | True while `connect()`, `connectWithProfile()`, `disconnect()` or `forget()` runs. Other calls are ignored until it ends. |
 | `error` | string, read-only | Why the last action failed. Empty when it succeeded. |
+| `savedProfiles` | ObjectModel of [WifiProfile](#wifiprofile), read-only | The saved profiles for this network. A loaded profile matches by its SSID. One that could not be read matches by its profile name. A profile keeps its object while its id stays. A saved SSID that is not in range has no network object. |
 | `connect()` | method | Connects to this Wi-Fi network with saved credentials, and lets Windows reconnect to it automatically. Needs Wi-Fi access and the network in the last scan. Fails for a wired network. |
+| `connectWithProfile(profile)` | method | Connects with that saved profile. The profile has to belong to this network. The call finishes when Windows accepts the request, and the next snapshot reports whether the adapter associated. A profile marked hidden is connected as a hidden network. Uses the same `busy`, `error` and `operationFailed` as `connect()`. Fails for a wired network. |
 | `disconnect()` | method | Disconnects the Wi-Fi adapter. Needs Wi-Fi access. Fails for a wired network. |
-| `forget()` | method | Deletes the saved Wi-Fi profile with this SSID as its name. Fails for a wired network. |
+| `forget()` | method | Deletes the saved Wi-Fi profile whose name is this SSID. Fails for a wired network. A profile whose name differs from the SSID is removed with `WifiProfile.forget()`. |
 | `operationFailed(message)` | signal | Emitted when an action fails, with the same text as `error`. |
 
 ## WifiNetwork
@@ -67,12 +69,32 @@ A Wi-Fi network in range, reached from a [WifiDevice](#wifidevice)'s `networks`.
 | `security` | [WifiSecurityType](#wifisecuritytype), read-only | How the network authenticates. |
 | `connectWithPassword(password)` | method | Connects with a password, for a secured network that isn't saved. Lets Windows reconnect to it automatically. |
 
+## WifiProfile
+
+A saved WLAN profile for one network, reached from `Network.savedProfiles`. It is not a Windows connection profile, and QML cannot create one. It never holds a password. More than one profile can share an SSID.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `id` | string, read-only | The adapter id, a colon, and the profile name. |
+| `name` | string, read-only | The WLAN profile name. `forget()` and `connectWithProfile()` use it. It can differ from `ssid`. |
+| `ssid` | string, read-only | The SSID stored in the profile. Empty when the profile could not be read, or when the SSID text was not valid. |
+| `autoConnect` | bool | Whether the profile's connection mode is automatic. Setting it changes only that element, to `auto` or `manual`, and keeps every other element Windows stored. The value stays what the last read reported until a later read shows the change. A failure sets `error` and emits `operationFailed`, and the value does not change. Windows can refuse a change to an all-users profile when the process is not an administrator. That refusal is reported. |
+| `security` | [WifiSecurityType](#wifisecuritytype), read-only | How the profile authenticates. |
+| `hasPassword` | bool, read-only | Whether the profile has a key element. The key text is not read. |
+| `loaded` | bool, read-only | Whether the profile XML was read. False when it could not be. `error` then says why. A failed read does not emit `operationFailed`. |
+| `error` | string, read-only | Why the last action failed, or why the profile could not be read. Empty when both succeeded. |
+| `read()` | method | Returns `id`, `name`, `ssid`, `autoConnect`, `security`, `hasPassword` and `loaded`. `security` is the value's name. There is no key. |
+| `clearPassword()` | method | Removes every key element and writes the profile back. Other elements stay, including ones this module does not interpret. When there is no key element, nothing is written. The key text is not read. A failure sets `error` and emits `operationFailed`. |
+| `forget()` | method | Deletes this saved profile by its profile name. A failure sets `error` and emits `operationFailed`. |
+| `operationFailed(message)` | signal | Emitted when setting `autoConnect`, `clearPassword()` or `forget()` fails, with the same text as `error`. |
+
 ## WifiDevice
 
 A Wi-Fi adapter, reached from `Networking.devices`. Has the members of [NetworkDevice](#networkdevice).
 
 | Member | Type | Description |
 | --- | --- | --- |
+| `mode` | [WifiDeviceMode](#wifidevicemode), read-only | The 802.11 mode the adapter is in. |
 | `scanning` | bool, read-only | True while `scan()` runs. |
 | `error` | string, read-only | Why the last scan failed. Empty when it succeeded. |
 | `scan()` | method | Scans once and updates `networks`. Needs `Networking.requestAccess()` first. No scan runs in the background. |
@@ -145,6 +167,12 @@ Values: `Unknown`, `None`, `CaptivePortal`, `LocalAccess`, `InternetAccess`
 The values of `NetworkProfile.cost`.
 
 Values: `Unknown`, `Unrestricted`, `Fixed`, `Variable`
+
+## WifiDeviceMode
+
+The values of `WifiDevice.mode`. `Station` is an extensible station, the usual client. `AccessPoint` is an extensible access point, a local hotspot. Windows has no 802.11s mesh mode, so `Mesh` is never reported. Windows 11 does not report an ad-hoc BSS, so `AdHoc` is never reported. Any other operation mode, and a query Windows does not answer, is `Unknown`. `WifiDeviceMode.toString(mode)` returns the value's name.
+
+Values: `Unknown`, `AccessPoint`, `Mesh`, `Station`, `AdHoc`
 
 ## WifiRadioState
 

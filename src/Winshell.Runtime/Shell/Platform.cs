@@ -61,7 +61,10 @@ public sealed record FloatingPlacement(
     QSize MinimumSize,
     QSize MaximumSize,
     bool Maximized,
-    bool Minimized);
+    bool Minimized,
+    bool Fullscreen = false,
+    ShellWindow? Owner = null,
+    bool StateRequested = false);
 
 /// <summary>What the window shows behind its content: nothing, or a Windows 11 material.</summary>
 public enum WindowBackdrop
@@ -94,6 +97,15 @@ public interface IWindowBackend : IDisposable
 
     /// <summary>The areas that take input, in logical window coordinates; null means everywhere.</summary>
     void SetInputRegion(IReadOnlyList<QRect>? rects);
+
+    /// <summary>Multiplies the opacity of the window content, from 0 to 1. 1 leaves a new window unchanged.</summary>
+    void SetOpacity(double opacity);
+
+    /// <summary>
+    /// Clips drawing to this rectangle in logical window coordinates, or null to draw the whole window.
+    /// It does not change <see cref="SetInputRegion"/>.
+    /// </summary>
+    void SetVisibleMask(QRect? bounds);
 
     void SetCursor(int shape);
 
@@ -144,6 +156,12 @@ public interface IWindowClient
     void OnDismissed();
 
     void OnStateChanged(bool maximized, bool minimized);
+
+    /// <summary>The window started or stopped covering its monitor without a frame. The default does nothing.</summary>
+    void OnFullscreenChanged(bool fullscreen) { }
+
+    /// <summary>Windows destroyed the native window, as when its owner closes. The default does nothing.</summary>
+    void OnBackingDestroyed() { }
 
     /// <summary>
     /// The native window threw while drawing or handling a message, and stopped doing either. Called on the loop,
