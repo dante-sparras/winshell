@@ -44,7 +44,7 @@ Types not listed keep their names in the new module.
 | `PwObjectTracker`, `PwNodeLinkTracker`, `PwNodePeakMonitor`, `PwAudioChannel` | `AudioObjectTracker`, `AudioLinkTracker`, `AudioPeakMonitor`, `AudioChannel` | `Winshell.Audio` |
 | `Mpris`, `MprisPlayer` | `Media`, `MediaSession` | `Winshell.Media` |
 | `MprisPlaybackState`, `MprisLoopState` | `MediaPlaybackState`, `MediaLoopState` | `Winshell.Media` |
-| `NMSettings` | `NetworkProfile` | `Winshell.Network` |
+| `NMSettings` | `WifiProfile` | `Winshell.Network` |
 | `UPower`, `UPowerDevice` | `Power`, `PowerDevice` | `Winshell.Power` |
 | `UPowerDeviceState`, `UPowerDeviceType` | `PowerDeviceState`, `PowerDeviceType` | `Winshell.Power` |
 | `PowerProfiles`, `PowerProfile` | `PowerMode`, `PowerModeLevel` | `Winshell.Power` |
@@ -331,8 +331,16 @@ See [Windows networking](network.md) for the native models, permissions and expl
 
 | Former member | Windows API |
 | --- | --- |
-| `Network.nmSettings`, `connectWithSettings()`, `NetworkProfile.uuid` | Removed; `Networking.profiles` exposes real Windows connection profiles and their `adapterId`, connectivity and cost |
-| `NetworkDevice.nmManaged`, `autoconnect` | Removed; Windows manages adapters and per-network reconnection |
+| `Network.nmSettings` | `savedProfiles`, an ObjectModel of `WifiProfile` |
+| `connectWithSettings()` | `connectWithProfile(profile)`. It reports on the network's `busy`, `error` and `operationFailed`. The call returns when Windows accepts it, and the next snapshot reports the association |
+| `NetworkProfile.uuid` | Removed. `WifiProfile.id` is the adapter id and the profile name. `Networking.profiles` is Windows' connection-profile list, not the saved WLAN profiles |
+| `NMSettings.id` | `name`, the WLAN profile name. `ssid` is the network name inside the profile |
+| `settingsChanged` | Property change signals, such as `autoConnectChanged`. There is no settings object and no `settingsChanged` signal |
+| `loaded` | `loaded` bool. A profile that could not be read has `loaded` false and an `error`. That does not emit `operationFailed` |
+| `clearSecrets()` | `clearPassword()`. It removes the key element. `read()` never returns a key |
+| `NMSettings` writes | Setting `autoConnect` changes only the profile's connection mode and keeps every other element |
+| `NetworkDevice.nmManaged` | Removed. Windows manages the adapter |
+| `NetworkDevice.autoconnect` | `WifiProfile.autoConnect` on each saved profile. There is no adapter-wide switch |
 | `NetworkBackendType`, `Networking.backend` | Removed; the backend is always Windows |
 | `ConnectivityCheckEnabled`, `canCheckConnectivity` | Removed; `connectivity` reports Windows NCSI without masking it |
 | `checkConnectivity()` | `refresh()` |
