@@ -39,12 +39,12 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $pester = @(Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -eq [version]'5.6.1' })
     if ($pester.Count -eq 0) {
-        Write-Host 'Pester 5.6.1 is not installed, so Install.Tests.ps1, Uninstall.Tests.ps1, PublishRelease.Tests.ps1, FlakyTests.Tests.ps1, StressTests.Tests.ps1 and ReleaseGate.Tests.ps1 were skipped.'
+        Write-Host 'Pester 5.6.1 is not installed, so Install.Tests.ps1, Uninstall.Tests.ps1, PublishRelease.Tests.ps1, FlakyTests.Tests.ps1 and ReleaseGate.Tests.ps1 were skipped.'
         exit 0
     }
     Import-Module Pester -RequiredVersion 5.6.1
     # -CI would write testResults.xml into the checkout, so the result is checked here instead.
-    $result = Invoke-Pester -Path 'scripts\Install.Tests.ps1', 'scripts\Uninstall.Tests.ps1', 'scripts\PublishRelease.Tests.ps1', 'scripts\FlakyTests.Tests.ps1', 'scripts\StressTests.Tests.ps1', 'scripts\ReleaseGate.Tests.ps1' -PassThru
+    $result = Invoke-Pester -Path 'scripts\Install.Tests.ps1', 'scripts\Uninstall.Tests.ps1', 'scripts\PublishRelease.Tests.ps1', 'scripts\FlakyTests.Tests.ps1', 'scripts\ReleaseGate.Tests.ps1' -PassThru
     if ($result.Result -ne 'Passed') { exit 1 }
 }
 finally {

@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 # A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
-# a shared one would drop the ci run of a commit in a burst of merges, and with it that commit's stress run, and a
-# release commit would wait for a check that never comes.
+# a shared one would drop the ci run of a commit in a burst of merges, and a release commit would wait for a check that
+# never comes.
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -21,14 +21,13 @@ jobs:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
     runs-on: windows-2025
-    timeout-minutes: 35
+    timeout-minutes: 15
     outputs:
       flaky: ${{ steps.flaky.outputs.flaky }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 2
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
@@ -55,16 +54,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
           ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
-      - name: Stress new and changed tests
-        # After the merge, so no pull request waits for it. A failure files a flaky issue and blocks nothing. As in the
-        # media job, continue-on-error is on the step.
-        if: github.event_name == 'push'
-        continue-on-error: true
-        timeout-minutes: 20
-        shell: pwsh
-        env:
-          WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
-        run: pwsh scripts/stress-tests.ps1
       - name: Flaky tests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -262,8 +251,6 @@ jobs:
           Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/FlakyTests.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/StressTests.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE
