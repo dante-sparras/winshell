@@ -310,10 +310,13 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         Assert.Equal("WindowsAdapter", adapter.Id);
         // enabled used to be read-only. Device properties stay read-only.
         Assert.True(adapter.Meta.Properties["enabled"].CanWrite);
+        Assert.True(adapter.Meta.Properties["discoverable"].CanWrite);
+        Assert.True(adapter.Meta.Properties["pairable"].CanWrite);
         Assert.True(adapter.Meta.Properties.ContainsKey("error"));
         Assert.False(item.Meta.Properties["connected"].CanWrite);
         Assert.False(item.Meta.Properties["name"].CanWrite);
-        foreach (var name in new[] { "dbusPath", "adapterId", "discoverable", "pairable", "pairableTimeout", "discoverableTimeout" }) Assert.False(adapter.HasMember(name));
+        // Windows has no discoverable or pairable timeout. Those members stay absent.
+        foreach (var name in new[] { "dbusPath", "adapterId", "pairableTimeout", "discoverableTimeout" }) Assert.False(adapter.HasMember(name));
         foreach (var name in new[] { "dbusPath", "bonded", "trusted", "blocked", "wakeAllowed", "deviceName" }) Assert.False(item.HasMember(name));
         Assert.True(item.HasMember("icon"));
         Assert.False(item.Meta.Properties["icon"].CanWrite);
@@ -702,6 +705,187 @@ public sealed class BluetoothTests(ITestOutputHelper output)
     private static string IconProperties(params (string Key, object Value)[] properties) =>
         BluetoothIcon.FromReports([BluetoothIcon.Read(properties.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))]);
 
+    [Fact]
+    public async Task Discoverable_and_pairable_follow_a_read_and_windows_rules()
+    {
+        var backend = new FakeBackend();
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        var shown = Snapshot() with { Adapter = Adapter() with { Discoverable = false, Pairable = true } };
+        backend.Snapshot = shown;
+        service.Apply(shown);
+        var adapter = service.DefaultAdapter!;
+        string? signal = null;
+        adapter.Connect("operationFailed", args => signal = (string)args[0]!);
+        Assert.False(adapter.Discoverable);
+        Assert.True(adapter.Pairable);
+
+        await service.SetDiscoverableAsync(adapter, false);
+        Assert.Empty(backend.Calls);
+
+        await service.SetDiscoverableAsync(adapter, true);
+        Assert.False(adapter.Discoverable);
+        Assert.Equal("discoverable-on", Assert.Single(backend.Calls));
+        loop.Process();
+        Assert.True(adapter.Discoverable);
+        Assert.True(adapter.Pairable);
+        Assert.Equal("", adapter.Error);
+        Assert.Null(signal);
+
+        backend.Calls.Clear();
+        await service.SetDiscoverableAsync(adapter, false);
+        loop.Process();
+        Assert.Equal("discoverable-off", Assert.Single(backend.Calls));
+        Assert.False(adapter.Discoverable);
+        Assert.True(adapter.Pairable);
+
+        backend.Calls.Clear();
+        backend.Snapshot = Snapshot() with { Adapter = Adapter() with { Discoverable = false, Pairable = false } };
+        service.Apply(backend.Snapshot);
+        await service.SetDiscoverableAsync(adapter, true);
+        Assert.Equal(["pairable-on", "discoverable-on"], backend.Calls);
+        Assert.False(adapter.Discoverable);
+        Assert.False(adapter.Pairable);
+        loop.Process();
+        Assert.True(adapter.Discoverable);
+        Assert.True(adapter.Pairable);
+
+        backend.Calls.Clear();
+        await service.SetPairableAsync(adapter, false);
+        Assert.Equal(["discoverable-off", "pairable-off"], backend.Calls);
+        Assert.True(adapter.Discoverable);
+        loop.Process();
+        Assert.False(adapter.Discoverable);
+        Assert.False(adapter.Pairable);
+
+        backend.Calls.Clear();
+        await service.SetPairableAsync(adapter, true);
+        loop.Process();
+        Assert.Equal("pairable-on", Assert.Single(backend.Calls));
+        Assert.False(adapter.Discoverable);
+        Assert.True(adapter.Pairable);
+
+        backend.Calls.Clear();
+        backend.KeepSnapshot = true;
+        await service.SetDiscoverableAsync(adapter, true);
+        loop.Process();
+        Assert.Equal("discoverable-on", Assert.Single(backend.Calls));
+        Assert.False(adapter.Discoverable);
+        Assert.Equal("", adapter.Error);
+        Assert.Null(signal);
+        service.Destroy();
+    }
+
+    [Fact]
+    public async Task A_visibility_failure_is_reported_and_does_not_skip_ahead_of_windows()
+    {
+        var backend = new FakeBackend();
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        var shown = Snapshot() with { Adapter = Adapter() with { Discoverable = false, Pairable = false } };
+        backend.Snapshot = shown;
+        service.Apply(shown);
+        var adapter = service.DefaultAdapter!;
+        string? signal = null;
+        adapter.Connect("operationFailed", args => signal = (string)args[0]!);
+
+        backend.PairableError = "incoming refused";
+        await service.SetDiscoverableAsync(adapter, true);
+        loop.Process();
+        Assert.Equal("pairable-on", Assert.Single(backend.Calls));
+        Assert.False(adapter.Pairable);
+        Assert.False(adapter.Discoverable);
+        Assert.Equal("incoming refused", adapter.Error);
+        Assert.Equal("incoming refused", signal);
+
+        signal = null;
+        backend.Calls.Clear();
+        backend.PairableError = null;
+        backend.DiscoverableError = "discovery refused";
+        await service.SetDiscoverableAsync(adapter, true);
+        loop.Process();
+        Assert.Equal(["pairable-on", "discoverable-on"], backend.Calls);
+        Assert.True(adapter.Pairable);
+        Assert.False(adapter.Discoverable);
+        Assert.Equal("discovery refused", adapter.Error);
+        Assert.Equal("discovery refused", signal);
+
+        service.Apply(Snapshot() with { Adapter = Adapter() with { Discoverable = true, Pairable = true } });
+        Assert.True(adapter.Discoverable);
+        Assert.Equal("", adapter.Error);
+
+        signal = null;
+        backend.Calls.Clear();
+        backend.DiscoverableError = null;
+        backend.Snapshot = Snapshot() with { Adapter = Adapter() with { Discoverable = false, Pairable = true } };
+        service.Apply(backend.Snapshot);
+        backend.VisibilityException = new UnauthorizedAccessException("Access revoked");
+        await service.SetDiscoverableAsync(adapter, true);
+        loop.Process();
+        Assert.Equal("discoverable-on", Assert.Single(backend.Calls));
+        Assert.False(adapter.Discoverable);
+        Assert.Equal("Access revoked", adapter.Error);
+        Assert.Equal("Access revoked", signal);
+        service.Destroy();
+    }
+
+    [Fact]
+    public async Task A_visibility_request_in_flight_ignores_another()
+    {
+        var gate = new TaskCompletionSource<string?>();
+        var backend = new FakeBackend { VisibilityGate = gate, Snapshot = Snapshot() with { Adapter = Adapter() with { Pairable = true } } };
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        service.Apply(backend.Snapshot);
+        var adapter = service.DefaultAdapter!;
+        var first = service.SetDiscoverableAsync(adapter, true);
+        await service.SetPairableAsync(adapter, false);
+        Assert.Equal("discoverable-on", Assert.Single(backend.Calls));
+        adapter.Destroy();
+        gate.SetResult(null);
+        await first;
+        loop.Process();
+        Assert.Equal("", adapter.Error);
+        service.Destroy();
+    }
+
+    [Fact]
+    public void Qml_can_assign_the_visibility_the_adapter_already_reports()
+    {
+        var backend = new FakeBackend();
+        var loop = new ManualEventLoop();
+        var service = new BluetoothService(backend, loop);
+        var directory = Path.Combine(Path.GetTempPath(), "winshell-bluetooth-visibility-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            service.Apply(Snapshot());
+            File.WriteAllText(Path.Combine(directory, "shell.qml"), """
+                import QtQml
+                import Winshell.Bluetooth
+                QtObject {
+                    Component.onCompleted: {
+                        TestBluetooth.defaultAdapter.discoverable = false
+                        TestBluetooth.defaultAdapter.pairable = false
+                    }
+                }
+                """);
+            var registry = StandardModules.Create();
+            BluetoothModule.Register(registry);
+            registry.Module("Winshell.Bluetooth").Singleton(_ => service, "TestBluetooth");
+            using var engine = new QmlEngine(registry, loop, new Log(), directory);
+            engine.CreateRoot(Path.Combine(directory, "shell.qml"));
+            Assert.Empty(backend.Calls);
+            Assert.False(service.DefaultAdapter!.Discoverable);
+            Assert.False(service.DefaultAdapter.Pairable);
+        }
+        finally
+        {
+            service.Destroy();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private sealed class FakeBackend : IBluetoothBackend
     {
         public BluetoothSnapshot Snapshot { get; set; } = Snapshot();
@@ -725,6 +909,10 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         public Exception? RadioException { get; set; }
         public bool KeepSnapshot { get; set; }
         public TaskCompletionSource<string?>? RadioGate { get; init; }
+        public string? DiscoverableError { get; set; }
+        public string? PairableError { get; set; }
+        public Exception? VisibilityException { get; set; }
+        public TaskCompletionSource<string?>? VisibilityGate { get; init; }
         public TaskCompletionSource FirstRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task<BluetoothSnapshot> ReadAsync()
         {
@@ -769,6 +957,36 @@ public sealed class BluetoothTests(ITestOutputHelper output)
             if (error is null && !KeepSnapshot && Snapshot.Adapter is { } adapter)
                 Snapshot = Snapshot with { Adapter = adapter with { State = enabled ? BluetoothAdapterState.On : BluetoothAdapterState.Off } };
             return error;
+        }
+        public Task<string?> SetDiscoverableAsync(bool discoverable) =>
+            Visibility(discoverable ? "discoverable-on" : "discoverable-off", () =>
+            {
+                if (DiscoverableError is { } error) return error;
+                if (!KeepSnapshot && Snapshot.Adapter is { } adapter)
+                    Snapshot = Snapshot with { Adapter = adapter with { Discoverable = discoverable } };
+                return null;
+            });
+        public Task<string?> SetPairableAsync(bool pairable) =>
+            Visibility(pairable ? "pairable-on" : "pairable-off", () =>
+            {
+                if (PairableError is { } error) return error;
+                if (!KeepSnapshot && Snapshot.Adapter is { } adapter)
+                    Snapshot = Snapshot with { Adapter = adapter with { Pairable = pairable } };
+                return null;
+            });
+        private Task<string?> Visibility(string call, Func<string?> apply)
+        {
+            Calls.Add(call);
+            if (VisibilityException is { } exception)
+                return Task.FromException<string?>(exception);
+            if (VisibilityGate is { } gate)
+                return FinishVisibility(gate.Task, apply);
+            return Task.FromResult(apply());
+        }
+        private async Task<string?> FinishVisibility(Task<string?> pending, Func<string?> apply)
+        {
+            var error = await pending.ConfigureAwait(false);
+            return error ?? apply();
         }
         public void Dispose() { Disposed = true; }
     }

@@ -8,7 +8,10 @@ public enum BluetoothAdapterState { Unknown, Off, On, Disabled }
 public enum BluetoothDeviceState { Disconnected, Connected }
 public enum BluetoothOperation { None, Connecting, Disconnecting, Pairing, Unpairing }
 
-/// <summary>The default Windows Bluetooth adapter. Setting <see cref="Enabled"/> asks Windows to change its radio.</summary>
+/// <summary>
+/// The default Windows Bluetooth adapter. Setting <see cref="Enabled"/> asks Windows to change its radio.
+/// Setting <see cref="Discoverable"/> or <see cref="Pairable"/> asks Windows to change discovery or incoming connections.
+/// </summary>
 [QmlSignal("operationFailed", "message")]
 public sealed class BluetoothAdapter : QObject
 {
@@ -25,6 +28,8 @@ public sealed class BluetoothAdapter : QObject
     [Qml] public string Address { get { Track(); return _info.Address; } }
     [Qml] public BluetoothAdapterState State { get { Track(); return _info.State; } }
     [Qml] public bool Enabled { get { Track(); return ReportsOn; } set => _ = _service.SetAdapterEnabledAsync(this, value); }
+    [Qml] public bool Discoverable { get { Track(); return _info.Discoverable; } set => _ = _service.SetDiscoverableAsync(this, value); }
+    [Qml] public bool Pairable { get { Track(); return _info.Pairable; } set => _ = _service.SetPairableAsync(this, value); }
     [Qml] public string Error { get { Track(); return _error; } }
     internal bool ReportsOn => _info.State == BluetoothAdapterState.On;
     internal void Report(string error)
@@ -38,12 +43,15 @@ public sealed class BluetoothAdapter : QObject
         _info = info;
         if (old.Name != info.Name) NotifyChanged("name");
         if (old.Address != info.Address) NotifyChanged("address");
+        if (old.Discoverable != info.Discoverable) NotifyChanged("discoverable");
+        if (old.Pairable != info.Pairable) NotifyChanged("pairable");
         if (old.State != info.State)
         {
             NotifyChanged("state");
             NotifyChanged("enabled");
-            SetField(ref _error, "", nameof(Error));
         }
+        if (old.State != info.State || old.Discoverable != info.Discoverable || old.Pairable != info.Pairable)
+            SetField(ref _error, "", nameof(Error));
     }
 }
 
@@ -195,6 +203,7 @@ public sealed class BluetoothService : QObject
     private int _monitorHolders;
     private bool _started;
     private int _radioSet;
+    private int _visibilitySet;
     private long _revision;
 
     internal BluetoothService(QmlEngine engine, IBluetoothBackend? backend = null)
@@ -410,6 +419,81 @@ public sealed class BluetoothService : QObject
             Post(() =>
             {
                 Volatile.Write(ref _radioSet, 0);
+                if (shouldReport && !adapter.IsDestroyed)
+                    adapter.Report(message);
+            });
+        }
+    }
+
+    // Windows accepts discovery only while incoming connections are on, and turning those off
+    // requires discovery off first. The property changes when a later read reports it.
+    internal async Task SetDiscoverableAsync(BluetoothAdapter adapter, bool discoverable)
+    {
+        if (IsDestroyed || adapter.IsDestroyed || !ReferenceEquals(adapter, _adapter) || adapter.Discoverable == discoverable)
+            return;
+        var openConnections = discoverable && !adapter.Pairable;
+        await RunVisibilityAsync(adapter, async () =>
+        {
+            var changed = false;
+            if (openConnections)
+            {
+                var incoming = await Backend.SetPairableAsync(true).ConfigureAwait(false);
+                if (incoming is not null)
+                    return (incoming, false);
+                changed = true;
+            }
+            var error = await Backend.SetDiscoverableAsync(discoverable).ConfigureAwait(false);
+            return (error, changed || error is null);
+        }).ConfigureAwait(false);
+    }
+
+    internal async Task SetPairableAsync(BluetoothAdapter adapter, bool pairable)
+    {
+        if (IsDestroyed || adapter.IsDestroyed || !ReferenceEquals(adapter, _adapter) || adapter.Pairable == pairable)
+            return;
+        var closeDiscovery = !pairable && adapter.Discoverable;
+        await RunVisibilityAsync(adapter, async () =>
+        {
+            var changed = false;
+            if (closeDiscovery)
+            {
+                var discovery = await Backend.SetDiscoverableAsync(false).ConfigureAwait(false);
+                if (discovery is not null)
+                    return (discovery, false);
+                changed = true;
+            }
+            var error = await Backend.SetPairableAsync(pairable).ConfigureAwait(false);
+            return (error, changed || error is null);
+        }).ConfigureAwait(false);
+    }
+
+    private async Task RunVisibilityAsync(BluetoothAdapter adapter, Func<Task<(string? Error, bool Changed)>> attempt)
+    {
+        if (Interlocked.CompareExchange(ref _visibilitySet, 1, 0) != 0)
+            return;
+        var error = "";
+        var report = false;
+        try
+        {
+            Invalidate();
+            var result = await attempt().ConfigureAwait(false);
+            error = result.Error ?? "";
+            report = true;
+            if (result.Changed)
+                await RefreshAsync().ConfigureAwait(false);
+        }
+        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        {
+            error = e.Message;
+            report = true;
+        }
+        finally
+        {
+            var message = error;
+            var shouldReport = report;
+            Post(() =>
+            {
+                Volatile.Write(ref _visibilitySet, 0);
                 if (shouldReport && !adapter.IsDestroyed)
                     adapter.Report(message);
             });
