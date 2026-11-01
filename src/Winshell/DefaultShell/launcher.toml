@@ -1,2 +1,0 @@
-# The apps pinned to Start, in order. [] pins nothing; without this file Start pins its defaults.
-pins = ["File Explorer", "windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel", "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App", "Microsoft.ScreenSketch_8wekyb3d8bbwe!App", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", "Microsoft.Windows.Photos_8wekyb3d8bbwe!App", "Microsoft.WindowsStore_8wekyb3d8bbwe!App"]

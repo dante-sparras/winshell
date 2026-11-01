@@ -69,7 +69,7 @@ dotnet test tests/Winshell.Runtime.Tests --filter FullyQualifiedName~DirectoryWa
 dotnet run --project src/Winshell -- run -p src/Winshell/DefaultShell
 ```
 
-`-p` takes any folder with a `shell.qml`, or the file. Saving a `.qml` file reloads the shell. From another terminal:
+`-p` takes any folder with a `shell.qml`, or the file. Saving a `.qml` file reloads the shell. The shell keeps `launcher.toml` and `preferences.toml` next to its `shell.qml`, and git ignores those two in `src/Winshell/DefaultShell`. From another terminal:
 
 ```powershell
 dotnet run --project src/Winshell -- list
