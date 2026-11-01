@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Winshell.Platform.Windows.Services.Bluetooth;
 using Winshell.Platform.Windows.Services.Notifications;
 using Winshell.Runtime;
@@ -13,24 +14,29 @@ public class MonitorSurvivalTests
     {
         var backend = new FlakyBluetooth();
         var loop = new ManualEventLoop();
-        var messages = new List<string>();
-        var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
+        var messages = new ConcurrentQueue<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Enqueue($"{category}: {message}") };
         using var engine = new QmlEngine(StandardModules.Create(), loop, log);
         var service = new BluetoothService(engine, backend);
         await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await service.RefreshAsync();
-        await Wait.UntilAsync(() => backend.Reads >= 2, "a second read", service.RefreshAsync);
+        // The monitor logs the failure after its read ends, and a read counts before its result is posted.
+        await Wait.UntilAsync(() =>
+        {
+            loop.Process();
+            return service.Ready && messages.Any(m => m.Contains("radio broke", StringComparison.Ordinal));
+        }, "the failure and a good read");
 
         Assert.True(backend.Reads >= 2, $"reads stayed at {backend.Reads}");
-        loop.Process();
         Assert.True(service.Ready);
         Assert.Contains(messages, m => m.Contains("radio broke", StringComparison.Ordinal));
         Assert.False(service.MonitorTask!.IsFaulted);
         Assert.False(service.MonitorTask.IsCompleted);
         service.Destroy();
-        Assert.True(backend.Disposed);
+        // A read still ending when the service is destroyed disposes the backend as it leaves.
         await service.MonitorTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.True(backend.Disposed);
         Assert.True(service.MonitorTask.IsCompletedSuccessfully);
     }
 
@@ -98,18 +104,22 @@ public class MonitorSurvivalTests
     {
         var backend = new FlakyNotifications();
         var loop = new ManualEventLoop();
-        var messages = new List<string>();
-        var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
+        var messages = new ConcurrentQueue<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Enqueue($"{category}: {message}") };
         using var engine = new QmlEngine(StandardModules.Create(), loop, log);
         var listener = new NotificationListener(backend, monitor: true) { Engine = engine };
         listener.ComponentComplete();
         await backend.First.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await listener.RefreshAsync();
-        await Wait.UntilAsync(() => backend.Reads >= 2, "a second read", listener.RefreshAsync);
+        // The monitor logs the failure after its read ends, and a read counts before its result is posted.
+        await Wait.UntilAsync(() =>
+        {
+            loop.Process();
+            return listener.Notifications.Rows.Count > 0 && messages.Any(m => m.Contains("center broke", StringComparison.Ordinal));
+        }, "the failure and a good read");
 
         Assert.True(backend.Reads >= 2, $"reads stayed at {backend.Reads}");
-        loop.Process();
         Assert.Equal("Hello", Assert.IsType<ShellNotification>(Assert.Single(listener.Notifications.Rows)).Title);
         Assert.Contains(messages, m => m.Contains("center broke", StringComparison.Ordinal));
         Assert.False(listener.MonitorTask!.IsFaulted);
