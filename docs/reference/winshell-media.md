@@ -27,6 +27,7 @@ A control that the app does not allow at the moment, such as `next()` while `can
 | `canSeek` | bool, read-only | Whether the app accepts a new position. |
 | `canGoNext` | bool, read-only | Whether the app accepts skipping to the next track. |
 | `canGoPrevious` | bool, read-only | Whether the app accepts going to the previous track. |
+| `canControl` | bool, read-only | True when the app accepts at least one playback command. Windows has no flag of its own, so this follows `canPlay`, `canPause`, `canStop`, `canSeek`, `canGoNext`, and `canGoPrevious`, and it changes when that answer changes. |
 | `canSwitchTo` | bool, read-only | True when Windows can bring the app's window forward: the app is a Store app, or its program has a main window. It is worked out each time it is read, and no change is reported. |
 | `appName` | string, read-only | The name Windows shows for the app. |
 | `appId` | string, read-only | The app's AppUserModelID, such as `Spotify.exe` or a Store app's id. |

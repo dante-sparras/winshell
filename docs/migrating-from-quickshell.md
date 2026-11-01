@@ -116,7 +116,7 @@ Types not listed keep their names in the new module.
 | `MprisPlayer.dbusName` | Removed. Windows has no bus name for a session. |
 | `MprisPlayer.canRaise`, `raise()` | `canSwitchTo`, `switchTo()` |
 | `MprisPlayer.canQuit`, `quit()` | Removed. Windows cannot ask the app to quit. |
-| `MprisPlayer.canControl` | Removed. |
+| `MprisPlayer.canControl` | `canControl`. True when the session accepts at least one playback command. Windows has no separate flag. |
 | `MprisPlayer.volume`, `volumeSupported` | Removed. Change the app's audio session instead. |
 | `MprisPlayer.fullscreen`, `canSetFullscreen` | Removed. |
 | `MprisPlayer.openUri()`, `supportedUriSchemes`, `supportedMimeTypes` | Removed. |
