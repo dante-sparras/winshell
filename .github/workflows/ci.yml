@@ -26,17 +26,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
-      - name: Look for the SDK
-        # The image usually has an SDK that global.json accepts, so this job downloads one only when a bump gets there
-        # first.
-        id: sdk
-        shell: pwsh
-        run: |
-          dotnet --version
-          if ($LASTEXITCODE -ne 0) { 'missing=true' >> $env:GITHUB_OUTPUT }
-          exit 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        if: steps.sdk.outputs.missing == 'true'
         with:
           global-json-file: global.json
       - name: Turn Windows animation effects on
@@ -52,6 +42,7 @@ jobs:
       - name: Check
         # A pull request waits for the build and the main tests. A push to main runs everything, and ReleaseGate.ps1 holds
         # a release until that passes.
+        timeout-minutes: 10
         shell: pwsh
         env:
           WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
@@ -60,7 +51,7 @@ jobs:
           WINSHELL_SNAPSHOT_DIFFS: ${{ runner.temp }}/snapshot-diffs
         run: |
           New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
-          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') { pwsh scripts/check.ps1 -Quick } else { pwsh scripts/check.ps1 }
+          ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request')
       - name: Stress new and changed tests
         # After the merge, so no pull request waits for it. A failure files a flaky issue and blocks nothing. As in the
         # media job, continue-on-error is on the step.
@@ -138,8 +129,10 @@ jobs:
 
   quarantine:
     # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing. As in the media job,
-    # continue-on-error is on the step.
+    # continue-on-error is on the step, and the job skips pull requests, where a check that can't fail would only look
+    # like a pass.
     name: quarantine
+    if: github.event_name == 'push'
     runs-on: windows-2025
     timeout-minutes: 15
     steps:
@@ -156,8 +149,10 @@ jobs:
 
   media:
     # Runners often don't publish Windows media sessions. A failed test shows in this job's log and blocks nothing.
-    # continue-on-error is on the step, so the failure doesn't put a red check on every pull request.
+    # continue-on-error is on the step, so the failure doesn't put a red check on main. The job skips pull requests,
+    # where a check that can't fail would only look like a pass.
     name: media
+    if: github.event_name == 'push'
     runs-on: windows-2025
     timeout-minutes: 15
     steps:
