@@ -36,11 +36,7 @@ public class UtilityTests
             File.WriteAllBytes(Path.Combine(shell.Directory, "halves.png"), data.ToArray());
         }
         var root = shell.Load();
-        for (var i = 0; i < 100 && ((List<object?>)root.ReadProperty("colors")!).Count == 0; i++)
-        {
-            await Task.Delay(20, TestContext.Current.CancellationToken);
-            shell.Loop.Process();
-        }
+        await Wait.UntilAsync(() => ((List<object?>)root.ReadProperty("colors")!).Count > 0, "the image colors", shell.Loop.Process);
         var colors = ((List<object?>)root.ReadProperty("colors")!).Cast<QColor>().Select(c => c.ToString()).Order().ToList();
         Assert.Equal(["#0000ff", "#ff0000"], colors);
     }

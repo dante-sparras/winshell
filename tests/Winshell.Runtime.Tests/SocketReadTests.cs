@@ -2,6 +2,8 @@ using System.IO.Pipes;
 using System.Text;
 using Winshell.Runtime.Shell;
 
+#pragma warning disable CA1416 // Winshell only runs on Windows; this project targets plain net10.0.
+
 namespace Winshell.Runtime.Tests;
 
 /// <summary>A socket read that finishes a 4-byte UTF-8 character on a full buffer still delivers the text.</summary>
@@ -21,12 +23,7 @@ public class SocketReadTests
         socket.Connected = true;
 
         var connected = server.WaitForConnectionAsync(TestContext.Current.CancellationToken);
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (!socket.Connected && DateTime.UtcNow < until)
-        {
-            shell.Loop.Process();
-            await Task.Delay(20, TestContext.Current.CancellationToken);
-        }
+        await Wait.UntilAsync(() => socket.Connected, "the socket to connect", shell.Loop.Process);
         await connected;
         Assert.True(socket.Connected);
 
@@ -34,7 +31,8 @@ public class SocketReadTests
         Assert.Equal(4, emoji.Length);
         await server.WriteAsync(emoji.AsMemory(0, 3), TestContext.Current.CancellationToken);
         await server.FlushAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(150, TestContext.Current.CancellationToken);
+        // The socket has to have read the first three bytes alone, or the next read is not a full one that ends them.
+        await Task.Run(server.WaitForPipeDrain, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         shell.Loop.Process();
 
         var chunk = new byte[8192];
@@ -44,12 +42,7 @@ public class SocketReadTests
         await server.FlushAsync(TestContext.Current.CancellationToken);
 
         var expect = "🎵" + new string('x', 8191);
-        until = DateTime.UtcNow.AddSeconds(5);
-        while (received.Length < expect.Length && DateTime.UtcNow < until)
-        {
-            shell.Loop.Process();
-            await Task.Delay(20, TestContext.Current.CancellationToken);
-        }
+        await Wait.UntilAsync(() => received.Length >= expect.Length, "the text", shell.Loop.Process);
 
         Assert.Equal(expect, received.ToString());
         Assert.True(socket.Connected);
