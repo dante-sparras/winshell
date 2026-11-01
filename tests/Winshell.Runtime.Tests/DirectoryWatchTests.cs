@@ -25,6 +25,28 @@ public sealed class DirectoryWatchTests : IDisposable
     }
 
     [Fact]
+    public void A_watch_outlives_the_thread_that_started_it()
+    {
+        using var seen = new ManualResetEventSlim();
+        DirectoryWatch? watch = null;
+        var starter = new Thread(() => watch = DirectoryWatch.Start(_directory, DirectoryWatch.FileChanges, name =>
+        {
+            if (name == "made.qml")
+                seen.Set();
+        }, () => { }));
+        starter.Start();
+        starter.Join();
+        using (watch)
+        {
+            Assert.NotNull(watch);
+
+            File.WriteAllText(Path.Combine(_directory, "made.qml"), "");
+
+            Assert.True(seen.Wait(TimeSpan.FromSeconds(10)), "The new file was not reported.");
+        }
+    }
+
+    [Fact]
     public void Deleting_the_folder_ends_the_watch()
     {
         using var lost = new ManualResetEventSlim();
