@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Winshell.Platform.Windows.Services.Apps;
 using Winshell.Runtime;
@@ -10,7 +11,7 @@ namespace Winshell.Platform.Windows.Tests;
 /// </summary>
 public sealed class AppIndexTests
 {
-    private static readonly long Now = DateTimeOffset.Parse("2026-06-15T12:00:00Z").ToUnixTimeMilliseconds();
+    private static readonly long Now = DateTimeOffset.Parse("2026-06-15T12:00:00Z", CultureInfo.InvariantCulture).ToUnixTimeMilliseconds();
 
     private readonly ITestOutputHelper _output;
 
@@ -223,7 +224,7 @@ public sealed class AppIndexTests
             {
                 Assert.InRange(
                     row.LastUsedUnixMilliseconds,
-                    DateTimeOffset.Parse("2000-01-01T00:00:00Z").ToUnixTimeMilliseconds(),
+                    DateTimeOffset.Parse("2000-01-01T00:00:00Z", CultureInfo.InvariantCulture).ToUnixTimeMilliseconds(),
                     DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds());
             }
         });

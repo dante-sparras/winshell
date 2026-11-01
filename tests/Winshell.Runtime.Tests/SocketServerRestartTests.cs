@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Pipes;
 using Winshell.Runtime;
 using Xunit;
@@ -60,7 +61,7 @@ public class SocketServerRestartTests
         shell.Loop.Process();
     }
 
-    private static int Accepted(QObject root) => Convert.ToInt32(root.ReadProperty("accepted"));
+    private static int Accepted(QObject root) => Convert.ToInt32(root.ReadProperty("accepted"), CultureInfo.InvariantCulture);
 
     private static async Task<bool> Connect(TestShell shell, string pipe, int timeoutMs)
     {

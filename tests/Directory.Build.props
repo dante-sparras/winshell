@@ -11,5 +11,6 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <Using Include="Xunit" />
     <Compile Include="$(MSBuildThisFileDirectory)TestSupport\*.cs" Link="TestSupport\%(Filename)%(Extension)" />
+    <None Include="$(MSBuildThisFileDirectory)xunit.runner.json" Link="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

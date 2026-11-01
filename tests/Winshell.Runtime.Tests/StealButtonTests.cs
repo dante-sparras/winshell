@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -35,7 +36,7 @@ public class StealButtonTests
 
         scene.PointerPress(50, 80, QtEnums.RightButton);
         scene.PointerMove(50, 50);
-        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("contentY")));
+        Assert.Equal(0.0, Convert.ToDouble(root.ReadProperty("contentY"), CultureInfo.InvariantCulture));
 
         scene.PointerRelease(50, 50, QtEnums.RightButton);
         shell.Loop.Process();

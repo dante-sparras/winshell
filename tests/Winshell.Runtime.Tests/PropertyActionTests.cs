@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Winshell.Runtime.Tests;
 
 /// <summary>A PropertyAction in a transition writes the state's value when the sequence reaches it.</summary>
@@ -37,20 +39,20 @@ public class PropertyActionTests
         var box = shell.Load();
         shell.Eval(box, "state = \"gone\"");
 
-        Assert.True(Convert.ToBoolean(box.ReadProperty("visible")));
-        Assert.Equal(40d, Convert.ToDouble(box.ReadProperty("height")));
-        Assert.Equal(1d, Convert.ToDouble(box.ReadProperty("opacity")));
-        Assert.False(Convert.ToBoolean(box.ReadProperty("ran")));
+        Assert.True(Convert.ToBoolean(box.ReadProperty("visible"), CultureInfo.InvariantCulture));
+        Assert.Equal(40d, Convert.ToDouble(box.ReadProperty("height"), CultureInfo.InvariantCulture));
+        Assert.Equal(1d, Convert.ToDouble(box.ReadProperty("opacity"), CultureInfo.InvariantCulture));
+        Assert.False(Convert.ToBoolean(box.ReadProperty("ran"), CultureInfo.InvariantCulture));
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(400));
-        Assert.True(Convert.ToBoolean(box.ReadProperty("visible")));
-        Assert.False(Convert.ToBoolean(box.ReadProperty("ran")));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("opacity")), 0.4, 0.8);
+        Assert.True(Convert.ToBoolean(box.ReadProperty("visible"), CultureInfo.InvariantCulture));
+        Assert.False(Convert.ToBoolean(box.ReadProperty("ran"), CultureInfo.InvariantCulture));
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("opacity"), CultureInfo.InvariantCulture), 0.4, 0.8);
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(700));
-        Assert.False(Convert.ToBoolean(box.ReadProperty("visible")));
-        Assert.True(Convert.ToBoolean(box.ReadProperty("ran")));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("opacity")), 0, 0.05);
+        Assert.False(Convert.ToBoolean(box.ReadProperty("visible"), CultureInfo.InvariantCulture));
+        Assert.True(Convert.ToBoolean(box.ReadProperty("ran"), CultureInfo.InvariantCulture));
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("opacity"), CultureInfo.InvariantCulture), 0, 0.05);
     }
 
     [Fact]
@@ -77,7 +79,7 @@ public class PropertyActionTests
             """));
         var box = shell.Load();
         shell.Eval(box, "state = \"go\"");
-        Assert.Equal(1, Convert.ToInt32(box.ReadProperty("n")));
-        Assert.True(Convert.ToBoolean(box.ReadProperty("ran")));
+        Assert.Equal(1, Convert.ToInt32(box.ReadProperty("n"), CultureInfo.InvariantCulture));
+        Assert.True(Convert.ToBoolean(box.ReadProperty("ran"), CultureInfo.InvariantCulture));
     }
 }

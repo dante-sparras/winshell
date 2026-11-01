@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Winshell.Runtime.Tests;
 
 /// <summary>A member's loops play one after another inside a group, and a rotation keeps its direction.</summary>
@@ -29,16 +31,16 @@ public class AnimationGroupLoopTests
         var box = shell.Load();
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("place")), 40, 60);
-        Assert.False(Convert.ToBoolean(box.ReadProperty("done")));
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("place"), CultureInfo.InvariantCulture), 40, 60);
+        Assert.False(Convert.ToBoolean(box.ReadProperty("done"), CultureInfo.InvariantCulture));
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(2000));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("place")), 40, 60);
-        Assert.False(Convert.ToBoolean(box.ReadProperty("done")));
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("place"), CultureInfo.InvariantCulture), 40, 60);
+        Assert.False(Convert.ToBoolean(box.ReadProperty("done"), CultureInfo.InvariantCulture));
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(600));
-        Assert.True(Convert.ToBoolean(box.ReadProperty("done")));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("place")), 90, 100);
+        Assert.True(Convert.ToBoolean(box.ReadProperty("done"), CultureInfo.InvariantCulture));
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("place"), CultureInfo.InvariantCulture), 90, 100);
     }
 
     [Fact]
@@ -65,10 +67,10 @@ public class AnimationGroupLoopTests
         var box = shell.Load();
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(1500));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("place")), 40, 60);
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("place"), CultureInfo.InvariantCulture), 40, 60);
 
         shell.Loop.Advance(TimeSpan.FromMilliseconds(1500));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("place")), 90, 100);
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("place"), CultureInfo.InvariantCulture), 90, 100);
     }
 
     [Theory]
@@ -94,6 +96,6 @@ public class AnimationGroupLoopTests
             """));
         var box = shell.Load();
         shell.Loop.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.InRange(Convert.ToDouble(box.ReadProperty("rotation")), 340, 380);
+        Assert.InRange(Convert.ToDouble(box.ReadProperty("rotation"), CultureInfo.InvariantCulture), 340, 380);
     }
 }

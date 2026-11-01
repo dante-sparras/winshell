@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Runtime.Quick;
 
 namespace Winshell.Runtime.Tests;
@@ -50,7 +51,7 @@ public class Qt149BatchTests
         using var _ = shell;
         scene.PointerPress(20, 20, QtEnums.LeftButton, QtEnums.ShiftModifier);
         scene.PointerRelease(20, 20, QtEnums.LeftButton, QtEnums.ShiftModifier);
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("taps")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("taps"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -64,10 +65,10 @@ public class Qt149BatchTests
         Assert.True(root.ReadProperty("hot") is true);
         scene.PointerPress(20, 20, QtEnums.LeftButton);
         scene.PointerRelease(20, 20, QtEnums.LeftButton);
-        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("taps")));
+        Assert.Equal(0, Convert.ToInt32(root.ReadProperty("taps"), CultureInfo.InvariantCulture));
         scene.PointerPress(20, 20, QtEnums.LeftButton, QtEnums.ShiftModifier);
         scene.PointerRelease(20, 20, QtEnums.LeftButton, QtEnums.ShiftModifier);
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("taps")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("taps"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -87,8 +88,8 @@ public class Qt149BatchTests
     {
         using var shell = Load("import QtQuick\nItem { id: box; property int m: 1; property int n: 1; states: [ State { name: \"base\"; PropertyChanges { target: box; m: 5; n: 5 } }, State { name: \"more\"; extend: \"base\"; PropertyChanges { target: box; n: 9 } } ] }", out var root);
         ((Item)root).State = "more";
-        Assert.Equal(5, Convert.ToInt32(root.ReadProperty("m")));
-        Assert.Equal(9, Convert.ToInt32(root.ReadProperty("n")));
+        Assert.Equal(5, Convert.ToInt32(root.ReadProperty("m"), CultureInfo.InvariantCulture));
+        Assert.Equal(9, Convert.ToInt32(root.ReadProperty("n"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -96,9 +97,9 @@ public class Qt149BatchTests
     {
         using var shell = Load("import QtQuick\nItem { id: root; property int source: 3; property int snap: 0; states: State { name: \"on\"; PropertyChanges { target: root; snap: root.source; explicit: true } } }", out var root);
         ((Item)root).State = "on";
-        Assert.Equal(3, Convert.ToInt32(root.ReadProperty("snap")));
+        Assert.Equal(3, Convert.ToInt32(root.ReadProperty("snap"), CultureInfo.InvariantCulture));
         root.WriteProperty("source", 8);
-        Assert.Equal(3, Convert.ToInt32(root.ReadProperty("snap")));
+        Assert.Equal(3, Convert.ToInt32(root.ReadProperty("snap"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -106,10 +107,10 @@ public class Qt149BatchTests
     {
         using var shell = Load("import QtQuick\nItem { id: root; property bool go: true; property real w: 0; NumberAnimation { target: root; property: \"w\"; from: 0; to: 100; duration: 1000; alwaysRunToEnd: true; running: root.go } }", out var root);
         shell.Loop.Advance(TimeSpan.FromMilliseconds(200));
-        Assert.InRange(Convert.ToDouble(root.ReadProperty("w")), 1, 99);
+        Assert.InRange(Convert.ToDouble(root.ReadProperty("w"), CultureInfo.InvariantCulture), 1, 99);
         root.WriteProperty("go", false);
         shell.Loop.Advance(TimeSpan.FromMilliseconds(1000));
-        Assert.Equal(100, Convert.ToDouble(root.ReadProperty("w")));
+        Assert.Equal(100, Convert.ToDouble(root.ReadProperty("w"), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -120,7 +121,7 @@ public class Qt149BatchTests
         root.WriteProperty("go", false);
         Assert.True(root.ReadProperty("live") is true);
         shell.Loop.Advance(TimeSpan.FromMilliseconds(1000));
-        Assert.Equal(100, Convert.ToDouble(root.ReadProperty("w")));
+        Assert.Equal(100, Convert.ToDouble(root.ReadProperty("w"), CultureInfo.InvariantCulture));
         Assert.False(root.ReadProperty("live") is true);
     }
 
@@ -128,11 +129,11 @@ public class Qt149BatchTests
     public void A_delayed_binding_waits_until_the_next_turn()
     {
         using var shell = Load("import QtQuick\nItem { id: root; property int source: 1; property int seen: 0; Binding { target: root; property: \"seen\"; value: root.source; delayed: true } }", out var root);
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("seen")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("seen"), CultureInfo.InvariantCulture));
         root.WriteProperty("source", 7);
-        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("seen")));
+        Assert.Equal(1, Convert.ToInt32(root.ReadProperty("seen"), CultureInfo.InvariantCulture));
         shell.Loop.Process();
-        Assert.Equal(7, Convert.ToInt32(root.ReadProperty("seen")));
+        Assert.Equal(7, Convert.ToInt32(root.ReadProperty("seen"), CultureInfo.InvariantCulture));
     }
 
     private static TestShell Load(string qml, out QObject root)
@@ -164,6 +165,6 @@ public class Qt149BatchTests
     private static int Taps(Item item, string name)
     {
         var found = item.ObjectName == name ? item : item.ChildItems.First(child => child.ObjectName == name);
-        return Convert.ToInt32(found.ReadProperty("taps"));
+        return Convert.ToInt32(found.ReadProperty("taps"), CultureInfo.InvariantCulture);
     }
 }

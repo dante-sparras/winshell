@@ -1,3 +1,4 @@
+using System.Globalization;
 using SkiaSharp;
 using Winshell.Runtime.Quick;
 
@@ -318,13 +319,13 @@ public class QuickTests
         using var _ = shell;
         Render(scene, 50, 50).Dispose();
         shell.Loop.Process();
-        var before = Convert.ToInt32(root.ReadProperty("paints"));
+        var before = Convert.ToInt32(root.ReadProperty("paints"), CultureInfo.InvariantCulture);
 
         // The window moved to a 200% monitor: the canvas surface is made again at twice the pixels, and painted again.
         scene.DevicePixelRatio = 2;
         shell.Loop.Process();
         Render(scene, 100, 100).Dispose();
-        Assert.True(Convert.ToInt32(root.ReadProperty("paints")) > before);
+        Assert.True(Convert.ToInt32(root.ReadProperty("paints"), CultureInfo.InvariantCulture) > before);
     }
 
     [Fact]
