@@ -38,7 +38,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
 │   ├── Winshell.Qml/                # The QML parser
 │   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Winshell modules
-│   └── Winshell.Platform.Windows/   # Windows 11 windows, composition, and services
+│   ├── Winshell.Services/           # The Windows services and the code under them, with no QML, Jint or Skia
+│   └── Winshell.Platform.Windows/   # Windows 11 windows, composition, and the QML face of the services
 ├── tests/
 │   ├── Winshell.Qml.Tests/
 │   ├── Winshell.Runtime.Tests/

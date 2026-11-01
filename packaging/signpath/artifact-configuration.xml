@@ -17,12 +17,14 @@
       <include path="win-x64/winshell.dll" />
       <include path="win-x64/Winshell.Qml.dll" />
       <include path="win-x64/Winshell.Runtime.dll" />
+      <include path="win-x64/Winshell.Services.dll" />
       <include path="win-x64/Winshell.Platform.Windows.dll" />
       <include path="win-arm64/winshell.exe" />
       <include path="win-arm64/winshellw.exe" />
       <include path="win-arm64/winshell.dll" />
       <include path="win-arm64/Winshell.Qml.dll" />
       <include path="win-arm64/Winshell.Runtime.dll" />
+      <include path="win-arm64/Winshell.Services.dll" />
       <include path="win-arm64/Winshell.Platform.Windows.dll" />
       <for-each>
         <authenticode-sign />

@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 
@@ -369,7 +369,7 @@ public class FloatingWindowFullscreenTests
 
     private static RECT Restored(nint hwnd)
     {
-        var placement = new WINDOWPLACEMENT { Length = (uint)Marshal.SizeOf<WINDOWPLACEMENT>() };
+        var placement = new Winshell.Native.WINDOWPLACEMENT { Length = (uint)Marshal.SizeOf<Winshell.Native.WINDOWPLACEMENT>() };
         Assert.True(Win32.GetWindowPlacement(hwnd, ref placement));
         return placement.Normal;
     }

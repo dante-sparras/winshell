@@ -135,7 +135,7 @@ internal sealed class UiaTextRange(UiaElement owner, int start, int end) : IText
         {
             var piece = pieces[i];
             var origin = input.MapToScene(piece.X, piece.Y);
-            var rect = owner.Automation.ToScreen(new Runtime.QRect(origin.X, origin.Y, piece.Width, piece.Height));
+            var rect = owner.Automation.ToScreen(new QRect(origin.X, origin.Y, piece.Width, piece.Height));
             (values[i * 4], values[i * 4 + 1], values[i * 4 + 2], values[i * 4 + 3]) =
                 (rect.Left, rect.Top, rect.Width, rect.Height);
         }

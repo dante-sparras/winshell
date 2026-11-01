@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using SkiaSharp;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
 

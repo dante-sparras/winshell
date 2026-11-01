@@ -1,4 +1,4 @@
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Platform.Windows.Services.Tray;
 using Winshell.Runtime;
 

@@ -69,7 +69,7 @@ public sealed class UpdatesService : QObject
     {
         if (_updater is null)
         {
-            ServiceSupport.Warn(this, "updates", "Updates.check(): this Winshell does not update itself.");
+            QmlServices.Warn(this, "updates", "Updates.check(): this Winshell does not update itself.");
             return;
         }
         ServiceSupport.Run("updates", _updater.CheckAsync);
@@ -80,7 +80,7 @@ public sealed class UpdatesService : QObject
     public void Restart()
     {
         if (_updater?.RestartToUpdate() != true)
-            ServiceSupport.Warn(this, "updates", "Updates.restart(): no update is ready.");
+            QmlServices.Warn(this, "updates", "Updates.restart(): no update is ready.");
     }
 
     private void OnChanged(UpdateState state)

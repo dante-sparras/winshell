@@ -819,7 +819,7 @@ public class TaskbarTests
     }
 
     /// <summary>Where the platform puts the panel on a monitor, as Win32Window does for its exclusion mode.</summary>
-    private static Winshell.Platform.Windows.Native.RECT Placed(PanelWindow bar, Winshell.Platform.Windows.Native.RECT monitor, double scale)
+    private static Winshell.Native.RECT Placed(PanelWindow bar, Winshell.Native.RECT monitor, double scale)
     {
         Assert.Equal(1, bar.ExclusionMode);
         var placement = new PanelPlacement(null, bar.Anchors.Edges, bar.Margins.Left, bar.Margins.Top, bar.Margins.Right, bar.Margins.Bottom,
@@ -835,8 +835,8 @@ public class TaskbarTests
     public void An_auto_hiding_taskbar_never_reaches_the_screen_below_while_it_slides(double scale)
     {
         // This screen, with another directly below it.
-        var upper = new Winshell.Platform.Windows.Native.RECT(0, 0, (int)(1920 * scale), (int)(1080 * scale));
-        var lower = new Winshell.Platform.Windows.Native.RECT(0, upper.Bottom, upper.Right, upper.Bottom + (int)(1080 * scale));
+        var upper = new Winshell.Native.RECT(0, 0, (int)(1920 * scale), (int)(1080 * scale));
+        var lower = new Winshell.Native.RECT(0, upper.Bottom, upper.Right, upper.Bottom + (int)(1080 * scale));
         var (shell, bar) = Taskbar(new Desk());
         using var _ = shell;
         var start = In(bar, "startButton");

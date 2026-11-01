@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using Winshell.Platform.Windows.Accessibility;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
 using Winshell.Runtime.Shell;
@@ -538,7 +538,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         Win32.GetWindowRect(Handle, out var shown);
         var maximized = Win32.IsZoomed(Handle);
         var minimized = Win32.IsIconic(Handle);
-        var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
+        var placement = new Winshell.Native.WINDOWPLACEMENT { Length = (uint)sizeof(Winshell.Native.WINDOWPLACEMENT) };
         var hasPlacement = Win32.GetWindowPlacement(Handle, ref placement);
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
@@ -563,13 +563,13 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     /// The restored rectangle in screen pixels. A normal window is already there. A minimized or maximized one
     /// reports it in workspace coordinates, which start at the primary monitor's work area.
     /// </summary>
-    private static RECT RestoredScreenRect(WINDOWPLACEMENT placement, RECT shown)
+    private static RECT RestoredScreenRect(Winshell.Native.WINDOWPLACEMENT placement, RECT shown)
     {
         var primary = Screens.Enumerate().FirstOrDefault(m => m.Info.IsPrimary);
         var bias = primary is null
             ? (X: 0, Y: 0)
-            : Services.WindowList.WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, false);
-        var shifted = Services.WindowList.WindowRules.Shift(placement.Normal, bias.X, bias.Y);
+            : WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, false);
+        var shifted = WindowRules.Shift(placement.Normal, bias.X, bias.Y);
         return shifted.Width > 0 && shifted.Height > 0 ? shifted : shown;
     }
 
@@ -627,7 +627,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     private void SetCorners(int preference) =>
         Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
 
-    private Monitor? CurrentMonitor()
+    private ConnectedMonitor? CurrentMonitor()
     {
         if (Handle == 0)
             return null;

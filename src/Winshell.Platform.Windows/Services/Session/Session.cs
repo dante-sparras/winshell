@@ -23,12 +23,12 @@ public sealed class SessionService : QObject
         var locker = _engine.GetService<IWorkstationLock>();
         if (locker is null)
         {
-            ServiceSupport.Warn(this, "session", "Session.lock() needs a shell running on the Windows desktop.");
+            QmlServices.Warn(this, "session", "Session.lock() needs a shell running on the Windows desktop.");
             return false;
         }
         if (locker.Lock())
             return true;
-        ServiceSupport.Warn(this, "session", "Windows did not lock the session.");
+        QmlServices.Warn(this, "session", "Windows did not lock the session.");
         return false;
     }
 }

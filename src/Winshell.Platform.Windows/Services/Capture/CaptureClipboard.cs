@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using SkiaSharp;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 
 namespace Winshell.Platform.Windows.Services.Capture;
 

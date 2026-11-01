@@ -1,4 +1,4 @@
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Runtime;
 
 namespace Winshell.Platform.Windows;

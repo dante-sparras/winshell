@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Platform.Windows.Services.Input;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -33,7 +33,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
         Hotkeys = new WindowsHotkeyRegistrar(loop);
         _current = this;
         Win32.SetProcessDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        _screens = Platform.Windows.Screens.Enumerate().Select(m => m.Info).ToList();
+        _screens = Winshell.Screens.Enumerate().Select(m => m.Info).ToList();
         ListenForTextScale();
         ReadTheme();
         ListenForClipboard();
@@ -91,7 +91,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
 
     private void RefreshScreens()
     {
-        var next = Platform.Windows.Screens.Enumerate().Select(m => m.Info).ToList();
+        var next = Winshell.Screens.Enumerate().Select(m => m.Info).ToList();
         if (next.SequenceEqual(_screens))
             return;
         _screens = next;

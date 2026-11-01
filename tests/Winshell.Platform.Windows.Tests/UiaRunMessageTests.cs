@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using Winshell.Platform.Windows.Accessibility;
-using Winshell.Platform.Windows.Native;
+using Winshell.Native;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;

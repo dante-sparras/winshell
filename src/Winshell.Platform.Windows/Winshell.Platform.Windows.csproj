@@ -8,8 +8,6 @@
     <PackageReference Include="Vortice.Direct3D11" />
     <PackageReference Include="Vortice.DirectComposition" />
     <PackageReference Include="Vortice.DXGI" />
-    <PackageReference Include="Microsoft.Win32.SystemEvents" />
-    <PackageReference Include="System.Management" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Winshell.Runtime\Winshell.Runtime.csproj" />

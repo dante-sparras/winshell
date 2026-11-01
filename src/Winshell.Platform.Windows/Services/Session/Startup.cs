@@ -39,13 +39,13 @@ public sealed class StartupService : QObject
         {
             if (_registry is null)
             {
-                ServiceSupport.Warn(this, "startup", "Startup.runAtSignIn needs a shell started by winshell.exe.");
+                QmlServices.Warn(this, "startup", "Startup.runAtSignIn needs a shell started by winshell.exe.");
                 return;
             }
             if (value == _runs)
                 return;
             if (!(value ? _registry.Register() : _registry.Unregister()))
-                ServiceSupport.Warn(this, "startup", value ? "Windows did not let Winshell register to run at sign-in." : "Windows did not let Winshell stop running at sign-in.");
+                QmlServices.Warn(this, "startup", value ? "Windows did not let Winshell register to run at sign-in." : "Windows did not let Winshell stop running at sign-in.");
             Read();
         }
     }

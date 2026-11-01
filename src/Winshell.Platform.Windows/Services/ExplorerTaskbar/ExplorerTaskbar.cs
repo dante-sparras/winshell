@@ -3,17 +3,6 @@ using Winshell.Runtime;
 namespace Winshell.Platform.Windows.Services.ExplorerTaskbar;
 
 /// <summary>
-/// Hides Explorer's taskbar and releases the screen edge it reserved, then puts both back.
-/// The only implementation that calls Win32 is <see cref="Win32ExplorerTaskbar"/>.
-/// </summary>
-internal interface IExplorerTaskbar
-{
-    void Hide();
-
-    void Restore();
-}
-
-/// <summary>
 /// One process-wide handoff. <see cref="Hide"/> is the first time the taskbar object exists, so leaving this off
 /// never looks at Explorer's windows. <see cref="Restore"/> is safe to call again, including after a crash handler
 /// and the process exit have both run.
