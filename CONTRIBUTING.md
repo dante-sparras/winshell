@@ -76,7 +76,7 @@ CI checks the PR title. It also checks the branch name, but only as a reminder; 
 Fill in the PR template:
 
 - **Summary**: the issue it comes from, if any, and the smallest diagram, diff sketch, or tree that shows the change.
-- **Evidence**: a before and after, from the tests or manual steps you ran. "Tests pass" on its own isn't enough. Add **Not verified** for anything you couldn't check. For visible changes, add before/after screenshots, or a short recording when motion matters. Attach them to the PR; don't commit them to the repo.
+- **Evidence**: a before and after, from the tests or manual steps you ran. "Tests pass" on its own isn't enough. Add **Not verified** for anything you couldn't check. For a change to the settings or notification surfaces, link the `settings-surface` or `notification-surface` artifact from the PR's `ci` run. Don't commit evidence to the repo.
 - **Merge Danger**: whether this is a one-way or two-way **Door**, and its **Blast Radius**, the one word for what it can affect.
 
 If an AI agent did the work, end the description with the model and the tool you used, such as "Claude Opus 5.5 in Claude Code".
