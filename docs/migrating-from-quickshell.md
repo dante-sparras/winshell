@@ -352,7 +352,9 @@ See [Windows Bluetooth](bluetooth.md) for state, discovery, battery and action l
 | Former member | Windows API |
 | --- | --- |
 | `BluetoothAdapter.adapterId` (`hci0`), adapter/device `dbusPath` | Windows device `id`; no D-Bus or HCI aliases |
-| Writable adapter `enabled`, `discoverable`, `discoverableTimeout`, `pairable`, `pairableTimeout` | `enabled` asks Windows to change the radio and keeps the value Windows reports. `discoverable`, `discoverableTimeout`, `pairable` and `pairableTimeout` are removed |
+| Writable adapter `enabled` | Asks Windows to change the radio and keeps the value Windows reports |
+| Writable `discoverable` and `pairable` | `discoverable` asks Windows to change whether the radio can be found. `pairable` asks Windows to change incoming connections, which is wider than BlueZ pairing. Both keep the value a later read reports |
+| `discoverableTimeout`, `pairableTimeout` | Removed. Windows has no discoverable or pairable timeout |
 | `BluetoothAdapterState.Enabled`, `Disabled`, `Blocked`, `Enabling`, `Disabling` | `On`, `Off`, `Disabled`, `Unknown`; pending device work is reported separately by `operation` |
 | `BluetoothAdapter.discovering`, `devices` | Singleton `Bluetooth.discovering`, `startDiscovery()`, `stopDiscovery()`, `devices`, `pairedDevices`, `nearbyDevices` |
 | `BluetoothDevice.deviceName`, writable `name` | Read-only `name` |
