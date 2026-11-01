@@ -92,12 +92,7 @@ public class IoMemberTests
         int? error = null;
         socket.Connect("error", args => error = Convert.ToInt32(args[0], System.Globalization.CultureInfo.InvariantCulture));
         socket.Connected = true;
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (error is null && DateTime.UtcNow < until)
-        {
-            shell.Loop.Process();
-            await Task.Delay(20);
-        }
-        return error ?? -2;
+        await Wait.UntilAsync(() => error is not null, "the connection to fail", shell.Loop.Process);
+        return error!.Value;
     }
 }

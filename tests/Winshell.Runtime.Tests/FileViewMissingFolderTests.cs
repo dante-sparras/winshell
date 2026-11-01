@@ -30,12 +30,7 @@ public class FileViewMissingFolderTests
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "settings.toml"), "name = \"by hand\"");
 
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!Equals(shell.Eval(root, "settings.name"), "by hand") && DateTime.UtcNow < deadline)
-        {
-            shell.Loop.Process();
-            Thread.Sleep(10);
-        }
+        Wait.Until(() => Equals(shell.Eval(root, "settings.name"), "by hand"), "the file in the new folder", shell.Loop.Process);
 
         Assert.Equal("by hand", shell.Eval(root, "settings.name"));
         Assert.Empty(shell.Messages);
