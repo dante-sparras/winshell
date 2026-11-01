@@ -34,7 +34,7 @@ public class FileViewFolderReturnsTests
         using var watch = DirectoryWatch.Start(directory, DirectoryWatch.FileChanges, _ => { }, deleted.Set);
         Assert.NotNull(watch);
         Directory.Delete(directory, true);
-        Assert.True(deleted.Wait(TimeSpan.FromSeconds(30)), "The folder was not reported as deleted.");
+        Assert.True(deleted.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "The folder was not reported as deleted.");
         shell.Loop.Process();
 
         Directory.CreateDirectory(directory);

@@ -310,7 +310,7 @@ public class NotificationTests(ITestOutputHelper output)
     [Fact]
     public async Task Native_read_is_safe_without_prompting_or_changing_settings()
     {
-        var snapshot = await new WindowsNotificationBackend().ReadAsync();
+        var snapshot = await new WindowsNotificationBackend().ReadAsync(TestContext.Current.CancellationToken);
         Assert.True(Enum.IsDefined(snapshot.AccessStatus));
         Assert.True(Enum.IsDefined(snapshot.Focus));
         Assert.True(Enum.IsDefined(snapshot.Mode));

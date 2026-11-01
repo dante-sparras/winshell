@@ -19,7 +19,7 @@ public class ScriptBudgetTests
             """));
         using var engine = new QmlEngine(StandardModules.Create(), shell.Loop, shell.Log, shell.Directory, TimeSpan.FromMilliseconds(200));
         var load = Task.Run(() => engine.CreateRoot(Path.Combine(shell.Directory, "shell.qml")));
-        var finished = await Task.WhenAny(load, Task.Delay(5000));
+        var finished = await Task.WhenAny(load, Task.Delay(5000, TestContext.Current.CancellationToken));
         Assert.Same(load, finished);
         var root = await load;
         shell.Loop.Process();

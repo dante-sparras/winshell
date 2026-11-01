@@ -32,7 +32,7 @@ public class AppScanFailureTests
                 registerIcons: false,
                 log);
             catalog.Start();
-            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(5));
+            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Contains(messages, m => m.Contains("scan broke", StringComparison.Ordinal));
 
             File.WriteAllText(Path.Combine(folder, "note.txt"), "x");
@@ -40,7 +40,7 @@ public class AppScanFailureTests
             while (Volatile.Read(ref calls) < 2)
             {
                 Assert.True(DateTime.UtcNow < until, $"the next scan did not run (calls={Volatile.Read(ref calls)})");
-                await Task.Delay(20);
+                await Task.Delay(20, TestContext.Current.CancellationToken);
             }
         }
         finally

@@ -291,7 +291,7 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         var loop = new ManualEventLoop();
         using var engine = new QmlEngine(StandardModules.Create(), loop);
         var service = new BluetoothService(engine, backend);
-        await backend.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await backend.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         service.ComponentComplete();
         service.Destroy();
         loop.Process();
@@ -328,7 +328,7 @@ public sealed class BluetoothTests(ITestOutputHelper output)
     {
         using var backend = new BluetoothBackend();
         BluetoothSnapshot snapshot;
-        try { snapshot = await backend.ReadAsync(); }
+        try { snapshot = await backend.ReadAsync(TestContext.Current.CancellationToken); }
         catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
         {
             output.WriteLine($"Native read unavailable: {e.Message}");
@@ -408,14 +408,14 @@ public sealed class BluetoothTests(ITestOutputHelper output)
         var watched = new FakeBackend { Snapshot = Snapshot(Device()) };
         using var engine = new QmlEngine(StandardModules.Create(), loop);
         var service = new BluetoothService(engine, watched);
-        await watched.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await watched.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         loop.Process();
         var reads = watched.Reads;
         service.StopMonitoring();
         service.StartMonitoring();
         var until = DateTime.UtcNow.AddSeconds(2);
         while (watched.Reads == reads && DateTime.UtcNow < until)
-            await Task.Delay(10);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
         Assert.True(watched.Reads > reads);
         service.Destroy();
         loop.Process();

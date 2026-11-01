@@ -105,7 +105,7 @@ public class FileViewWaitForJobTests
         });
         var releaser = new Thread(() =>
         {
-            if (!entered.Wait(Hang) || !secondQueued.Wait(Hang))
+            if (!entered.Wait(Hang, TestContext.Current.CancellationToken) || !secondQueued.Wait(Hang))
                 return;
             release.Set();
         })
@@ -114,7 +114,7 @@ public class FileViewWaitForJobTests
         {
             releaser.Start();
             view.SetText("one");
-            Assert.True(entered.Wait(Hang), "The save never reached the gate.");
+            Assert.True(entered.Wait(Hang, TestContext.Current.CancellationToken), "The save never reached the gate.");
             view.SetText("two");
             secondQueued.Set();
             Assert.Equal(true, shell.Eval(view, "waitForJob()"));
@@ -200,7 +200,7 @@ public class FileViewWaitForJobTests
         });
         var releaser = new Thread(() =>
         {
-            if (entered.Wait(Hang))
+            if (entered.Wait(Hang, TestContext.Current.CancellationToken))
                 release.Set();
         })
         { IsBackground = true };
@@ -246,7 +246,7 @@ public class FileViewWaitForJobTests
         });
         var releaser = new Thread(() =>
         {
-            if (entered.Wait(Hang))
+            if (entered.Wait(Hang, TestContext.Current.CancellationToken))
                 release.Set();
         })
         { IsBackground = true };

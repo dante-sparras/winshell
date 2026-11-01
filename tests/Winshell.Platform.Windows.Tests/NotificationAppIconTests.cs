@@ -128,7 +128,7 @@ public class NotificationAppIconTests
         try
         {
             listener.Apply(Snapshot(Toast(1, appId, fake), Toast(2, appId, fake)));
-            opened.Wait();
+            opened.Wait(TestContext.Current.CancellationToken);
             var rows = listener.Notifications.Rows.Cast<ShellNotification>().OrderBy(n => n.Id).ToArray();
             Assert.Equal("", rows[0].AppIcon);
             Assert.Equal("", rows[1].AppIcon);
@@ -137,7 +137,7 @@ public class NotificationAppIconTests
 
             Assert.True(rows[0].Dismiss());
             gate.Set();
-            done.Wait();
+            done.Wait(TestContext.Current.CancellationToken);
             loop.Process();
 
             Assert.True(rows[0].IsDestroyed);
@@ -156,7 +156,7 @@ public class NotificationAppIconTests
         {
             gate.Set();
             if (!done.IsSet)
-                done.Wait();
+                done.Wait(TestContext.Current.CancellationToken);
             loop.Process();
             listener.Destroy();
             loop.Process();

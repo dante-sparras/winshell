@@ -31,29 +31,29 @@ public class IpcBoundsTests
             catch (IOException)
             {
             }
-        });
+        }, TestContext.Current.CancellationToken);
         using var reader = new StreamReader(client, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 256, leaveOpen: true);
-        var line = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        var line = await reader.ReadLineAsync(TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.NotNull(line);
         var response = JsonSerializer.Deserialize(line, IpcJson.Default.IpcResponse);
         Assert.NotNull(response);
         Assert.False(response.Ok);
         Assert.Equal("Request is too long", response.Error);
-        await writing.WaitAsync(TimeSpan.FromSeconds(5));
+        await writing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await using var parked = await Connect(name);
         var held = new byte[IpcServer.MaxRequestBytes - 1];
         var prefix = "{\"op\":\"kill\""u8;
         prefix.CopyTo(held);
         Array.Fill(held, (byte)' ', prefix.Length, held.Length - prefix.Length);
-        await parked.WriteAsync(held);
+        await parked.WriteAsync(held, TestContext.Current.CancellationToken);
         server.Dispose();
 
-        var n = await parked.ReadAsync(new byte[1]).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        var n = await parked.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal(0, n);
         try
         {
-            await parked.WriteAsync("}\n"u8.ToArray());
+            await parked.WriteAsync("}\n"u8.ToArray(), TestContext.Current.CancellationToken);
         }
         catch (IOException)
         {
@@ -67,7 +67,7 @@ public class IpcBoundsTests
     {
         using var probe = new Probe();
         await using var client = await Connect(probe.Pipe);
-        await client.WriteAsync(Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n"));
+        await client.WriteAsync(Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n"), TestContext.Current.CancellationToken);
         await probe.WaitUntil(() => probe.Ping.Count == 1, "The listener did not subscribe.");
 
         await client.DisposeAsync();
@@ -87,13 +87,13 @@ public class IpcBoundsTests
             {
                 var client = await Connect(probe.Pipe);
                 held.Add(client);
-                await client.WriteAsync(request);
+                await client.WriteAsync(request, TestContext.Current.CancellationToken);
                 var subscribed = i + 1;
                 await probe.WaitUntil(() => probe.Ping.Count == subscribed, "A listener inside the cap did not subscribe.");
             }
 
             await using var extra = await Connect(probe.Pipe);
-            var n = await extra.ReadAsync(new byte[1]).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            var n = await extra.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(0, n);
             Assert.Equal(IpcServer.MaxClients, probe.Ping.Count);
         }
@@ -109,14 +109,14 @@ public class IpcBoundsTests
     {
         using var probe = new Probe();
         await using var client = await Connect(probe.Pipe);
-        await client.WriteAsync(Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n"));
+        await client.WriteAsync(Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n"), TestContext.Current.CancellationToken);
         await probe.WaitUntil(() => probe.Ping.Count == 1, "The listener did not subscribe.");
 
         // Larger than the pipe buffer, so the server stays inside this write until the client reads it.
         var value = new string('a', 128 * 1024);
         probe.Ping.Emit([value]);
         var first = new byte[1];
-        Assert.Equal(1, await client.ReadAsync(first).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(1, await client.ReadAsync(first, TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
         // Short, so the test reads a full queue quickly. Only the first has to hold the server in its write.
         for (var i = 0; i < IpcServer.MaxQueuedSignals + 20; i++)
             probe.Ping.Emit(["queued"]);
@@ -133,7 +133,7 @@ public class IpcBoundsTests
         Assert.Equal(value, values[0]);
         Assert.All(values.Skip(1), queued => Assert.Equal("queued", queued));
         await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await client.ReadAsync(new byte[1]).AsTask().WaitAsync(TimeSpan.FromSeconds(2)));
+            await client.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
     }
 
     private static string PipeName() => "winshell-test-" + Guid.NewGuid().ToString("N");
