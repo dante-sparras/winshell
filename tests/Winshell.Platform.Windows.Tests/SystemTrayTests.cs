@@ -8,6 +8,7 @@ namespace Winshell.Platform.Windows.Tests;
 /// The <c>Winshell.Tray</c> API over a host that is never started, fed the calls apps make. Nothing here touches the
 /// real notification area; the overflow settings test only reads the registry.
 /// </summary>
+[Collection(ThemeCollection.Name)]
 public sealed class SystemTrayTests : IDisposable
 {
     private readonly ITestOutputHelper _output;
