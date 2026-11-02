@@ -137,9 +137,10 @@ public static partial class Tasks
                 t.Pin,
                 t.Entry,
                 t.Windows,
-                t.Entry?.Icon ?? (t.Windows.Count > 0 ? t.Windows[0].Icon : t.Pin),
+                // An entry supplies its own icon, even when that icon is blank.
+                t.Entry is not null ? t.Entry.Icon : (t.Windows.Count > 0 ? t.Windows[0].Icon : t.Pin),
                 // The id to pin this app by: its entry in the app index, or the program it runs.
-                t.Pin.Length > 0 ? t.Pin : t.Entry?.Id ?? t.Windows[0].Executable))];
+                t.Pin.Length > 0 ? t.Pin : (t.Entry is not null ? t.Entry.Id : t.Windows[0].Executable)))];
     }
 
     /// <summary>The app's name: its name in the app index, or the title of its one window, or its program's name.</summary>
@@ -178,7 +179,13 @@ public static partial class Tasks
             return front == 0 ? new TaskClick.Minimize(windows[0]) : new TaskClick.Activate(windows[0]);
         if (front >= 0)
             return new TaskClick.Activate(windows[(front + 1) % windows.Count]);
-        return new TaskClick.Activate(lastUsed is not null && windows.Contains(lastUsed) ? lastUsed : windows[0]);
+        // The window used last is that window, not one that only looks like it.
+        for (var i = 0; i < windows.Count; i++)
+        {
+            if (ReferenceEquals(windows[i], lastUsed))
+                return new TaskClick.Activate(windows[i]);
+        }
+        return new TaskClick.Activate(windows[0]);
     }
 
     [GeneratedRegex(@"^[a-z]:[\\/]", RegexOptions.IgnoreCase)]
