@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary>An option Winshell does not have, and a spare word, exit 2 before a shell starts.</summary>
+[Trait("Category", "Slow")]
 public class UnknownOptionTests
 {
     // Each run names a path that is not there, so a bug in the check cannot start the default shell.

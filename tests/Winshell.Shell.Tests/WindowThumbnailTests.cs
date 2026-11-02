@@ -5,6 +5,7 @@ using Windows.Foundation;
 namespace Winshell.ShellTests;
 
 /// <summary>The thumbnail can find the shell window it is drawn in. What DWM then paints is not asserted here.</summary>
+[Trait("Category", "Slow")]
 public sealed class WindowThumbnailTests
 {
     [Fact]

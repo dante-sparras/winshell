@@ -4,6 +4,7 @@ namespace Winshell.ShellTests;
 /// The shell of this test process is a Winshell instance, in a local folder of its own: it is listed, it logs, it has
 /// its folders, and the control pipe reaches what it registered.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class ShellInstanceTests
 {
     private static async Task<InstanceInfo> Own()

@@ -4,6 +4,7 @@ using Winshell.Native;
 
 namespace Winshell.ShellTests;
 
+[Trait("Category", "Slow")]
 public sealed class PanelEdgeTests
 {
     [Fact]

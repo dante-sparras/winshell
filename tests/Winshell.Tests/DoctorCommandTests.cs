@@ -5,6 +5,7 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary><c>winshell doctor</c> as a process. Every config is under a temp folder this class creates. It never builds.</summary>
+[Trait("Category", "Slow")]
 public sealed class DoctorCommandTests : IDisposable
 {
     private static readonly string[] Ids =

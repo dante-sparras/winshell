@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Winshell.Tests;
 
+[Trait("Category", "Slow")]
 public class VersionTests
 {
     [Fact]

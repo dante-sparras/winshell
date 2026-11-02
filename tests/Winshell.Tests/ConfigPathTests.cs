@@ -1,6 +1,7 @@
 namespace Winshell.Tests;
 
 /// <summary>Config roots. Every path is under a temp folder this class creates.</summary>
+[Trait("Category", "Slow")]
 public sealed class ConfigPathTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-config-tests", Guid.NewGuid().ToString("N"));

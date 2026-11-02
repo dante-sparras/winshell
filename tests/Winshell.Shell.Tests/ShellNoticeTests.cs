@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Winshell.ShellTests;
 
+[Trait("Category", "Slow")]
 public sealed class ShellNoticeTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
