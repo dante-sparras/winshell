@@ -825,7 +825,7 @@ internal sealed class QuickSettingsRig : IDisposable
             ]);
 
     public static PowerSnapshot Battery(double percentage, PowerDeviceState state) =>
-        new(true, new PowerDeviceInfo("BAT", "Battery", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0, 0, 0, 0, ""), [], false);
+        new(true, new PowerDeviceInfo("BAT", "Battery", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0, 0, 0, 0), [], false);
 
     public void Dispose()
     {
