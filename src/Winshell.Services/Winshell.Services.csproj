@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.SystemEvents" />
     <PackageReference Include="System.Management" />
+    <PackageReference Include="Tomlyn" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Winshell.Runtime" />

@@ -31,11 +31,11 @@ public class FileViewHandSaveTests
     [Fact]
     public void A_hand_save_wins_only_when_the_disk_matches_neither_side_of_the_write()
     {
-        Assert.False(FileView.HandSaveWins(null, "a", "b"));
-        Assert.False(FileView.HandSaveWins("a", "a", "b"));
-        Assert.False(FileView.HandSaveWins("b", "a", "b"));
-        Assert.True(FileView.HandSaveWins("c", "a", "b"));
-        Assert.True(FileView.HandSaveWins("c", null, "b"));
+        Assert.False(AtomicFile.HandSaveWins(null, "a", "b"));
+        Assert.False(AtomicFile.HandSaveWins("a", "a", "b"));
+        Assert.False(AtomicFile.HandSaveWins("b", "a", "b"));
+        Assert.True(AtomicFile.HandSaveWins("c", "a", "b"));
+        Assert.True(AtomicFile.HandSaveWins("c", null, "b"));
     }
 
     [Fact]
