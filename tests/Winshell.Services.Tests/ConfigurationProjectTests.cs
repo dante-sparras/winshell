@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Winshell.Services.Tests;
 
 public sealed class ConfigurationProjectTests : IDisposable
@@ -104,6 +106,42 @@ public sealed class ConfigurationProjectTests : IDisposable
         Assert.Null(error);
     }
 
+    [Fact]
+    public void A_leftover_shell_qml_is_not_a_project_and_not_an_error()
+    {
+        var qml = Path.Combine(_root, "shell.qml");
+        File.WriteAllText(qml, "import Winshell\n");
+        File.WriteAllText(Path.Combine(_root, "notes.txt"), "hello");
+
+        Assert.Null(ConfigurationProject.Find(qml, null, _root, out var qmlError));
+        Assert.Null(qmlError);
+        Assert.Equal(qml, ConfigurationProject.LeftoverQml(qml, null, _root));
+        Assert.StartsWith("No .csproj at ", Refusal(path: Path.Combine(_root, "notes.txt")), StringComparison.Ordinal);
+
+        var folder = Path.Combine(_root, "old");
+        Directory.CreateDirectory(folder);
+        var nested = Path.Combine(folder, "shell.qml");
+        File.WriteAllText(nested, "import Winshell\n");
+        Assert.Null(ConfigurationProject.Find(folder, null, _root, out var folderError));
+        Assert.Null(folderError);
+        Assert.Equal(nested, ConfigurationProject.LeftoverQml(null, "old", _root));
+    }
+
+    [Fact]
+    public void A_project_hides_a_leftover_shell_qml_and_a_program_finds_its_project()
+    {
+        var file = Project("mine\\Bar.csproj");
+        File.WriteAllText(Path.Combine(_root, "mine", "shell.qml"), "import Winshell\n");
+        var project = Found(path: Path.Combine(_root, "mine"));
+
+        Assert.Equal(file, project.ProjectFile);
+        Assert.Null(ConfigurationProject.LeftoverQml(Path.Combine(_root, "mine"), null, _root));
+        Assert.Equal(file, ConfigurationProject.ForProgram(project.Program)!.ProjectFile);
+        Assert.Equal(file, ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder + ".next", "Bar.exe"))!.ProjectFile);
+        Assert.Null(ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder, "other.exe")));
+        Assert.Null(ConfigurationProject.ForProgram(Path.Combine(_root, "winshell.exe")));
+    }
+
     [Theory]
     [InlineData("<Project><PropertyGroup><AssemblyName>Mine</AssemblyName></PropertyGroup></Project>", "Mine.exe")]
     [InlineData("<Project><PropertyGroup><AssemblyName>$(Other)</AssemblyName></PropertyGroup></Project>", "Bar.exe")]
@@ -164,6 +202,75 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
+    public void A_failed_build_leaves_the_running_program_where_it_was()
+    {
+        var file = Project("Bar.csproj");
+        File.SetLastWriteTimeUtc(file, Long);
+        var project = Found(path: file);
+        Built(project, Long);
+        // Opening the file here stops the rename. A running program does not: its mapping still lets the folder move.
+        File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), project.Program, overwrite: true);
+        File.SetLastWriteTimeUtc(project.Program, Long);
+        File.WriteAllText(Project("Program.cs"), "class Program {}");
+        File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), Long.AddMinutes(2));
+        using var running = Process.Start(new ProcessStartInfo(project.Program)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            ArgumentList = { "/c", "ping", "-n", "30", "127.0.0.1" },
+        })!;
+        try
+        {
+            running.OutputDataReceived += (_, _) => { };
+            running.ErrorDataReceived += (_, _) => { };
+            running.BeginOutputReadLine();
+            running.BeginErrorReadLine();
+            Assert.False(running.HasExited);
+            var reason = project.Prepare(noBuild: false, (_, _, _) => new CommandResult(1, "error CS1002: ; expected [Bar.csproj]"));
+
+            // Whether the folder moved or the build went beside it is the build's business. This is what must hold after either.
+            Assert.Contains("error CS1002", reason, StringComparison.Ordinal);
+            Assert.True(File.Exists(project.Program));
+            Assert.False(Directory.Exists(project.OutputFolder + ".previous"));
+            Assert.False(running.HasExited);
+        }
+        finally
+        {
+            if (!running.HasExited)
+            {
+                running.Kill(entireProcessTree: true);
+                running.WaitForExit();
+            }
+        }
+    }
+
+    [Fact]
+    public void A_folder_that_will_not_move_is_built_beside_the_running_program()
+    {
+        var file = Project("Bar.csproj");
+        File.SetLastWriteTimeUtc(file, Long);
+        var project = Found(path: file);
+        Built(project, Long);
+        File.WriteAllText(Project("Program.cs"), "class Program {}");
+        File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), Long.AddMinutes(2));
+        using (new FileStream(project.Program, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            string? output = null;
+            var reason = project.Prepare(noBuild: false, (_, arguments, _) =>
+            {
+                output = arguments.SkipWhile(argument => argument != "-o").Skip(1).First();
+                return new CommandResult(0, "");
+            });
+            Assert.Null(reason);
+            Assert.Equal(project.OutputFolder + ".next", output);
+            Assert.Equal(Path.Combine(project.OutputFolder + ".next", "Bar.exe"), project.RebuiltBeside);
+            Assert.True(File.Exists(project.Program));
+        }
+    }
+
+    [Fact]
     public void No_build_runs_what_the_last_build_left_even_with_a_newer_source()
     {
         var file = Project("Bar.csproj");
@@ -185,19 +292,49 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Bar.csproj")]
-    [InlineData("Directory.Build.props")]
-    [InlineData("Directory.Build.targets")]
-    public void A_downloaded_project_never_reaches_a_build(string name)
+    [InlineData("Bar.csproj", 3)]
+    [InlineData("Directory.Build.props", 3)]
+    [InlineData("Directory.Build.targets", 3)]
+    [InlineData("Bar.csproj", 4)]
+    public void A_downloaded_project_never_reaches_a_build(string name, int zone)
     {
         var project = Found(path: Project("Bar.csproj"));
         var marked = Path.Combine(_root, name);
         File.AppendAllText(marked, "");
-        File.WriteAllText(marked + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
+        File.WriteAllText(marked + ":Zone.Identifier", $"[ZoneTransfer]\r\nZoneId={zone}\r\n");
 
         var refusal = project.Prepare(noBuild: false, Builds);
 
-        Assert.StartsWith(name + " was downloaded", refusal, StringComparison.Ordinal);
+        Assert.StartsWith($"{marked}: {name} was downloaded", refusal, StringComparison.Ordinal);
+        Assert.Empty(_commands);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void A_project_from_this_pc_or_the_intranet_can_be_prepared(int zone)
+    {
+        var file = Project("Bar.csproj");
+        var project = Found(path: file);
+        Built(project, new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.WriteAllText(file + ":Zone.Identifier", $"[ZoneTransfer]\r\nZoneId={zone}\r\n");
+
+        Assert.False(ZoneIdentifier.IsDownloaded(file));
+        Assert.Null(project.Prepare(noBuild: false, Builds));
+        Assert.Empty(_commands);
+    }
+
+    [Fact]
+    public void A_project_without_a_zone_can_be_prepared()
+    {
+        var file = Project("Bar.csproj");
+        var project = Found(path: file);
+        Built(project, new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.False(ZoneIdentifier.IsDownloaded(file));
+        Assert.False(ZoneIdentifier.IsDownloaded(Path.Combine(_root, "missing.csproj")));
+        Assert.Null(project.Prepare(noBuild: false, Builds));
         Assert.Empty(_commands);
     }
 

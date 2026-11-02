@@ -82,6 +82,19 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
+    public async Task A_build_error_shows_on_the_running_shell()
+    {
+        var shell = await ShellFixture.Current();
+
+        var response = Assert.Single(await Ask(new IpcRequest("build-error", Args: ["Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"])));
+
+        Assert.True(response.Ok);
+        Assert.Equal(NoticeKind.BuildError, shell.Notices!.Current!.Kind);
+        Assert.Contains("CS1002", shell.Notices.Current.Body, StringComparison.Ordinal);
+        Assert.Equal(Environment.ProcessId, (await Own()).Pid);
+    }
+
+    [Fact]
     public async Task A_handler_that_throws_fails_the_call_and_the_shell_goes_on()
     {
         using var handler = await ShellFixture.On(s => s.Ipc.Handle("tests", "fail", new Action(() => throw new InvalidOperationException("no"))));

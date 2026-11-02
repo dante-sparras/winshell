@@ -6,7 +6,7 @@ namespace Winshell;
 /// <summary>The id that names a shell across runs, and the folders named after it.</summary>
 internal sealed record ShellIdentity(string ShellId, string DataDir, string StateDir, string CacheDir)
 {
-    /// <summary>The identity of a shell defined by <paramref name="rootFile"/>, its <c>shell.qml</c> or its program.</summary>
+    /// <summary>The identity of a shell defined by <paramref name="rootFile"/>, its program.</summary>
     /// <param name="rootFile">A full path. A relative folder is next to this file.</param>
     /// <param name="configRoot">The folder configurations live in, or empty when there is none.</param>
     /// <param name="shellId">The id it asks for. Null names it after where it is.</param>

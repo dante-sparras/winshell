@@ -1,6 +1,3 @@
-# Reference checkout. Not part of this repo. pwsh scripts/dev.ps1 brings it back after a clone.
-docs/agents/quickshell/
-
 # The docs site DocFX builds from docs/.
 docs/_site/
 
@@ -37,10 +34,6 @@ obj/
 .vs/
 *.user
 TestResults/
-
-# What the default shell writes next to shell.qml when it runs from source.
-src/Winshell/DefaultShell/launcher.toml
-src/Winshell/DefaultShell/preferences.toml
 
 # Status files agent tooling writes.
 out/

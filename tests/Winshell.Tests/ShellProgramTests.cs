@@ -1,22 +1,23 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Winshell.Tests;
 
 /// <summary>
-/// winshell-next.exe is a configuration's own program: it calls <c>Shell.Run</c>, and the CLI reaches it as it reaches a
-/// QML instance. Each test has config and local folders of its own, so it sees only its own shells and can't touch the
-/// user's.
+/// <c>winshell run</c> starts the default shell in this process. Each test has config and local folders of its own,
+/// so it sees only its own shells and can't touch the user's.
 /// </summary>
-public sealed class ShellProgramTests : IDisposable
+[Collection(DefaultShellCollection.Name)]
+public sealed partial class ShellProgramTests : IDisposable
 {
-    private static readonly string Next = Path.GetFullPath(typeof(ShellProgramTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "WinshellNext").Value!);
-
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
+
+    [GeneratedRegex(@"^Log: (?<path>.+), last \d+ lines\r?$", RegexOptions.Multiline)]
+    private static partial Regex LogLine();
 
     [Fact]
     public void List_log_ipc_and_kill_reach_the_program()
@@ -26,7 +27,7 @@ public sealed class ShellProgramTests : IDisposable
 
         var row = Info(process);
         Assert.Equal("winshell-default", row.GetProperty("shellId").GetString());
-        Assert.Equal(Next, row.GetProperty("configPath").GetString(), ignoreCase: true);
+        Assert.Equal(WinshellCli.Exe, row.GetProperty("configPath").GetString(), ignoreCase: true);
 
         var log = Run("log", "--pid", pid);
         Assert.Equal(0, log.Code);
@@ -69,7 +70,7 @@ public sealed class ShellProgramTests : IDisposable
     {
         var first = Start("--no-duplicate");
 
-        var second = Launch(["--no-duplicate"]);
+        var second = Launch(["-n"]);
 
         Wait.Until(() => second.HasExited, "the second start to exit");
         Assert.Equal(0, second.ExitCode);
@@ -97,24 +98,60 @@ public sealed class ShellProgramTests : IDisposable
         Assert.Equal(next.GetProperty("id").GetString(), Assert.Single(Listed()).GetProperty("id").GetString());
     }
 
+    /// <summary>
+    /// A crash after the config loaded, as an exception escaping the loop would be: one fatal report, written before
+    /// the log closes, and reporting it again as the process ends throws nothing. The report goes to a temp folder
+    /// through <c>WINSHELL_TEST_CRASH</c>, never to the user's crash folder.
+    /// </summary>
     [Fact]
-    public void A_start_that_fails_reports_it_and_leaves_no_running_instance()
+    public void A_crash_as_the_shell_starts_writes_one_report_and_leaves_no_running_instance()
     {
         var crashes = Path.Combine(_dir, "crashes");
 
-        var process = Launch([], crashes);
+        var (code, output, error) = WinshellCli.Run(["run"], [.. Folders, ("WINSHELL_TEST_CRASH", crashes)]);
 
-        Wait.Until(() => process.HasExited, "the failed start to exit");
-        Assert.Equal(1, process.ExitCode);
+        Assert.Equal(1, code);
         var report = File.ReadAllText(Assert.Single(Directory.GetFiles(crashes)));
         Assert.Contains("Winshell closed: yes", report, StringComparison.Ordinal);
+        Assert.Contains("Where: Winshell", report, StringComparison.Ordinal);
         Assert.Contains("Shell id: winshell-default", report, StringComparison.Ordinal);
         Assert.Contains("asked Winshell to crash as it started", report, StringComparison.Ordinal);
+        Assert.Contains("Shell ID: \"winshell-default\"", error + output, StringComparison.Ordinal);
+        Assert.DoesNotContain("ObjectDisposedException", error + output, StringComparison.Ordinal);
+        // The crash and its report are in the log, written before the log file closed.
+        var logged = File.ReadAllText(LogLine().Match(report).Groups["path"].Value);
+        Assert.Contains("FATAL: Winshell crashed: System.InvalidOperationException", logged, StringComparison.Ordinal);
+        Assert.Contains("Wrote a crash report to", logged, StringComparison.Ordinal);
         Assert.Empty(Listed());
 
         // Its shell id is free again, with no mutex or record left behind.
         var next = Start("--no-duplicate");
         Assert.False(next.HasExited);
+    }
+
+    /// <summary><c>winshell run -d</c> leaves the default shell to a child and returns, so the child holds the shell id.</summary>
+    [Fact]
+    public void A_detached_start_leaves_the_shell_id_to_the_child()
+    {
+        // Not redirected: the child would inherit the pipes, and reading them to the end waits until the shell exits.
+        var info = new ProcessStartInfo(WinshellCli.Exe) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (var arg in new[] { "run", "-n", "-d" })
+            info.ArgumentList.Add(arg);
+        foreach (var (name, value) in Folders)
+            info.Environment[name] = value;
+        using (var parent = Process.Start(info)!)
+        {
+            Assert.True(parent.WaitForExit(20_000), "winshell -d did not return");
+            Assert.Equal(0, parent.ExitCode);
+        }
+
+        Wait.Until(() => Listed().Any(), "the background shell");
+        var child = Assert.Single(Listed());
+        Assert.Equal("winshell-default", child.GetProperty("shellId").GetString());
+
+        var duplicate = Launch(["-n"]);
+        Wait.Until(() => duplicate.HasExited, "a duplicate of the background shell to exit");
+        Assert.Equal(child.GetProperty("pid").GetInt32(), Assert.Single(Listed()).GetProperty("pid").GetInt32());
     }
 
     private Process Start(params string[] args)
@@ -124,9 +161,9 @@ public sealed class ShellProgramTests : IDisposable
         return process;
     }
 
-    private Process Launch(string[] args, string? crashFolder = null)
+    private Process Launch(string[] args)
     {
-        var info = new ProcessStartInfo(Next)
+        var info = new ProcessStartInfo(WinshellCli.Exe)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
@@ -135,12 +172,11 @@ public sealed class ShellProgramTests : IDisposable
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        info.ArgumentList.Add("run");
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
         foreach (var (name, value) in Folders)
             info.Environment[name] = value;
-        if (crashFolder is not null)
-            info.Environment["WINSHELL_TEST_CRASH"] = crashFolder;
         var process = Process.Start(info)!;
         _started.Add(process);
         // Read the output so the shell never blocks on a full pipe.

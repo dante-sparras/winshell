@@ -11,9 +11,10 @@ public class OsMinimumTests
     {
         var root = RepoRoot();
         AssertPlatform(Path.Combine(root, "src", "Winshell", "Winshell.csproj"));
-        AssertPlatform(Path.Combine(root, "src", "Winshell.Platform.Windows", "Winshell.Platform.Windows.csproj"));
+        AssertPlatform(Path.Combine(root, "src", "Winshell.Shell", "Winshell.Shell.csproj"));
+        AssertPlatform(Path.Combine(root, "src", "Winshell.DefaultShell", "Winshell.DefaultShell.csproj"));
+        AssertPlatform(Path.Combine(root, "src", "Winshell.Services", "Winshell.Services.csproj"));
         AssertPlatform(Path.Combine(root, "tests", "Winshell.Tests", "Winshell.Tests.csproj"));
-        AssertPlatform(Path.Combine(root, "tests", "Winshell.Platform.Windows.Tests", "Winshell.Platform.Windows.Tests.csproj"));
 
         var package = File.ReadAllText(Path.Combine(root, "scripts", "package.ps1"));
         Assert.Contains("MinimumOSVersion: 10.0.22621.0", package, StringComparison.Ordinal);

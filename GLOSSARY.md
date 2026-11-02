@@ -1,6 +1,6 @@
 # Winshell
 
-Winshell is a Windows 11 shell. A configuration written in QML describes the windows and items it shows.
+Winshell is a Windows 11 shell. A configuration is a .NET project that builds into one program and describes the windows it shows.
 
 ## The shell
 
@@ -9,35 +9,31 @@ The desktop shell one configuration describes, running as one process.
 _Avoid_: app, host, session
 
 **Configuration**:
-The QML that defines a shell, loaded from one directory.
-_Avoid_: theme, skin, project
+The .NET project that defines a shell, built into one program.
+_Avoid_: theme, skin, script
 
 **Shell id**:
 The name that identifies a configuration across runs.
 _Avoid_: instance id, path
 
 **Instance**:
-One running process of a shell. The CLI lists, logs, and kills instances.
+One running process of a shell. A reload replaces it. The CLI lists, logs, and kills instances.
 _Avoid_: generation, session
-
-**Generation**:
-One load of a configuration. A reload retires it and starts the next.
-_Avoid_: instance, session
 
 **Windows session**:
 The signed-in Windows user session the shell runs in. Windows locks and unlocks it; the shell can only ask it to lock.
 _Avoid_: logon session, user session
 
 **Reload**:
-Replacing the running generation with a new load of the same configuration.
-_Avoid_: restart, refresh
+Building the configuration and replacing the running instance with the result.
+_Avoid_: restart, refresh, generation
 
 **Notice**:
-Winshell's own window, drawn like a Windows 11 notification, for a configuration error or a window that failed. It is Winshell's, not the configuration's, so it shows even when the configuration did not load.
-_Avoid_: toast, popup, reload popup
+Winshell's own window, drawn like a Windows 11 notification, for a configuration that did not build or a failure Winshell reports. It is Winshell's, not the configuration's.
+_Avoid_: toast, popup, flyout
 
 **Crash report**:
-A text file Winshell writes on this PC when the runtime itself fails: where, the exception, and the end of the log. A mistake in the configuration is a config error, not a crash.
+A text file Winshell writes on this PC when the shell itself fails: where, the exception, and the end of the log. A project that did not build is a build error, not a crash.
 _Avoid_: dump, telemetry
 
 ## What it shows
@@ -54,9 +50,9 @@ _Avoid_: bar, taskbar, dock, layer surface
 A frameless window placed next to another window.
 _Avoid_: popup, flyout
 
-**Popup**:
-A control shown in the overlay of the window that holds it. It is not a window of its own.
-_Avoid_: popup window, flyout, dialog
+**Flyout**:
+A control shown over a window, in that window's overlay. It is not a window of its own.
+_Avoid_: popup, popup window, dialog
 
 **Taskbar**:
 The default shell's panel along the bottom of each screen: Start, Search, the apps, the notification area and the clock. Explorer's own taskbar is the Windows taskbar.
@@ -84,7 +80,7 @@ _Avoid_: control panel, config app
 
 **Preferences**:
 The choices made in Winshell Settings, kept in `preferences.toml` in the config folder.
-_Avoid_: settings (that is Windows Settings), config (that is the QML)
+_Avoid_: settings (that is Windows Settings)
 
 **On-screen display**:
 The panel Windows 11 shows when volume, brightness, media or the microphone mute changes. It sits above the taskbar and does not reserve space.
@@ -106,21 +102,13 @@ _Avoid_: zoom, DPI factor
 What shows through the transparent parts of a window: nothing, or a Windows 11 material.
 _Avoid_: blur, wallpaper, effect
 
-**Item**:
-A node in a window's visual tree.
-_Avoid_: widget, element, control
-
 **Control**:
-An item with the behavior of a standard control, drawn in the Windows 11 style.
-_Avoid_: widget
+A WinUI control.
+_Avoid_: widget, item
 
 **Theme**:
 Light or dark, whether a contrast theme is on, the accent color and the system colors, as Windows reports them. A shell can choose light or dark and its own accent on top; a contrast theme still wins.
 _Avoid_: skin, style, palette
-
-**Token**:
-A named color, corner radius, font or timing of the Windows 11 look, made from the theme. It has the name of its WinUI 3 theme resource.
-_Avoid_: brush, resource, variable
 
 ## What it reads from Windows
 
@@ -179,13 +167,5 @@ _Avoid_: global shortcut, keybind, accelerator, bind
 ## The language
 
 **Module**:
-A named group of QML types a document imports. Winshell's own are `Winshell` and `Winshell.*`; the Qt Quick ones are `QtQuick` and `QtQuick.*`.
-_Avoid_: package, library, namespace
-
-**Binding**:
-A property whose value is the result of an expression, updated when the values that expression reads change.
-_Avoid_: watcher, computed property
-
-**Singleton**:
-The one object of a type for a shell.
-_Avoid_: global, service
+A Winshell namespace.
+_Avoid_: package, library, QML module

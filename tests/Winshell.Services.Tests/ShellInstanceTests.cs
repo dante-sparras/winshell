@@ -19,9 +19,13 @@ public sealed class ShellInstanceTests
 
         public int Quits { get; private set; }
 
+        public string? BuildError { get; private set; }
+
+        public string? BuildProject { get; private set; }
+
         public IIpcTargets Ipc { get; } = new ShellIpc(new Log());
 
-        public string? Reload(bool hard)
+        public string? Reload(bool hard, string? program)
         {
             Reloads++;
             return ReloadError;
@@ -30,6 +34,12 @@ public sealed class ShellInstanceTests
         public void Reloaded() => Answered++;
 
         public void Quit() => Quits++;
+
+        public void ShowBuildError(string error, string projectFile)
+        {
+            BuildError = error;
+            BuildProject = projectFile;
+        }
     }
 
     private static List<(InstanceInfo Info, bool Alive)> Rows(ShellInstance instance) =>
@@ -117,6 +127,22 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
+    public void A_secret_in_a_log_line_is_taken_out_of_the_file()
+    {
+        var log = new Log();
+        var instance = ShellInstance.Open(Program, log);
+        log.Warn("shell", "sync --password SENTINEL-PASSWORD");
+        string text;
+        using (var stream = new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (var reader = new StreamReader(stream))
+            text = reader.ReadToEnd();
+        instance.Abandon();
+
+        Assert.Contains("sync --password [redacted]", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("SENTINEL", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_crash_writes_one_fatal_report_and_keeps_the_next_start_from_calling_it_clean()
     {
         var instance = ShellInstance.Open(Program, new Log());
@@ -172,6 +198,22 @@ public sealed class ShellInstanceTests
         Assert.Equal((false, "It did not start."), (response.Ok, response.Error));
         loop.RunDue();
         Assert.Equal(0, control.Answered);
+    }
+
+    [Fact]
+    public async Task A_build_error_is_handed_to_the_shell_with_its_project()
+    {
+        var control = new FakeControl();
+        var (pipe, loop, server) = Serve(control);
+        using var _ = server;
+
+        var response = await Pumping(loop, () => Ask(pipe, new IpcRequest("build-error", Args: ["Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"])));
+        var refused = await Pumping(loop, () => Ask(pipe, new IpcRequest("build-error", Args: ["only one"])));
+
+        Assert.True(response.Ok);
+        Assert.Equal(("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"), (control.BuildError, control.BuildProject));
+        Assert.Equal((false, "build-error takes the error and the project file"), (refused.Ok, refused.Error));
+        Assert.Equal(0, control.Quits);
     }
 
     [Fact]

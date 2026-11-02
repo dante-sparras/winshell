@@ -40,7 +40,7 @@ public interface IIpcTargets
     IDisposable Listen(string target, string signal, Action<string> onSignal);
 }
 
-/// <summary>The rules a value follows across the pipe, the same for an <c>IpcHandler</c> and a C# registration.</summary>
+/// <summary>The rules a value follows across the pipe.</summary>
 internal static class IpcValues
 {
     /// <summary>The most parameters a function can take.</summary>

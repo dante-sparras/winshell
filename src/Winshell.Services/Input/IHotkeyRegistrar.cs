@@ -21,7 +21,7 @@ internal readonly record struct HotkeyClaim(HotkeyClaimStatus Status, string Err
     public static HotkeyClaim Invalid(string error) => new(HotkeyClaimStatus.Invalid, error);
 }
 
-/// <summary>The object told when its hotkey is pressed or released. Implemented explicitly so the methods stay off QML.</summary>
+/// <summary>The object told when its hotkey is pressed or released. Implemented explicitly so the methods stay off the public surface.</summary>
 internal interface IHotkeyListener
 {
     IEventLoop Loop { get; }

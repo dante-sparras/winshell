@@ -263,7 +263,7 @@ public sealed partial class CrashReports(string folder)
     }
 
     // A log line as winshell.exe writes it: "2026-10-29 12:00:00.000  INFO window: message". Older logs omit
-    // the date. No category means QML's console. A line that does not start like this continues the line before.
+    // the date. A line with no category is not a log line. A line that does not start like this continues the line before.
     [GeneratedRegex(@"^(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}\.\d{3} +(?:DEBUG|INFO|WARN|ERROR|FATAL)(?<category> [^\s:]+)?:")]
     private static partial Regex LogLine();
 

@@ -11,7 +11,7 @@ internal static partial class UpdateSignature
 {
     /// <summary>The binaries SignPath signs, as <c>packaging/signpath/artifact-configuration.xml</c> lists them.</summary>
     internal static readonly string[] Signed =
-        ["winshell.exe", "winshellw.exe", "winshell.dll", "Winshell.Qml.dll", "Winshell.Runtime.dll", "Winshell.Services.dll", "Winshell.Platform.Windows.dll"];
+        ["winshell.exe", "winshellw.exe", "winshell.dll", "Winshell.Services.dll", "Winshell.Shell.dll", "Winshell.DefaultShell.dll"];
 
     /// <summary>
     /// The subject of the certificate that signed <paramref name="path"/>, or null when it has no valid embedded

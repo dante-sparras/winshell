@@ -37,7 +37,63 @@ internal sealed class ConfigurationProject
     /// <summary>Where a build puts the program. It is fixed, so a start with no SDK finds it without asking MSBuild.</summary>
     public string OutputFolder => Path.Combine(Folder, "bin", "shell");
 
+    /// <summary>
+    /// The project whose built program is <paramref name="program"/>. The file is <c>&lt;project&gt;\bin\shell\Name.exe</c>,
+    /// or <c>bin\shell.next\Name.exe</c> when a reload had to build beside a program that still had its folder open.
+    /// Anything else, including <c>winshell.exe</c>, is null.
+    /// </summary>
+    public static ConfigurationProject? ForProgram(string program)
+    {
+        string full;
+        try
+        {
+            full = Path.GetFullPath(program);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException or IOException)
+        {
+            return null;
+        }
+        var shell = Path.GetDirectoryName(full);
+        var bin = shell is null ? null : Path.GetDirectoryName(shell);
+        var folder = bin is null ? null : Path.GetDirectoryName(bin);
+        var output = shell is null ? null : Path.GetFileName(shell);
+        if (folder is null
+            || output is null
+            || !Path.GetFileName(bin!).Equals("bin", StringComparison.OrdinalIgnoreCase)
+            || !(output.Equals("shell", StringComparison.OrdinalIgnoreCase) || output.Equals("shell.next", StringComparison.OrdinalIgnoreCase)))
+            return null;
+        var project = In(folder, out _);
+        if (project is null)
+            return null;
+        return Path.GetFileName(full).Equals(project.AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase) ? project : null;
+    }
+
+    /// <summary>
+    /// A <c>shell.qml</c> left where a configuration used to be, when no project would run instead. Null when a project
+    /// is selected, when none can be chosen, or when there is no such file. Several QML-only folders still name one
+    /// file, so the default shell can say that QML configurations stopped working.
+    /// </summary>
+    public static string? LeftoverQml(string? path, string? name, string root)
+    {
+        try
+        {
+            if (Find(path, name, root, out var error) is not null || error is not null)
+                return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+        return QmlChoice(path, name, root);
+    }
+
     public string Program => Path.Combine(OutputFolder, AssemblyName() + ".exe");
+
+    /// <summary>
+    /// The program a successful build wrote beside <see cref="Program"/>, because the running one had its folder open.
+    /// Null when the build replaced <see cref="Program"/>, or when nothing was built.
+    /// </summary>
+    public string? RebuiltBeside { get; private set; }
 
     /// <summary>
     /// The project to run: <paramref name="path"/>, a project or a folder holding one; or a named folder in
@@ -51,16 +107,25 @@ internal sealed class ConfigurationProject
         {
             var full = Path.GetFullPath(path);
             if (File.Exists(full))
-                return new ConfigurationProject(full);
+            {
+                // A leftover shell.qml is not a project and not an error: the default shell runs and says so.
+                if (full.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                    return new ConfigurationProject(full);
+                if (IsShellQml(full))
+                    return null;
+                error = $"No .csproj at {full}";
+                return null;
+            }
             var found = In(full, out error);
-            if (found is null && error is null)
+            if (found is null && error is null && !File.Exists(Path.Combine(full, "shell.qml")))
                 error = $"No .csproj at {full}";
             return found;
         }
         if (name is not null)
         {
-            var found = In(Path.Combine(root, name), out error);
-            if (found is null && error is null)
+            var folder = Path.Combine(root, name);
+            var found = In(folder, out error);
+            if (found is null && error is null && !File.Exists(Path.Combine(folder, "shell.qml")))
                 error = $"No config named \"{name}\" in {root}";
             return found;
         }
@@ -84,7 +149,7 @@ internal sealed class ConfigurationProject
     public string? Prepare(bool noBuild, RunCommand run)
     {
         if (Downloaded() is { } file)
-            return ZoneIdentifier.Blocked(file);
+            return $"{file}: {ZoneIdentifier.Blocked(file)}";
         if (noBuild)
             return File.Exists(Program) ? null : $"{Name} has not been built. Run winshell run once to build it.";
         return NeedsBuild() ? Build(run) : null;
@@ -156,8 +221,76 @@ internal sealed class ConfigurationProject
 
     private string? Build(RunCommand run)
     {
-        var result = run("dotnet", ["build", ProjectFile, "-c", "Release", "-o", OutputFolder, "--nologo", "-v", "q"], Folder);
-        return result.ExitCode == 0 ? null : $"{Name} did not build.\n{Errors(result.Output)}";
+        // A running program keeps its files open. Windows will not replace those, and a build then waits on them
+        // until it gives up. Renaming the folder lets the build write the new program. A WinUI program also keeps the
+        // folder itself open, so the rename fails and the build goes in the folder beside it.
+        var destination = OutputFolder;
+        var parked = Park(destination);
+        if (parked is null && Directory.Exists(destination))
+        {
+            destination = OutputFolder + ".next";
+            parked = Park(destination);
+            if (parked is null && Directory.Exists(destination))
+                return $"{Name} is running, and the build could not write a new program beside it.";
+        }
+        var result = run("dotnet", ["build", ProjectFile, "-c", "Release", "-o", destination, "--nologo", "-v", "q"], Folder);
+        if (result.ExitCode == 0)
+        {
+            QuietDelete(parked);
+            RebuiltBeside = destination == OutputFolder ? null : Path.Combine(destination, AssemblyName() + ".exe");
+            return null;
+        }
+        RebuiltBeside = null;
+        if (parked is not null)
+            Restore(destination, parked);
+        return $"{Name} did not build.\n{Errors(result.Output)}";
+    }
+
+    /// <summary>Moves <paramref name="folder"/> aside, or null when there was nothing to move or the move failed.</summary>
+    private static string? Park(string folder)
+    {
+        var parked = folder + ".previous";
+        QuietDelete(parked);
+        if (!Directory.Exists(folder))
+            return null;
+        try
+        {
+            Directory.Move(folder, parked);
+            return parked;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Puts a parked program back when the build failed, so the last one that ran is still there.</summary>
+    private static void Restore(string folder, string parked)
+    {
+        if (!Directory.Exists(parked))
+            return;
+        try
+        {
+            QuietDelete(folder);
+            if (!Directory.Exists(folder))
+                Directory.Move(parked, folder);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static void QuietDelete(string? path)
+    {
+        if (path is null || !Directory.Exists(path))
+            return;
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>The compiler's own lines, once each, without the project MSBuild adds to every one. Any other failure keeps its last lines.</summary>
@@ -203,6 +336,41 @@ internal sealed class ConfigurationProject
 
     private static string[] Projects(string folder) =>
         Directory.Exists(folder) ? Directory.GetFiles(folder, "*.csproj") : [];
+
+    private static bool IsShellQml(string path) =>
+        Path.GetFileName(path).Equals("shell.qml", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The <c>shell.qml</c> the old resolver would have run: the path, the named folder, the root, <c>default</c>, then one folder.</summary>
+    private static string? QmlChoice(string? path, string? name, string root)
+    {
+        if (path is not null)
+        {
+            var full = Path.GetFullPath(path);
+            if (File.Exists(full) && IsShellQml(full))
+                return full;
+            var inDir = Path.Combine(full, "shell.qml");
+            return File.Exists(inDir) ? inDir : null;
+        }
+        if (name is not null)
+        {
+            var named = Path.Combine(root, name, "shell.qml");
+            return File.Exists(named) ? named : null;
+        }
+        var top = Path.Combine(root, "shell.qml");
+        if (File.Exists(top))
+            return top;
+        var fallback = Path.Combine(root, "default", "shell.qml");
+        if (File.Exists(fallback))
+            return fallback;
+        if (!Directory.Exists(root))
+            return null;
+        var configs = Directory.EnumerateDirectories(root)
+            .Select(folder => Path.Combine(folder, "shell.qml"))
+            .Where(File.Exists)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return configs.Count > 0 ? configs[0] : null;
+    }
 
     /// <summary>The project's files. <c>bin</c>, <c>obj</c> and dot folders are what a build and an editor write.</summary>
     private static IEnumerable<string> Sources(string folder)

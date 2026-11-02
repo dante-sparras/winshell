@@ -705,7 +705,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
         Pass,
     }
 
-    // Runs on the hook thread. No QML, no logging, and no wait: the system drops a hook that is slow.
+    // Runs on the hook thread. No logging, and no wait: the system drops a hook that is slow.
     private InhibitDecision Decide(int virtualKey, bool isUp, HotkeyModifiers modifiers, uint scanCode, uint flags)
     {
         Span<nint> windows = stackalloc nint[MaxTrackedWindows];

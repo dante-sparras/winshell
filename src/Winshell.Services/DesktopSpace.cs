@@ -3,7 +3,7 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>
-/// Maps between the physical pixels of the virtual desktop and the logical pixels QML sees. As Qt does on Windows,
+/// Maps between the physical pixels of the virtual desktop and logical pixels. On Windows,
 /// a monitor keeps its physical top-left corner and divides its size by its scale, so monitors of mixed DPI never
 /// overlap: every logical point belongs to at most one monitor, and maps back through that monitor's scale.
 /// </summary>

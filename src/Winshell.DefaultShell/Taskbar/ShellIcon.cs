@@ -7,9 +7,8 @@ using Microsoft.UI.Xaml.Media.Imaging;
 namespace Winshell.DefaultShell.Taskbar;
 
 /// <summary>
-/// An icon for a task button. <c>Shell.iconPath</c> hands the QML image loader a path, and that loader draws it with
-/// Skia, so it stays in the runtime. This asks the Windows shell for the same program path or packaged app id and
-/// keeps the bitmap for WinUI.
+/// An icon for a task button. This asks the Windows shell for the program path or packaged app id and keeps the
+/// bitmap for WinUI.
 /// </summary>
 internal static class ShellIcon
 {

@@ -48,12 +48,7 @@ jobs:
         shell: pwsh
         env:
           WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
-          WINSHELL_NOTIFICATION_EVIDENCE: ${{ runner.temp }}/notification-evidence
-          WINSHELL_SETTINGS_EVIDENCE: ${{ runner.temp }}/settings-evidence
-          WINSHELL_SNAPSHOT_DIFFS: ${{ runner.temp }}/snapshot-diffs
-        run: |
-          New-Item -ItemType Directory -Force -Path $env:WINSHELL_NOTIFICATION_EVIDENCE | Out-Null
-          ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
+        run: ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
       - name: Flaky tests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -69,28 +64,6 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
             'flaky=true' >> $env:GITHUB_OUTPUT
           }
-      - name: Notification surface evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: notification-surface
-          path: ${{ runner.temp }}/notification-evidence/*.png
-          if-no-files-found: ignore
-      - name: Settings surface evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: settings-surface
-          path: ${{ runner.temp }}/settings-evidence/*.png
-          if-no-files-found: ignore
-      - name: Snapshot diffs
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: snapshot-diffs
-          path: ${{ runner.temp }}/snapshot-diffs/*.png
-          if-no-files-found: ignore
-
   flaky-report:
     # Files or updates an issue for each test in the flaky report. It is a separate job so that ci, which
     # runs the code under test, gets no write token. A fork's token can't write, so a failure here blocks nothing.
@@ -120,7 +93,7 @@ jobs:
         run: pwsh scripts/report-flaky.ps1 -ReportPath (Join-Path $env:RUNNER_TEMP 'flaky-tests/flaky-tests.txt') -RunUrl $env:RUN_URL
 
   quarantine:
-    # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing. As in the media job,
+    # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing.
     # continue-on-error is on the step, and the job skips pull requests, where a check that can't fail would only look
     # like a pass.
     name: quarantine
@@ -138,26 +111,6 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: pwsh scripts/run-tests.ps1 -Quarantined
-
-  media:
-    # Runners often don't publish Windows media sessions. A failed test shows in this job's log and blocks nothing.
-    # continue-on-error is on the step, so the failure doesn't put a red check on main. The job skips pull requests,
-    # where a check that can't fail would only look like a pass.
-    name: media
-    if: github.event_name == 'push'
-    runs-on: windows-2025
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Media session test
-        continue-on-error: true
-        shell: pwsh
-        run: dotnet test .\tests\Winshell.Platform.Windows.Tests --nologo --filter 'Category=Media'
 
   installer:
     name: installer

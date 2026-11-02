@@ -12,9 +12,8 @@ using System.Xml.Linq;
 namespace Winshell.Package.Tests;
 
 /// <summary>
-/// Packs the library and the templates, builds each one the way a start does, and runs it. A shell opens real windows,
-/// so the test moves to an empty Winland workspace first and puts it back after. This is slow, and the main test stage
-/// leaves <c>Category=Package</c> out.
+/// Packs the library and the templates, builds each one the way a start does, and runs it. This is slow, and the main
+/// test stage leaves <c>Category=Package</c> out.
 /// </summary>
 [Trait("Category", "Package")]
 [Collection(nameof(PackedTemplateTests))]
@@ -42,91 +41,57 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
 
     private void Run(string shellId, string projectFile)
     {
-        var workspace = NoteWorkspace();
+        var project = ConfigurationProject.Find(projectFile, null, Path.GetDirectoryName(projectFile)!, out var error);
+        Assert.Null(error);
+        var why = project!.Prepare(false, ConfigurationProject.Run);
+        Assert.True(why is null, why);
+
+        var dir = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
+        (string Name, string Value)[] folders =
+        [
+            ("WINSHELL_CONFIG_DIR", Path.Combine(dir, "config")),
+            ("WINSHELL_LOCAL_DIR", Path.Combine(dir, "local")),
+        ];
+        Directory.CreateDirectory(folders[0].Value);
+        Directory.CreateDirectory(folders[1].Value);
+        var output = new StringBuilder();
+        var process = Start(project.Program, folders, output);
         try
         {
-            Winland("keyword", "windowrule", "ignore, exe:PackedShell\\.exe");
-            Winland("dispatch", "workspace", "empty");
-            var project = ConfigurationProject.Find(projectFile, null, Path.GetDirectoryName(projectFile)!, out var error);
-            Assert.Null(error);
-            var why = project!.Prepare(false, ConfigurationProject.Run);
-            Assert.True(why is null, why);
-
-            var dir = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
-            (string Name, string Value)[] folders =
-            [
-                ("WINSHELL_CONFIG_DIR", Path.Combine(dir, "config")),
-                ("WINSHELL_LOCAL_DIR", Path.Combine(dir, "local")),
-            ];
-            Directory.CreateDirectory(folders[0].Value);
-            Directory.CreateDirectory(folders[1].Value);
-            var output = new StringBuilder();
-            var process = Start(project.Program, folders, output);
-            try
+            var pid = process.Id.ToString(CultureInfo.InvariantCulture);
+            Wait.Until(() =>
             {
-                var pid = process.Id.ToString(CultureInfo.InvariantCulture);
-                Wait.Until(() =>
-                {
-                    if (process.HasExited)
-                        Assert.Fail($"The shell exited with {process.ExitCode}: {output}");
-                    return Listed(folders).Any(row => row.GetProperty("pid").GetInt32() == process.Id);
-                }, $"instance {pid} in winshell list");
+                if (process.HasExited)
+                    Assert.Fail($"The shell exited with {process.ExitCode}: {output}");
+                return Listed(folders).Any(row => row.GetProperty("pid").GetInt32() == process.Id);
+            }, $"instance {pid} in winshell list");
 
-                Assert.Equal(shellId, Listed(folders).Single(row => row.GetProperty("pid").GetInt32() == process.Id).GetProperty("shellId").GetString());
-                var log = CliRun(["log", "--pid", pid], folders);
-                Assert.Equal(0, log.Code);
-                Assert.Contains($"Winshell {templates.Version} on Windows", log.Output, StringComparison.Ordinal);
+            Assert.Equal(shellId, Listed(folders).Single(row => row.GetProperty("pid").GetInt32() == process.Id).GetProperty("shellId").GetString());
+            var log = CliRun(["log", "--pid", pid], folders);
+            Assert.Equal(0, log.Code);
+            Assert.Contains($"Winshell {templates.Version} on Windows", log.Output, StringComparison.Ordinal);
 
-                var killed = CliRun(["kill", "--pid", pid], folders);
-                Assert.Equal(0, killed.Code);
-                Wait.Until(() => process.HasExited, "winshell kill to stop the shell");
-                Assert.Equal(0, process.ExitCode);
-            }
-            finally
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit();
-                }
-                process.Dispose();
-                try
-                {
-                    Directory.Delete(dir, true);
-                }
-                catch (IOException)
-                {
-                }
-            }
+            var killed = CliRun(["kill", "--pid", pid], folders);
+            Assert.Equal(0, killed.Code);
+            Wait.Until(() => process.HasExited, "winshell kill to stop the shell");
+            Assert.Equal(0, process.ExitCode);
         }
         finally
         {
-            Winland("dispatch", "workspace", workspace);
-            Winland("reload");
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+            process.Dispose();
+            try
+            {
+                Directory.Delete(dir, true);
+            }
+            catch (IOException)
+            {
+            }
         }
-    }
-
-    /// <summary>The workspace in use. An empty one belongs to another run: wait, and never note its id.</summary>
-    private static string NoteWorkspace()
-    {
-        while (true)
-        {
-            var (code, output, error) = Command("winland", ["-j", "activeworkspace"], null);
-            Assert.True(code == 0, error);
-            using var json = JsonDocument.Parse(output);
-            var root = json.RootElement;
-            if (root.GetProperty("windows").GetInt32() != 0)
-                return root.GetProperty("id").ValueKind == JsonValueKind.String
-                    ? root.GetProperty("id").GetString()!
-                    : root.GetProperty("id").GetInt32().ToString(CultureInfo.InvariantCulture);
-            Wait.ForNothingToHappen(TimeSpan.FromSeconds(5));
-        }
-    }
-
-    private static void Winland(params string[] args)
-    {
-        var (code, _, error) = Command("winland", args, null);
-        Assert.True(code == 0, $"winland {string.Join(' ', args)} failed: {error}");
     }
 
     private static Process Start(string exe, (string Name, string Value)[] environment, StringBuilder output)

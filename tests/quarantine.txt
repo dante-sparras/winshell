@@ -1,3 +1,2 @@
 # Tests the ci job leaves out, one fully qualified name per line, such as Winshell.Tests.SomeTests.A_test_name.
 # The quarantine job runs them and cannot block a merge. See "Flaky tests" in CONTRIBUTING.md.
-Winshell.Platform.Windows.Tests.HotkeyForegroundTests.Taking_the_keyboard_returns_promptly_when_another_window_is_in_front

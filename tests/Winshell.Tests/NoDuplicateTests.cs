@@ -6,66 +6,61 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary>
-/// <c>--no-duplicate</c> holds a per-config mutex for the life of the shell, so a second start exits
-/// even when the first has not written instance.json yet.
+/// <c>--no-duplicate</c> holds a per-shell-id mutex for the life of the shell, so a second start exits
+/// even when the first has not written instance.json yet. Two programs with different shell ids both stay.
 /// </summary>
 public sealed class NoDuplicateTests : IDisposable
 {
-    private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _local;
+    private readonly string _config;
     private readonly List<Process> _started = [];
-    private readonly Dictionary<int, StringBuilder> _errors = [];
+    private readonly Dictionary<int, StringBuilder> _printed = [];
+
+    public NoDuplicateTests()
+    {
+        _local = Path.Combine(_dir, "local");
+        _config = Path.Combine(_dir, "config");
+        Directory.CreateDirectory(_local);
+        Directory.CreateDirectory(_config);
+    }
 
     [Fact]
-    public void A_second_start_exits_and_another_config_stays()
+    public void A_second_start_exits_and_another_shell_stays()
     {
-        var config = Config("one");
-        var other = Config("two");
-        var first = Start(config, duplicate: true);
+        var first = Start(duplicate: true);
+        AssertHeld("probe");
 
-        AssertHeld(ShellFile(config));
-
-        var same = Run("run", "-n", "-p", OtherCase(config));
-        Assert.Equal(0, same.Code);
-        Assert.Equal("", same.Output);
-        Assert.Equal("", same.Error);
+        var same = Launch(duplicate: true);
+        AssertExitedQuietly(same);
         Assert.False(first.HasExited);
 
-        var second = Start(other, duplicate: true);
+        var second = Start(duplicate: true, "other");
         Assert.False(first.HasExited);
         Assert.False(second.HasExited);
-        AssertHeld(ShellFile(other));
+        AssertHeld("other");
     }
 
     [Fact]
     public void A_shell_started_without_the_flag_still_blocks_a_duplicate()
     {
-        var config = Config("open");
-        var first = Start(config, duplicate: false);
-        Assert.Throws<WaitHandleCannotBeOpenedException>(() => Mutex.OpenExisting(DuplicateHold.ConfigMutexName(ShellFile(config))));
+        var first = Start(duplicate: false);
+        Assert.Throws<WaitHandleCannotBeOpenedException>(() => Mutex.OpenExisting(MutexName("probe")));
 
-        var same = Run("run", "-n", "-p", config);
-        Assert.Equal(0, same.Code);
-        Assert.Equal("", same.Output);
-        Assert.Equal("", same.Error);
+        AssertExitedQuietly(Launch(duplicate: true));
         Assert.False(first.HasExited);
     }
 
     [Fact]
     public void Two_overlapping_starts_leave_one_shell()
     {
-        var config = Config("race");
-        var first = Launch(config, duplicate: true);
-        var second = Launch(config, duplicate: true);
+        var first = Launch(duplicate: true);
+        var second = Launch(duplicate: true);
 
         Wait.Until(() => first.HasExited || second.HasExited, "one of the two starts to exit");
         var loser = first.HasExited ? first : second;
         var winner = ReferenceEquals(loser, first) ? second : first;
-        Assert.True(loser.WaitForExit(15_000));
-        loser.WaitForExit();
-        Assert.Equal(0, loser.ExitCode);
-        Assert.Equal("", Errors(loser));
+        AssertExitedQuietly(loser);
 
         Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == winner.Id), $"instance {winner.Id}");
         Assert.False(winner.HasExited);
@@ -75,79 +70,46 @@ public sealed class NoDuplicateTests : IDisposable
     [Fact]
     public void Daemonize_leaves_the_mutex_to_the_child()
     {
-        var config = Config("daemon");
-        // Do not redirect the parent. The child inherits those pipes, and reading them to the end waits until the shell exits.
-        var parent = StartReturning("run", "-n", "-d", "-p", config);
-        Assert.Equal(0, parent);
+        Assert.Equal(0, ProbeShell.Detach(_config, _local, ["--no-duplicate", "-d"]));
 
-        var shell = ShellFile(config);
-        Wait.Until(() => Listed().Any(i => SameConfig(i, shell)), "the background shell");
-        var pid = Listed().Single(i => SameConfig(i, shell)).GetProperty("pid").GetInt32();
-        _started.Add(Process.GetProcessById(pid));
-        AssertHeld(shell);
+        Wait.Until(() => Listed().Any(i => i.GetProperty("shellId").GetString() == "probe"), "the background shell");
+        var pid = Listed().Single(i => i.GetProperty("shellId").GetString() == "probe").GetProperty("pid").GetInt32();
+        var child = Process.GetProcessById(pid);
+        _started.Add(child);
+        AssertHeld("probe");
 
-        var again = Run("run", "-n", "-p", config);
-        Assert.Equal(0, again.Code);
-        Assert.Equal("", again.Output);
-        Assert.Equal("", again.Error);
-        Assert.False(_started[^1].HasExited);
+        AssertExitedQuietly(Launch(duplicate: true));
+        Assert.False(child.HasExited);
     }
 
-    private string Config(string name)
+    private Process Start(bool duplicate, string? shellId = null)
     {
-        var dir = Path.Combine(_dir, name);
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "shell.qml"), """
-            import Winshell
-            ShellRoot {}
-            """);
-        return dir;
-    }
-
-    private static string ShellFile(string configDir) => Path.GetFullPath(Path.Combine(configDir, "shell.qml"));
-
-    private static string OtherCase(string path) =>
-        path.Any(char.IsLower) ? path.ToUpperInvariant() : path.ToLowerInvariant();
-
-    private Process Start(string configDir, bool duplicate)
-    {
-        var process = Launch(configDir, duplicate);
+        var process = Launch(duplicate, shellId);
         Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
-    private Process Launch(string configDir, bool duplicate)
+    private Process Launch(bool duplicate, string? shellId = null)
     {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        info.ArgumentList.Add("run");
-        if (duplicate)
-            info.ArgumentList.Add("-n");
-        info.ArgumentList.Add("-p");
-        info.ArgumentList.Add(configDir);
-        info.Environment["WINSHELL_CONFIG_DIR"] = _dir;
-        var process = Process.Start(info)!;
+        var printed = new StringBuilder();
+        var process = ProbeShell.Launch(_config, _local, duplicate ? ["--no-duplicate"] : [], shellId, printed);
         _started.Add(process);
-        _errors[process.Id] = new StringBuilder();
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-                _errors[process.Id].AppendLine(e.Data);
-        };
-        process.BeginErrorReadLine();
-        process.OutputDataReceived += (_, _) => { };
-        process.BeginOutputReadLine();
+        _printed[process.Id] = printed;
         return process;
     }
 
-    private static void AssertHeld(string shellFile)
+    private void AssertExitedQuietly(Process process)
     {
-        using var mutex = Mutex.OpenExisting(DuplicateHold.ConfigMutexName(shellFile));
+        Assert.True(process.WaitForExit(20_000));
+        // Without a timeout this waits for the output to be read to its end.
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+        Assert.Equal("", _printed[process.Id].ToString());
+    }
+
+    private void AssertHeld(string shellId)
+    {
+        using var mutex = Mutex.OpenExisting(MutexName(shellId));
         var taken = false;
         try
         {
@@ -165,12 +127,9 @@ public sealed class NoDuplicateTests : IDisposable
         Assert.False(taken);
     }
 
-    private string Errors(Process process) => _errors.TryGetValue(process.Id, out var text) ? text.ToString() : "";
+    private string MutexName(string shellId) => DuplicateHold.ShellMutexName(shellId, _local);
 
-    private static bool SameConfig(JsonElement row, string shellFile) =>
-        string.Equals(row.GetProperty("configPath").GetString(), shellFile, StringComparison.OrdinalIgnoreCase);
-
-    private static List<JsonElement> Listed()
+    private List<JsonElement> Listed()
     {
         var result = Run("list", "--json");
         Assert.Equal(0, result.Code);
@@ -178,24 +137,8 @@ public sealed class NoDuplicateTests : IDisposable
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    /// <summary>Starts winshell and waits for that process only. A daemonized child is not this process, and it must not inherit a pipe.</summary>
-    private static int StartReturning(params string[] args)
-    {
-        var info = new ProcessStartInfo(Exe) { UseShellExecute = false, CreateNoWindow = true };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        using var process = Process.Start(info)!;
-        if (!process.WaitForExit(20_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            throw new TimeoutException("winshell did not exit");
-        }
-        return process.ExitCode;
-    }
-
-    private static (int Code, string Output, string Error) Run(params string[] args) =>
-        WinshellCli.Run(args);
+    private (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
 
     public void Dispose()
     {

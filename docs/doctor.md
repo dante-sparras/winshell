@@ -1,16 +1,16 @@
 # winshell doctor
 
-`winshell doctor` checks how this PC is set up for Winshell. It prints a line per check, `PASS`, `WARN` or `FAIL`, and a fix under each warning and failure. It exits with 1 when a check fails and 0 otherwise.
+`winshell doctor` checks how this PC is set up for Winshell. It prints a line per check, `PASS`, `WARN` or `FAIL`, and a fix under each warning and failure. It exits with 1 when a check fails and 0 otherwise. It never builds. It reads a project file as data, and it does not parse a configuration.
 
 ```text
 winshell doctor              # the checks, colored when printed to a console
 winshell doctor --no-color   # without color; NO_COLOR or a redirected output does the same
 winshell doctor --json       # the same checks as JSON
 winshell doctor -c <name>    # check that config instead of the one winshell would pick
-winshell doctor -p <path>    # check the shell.qml at that path, or in that folder
+winshell doctor -p <path>    # check the project at that path, or in that folder
 ```
 
-The **Run diagnostics** button on the About page of Winshell Settings runs the same checks for the config the shell runs, and lists them under the card.
+The **Run diagnostics** button on the About page of Winshell Settings lists the project checks for the config folder the shell uses: whether a project was found, whether a file the build would run was downloaded, whether the program has been built, and whether a build is needed. Nothing is built.
 
 ## The checks
 
@@ -18,7 +18,10 @@ The **Run diagnostics** button on the About page of Winshell Settings runs the s
 | --- | --- | --- |
 | Windows | Windows 11 version 22H2 (build 22621) or later. Shows the version and build. The message also says when transparency effects are off and when a contrast theme is on; neither changes the result. | Fails before Windows 11 and warns before 22H2. |
 | .NET | .NET 10 or later. Says whether it is built into Winshell or installed on the PC. | Fails. |
-| Config | Every `.qml` file in the config's folder and the folders under it parses, and the running instance of that config logged no load error after its last load. Folders starting with `.`, `node_modules`, links and folders with a `shell.qml` of their own, which are other configs, are skipped. Reading stops after 500 folders and says so. A `.qml` file larger than 1 MiB is named and not read. Nesting past 256 levels is a parse error. No config of your own passes: Winshell runs its default shell. It also reads `preferences.toml`, `launcher.toml` and `quick-settings.toml` where that shell loads them, with the same parser. A file larger than 1 MiB is named and not read, and Tomlyn does not load nesting past 64 levels. A missing file is fine. | Fails with the first error's file, line and column for a file beside `shell.qml`, for a load error, when the config folder cannot be read, when several configs exist and none is picked, or when `shell.qml` was downloaded from the internet and is not unblocked; then no file is read. A file larger than 1 MiB is named in that error instead. Warns for an error in a subfolder: Winshell only fails if the config imports that file. Warns, and names the file, when one of those TOML files does not parse, is past a limit, or cannot be read. A QML failure still fails. |
+| Project | A project was found, or there is none and Winshell would run the default shell. The message is the `.csproj` path, or that there is no project. | Fails when the folder cannot be read, or when several configs exist and none is picked. |
+| Downloaded | No `.csproj`, `.props` or `.targets` beside the project has a `Zone.Identifier` for the Internet or Restricted zone. | Fails and names the file. Unblock it if you trust it. Nothing is built. |
+| Built | `bin\shell` has the program. | Fails when it has not been built. The fix is to run `winshell run` once. |
+| Build | No source is newer than that program. | Warns when a file is newer, or when it has not been built. The fix is to run `winshell run`. Signing in uses the last build. |
 | Folders | Winshell can write the config's folder and `%LOCALAPPDATA%\winshell`, and no instance runs as administrator. | Fails when a folder cannot be written; warns about an instance that runs as administrator. Run as administrator, doctor says it checked what an administrator can write. |
 | App bars | No app other than the Windows taskbar and Winshell reserves an edge of a screen. | Warns, naming the app when a window of its size lies along that edge. On an edge with a Winshell panel, whose margins and exclusive zone doctor cannot see, it warns when it can name another app's window in that strip, including one that overlaps the panel. Also warns when the Windows taskbar and a Winshell panel both reserve the same edge. |
 | DPI | Winshell is per-monitor DPI aware, and Windows keeps no compatibility setting for `winshell.exe`. Shows each screen's scale. | Fails when Winshell is not per-monitor aware, or an "override high DPI scaling" setting makes Windows scale it. Warns about other high DPI settings, which a per-monitor Winshell ignores, naming the box to clear; about Run this program as an administrator, which makes Windows skip it at sign-in; and about a compatibility mode. |
@@ -27,13 +30,13 @@ The **Run diagnostics** button on the About page of Winshell Settings runs the s
 | Running | Always passes. Lists each running instance, its process, its config and its log. | |
 | Crashes | No crash report in `%LOCALAPPDATA%\winshell\crashes` from the last 7 days. | Warns with the count and the newest report. |
 
-WebView2 and the Windows App SDK are not checked: Winshell uses neither. A check that cannot run warns with the reason, and the other checks still run.
+Doctor does not check the Windows App SDK. It ships inside the build. A check that cannot run warns with the reason, and the other checks still run.
 
 Paths in the output start with `%LOCALAPPDATA%`, `%APPDATA%` or `%USERPROFILE%` instead of your user folder, so you can paste it into a bug report without your Windows user name. Program names along a screen edge are left as they are: they are the point of that check.
 
 ## What it changes
 
-Nothing. It shows no prompts, writes no registry values or settings, and starts or stops no instance. To check that a folder can be written, it makes one empty file there, which is deleted as it closes.
+Nothing. It shows no prompts, writes no registry values or settings, starts or stops no instance, and runs no build. To check that a folder can be written, it makes one empty file there, which is deleted as it closes.
 
 ## JSON
 
@@ -47,8 +50,8 @@ Nothing. It shows no prompts, writes no registry values or settings, and starts 
 }
 ```
 
-`version` is whatever `winshell doctor --json` prints for that build. The sample uses `x.y.z` in its place. `id` is one of `windows`, `dotnet`, `config`, `folders`, `appBars`, `dpi`, `signIn`, `notifications`, `instances` and `crashes`. `status` is `pass`, `warn` or `fail`. `fix` is null when the check passed.
+`version` is whatever `winshell doctor --json` prints for that build. The sample uses `x.y.z` in its place. `id` is one of `windows`, `dotnet`, `project`, `downloaded`, `built`, `build`, `folders`, `appBars`, `dpi`, `signIn`, `notifications`, `instances` and `crashes`. `status` is `pass`, `warn` or `fail`. `fix` is null when the check passed.
 
 ## Not checked by the automated tests
 
-The tests judge each check from made-up facts and run every check on the CI machine. They run `winshell doctor` and `--json` as processes, with and without a config, and with a config folder that denies listing. They read a config with a junction back to itself and ask a folder that denies writing. They do not set up another app bar, a compatibility setting, an elevated instance or a winget install on a real PC, so those messages were only checked from made-up facts.
+The tests judge each check from made-up facts and run every check on the CI machine. They run `winshell doctor` and `--json` as processes, with and without a config, and with a config folder that denies listing. They ask a folder that denies writing. They do not set up another app bar, a compatibility setting, an elevated instance or a winget install on a real PC, so those messages were only checked from made-up facts.

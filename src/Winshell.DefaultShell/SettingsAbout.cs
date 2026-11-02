@@ -75,11 +75,10 @@ public static class SettingsAbout
     }
 
     /// <summary>
-    /// The configuration project in <paramref name="configRoot"/>, as the About page lists it. The project file is
-    /// read as data. Nothing is built.
+    /// The same checks as <c>winshell doctor</c>, for the shell running in this process. Nothing is built.
     /// </summary>
     public static IReadOnlyList<SettingsDiagnostic> Checks(string configRoot) =>
-        [.. Doctor.Configuration(configRoot).Select(check => new SettingsDiagnostic(
+        [.. Doctor.ForThisProcess(configRoot).Select(check => new SettingsDiagnostic(
             check.Id, Doctor.StatusName(check.Status), check.Title, check.Message, check.Fix ?? ""))];
 
     /// <summary>What Narrator reads for one check: the result, what it found, and the fix when there is one.</summary>
@@ -128,7 +127,9 @@ public sealed class SettingsDiagnosticsSession
             {
                 checks = probe();
             }
-            catch (Exception e) when (e is not OutOfMemoryException)
+#pragma warning disable CA1031 // Out of memory too: this thread ending would take the shell with it, and the page reports it.
+            catch (Exception e)
+#pragma warning restore CA1031
             {
                 checks = [SettingsAbout.Failed(e)];
             }

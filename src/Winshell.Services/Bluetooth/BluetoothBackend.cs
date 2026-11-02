@@ -73,7 +73,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             catch (Exception e) when (IsExpectedFailure(e)) { }
             lock (_lock) _hasRadio = radio is not null;
             cancellation.ThrowIfCancellationRequested();
-            // These queries can block. Their own thread keeps them off the QML thread and off the pool.
+            // These queries can block. Their own thread keeps them off the shell's thread and off the pool.
             var visibility = await OffUi(() => (
                 Discoverable: BluetoothIsDiscoverable(0),
                 Pairable: BluetoothIsConnectable(0))).ConfigureAwait(false);

@@ -41,6 +41,12 @@ public sealed record ShellOptions
     /// A configuration's own program leaves this null.
     /// </summary>
     public Updater? Updater { get; init; }
+
+    /// <summary>
+    /// A <c>shell.qml</c> left behind, with no project. The shell says once, as it starts, that QML configurations
+    /// stopped working. Null when there is nothing to say.
+    /// </summary>
+    internal string? RetiredQml { get; init; }
 }
 
 /// <summary>A configuration: the program that defines a shell. <see cref="Start"/> makes its windows.</summary>
@@ -200,7 +206,7 @@ public sealed partial class Shell : IDisposable
             return;
 
         var log = Log.Default;
-        var instance = ShellInstance.Open(program, log);
+        var instance = ShellInstance.Open(program, log, arguments.Verbose);
         instance.Crashes.ShellId = identity.ShellId;
         log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{program}\"");
         log.Info("shell", $"Shell ID: \"{identity.ShellId}\"");
@@ -245,6 +251,8 @@ public sealed partial class Shell : IDisposable
                         instance.Publish(identity.ShellId);
                         configuration.Start(shell);
                         ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
+                        if (options.RetiredQml is { Length: > 0 } qml)
+                            loop.Post(() => notices.Show(ShellNotices.ForRetiredQml(qml)));
 #if DEBUG
                         if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
                             throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash as it started.");
@@ -283,8 +291,8 @@ public sealed partial class Shell : IDisposable
     }
 
     /// <summary>
-    /// Replaces this instance with a new process of the same program, which takes over once this one has gone. Until
-    /// the CLI builds a reload, that is all it is. False when that process did not start: the shell then keeps running.
+    /// Replaces this instance with a new process of the same program, which takes over once this one has gone.
+    /// False when that process did not start: the shell then keeps running.
     /// </summary>
     public bool Reload()
     {
@@ -311,12 +319,15 @@ public sealed partial class Shell : IDisposable
         return null;
     }
 
-    /// <summary>Starts the process that takes over from this one, once. Null when it started, or else why not.</summary>
-    private string? StartNext()
+    /// <summary>
+    /// Starts the process that takes over from this one, once. <paramref name="program"/> is that process when a build
+    /// wrote it beside this one; null starts this program again. Null when it started, or else why not.
+    /// </summary>
+    private string? StartNext(string? program = null)
     {
         if (_nextStarted)
             return null;
-        var program = Environment.ProcessPath!;
+        program ??= Environment.ProcessPath!;
         var info = new ProcessStartInfo(program) { UseShellExecute = false, CreateNoWindow = true };
         foreach (var argument in _arguments.ForNext(Environment.ProcessId))
             info.ArgumentList.Add(argument);
@@ -357,11 +368,14 @@ public sealed partial class Shell : IDisposable
     {
         public IIpcTargets Ipc => shell.Ipc;
 
-        public string? Reload(bool hard) => shell.StartNext();
+        public string? Reload(bool hard, string? program) => shell.StartNext(program);
 
         public void Reloaded() => shell.Quit();
 
         public void Quit() => shell.Quit();
+
+        public void ShowBuildError(string error, string projectFile) =>
+            shell.Notices?.Show(ShellNotices.ForBuildError(error, projectFile));
     }
 
     /// <summary>

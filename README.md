@@ -1,14 +1,14 @@
 # Winshell
 
-A desktop shell toolkit for Windows 11. A configuration written in QML describes the shell.
+A desktop shell toolkit for Windows 11. A configuration is a .NET project that builds into one program.
 
 ## Install
 
-Winshell runs on Windows 11. [Getting started](docs/guide/getting-started.md) describes the same options. The portable zip and the PowerShell command install the latest release. winget and the Microsoft Store are not available yet. Building from source is for working on Winshell.
+Winshell runs on Windows 11. [Getting started](docs/guide/getting-started.md) describes the same options. The portable zip and the PowerShell command install the latest release. winget and the Microsoft Store are not available yet. Building from source is for working on Winshell. Only someone writing a shell needs the .NET SDK.
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. Unzip one into a folder of its own and run `winshell.exe`. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
+A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is 72 MB before ReadyToRun. Unzip one into a folder of its own and run `winshell.exe`. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
 
 Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](docs/code-signing-policy.md).
 
@@ -64,11 +64,11 @@ That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder 
 
 ## Documentation
 
-Start with [Getting started](docs/guide/getting-started.md). The [docs](docs/index.md) also have a configuration guide, troubleshooting, and a reference for every module. To build Winshell from source, see the [development runbook](docs/development.md).
+Start with [Getting started](docs/guide/getting-started.md). The [docs](docs/index.md) also have a configuration guide, troubleshooting, and a reference for every namespace. To build Winshell from source, see the [development runbook](docs/development.md).
 
-Coming from Quickshell? See [Migrating from Quickshell](docs/migrating-from-quickshell.md).
+A shell of your own is `dotnet new winshell -n MyShell`, or `dotnet new winshell-default -n MyShell` to start from the default shell. That is the step that needs the .NET SDK.
 
-Something not working? Run `winshell doctor`. It checks this PC's setup and says how to fix what's wrong. See [winshell doctor](docs/doctor.md).
+Something not working? Run `winshell doctor`. It checks this PC's setup and says how to fix what's wrong. It does not build. See [winshell doctor](docs/doctor.md).
 
 ## Contributing
 

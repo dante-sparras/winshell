@@ -170,7 +170,25 @@ public sealed class AppsServiceTests : IDisposable
         var hit = Assert.Single(documents.Search("budget REPORT"));
         Assert.Equal(Path.Combine(_folder, "Budget report.lnk"), hit.Path);
         Assert.Empty(documents.Search("   "));
+        Assert.Empty(documents.Search("budget missing"));
         Assert.Empty(new RecentDocuments(Path.Combine(_folder, "missing")).Search("report"));
+
+        Touch("Agenda.txt", 4);
+        var nested = Path.Combine(_folder, "nested");
+        Directory.CreateDirectory(nested);
+        File.WriteAllBytes(Path.Combine(nested, "Secret Agenda.lnk"), []);
+        Assert.Empty(documents.Search("agenda"));
+        Assert.Empty(documents.Search(Path.GetFileName(_folder)));
+
+        var same = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.WriteAllBytes(Path.Combine(_folder, "Beta.lnk"), []);
+        File.WriteAllBytes(Path.Combine(_folder, "Able.lnk"), []);
+        File.SetLastWriteTimeUtc(Path.Combine(_folder, "Beta.lnk"), same);
+        File.SetLastWriteTimeUtc(Path.Combine(_folder, "Able.lnk"), same);
+        Assert.Equal(["Able", "Beta"], documents.Search("a").Select(document => document.Name).Where(name => name is "Able" or "Beta"));
+
+        Assert.Empty(new RecentDocuments().Search(""));
+        Assert.Empty(new RecentDocuments().Search("\t"));
     }
 
     [Fact]

@@ -6,9 +6,9 @@ This signing is not active yet. It starts once the SignPath Foundation project f
 
 ## What is signed
 
-The Windows binaries built from this repository, in the portable zips on [GitHub Releases](https://github.com/dante-sparras/winshell/releases) and the winget package made from them: `winshell.exe`, `winshellw.exe` (the same program without a console window), `winshell.dll`, `Winshell.Qml.dll`, `Winshell.Runtime.dll`, `Winshell.Services.dll` and `Winshell.Platform.Windows.dll`, for x64 and arm64. Each one is named Winshell and carries the release's version.
+The Windows binaries built from this repository, in the portable zips on [GitHub Releases](https://github.com/dante-sparras/winshell/releases) and the winget package made from them: `winshell.exe`, `winshellw.exe` (the same program without a console window), `winshell.dll`, `Winshell.Services.dll`, `Winshell.Shell.dll` and `Winshell.DefaultShell.dll`, for x64 and arm64. Each one is named Winshell and carries the release's version.
 
-The .NET runtime and the libraries Winshell uses (SkiaSharp, HarfBuzzSharp, Jint, Vortice and others) ship in the same zips with their own publishers' signatures, or none. They are not signed with this certificate. The Microsoft Store package is signed by the Microsoft Store.
+The .NET runtime and the libraries Winshell uses (Vortice and others) ship in the same zips with their own publishers' signatures, or none. They are not signed with this certificate. The Microsoft Store package is signed by the Microsoft Store.
 
 ## How a release is signed
 

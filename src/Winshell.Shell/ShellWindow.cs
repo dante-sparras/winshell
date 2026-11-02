@@ -175,6 +175,12 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     /// <summary>The user closed the window. It is hidden, and can be shown again.</summary>
     public event Action? Closed;
 
+    /// <summary>The native window now exists, so a window it owns can link to it.</summary>
+    internal event Action? HostCreated;
+
+    /// <summary>This window is about to go for good.</summary>
+    internal event Action? Disposing;
+
     /// <summary>The native window failed. It was rebuilt with the same content.</summary>
     public event Action<Exception>? Failed;
 
@@ -203,6 +209,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
             _host.SetInputRegion(_inputRegion);
         if (_visibleMask is { } mask)
             _host.SetVisibleMask(mask);
+        HostCreated?.Invoke();
     }
 
     /// <summary>Tells the native window where to be. Only called with a host.</summary>
@@ -257,10 +264,12 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
 
     void IHostClient.OnFullscreenChanged(bool fullscreen) => OnFullscreenChanged(fullscreen);
 
+    /// <summary>Windows destroyed the native window, because its owner closed. To the app that is this window closing.</summary>
     void IHostClient.OnBackingDestroyed()
     {
         _host = null;
-        Set(ref _visible, false, nameof(Visible));
+        if (Set(ref _visible, false, nameof(Visible)))
+            Closed?.Invoke();
     }
 
     void IHostClient.OnFailed(Exception error)
@@ -283,6 +292,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        Disposing?.Invoke();
         _host?.Dispose();
         _host = null;
         Set(ref _visible, false, nameof(Visible));

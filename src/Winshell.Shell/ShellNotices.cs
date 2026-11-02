@@ -9,6 +9,9 @@ internal enum NoticeKind
 
     /// <summary>Something failed and Winshell wrote a crash report. It goes away by itself.</summary>
     Crash,
+
+    /// <summary>A <c>shell.qml</c> was left behind. QML configurations stopped working. It stays until it is dismissed.</summary>
+    RetiredQml,
 }
 
 /// <summary>What a notice says, and the file its button opens. A zero <paramref name="Timeout"/> keeps it until it is dismissed.</summary>
@@ -70,6 +73,17 @@ internal sealed class ShellNotices : IDisposable
         "Winshell keeps running the last version that built.",
         "Open project",
         projectFile,
+        TimeSpan.Zero);
+
+    /// <summary>The notice for a <c>shell.qml</c> left behind, shown once as the shell starts.</summary>
+    public static Notice ForRetiredQml(string qmlFile) => new(
+        NoticeKind.RetiredQml,
+        "QML configurations stopped working",
+        Path.GetFileName(qmlFile),
+        $"{qmlFile} is a QML configuration, and QML configurations stopped working.",
+        "Start a new one with dotnet new winshell.",
+        "Open file",
+        qmlFile,
         TimeSpan.Zero);
 
     /// <summary>The notice for something that failed: what failed, what Winshell did, and the report.</summary>

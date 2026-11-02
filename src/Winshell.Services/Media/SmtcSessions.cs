@@ -365,7 +365,7 @@ internal sealed class SmtcSession
     public TimeSpan StartTime { get; private set; }
 
     /// <summary>
-    /// Values changed: the QML names of the changed properties, and whether the track changed, in which case
+    /// Values changed: the names of the changed properties, and whether the track changed, in which case
     /// <c>trackChanged</c> comes before the values and <c>postTrackChanged</c> after.
     /// </summary>
     public event Action<IReadOnlyList<string>, bool>? Changed;
@@ -937,7 +937,7 @@ internal static class MediaPlaybackStates
 
 /// <summary>
 /// Track art from Windows comes as image data, not a url. It is written to a file in the temp folder, named by
-/// its content, so the same art is one file, and given to QML as a <c>file:///</c> url. Each process has a folder
+/// its content, so the same art is one file, and handed out as a <c>file:///</c> url. Each process has a folder
 /// of its own: an instance deletes the art it no longer uses, which must not be art another instance shows.
 /// </summary>
 internal static class ArtCache

@@ -5,14 +5,14 @@ namespace Winshell;
 /// <summary>
 /// How much of a file Winshell will read. A preferences file is a dozen keys.
 /// <see cref="FileView"/> and <see cref="JsonAdapter"/> use <see cref="MaxReadBytes"/>.
-/// TOML, and one QML file in doctor, use <see cref="MaxTextBytes"/>.
+/// TOML uses <see cref="MaxTextBytes"/>.
 /// </summary>
 internal static class DataLimits
 {
     /// <summary>64 MiB. A general file read, including JSON, stops past this.</summary>
     public const int MaxReadBytes = 64 * 1024 * 1024;
 
-    /// <summary>1 MiB. A TOML file, and one QML file in doctor, stop past this.</summary>
+    /// <summary>1 MiB. A TOML file stops past this.</summary>
     public const int MaxTextBytes = 1024 * 1024;
 
     /// <summary>Null when <paramref name="bytes"/> is within <paramref name="maxBytes"/>.</summary>

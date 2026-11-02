@@ -3,7 +3,7 @@ using Winshell.Native;
 
 namespace Winshell;
 
-/// <summary>A connected monitor: what QML sees of it, and its physical rectangles and scale.</summary>
+/// <summary>A connected monitor: its identity, and its physical rectangles and scale.</summary>
 internal sealed record ConnectedMonitor(nint Handle, ScreenInfo Info, RECT Bounds, RECT Work, double Scale)
 {
     /// <summary>The area a panel or popup on this monitor lays out in: the work area, or the whole monitor without one.</summary>

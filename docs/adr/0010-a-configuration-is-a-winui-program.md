@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-A configuration becomes a .NET project that references a `Winshell` package and builds into one program showing real WinUI 3 controls. QML, Jint and the Skia scene go, with no release that supports both and no converter. This supersedes ADR-0001, ADR-0002 and ADR-0005, and the backdrop part of ADR-0003. Until the cut below, those ADRs still describe what `main` runs.
+A configuration becomes a .NET project that references a `Winshell` package and builds into one program showing real WinUI 3 controls. QML, Jint and the Skia scene go, with no release that supports both and no converter. This supersedes ADR-0001, ADR-0002 and ADR-0005, and the backdrop part of ADR-0003. The cut is done. Those ADRs no longer describe what `main` runs.
 
 The reason is the controls. ADR-0005 left a real IME composition, UI Automation across the built-in controls and a token pass still to do, on top of the 25,000 lines of `Quick/` that imitate Windows 11. WinUI already is Windows 11, so that work and that code stop being ours. Startup and C# tooling are bonuses, not the reason. The cost of moving is low now: this is 0.x, a release can still break a configuration, and no external configuration has turned up.
 

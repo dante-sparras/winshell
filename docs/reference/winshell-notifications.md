@@ -1,125 +1,119 @@
 # Winshell.Notifications
 
-Reads Windows Notification Center, reports Focus and Do Not Disturb, and sends native toasts. [Windows notifications](../notifications.md) explains access, deployment and what Windows lets a shell do with another app's notification.
-
-`import Winshell.Notifications`
-
-## NotificationListener
-
-A view of Windows Notification Center. Create one with `NotificationListener { }`; each listener has its own view and reads the full Windows snapshot every ten seconds, and at once when Windows reports a toast change to a packaged shell. Loading it checks access without prompting.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `notifications` | ObjectModel of [Notification](#notification), read-only | Every readable notification, newest first. Empty without access. |
-| `groups` | ObjectModel of [NotificationGroup](#notificationgroup), read-only | The notifications in one group per app, newest first. |
-| `accessStatus` | int, read-only | A [NotificationAccessStatus](#notificationaccessstatus) value. |
-| `focusState` | int, read-only | A [NotificationState](#notificationstate) value: whether a Focus session is on. |
-| `notificationMode` | int, read-only | A [NotificationMode](#notificationmode) value: Windows' current notification restriction. |
-| `doNotDisturbState` | int, read-only | A [NotificationState](#notificationstate) value: `On` for priority-only or alarms-only, `Off` for unrestricted. |
-| `error` | string, read-only | Why access or the last operation failed. |
-| `requestAccess()` | method | Asks Windows for access to notifications and returns at once. Call it from a button in a foreground window. Ignored while a request is pending. |
-| `clearAll()` | method, returns bool | Dismisses the notifications in this listener's current snapshot. Returns whether every removal succeeded; failed ones stay. |
-| `notificationAdded(notification)` | signal | Emitted after the models contain a newly seen notification, including those in the first snapshot. |
-| `operationFailed(message)` | signal | Emitted when an access request, a dismissal or `invoke()` fails, with the same text as `error`. |
-
-## ToastMessage
-
-A native toast sent under an installed Windows AppUserModelID. Create one with `ToastMessage { }` and call `send()`.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `appId` | string | The AppUserModelID of the sending app's installed Windows identity. Required. |
-| `title` | string | The first line. Required. |
-| `body` | string | The text under the title, as plain text. |
-| `activationUri` | string | An absolute protocol URI Windows opens when the user clicks the toast. Without one, the toast is informational. |
-| `tag` | string | An optional Windows replacement identifier, at most 64 characters. |
-| `group` | string | An optional Windows replacement group, at most 64 characters. Needs a `tag`. |
-| `silent` | bool | Whether the toast plays no sound. |
-| `error` | string, read-only | Why the last send failed. Cleared by a send that passes validation. |
-| `actions` | list of [ToastAction](#toastaction) | Up to five buttons on the toast, set in the declaration. |
-| `send()` | method, returns bool | Sends the toast. Returns whether validation and submission succeeded; Windows can still hold back the banner. |
-| `failed(message)` | signal | Emitted when a send fails, at once or when Windows later rejects the toast. |
-
-## ToastAction
-
-A button on a toast. Create it inside `ToastMessage.actions` with `ToastAction { }`.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `text` | string | The button's label. Required. |
-| `activationUri` | string | The absolute protocol URI Windows opens when the user clicks the button. |
+Notification Center, Focus, and toasts. Reach them from `Shell.Current.Notifications`.
 
 ## Notification
 
-A notification in Notification Center, reached from a listener's `notifications` or a group's `notifications`. The object stays the same while its content changes. It is [retainable](winshell.md#retainable): `RetainableLock { object: notification; locked: true }` keeps it after it leaves the center, so it can finish an exit transition.
+A notification in Notification Center. The object stays the same while its content changes. It stays usable after it leaves the center, so a UI can finish an exit transition, but its logo is gone by then.
+
+Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `id` | real, read-only | The Windows notification id, a full unsigned 32-bit number. |
-| `appId` | string, read-only | The AppUserModelID of the app that sent it. Can be empty. |
-| `appName` | string, read-only | The sending app's display name. |
-| `appIcon` | string, read-only | A `file:///` url of the sending app's logo, for an `Image` source. Empty when Windows gives none. It can stay empty for a moment and then change. One temporary file per app, deleted when that app's notifications are gone. A logo over 8 MiB or 4096 by 4096 pixels, or not a PNG, JPEG, GIF, BMP or WebP picture, is ignored. |
-| `title` | string, read-only | The first line of text. |
-| `body` | string, read-only | The rest of the text. |
-| `createdAt` | real, read-only | When it arrived, in Unix milliseconds for `new Date(createdAt)`. |
-| `expiresAt` | real, read-only | When it expires, in Unix milliseconds. 0 when Windows supplied no expiry. |
-| `canInvoke` | bool, read-only | Always false: Windows gives a shell no way to activate another app's notification. |
-| `dismiss()` | method, returns bool | Removes the notification from Windows. Returns true only when Windows accepted the removal. |
-| `invoke()` | method, returns bool | Always returns false and sets the listener's `error`. Use Notification Center to activate it. |
-
-## NotificationGroup
-
-The notifications of one app, reached from `NotificationListener.groups`. Notifications without an app identity each get a group of their own.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `appId` | string, read-only | The AppUserModelID the group is for. |
-| `appName` | string, read-only | The app's display name. |
-| `notifications` | ObjectModel of [Notification](#notification), read-only | The app's notifications, newest first. |
-| `dismiss()` | method, returns bool | Dismisses the group's current notifications. Returns whether every removal succeeded; failed ones stay. |
+| `AppIcon` | string, read-only | A `file:///` url of the sending app's logo. Empty until the read finishes, and when Windows gives none. |
+| `AppId` | string, read-only | The AppUserModelID of the app that sent it. Can be empty. |
+| `AppName` | string, read-only |  |
+| `Body` | string, read-only |  |
+| `CanInvoke` | bool, read-only | Always false: Windows gives a shell no way to activate another app's notification. |
+| `CreatedAt` | DateTimeOffset, read-only |  |
+| `ExpiresAt` | DateTimeOffset?, read-only | When it expires, or null when Windows supplied no expiry. |
+| `Id` | UInt32, read-only | The Windows notification id. |
+| `Title` | string, read-only |  |
+| `Dismiss()` | bool | Removes the notification from Windows. Returns true only when Windows accepted the removal. |
+| `Invoke()` | bool | UserNotificationListener exposes no activation arguments or actions for other apps. |
 
 ## NotificationAccessStatus
 
-The values of `NotificationListener.accessStatus`. `Requesting` lasts while a `requestAccess()` prompt is pending.
+| Value | Number | Description |
+| --- | --- | --- |
+| `Unspecified` | 0 |  |
+| `Allowed` | 1 |  |
+| `Denied` | 2 |  |
+| `Unavailable` | 3 |  |
+| `Requesting` | 4 |  |
 
-Values: `Unspecified`, `Allowed`, `Denied`, `Unavailable`, `Requesting`
+## NotificationGroup
+
+The notifications of one app. Notifications without an app identity each get a group of their own.
+
+Has the members of [ObservableObject](winshell.md#observableobject).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `AppId` | string, read-only |  |
+| `AppName` | string, read-only |  |
+| `Notifications` | ObservableCollection of [Notification](#notification), read-only | The app's notifications, newest first. |
+| `Dismiss()` | bool | Dismisses the group's current notifications. Returns whether every removal succeeded; failed ones stay. |
+
+## NotificationListener
+
+A view of Windows Notification Center. Making one never prompts for access.
+
+Has the members of [ObservableObject](winshell.md#observableobject).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `NotificationListener([IEventLoop](winshell.md#ieventloop) loop)` | constructor |  |
+| `AccessStatus` | [NotificationAccessStatus](#notificationaccessstatus), read-only |  |
+| `DoNotDisturbState` | [NotificationState](#notificationstate), read-only | On for priority-only or alarms-only, Off for unrestricted. |
+| `Error` | string, read-only | Why access or the last operation failed. |
+| `FocusState` | [NotificationState](#notificationstate), read-only | Whether a Focus session is on. |
+| `Groups` | ObservableCollection of [NotificationGroup](#notificationgroup), read-only | The notifications in one group per app, newest first. |
+| `NotificationMode` | [NotificationMode](#notificationmode), read-only | Windows' current notification restriction. |
+| `Notifications` | ObservableCollection of [Notification](#notification), read-only | Every readable notification, newest first. Empty without access. |
+| `NotificationAdded` | Action of [Notification](#notification) |  |
+| `OperationFailed` | Action of string |  |
+| `ClearAll()` | bool | Dismisses this listener's current snapshot. Returns whether every removal succeeded; failed ones stay. |
+| `Dispose()` | void |  |
+| `RequestAccess()` | void | Asks Windows for access and returns at once. Call from a button in a foreground window. |
 
 ## NotificationMode
 
-The values of `NotificationListener.notificationMode`. `Unknown` on Windows builds without the API.
-
-Values: `Unknown`, `Unrestricted`, `PriorityOnly`, `AlarmsOnly`
+| Value | Number | Description |
+| --- | --- | --- |
+| `Unrestricted` | 0 |  |
+| `PriorityOnly` | 1 |  |
+| `AlarmsOnly` | 2 |  |
+| `Unknown` | -1 |  |
 
 ## NotificationState
 
-The values of `focusState` and `doNotDisturbState`. `Unknown` when Windows does not report the state.
+| Value | Number | Description |
+| --- | --- | --- |
+| `Unknown` | 0 |  |
+| `Off` | 1 |  |
+| `On` | 2 |  |
 
-Values: `Unknown`, `Off`, `On`
+## ToastAction
 
-## Examples
+A button on a toast.
 
-Every readable notification, with a button that dismisses it.
+Has the members of [ObservableObject](winshell.md#observableobject).
 
-```qml
-import QtQuick
-import QtQuick.Controls
-import Winshell.Notifications
+| Member | Type | Description |
+| --- | --- | --- |
+| `ToastAction()` | constructor |  |
+| `ActivationUri` | string | The absolute protocol URI Windows opens when the user clicks the button. |
+| `Text` | string | The button's label. Required. |
 
-Column {
-    NotificationListener { id: center }
-    Button {
-        visible: center.accessStatus !== NotificationAccessStatus.Allowed
-        text: "Allow notification access"
-        onClicked: center.requestAccess()
-    }
-    Repeater {
-        model: center.notifications
-        Button {
-            required property var modelData
-            text: modelData.appName + ": " + modelData.title
-            onClicked: modelData.dismiss()
-        }
-    }
-    Button { text: "Clear all"; onClicked: center.clearAll() }
-}
-```
+## ToastMessage
+
+A native toast sent under an installed Windows AppUserModelID.
+
+Has the members of [ObservableObject](winshell.md#observableobject).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `ToastMessage([IEventLoop](winshell.md#ieventloop) loop)` | constructor |  |
+| `Actions` | ObservableCollection of [ToastAction](#toastaction), read-only | Up to five buttons on the toast. |
+| `ActivationUri` | string | An absolute protocol URI Windows opens when the user clicks the toast. Without one, the toast is informational. |
+| `AppId` | string | The AppUserModelID of the sending app's installed Windows identity. Required. |
+| `Body` | string | The text under the title, as plain text. |
+| `Error` | string, read-only | Why the last send failed. Cleared by a send that passes validation. |
+| `Group` | string | An optional Windows replacement group, at most 64 characters. Needs a Tag. |
+| `Silent` | bool | Whether the toast plays no sound. |
+| `Tag` | string | An optional Windows replacement identifier, at most 64 characters. |
+| `Title` | string | The first line. Required. |
+| `Failed` | Action of string |  |
+| `Send()` | bool | Sends the toast. Returns whether validation and submission succeeded; Windows can still hold back the banner. |
+
