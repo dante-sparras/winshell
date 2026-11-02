@@ -10,145 +10,101 @@ namespace Winshell.DefaultShell;
 /// <summary>The time and the date on the right of the taskbar. A click opens the notification center and calendar.</summary>
 public sealed partial class TaskbarClock : Button
 {
-    private (TaskbarClockModel Model, Preferences Preferences, TimeProvider Time, DispatcherTimer Timer, NotificationCenter Center, CalendarMonth Month, CalendarFlyoutView Flyout)? _run;
-    private PanelWindow? _window;
-    private PopupWindow? _popup;
-    // A click on the clock is outside the popup, so the grab closes it before this click arrives.
-    private bool _suppressOpen;
+    private readonly PanelWindow _bar;
+    private readonly Preferences _preferences;
+    private readonly TimeProvider _time;
+    private readonly NotificationCenter _center;
+    private readonly TaskbarClockModel _model;
+    private readonly CalendarMonth _month;
+    private readonly CalendarFlyoutView _flyout;
+    private readonly PopupWindow _popup;
+    private readonly DispatcherTimer _timer = new();
+    private DateTimeOffset _dismissed;
 
-    public TaskbarClock() => InitializeComponent();
-
-    public void Attach(Preferences preferences, TimeProvider time, NotificationCenter center)
+    public TaskbarClock(PanelWindow bar, Preferences preferences, TimeProvider time, NotificationCenter center)
     {
-        Detach();
-        var month = new CalendarMonth(time);
-        var flyout = new CalendarFlyoutView(month, center, preferences);
-        var timer = new DispatcherTimer();
-        timer.Tick += (_, _) => Show();
-        _run = (new TaskbarClockModel(time, preferences), preferences, time, timer, center, month, flyout);
-        flyout.CloseRequested += OnClose;
+        _bar = bar;
+        _preferences = preferences;
+        _time = time;
+        _center = center;
+        _model = new TaskbarClockModel(time, preferences);
+        _month = new CalendarMonth(time);
+        _flyout = new CalendarFlyoutView(_month, center, preferences);
+        _popup = new PopupWindow { GrabFocus = true, Corners = WindowCorners.Round, Content = _flyout };
+        InitializeComponent();
+        _popup.Dismissed += OnDismissed;
+        _flyout.CloseRequested += OnClose;
+        _timer.Tick += (_, _) => Tick();
         preferences.PropertyChanged += OnPreferences;
         center.PropertyChanged += OnCenter;
-        Show();
+        Tick();
     }
 
-    public void Use(PanelWindow window) => _window = window;
-
-    /// <summary>The popup uses the taskbar's material. A popup that is not open yet picks it up when it opens.</summary>
-    public void UseBackdrop()
+    /// <summary>Drops the popup and what the clock follows. The bar is about to close, and the center stays.</summary>
+    public void Release()
     {
-        if (_popup is not null && _run is { } run)
-            _popup.Backdrop = run.Preferences.Material;
-    }
-
-    public void Detach()
-    {
-        if (_run is not { } run)
-            return;
-        run.Preferences.PropertyChanged -= OnPreferences;
-        run.Center.PropertyChanged -= OnCenter;
-        run.Flyout.CloseRequested -= OnClose;
-        run.Timer.Stop();
-        run.Flyout.Release();
-        if (_popup is not null)
-        {
-            _popup.Dismissed -= OnDismissed;
-            _popup.Content = null;
-            _popup.Dispose();
-            _popup = null;
-        }
-        _run = null;
-        _window = null;
-        _suppressOpen = false;
+        _preferences.PropertyChanged -= OnPreferences;
+        _center.PropertyChanged -= OnCenter;
+        _timer.Stop();
+        _flyout.Release();
+        _popup.Dispose();
     }
 
     private void OnPreferences(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(Preferences.ClockSeconds))
-            Show();
+            Tick();
     }
 
     private void OnCenter(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NotificationCenter.Count))
-            Show(restart: false);
+            Show();
     }
 
     private void OnClick(object sender, RoutedEventArgs e)
     {
-        if (_suppressOpen)
-            return;
-        if (_popup is { Visible: true })
-        {
+        if (_popup.Visible)
             OnClose();
-            return;
-        }
-        Open();
+        else if (!TaskbarClockModel.ClosedBySameClick(_dismissed, _time.GetUtcNow()))
+            Open();
     }
 
     private void Open()
     {
-        if (_run is not { } run)
+        if (_bar.Screen is not { } screen)
             return;
-        var popup = EnsurePopup(run);
-        if (_window is { Screen: { } screen } window)
-        {
-            popup.Screen = screen;
-            var point = TransformToVisual(null).TransformPoint(new global::Windows.Foundation.Point(0, 0));
-            var origin = window.Origin;
-            popup.Rect = CalendarFlyoutPlacement.Place(new QRect(origin.X + point.X, origin.Y + point.Y, ActualWidth, ActualHeight), screen.WorkArea);
-        }
-        popup.Backdrop = run.Preferences.Material;
-        var local = run.Time.GetLocalNow().LocalDateTime;
-        run.Month.Date = local;
-        run.Month.Today();
-        popup.Visible = true;
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, run.Flyout.FocusClose);
+        var point = TransformToVisual(null).TransformPoint(default);
+        var origin = _bar.Origin;
+        _popup.Screen = screen;
+        _popup.Rect = CalendarFlyoutPlacement.Place(new QRect(origin.X + point.X, origin.Y + point.Y, ActualWidth, ActualHeight), screen.WorkArea);
+        _popup.Backdrop = _preferences.Material;
+        _month.Date = _time.GetLocalNow().LocalDateTime;
+        _month.Today();
+        _popup.Visible = true;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, _flyout.FocusClose);
     }
 
-    private PopupWindow EnsurePopup((TaskbarClockModel Model, Preferences Preferences, TimeProvider Time, DispatcherTimer Timer, NotificationCenter Center, CalendarMonth Month, CalendarFlyoutView Flyout) run)
+    private void OnDismissed() => _dismissed = _time.GetUtcNow();
+
+    private void OnClose() => _popup.Visible = false;
+
+    private void Tick()
     {
-        if (_popup is not null)
-            return _popup;
-        var popup = new PopupWindow
-        {
-            GrabFocus = true,
-            Corners = WindowCorners.Round,
-            Content = run.Flyout,
-        };
-        popup.Dismissed += OnDismissed;
-        _popup = popup;
-        return popup;
+        Show();
+        _timer.Stop();
+        _timer.Interval = TaskbarClockModel.UntilNext(_time.GetLocalNow(), _preferences.ClockSeconds);
+        _timer.Start();
     }
 
-    private void OnDismissed()
+    private void Show()
     {
-        _suppressOpen = true;
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => _suppressOpen = false);
-    }
-
-    private void OnClose()
-    {
-        if (_popup is not null)
-            _popup.Visible = false;
-        Focus(FocusState.Programmatic);
-    }
-
-    private void Show(bool restart = true)
-    {
-        if (_run is not { } run)
-            return;
-        var local = run.Time.GetLocalNow().LocalDateTime;
-        run.Model.Refresh(run.Center.Count);
-        Readout.Text = run.Model.Text;
-        AutomationProperties.SetName(this, run.Model.AccessibleName);
-        run.Center.NoteClock();
-        if (run.Month.Date.Date != local.Date)
-            run.Month.Date = local;
-        if (!restart)
-            return;
-        run.Timer.Stop();
-        run.Timer.Interval = TaskbarClockModel.UntilNext(run.Time.GetLocalNow(), run.Preferences.ClockSeconds);
-        run.Timer.Start();
+        var local = _time.GetLocalNow().LocalDateTime;
+        _model.Refresh(_center.Count);
+        Readout.Text = _model.Text;
+        AutomationProperties.SetName(this, _model.AccessibleName);
+        _center.NoteClock();
+        if (_month.Date.Date != local.Date)
+            _month.Date = local;
     }
 }

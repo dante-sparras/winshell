@@ -28,22 +28,16 @@ public sealed partial class NotificationCard : UserControl
         {
             if (ReferenceEquals(_item, value))
                 return;
-            if (_item is not null)
-                _item.PropertyChanged -= OnItem;
+            Follow(false);
             _item = value;
-            if (_item is not null)
-                _item.PropertyChanged += OnItem;
+            Follow(true);
             Apply();
         }
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_item is not null)
-        {
-            _item.PropertyChanged -= OnItem;
-            _item.PropertyChanged += OnItem;
-        }
+        Follow(true);
         if (_center is not null)
             _center.PropertyChanged -= OnCenter;
         _center = FindCenter();
@@ -54,8 +48,7 @@ public sealed partial class NotificationCard : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        if (_item is not null)
-            _item.PropertyChanged -= OnItem;
+        Follow(false);
         if (_center is not null)
             _center.PropertyChanged -= OnCenter;
     }
@@ -89,5 +82,14 @@ public sealed partial class NotificationCard : UserControl
                 return flyout.Center;
         }
         return null;
+    }
+
+    private void Follow(bool on)
+    {
+        if (_item is null)
+            return;
+        _item.PropertyChanged -= OnItem;
+        if (on)
+            _item.PropertyChanged += OnItem;
     }
 }

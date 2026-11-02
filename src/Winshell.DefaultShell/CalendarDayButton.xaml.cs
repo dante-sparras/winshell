@@ -25,29 +25,22 @@ public sealed partial class CalendarDayButton : Button
         {
             if (ReferenceEquals(_day, value))
                 return;
-            if (_day is not null)
-                _day.PropertyChanged -= OnDay;
+            Follow(false);
             _day = value;
-            if (_day is not null)
-                _day.PropertyChanged += OnDay;
+            Follow(true);
             Apply();
         }
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_day is not null)
-        {
-            _day.PropertyChanged -= OnDay;
-            _day.PropertyChanged += OnDay;
-        }
+        Follow(true);
         Apply();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        if (_day is not null)
-            _day.PropertyChanged -= OnDay;
+        Follow(false);
     }
 
     private void OnDay(object? sender, PropertyChangedEventArgs e) => Apply();
@@ -74,4 +67,13 @@ public sealed partial class CalendarDayButton : Button
     }
 
     private static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+
+    private void Follow(bool on)
+    {
+        if (_day is null)
+            return;
+        _day.PropertyChanged -= OnDay;
+        if (on)
+            _day.PropertyChanged += OnDay;
+    }
 }

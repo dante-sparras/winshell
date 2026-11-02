@@ -33,6 +33,13 @@ public sealed class TaskbarClockModel
         AccessibleName = name;
     }
 
+    /// <summary>
+    /// Whether a click on the clock is the one that closed its popup. A press outside the popup dismisses it, so a
+    /// press on the clock does, and that click arrives when the button comes up. It must not open the popup again.
+    /// </summary>
+    public static bool ClosedBySameClick(DateTimeOffset dismissed, DateTimeOffset now) =>
+        now - dismissed < TimeSpan.FromMilliseconds(500);
+
     /// <summary>How long until the next second, or the next minute when seconds are hidden. Never zero.</summary>
     public static TimeSpan UntilNext(DateTimeOffset now, bool seconds)
     {

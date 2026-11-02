@@ -12,22 +12,21 @@ public sealed partial class TaskbarView : UserControl
 {
     private readonly Preferences _preferences;
     private readonly TrayAreaView _tray;
+    private readonly TaskbarClock _clock;
 
-    public TaskbarView(TaskbarModel model, TrayArea tray, Preferences preferences, TimeProvider time, NotificationCenter center)
+    public TaskbarView(TaskbarModel model, TrayArea tray, PanelWindow window, Preferences preferences, TimeProvider time, NotificationCenter center)
     {
         Model = model;
         _preferences = preferences;
         InitializeComponent();
-        Clock.Attach(preferences, time, center);
         _tray = new TrayAreaView(tray);
-        Corner.Children.Insert(0, _tray);
+        _clock = new TaskbarClock(window, preferences, time, center);
+        Corner.Children.Add(_tray);
+        Corner.Children.Add(_clock);
         Place();
         _preferences.PropertyChanged += OnPreferences;
         ContextRequested += OnContextRequested;
     }
-
-    /// <summary>The window this bar is. The clock places its popup from it.</summary>
-    public void Use(PanelWindow window) => Clock.Use(window);
 
     public TaskbarModel Model { get; }
 
@@ -36,7 +35,7 @@ public sealed partial class TaskbarView : UserControl
     {
         _preferences.PropertyChanged -= OnPreferences;
         _tray.Release();
-        Clock.Detach();
+        _clock.Release();
     }
 
     private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
@@ -67,8 +66,6 @@ public sealed partial class TaskbarView : UserControl
     {
         if (e.PropertyName == nameof(Preferences.TaskbarCentered))
             Place();
-        else if (e.PropertyName == nameof(Preferences.Backdrop))
-            Clock.UseBackdrop();
     }
 
     /// <summary>Centered apps sit in the middle. Apps on the left stay clear of the clock.</summary>

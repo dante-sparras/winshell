@@ -9,6 +9,23 @@ public sealed class TaskbarClockModelTests : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(120, true)]
+    [InlineData(499, true)]
+    [InlineData(500, false)]
+    [InlineData(5000, false)]
+    public void A_click_just_after_the_popup_was_dismissed_is_the_click_that_dismissed_it(int after, bool same)
+    {
+        var dismissed = new DateTimeOffset(2026, 11, 2, 5, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(same, TaskbarClockModel.ClosedBySameClick(dismissed, dismissed.AddMilliseconds(after)));
+    }
+
+    [Fact]
+    public void A_popup_that_was_never_dismissed_lets_the_first_click_open_it() =>
+        Assert.False(TaskbarClockModel.ClosedBySameClick(default, new DateTimeOffset(2026, 11, 2, 5, 0, 0, TimeSpan.Zero)));
+
     [Fact]
     public void The_clock_shows_the_time_and_the_date_and_seconds_when_they_are_on()
     {

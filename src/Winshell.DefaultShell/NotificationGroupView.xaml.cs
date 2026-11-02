@@ -26,11 +26,9 @@ public sealed partial class NotificationGroupView : UserControl
         {
             if (ReferenceEquals(_group, value))
                 return;
-            if (_group is not null)
-                _group.PropertyChanged -= OnGroup;
+            Follow(false);
             _group = value;
-            if (_group is not null)
-                _group.PropertyChanged += OnGroup;
+            Follow(true);
             Cards.ItemsSource = _group?.Notifications;
             Apply();
         }
@@ -38,18 +36,13 @@ public sealed partial class NotificationGroupView : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_group is not null)
-        {
-            _group.PropertyChanged -= OnGroup;
-            _group.PropertyChanged += OnGroup;
-        }
+        Follow(true);
         Apply();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        if (_group is not null)
-            _group.PropertyChanged -= OnGroup;
+        Follow(false);
     }
 
     private void OnGroup(object? sender, PropertyChangedEventArgs e)
@@ -66,5 +59,14 @@ public sealed partial class NotificationGroupView : UserControl
             return;
         TitleText.Text = NotificationCenter.AppName(group.AppName);
         AutomationProperties.SetName(ClearButton, NotificationCenter.ClearName(group.AppName));
+    }
+
+    private void Follow(bool on)
+    {
+        if (_group is null)
+            return;
+        _group.PropertyChanged -= OnGroup;
+        if (on)
+            _group.PropertyChanged += OnGroup;
     }
 }
