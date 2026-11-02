@@ -1,12 +1,22 @@
-<UserControl
+<Button
     x:Class="Winshell.DefaultShell.TaskbarClock"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    VerticalAlignment="Center">
+    MinWidth="0"
+    Height="40"
+    Padding="10,0"
+    BorderThickness="0"
+    Background="Transparent"
+    HorizontalAlignment="Left"
+    VerticalAlignment="Center"
+    HorizontalContentAlignment="Center"
+    VerticalContentAlignment="Center"
+    Click="OnClick"
+    AutomationProperties.HelpText="Open notification center and calendar"
+    AutomationProperties.FullDescription="Open notification center and calendar">
     <TextBlock
         x:Name="Readout"
-        Margin="10,0"
         Style="{ThemeResource CaptionTextBlockStyle}"
         TextAlignment="Center"
         VerticalAlignment="Center" />
-</UserControl>
+</Button>

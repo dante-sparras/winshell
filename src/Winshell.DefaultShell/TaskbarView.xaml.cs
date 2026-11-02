@@ -12,15 +12,17 @@ public sealed partial class TaskbarView : UserControl
 {
     private readonly Preferences _preferences;
     private readonly TrayAreaView _tray;
+    private readonly TaskbarClock _clock;
 
-    public TaskbarView(TaskbarModel model, TrayArea tray, Preferences preferences, TimeProvider time)
+    public TaskbarView(TaskbarModel model, TrayArea tray, PanelWindow window, Preferences preferences, TimeProvider time, NotificationCenter center)
     {
         Model = model;
         _preferences = preferences;
         InitializeComponent();
-        Clock.Attach(preferences, time);
         _tray = new TrayAreaView(tray);
-        Corner.Children.Insert(0, _tray);
+        _clock = new TaskbarClock(window, preferences, time, center);
+        Corner.Children.Add(_tray);
+        Corner.Children.Add(_clock);
         Place();
         _preferences.PropertyChanged += OnPreferences;
         ContextRequested += OnContextRequested;
@@ -33,7 +35,7 @@ public sealed partial class TaskbarView : UserControl
     {
         _preferences.PropertyChanged -= OnPreferences;
         _tray.Release();
-        Clock.Detach();
+        _clock.Release();
     }
 
     private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
