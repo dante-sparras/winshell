@@ -71,6 +71,26 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 - Don't edit `.agents/skills/` or `.claude/skills/`; the `skills` CLI overwrites them.
 - Never commit `.env` files or credentials.
 
+## Live UI with Winland running
+
+Winland tiles every normal window, so the windows a live run or a test opens change size and land among the user's windows. When `winland` is running, do that work on an empty workspace:
+
+```powershell
+$workspace = (winland -j activeworkspace | ConvertFrom-Json).id
+winland keyword windowrule 'ignore, exe:(winshell|winshellw|winshell-next|Winshell\..*Tests)\.exe'
+winland dispatch workspace empty
+```
+
+- The rule reaches windows that open after it, and `workspace empty` moves the focused monitor only. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
+- `winland -j clients` must list no Winshell window.
+- Open a real window there. Winland must tile it, it must open above the shell's windows, and no shell window may draw over it. Check again after `winland dispatch fullscreen`, where the taskbar goes behind it.
+- Finish in a `finally`, so the user gets their workspace back and the rule goes:
+
+```powershell
+winland dispatch workspace $workspace
+winland reload
+```
+
 ## Agent skills
 
 ### Issue tracker
