@@ -259,7 +259,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
     /// <summary>Registers an app bar on an edge, so maximized windows stay out of the zone. Returns the area it got.</summary>
     private RECT ReserveAppBar(Edges edge, int thickness, RECT monitor)
     {
-        using var explorerFirst = Services.Tray.TrayHost.ExplorerFirst();
+        using var explorerFirst = TrayHost.ExplorerFirst();
         var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = Handle, uCallbackMessage = AppBarMessage };
         if (!_appBarRegistered)
         {
@@ -338,7 +338,7 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         if (!_appBarRegistered)
             return;
         var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = Handle };
-        using (Services.Tray.TrayHost.ExplorerFirst())
+        using (TrayHost.ExplorerFirst())
             Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
         _appBarRegistered = false;
         _appBar.Clear();

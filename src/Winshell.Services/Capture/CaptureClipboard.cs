@@ -1,19 +1,14 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using SkiaSharp;
 using Winshell.Native;
 
-namespace Winshell.Platform.Windows.Services.Capture;
+namespace Winshell.Capture;
 
 internal static partial class CaptureClipboard
 {
     /// <summary>A top-down BITMAPV5HEADER followed by straight-alpha BGRA pixels, including explicit channel masks.</summary>
-    internal static byte[] EncodeDib(SKImage image)
+    internal static byte[] EncodeDib(PixelImage image)
     {
-        var info = new SKImageInfo(image.Width, image.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
-        using var bitmap = new SKBitmap(info);
-        if (!image.ReadPixels(info, bitmap.GetPixels(), bitmap.RowBytes, 0, 0))
-            throw new InvalidOperationException("Cannot read capture pixels.");
         var length = checked(image.Width * image.Height * 4);
         using var stream = new MemoryStream(checked(124 + length));
         using var writer = new BinaryWriter(stream);
@@ -31,13 +26,11 @@ internal static partial class CaptureClipboard
         writer.Write(0); writer.Write(0); writer.Write(0); // gamma
         writer.Write(4); // LCS_GM_IMAGES
         writer.Write(0); writer.Write(0); writer.Write(0);
-        var pixels = new byte[length];
-        Marshal.Copy(bitmap.GetPixels(), pixels, 0, length);
-        writer.Write(pixels);
+        writer.Write(image.StraightBgra());
         return stream.ToArray();
     }
 
-    public static void Copy(SKImage image, nint owner)
+    public static void Copy(PixelImage image, nint owner)
     {
         var dib = EncodeDib(image);
         var memory = Win32.GlobalAlloc(Win32.GMEM_MOVEABLE, (nuint)dib.Length);

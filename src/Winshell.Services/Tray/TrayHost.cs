@@ -1,11 +1,9 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using SkiaSharp;
 using Winshell.Native;
-using Winshell.Runtime;
 using WinEvents = Winshell.Windows.NativeMethods;
 
-namespace Winshell.Platform.Windows.Services.Tray;
+namespace Winshell.Tray;
 
 /// <summary>One notification area icon an app added with <c>Shell_NotifyIcon</c>.</summary>
 internal sealed class TrayIcon
@@ -31,7 +29,7 @@ internal sealed class TrayIcon
     public bool Overflow { get; set; } = true;
 
     /// <summary>The icon as the app drew it, at the size it chose.</summary>
-    public SKImage? Image { get; set; }
+    public PixelImage? Image { get; set; }
 
     /// <summary>The module and resource the icon was loaded from, when Windows knows, so it can be drawn at any size.</summary>
     public IconResource? Resource { get; set; }
@@ -45,6 +43,23 @@ internal sealed class TrayIcon
 
 /// <summary>An icon resource in a program or library: a numeric id, or a name when the id is 0.</summary>
 internal sealed record IconResource(string Module, ushort Id, string Name);
+
+/// <summary>What the public tray needs of the host. A test gives it a fake, and nothing touches the real tray.</summary>
+internal interface ITrayHost
+{
+    IReadOnlyCollection<TrayIcon> Icons { get; }
+
+    event Action<TrayIcon>? Added;
+
+    event Action<TrayIcon>? Changed;
+
+    event Action<TrayIcon>? Removed;
+
+    /// <summary>The app asked for a balloon notification: its title, its text, and its <c>NIIF_</c> flags.</summary>
+    event Action<TrayIcon, string, string, uint>? Balloon;
+
+    void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at);
+}
 
 /// <summary>
 /// The window class the host registers, the taskbar class it passes messages on to, and the name that makes one
@@ -61,7 +76,7 @@ internal sealed record TrayNames(string Window, string Explorer, string Owner)
 /// passes every message on to Explorer so its own tray and the app bars keep working. Apps are asked to add their
 /// icons again with the <c>TaskbarCreated</c> broadcast.
 /// </summary>
-internal sealed unsafe partial class TrayHost : IDisposable
+internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
 {
     private const uint WM_COPYDATA = 0x004A;
     private const uint WM_USER = 0x0400;
@@ -442,7 +457,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
                     icon.Hidden = (call.State & TrayProtocol.NIS_HIDDEN) != 0;
                 if ((call.Flags & TrayProtocol.NIF_ICON) != 0)
                 {
-                    icon.Image?.Dispose();
                     // The app may destroy the icon once this returns, so it is read now.
                     icon.Image = IconImage(call.Icon);
                     icon.Resource = ResourceOf(call.Icon);
@@ -525,7 +539,6 @@ internal sealed unsafe partial class TrayHost : IDisposable
             return;
         Unindex(icon);
         Removed?.Invoke(icon);
-        icon.Image?.Dispose();
     }
 
     // Clicks, sent the way Explorer sends them
@@ -643,7 +656,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
     /// Draws an icon from its resource at a size in pixels, so it is sharp at any scale. Null when the module or the
     /// resource is gone or is not on a local drive. The library is only mapped as data.
     /// </summary>
-    public static SKImage? ResourceImage(IconResource resource, int size)
+    public static PixelImage? ResourceImage(IconResource resource, int size)
     {
         if (!IsLocalPath(resource.Module))
             return null;
@@ -686,7 +699,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
     }
 
     /// <summary>Draws an icon into a straight-alpha image, at its own size unless one is given.</summary>
-    private static SKImage? IconImage(nint icon, int size = 0)
+    private static PixelImage? IconImage(nint icon, int size = 0)
     {
         if (icon == 0 || !GetIconInfo(icon, out var info))
             return null;
@@ -730,7 +743,7 @@ internal sealed unsafe partial class TrayHost : IDisposable
                     for (var i = 0; i < pixels.Length; i++)
                         pixels[i] = (mask[i] & 0xffffff) == 0 ? pixels[i] | 0xff000000 : 0;
                 }
-                var image = SKImage.FromPixelCopy(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Unpremul), bits, size * 4);
+                var image = new PixelImage(size, size, new Span<byte>((void*)bits, size * size * 4).ToArray());
                 SelectObject(dc, old);
                 return image;
             }

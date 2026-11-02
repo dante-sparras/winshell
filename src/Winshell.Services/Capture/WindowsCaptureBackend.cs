@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using SkiaSharp;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -8,13 +7,12 @@ using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 using Winshell.Native;
-using Winshell.Runtime;
 
-namespace Winshell.Platform.Windows.Services.Capture;
+namespace Winshell.Capture;
 
 /// <summary>
-/// A two-buffer WGC pool on a private D3D device. The engine samples the latest frame, so slow consumers never
-/// queue frames or UI callbacks. Only a consumed frame crosses to the current raster Skia scene.
+/// A two-buffer WGC pool on a private D3D device. The session samples the latest frame, so slow consumers never
+/// queue frames or UI callbacks. Only a consumed frame leaves the GPU.
 /// </summary>
 internal sealed class WindowsCaptureBackend : ICaptureBackend
 {
@@ -61,7 +59,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
 
     private void OnClosed(GraphicsCaptureItem sender, object args) => Volatile.Read(ref _closed)?.Invoke();
 
-    public SKImage? ReadLatest()
+    public PixelImage? ReadLatest()
     {
         if (_pool is null)
             return null;
@@ -131,18 +129,13 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             _context.Flush();
             return ready ?? Readback();
         }
-        catch
-        {
-            ready?.Dispose();
-            throw;
-        }
         finally
         {
             latest?.Dispose();
         }
     }
 
-    private SKImage? Readback()
+    private unsafe PixelImage? Readback()
     {
         var result = _context!.Map(_staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.DoNotWait, out var mapped);
         if (result.Code == unchecked((int)0x887a000a)) // DXGI_ERROR_WAS_STILL_DRAWING
@@ -151,9 +144,10 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         _readbackPending = false;
         try
         {
-            using var bitmap = new SKBitmap(new SKImageInfo(_size.Width, _size.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-            CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), bitmap.GetPixels(), bitmap.RowBytes, _size.Width, _size.Height);
-            return SKImage.FromBitmap(bitmap);
+            var pixels = new byte[checked(_size.Width * _size.Height * 4)];
+            fixed (byte* destination = pixels)
+                CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), (nint)destination, _size.Width * 4, _size.Width, _size.Height);
+            return new PixelImage(_size.Width, _size.Height, pixels, premultiplied: true);
         }
         finally { _context.Unmap(_staging!, 0); }
     }

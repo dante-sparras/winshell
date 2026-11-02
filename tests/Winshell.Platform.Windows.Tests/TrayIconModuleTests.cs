@@ -35,7 +35,7 @@ public sealed class TrayIconModuleTests
     public void An_image_is_loaded_from_a_local_module()
     {
         var shell32 = Path.Combine(Environment.SystemDirectory, "shell32.dll");
-        using var image = TrayHost.ResourceImage(new IconResource(shell32, 3, ""), 32);
+        var image = TrayHost.ResourceImage(new IconResource(shell32, 3, ""), 32);
         Assert.NotNull(image);
         Assert.Equal(32, image.Width);
     }
