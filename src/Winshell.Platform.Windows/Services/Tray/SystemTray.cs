@@ -6,17 +6,6 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Tray;
 
-/// <summary>The icon a balloon notification asked for, from its <c>NIIF_</c> flags.</summary>
-public enum BalloonIcon
-{
-    None = 0,
-    Info = 1,
-    Warning = 2,
-    Error = 3,
-    /// <summary>The app's own icon.</summary>
-    App = 4,
-}
-
 /// <summary>
 /// The <c>SystemTray</c>: the notification area icons of every app, in the order they were added. An icon the app
 /// hid is left out until the app shows it again.
@@ -187,9 +176,8 @@ internal sealed class TrayIconProvider : IImageProvider
             return null;
         var size = Math.Max(requestedWidth, requestedHeight);
         if (size > 0 && size != image.Width && icon.Resource is { } resource && TrayHost.ResourceImage(resource, size) is { } sharp)
-            return sharp;
-        // The host keeps the image; the cache gets a copy it may dispose of.
-        return SKImage.FromBitmap(SKBitmap.FromImage(image));
+            return sharp.ToSkImage();
+        return image.ToSkImage();
     }
 }
 

@@ -8,6 +8,8 @@
     <PackageReference Include="Microsoft.Win32.SystemEvents" />
     <PackageReference Include="System.Management" />
     <PackageReference Include="Tomlyn" />
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.DXGI" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Winshell.Runtime" />

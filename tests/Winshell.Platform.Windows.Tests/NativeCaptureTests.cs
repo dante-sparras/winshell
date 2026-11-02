@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using SkiaSharp;
 using Windows.Graphics.Capture;
 using Winshell.Platform.Windows.Services.Capture;
 using Winshell.Platform.Windows.Services.WindowList;
@@ -91,17 +90,15 @@ public class NativeCaptureTests(ITestOutputHelper output)
                         loop.Schedule(TimeSpan.FromMilliseconds(33), Poll);
                         return;
                     }
-                    using var frame = (monitor ?? capture).ReadLatest();
+                    var frame = (monitor ?? capture).ReadLatest();
                     if (frame is not null)
                     {
                         output.WriteLine($"stage {stage}: {frame.Width}x{frame.Height} physical pixels");
                         if (stage == 0)
                         {
-                            using var bitmap = SKBitmap.FromImage(frame);
-                            Assert.Equal(SKColors.Red, bitmap.GetPixel(frame.Width / 2, frame.Height / 2));
-                            using var png = frame.Encode(SKEncodedImageFormat.Png, 100);
-                            using (var stream = File.Create(Path.Combine(directory, "own-window.png")))
-                                png.SaveTo(stream);
+                            var center = (frame.Height / 2 * frame.Width + frame.Width / 2) * 4;
+                            Assert.Equal(new byte[] { 0, 0, 255, 255 }, frame.Bgra.Slice(center, 4).ToArray());
+                            File.WriteAllBytes(Path.Combine(directory, "own-window.png"), frame.EncodePng());
                             initialWidth = frame.Width;
                             window.SetPanel(new PanelPlacement(null, Edges.Top | Edges.Left, 0, 0, 0, 0,
                                 480, 240, 1, 0, true, false, "capture-test"));
