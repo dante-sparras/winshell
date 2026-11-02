@@ -299,6 +299,23 @@ public sealed class TaskbarModelTests : IDisposable
     }
 
     [Fact]
+    public void Dragging_a_pin_onto_another_saves_that_order()
+    {
+        using var preferences = Open();
+        using var pins = Pins("explorer", "edge", "store");
+        var desk = new Desk(preferences, pins);
+        desk.Apps.Add(new FakeApp("explorer", "File Explorer"));
+        desk.Apps.Add(new FakeApp("edge", "Edge"));
+        desk.Apps.Add(new FakeApp("store", "Store"));
+        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
+
+        model.MovePin(model.Tasks[0].Pin, model.Tasks[2].Pin);
+
+        Assert.Equal(["app:edge", "app:store", "app:explorer"], model.Tasks.Select(task => task.Key).ToArray());
+        Assert.Equal(["edge", "store", "explorer"], pins.Ids);
+    }
+
+    [Fact]
     public void Start_and_Search_raise_an_event_and_open_nothing()
     {
         using var preferences = Open();

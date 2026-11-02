@@ -40,6 +40,12 @@ public sealed partial class TaskbarClock : Button
         Tick();
     }
 
+    /// <summary>The notification center and calendar are open, so an auto-hiding taskbar stays up.</summary>
+    internal bool IsOpen => _popup.Visible;
+
+    /// <summary>The notification center and calendar opened or closed.</summary>
+    internal event EventHandler? OpenChanged;
+
     /// <summary>Drops the popup and what the clock follows. The bar is about to close, and the center stays.</summary>
     public void Release()
     {
@@ -91,12 +97,21 @@ public sealed partial class TaskbarClock : Button
         _month.Date = _time.GetLocalNow().LocalDateTime;
         _month.Today();
         _popup.Visible = true;
+        OpenChanged?.Invoke(this, EventArgs.Empty);
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, _flyout.FocusClose);
     }
 
-    private void OnDismissed() => _dismissed = _time.GetUtcNow();
+    private void OnDismissed()
+    {
+        _dismissed = _time.GetUtcNow();
+        OpenChanged?.Invoke(this, EventArgs.Empty);
+    }
 
-    private void OnClose() => _popup.Visible = false;
+    private void OnClose()
+    {
+        _popup.Visible = false;
+        OpenChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     private void Tick()
     {
