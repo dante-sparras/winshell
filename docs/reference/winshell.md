@@ -14,14 +14,14 @@ The running shell: its screens and services. There is one in a process.
 | `Bluetooth` | [BluetoothService](winshell-bluetooth.md#bluetoothservice), read-only |  |
 | `Brightness` | [BrightnessService](winshell-power.md#brightnessservice), read-only |  |
 | `CacheDir` | string, read-only | This shell's cache folder, which exists once read. |
-| `ColorScheme` | string | The color scheme every window follows: `system`, `light` or `dark`. |
+| `ColorScheme` | [ColorScheme](#colorscheme) | The color scheme every window follows. |
 | `ConfigDir` | string, read-only | The folder of this configuration's program, where its own files are. |
 | `ConfigRoot` | string, read-only | The config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR` when it is set. |
 | `Current` | [Shell](#shell), static, read-only | The shell of this process. Reading it before Run has started it throws. |
 | `DataDir` | string, read-only | This shell's data folder, which exists once read. |
 | `ExplorerTaskbar` | [ExplorerTaskbarService](winshell-explorertaskbar.md#explorertaskbarservice), read-only | Whether Explorer's taskbar is hidden. Winshell shows it again when it exits. |
 | `Ipc` | [ShellIpc](#shellipc), read-only | What `winshell ipc` reaches in this shell. |
-| `IsDark` | bool, read-only | Whether windows are dark. ColorScheme overrides Windows mode, and `system` follows it. |
+| `IsDark` | bool, read-only | Whether windows are dark. ColorScheme overrides Windows mode, and System follows it. |
 | `JumpLists` | [JumpListService](winshell-apps.md#jumplistservice), read-only |  |
 | `Log` | [Log](#log), read-only |  |
 | `LogPath` | string, read-only | This instance's log file, or empty when it writes none. |
@@ -167,6 +167,16 @@ A WinUI FrameworkElement. The members here are the ones Winshell adds.
 | `Window` | [AppWindow](winshell-windows.md#appwindow)? |  |
 | `PeekProperty` | DependencyProperty, static | While true, Windows shows this window at full size and hides the others. It stays off when the user turned peek off, and it ends when this element unloads or the window goes. |
 | `WindowProperty` | DependencyProperty, static | The app window to preview, from Windows. Null shows nothing. |
+
+## ColorScheme
+
+Whether windows are light or dark. System follows Windows.
+
+| Value | Number | Description |
+| --- | --- | --- |
+| `System` | 0 |  |
+| `Light` | 1 |  |
+| `Dark` | 2 |  |
 
 ## CaptureView
 

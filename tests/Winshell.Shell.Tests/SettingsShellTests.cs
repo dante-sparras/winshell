@@ -56,7 +56,7 @@ public sealed class SettingsShellTests
                 Assert.Equal(WindowBackdrop.Mica, rig.Preferences.Material);
 
                 rig.Preferences.ColorScheme = SettingsCatalog.ColorSchemes[2].Value;
-                Assert.Equal("dark", shell.ColorScheme);
+                Assert.Equal(ColorScheme.Dark, shell.ColorScheme);
                 Assert.True(shell.IsDark);
                 Assert.Same(shell, Shell.Current);
                 return messages.Where(m => !m.StartsWith("hotkey:", StringComparison.Ordinal) && !m.StartsWith("ipc: Duplicate IPC name", StringComparison.Ordinal)).ToArray();
