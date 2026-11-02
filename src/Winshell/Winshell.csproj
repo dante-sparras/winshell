@@ -23,6 +23,34 @@
     <!-- UseWinUI would infer a windowed exe. The installer turns a console winshell.exe into winshellw.exe. -->
     <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
   </PropertyGroup>
+  <!-- A release is trimmed. Partial leaves Winshell's own assemblies whole, which the TOML files and the IPC handlers
+       reflect over, and cuts the framework and the WinRT projections to what they use. Set here and not by the script,
+       so a build runs under the same switches a release does, and only this project's publish trims. -->
+  <PropertyGroup>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+  <!-- Kept whole. A trimmed interface loses the vtable slots of the methods nothing calls, so these COM surfaces would
+       call the wrong method. WinUI's projections, trimmed, fail to start with E_NOINTERFACE. Tomlyn reads by reflection. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Microsoft.WinUI" />
+    <TrimmerRootAssembly Include="Microsoft.InteractiveExperiences.Projection" />
+    <TrimmerRootAssembly Include="SharpGen.Runtime" />
+    <TrimmerRootAssembly Include="SharpGen.Runtime.COM" />
+    <TrimmerRootAssembly Include="System.Management" />
+    <TrimmerRootAssembly Include="Tomlyn" />
+    <TrimmerRootAssembly Include="Vortice.Direct3D11" />
+    <TrimmerRootAssembly Include="Vortice.DirectX" />
+    <TrimmerRootAssembly Include="Vortice.DXGI" />
+    <TrimmerRootAssembly Include="Vortice.Mathematics" />
+  </ItemGroup>
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Microsoft.WinUI" />
+    <TrimmerRootAssembly Include="Microsoft.InteractiveExperiences.Projection" />
+  </ItemGroup>
   <!-- scripts/package.ps1 names the repository a release build comes from. A build with it updates itself from that
        repository's GitHub Releases; a build from source has none and never does. -->
   <ItemGroup Condition="'$(WinshellReleaseRepository)' != ''">

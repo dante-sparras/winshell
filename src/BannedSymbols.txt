@@ -6,3 +6,4 @@ P:System.DateTimeOffset.UtcNow;Use a TimeProvider: QmlEngine.Time, or TimeProvid
 P:System.Environment.TickCount;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
 P:System.Environment.TickCount64;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
 T:System.Diagnostics.Stopwatch;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
+N:System.Runtime.InteropServices.ComTypes;A release trims the framework, and a trimmed COM interface calls the wrong method. Declare the interface in src
