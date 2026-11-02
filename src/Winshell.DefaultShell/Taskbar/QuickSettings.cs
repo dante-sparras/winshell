@@ -20,6 +20,9 @@ public static class QuickSettingsPlacement
         new(button.Right - Width, button.Top - Gap - height, Width, height);
 }
 
+/// <summary>A tile Winshell Settings and quick settings both know: its key, its name and its glyph.</summary>
+public sealed record QuickSettingsKind(string Key, string Title, string Glyph);
+
 /// <summary>One tile. A tile the PC cannot show stays out of <see cref="QuickSettings.Shown"/> and keeps its place.</summary>
 public sealed class QuickSettingsTile : ObservableObject
 {
@@ -366,7 +369,19 @@ public sealed class QuickSettingsPopup : ObservableObject
 /// </summary>
 public sealed class QuickSettings : ObservableObject
 {
-    private static readonly string[] DefaultKeys = ["wifi", "bluetooth", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"];
+    /// <summary>The tiles Winshell knows, in the order a missing list uses.</summary>
+    public static IReadOnlyList<QuickSettingsKind> Kinds { get; } =
+    [
+        new("wifi", "Wi-Fi", "\uE701"),
+        new("bluetooth", "Bluetooth", "\uE702"),
+        new("airplaneMode", "Airplane mode", "\uE709"),
+        new("energySaver", "Energy saver", "\uE863"),
+        new("powerMode", "Power mode", "\uEC4A"),
+        new("nightLight", "Night light", "\uF08C"),
+        new("accessibility", "Accessibility", "\uE776"),
+    ];
+
+    private static readonly string[] DefaultKeys = [.. Kinds.Select(static kind => kind.Key)];
     private static readonly string[] ModeNames = ["Best power efficiency", "Balanced", "Best performance"];
 
     private readonly SystemStatus _status;
@@ -414,13 +429,13 @@ public sealed class QuickSettings : ObservableObject
         _brightness = brightness;
         _layout = layout;
         _media = media;
-        _wifi = new QuickSettingsTile("wifi", "Wi-Fi", "\uE701", "Opens Wi-Fi settings", true, "ms-settings:network-wifi", "");
-        _bluetoothTile = new QuickSettingsTile("bluetooth", "Bluetooth", "\uE702", "Opens Bluetooth settings", true, "ms-settings:bluetooth", "");
-        _airplane = new QuickSettingsTile("airplaneMode", "Airplane mode", "\uE709", "Opens airplane mode settings", true, "ms-settings:network-airplanemode", "");
-        _energySaver = new QuickSettingsTile("energySaver", "Energy saver", "\uE863", "Opens energy saver settings", true, "ms-settings:batterysaver", "");
-        _powerModeTile = new QuickSettingsTile("powerMode", "Power mode", "\uEC4A", "", false, "", "powerMode");
-        _nightLight = new QuickSettingsTile("nightLight", "Night light", "\uF08C", "Opens night light settings", false, "ms-settings:nightlight", "");
-        _accessibility = new QuickSettingsTile("accessibility", "Accessibility", "\uE776", "Opens accessibility settings", false, "ms-settings:easeofaccess", "");
+        _wifi = Tile("wifi", "Opens Wi-Fi settings", true, "ms-settings:network-wifi", "");
+        _bluetoothTile = Tile("bluetooth", "Opens Bluetooth settings", true, "ms-settings:bluetooth", "");
+        _airplane = Tile("airplaneMode", "Opens airplane mode settings", true, "ms-settings:network-airplanemode", "");
+        _energySaver = Tile("energySaver", "Opens energy saver settings", true, "ms-settings:batterysaver", "");
+        _powerModeTile = Tile("powerMode", "", false, "", "powerMode");
+        _nightLight = Tile("nightLight", "Opens night light settings", false, "ms-settings:nightlight", "");
+        _accessibility = Tile("accessibility", "Opens accessibility settings", false, "ms-settings:easeofaccess", "");
         _tiles = [_wifi, _bluetoothTile, _airplane, _energySaver, _powerModeTile, _nightLight, _accessibility];
         for (var i = 0; i < ModeNames.Length; i++)
         {
@@ -814,6 +829,16 @@ public sealed class QuickSettings : ObservableObject
         Replace(Unpinned, unpinned);
         if (hadUnpinned != HasUnpinned)
             Changed(nameof(HasUnpinned));
+    }
+
+    private static QuickSettingsTile Tile(string key, string description, bool toggle, string settingsUri, string page)
+    {
+        foreach (var kind in Kinds)
+        {
+            if (kind.Key == key)
+                return new QuickSettingsTile(kind.Key, kind.Title, kind.Glyph, description, toggle, settingsUri, page);
+        }
+        throw new InvalidOperationException($"Quick settings has no tile \"{key}\".");
     }
 
     private List<string> PinnedKeys() =>
