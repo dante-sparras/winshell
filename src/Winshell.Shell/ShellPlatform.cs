@@ -33,6 +33,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
         _uiSettings.ColorValuesChanged += OnColorValuesChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        Flyouts = new FlyoutDismissal(this);
     }
 
     public IEventLoop Loop { get; }
@@ -40,6 +41,8 @@ internal sealed unsafe class ShellPlatform : IDisposable
     public Log Log { get; }
 
     public ObservableCollection<ScreenInfo> Screens { get; }
+
+    internal FlyoutDismissal Flyouts { get; }
 
     /// <summary>The native windows that exist now.</summary>
     internal IReadOnlyList<HostWindow> Windows => _windows;
@@ -239,6 +242,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
             _uiSettings = null;
         }
         Unhook();
+        Flyouts.Dispose();
         foreach (var w in _windows.ToArray())
             w.Dispose();
     }
