@@ -16,7 +16,7 @@ There were no users yet, so the switch has no migration: Winshell never reads th
 
 ## Consequences
 
-- Tomlyn (BSD-2-Clause, the license Jint already has) is a dependency of `Winshell.Runtime`.
+- Tomlyn (BSD-2-Clause, the license Jint already has) is a dependency of `Winshell.Services`.
 - TOML has no null. `TomlAdapter` leaves out a key whose value is null or undefined, and takes it out of the file. The comments around it stay.
 - `JsonAdapter` stays for configurations that want JSON. App state that nobody edits by hand, such as the taskbar's `taskbar.json` in the data folder, isn't covered by this rule.
 - A new file a user edits by hand is TOML, through `TomlAdapter`.

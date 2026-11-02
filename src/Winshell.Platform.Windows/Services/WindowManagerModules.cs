@@ -1,5 +1,4 @@
 using Winshell.Platform.Windows.Services.Apps;
-using Winshell.Platform.Windows.Services.Winland;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
 
@@ -31,10 +30,10 @@ internal static class WindowManagerModules
             .Uncreatable<VirtualDesktop>("VirtualDesktop");
 
         registry.Module("Winshell.Winland")
-            .Singleton(e => new WinlandService(e), "Winland")
-            .Uncreatable<WinlandEvent>("WinlandEvent")
-            .Uncreatable<WinlandMonitor>("WinlandMonitor")
-            .Uncreatable<WinlandWorkspace>("WinlandWorkspace")
-            .Uncreatable<WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels");
+            .Singleton(e => new Winland.WinlandService(e), "Winland")
+            .Uncreatable<Winland.WinlandEvent>("WinlandEvent")
+            .Uncreatable<Winland.WinlandMonitor>("WinlandMonitor")
+            .Uncreatable<Winland.WinlandWorkspace>("WinlandWorkspace")
+            .Uncreatable<Winland.WinlandWindow>("WinlandWindow", "WinlandWindow comes from Winland.toplevels");
     }
 }

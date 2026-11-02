@@ -64,7 +64,7 @@ public class FileViewLinkTests
 
         Assert.Contains("kept", File.ReadAllText(real), StringComparison.Ordinal);
         Assert.Contains("kept", File.ReadAllText(link), StringComparison.Ordinal);
-        Assert.True(FileView.SaveTarget(link, out var hardLink).Length > 0);
+        Assert.True(AtomicFile.SaveTarget(link, out var hardLink).Length > 0);
         Assert.True(hardLink);
     }
 
@@ -84,7 +84,7 @@ public class FileViewLinkTests
 
         Assert.Contains("two", File.ReadAllText(real), StringComparison.Ordinal);
         Assert.Contains("two", File.ReadAllText(link), StringComparison.Ordinal);
-        Assert.True(FileView.SaveTarget(link, out var hardLink).Length > 0);
+        Assert.True(AtomicFile.SaveTarget(link, out var hardLink).Length > 0);
         Assert.True(hardLink);
     }
 
