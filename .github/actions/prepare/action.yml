@@ -7,6 +7,44 @@ runs:
     - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
       with:
         global-json-file: global.json
+    - name: Restore NuGet packages
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ hashFiles('Directory.Packages.props') }}
+        restore-keys: nuget-
+    # A push to main always builds clean. It is what the pull requests after it start from, and what ships.
+    - name: Restore the last build of main
+      id: build
+      if: github.event_name == 'pull_request'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          src/*/bin
+          src/*/obj
+          tests/*/bin
+          tests/*/obj
+          templates/bin
+          templates/obj
+          .build-cache
+        key: build-${{ github.sha }}
+        restore-keys: build-
+    - name: Date unchanged files before that build
+      # A checkout dates every file now, which would rebuild everything. A file with the blob the build saw goes back to
+      # a date older than the build, so MSBuild rebuilds what this change touches and nothing else.
+      if: steps.build.outputs.cache-matched-key != ''
+      shell: pwsh
+      run: |
+        $built = @{}
+        foreach ($line in Get-Content -LiteralPath .build-cache/tracked.txt) {
+          $stage, $path = $line -split "`t", 2
+          $built[$path] = $stage
+        }
+        $before = [datetime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
+        foreach ($line in git -c core.quotePath=false ls-files --stage) {
+          $stage, $path = $line -split "`t", 2
+          if ($built[$path] -eq $stage) { [IO.File]::SetLastWriteTimeUtc($path, $before) }
+        }
     - name: Turn Windows animation effects on
       # The runner has them off. Winshell follows that setting, and tests of a sliding taskbar or a fading on-screen
       # display need the frames in between, so this makes the runner match a default Windows desktop.

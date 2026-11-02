@@ -37,6 +37,32 @@ jobs:
         env:
           WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
         run: ./scripts/check.ps1 -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
+      # Only main writes the caches, so a pull request can't change what another one starts from.
+      - name: Note which files this build saw
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .build-cache | Out-Null
+          git -c core.quotePath=false ls-files --stage | Set-Content -LiteralPath .build-cache/tracked.txt
+      - name: Save this build
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            src/*/bin
+            src/*/obj
+            tests/*/bin
+            tests/*/obj
+            templates/bin
+            templates/obj
+            .build-cache
+          key: build-${{ github.sha }}
+      - name: Save NuGet packages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('Directory.Packages.props') }}
       - name: Flaky tests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
