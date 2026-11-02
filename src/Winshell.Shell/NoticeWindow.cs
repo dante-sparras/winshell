@@ -38,7 +38,6 @@ internal sealed class NoticeWindow : IDisposable
             Margins = new Thickness(0, 0, 12, 12),
             Width = NoticeWidth,
             Height = Math.Ceiling(content.DesiredSize.Height),
-            ExclusiveZone = 0,
             AboveWindows = true,
             Focusable = true,
             Backdrop = WindowBackdrop.Acrylic,

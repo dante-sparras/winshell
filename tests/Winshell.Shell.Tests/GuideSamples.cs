@@ -24,7 +24,7 @@ public static class GuideSamples
         {
             Anchors = Edges.Left | Edges.Right | Edges.Bottom,
             Height = 48,
-            ExclusiveZone = 48,
+            ReservedSize = 48,
             Content = new TextBlock { Text = "Winshell" },
             Visible = true,
         };

@@ -2,16 +2,6 @@ using Windows.Foundation;
 
 namespace Winshell;
 
-/// <summary>How a panel treats the edges other bars reserve.</summary>
-public enum PanelExclusionMode
-{
-    /// <summary>Stays inside the work area, and reserves <c>ExclusiveZone</c> if that is set.</summary>
-    Normal = 0,
-
-    /// <summary>Covers the whole screen, over the taskbar and other bars.</summary>
-    Ignore = 1,
-}
-
 /// <summary>Where and how a panel sits on its screen.</summary>
 internal sealed record PanelPlacement(
     ScreenInfo? Screen,
@@ -22,8 +12,8 @@ internal sealed record PanelPlacement(
     double MarginBottom,
     double Width,
     double Height,
-    PanelExclusionMode ExclusionMode,
-    double ExclusiveZone,
+    bool CoversScreen,
+    double ReservedSize,
     bool AboveWindows,
     bool Focusable);
 
