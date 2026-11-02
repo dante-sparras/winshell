@@ -10,7 +10,7 @@ namespace Winshell;
 /// A crash report on disk, and what it is about. A window's report also names the window for a person,
 /// <see cref="Subject"/>, and says what Winshell did about it, <see cref="Recovery"/>.
 /// </summary>
-public sealed record CrashReport(string Path, string Where, Exception Error, bool Fatal)
+internal sealed record CrashReport(string Path, string Where, Exception Error, bool Fatal)
 {
     /// <summary>What failed, as a sentence names it: "the taskbar", "Winshell Settings", "a window". Empty when it is not a window.</summary>
     public string Subject { get; init; } = "";
@@ -25,7 +25,7 @@ public sealed record CrashReport(string Path, string Where, Exception Error, boo
 /// the secrets <see cref="CrashRedaction"/> recognizes taken out and what scripts logged left out. Several instances
 /// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted.
 /// </summary>
-public sealed partial class CrashReports(string folder)
+internal sealed partial class CrashReports(string folder)
 {
     private const string Heading = "Winshell crash report";
     private const int LogLines = 40;

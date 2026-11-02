@@ -76,28 +76,6 @@ internal static partial class ShellLink
         }
     }
 
-    /// <summary>A command line's arguments, split as programs on Windows split their own.</summary>
-    public static unsafe List<string> SplitArguments(string arguments)
-    {
-        if (string.IsNullOrWhiteSpace(arguments))
-            return [];
-        // The first word is read as a program name, by other rules, so a placeholder takes its place.
-        var argv = Win32.CommandLineToArgvW("x " + arguments, out var count);
-        if (argv == 0)
-            return [];
-        try
-        {
-            var result = new List<string>(count);
-            for (var i = 1; i < count; i++)
-                result.Add(Marshal.PtrToStringUni(((nint*)argv)[i]) ?? "");
-            return result;
-        }
-        finally
-        {
-            Win32.LocalFree(argv);
-        }
-    }
-
     [ComImport]
     [Guid("0000010b-0000-0000-C000-000000000046")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

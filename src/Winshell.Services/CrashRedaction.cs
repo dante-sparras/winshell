@@ -8,7 +8,7 @@ namespace Winshell;
 /// a URL, and long opaque tokens. It recognizes shapes, not meaning, so a report says that it was cleaned this way
 /// rather than that it is safe.
 /// </summary>
-public static partial class CrashRedaction
+internal static partial class CrashRedaction
 {
     public const string Mask = "[redacted]";
 

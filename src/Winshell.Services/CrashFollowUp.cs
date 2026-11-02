@@ -7,7 +7,7 @@ namespace Winshell;
 /// The record is TOML in the state folder: <c>clean</c> is the last exit that was not a crash, and <c>shown</c>
 /// is the report already shown.
 /// </summary>
-public static class CrashFollowUp
+internal static class CrashFollowUp
 {
     public readonly record struct Pending(string Path, string ExceptionLine);
 

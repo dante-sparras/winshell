@@ -12,16 +12,6 @@ public sealed class DocsTests
 {
     private static readonly string Repo = FindRepo();
 
-    /// <summary>
-    /// Public because a generated or a Winshell assembly needs them, and not part of what a configuration uses. Any other
-    /// public type in the root namespace is on the page, so a new one is a choice: documented, or named here.
-    /// </summary>
-    private static readonly HashSet<string> WinshellLeftOut =
-    [
-        "CrashFollowUp", "CrashRedaction", "CrashReport", "CrashReports", "EventQueue", "JsonText", "ManualEventLoop",
-        "PanelPlacement", "PopupPlacement", "ProductVersion", "ShellLocations", "ZoneIdentifier",
-    ];
-
     private const BindingFlags Declared = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
     [Fact]
@@ -222,9 +212,7 @@ public sealed class DocsTests
     {
         if (type.Namespace is null || type.Name.StartsWith('<'))
             return false;
-        if (type.Namespace == "Winshell")
-            return !WinshellLeftOut.Contains(type.Name);
-        return type.Namespace.StartsWith("Winshell.", StringComparison.Ordinal);
+        return type.Namespace == "Winshell" || type.Namespace.StartsWith("Winshell.", StringComparison.Ordinal);
     }
 
     private static IEnumerable<Type> Related(Type type)

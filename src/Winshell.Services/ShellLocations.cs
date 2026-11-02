@@ -1,7 +1,7 @@
 namespace Winshell;
 
 /// <summary>The Windows folders Winshell uses for the current user.</summary>
-public static class ShellLocations
+internal static class ShellLocations
 {
     /// <summary>User configurations: <c>%APPDATA%\winshell</c>. These roam with the profile.</summary>
     public static string ConfigRoot =>
@@ -34,5 +34,4 @@ public static class ShellLocations
     public static string CrashRoot => Path.Combine(LocalRoot, "crashes");
 
     /// <summary>The shell written out when the user has no configuration yet.</summary>
-    public static string DefaultShellRoot => Path.Combine(LocalRoot, "default-shell");
 }

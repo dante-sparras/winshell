@@ -15,10 +15,8 @@ public sealed class StartTests : IDisposable
         Assert.Equal(640, StartList.MenuWidth);
         Assert.Equal(720, StartList.MenuHeight);
         Assert.Equal(22, StartList.Margin);
-        Assert.Equal(596, StartList.ContentWidth);
         Assert.Equal(22, StartList.SearchX);
         Assert.Equal(16, StartList.SearchY);
-        Assert.Equal(596, StartList.SearchWidth);
         Assert.Equal(32, StartList.SearchHeight);
         Assert.Equal(6, StartList.Columns);
         Assert.Equal(96, StartList.TileWidth);

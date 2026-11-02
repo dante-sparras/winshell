@@ -357,7 +357,7 @@ internal static class TomlSyntax
     }
 
     /// <summary>Everything in a document that defines one key: its assignments, and its tables or array of tables.</summary>
-    public sealed class Owned
+    internal sealed class Owned
     {
         public List<KeyValueSyntax> KeyValues { get; } = [];
 

@@ -35,7 +35,6 @@ public sealed record SettingsCrumb(string Key, string Title, bool Link);
 /// </summary>
 public static class SettingsCatalog
 {
-    public const double PaneWidth = 280;
     public const double ContentMaxWidth = 1000;
     public const double WindowWidth = 1000;
     public const double WindowHeight = 700;
@@ -135,8 +134,6 @@ public static class SettingsCatalog
     public static SettingsEntry? FindSetting(string? key) => Settings.FirstOrDefault(setting => setting.Key == key);
 
     public static SettingsSubpage? FindSubpage(string? key) => Subpages.FirstOrDefault(page => page.Key == key);
-
-    public static SettingsPage RequirePage(string key) => FindPage(key) ?? throw new InvalidOperationException($"Winshell Settings has no page \"{key}\".");
 
     public static SettingsEntry RequireSetting(string key) => FindSetting(key) ?? throw new InvalidOperationException($"Winshell Settings has no setting \"{key}\".");
 

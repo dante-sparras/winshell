@@ -14,6 +14,5 @@ public class ShellLocationTests
         Assert.Equal(Path.Combine(ShellLocations.LocalRoot, "state"), ShellLocations.StateRoot);
         Assert.Equal(Path.Combine(ShellLocations.LocalRoot, "data"), ShellLocations.DataRoot);
         Assert.Equal(Path.Combine(ShellLocations.LocalRoot, "run"), ShellLocations.RunRoot);
-        Assert.Equal(Path.Combine(ShellLocations.LocalRoot, "default-shell"), ShellLocations.DefaultShellRoot);
     }
 }
