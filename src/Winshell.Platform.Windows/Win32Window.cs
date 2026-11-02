@@ -241,7 +241,8 @@ internal sealed unsafe class Win32Window : IWindowBackend, IRebindable
         var rect = DesktopSpace.Anchor(area, p, _scale);
         var topmost = p.AboveWindows && !_fullscreenAppActive;
         SetExStyle(Win32.WS_EX_TOPMOST, topmost);
-        var after = p.AboveWindows ? (topmost ? Win32.HWND_TOPMOST : Win32.HWND_NOTOPMOST) : Win32.HWND_BOTTOM;
+        // HWND_NOTOPMOST would put it above every window that is not topmost, so over the fullscreen app.
+        var after = topmost ? Win32.HWND_TOPMOST : Win32.HWND_BOTTOM;
         Move(rect.Left, rect.Top, rect.Width, rect.Height, after);
     }
 
