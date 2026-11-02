@@ -51,27 +51,8 @@ public sealed class IpcHandler : QObject
     protected override void OnDestroy() => Engine?.GetService<IpcRegistry>()?.Unregister(_target, this);
 }
 
-/// <summary>One parameter of a function or a signal <c>ipc show</c> can list.</summary>
-public sealed record IpcParameterView(string Name, string? Type);
-
-/// <summary>A function <c>ipc show</c> can call.</summary>
-public sealed record IpcFunctionView(string Name, IReadOnlyList<IpcParameterView> Parameters, string Returns);
-
-/// <summary>A property <c>ipc show</c> can read.</summary>
-public sealed record IpcPropertyView(string Name, string Type);
-
-/// <summary>A signal declared on an <c>IpcHandler</c>.</summary>
-public sealed record IpcSignalView(string Name, IReadOnlyList<IpcParameterView> Parameters);
-
-/// <summary>One IPC target, as <c>ipc show</c> knows it. <c>ipc show -j</c> prints these records as they are.</summary>
-public sealed record IpcTargetView(
-    string Target,
-    IReadOnlyList<IpcFunctionView> Functions,
-    IReadOnlyList<IpcPropertyView> Properties,
-    IReadOnlyList<IpcSignalView> Signals);
-
 /// <summary>The IPC handlers of one shell, by target, and the calls the CLI makes to them.</summary>
-public sealed class IpcRegistry
+public sealed class IpcRegistry : IIpcTargets
 {
     private static readonly HashSet<string> IpcTypes = ["string", "int", "bool", "real", "double", "color", "void"];
     private readonly Dictionary<string, IpcHandler> _handlers = new(StringComparer.Ordinal);
@@ -108,23 +89,6 @@ public sealed class IpcRegistry
         return targets;
     }
 
-    /// <summary>Every target with its functions, properties and signals, as <c>ipc show</c> prints them.</summary>
-    public string Show()
-    {
-        var sb = new StringBuilder();
-        foreach (var target in Describe())
-        {
-            sb.Append("target ").Append(target.Target).Append('\n');
-            foreach (var function in target.Functions)
-                sb.Append("  function ").Append(function.Name).Append('(').Append(string.Join(", ", function.Parameters.Select(p => $"{p.Name}: {p.Type}"))).Append("): ").Append(function.Returns).Append('\n');
-            foreach (var property in target.Properties)
-                sb.Append("  property ").Append(property.Name).Append(": ").Append(property.Type).Append('\n');
-            foreach (var signal in target.Signals)
-                sb.Append("  signal ").Append(signal.Name).Append('(').Append(string.Join(", ", signal.Parameters.Select(p => p.Name))).Append(")\n");
-        }
-        return sb.ToString();
-    }
-
     private static List<IpcParameterView> SignalParameters(SignalDefinition signal)
     {
         var parameters = new List<IpcParameterView>(signal.Parameters.Count);
@@ -137,7 +101,7 @@ public sealed class IpcRegistry
     }
 
     private static bool Callable(Qml.QmlFunctionDeclaration d) =>
-        d.Parameters.Count <= 10 && d.ReturnType is not null && IpcTypes.Contains(d.ReturnType) && d.Parameters.All(p => p.Type is not null && IpcTypes.Contains(p.Type) && p.Type != "void");
+        d.Parameters.Count <= IpcValues.MaxParameters && d.ReturnType is not null && IpcTypes.Contains(d.ReturnType) && d.Parameters.All(p => p.Type is not null && IpcTypes.Contains(p.Type) && p.Type != "void");
 
     /// <summary>Calls a handler function. Returns its result as text, or throws with a message for the CLI.</summary>
     public string Call(string target, string function, IReadOnlyList<string> args)
@@ -147,9 +111,9 @@ public sealed class IpcRegistry
         if (handler.FunctionDeclaration(function) is not { } d)
             throw new IpcException($"Function not found: {target}.{function}");
         if (!Callable(d))
-            throw new IpcException($"Function {target}.{function} has a type IPC can't pass. It takes and returns string, int, bool, real, double or color.");
+            throw new IpcException(IpcValues.WrongTypes(target, function));
         if (args.Count != d.Parameters.Count)
-            throw new IpcException($"Function {target}.{function} takes {d.Parameters.Count} argument{(d.Parameters.Count == 1 ? "" : "s")}, {args.Count} given");
+            throw new IpcException(IpcValues.WrongCount(target, function, d.Parameters.Count, args.Count));
         var converted = new object?[args.Count];
         for (var i = 0; i < args.Count; i++)
             converted[i] = Parse(args[i], d.Parameters[i].Type!, d.Parameters[i].Name);
@@ -179,20 +143,12 @@ public sealed class IpcRegistry
     private static object? Parse(string text, string type, string name) => type switch
     {
         "string" => text,
-        "int" => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : throw new IpcException($"Argument {name} is not an int: {text}"),
-        "real" or "double" => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : throw new IpcException($"Argument {name} is not a real: {text}"),
-        "bool" => text switch
-        {
-            "true" => true,
-            "false" => false,
-            _ when int.TryParse(text, out var n) => n != 0,
-            _ => throw new IpcException($"Argument {name} is not a bool: {text}"),
-        },
-        "color" => QColor.TryParse(text.StartsWith('#') || !IsHex(text) ? text : "#" + text, out var c) ? c : throw new IpcException($"Argument {name} is not a color: {text}"),
+        "int" => IpcValues.ParseInt(text, name),
+        "real" or "double" => IpcValues.ParseReal(text, name),
+        "bool" => IpcValues.ParseBool(text, name),
+        "color" => QColor.TryParse(IpcValues.ColorText(text), out var c) ? c : throw new IpcException($"Argument {name} is not a color: {text}"),
         _ => text,
     };
-
-    private static bool IsHex(string s) => s.Length is 3 or 6 or 8 && s.All(char.IsAsciiHexDigit);
 
     private static string Format(JsValue value, string type)
     {
@@ -207,8 +163,6 @@ public sealed class IpcRegistry
         };
     }
 }
-
-public sealed class IpcException(string message) : Exception(message);
 
 /// <summary>
 /// The <c>Socket</c>: a stream to a Unix domain socket path, or on Windows also a named pipe

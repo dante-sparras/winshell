@@ -5,8 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Microsoft.Win32.SafeHandles;
-using Winshell.Runtime;
-using Winshell.Runtime.Shell;
 
 namespace Winshell;
 
@@ -27,13 +25,28 @@ internal sealed record IpcResponse(
 [JsonSerializable(typeof(IpcResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext;
 
+/// <summary>What the control pipe does to the shell it serves. Every member runs on the shell's thread.</summary>
+internal interface IInstanceControl
+{
+    /// <summary>The shell's IPC targets now. A reload can replace them.</summary>
+    IIpcTargets Ipc { get; }
+
+    /// <summary>Reloads the shell. Null when it worked, or else why not, for the client.</summary>
+    string? Reload(bool hard);
+
+    /// <summary>Ends the shell.</summary>
+    void Quit();
+
+    /// <summary>A failed request as the client reads it.</summary>
+    string Describe(Exception e) => $"ipc: {e.GetType().Name}: {e.Message}";
+}
+
 /// <summary>Takes CLI requests on a named pipe and runs them on the UI thread.</summary>
 internal sealed class IpcServer : IDisposable
 {
     private readonly string _pipe;
     private readonly IEventLoop _loop;
-    private readonly Func<ShellHost> _host;
-    private readonly Action _kill;
+    private readonly IInstanceControl _control;
     private readonly Action? _dismissNotice;
     private readonly Func<SafePipeHandle, string?> _refusal;
     private readonly CancellationTokenSource _cancel = new();
@@ -61,13 +74,12 @@ internal sealed class IpcServer : IDisposable
     /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it: that notice is not an <c>IpcHandler</c>,
     /// and it is showing when the configuration failed to load, which is when a handler cannot exist.
     /// </param>
-    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, Func<ShellHost> host, Action kill, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null)
+    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null)
     {
         _pipe = pipe;
         _first = first;
         _loop = loop;
-        _host = host;
-        _kill = kill;
+        _control = control;
         _dismissNotice = dismissNotice;
         _refusal = refusal ?? PipeTrust.ClientRefusal;
         _ = Task.Run(AcceptLoop);
@@ -267,7 +279,7 @@ internal sealed class IpcServer : IDisposable
         // Before the configuration's handlers: there is no handler when the configuration did not load.
         if (request is { Op: "call", Target: "notice", Name: "dismiss" })
             return DismissNotice(request.Args);
-        var ipc = _host().Ipc;
+        var ipc = _control.Ipc;
         try
         {
             return request.Op switch
@@ -288,7 +300,7 @@ internal sealed class IpcServer : IDisposable
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             // A script error is a failed call, not a crash report from an unobserved task.
-            return new IpcResponse(false, Error: Log.Describe(e, "ipc"));
+            return new IpcResponse(false, Error: _control.Describe(e));
         }
     }
 
@@ -305,13 +317,13 @@ internal sealed class IpcServer : IDisposable
 
     private IpcResponse Kill()
     {
-        _loop.Post(_kill);
+        _loop.Post(_control.Quit);
         return new IpcResponse(true);
     }
 
-    private IpcResponse Reload(bool hard) => _host().TryReload(hard)
-        ? new IpcResponse(true)
-        : new IpcResponse(false, Error: "The configuration did not load. Run winshell log to see why.");
+    private IpcResponse Reload(bool hard) => _control.Reload(hard) is { } error
+        ? new IpcResponse(false, Error: error)
+        : new IpcResponse(true);
 
     private async Task Listen(IpcRequest request, StreamWriter writer, Stream stream, bool once)
     {
@@ -326,7 +338,7 @@ internal sealed class IpcServer : IDisposable
         {
             try
             {
-                subscription = _host().Ipc.Listen(request.Target ?? "", request.Name ?? "", value => channel.Writer.TryWrite(value));
+                subscription = _control.Ipc.Listen(request.Target ?? "", request.Name ?? "", value => channel.Writer.TryWrite(value));
                 return null;
             }
             catch (IpcException e)
@@ -335,7 +347,7 @@ internal sealed class IpcServer : IDisposable
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
-                return Log.Describe(e, "ipc");
+                return _control.Describe(e);
             }
         }).ConfigureAwait(false);
         if (error is not null)

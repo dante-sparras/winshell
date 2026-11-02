@@ -1,5 +1,3 @@
-using Winshell.Runtime.Shell;
-
 namespace Winshell;
 
 /// <summary>Which folder a configuration is loaded from, and the one-time copy out of <c>~/.config/winshell</c>.</summary>

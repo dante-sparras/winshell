@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Winshell.Runtime.Shell;
+namespace Winshell;
 
 /// <summary>
 /// A crash report on disk, and what it is about. A window's report also names the window for a person,

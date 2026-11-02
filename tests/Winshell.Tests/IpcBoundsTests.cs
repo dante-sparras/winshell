@@ -17,7 +17,7 @@ public class IpcBoundsTests
         var name = PipeName();
         var loop = new EventQueue();
         var killed = false;
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, () => null!, () => killed = true);
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, new QmlInstanceControl(() => null!, () => killed = true));
         await using var client = await Connect(name);
 
         var payload = new byte[IpcServer.MaxRequestBytes + 1];
@@ -208,7 +208,7 @@ public class IpcBoundsTests
             Ping = handler.GetSignal("ping")!;
             Assert.NotNull(Ping);
             Pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
-            Server = new IpcServer(IpcServer.OpenFirst(Pipe), Pipe, Loop, () => Host, () => { });
+            Server = new IpcServer(IpcServer.OpenFirst(Pipe), Pipe, Loop, new QmlInstanceControl(() => Host, () => { }));
         }
 
         public ManualEventLoop Loop { get; }

@@ -800,7 +800,7 @@ namespace Winshell
             }
             if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
                 log.Warn("shell", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
-            using var ipc = new IpcServer(listening, pipe, loop, () => host, () => loop.Quit(0), dismissNotice: () => notices.Hide());
+            using var ipc = new IpcServer(listening, pipe, loop, new QmlInstanceControl(() => host, () => loop.Quit(0)), dismissNotice: () => notices.Hide());
             var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, TimeProvider.System.GetLocalNow().LocalDateTime, pipe, logPath, processStart));
             Console.CancelKeyPress += (_, e) =>
