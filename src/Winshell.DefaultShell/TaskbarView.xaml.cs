@@ -1,5 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell;
@@ -17,6 +20,7 @@ public sealed partial class TaskbarView : UserControl
         Clock.Attach(preferences, time);
         Place();
         _preferences.PropertyChanged += OnPreferences;
+        ContextRequested += OnContextRequested;
     }
 
     public TaskbarModel Model { get; }
@@ -26,6 +30,31 @@ public sealed partial class TaskbarView : UserControl
     {
         _preferences.PropertyChanged -= OnPreferences;
         Clock.Detach();
+    }
+
+    private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        if (args.Handled)
+            return;
+        if (args.OriginalSource is DependencyObject source && InsideButtonOrClock(source))
+            return;
+        if (!args.TryGetPosition(this, out var point))
+            return;
+        args.Handled = true;
+        var menu = TaskMenuFlyout.Create(TaskMenu.BarName);
+        TaskMenuFlyout.Fill(menu, [TaskMenu.Settings], _ => Model.RequestSettings(), 16);
+        menu.ShowAt(this, new FlyoutShowOptions { Position = point, Placement = FlyoutPlacementMode.Top });
+    }
+
+    /// <summary>A button or the clock handles its own pointer. Empty bar is everything else.</summary>
+    private static bool InsideButtonOrClock(DependencyObject source)
+    {
+        for (DependencyObject? node = source; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is Button or TaskbarClock)
+                return true;
+        }
+        return false;
     }
 
     private void OnPreferences(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

@@ -17,7 +17,7 @@ internal sealed class Taskbars
         _shell = shell;
         _preferences = preferences;
         _pins = pins;
-        _desktop = new TaskbarDesktop(shell.WindowList, shell.Apps);
+        _desktop = new TaskbarDesktop(shell.WindowList, shell.Apps, shell.JumpLists);
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
         Sync();

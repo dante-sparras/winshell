@@ -41,6 +41,17 @@ public sealed class TaskWindowTests
         Assert.True(adapter.Activated);
     }
 
+    [Fact]
+    public void Close_reaches_the_window()
+    {
+        var source = new Source();
+        var adapter = new TaskWindow(Window(source, 7, "Notepad"));
+
+        adapter.Close();
+
+        Assert.Equal(7, source.ClosedHwnd);
+    }
+
     private static AppWindow Window(Source source, nint hwnd, string title) =>
         new(new WindowInfo(hwnd, title, "notes", @"C:\notes.exe", @"C:\notes.exe", 0, false, false, false, ""), source, null);
 
@@ -51,6 +62,8 @@ public sealed class TaskWindowTests
         public nint MinimizedHwnd { get; private set; }
 
         public bool Minimized { get; private set; }
+
+        public nint ClosedHwnd { get; private set; }
 
         public IReadOnlyDictionary<nint, WindowInfo> Windows { get; } = new Dictionary<nint, WindowInfo>();
 
@@ -72,9 +85,7 @@ public sealed class TaskWindowTests
 
         public void Activate(nint hwnd) => Activated = hwnd;
 
-        public void Close(nint hwnd)
-        {
-        }
+        public void Close(nint hwnd) => ClosedHwnd = hwnd;
 
         public void SetMaximized(nint hwnd, bool maximized)
         {

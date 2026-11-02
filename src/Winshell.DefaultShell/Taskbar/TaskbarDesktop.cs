@@ -17,6 +17,9 @@ public interface ITaskDesktop
     /// <summary>The app index entry for an id, an app id, or a name.</summary>
     ITaskApp? Find(string name);
 
+    /// <summary>The jump list for an AppUserModelID. The same object comes back for an id, and a later read updates it.</summary>
+    AppJumpList JumpList(string appId);
+
     /// <summary>The window list or the app index changed.</summary>
     event EventHandler? Changed;
 
@@ -32,11 +35,13 @@ internal sealed class TaskbarDesktop : ITaskDesktop
 {
     private readonly WindowListService _windows;
     private readonly AppsService _apps;
+    private readonly JumpListService _jumps;
 
-    public TaskbarDesktop(WindowListService windows, AppsService apps)
+    public TaskbarDesktop(WindowListService windows, AppsService apps, JumpListService jumps)
     {
         _windows = windows;
         _apps = apps;
+        _jumps = jumps;
         windows.Windows.CollectionChanged += OnWindows;
         apps.Apps.CollectionChanged += OnApps;
         windows.PropertyChanged += OnActiveWindow;
@@ -47,6 +52,8 @@ internal sealed class TaskbarDesktop : ITaskDesktop
     public IOpenWindow? Active => _windows.ActiveWindow is { } window ? new TaskWindow(window) : null;
 
     public ITaskApp? Find(string name) => _apps.Find(name) is { } entry ? new TaskApp(entry) : null;
+
+    public AppJumpList JumpList(string appId) => _jumps.ForApp(appId);
 
     public event EventHandler? Changed;
 

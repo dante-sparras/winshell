@@ -15,6 +15,9 @@ public interface IOpenWindow : ITaskWindow, INotifyPropertyChanged
     void Activate();
 
     void Minimize();
+
+    /// <summary>Asks the window to close.</summary>
+    void Close();
 }
 
 /// <summary>
@@ -42,6 +45,8 @@ public sealed record TaskWindow(AppWindow Window) : IOpenWindow
     public void Activate() => Window.Activate();
 
     public void Minimize() => Window.Minimized = true;
+
+    public void Close() => Window.Close();
 
     public event PropertyChangedEventHandler? PropertyChanged
     {
