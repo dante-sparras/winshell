@@ -395,5 +395,26 @@ public sealed class ConfigurationProjectTests : IDisposable
         Assert.Equal((0, "built"), ToTuple(ConfigurationProject.Run(project.Program, [], project.Folder)));
     }
 
+    [Fact]
+    public void What_a_program_prints_arrives_with_its_exit_on_a_busy_pool()
+    {
+        var results = new CommandResult[200];
+        Parallel.For(0, results.Length, new ParallelOptions { MaxDegreeOfParallelism = 32 }, i =>
+            results[i] = ConfigurationProject.Run("cmd", ["/c", "echo built"], _root));
+
+        Assert.All(results, result => Assert.Equal((0, "built"), ToTuple(result)));
+    }
+
+    [Fact]
+    public void A_server_that_outlives_its_build_does_not_hold_up_the_result()
+    {
+        var watch = Stopwatch.StartNew();
+
+        var result = ConfigurationProject.Run("cmd", ["/c", "start /b ping -n 15 127.0.0.1 >nul & echo built"], Path.GetTempPath());
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Took {watch.Elapsed}.");
+        Assert.Equal((0, "built"), ToTuple(result));
+    }
+
     private static (int, string) ToTuple(CommandResult result) => (result.ExitCode, result.Output);
 }
