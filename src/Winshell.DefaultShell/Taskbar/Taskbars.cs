@@ -1,5 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Winshell.Apps;
+using Winshell.Input;
 
 namespace Winshell.DefaultShell.Taskbar;
 
@@ -13,6 +15,8 @@ internal sealed class Taskbars
     private readonly TrayArea _tray;
     private readonly NotificationCenter _notifications;
     private readonly QuickSettings _quick;
+    private readonly Start _start;
+    private readonly Hotkey _hotkey;
     private readonly List<Bar> _bars = [];
 
     public Taskbars(Shell shell, Preferences preferences, TaskbarPins pins)
@@ -37,10 +41,22 @@ internal sealed class Taskbars
             new QuickSettingsLayout(shell.StatePath("quick-settings.toml"), shell.Loop, shell.Log),
             shell.Media);
         _quick.SettingsRequested += uri => ProgramStart.Start(uri, shell.Log);
+        // One Start catalog for every bar, so two bars do not both write the default pins.
+        var apps = shell.Apps;
+        _start = new Start(Path.Combine(shell.ConfigRoot, "launcher.toml"), shell.Loop, shell.Log, query => apps.Search(query).Select(ToStartApp).ToList());
+        _start.Use(apps);
+        _start.ShowRecommended = preferences.StartRecommended;
+        // The Win tap is the key-up. Pressed is that tap, so Released is not wired: it would close what Pressed just opened.
+        _hotkey = shell.NewHotkey();
+        _hotkey.Pressed += (_, _) => ToggleStart();
+        _hotkey.Sequence = preferences.StartHotkey;
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
         Sync();
     }
+
+    private static StartApp ToStartApp(AppEntry app) =>
+        new(app.Id, app.Name, app.AppId, app.Icon, app.Target, app.Packaged, app.Hidden);
 
     private void OnScreens(object? sender, NotifyCollectionChangedEventArgs e) => Sync();
 
@@ -53,6 +69,26 @@ internal sealed class Taskbars
             foreach (var bar in _bars)
                 bar.Window.Backdrop = _preferences.Material;
         }
+        else if (e.PropertyName == nameof(Preferences.StartHotkey))
+            _hotkey.Sequence = _preferences.StartHotkey;
+        else if (e.PropertyName == nameof(Preferences.StartRecommended))
+            _start.ShowRecommended = _preferences.StartRecommended;
+    }
+
+    /// <summary>One hotkey. An open Start closes. Otherwise the main taskbar's Start opens.</summary>
+    private void ToggleStart()
+    {
+        var popups = new List<StartPopup>(_bars.Count);
+        var main = 0;
+        foreach (var bar in _bars)
+        {
+            if (bar.Window.Content is not TaskbarView view)
+                continue;
+            if (bar.IsMain)
+                main = popups.Count;
+            popups.Add(view.StartPopup);
+        }
+        StartHotkey.Toggle(popups, main);
     }
 
     private void Sync()
@@ -74,6 +110,7 @@ internal sealed class Taskbars
             var bar = _bars.Find(item => item.Window.Screen?.Id == screen.Id);
             if (bar is not null)
             {
+                bar.IsMain = isMain;
                 bar.Window.Screen = screen;
                 bar.Window.Backdrop = _preferences.Material;
                 bar.Model.SetScreen(screen, isMain);
@@ -88,9 +125,11 @@ internal sealed class Taskbars
                 ExclusiveZone = 48,
                 Backdrop = _preferences.Material,
             };
-            window.Content = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System, _notifications, _quick);
+            window.Content = new TaskbarView(
+                model, _tray, window, _preferences, TimeProvider.System, _notifications, _quick,
+                _start, _shell.Apps, _shell.RecentDocuments, _shell.Loop, _shell.Log);
             window.Visible = true;
-            _bars.Add(new Bar(model, window));
+            _bars.Add(new Bar(model, window, isMain));
         }
     }
 
@@ -102,10 +141,12 @@ internal sealed class Taskbars
         bar.Window.Dispose();
     }
 
-    private sealed class Bar(TaskbarModel model, PanelWindow window)
+    private sealed class Bar(TaskbarModel model, PanelWindow window, bool isMain)
     {
         public TaskbarModel Model { get; } = model;
 
         public PanelWindow Window { get; } = window;
+
+        public bool IsMain { get; set; } = isMain;
     }
 }
