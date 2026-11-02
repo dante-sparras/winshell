@@ -11,6 +11,8 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Winshell.Runtime" />
+    <InternalsVisibleTo Include="Winshell.Shell" />
+    <InternalsVisibleTo Include="Winshell.Shell.Tests" />
     <InternalsVisibleTo Include="Winshell.Platform.Windows" />
     <InternalsVisibleTo Include="Winshell" />
     <InternalsVisibleTo Include="Winshell.Services.Tests" />

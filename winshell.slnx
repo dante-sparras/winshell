@@ -4,6 +4,9 @@
     <Project Path="src/Winshell.Qml/Winshell.Qml.csproj" />
     <Project Path="src/Winshell.Runtime/Winshell.Runtime.csproj" />
     <Project Path="src/Winshell.Services/Winshell.Services.csproj" />
+    <Project Path="src/Winshell.Shell/Winshell.Shell.csproj" />
+    <Project Path="src/Winshell.DefaultShell/Winshell.DefaultShell.csproj" />
+    <Project Path="src/Winshell.Next/Winshell.Next.csproj" />
     <Project Path="src/Winshell/Winshell.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -11,6 +14,7 @@
     <Project Path="tests/Winshell.Qml.Tests/Winshell.Qml.Tests.csproj" />
     <Project Path="tests/Winshell.Runtime.Tests/Winshell.Runtime.Tests.csproj" />
     <Project Path="tests/Winshell.Services.Tests/Winshell.Services.Tests.csproj" />
+    <Project Path="tests/Winshell.Shell.Tests/Winshell.Shell.Tests.csproj" />
     <Project Path="tests/Winshell.Tests/Winshell.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,7 +1,6 @@
 using Winshell.Native;
-using Winshell.Runtime;
 
-namespace Winshell.Platform.Windows;
+namespace Winshell;
 
 /// <summary>
 /// The framed place a fullscreen window returns to. The offset and size are logical pixels from the monitor's
