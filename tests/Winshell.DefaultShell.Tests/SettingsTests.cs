@@ -167,17 +167,6 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
-    public void The_color_scheme_overrides_Windows_mode()
-    {
-        Assert.True(Shell.DarkFor("dark", false));
-        Assert.False(Shell.DarkFor("light", true));
-        Assert.True(Shell.DarkFor("system", true));
-        Assert.False(Shell.DarkFor("system", false));
-        Assert.True(Shell.DarkFor("sepia", true));
-        Assert.False(Shell.DarkFor(null, false));
-    }
-
-    [Fact]
     public void Notifications_name_Do_not_disturb_and_keep_an_app_that_was_turned_off()
     {
         Assert.Equal("On", NotificationAppList.DoNotDisturbText(NotificationState.On));

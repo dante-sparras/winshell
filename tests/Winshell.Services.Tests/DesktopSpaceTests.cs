@@ -81,7 +81,7 @@ public class DesktopSpaceTests
     }
 
     private static PanelPlacement Panel(Edges anchors, double width = 0, double height = 0, double left = 0, double top = 0, double right = 0, double bottom = 0) =>
-        new(null, anchors, left, top, right, bottom, width, height, 0, 0, true, false, "");
+        new(null, anchors, left, top, right, bottom, width, height, PanelExclusionMode.Normal, 0, true, false);
 
     [Fact]
     public void A_top_bar_spans_its_area_at_the_monitor_scale()
