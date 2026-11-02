@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Winshell.Apps;
 using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell;
@@ -14,8 +15,21 @@ public sealed partial class TaskbarView : UserControl
     private readonly TrayAreaView _tray;
     private readonly TaskbarClock _clock;
     private readonly QuickSettingsFlyout _quick;
+    private readonly StartFlyout _start;
 
-    public TaskbarView(TaskbarModel model, TrayArea tray, PanelWindow window, Preferences preferences, TimeProvider time, NotificationCenter center, QuickSettings settings)
+    public TaskbarView(
+        TaskbarModel model,
+        TrayArea tray,
+        PanelWindow window,
+        Preferences preferences,
+        TimeProvider time,
+        NotificationCenter center,
+        QuickSettings settings,
+        Start start,
+        AppsService apps,
+        RecentDocuments documents,
+        IEventLoop loop,
+        Log log)
     {
         Model = model;
         _preferences = preferences;
@@ -23,6 +37,14 @@ public sealed partial class TaskbarView : UserControl
         _tray = new TrayAreaView(tray);
         _clock = new TaskbarClock(window, preferences, time, center);
         _quick = new QuickSettingsFlyout(window, _tray.QuickSettingsAnchor, settings, preferences, time);
+        _start = new StartFlyout(window, StartButton, model, start, apps, documents, loop, log, preferences, time);
+        _start.Popup.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not (nameof(StartPopup.IsOpen) or nameof(StartPopup.SearchOpen)))
+                return;
+            StartFill.Visibility = _start.Popup.IsOpen ? Visibility.Visible : Visibility.Collapsed;
+            SearchFill.Visibility = _start.Popup.IsOpen && _start.Popup.SearchOpen ? Visibility.Visible : Visibility.Collapsed;
+        };
         Corner.Children.Add(_tray);
         Corner.Children.Add(_clock);
         Place();
@@ -32,10 +54,13 @@ public sealed partial class TaskbarView : UserControl
 
     public TaskbarModel Model { get; }
 
-    /// <summary>Drops the tray, the clock, quick settings and the preference subscription. The window is about to close.</summary>
+    internal StartPopup StartPopup => _start.Popup;
+
+    /// <summary>Drops the tray, the clock, quick settings, Start and the preference subscription. The window is about to close.</summary>
     public void Release()
     {
         _preferences.PropertyChanged -= OnPreferences;
+        _start.Release();
         _quick.Release();
         _tray.Release();
         _clock.Release();

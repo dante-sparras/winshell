@@ -42,19 +42,22 @@
                             </ResourceDictionary.ThemeDictionaries>
                         </ResourceDictionary>
                     </Button.Resources>
-                    <Grid Width="19" Height="19" ColumnSpacing="1" RowSpacing="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="9" />
-                            <ColumnDefinition Width="9" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="9" />
-                            <RowDefinition Height="9" />
-                        </Grid.RowDefinitions>
-                        <Border Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
-                        <Border Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
-                        <Border Grid.Row="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
-                        <Border Grid.Row="1" Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                    <Grid Width="40" Height="40">
+                        <Border x:Name="StartFill" Visibility="Collapsed" CornerRadius="{ThemeResource ControlCornerRadius}" Background="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                        <Grid Width="19" Height="19" ColumnSpacing="1" RowSpacing="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="9" />
+                                <ColumnDefinition Width="9" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="9" />
+                                <RowDefinition Height="9" />
+                            </Grid.RowDefinitions>
+                            <Border Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                            <Border Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                            <Border Grid.Row="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                            <Border Grid.Row="1" Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        </Grid>
                     </Grid>
                 </Button>
                 <Button
@@ -69,7 +72,10 @@
                     CornerRadius="{ThemeResource ControlCornerRadius}"
                     AutomationProperties.Name="Search"
                     Click="{x:Bind Model.RequestSearch}">
-                    <FontIcon Glyph="&#xE721;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                    <Grid Width="40" Height="40">
+                        <Border x:Name="SearchFill" Visibility="Collapsed" CornerRadius="{ThemeResource ControlCornerRadius}" Background="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                        <FontIcon Glyph="&#xE721;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                    </Grid>
                 </Button>
                 <ItemsRepeater
                     x:Name="TasksHost"
