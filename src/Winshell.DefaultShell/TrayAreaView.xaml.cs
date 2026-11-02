@@ -21,6 +21,12 @@ public sealed partial class TrayAreaView : UserControl
     /// <summary>The button the flyout sits above.</summary>
     public Button QuickSettingsAnchor => QuickSettingsButton;
 
+    /// <summary>The hidden icons are open, so an auto-hiding taskbar stays up.</summary>
+    internal bool HiddenOpen { get; private set; }
+
+    /// <summary>The hidden icons opened or closed.</summary>
+    internal event EventHandler? HiddenChanged;
+
     /// <summary>The window is about to close, and the tray stays for the other bars.</summary>
     public void Release()
     {
@@ -33,9 +39,19 @@ public sealed partial class TrayAreaView : UserControl
         Area.RequestQuickSettings();
     }
 
-    private void OnHiddenOpened(object? sender, object args) => ChevronIcon.Glyph = TrayArea.ChevronGlyph(true);
+    private void OnHiddenOpened(object? sender, object args)
+    {
+        ChevronIcon.Glyph = TrayArea.ChevronGlyph(true);
+        HiddenOpen = true;
+        HiddenChanged?.Invoke(this, EventArgs.Empty);
+    }
 
-    private void OnHiddenClosed(object? sender, object args) => ChevronIcon.Glyph = TrayArea.ChevronGlyph(false);
+    private void OnHiddenClosed(object? sender, object args)
+    {
+        ChevronIcon.Glyph = TrayArea.ChevronGlyph(false);
+        HiddenOpen = false;
+        HiddenChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     private Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 

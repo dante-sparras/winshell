@@ -6,16 +6,13 @@
     xmlns:taskbar="using:Winshell.DefaultShell.Taskbar"
     IsTabStop="False"
     AutomationProperties.Name="Taskbar">
-    <!-- A UserControl draws no background, so this one is what takes a click on an empty part of the bar. -->
-    <Grid Background="Transparent">
+    <!-- The window shrinks to two pixels while the bar is hidden. The face stays the full height, so the window clips
+         its top and that line can still take the pointer. A UserControl draws no background of its own. -->
+    <Canvas x:Name="FaceHost" Background="Transparent">
+        <Grid x:Name="Face" Height="48" Canvas.Top="0" Background="Transparent">
         <Border Height="1" VerticalAlignment="Top" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" />
-        <Grid Margin="12,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <StackPanel x:Name="Apps" Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Grid x:Name="Bar" Margin="12,0">
+            <StackPanel x:Name="Apps" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Left">
                 <Button
                     x:Name="StartButton"
                     Width="40"
@@ -80,24 +77,45 @@
                         <FontIcon Glyph="&#xE721;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     </Grid>
                 </Button>
-                <ItemsRepeater
-                    x:Name="TasksHost"
-                    ItemsSource="{x:Bind Model.Tasks, Mode=OneWay}"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Left"
-                    AutomationProperties.Name="Running applications">
-                    <ItemsRepeater.Layout>
-                        <StackLayout Orientation="Horizontal" Spacing="4" />
-                    </ItemsRepeater.Layout>
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="taskbar:TaskItem">
-                            <local:TaskButton Item="{x:Bind}" />
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
+                <ScrollViewer
+                    x:Name="Strip"
+                    Height="40"
+                    HorizontalScrollBarVisibility="Hidden"
+                    HorizontalScrollMode="Enabled"
+                    VerticalScrollBarVisibility="Disabled"
+                    VerticalScrollMode="Disabled"
+                    ZoomMode="Disabled"
+                    IsTabStop="False">
+                    <ItemsRepeater
+                        x:Name="TasksHost"
+                        ItemsSource="{x:Bind Model.Tasks, Mode=OneWay}"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Left"
+                        AutomationProperties.Name="Running applications">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Horizontal" Spacing="4" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="taskbar:TaskItem">
+                                <local:TaskButton Item="{x:Bind}" />
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </ScrollViewer>
             </StackPanel>
-            <StackPanel x:Name="Corner" Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <StackPanel x:Name="Corner" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
             </StackPanel>
+            <Border
+                x:Name="DropMark"
+                Width="2"
+                Height="40"
+                CornerRadius="1"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                IsHitTestVisible="False"
+                Visibility="Collapsed"
+                Background="{ThemeResource AccentFillColorDefaultBrush}" />
         </Grid>
-    </Grid>
+        </Grid>
+    </Canvas>
 </UserControl>
