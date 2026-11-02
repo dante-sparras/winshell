@@ -240,8 +240,12 @@ internal static unsafe class WindowTracker
     /// The taskbar's rule: a visible, uncloaked top-level window with a title that either asks for a taskbar button
     /// or has no owner and is not a tool window or a window that never activates.
     /// </summary>
-    private static bool IsTaskbarWindow(nint hwnd)
+    internal static bool IsTaskbarWindow(nint hwnd)
     {
+        // Asking a window of this process for its title sends it a message with no timeout. A hidden one can belong to a
+        // thread waiting for this one, as SystemEvents does while it raises an event, and neither would ever go on.
+        if (!Win32.IsWindowVisible(hwnd))
+            return false;
         var style = (long)Win32.GetWindowLongPtr(hwnd, GWL_STYLE);
         var ex = (long)Win32.GetWindowLongPtr(hwnd, GWL_EXSTYLE);
         return WindowRules.ShowsOnTaskbar(new TaskbarWindowFacts(
