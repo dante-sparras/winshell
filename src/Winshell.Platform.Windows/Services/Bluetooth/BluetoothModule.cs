@@ -4,9 +4,6 @@ using Winshell.Runtime.Shell;
 
 namespace Winshell.Platform.Windows.Services.Bluetooth;
 
-public enum BluetoothDeviceState { Disconnected, Connected }
-public enum BluetoothOperation { None, Connecting, Disconnecting, Pairing, Unpairing }
-
 /// <summary>
 /// The default Windows Bluetooth adapter. Setting <see cref="Enabled"/> asks Windows to change its radio.
 /// Setting <see cref="Discoverable"/> or <see cref="Pairable"/> asks Windows to change discovery or incoming connections.
