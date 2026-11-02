@@ -18,7 +18,8 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 ├── docs/
 │   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
-│   │   └── release-notes/           # Notes for a release, once that release exists
+│   │   ├── release-notes/           # Notes for a release, once that release exists
+│   │   └── test-audit/              # The gate every test passes
 │   ├── guide/                       # The docs site's guide section
 │   ├── reference/                   # A page per module
 │   ├── security/                    # The threat model
@@ -57,6 +58,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 
 ## Before you finish
 
+- Writing, changing or reviewing a test? It must pass the gate in [docs/agents/test-audit/SKILL.md](docs/agents/test-audit/SKILL.md).
 - Build with `dotnet build .\winshell.slnx -warnaserror`, which must pass with 0 warnings, then run the focused tests for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The required `ci` job runs the build and the main test stage on a PR, and all of `pwsh scripts/check.ps1` on a push to `main` and on the release PR. `check.ps1` runs the Pester suites when Pester 5.6.1 is installed, and does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
@@ -100,6 +102,10 @@ Issues live in GitHub Issues for dante-sparras/winshell, used through `gh`. See 
 ### Triage labels
 
 The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Test audit
+
+Audits and sweeps of `tests/` follow `docs/agents/test-audit/SKILL.md`. It is this repo's own, adapted from OpenClaw's skill, so it lives outside `.agents/skills/`.
 
 ### Domain docs
 
