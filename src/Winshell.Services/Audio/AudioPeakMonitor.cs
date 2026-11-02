@@ -102,7 +102,7 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
         }
         Set(ref _peak, values.Length == 0 ? 0 : values.Max(), nameof(Peak));
         var node = _node!.Node;
-        var channels = (node.Channels.Length == values.Length ? node.Channels : ChannelLayout.FromFormat(null, values.Length)).Select(c => (AudioChannel)c).ToArray();
+        var channels = node.Channels.Length == values.Length ? node.Channels : ChannelLayout.FromFormat(null, values.Length);
         if (!channels.SequenceEqual(_channels))
         {
             _channels = channels;

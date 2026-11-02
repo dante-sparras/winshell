@@ -17,7 +17,6 @@ internal sealed class AudioGraph : IAudioGraph
     private readonly IMMDeviceEnumerator? _enumerator;
     private readonly DeviceNotifications? _notifications;
     private readonly List<AudioGraphNode> _nodes = [];
-    private readonly List<AudioGraphLink> _links = [];
     private readonly Dictionary<string, EndpointNode> _endpoints = new(StringComparer.OrdinalIgnoreCase);
     private int _syncPending;
     private int _nextId = 1;
@@ -49,8 +48,6 @@ internal sealed class AudioGraph : IAudioGraph
 
     public IReadOnlyList<AudioGraphNode> Nodes => _nodes;
 
-    public IReadOnlyList<AudioGraphLink> Links => _links;
-
     public bool Ready { get; }
 
     public EndpointNode? DefaultPlayback { get; private set; }
@@ -66,10 +63,6 @@ internal sealed class AudioGraph : IAudioGraph
     public event Action<AudioGraphNode>? NodeAdded;
 
     public event Action<AudioGraphNode>? NodeRemoved;
-
-    public event Action<AudioGraphLink>? LinkAdded;
-
-    public event Action<AudioGraphLink>? LinkRemoved;
 
     public event Action? DefaultsChanged;
 
@@ -205,26 +198,9 @@ internal sealed class AudioGraph : IAudioGraph
         if (shown == _nodes.Contains(session))
             return;
         if (shown)
-        {
             AddNode(session);
-            var link = session.IsPlayback
-                ? new AudioGraphLink(NextId(), session, session.Endpoint)
-                : new AudioGraphLink(NextId(), session.Endpoint, session);
-            link.Active = session.Active;
-            session.Link = link;
-            _links.Add(link);
-            LinkAdded?.Invoke(link);
-        }
         else
-        {
-            if (session.Link is { } link)
-            {
-                _links.Remove(link);
-                LinkRemoved?.Invoke(link);
-                session.Link = null;
-            }
             RemoveNode(session);
-        }
     }
 
     private void AddNode(AudioGraphNode node)
@@ -273,15 +249,23 @@ internal abstract class AudioGraphNode(int id)
 
     public string InterfaceName { get; protected set; } = "";
 
-    /// <summary>The <c>AudioNodeType</c> flags.</summary>
-    public int Type { get; protected set; }
+    public AudioNodeType Type { get; protected set; }
 
     /// <summary>True for a playback device and for an app session that plays to one.</summary>
-    public bool IsPlayback => (Type & AudioNodeTypes.Playback) != 0;
+    public bool IsPlayback => Type is AudioNodeType.PlaybackDevice or AudioNodeType.PlaybackSession;
+
+    /// <summary>True for an app's audio session, false for a device.</summary>
+    public bool IsSession => Type is AudioNodeType.PlaybackSession or AudioNodeType.RecordingSession;
+
+    /// <summary>The device a session is on. Null for a device.</summary>
+    public virtual AudioGraphNode? Device => null;
+
+    /// <summary>True while a session plays or records, false while it is open but idle. A device stays false.</summary>
+    public bool Active { get; private set; }
 
     public Dictionary<string, string> Properties { get; protected set; } = [];
 
-    public int[] Channels { get; protected set; } = [];
+    public AudioChannel[] Channels { get; protected set; } = [];
 
     public IReadOnlyList<float> Volumes => _volumes;
 
@@ -291,6 +275,8 @@ internal abstract class AudioGraphNode(int id)
     public event Action? AudioChanged;
 
     public event Action? PropertiesChanged;
+
+    public event Action? ActiveChanged;
 
     public abstract void SetVolumes(IReadOnlyList<float> volumes);
 
@@ -312,42 +298,14 @@ internal abstract class AudioGraphNode(int id)
     }
 
     protected void ApplyProperties() => PropertiesChanged?.Invoke();
-}
 
-/// <summary>A connection from a stream to its device, or from a device to a recording stream.</summary>
-internal sealed class AudioGraphLink(int id, AudioGraphNode source, AudioGraphNode target)
-{
-    private bool _active;
-
-    public int Id { get; } = id;
-
-    public AudioGraphNode Source { get; } = source;
-
-    public AudioGraphNode Target { get; } = target;
-
-    /// <summary>True while audio flows (the session is active), false while the stream is open but idle.</summary>
-    public bool Active
+    protected void ApplyActive(bool active)
     {
-        get => _active;
-        set
-        {
-            if (_active == value)
-                return;
-            _active = value;
-            StateChanged?.Invoke();
-        }
+        if (active == Active)
+            return;
+        Active = active;
+        ActiveChanged?.Invoke();
     }
-
-    public event Action? StateChanged;
-}
-
-/// <summary>The <c>AudioNodeType</c> flags.</summary>
-internal static class AudioNodeTypes
-{
-    public const int Audio = 0b1;
-    public const int Session = 0b100;
-    public const int Recording = 0b1000;
-    public const int Playback = 0b10000;
 }
 
 /// <summary>An audio endpoint: a playback device, or a recording device.</summary>
@@ -370,7 +328,7 @@ internal sealed class EndpointNode : AudioGraphNode
         _graph = graph;
         _device = device;
         DeviceId = deviceId;
-        Type = AudioNodeTypes.Audio | (render ? AudioNodeTypes.Playback : AudioNodeTypes.Recording);
+        Type = render ? AudioNodeType.PlaybackDevice : AudioNodeType.RecordingDevice;
         device.OpenPropertyStore(0, out var store);
         Description = CoreAudio.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
         InterfaceName = CoreAudio.ReadString(store, CoreAudio.DeviceDescription) ?? "";
@@ -673,8 +631,8 @@ internal sealed class SessionNode : AudioGraphNode
         _control = control;
         Endpoint = endpoint;
         InstanceId = instanceId;
-        Active = state == AudioSessionState.Active;
-        Type = AudioNodeTypes.Audio | AudioNodeTypes.Session | (endpoint.IsPlayback ? AudioNodeTypes.Playback : AudioNodeTypes.Recording);
+        ApplyActive(state == AudioSessionState.Active);
+        Type = endpoint.IsPlayback ? AudioNodeType.PlaybackSession : AudioNodeType.RecordingSession;
         Channels = endpoint.Channels;
         control.GetProcessId(out _processId);
         IsSystem = control.IsSystemSoundsSession() == 0;
@@ -687,14 +645,12 @@ internal sealed class SessionNode : AudioGraphNode
 
     public EndpointNode Endpoint { get; }
 
-    public string InstanceId { get; }
+    public override AudioGraphNode Device => Endpoint;
 
-    public bool Active { get; private set; }
+    public string InstanceId { get; }
 
     /// <summary>The session of Windows' own sounds, not of an app.</summary>
     public bool IsSystem { get; }
-
-    public AudioGraphLink? Link { get; set; }
 
     public override IAudioMeterInformation? Meter => _released ? null : _control as IAudioMeterInformation;
 
@@ -827,9 +783,7 @@ internal sealed class SessionNode : AudioGraphNode
             _graph.RemoveSession(this);
             return;
         }
-        Active = state == AudioSessionState.Active;
-        if (Link is { } link)
-            link.Active = Active;
+        ApplyActive(state == AudioSessionState.Active);
     }
 
     private sealed class SessionEvents(SessionNode node) : IAudioSessionEvents
@@ -876,55 +830,31 @@ internal sealed class SessionNode : AudioGraphNode
     }
 }
 
-/// <summary>Maps a Windows speaker mask onto <c>AudioChannel</c> values.</summary>
+/// <summary>Maps a Windows speaker mask onto <see cref="AudioChannel"/> values.</summary>
 internal static class ChannelLayout
 {
-    private const int Mono = 2;
-    private const int AuxStart = 0x1000;
-
-    // SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, ... in bit order, as AudioChannel values.
-    private static readonly int[] MaskChannels =
-    [
-        3, // FrontLeft
-        4, // FrontRight
-        5, // FrontCenter
-        6, // LowFrequencyEffects
-        12, // RearLeft (back left)
-        13, // RearRight (back right)
-        9, // FrontLeftCenter
-        10, // FrontRightCenter
-        11, // RearCenter (back center)
-        7, // SideLeft
-        8, // SideRight
-        14, // TopCenter
-        15, // TopFrontLeft
-        16, // TopFrontCenter
-        17, // TopFrontRight
-        18, // TopRearLeft
-        19, // TopRearCenter
-        20, // TopRearRight
-    ];
+    private const int SpeakerBits = 18;
 
     /// <summary>The channels of a device from its WAVEFORMATEXTENSIBLE, or a guess from the channel count.</summary>
-    public static int[] FromFormat(byte[]? format, int count)
+    public static AudioChannel[] FromFormat(byte[]? format, int count)
     {
         if (format is { Length: >= 24 } && BitConverter.ToUInt16(format, 0) == 0xFFFE)
         {
             var mask = BitConverter.ToUInt32(format, 20);
-            var channels = new List<int>();
-            for (var bit = 0; bit < MaskChannels.Length; bit++)
+            var channels = new List<AudioChannel>();
+            for (var bit = 0; bit < SpeakerBits; bit++)
             {
                 if ((mask & (1u << bit)) != 0)
-                    channels.Add(MaskChannels[bit]);
+                    channels.Add(AudioChannel.FrontLeft + bit);
             }
             if (channels.Count == count)
                 return channels.ToArray();
         }
         return count switch
         {
-            1 => [Mono],
-            2 => [3, 4],
-            _ => Enumerable.Range(0, count).Select(i => AuxStart + i).ToArray(),
+            1 => [AudioChannel.Mono],
+            2 => [AudioChannel.FrontLeft, AudioChannel.FrontRight],
+            _ => new AudioChannel[count],
         };
     }
 }
