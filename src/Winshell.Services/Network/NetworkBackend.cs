@@ -485,5 +485,4 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         }
     }
 
-    internal Task<NetworkSnapshot> ReadForTestAsync() => ReadAsync();
 }

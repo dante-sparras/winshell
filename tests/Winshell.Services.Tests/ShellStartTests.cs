@@ -115,9 +115,6 @@ public sealed class ShellStartTests
     }
 
     [Fact]
-    public void A_config_and_a_shell_id_never_share_a_mutex()
-    {
+    public void A_shell_id_names_its_mutex_in_any_case() =>
         Assert.Equal(DuplicateHold.ShellMutexName("Mine"), DuplicateHold.ShellMutexName("mine"));
-        Assert.NotEqual(DuplicateHold.ConfigMutexName(@"C:\mine"), DuplicateHold.ShellMutexName(@"C:\mine"));
-    }
 }

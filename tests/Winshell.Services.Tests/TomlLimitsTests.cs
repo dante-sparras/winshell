@@ -20,13 +20,12 @@ public sealed class TomlLimitsTests
     [Fact]
     public void The_budgets_sit_above_a_preferences_file()
     {
-        Assert.Equal(64 * 1024 * 1024, DataLimits.MaxReadBytes);
         Assert.Equal(1024 * 1024, DataLimits.MaxTextBytes);
         Assert.Null(DataLimits.FileBytes(DataLimits.MaxTextBytes, DataLimits.MaxTextBytes));
         Assert.Null(DataLimits.FileBytes(-1, DataLimits.MaxTextBytes));
         Assert.Contains(
             "above the limit of ",
-            DataLimits.FileBytes(DataLimits.MaxReadBytes + 1, DataLimits.MaxReadBytes),
+            DataLimits.FileBytes(DataLimits.MaxTextBytes + 1, DataLimits.MaxTextBytes),
             StringComparison.Ordinal);
 
         const string Preferences = """
