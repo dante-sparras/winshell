@@ -90,7 +90,6 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `FullChargeCapacity` | double, read-only | Full-charge capacity, in watt-hours. |
 | `HealthPercentage` | double, read-only | Full charge capacity over design capacity, from 0 to 100. |
 | `HealthSupported` | bool, read-only |  |
-| `IconName` | string, read-only |  |
 | `IsPresent` | bool, read-only |  |
 | `IsSystemBattery` | bool, read-only |  |
 | `Model` | string, read-only |  |

@@ -281,7 +281,7 @@ public sealed class SystemStatusTests
     }
 
     private static PowerDeviceInfo Battery(double percentage, PowerDeviceState state, bool present) =>
-        new("BAT", "Battery", present ? PowerDeviceType.Battery : PowerDeviceType.Unknown, present, present, state, percentage, 0, 0, 0, 0, 0, 0, "");
+        new("BAT", "Battery", present ? PowerDeviceType.Battery : PowerDeviceType.Unknown, present, present, state, percentage, 0, 0, 0, 0, 0, 0);
 
     private static NetworkSnapshot Snap(NetworkConnectivity connectivity, params NetworkDeviceInfo[] devices) =>
         new(true, devices, connectivity, true, true);

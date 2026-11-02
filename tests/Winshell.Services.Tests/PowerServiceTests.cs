@@ -6,7 +6,7 @@ namespace Winshell.Services.Tests;
 public sealed class PowerServiceTests
 {
     private static PowerDeviceInfo Battery(string id, double percentage = 0.5) => new(id, "Model", PowerDeviceType.Battery, true, true,
-        PowerDeviceState.Discharging, percentage, 10, 20, -5, 3600, 0, 90, "battery");
+        PowerDeviceState.Discharging, percentage, 10, 20, -5, 3600, 0, 90);
 
     private static PowerSnapshot Snapshot(params PowerDeviceInfo[] devices) =>
         new(true, devices.FirstOrDefault() ?? PowerDeviceInfo.NoBattery, devices, devices.Length > 0);
