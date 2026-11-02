@@ -1,7 +1,4 @@
 global using Winshell.Audio;
-global using Winshell.Bluetooth;
-global using Winshell.ExplorerTaskbar;
-global using Winshell.Input;
 global using Winshell.Native;
 global using Winshell.Notifications;
 global using Winshell.Tray;
