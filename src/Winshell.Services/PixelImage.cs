@@ -37,9 +37,11 @@ public sealed class PixelImage
     public byte[] EncodePng()
     {
         using var output = new InMemoryRandomAccessStream();
+#pragma warning disable VSTHRD002 // The caller asked to block: it runs off the loop.
         var encoder = BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output).AsTask().GetAwaiter().GetResult();
         encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, (uint)Width, (uint)Height, 96, 96, StraightBgra());
         encoder.FlushAsync().AsTask().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
         using var encoded = new MemoryStream();
         using (var input = output.GetInputStreamAt(0).AsStreamForRead())
             input.CopyTo(encoded);

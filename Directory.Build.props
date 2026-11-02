@@ -6,6 +6,10 @@
     <!-- A new SDK feature band must not add analyzer warnings on its own. Raise this deliberately. -->
     <AnalysisLevel>10.0</AnalysisLevel>
     <LangVersion>latest</LangVersion>
+    <!-- .editorconfig's code style rules fail the build, as the analyzers do. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Paths in a release's binaries and symbols are not this runner's. -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <!-- The product version is the release-please manifest. -p:Version= overrides it.

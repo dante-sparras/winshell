@@ -214,7 +214,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private void Request(string command, Action<string?> onReply)
     {
         var generation = _generation;
-        _link.RequestAsync(command).ContinueWith(t =>
+        _ = _link.RequestAsync(command).ContinueWith(t =>
         {
             var reply = t.IsCompletedSuccessfully ? t.Result : null;
             _loop.Post(() =>

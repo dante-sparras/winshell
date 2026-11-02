@@ -1,4 +1,3 @@
-#pragma warning disable CA1416
 using System.Runtime.InteropServices;
 using System.Text;
 using Tomlyn.Parsing;
