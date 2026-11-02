@@ -103,7 +103,7 @@ public sealed partial class Shell
         return service;
     });
 
-    /// <summary>What <see cref="Updates"/> follows. <c>winshell.exe</c> sets it, and a configuration's program leaves it null.</summary>
+    /// <summary>What <see cref="Updates"/> follows. <see cref="Run{T}"/> copies it from <see cref="ShellOptions.Updater"/>.</summary>
     internal Updater? Updater { get; set; }
 
     /// <summary>Winshell's own notices. Set as the shell starts.</summary>

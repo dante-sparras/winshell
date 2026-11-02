@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Winshell.Services.Tests;
 
 /// <summary>What a start reads before it is a shell: its command line, its id, and its folders.</summary>
@@ -35,6 +37,40 @@ public sealed class ShellStartTests
 
         Assert.Equal(["--after", "2", "--no-duplicate", "--", "a"], arguments.ForNext(2));
         Assert.Equal(2, ShellArguments.Parse(arguments.ForNext(2)).After);
+        Assert.False(ShellArguments.Parse(arguments.ForNext(2)).Daemonize);
+    }
+
+    [Fact]
+    public void A_detached_start_drops_d_and_keeps_the_handoff()
+    {
+        var arguments = ShellArguments.Parse(["-d", "--after", "7", "--theme", "dark", "--daemonize", "--", "-d"]);
+
+        Assert.True(arguments.Daemonize);
+        Assert.Equal(7, arguments.After);
+        Assert.Equal(["--theme", "dark", "--", "-d"], arguments.Kept);
+        Assert.Equal(["--after", "7", "--theme", "dark", "--", "-d"], arguments.Detached);
+        Assert.Equal(["--after", "8", "--theme", "dark", "--", "-d"], arguments.ForNext(8));
+        Assert.False(ShellArguments.Parse(arguments.ForNext(8)).Daemonize);
+
+        var start = arguments.DetachedStart(@"C:\shells\winshell-next.exe");
+        Assert.Equal(@"C:\shells\winshell-next.exe", start.FileName);
+        Assert.False(start.UseShellExecute);
+        Assert.True(start.CreateNoWindow);
+        Assert.Equal(ProcessWindowStyle.Normal, start.WindowStyle);
+        Assert.Equal(["--after", "7", "--theme", "dark", "--", "-d"], start.ArgumentList);
+    }
+
+    [Fact]
+    public void An_update_restarts_with_after_unless_another_winshell_is_running()
+    {
+        var arguments = ShellArguments.Parse(["-d", "--no-duplicate", "--theme", "dark"]);
+
+        Assert.Equal(UpdateRestart.AnotherRunning, UpdateRestart.Decide(arguments, 4, anotherRunning: true, out var refused));
+        Assert.Equal(["--after", "4", "--no-duplicate", "--theme", "dark"], refused);
+        Assert.False(ShellArguments.Parse(refused).Daemonize);
+
+        Assert.Null(UpdateRestart.Decide(arguments, 4, anotherRunning: false, out var next));
+        Assert.Equal(refused, next);
     }
 
     [Fact]

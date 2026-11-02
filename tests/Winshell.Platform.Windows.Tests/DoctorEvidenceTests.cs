@@ -58,7 +58,7 @@ public sealed class DoctorEvidenceTests : IDisposable
     [Fact]
     public void An_unreadable_crash_folder_warns()
     {
-        var read = new DoctorProbe.CrashFolderRead([], @"C:\locked: Access is denied");
+        var read = new CrashFolderRead([], @"C:\locked: Access is denied");
 
         var check = CrashesIn(read, DateTime.UtcNow);
 

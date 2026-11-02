@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.XamlTypeInfo;
+using Winshell.Updates;
 
 namespace Winshell;
 
@@ -33,6 +34,13 @@ public sealed record ShellOptions
 
     /// <summary>Another folder for <see cref="Shell.CacheDir"/>, read as <see cref="DataDir"/> is.</summary>
     public string? CacheDir { get; init; }
+
+    /// <summary>
+    /// The updater <c>winshell.exe</c> passes when it runs this shell in-process. Installing a download stays in
+    /// <c>winshell.exe</c>, before the shell starts. Restart then starts this program again with <c>--after</c>.
+    /// A configuration's own program leaves this null.
+    /// </summary>
+    public Updater? Updater { get; init; }
 }
 
 /// <summary>A configuration: the program that defines a shell. <see cref="Start"/> makes its windows.</summary>
@@ -153,7 +161,9 @@ public sealed partial class Shell : IDisposable
     /// <summary>
     /// Runs a configuration until the shell quits, on this thread, as a Winshell instance: <c>winshell list</c>, <c>log</c>,
     /// <c>kill</c>, <c>reload</c> and <c>ipc</c> reach it. Call it from <c>Main</c>, marked <c>[STAThread]</c>. The program
-    /// takes <c>--no-duplicate</c> on its command line, and exits at once when its shell id is already running.
+    /// takes <c>--no-duplicate</c> and <c>-d</c> on its command line. <c>--no-duplicate</c> exits at once when its shell
+    /// id is already running. <c>-d</c> starts this program again and returns, so the caller does not wait, and that
+    /// start keeps <c>--after</c>.
     /// </summary>
     public static void Run<T>(ShellOptions? options = null)
         where T : ShellConfiguration, new() =>
@@ -162,10 +172,25 @@ public sealed partial class Shell : IDisposable
     private static void Run(ShellConfiguration configuration, ShellOptions options)
     {
         var arguments = ShellArguments.Parse(Environment.GetCommandLineArgs().Skip(1));
+        var program = Environment.ProcessPath!;
+        // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
+        // The child keeps --after and waits itself, so a reload's handoff still lets the old process go first.
+        if (arguments.Daemonize)
+        {
+            try
+            {
+                using var child = Process.Start(arguments.DetachedStart(program));
+            }
+            catch (Exception e) when (e is Win32Exception or InvalidOperationException)
+            {
+                StartupError.Report($"Could not start \"{program}\": {e.Message}", null);
+                Environment.ExitCode = 1;
+            }
+            return;
+        }
         // A reload: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
         if (arguments.After is { } previous)
             Instances.WaitForExit(previous);
-        var program = Environment.ProcessPath!;
         var identity = ShellIdentity.Resolve(program, ConfigPaths.Root(), options.ShellId, options.DataDir, options.StateDir, options.CacheDir);
         // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
         using var duplicate = arguments.NoDuplicate
@@ -205,6 +230,9 @@ public sealed partial class Shell : IDisposable
                         loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
                         var shell = new Shell(loop, log, options, identity, arguments);
                         shell.LogPath = instance.LogPath;
+                        shell.Updater = options.Updater;
+                        if (options.Updater is { } updater)
+                            updater.Restart = shell.RestartForUpdate;
                         _current = shell;
                         var notices = new ShellNotices(
                             loop,
@@ -264,6 +292,23 @@ public sealed partial class Shell : IDisposable
             return false;
         Quit();
         return true;
+    }
+
+    /// <summary>
+    /// Starts this program again with <c>--after</c>, as <see cref="Reload"/> does, once no other Winshell is running.
+    /// The start is posted, so a caller on the shell's thread is not torn down while it is still running.
+    /// </summary>
+    private string? RestartForUpdate()
+    {
+        var another = Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId);
+        if (UpdateRestart.Decide(_arguments, Environment.ProcessId, another, out _) is { } refused)
+            return refused;
+        Loop.Post(() =>
+        {
+            if (StartNext() is null)
+                Quit();
+        });
+        return null;
     }
 
     /// <summary>Starts the process that takes over from this one, once. Null when it started, or else why not.</summary>

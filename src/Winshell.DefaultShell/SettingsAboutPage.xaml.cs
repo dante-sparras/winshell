@@ -9,14 +9,14 @@ using Winshell.Updates;
 namespace Winshell.DefaultShell;
 
 /// <summary>
-/// The version, Winshell's own updates, the config folder, this instance's log, and the diagnostics card. The doctor
-/// that fills the card lives with the shell started by winshell.exe; this page shows that it has none.
+/// The version, Winshell's own updates, the config folder, this instance's log, and the diagnostics card. The card
+/// checks the configuration project. Those checks read the project file and run off the UI thread.
 /// </summary>
 public sealed partial class SettingsAboutPage : UserControl
 {
     private readonly Preferences _preferences;
     private readonly Shell _shell;
-    private readonly SettingsDiagnosticsSession _diagnostics = new(null);
+    private readonly SettingsDiagnosticsSession _diagnostics;
     private readonly string _diagnosticsIdle;
     private bool _applying;
 
@@ -24,6 +24,7 @@ public sealed partial class SettingsAboutPage : UserControl
     {
         _preferences = preferences;
         _shell = shell;
+        _diagnostics = new(() => SettingsAbout.Checks(shell.ConfigRoot));
         InitializeComponent();
         var version = SettingsCatalog.RequireSetting("version");
         var updates = SettingsCatalog.RequireSetting("winshellUpdates");
