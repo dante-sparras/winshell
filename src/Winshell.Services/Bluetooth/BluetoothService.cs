@@ -104,7 +104,7 @@ public sealed class BluetoothDevice : ObservableObject
 
     public string Name => _info.Name;
 
-    /// <summary>A BlueZ device-type icon name. Empty when Windows reports no class, or a class BlueZ does not name.</summary>
+    /// <summary>A device-type name, such as <c>audio-headset</c> or <c>input-keyboard</c>. Empty when Windows reports no class, or a class that has no name.</summary>
     public string Icon => _info.Icon;
 
     public bool Paired => _info.Paired;

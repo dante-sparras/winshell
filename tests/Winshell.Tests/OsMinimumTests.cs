@@ -9,7 +9,7 @@ public class OsMinimumTests
     [Fact]
     public void Projects_and_packages_require_build_22621()
     {
-        var root = RepoRoot();
+        var root = Repo.Root;
         AssertPlatform(Path.Combine(root, "src", "Winshell", "Winshell.csproj"));
         AssertPlatform(Path.Combine(root, "src", "Winshell.Shell", "Winshell.Shell.csproj"));
         AssertPlatform(Path.Combine(root, "src", "Winshell.DefaultShell", "Winshell.DefaultShell.csproj"));
@@ -28,17 +28,5 @@ public class OsMinimumTests
     {
         var text = File.ReadAllText(path);
         Assert.Contains("<SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>", text, StringComparison.Ordinal);
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "winshell.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("The tests run outside the repository.");
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using Winshell.Diagnostics;
 using Winshell.Native;
 
 namespace Winshell.ShellTests;
@@ -27,6 +28,19 @@ public sealed class PanelEdgeTests
         });
 
         Assert.False(holds);
+    }
+
+    [Fact]
+    public async Task The_doctor_knows_a_panel_for_Winshell_s_own()
+    {
+        var classes = await ShellFixture.On(_ =>
+        {
+            using var panel = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
+            panel.Visible = true;
+            return DoctorProbe.EdgeWindows().Select(window => window.ClassName).ToList();
+        });
+
+        Assert.Contains(Doctor.WinshellClass, classes);
     }
 
     [Fact]

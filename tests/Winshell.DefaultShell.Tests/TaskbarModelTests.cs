@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text.Json;
+using Windows.Foundation;
 using Winshell.Apps;
 using Winshell.DefaultShell.Taskbar;
 
@@ -23,7 +24,7 @@ public sealed class TaskbarModelTests : IDisposable
     }
 
     private static ScreenInfo Screen(string id, bool primary = false, double x = 0) =>
-        new(id, id, "", "", "", new QRect(x, 0, 800, 600), new QRect(x, 0, 800, 560), 1, 0, 0, 60, primary);
+        new(id, id, "", "", "", new Rect(x, 0, 800, 600), new Rect(x, 0, 800, 560), 1, 0, 0, 60, primary);
 
     [Fact]
     public void Pins_come_first_and_then_the_apps_that_are_running()

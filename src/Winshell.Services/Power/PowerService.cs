@@ -41,8 +41,6 @@ public sealed class PowerDevice : ObservableObject
 
     public bool HealthSupported => _info.HealthPercentage != 0;
 
-    public string IconName => _info.IconName;
-
     public bool IsSystemBattery => _info.Type == PowerDeviceType.Battery && _info.PowersTheSystem;
 
     public string DeviceId => _info.DeviceId;
@@ -67,7 +65,6 @@ public sealed class PowerDevice : ObservableObject
         Changed(old.State != info.State, nameof(State));
         Changed(old.HealthPercentage != info.HealthPercentage, nameof(HealthPercentage));
         Changed((old.HealthPercentage != 0) != HealthSupported, nameof(HealthSupported));
-        Changed(old.IconName != info.IconName, nameof(IconName));
         Changed((old.Type == PowerDeviceType.Battery && old.PowersTheSystem) != IsSystemBattery, nameof(IsSystemBattery));
         Changed(old.DeviceId != info.DeviceId, nameof(DeviceId));
         Changed(old.Model != info.Model, nameof(Model));

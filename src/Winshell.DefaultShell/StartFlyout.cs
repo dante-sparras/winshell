@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
 using Winshell.Apps;
 using Winshell.DefaultShell.Taskbar;
 
@@ -183,7 +184,7 @@ internal sealed class StartFlyout
         var origin = _bar.Origin;
         var width = _bar.ActualWidth > 0 ? _bar.ActualWidth : screen.Geometry.Width;
         var height = _bar.ActualHeight > 0 ? _bar.ActualHeight : 48;
-        var taskbar = new QRect(origin.X, origin.Y, width, height);
+        var taskbar = new Rect(origin.X, origin.Y, width, height);
         _window.Rect = StartPlacement.Above(taskbar, screen.WorkArea, _preferences.TaskbarCentered, origin.X + point.X);
     }
 }

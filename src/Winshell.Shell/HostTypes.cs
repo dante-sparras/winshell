@@ -1,3 +1,5 @@
+using Windows.Foundation;
+
 namespace Winshell;
 
 internal enum WindowKind
@@ -10,6 +12,14 @@ internal enum WindowKind
 
     /// <summary>A <see cref="PopupWindow"/>: no frame, placed next to another window.</summary>
     Popup,
+}
+
+/// <summary>Whether windows are light or dark. <see cref="System"/> follows Windows.</summary>
+public enum ColorScheme
+{
+    System,
+    Light,
+    Dark,
 }
 
 /// <summary>What a window shows behind its content: nothing, or a Windows 11 material.</summary>
@@ -35,8 +45,8 @@ internal sealed record FloatingPlacement(
     string Title,
     double Width,
     double Height,
-    QSize MinimumSize,
-    QSize MaximumSize,
+    Size MinimumSize,
+    Size MaximumSize,
     bool Maximized,
     bool Minimized,
     bool Fullscreen = false,

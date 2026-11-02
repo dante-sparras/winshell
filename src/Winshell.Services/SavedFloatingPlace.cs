@@ -1,3 +1,4 @@
+using Windows.Foundation;
 using Winshell.Native;
 
 namespace Winshell;
@@ -32,7 +33,7 @@ internal sealed record SavedFloatingPlace(
     /// <summary>The saved place on a monitor, in that monitor's physical pixels at <paramref name="scale"/>.</summary>
     public RECT RectOn(RECT monitor, double scale)
     {
-        var logical = new QRect(monitor.Left + OffsetX, monitor.Top + OffsetY, Width, Height);
+        var logical = new Rect(monitor.Left + OffsetX, monitor.Top + OffsetY, Math.Max(0, Width), Math.Max(0, Height));
         return DesktopSpace.ToPhysical(logical, monitor, scale);
     }
 }

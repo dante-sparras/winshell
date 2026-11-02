@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.Foundation;
 using Winshell.DefaultShell.Taskbar;
 using Winshell.Input;
 
@@ -174,7 +175,7 @@ public sealed class DesktopChordTests
     [Fact]
     public void The_switcher_sits_above_the_taskbar_and_the_menu_at_its_top_left()
     {
-        var bar = new QRect(100, 1000, 1600, 48);
+        var bar = new Rect(100, 1000, 1600, 48);
         var switcher = DesktopChordLayout.Switcher(bar, 1920, windows: 2, desktops: true);
         var power = DesktopChordLayout.Power(bar, DesktopSwitcher.Commands.Count);
 

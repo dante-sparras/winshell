@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Winshell.Capture;
 using Winshell.Windows;
 
@@ -38,7 +39,7 @@ public sealed class CaptureSessionTests
 
         Assert.Same(frame, session.Frame);
         Assert.True(session.HasFrame);
-        Assert.Equal(new QSize(4, 2), session.PixelSize);
+        Assert.Equal(new Size(4, 2), session.PixelSize);
         Assert.Equal(1, ready);
 
         session.Stop();
@@ -46,7 +47,7 @@ public sealed class CaptureSessionTests
         Assert.False(session.Running);
         Assert.False(session.HasFrame);
         Assert.Null(session.Frame);
-        Assert.Equal(new QSize(0, 0), session.PixelSize);
+        Assert.Equal(new Size(0, 0), session.PixelSize);
         Assert.Equal(1, backend.Disposals);
         loop.Advance(TimeSpan.FromSeconds(10));
         Assert.Equal(1, backend.Reads);

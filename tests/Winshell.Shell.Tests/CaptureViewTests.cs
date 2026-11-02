@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Foundation;
 using Winshell.Capture;
 
 namespace Winshell.ShellTests;
@@ -32,7 +33,7 @@ public sealed class CaptureViewTests
             };
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 40, screen.Y + 40, 200, 120),
+                Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
                 Content = new Grid { Children = { view } },
             };
             popup.Visible = true;
@@ -97,7 +98,7 @@ public sealed class CaptureViewTests
             };
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 80, screen.Y + 80, 200, 120),
+                Rect = new Rect(screen.X + 80, screen.Y + 80, 200, 120),
                 Content = new Grid { Children = { view } },
             };
             popup.Visible = true;

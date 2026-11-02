@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
 using Winshell;
 using Winshell.DefaultShell.Taskbar;
 
@@ -152,7 +153,7 @@ internal sealed class TaskPreviewFlyout
         var origin = _bar.Origin;
         var width = button.ActualWidth > 0 ? button.ActualWidth : button.Width;
         var height = button.ActualHeight > 0 ? button.ActualHeight : button.Height;
-        var anchor = new QRect(origin.X + point.X, origin.Y + point.Y, width, height);
+        var anchor = new Rect(origin.X + point.X, origin.Y + point.Y, width, height);
         var size = _view.SizeForPopup();
         _popup.Rect = TaskPreview.Place(anchor, size.Width, size.Height, work);
     }

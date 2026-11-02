@@ -1,3 +1,4 @@
+using Windows.Foundation;
 using Winshell.Apps;
 
 namespace Winshell.DefaultShell.Taskbar;
@@ -286,7 +287,7 @@ public static class StartPlacement
     /// <summary>The gap between the menu and the top of the taskbar.</summary>
     public const double Gap = 12;
 
-    public static QRect Above(QRect taskbar, QRect workArea, bool centered, double startButtonX)
+    public static Rect Above(Rect taskbar, Rect workArea, bool centered, double startButtonX)
     {
         var width = Math.Min(StartList.MenuWidth, Math.Max(1, workArea.Width));
         var height = Math.Min(StartList.MenuHeight, Math.Max(1, workArea.Height - Gap));
@@ -301,7 +302,7 @@ public static class StartPlacement
             y = workArea.Y;
         else if (y + height > workArea.Bottom)
             y = workArea.Bottom - height;
-        return new QRect(Round(x), Round(y), Round(width), Round(height));
+        return new Rect(Round(x), Round(y), Round(width), Round(height));
     }
 
     private static double Round(double value) => Math.Round(value, MidpointRounding.AwayFromZero);

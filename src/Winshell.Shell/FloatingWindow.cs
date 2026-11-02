@@ -1,11 +1,13 @@
+using Windows.Foundation;
+
 namespace Winshell;
 
 /// <summary>A normal window with a title bar, as Winshell Settings is.</summary>
 public sealed class FloatingWindow : ShellWindow
 {
     private string _title = "";
-    private QSize _minimumSize;
-    private QSize _maximumSize;
+    private Size _minimumSize;
+    private Size _maximumSize;
     private bool _maximized;
     private bool _minimized;
     private bool _fullscreen;
@@ -34,7 +36,7 @@ public sealed class FloatingWindow : ShellWindow
         }
     }
 
-    public QSize MinimumSize
+    public Size MinimumSize
     {
         get => _minimumSize;
         set
@@ -44,7 +46,7 @@ public sealed class FloatingWindow : ShellWindow
         }
     }
 
-    public QSize MaximumSize
+    public Size MaximumSize
     {
         get => _maximumSize;
         set

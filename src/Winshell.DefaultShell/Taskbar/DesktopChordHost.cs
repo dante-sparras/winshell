@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.UI.Dispatching;
+using Windows.Foundation;
 using Winshell.Apps;
 using Winshell.Windows;
 
@@ -147,7 +148,7 @@ internal sealed class DesktopChordHost : IDisposable, IDesktopCommandTarget
         Show(_switcherPopup, DesktopChordLayout.Switcher(bar, screenWidth, Windows().Count, desktops));
     }
 
-    private void Show(PopupWindow popup, QRect rect)
+    private void Show(PopupWindow popup, Rect rect)
     {
         if (_bar()?.Screen is { } screen)
             popup.Screen = screen;
@@ -156,7 +157,7 @@ internal sealed class DesktopChordHost : IDisposable, IDesktopCommandTarget
         popup.Visible = true;
     }
 
-    private bool TryBar(out QRect bar, out double screenWidth)
+    private bool TryBar(out Rect bar, out double screenWidth)
     {
         var window = _bar();
         var view = _view();
@@ -168,7 +169,7 @@ internal sealed class DesktopChordHost : IDisposable, IDesktopCommandTarget
         }
         var width = view.ActualWidth > 1 ? view.ActualWidth : screen.Geometry.Width;
         var height = view.ActualHeight > 1 ? view.ActualHeight : 48;
-        bar = new QRect(window.Origin.X, window.Origin.Y, width, height);
+        bar = new Rect(window.Origin.X, window.Origin.Y, width, height);
         screenWidth = screen.Geometry.Width;
         return true;
     }

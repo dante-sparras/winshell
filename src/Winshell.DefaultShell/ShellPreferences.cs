@@ -14,8 +14,13 @@ internal static class ShellPreferences
         Apply(shell, preferences, null);
     }
 
-    /// <summary><see cref="Preferences.ColorScheme"/>, or <c>system</c> when the file has one Winshell cannot use.</summary>
-    internal static string Scheme(Preferences preferences) => preferences.ValidColorScheme;
+    /// <summary><see cref="Preferences.ColorScheme"/>, or <see cref="ColorScheme.System"/> when the file has one Winshell cannot use.</summary>
+    internal static ColorScheme Scheme(Preferences preferences) => preferences.ValidColorScheme switch
+    {
+        "light" => ColorScheme.Light,
+        "dark" => ColorScheme.Dark,
+        _ => ColorScheme.System,
+    };
 
     /// <summary><see cref="Preferences.AccentColor"/> uppercased, or <c>""</c> when it is not a color Winshell can use.</summary>
     internal static string Accent(Preferences preferences) =>

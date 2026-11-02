@@ -172,7 +172,7 @@ public sealed class SystemStatus : ObservableObject
 
     private void OnVolume(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AudioVolume.Volume) or nameof(AudioVolume.Muted))
+        if (e.PropertyName is nameof(AudioNode.Volume) or nameof(AudioNode.Muted))
             PublishVolume();
     }
 
@@ -265,17 +265,17 @@ public sealed class SystemStatus : ObservableObject
         if (!ReferenceEquals(output, _output))
         {
             if (_output is not null)
-                _output.Audio.PropertyChanged -= OnVolume;
+                _output.PropertyChanged -= OnVolume;
             _output = output;
             if (_output is not null)
-                _output.Audio.PropertyChanged += OnVolume;
+                _output.PropertyChanged += OnVolume;
         }
         PublishVolume();
     }
 
     private void PublishVolume()
     {
-        var audio = _output?.Audio;
+        var audio = _output;
         VolumeGlyph = StatusGlyphs.VolumeGlyph(audio?.Muted ?? true, audio?.Volume ?? 0);
     }
 

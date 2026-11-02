@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Winshell.Windows;
 
 namespace Winshell.Capture;
@@ -65,7 +66,7 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     public string Error => _error;
 
     /// <summary>The size of <see cref="Frame"/> in physical pixels, or zero without a frame.</summary>
-    public QSize PixelSize => new(_frame?.Width ?? 0, _frame?.Height ?? 0);
+    public Size PixelSize => new(_frame?.Width ?? 0, _frame?.Height ?? 0);
 
     /// <summary>Applied on the next start. Previews omit the pointer by default.</summary>
     public bool IncludeCursor

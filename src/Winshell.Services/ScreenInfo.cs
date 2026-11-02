@@ -1,3 +1,5 @@
+using Windows.Foundation;
+
 namespace Winshell;
 
 /// <summary>
@@ -10,8 +12,8 @@ public sealed record ScreenInfo(
     string Model,
     string Manufacturer,
     string SerialNumber,
-    QRect Geometry,
-    QRect WorkArea,
+    Rect Geometry,
+    Rect WorkArea,
     double DevicePixelRatio,
     double PhysicalWidthMm,
     double PhysicalHeightMm,
