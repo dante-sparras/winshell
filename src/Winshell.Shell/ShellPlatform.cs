@@ -55,10 +55,8 @@ internal sealed unsafe class ShellPlatform : IDisposable
 
     public SystemBackdropTheme BackdropTheme => IsDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
-    /// <summary>Puts the tray windows behind Explorer's while an app bar changes. Set once the tray runs in this process.</summary>
-    internal static Func<IDisposable>? ExplorerFirstHook { get; set; }
-
-    internal static IDisposable ExplorerFirst() => ExplorerFirstHook?.Invoke() ?? Nothing.Instance;
+    /// <summary>Puts the tray windows behind Explorer's while an app bar changes.</summary>
+    internal static IDisposable ExplorerFirst() => Winshell.Tray.TrayHost.ExplorerFirst();
 
     public event Action? ThemeChanged;
 
@@ -241,14 +239,5 @@ internal sealed unsafe class ShellPlatform : IDisposable
         Unhook();
         foreach (var w in _windows.ToArray())
             w.Dispose();
-    }
-
-    private sealed class Nothing : IDisposable
-    {
-        public static readonly Nothing Instance = new();
-
-        public void Dispose()
-        {
-        }
     }
 }
