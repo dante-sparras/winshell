@@ -40,6 +40,9 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     /// <summary>The buttons, pinned apps first. A button that did not change stays the same object.</summary>
     public ObservableCollection<TaskItem> Tasks { get; } = [];
 
+    /// <summary>The buttons were rebuilt. One event for the whole change, after every button is in place.</summary>
+    public event EventHandler? Updated;
+
     /// <summary>The Start button was clicked. Nothing opens.</summary>
     public event EventHandler? StartRequested;
 
@@ -207,6 +210,7 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         Place(TaskbarTasks.Build(_desktop.Windows, _pins.Ids, _desktop.Find, Shows, ShowPins));
+        Updated?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

@@ -16,6 +16,7 @@ public sealed partial class TaskbarView : UserControl
     private readonly TaskbarClock _clock;
     private readonly QuickSettingsFlyout _quick;
     private readonly StartFlyout _start;
+    private readonly TaskPreviewFlyout _previews;
 
     public TaskbarView(
         TaskbarModel model,
@@ -38,6 +39,7 @@ public sealed partial class TaskbarView : UserControl
         _clock = new TaskbarClock(window, preferences, time, center);
         _quick = new QuickSettingsFlyout(window, _tray.QuickSettingsAnchor, settings, preferences, time);
         _start = new StartFlyout(window, StartButton, model, start, apps, documents, loop, log, preferences, time);
+        _previews = new TaskPreviewFlyout(window, model, preferences, time, ButtonFor, AnyButton, StartButton);
         _start.Popup.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is not (nameof(StartPopup.IsOpen) or nameof(StartPopup.SearchOpen)))
@@ -56,11 +58,15 @@ public sealed partial class TaskbarView : UserControl
 
     internal StartPopup StartPopup => _start.Popup;
 
+    /// <summary>The live previews for this bar's buttons.</summary>
+    internal TaskPreview Previews => _previews.Model;
+
     /// <summary>Drops the tray, the clock, quick settings, Start and the preference subscription. The window is about to close.</summary>
     public void Release()
     {
         _preferences.PropertyChanged -= OnPreferences;
         _start.Release();
+        _previews.Release();
         _quick.Release();
         _tray.Release();
         _clock.Release();
@@ -94,6 +100,38 @@ public sealed partial class TaskbarView : UserControl
     {
         if (e.PropertyName == nameof(Preferences.TaskbarCentered))
             Place();
+    }
+
+    private TaskButton? ButtonFor(string key)
+    {
+        foreach (var button in Buttons(TasksHost))
+        {
+            if (button.Item?.Key == key)
+                return button;
+        }
+        return null;
+    }
+
+    private TaskButton? AnyButton()
+    {
+        foreach (var button in Buttons(TasksHost))
+            return button;
+        return null;
+    }
+
+    private static IEnumerable<TaskButton> Buttons(DependencyObject node)
+    {
+        if (node is TaskButton button)
+        {
+            yield return button;
+            yield break;
+        }
+        var count = VisualTreeHelper.GetChildrenCount(node);
+        for (var i = 0; i < count; i++)
+        {
+            foreach (var child in Buttons(VisualTreeHelper.GetChild(node, i)))
+                yield return child;
+        }
     }
 
     /// <summary>Centered apps sit in the middle. Apps on the left stay clear of the clock.</summary>

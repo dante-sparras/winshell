@@ -87,6 +87,7 @@ internal sealed unsafe class HostWindow : IDisposable
             _root.RequestedTheme = platform.RequestedTheme;
             ApplyCaption();
             _root.KeyDown += OnRootKeyDown;
+            _root.Tag = client;
             _xaml = new DesktopWindowXamlSource();
             _xaml.Initialize(Win32Interop.GetWindowIdFromWindow(Handle));
             _xaml.Content = _root;
