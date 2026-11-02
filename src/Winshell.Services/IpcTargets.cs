@@ -41,7 +41,7 @@ public interface IIpcTargets
 }
 
 /// <summary>The rules a value follows across the pipe, the same for an <c>IpcHandler</c> and a C# registration.</summary>
-public static class IpcValues
+internal static class IpcValues
 {
     /// <summary>The most parameters a function can take.</summary>
     public const int MaxParameters = 10;

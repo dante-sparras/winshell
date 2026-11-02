@@ -14,16 +14,43 @@ internal sealed record IpcRequest(
     [property: JsonPropertyName("name")] string? Name = null,
     [property: JsonPropertyName("args")] List<string>? Args = null,
     [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false,
-    [property: JsonPropertyName("hard"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hard = false);
+    [property: JsonPropertyName("hard"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hard = false,
+    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0);
 
 internal sealed record IpcResponse(
     [property: JsonPropertyName("ok")] bool Ok,
     [property: JsonPropertyName("value")] string? Value = null,
-    [property: JsonPropertyName("error")] string? Error = null);
+    [property: JsonPropertyName("error")] string? Error = null,
+    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0);
 
 [JsonSerializable(typeof(IpcRequest))]
 [JsonSerializable(typeof(IpcResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext;
+
+/// <summary>
+/// The version of the lines the control pipe carries. A shell can outlive an update of the CLI, so each side names its
+/// protocol on every line. A side with no number sent no <c>protocol</c> field, and reads past one, which makes the
+/// field safe for both: a refusal is an ordinary failed response, and every client since the first prints those.
+/// </summary>
+internal static class IpcProtocol
+{
+    /// <summary>What this build speaks. Raise it when a side from before could not read a line.</summary>
+    public const int Current = 1;
+
+    /// <summary>The oldest this build still speaks. 0 is a side with no number, whose lines are the same as 1.</summary>
+    public const int Oldest = 0;
+
+    /// <summary>Why a shell speaking <paramref name="current"/> refuses a client speaking <paramref name="client"/>, or null.</summary>
+    public static string? ClientRefusal(int client, int current = Current, int oldest = Oldest) =>
+        client >= oldest && client <= current ? null : Mismatch(current, client);
+
+    /// <summary>Why a client speaking <paramref name="current"/> refuses a shell speaking <paramref name="shell"/>, or null. A newer shell decides for itself.</summary>
+    public static string? ShellRefusal(int shell, int current = Current, int oldest = Oldest) =>
+        shell >= oldest ? null : Mismatch(shell, current);
+
+    private static string Mismatch(int shell, int client) =>
+        $"This shell speaks control protocol {shell} and this winshell speaks {client}. Use the winshell that matches, or build the shell with this one.";
+}
 
 /// <summary>What the control pipe does to the shell it serves. Every member runs on the shell's thread.</summary>
 internal interface IInstanceControl
@@ -33,6 +60,11 @@ internal interface IInstanceControl
 
     /// <summary>Reloads the shell. Null when it worked, or else why not, for the client.</summary>
     string? Reload(bool hard);
+
+    /// <summary>Runs after a client has the answer to a reload that worked, which a shell that goes on to end has to wait for.</summary>
+    void Reloaded()
+    {
+    }
 
     /// <summary>Ends the shell.</summary>
     void Quit();
@@ -253,13 +285,26 @@ internal sealed class IpcServer : IDisposable
                 await Send(writer, new IpcResponse(false, Error: "Malformed request"), _cancel.Token).ConfigureAwait(false);
                 return;
             }
+            if (IpcProtocol.ClientRefusal(request.Protocol) is { } mismatch)
+            {
+                await Send(writer, new IpcResponse(false, Error: mismatch), _cancel.Token).ConfigureAwait(false);
+                return;
+            }
             if (request.Op is "listen" or "wait")
             {
                 await Listen(request, writer, stream, once: request.Op == "wait").ConfigureAwait(false);
                 return;
             }
             var response = await OnUiThread(() => Handle(request)).ConfigureAwait(false);
-            await Send(writer, response, _cancel.Token).ConfigureAwait(false);
+            try
+            {
+                await Send(writer, response, _cancel.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (request.Op == "reload" && response.Ok)
+                    _loop.Post(_control.Reloaded);
+            }
         }
         catch (IOException)
         {
@@ -277,7 +322,7 @@ internal sealed class IpcServer : IDisposable
     private IpcResponse Handle(IpcRequest request)
     {
         // Before the configuration's handlers: there is no handler when the configuration did not load.
-        if (request is { Op: "call", Target: "notice", Name: "dismiss" })
+        if (_dismissNotice is not null && request is { Op: "call", Target: "notice", Name: "dismiss" })
             return DismissNotice(request.Args);
         var ipc = _control.Ipc;
         try
@@ -309,9 +354,7 @@ internal sealed class IpcServer : IDisposable
     {
         if (args is { Count: > 0 })
             return new IpcResponse(false, Error: $"Function notice.dismiss takes 0 arguments, {args.Count} given");
-        if (_dismissNotice is not { } dismiss)
-            return new IpcResponse(false, Error: "Target not found: notice");
-        dismiss();
+        _dismissNotice!();
         return new IpcResponse(true);
     }
 
@@ -505,7 +548,7 @@ internal sealed class IpcServer : IDisposable
     }
 
     private static Task Send(StreamWriter writer, IpcResponse response, CancellationToken cancel) =>
-        writer.WriteLineAsync(JsonSerializer.Serialize(response, IpcJson.Default.IpcResponse).AsMemory(), cancel);
+        writer.WriteLineAsync(JsonSerializer.Serialize(response with { Protocol = IpcProtocol.Current }, IpcJson.Default.IpcResponse).AsMemory(), cancel);
 
     public void Dispose()
     {
@@ -544,15 +587,19 @@ internal sealed class IpcServer : IDisposable
             throw new IOException(refusal);
         using var reader = new StreamReader(client, Encoding.UTF8);
         await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
-        await writer.WriteLineAsync(JsonSerializer.Serialize(request, IpcJson.Default.IpcRequest)).ConfigureAwait(false);
+        await writer.WriteLineAsync(JsonSerializer.Serialize(request with { Protocol = IpcProtocol.Current }, IpcJson.Default.IpcRequest)).ConfigureAwait(false);
         while (true)
         {
             var line = await reader.ReadLineAsync(cancel).ConfigureAwait(false);
             if (line is null)
                 yield break;
             var response = JsonSerializer.Deserialize(line, IpcJson.Default.IpcResponse);
-            if (response is not null)
-                yield return response;
+            if (response is null)
+                continue;
+            // A failed response is already a sentence for the user, whichever side wrote it.
+            if (response.Ok && IpcProtocol.ShellRefusal(response.Protocol) is { } mismatch)
+                throw new IOException(mismatch);
+            yield return response;
         }
     }
 }

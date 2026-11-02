@@ -10,14 +10,14 @@ public class ShellIdFromConfigFolderTests
     [Fact]
     public void The_config_folder_itself_is_root()
     {
-        Assert.Equal("root", ShellHost.DefaultShellId(Path.Combine(Root, "shell.qml"), Root));
-        Assert.Equal("root", ShellHost.DefaultShellId(Path.Combine(Root, "shell.qml"), Root.ToUpperInvariant() + "\\"));
+        Assert.Equal("root", ShellIdentity.DefaultId(Path.Combine(Root, "shell.qml"), Root));
+        Assert.Equal("root", ShellIdentity.DefaultId(Path.Combine(Root, "shell.qml"), Root.ToUpperInvariant() + "\\"));
     }
 
     [Fact]
     public void A_named_config_is_its_folder_name()
     {
-        Assert.Equal("work", ShellHost.DefaultShellId(Path.Combine(Root, "Work", "shell.qml"), Root));
+        Assert.Equal("work", ShellIdentity.DefaultId(Path.Combine(Root, "Work", "shell.qml"), Root));
     }
 
     [Fact]
@@ -25,11 +25,11 @@ public class ShellIdFromConfigFolderTests
     {
         var moved = Path.Combine(Path.GetTempPath(), "winshell-id-moved");
         Assert.Equal(
-            ShellHost.DefaultShellId(Path.Combine(Root, "work", "shell.qml"), Root),
-            ShellHost.DefaultShellId(Path.Combine(moved, "work", "shell.qml"), moved));
+            ShellIdentity.DefaultId(Path.Combine(Root, "work", "shell.qml"), Root),
+            ShellIdentity.DefaultId(Path.Combine(moved, "work", "shell.qml"), moved));
         Assert.Equal(
-            ShellHost.DefaultShellId(Path.Combine(Root, "shell.qml"), Root),
-            ShellHost.DefaultShellId(Path.Combine(moved, "shell.qml"), moved));
+            ShellIdentity.DefaultId(Path.Combine(Root, "shell.qml"), Root),
+            ShellIdentity.DefaultId(Path.Combine(moved, "shell.qml"), moved));
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public class ShellIdFromConfigFolderTests
         var outside = Path.Combine(Path.GetTempPath(), "winshell-id-elsewhere", "shell.qml");
         var deeper = Path.Combine(Root, "a", "b", "shell.qml");
 
-        Assert.Matches("^[0-9a-f]{32}$", ShellHost.DefaultShellId(outside, Root));
-        Assert.Matches("^[0-9a-f]{32}$", ShellHost.DefaultShellId(deeper, Root));
-        Assert.Matches("^[0-9a-f]{32}$", ShellHost.DefaultShellId(Path.Combine(Root, "shell.qml"), ""));
+        Assert.Matches("^[0-9a-f]{32}$", ShellIdentity.DefaultId(outside, Root));
+        Assert.Matches("^[0-9a-f]{32}$", ShellIdentity.DefaultId(deeper, Root));
+        Assert.Matches("^[0-9a-f]{32}$", ShellIdentity.DefaultId(Path.Combine(Root, "shell.qml"), ""));
     }
 
     [Fact]

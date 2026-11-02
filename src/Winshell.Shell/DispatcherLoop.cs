@@ -9,6 +9,9 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
 
     public TimeSpan Now => TimeProvider.System.GetElapsedTime(_started);
 
+    /// <summary>Raised with what posted work or a timer threw, after it is logged.</summary>
+    public event Action<Exception>? Failed;
+
     public void Post(Action action) => queue.TryEnqueue(() => Run(action));
 
     public IDisposable Schedule(TimeSpan delay, Action action)
@@ -38,6 +41,7 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
 #pragma warning restore CA1031
         {
             log.Error("shell", e.ToString());
+            Failed?.Invoke(e);
         }
     }
 

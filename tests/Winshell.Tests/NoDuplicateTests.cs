@@ -43,7 +43,7 @@ public sealed class NoDuplicateTests : IDisposable
     {
         var config = Config("open");
         var first = Start(config, duplicate: false);
-        Assert.Throws<WaitHandleCannotBeOpenedException>(() => Mutex.OpenExisting(Cli.DuplicateMutexName(ShellFile(config))));
+        Assert.Throws<WaitHandleCannotBeOpenedException>(() => Mutex.OpenExisting(DuplicateHold.ConfigMutexName(ShellFile(config))));
 
         var same = Run("run", "-n", "-p", config);
         Assert.Equal(0, same.Code);
@@ -147,7 +147,7 @@ public sealed class NoDuplicateTests : IDisposable
 
     private static void AssertHeld(string shellFile)
     {
-        using var mutex = Mutex.OpenExisting(Cli.DuplicateMutexName(shellFile));
+        using var mutex = Mutex.OpenExisting(DuplicateHold.ConfigMutexName(shellFile));
         var taken = false;
         try
         {

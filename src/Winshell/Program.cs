@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.IO.Pipes;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
 using System.Text;
 using Winshell;
 using Winshell.Platform.Windows;
@@ -601,7 +599,7 @@ namespace Winshell
         {
             // Restarted to update: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
             if (o.After is { } previous)
-                WaitForExit(previous);
+                Instances.WaitForExit(previous);
             // A downloaded update goes in place before any shell runs, and then the new winshell.exe runs the shell.
             // System.Diagnostics.Process is loaded first, from the files this one started with.
             RuntimeHelpers.PrepareMethod(typeof(Cli).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!.MethodHandle);
@@ -638,90 +636,22 @@ namespace Winshell
                 return 0;
             }
             // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
-            using var duplicate = o.NoDuplicate ? DuplicateHold.TryClaim(root) : default;
+            using var duplicate = o.NoDuplicate
+                ? DuplicateHold.TryClaim(DuplicateHold.ConfigMutexName(root), i => string.Equals(i.ConfigPath, root, StringComparison.OrdinalIgnoreCase))
+                : default;
             if (o.NoDuplicate && !duplicate.Acquired)
                 return 0;
 
-            Instances.Clean();
-            var id = Instances.NewId();
-            var dir = Instances.DirOf(id);
-            Directory.CreateDirectory(dir);
-            var logPath = System.IO.Path.Combine(dir, "log.txt");
-            var instanceLog = new InstanceLog(logPath);
             // Objects with no engine log through Log.Default. That is this process's log.
             var log = Log.Default;
-            log.MinimumLevel = o.Verbose ? LogLevel.Debug : LogLevel.Info;
-            var consoleLock = new object();
-            var logClosed = false;
-            log.Sink = (level, category, message) =>
-            {
-                var label = level switch
-                {
-                    LogLevel.Debug => "DEBUG",
-                    LogLevel.Info => " INFO",
-                    LogLevel.Warn => " WARN",
-                    LogLevel.Error => "ERROR",
-                    _ => "FATAL",
-                };
-                var line = string.IsNullOrEmpty(category) ? $"{label}: {message}" : $"{label} {category}: {message}";
-                lock (consoleLock)
-                {
-                    // A crash can still be reported after the log file is closed; then it goes to the console only.
-                    // The file outlives the run and goes into crash reports, so secrets are taken out of it.
-                    try
-                    {
-                        if (!logClosed)
-                            instanceLog.Write(level, $"{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
-                    }
-                    catch (Exception e) when (e is IOException or ObjectDisposedException)
-                    {
-                    }
-                    Console.Error.WriteLine(line);
-                }
-            };
-
-            // A crash is reported in a crash report that outlives the log, and in the instance's log, where
-            // winshell log finds it, before the process ends. Failures the shell survives get a report each too.
-            var crashes = new CrashReports(CrashFolder()) { ConfigPath = root, LogPath = logPath, Log = log };
-            var exitState = Path.Combine(ShellLocations.StateRoot, "last-exit.toml");
-            void Reported(CrashReport? report)
-            {
-                if (report is not null)
-                    Quietly(() => log.Info("shell", $"Wrote a crash report to \"{report.Path}\""));
-            }
-            Exception? fatal = null;
+            var instance = ShellInstance.Open(root, log, o.Verbose);
+            var crashes = instance.Crashes;
             // Null until the shell is about to start. A crash before that has not hidden Explorer's taskbar.
             ExplorerTaskbarSession? explorerTaskbar = null;
-            // Writes the report first, since logging can fail as the process ends. Returns false, so it can be an
-            // exception filter: that runs before the finally blocks below close the log.
-            bool ReportFatal(Exception error)
-            {
-                if (ReferenceEquals(fatal, error))
-                    return false;
-                fatal = error;
-                var report = crashes.Write("Winshell", error, fatal: true);
-                Quietly(() => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {error}"));
-                Reported(report);
-                return false;
-            }
-            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            {
-                // A crash on another thread can end the process without the finally below. Restore first.
-                Quietly(() => explorerTaskbar?.Restore());
-                if (e.ExceptionObject is Exception error)
-                    ReportFatal(error);
-                else
-                    Quietly(() => log.Write(LogLevel.Fatal, "", $"Winshell crashed: {e.ExceptionObject}"));
-            };
-            TaskScheduler.UnobservedTaskException += (_, e) =>
-            {
-                Quietly(() => log.Error("shell", $"A background task failed: {e.Exception}"));
-                e.SetObserved();
-                Reported(crashes.WriteOnce("background task", e.Exception, recovery: "A background task failed. Winshell is still running."));
-            };
+            instance.Crashing = () => explorerTaskbar?.Restore();
 
             using var loop = new WinEventLoop { Log = log };
-            loop.Failed += e => Reported(crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
+            loop.Failed += e => instance.Reported(crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
             using var updater = Updater.ForRelease(ReleaseRepository, Version, log);
             if (updater is not null)
             {
@@ -750,7 +680,7 @@ namespace Winshell
             }
             using var platform = new WindowsPlatform(loop, log);
             WindowsModules.Install(platform);
-            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = logPath, Crashes = crashes };
+            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = instance.LogPath, Crashes = crashes };
             crashes.ShellId = host.ShellId;
             // Winshell's own notice for a config error or a window that failed; it shows even when the config does not.
             using var notices = new ShellNotices(host, loop, platform, log, path => ShellNotices.Open(path, log));
@@ -773,36 +703,15 @@ namespace Winshell
             log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
             log.Info("shell", $"Launching config: \"{root}\"");
             log.Info("shell", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
-            log.Info("shell", $"Saving logs to \"{logPath}\"");
-            var pipe = $"winshell-{id}";
-            NamedPipeServerStream listening;
-            try
+            log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
+            if (!instance.TryOpenPipe())
             {
-                listening = IpcServer.OpenAvailable(ref pipe);
-            }
-            catch (IOException)
-            {
-                log.Error("shell", "The control pipe is already taken.");
-                lock (consoleLock)
-                {
-                    logClosed = true;
-                    instanceLog.Dispose();
-                }
-                try
-                {
-                    Directory.Delete(dir, recursive: true);
-                }
-                catch (Exception deleteError) when (deleteError is IOException or UnauthorizedAccessException)
-                {
-                }
-                Quietly(() => explorerTaskbar?.Dispose());
+                instance.Abandon();
+                ShellInstance.Quietly(() => explorerTaskbar?.Dispose());
                 return 1;
             }
-            if (!string.Equals(pipe, $"winshell-{id}", StringComparison.Ordinal))
-                log.Warn("shell", $"The control pipe winshell-{id} was taken. Listening on {pipe}.");
-            using var ipc = new IpcServer(listening, pipe, loop, new QmlInstanceControl(() => host, () => loop.Quit(0)), dismissNotice: () => notices.Hide());
-            var processStart = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
-            Instances.Write(new InstanceInfo(id, Environment.ProcessId, host.ShellId, root, TimeProvider.System.GetLocalNow().LocalDateTime, pipe, logPath, processStart));
+            instance.Listen(loop, new QmlInstanceControl(() => host, () => loop.Quit(0)), dismissNotice: () => notices.Hide());
+            instance.Publish(host.ShellId);
             Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
@@ -814,11 +723,11 @@ namespace Winshell
                 if (!host.Start() && host.Root is null)
                     log.Warn("shell", "The config failed to load. Winshell keeps running and reloads it when the files change.");
                 if (host.Root is not null)
-                    Quietly(() =>
+                    ShellInstance.Quietly(() =>
                     {
-                        if (CrashFollowUp.Find(crashes.Folder, exitState) is not { } closed)
+                        if (CrashFollowUp.Find(crashes.Folder, ShellInstance.ExitState) is not { } closed)
                             return;
-                        CrashFollowUp.MarkShown(exitState, closed.Path);
+                        CrashFollowUp.MarkShown(ShellInstance.ExitState, closed.Path);
                         var recovery = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
                         var previous = new CrashReport(closed.Path, "Winshell", new InvalidOperationException(recovery), true)
                         {
@@ -828,122 +737,29 @@ namespace Winshell
                         loop.Post(() => notices.Show(ShellNotices.ForCrash(previous)));
                     });
 #if DEBUG
-                if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
+                if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
                     loop.Schedule(TimeSpan.FromMilliseconds(300), () => loop.Quit(0));
 #endif
                 code = loop.Run();
 #if DEBUG
-                if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 })
-                    throw new InvalidOperationException($"{TestCrashVariable} asked Winshell to crash after its config loaded.");
+                if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
+                    throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash after its config loaded.");
 #endif
             }
-            catch (Exception e) when (ReportFatal(e))
+            catch (Exception e) when (instance.ReportFatal(e))
             {
                 throw;
             }
             finally
             {
-                if (fatal is null)
-                    Quietly(() => CrashFollowUp.MarkClean(exitState, TimeProvider.System.GetLocalNow()));
+                instance.MarkCleanExit();
                 host.Dispose();
                 // After the shell is gone, so a binding cannot hide the taskbar again. This runs when the loop
                 // returns and when an exception leaves this try, because the filter above does not swallow it.
-                Quietly(() => explorerTaskbar?.Dispose());
-                Instances.Remove(id);
-                lock (consoleLock)
-                {
-                    logClosed = true;
-                    instanceLog.Dispose();
-                }
+                ShellInstance.Quietly(() => explorerTaskbar?.Dispose());
+                instance.Close();
             }
             return code;
-        }
-
-        /// <summary>
-        /// Read only by the crash report test, and only in a Debug build: crash reports go to this folder, and the
-        /// shell crashes once its config has loaded and its loop has run, so the test sees the report a real crash writes.
-        /// A Release build ignores the variable.
-        /// </summary>
-        internal const string TestCrashVariable = "WINSHELL_TEST_CRASH";
-
-        private static string CrashFolder()
-        {
-#if DEBUG
-            if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 } folder)
-                return folder;
-#endif
-            return ShellLocations.CrashRoot;
-        }
-
-        /// <summary>Runs what reports a crash; that must not throw a second exception over the first.</summary>
-        private static void Quietly(Action action)
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception e) when (e is not OutOfMemoryException)
-            {
-            }
-        }
-
-        /// <summary>
-        /// Session mutex for one configuration. <c>--no-duplicate</c> holds it for the life of the shell, so two starts
-        /// that both pass the instance list, because neither has written it yet, cannot both keep running. The name is
-        /// a hash so a long path still fits, and the hash ignores case so Windows paths match.
-        /// </summary>
-        internal static string DuplicateMutexName(string configPath)
-        {
-            var full = System.IO.Path.GetFullPath(configPath).ToUpperInvariant();
-            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(full)));
-            return @"Local\winshell-" + hash;
-        }
-
-        /// <summary>Owns the <c>--no-duplicate</c> mutex until disposed. A failed claim owns nothing, and that start exits.</summary>
-        private readonly struct DuplicateHold : IDisposable
-        {
-            private readonly Mutex? _mutex;
-
-            private DuplicateHold(Mutex mutex) => _mutex = mutex;
-
-            public bool Acquired => _mutex is not null;
-
-            public static DuplicateHold TryClaim(string configPath)
-            {
-                var mutex = new Mutex(false, DuplicateMutexName(configPath));
-                bool mine;
-                try
-                {
-                    mine = mutex.WaitOne(0);
-                }
-                catch (AbandonedMutexException)
-                {
-                    // The previous shell crashed while it held this. The wait succeeded and this start owns it.
-                    mine = true;
-                }
-                if (!mine)
-                {
-                    mutex.Dispose();
-                    return default;
-                }
-                // A shell started without --no-duplicate holds no mutex. Its instance.json is the only record of it.
-                var running = Instances.List(false).FirstOrDefault(i => string.Equals(i.Info.ConfigPath, configPath, StringComparison.OrdinalIgnoreCase));
-                if (running.Info is not null)
-                {
-                    mutex.ReleaseMutex();
-                    mutex.Dispose();
-                    return default;
-                }
-                return new DuplicateHold(mutex);
-            }
-
-            public void Dispose()
-            {
-                if (_mutex is null)
-                    return;
-                _mutex.ReleaseMutex();
-                _mutex.Dispose();
-            }
         }
 
         /// <summary>
@@ -972,19 +788,6 @@ namespace Winshell
             finally
             {
                 installing.ReleaseMutex();
-            }
-        }
-
-        private static void WaitForExit(int pid)
-        {
-            try
-            {
-                using var process = Process.GetProcessById(pid);
-                process.WaitForExit(TimeSpan.FromSeconds(30));
-            }
-            catch (ArgumentException)
-            {
-                // It has already gone.
             }
         }
 
@@ -1217,7 +1020,7 @@ namespace Winshell
             try
             {
                 using var process = Process.GetProcessById(info.Pid);
-                if (process.HasExited || !IsThisInstance(info, process))
+                if (process.HasExited || !Instances.IsThisInstance(info, process))
                     return true;
                 return process.WaitForExit(timeout);
             }
@@ -1233,7 +1036,7 @@ namespace Winshell
             {
                 using var process = Process.GetProcessById(info.Pid);
                 // A different process now owns this id. The instance we asked is already gone.
-                if (process.HasExited || !IsThisInstance(info, process))
+                if (process.HasExited || !Instances.IsThisInstance(info, process))
                     return true;
                 process.Kill(entireProcessTree: true);
                 return process.WaitForExit(5000);
@@ -1241,23 +1044,6 @@ namespace Winshell
             catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
             {
                 return e is ArgumentException;
-            }
-        }
-
-        private static bool IsThisInstance(InstanceInfo info, Process process)
-        {
-            if (!process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (info.ProcessStart == 0)
-                return true;
-            try
-            {
-                var started = process.StartTime.ToUniversalTime().Ticks;
-                return started == 0 || started == info.ProcessStart;
-            }
-            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or ArgumentException)
-            {
-                return true;
             }
         }
 

@@ -11,20 +11,6 @@ public class PipeTrustTests
     private const int Medium = 0x2000;
     private const int High = 0x3000;
 
-    [Theory]
-    [InlineData(@"C:\Program Files\winshell\winshell.exe", true)]
-    [InlineData(@"C:\Program Files\winshell\winshellw.exe", true)]
-    [InlineData(@"C:\Program Files\winshell\WINSHELL.EXE", true)]
-    [InlineData(@"C:\Program Files\winshell\testhost.exe", false)]
-    [InlineData(@"C:\Program Files\winshell\notwinshell.exe", false)]
-    [InlineData(@"C:\Program Files\winshell\winshell.exe.txt", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void Only_the_shell_images_are_trusted(string? path, bool trusted)
-    {
-        Assert.Equal(trusted, PipeTrust.IsWinshellImage(path));
-    }
-
     [Fact]
     public void A_lower_integrity_is_refused_and_an_unknown_level_fails_closed()
     {
@@ -36,11 +22,8 @@ public class PipeTrustTests
     }
 
     [Fact]
-    public void The_running_process_has_an_image_and_an_integrity_level()
+    public void The_running_process_has_an_integrity_level()
     {
-        var path = PipeTrust.ImagePath(Environment.ProcessId);
-        Assert.False(string.IsNullOrEmpty(path));
-        Assert.False(PipeTrust.IsWinshellImage(path));
         Assert.True(PipeTrust.IntegrityRid(Environment.ProcessId) >= Medium);
     }
 
@@ -106,21 +89,6 @@ public class PipeTrustTests
         await client.ConnectAsync(3000, TestContext.Current.CancellationToken);
         await waiting;
         Assert.True(PipeTrust.ClientMayUseShell(server.SafePipeHandle));
-    }
-
-    [Fact]
-    public async Task A_pipe_owned_by_another_image_is_refused()
-    {
-        var name = "winshell-test-" + Guid.NewGuid().ToString("N");
-        await using var server = IpcServer.OpenFirst(name);
-        var waiting = server.WaitForConnectionAsync(TestContext.Current.CancellationToken);
-        var error = await Assert.ThrowsAsync<IOException>(async () =>
-        {
-            await foreach (var _ in IpcServer.Request(name, new IpcRequest("show"), TestContext.Current.CancellationToken))
-                break;
-        });
-        Assert.Contains("not owned by Winshell", error.Message, StringComparison.Ordinal);
-        await waiting;
     }
 
     [Fact]
