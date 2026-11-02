@@ -1,5 +1,3 @@
-using Winshell.Platform.Windows.Services.Media;
-
 namespace Winshell.Platform.Windows.Tests;
 
 /// <summary>

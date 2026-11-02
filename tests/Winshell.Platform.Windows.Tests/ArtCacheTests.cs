@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using SkiaSharp;
-using Winshell.Platform.Windows.Services.Media;
 
 namespace Winshell.Platform.Windows.Tests;
 
