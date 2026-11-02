@@ -455,8 +455,6 @@ public sealed class QuickSettings : ObservableObject
         brightness.Monitors.CollectionChanged += OnMonitors;
         layout.PropertyChanged += OnLayout;
         media.Sessions.CollectionChanged += OnMediaSessions;
-        // The service starts reading when the shell does. Enumeration waits until a flyout is open.
-        bluetooth.StopMonitoring();
         BindBluetooth();
         BindOutput();
         BindBrightness();

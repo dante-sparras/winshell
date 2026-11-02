@@ -33,8 +33,12 @@ public sealed class BluetoothServiceTests
         return messages;
     }
 
-    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null) =>
-        new(loop, log ?? new Log(), backend);
+    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null)
+    {
+        var service = new BluetoothService(loop, log ?? new Log(), backend);
+        service.StartMonitoring();
+        return service;
+    }
 
     [Fact]
     public async Task A_read_changes_only_the_properties_that_differ()
@@ -422,6 +426,17 @@ public sealed class BluetoothServiceTests
     }
 
     [Fact]
+    public void A_new_service_asks_Windows_for_nothing_until_monitoring_starts()
+    {
+        var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
+
+        using var service = new BluetoothService(new ManualEventLoop(), new Log(), backend);
+
+        Assert.Null(service.MonitorTask);
+        Assert.False(backend.FirstRead.Task.IsCompleted);
+    }
+
+    [Fact]
     public async Task The_service_starts_one_monitor_and_closes_its_backend()
     {
         var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
@@ -499,7 +514,7 @@ public sealed class BluetoothServiceTests
     public async Task A_refresh_during_a_read_reads_again_when_it_ends()
     {
         var backend = new GatedBackend();
-        using var service = new BluetoothService(new ManualEventLoop(), new Log(), backend, monitor: false);
+        using var service = new BluetoothService(new ManualEventLoop(), new Log(), backend);
         var first = service.RefreshAsync();
         await backend.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
 
@@ -534,7 +549,7 @@ public sealed class BluetoothServiceTests
     {
         var backend = new StubbornBackend();
         var loop = new ManualEventLoop();
-        var service = new BluetoothService(loop, new Log(), backend, monitor: false);
+        var service = new BluetoothService(loop, new Log(), backend);
         var read = service.RefreshAsync();
         await backend.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
 
@@ -553,7 +568,7 @@ public sealed class BluetoothServiceTests
     {
         private Session()
         {
-            Service = new BluetoothService(Loop, new Log(), Backend, monitor: false);
+            Service = new BluetoothService(Loop, new Log(), Backend);
         }
 
         public FakeBackend Backend { get; } = new();

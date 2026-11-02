@@ -56,6 +56,7 @@ public sealed class KeepAwakeTests
         var awake = new KeepAwake { Enabled = true };
         Assert.True(awake.HoldsRequest);
         awake.Dispose();
+        Assert.False(awake.Enabled);
         Assert.False(awake.HoldsRequest);
     }
 }

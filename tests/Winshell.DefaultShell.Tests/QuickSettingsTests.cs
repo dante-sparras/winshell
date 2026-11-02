@@ -616,8 +616,8 @@ public sealed class QuickSettingsTests
     [Fact]
     public async Task Bluetooth_is_read_only_while_a_flyout_is_open()
     {
-        using var rig = QuickSettingsRig.Create(laptop: false, monitor: true);
-        await Wait.UntilAsync(() => rig.MonitorAtStart!.IsCompleted, "monitoring to stop");
+        using var rig = QuickSettingsRig.Create(laptop: false);
+        Assert.Null(rig.Bluetooth.MonitorTask);
 
         rig.Popup.Show();
         var running = rig.Bluetooth.MonitorTask;
@@ -680,7 +680,7 @@ internal sealed class QuickSettingsRig : IDisposable
     private readonly List<QuickSettingsPopup> _popups = [];
     private readonly string _directory;
 
-    private QuickSettingsRig(bool laptop, bool monitor, string? file)
+    private QuickSettingsRig(bool laptop, string? file)
     {
         _directory = Path.Combine(Path.GetTempPath(), "winshell-quick-settings-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(_directory);
@@ -710,8 +710,7 @@ internal sealed class QuickSettingsRig : IDisposable
         PowerService = new PowerService(Loop, Power);
         PowerMode = new PowerModeService(Loop, Log, Modes, SetMode);
         Brightness = new BrightnessService(Loop, Log, BrightnessSource, Writer);
-        Bluetooth = new BluetoothService(Loop, Log, BluetoothBackend, monitor);
-        MonitorAtStart = Bluetooth.MonitorTask;
+        Bluetooth = new BluetoothService(Loop, Log, BluetoothBackend);
         Status = new SystemStatus(Networking, Audio, PowerService, PowerMode);
         LayoutPath = Path.Combine(_directory, "quick-settings.toml");
         Layout = new QuickSettingsLayout(LayoutPath, Loop, Log);
@@ -756,7 +755,6 @@ internal sealed class QuickSettingsRig : IDisposable
 
     public BluetoothService Bluetooth { get; }
 
-    public Task? MonitorAtStart { get; }
 
     public SystemStatus Status { get; }
 
@@ -776,7 +774,7 @@ internal sealed class QuickSettingsRig : IDisposable
 
     public QuickSettingsPopup Popup { get; }
 
-    public static QuickSettingsRig Create(bool laptop, bool monitor = false, string? file = null) => new(laptop, monitor, file);
+    public static QuickSettingsRig Create(bool laptop, string? file = null) => new(laptop, file);
 
     public async Task Load()
     {
