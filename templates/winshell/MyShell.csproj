@@ -11,6 +11,9 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
+    <!-- A shell mostly waits, and these two cost a third of an idle shell's CPU. -->
+    <TieredPGO>false</TieredPGO>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <!-- Read as text by the CLI, so it is written out and not computed. -->
     <AssemblyName>MyShell</AssemblyName>
   </PropertyGroup>
