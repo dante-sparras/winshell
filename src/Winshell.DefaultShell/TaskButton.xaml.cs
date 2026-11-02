@@ -87,7 +87,7 @@ public sealed partial class TaskButton : Button
         {
             if (Item is { } current)
                 model.Choose(current, id);
-        }, Pixels(16));
+        }, ShellIcon.Pixels(XamlRoot, 16));
         menu.Closed += (_, _) =>
         {
             if (ReferenceEquals(_menu, menu))
@@ -177,20 +177,12 @@ public sealed partial class TaskButton : Button
     private void ShowIcon(TaskItem? task)
     {
         var path = task is null ? "" : task.Icon;
-        var size = Pixels(24);
+        var size = ShellIcon.Pixels(XamlRoot, 24);
         if (path == _iconPath && size == _iconSize)
             return;
         _iconPath = path;
         _iconSize = size;
         Icon.Source = path.Length == 0 ? null : ShellIcon.Load(path, size);
-    }
-
-    private int Pixels(int size)
-    {
-        var scale = XamlRoot?.RasterizationScale ?? 1;
-        if (scale < 1)
-            scale = 1;
-        return Math.Max(1, (int)Math.Ceiling(size * scale));
     }
 
     private static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;

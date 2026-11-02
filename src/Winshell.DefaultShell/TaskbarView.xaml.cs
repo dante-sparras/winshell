@@ -7,17 +7,20 @@ using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell;
 
-/// <summary>The taskbar of one screen: Start, Search, the apps, and the clock.</summary>
+/// <summary>The taskbar of one screen: Start, Search, the apps, the tray and the clock.</summary>
 public sealed partial class TaskbarView : UserControl
 {
     private readonly Preferences _preferences;
+    private readonly TrayAreaView _tray;
 
-    public TaskbarView(TaskbarModel model, Preferences preferences, TimeProvider time)
+    public TaskbarView(TaskbarModel model, TrayArea tray, Preferences preferences, TimeProvider time)
     {
         Model = model;
         _preferences = preferences;
         InitializeComponent();
         Clock.Attach(preferences, time);
+        _tray = new TrayAreaView(tray);
+        Corner.Children.Insert(0, _tray);
         Place();
         _preferences.PropertyChanged += OnPreferences;
         ContextRequested += OnContextRequested;
@@ -25,10 +28,11 @@ public sealed partial class TaskbarView : UserControl
 
     public TaskbarModel Model { get; }
 
-    /// <summary>Drops the clock and the preference subscription. The window is about to close.</summary>
+    /// <summary>Drops the tray, the clock and the preference subscription. The window is about to close.</summary>
     public void Release()
     {
         _preferences.PropertyChanged -= OnPreferences;
+        _tray.Release();
         Clock.Detach();
     }
 
