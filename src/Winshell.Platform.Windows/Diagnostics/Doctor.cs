@@ -2,10 +2,10 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Winshell.Platform.Windows.Services.Session;
 using Winshell.Platform.Windows.Services.Updates;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;
+using Winshell.Session;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Platform.Windows.Diagnostics;

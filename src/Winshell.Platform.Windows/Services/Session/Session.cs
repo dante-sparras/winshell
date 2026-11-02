@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using Winshell.Runtime;
+using Winshell.Session;
 
 namespace Winshell.Platform.Windows.Services.Session;
 
@@ -31,23 +31,6 @@ public sealed class SessionService : QObject
         QmlServices.Warn(this, "session", "Windows did not lock the session.");
         return false;
     }
-}
-
-/// <summary>Locks the Windows session. Tests use a fake, so they never lock the PC.</summary>
-internal interface IWorkstationLock
-{
-    bool Lock();
-}
-
-internal sealed partial class WindowsWorkstationLock : IWorkstationLock
-{
-    public static readonly WindowsWorkstationLock Instance = new();
-
-    public bool Lock() => LockWorkStation();
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool LockWorkStation();
 }
 
 internal static class SessionModule
