@@ -32,7 +32,8 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
 │   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
-├── scripts/                         # Check, test, package, install and release scripts; docs/development.md lists them
+├── scripts/                         # Check, test, pack, package, install and release scripts; docs/development.md lists them
+├── templates/                       # dotnet new winshell and winshell-default; the default shell is generated at pack time
 ├── src/
 │   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
@@ -42,6 +43,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell.Shell/              # Shell.Run and WinUI windows; ADR-0010 replaces the runtime with this
 │   ├── Winshell.DefaultShell/       # The default shell in XAML and C#, not shipped until the cut
 │   ├── Winshell.Next/               # winshell-next.exe, which runs it until the cut
+│   ├── Winshell.Package/            # Packs Winshell.Services and Winshell.Shell as the Winshell package
 │   └── Winshell.Platform.Windows/   # Windows 11 windows, composition, and the QML face of the services
 ├── tests/
 │   ├── Winshell.Qml.Tests/
@@ -51,6 +53,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
 │   ├── Winshell.Platform.Windows.Tests/
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
+│   ├── Winshell.Package.Tests/      # Packs the templates and runs each shell; Category=Package, left out of the main run
 │   ├── TestSupport/                 # Source files every test project links instead of copying
 │   ├── Directory.Build.props        # What every test project shares
 │   └── quarantine.txt               # Flaky tests ci leaves out and the quarantine job runs
@@ -63,7 +66,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Build with `dotnet build .\winshell.slnx -warnaserror`, which must pass with 0 warnings, then run the focused tests for what you changed. Add `dotnet test .\tests\Winshell.Qml.Tests -c Release --filter Category=Corpus` when you touch `src/Winshell.Qml`, `dotnet test .\winshell.slnx --filter Category=Leak` when you touch reload, and `dotnet test .\tests\Winshell.Runtime.Tests --filter Category=Performance` when you touch Jint. The required `ci` job runs the build and the main test stage on a PR, and all of `pwsh scripts/check.ps1` on a push to `main` and on the release PR. `check.ps1` runs the Pester suites when Pester 5.6.1 is installed, and does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
+- Build with `dotnet build .\winshell.slnx -warnaserror`, which must pass with 0 warnings, then run the focused tests for what you changed. Add `dotnet test .\tests\Winshell.Qml.Tests -c Release --filter Category=Corpus` when you touch `src/Winshell.Qml`, `dotnet test .\winshell.slnx --filter Category=Leak` when you touch reload, and `dotnet test .\tests\Winshell.Runtime.Tests --filter Category=Performance` when you touch Jint. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The required `ci` job runs the build and the main test stage on a PR, and all of `pwsh scripts/check.ps1` on a push to `main` and on the release PR. `check.ps1` runs the Pester suites when Pester 5.6.1 is installed, and does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.

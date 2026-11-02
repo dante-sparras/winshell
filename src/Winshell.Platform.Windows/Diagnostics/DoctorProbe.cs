@@ -11,6 +11,8 @@ using Winshell.Runtime;
 using Winshell.Runtime.Shell;
 using Winshell.Session;
 
+using Winshell.Diagnostics;
+
 namespace Winshell.Platform.Windows.Diagnostics;
 
 /// <summary>

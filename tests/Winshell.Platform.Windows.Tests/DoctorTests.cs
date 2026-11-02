@@ -2,10 +2,11 @@ using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
+using Winshell.Diagnostics;
 using Winshell.Platform.Windows.Diagnostics;
 using Winshell.Platform.Windows.Services.Session;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
-using static Winshell.Platform.Windows.Diagnostics.Doctor;
+using static Winshell.Diagnostics.Doctor;
 
 namespace Winshell.Platform.Windows.Tests;
 

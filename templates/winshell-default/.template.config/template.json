@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "dante-sparras",
+  "classifications": [ "WinUI", "Shell" ],
+  "identity": "Winshell.Templates.DefaultShell",
+  "name": "Winshell default shell",
+  "description": "The default Winshell shell, as a project you can change.",
+  "shortName": "winshell-default",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "MyShell",
+  "preferNameDirectory": true
+}

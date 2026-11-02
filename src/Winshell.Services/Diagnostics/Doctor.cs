@@ -8,7 +8,7 @@ using Winshell.Session;
 using Winshell.Updates;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
-namespace Winshell.Platform.Windows.Diagnostics;
+namespace Winshell.Diagnostics;
 
 /// <summary>
 /// What <see cref="Doctor.Run"/> reads from this PC. The QML stack supplies it. Every read stays a read: the doctor

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "dante-sparras",
+  "classifications": [ "WinUI", "Shell" ],
+  "identity": "Winshell.Templates.Shell",
+  "name": "Winshell shell",
+  "description": "The smallest Winshell shell: one panel of XAML.",
+  "shortName": "winshell",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "MyShell",
+  "preferNameDirectory": true
+}

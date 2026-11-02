@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Winshell.Diagnostics;
 using Winshell.Platform.Windows.Diagnostics;
 using Winshell.Runtime;
 using Winshell.Runtime.Shell;

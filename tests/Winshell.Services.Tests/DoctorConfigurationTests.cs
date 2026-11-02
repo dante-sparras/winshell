@@ -1,4 +1,4 @@
-using Winshell.Platform.Windows.Diagnostics;
+using Winshell.Diagnostics;
 
 namespace Winshell.Services.Tests;
 
