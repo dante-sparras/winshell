@@ -17,10 +17,8 @@ public static class StartList
     public const double MenuWidth = 640;
     public const double MenuHeight = 720;
     public const double Margin = 22;
-    public const double ContentWidth = 596;
     public const double SearchX = 22;
     public const double SearchY = 16;
-    public const double SearchWidth = 596;
     public const double SearchHeight = 32;
     public const int Columns = 6;
     public const double TileWidth = 96;

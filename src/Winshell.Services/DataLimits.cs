@@ -3,15 +3,10 @@ using System.Globalization;
 namespace Winshell;
 
 /// <summary>
-/// How much of a file Winshell will read. A preferences file is a dozen keys.
-/// <see cref="FileView"/> and <see cref="JsonAdapter"/> use <see cref="MaxReadBytes"/>.
-/// TOML uses <see cref="MaxTextBytes"/>.
+/// How much of a TOML file Winshell will read. A preferences file is a dozen keys.
 /// </summary>
 internal static class DataLimits
 {
-    /// <summary>64 MiB. A general file read, including JSON, stops past this.</summary>
-    public const int MaxReadBytes = 64 * 1024 * 1024;
-
     /// <summary>1 MiB. A TOML file stops past this.</summary>
     public const int MaxTextBytes = 1024 * 1024;
 

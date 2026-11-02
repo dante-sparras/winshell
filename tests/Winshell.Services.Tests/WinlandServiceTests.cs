@@ -62,8 +62,8 @@ public sealed class WinlandServiceTests
 
         Assert.Equal([0, 1], service.Monitors.Select(m => m.Id));
         Assert.Equal(["special:special", "notes", "1", "3", "3"], service.Workspaces.Select(w => w.Name));
-        Assert.Equal(["10", "20"], service.Toplevels.Select(t => t.Address));
-        Assert.Equal((nint)0x10, service.Toplevels[0].Handle);
+        Assert.Equal(["10", "20"], service.Windows.Select(t => t.Address));
+        Assert.Equal((nint)0x10, service.Windows[0].Handle);
         Assert.Equal(-99, service.Workspaces.Single(w => w.Name == "special:special").Id);
         Assert.Equal(-1, service.Workspaces.Single(w => w.Name == "notes").Id);
 
@@ -86,12 +86,12 @@ public sealed class WinlandServiceTests
         Assert.True(focused.HasFullscreen);
         Assert.Equal("1", focused.Address);
 
-        Assert.Same(service.Toplevels[0], service.ActiveToplevel);
-        Assert.True(service.ActiveToplevel!.Activated);
-        Assert.Equal("Editor", service.ActiveToplevel.Title);
-        Assert.Same(focused, service.ActiveToplevel.Workspace);
-        Assert.Same(main, service.ActiveToplevel.Monitor);
-        Assert.Same(service.ActiveToplevel, Assert.Single(focused.Toplevels));
+        Assert.Same(service.Windows[0], service.ActiveWindow);
+        Assert.True(service.ActiveWindow!.Activated);
+        Assert.Equal("Editor", service.ActiveWindow.Title);
+        Assert.Same(focused, service.ActiveWindow.Workspace);
+        Assert.Same(main, service.ActiveWindow.Monitor);
+        Assert.Same(service.ActiveWindow, Assert.Single(focused.Windows));
     }
 
     [Fact]
@@ -105,19 +105,19 @@ public sealed class WinlandServiceTests
         Assert.Equal([@"\\.\DISPLAY1", @"\\.\DISPLAY2"], threes.Select(w => w.Monitor!.Name));
         Assert.False(threes[0].Active);
         Assert.True(threes[1].Active);
-        Assert.Equal("20", Assert.Single(threes[1].Toplevels).Address);
-        Assert.Empty(threes[0].Toplevels);
+        Assert.Equal("20", Assert.Single(threes[1].Windows).Address);
+        Assert.Empty(threes[0].Windows);
     }
 
     [Fact]
-    public void A_toplevel_is_the_app_window_with_its_handle()
+    public void A_window_is_the_app_window_with_its_handle()
     {
         var windows = new Listing();
         windows.Open(Info(0x10));
         using var list = new WindowListService(_loop, Log.Default, source: windows);
         using var service = Connected();
-        var editor = service.Toplevels.Single(window => window.Address == "10");
-        var browser = service.Toplevels.Single(window => window.Address == "20");
+        var editor = service.Windows.Single(window => window.Address == "10");
+        var browser = service.Windows.Single(window => window.Address == "20");
         Assert.Null(editor.Window);
         Assert.Null(service.WindowList);
 
@@ -156,15 +156,15 @@ public sealed class WinlandServiceTests
         service.Attach(list);
         _loop.Process();
 
-        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x10), service.Toplevels.Single(window => window.Address == "10").Window);
-        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20), service.Toplevels.Single(window => window.Address == "20").Window);
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x10), service.Windows.Single(window => window.Address == "10").Window);
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20), service.Windows.Single(window => window.Address == "20").Window);
     }
 
     [Fact]
     public void An_event_updates_the_same_objects_then_is_raised()
     {
         using var service = Connected();
-        var window = service.Toplevels[0];
+        var window = service.Windows[0];
         var changes = Watch(window);
         var seen = new List<(string Name, string Title)>();
         service.RawEvent += e => seen.Add((e.Name, window.Title));
@@ -174,7 +174,7 @@ public sealed class WinlandServiceTests
         Assert.Equal("New, title", window.Title);
         Assert.Equal([nameof(WinlandWindow.Title)], changes);
         Assert.Equal(("windowtitlev2", "New, title"), Assert.Single(seen));
-        Assert.Same(window, service.Toplevels[0]);
+        Assert.Same(window, service.Windows[0]);
     }
 
     [Fact]
@@ -226,30 +226,30 @@ public sealed class WinlandServiceTests
         var three = service.Workspaces.First(w => w.Name == "3" && w.Monitor!.Name == @"\\.\DISPLAY1");
 
         Raise(@"openwindow>>30,1,\\.\DISPLAY1,App,Title, with comma");
-        var window = service.Toplevels.Single(t => t.Address == "30");
+        var window = service.Windows.Single(t => t.Address == "30");
         Assert.Equal("Title, with comma", window.Title);
-        Assert.Contains(window, main.Toplevels);
+        Assert.Contains(window, main.Windows);
 
         Raise(@"movewindowv2>>30,3,3,\\.\DISPLAY1");
         Assert.Same(three, window.Workspace);
-        Assert.Contains(window, three.Toplevels);
-        Assert.DoesNotContain(window, main.Toplevels);
+        Assert.Contains(window, three.Windows);
+        Assert.DoesNotContain(window, main.Windows);
 
         Raise("activewindowv2>>30");
-        Assert.Same(window, service.ActiveToplevel);
-        Assert.False(service.Toplevels[0].Activated);
+        Assert.Same(window, service.ActiveWindow);
+        Assert.False(service.Windows[0].Activated);
 
         Raise("closewindow>>30");
-        Assert.DoesNotContain(window, service.Toplevels);
-        Assert.Empty(three.Toplevels);
-        Assert.Null(service.ActiveToplevel);
+        Assert.DoesNotContain(window, service.Windows);
+        Assert.Empty(three.Windows);
+        Assert.Null(service.ActiveWindow);
     }
 
     [Fact]
     public void An_urgent_window_marks_its_workspace_until_it_is_focused()
     {
         using var service = Connected();
-        var other = service.Toplevels[1];
+        var other = service.Windows[1];
         var workspace = other.Workspace!;
 
         Raise("urgent>>20");
@@ -293,23 +293,23 @@ public sealed class WinlandServiceTests
         using var service = Connected();
         var late = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _link.Pending = late;
-        service.RefreshToplevels();
+        service.RefreshWindows();
 
         _link.RaiseConnection(false);
         _loop.Process();
 
         Assert.Empty(service.Monitors);
         Assert.Empty(service.Workspaces);
-        Assert.Empty(service.Toplevels);
+        Assert.Empty(service.Windows);
         Assert.Null(service.FocusedMonitor);
         Assert.Null(service.FocusedWorkspace);
-        Assert.Null(service.ActiveToplevel);
+        Assert.Null(service.ActiveWindow);
 
         _link.Pending = null;
         late.SetResult(Clients);
         Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(50));
         _loop.Process();
-        Assert.Empty(service.Toplevels);
+        Assert.Empty(service.Windows);
 
         _link.Connected = true;
         _link.RaiseConnection(true);
@@ -390,22 +390,20 @@ public sealed class WinlandServiceTests
     {
         using var service = new WinlandService(_loop, Log.Default, _link);
 
-        Assert.Equal(@"\\.\pipe\winland-test", service.RequestSocketPath);
-        Assert.Equal(service.RequestSocketPath, service.EventSocketPath);
-        Assert.False(service.UsingLua);
+        Assert.Equal(@"\\.\pipe\winland-test", service.PipePath);
     }
 
     [Fact]
     public void A_disposed_service_stops_following_the_stream()
     {
         var service = Connected();
-        var title = service.Toplevels[0].Title;
+        var title = service.Windows[0].Title;
 
         _link.Raise("windowtitlev2>>10,Late");
         service.Dispose();
         _loop.Process();
 
-        Assert.Equal(title, service.Toplevels[0].Title);
+        Assert.Equal(title, service.Windows[0].Title);
         Assert.Equal(1, _link.Disposals);
         Assert.Equal(0, _link.Listeners);
     }

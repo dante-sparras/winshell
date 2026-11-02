@@ -1,6 +1,6 @@
 # Winshell
 
-The configuration's program uses these types. `Shell.Run<T>()` starts one, from `Main` marked `[STAThread]`. Windows are `PanelWindow`, `PopupWindow` and `FloatingWindow`. Their content is any WinUI element. Services hang off `Shell.Current`: [apps](winshell-apps.md), [audio](winshell-audio.md), [Bluetooth](winshell-bluetooth.md), [capture](winshell-capture.md), the [Explorer taskbar](winshell-explorertaskbar.md), [media](winshell-media.md), [network](winshell-network.md), [notifications](winshell-notifications.md), [power](winshell-power.md), [session](winshell-session.md), the [tray](winshell-tray.md), [updates](winshell-updates.md), [windows](winshell-windows.md) and [Winland](winshell-winland.md). `Shell.Ipc` is what `winshell ipc` calls. Preferences are a [TomlFile](#tomlfile). `doctor` reads a project through [Doctor](winshell-diagnostics.md#doctor) and does not build it.
+The configuration's program uses these types. `Shell.Run<T>()` starts one, from `Main` marked `[STAThread]`. Windows are `PanelWindow`, `PopupWindow` and `FloatingWindow`. Their content is any WinUI element. Services hang off `Shell.Current`: [apps](winshell-apps.md), [audio](winshell-audio.md), [Bluetooth](winshell-bluetooth.md), [capture](winshell-capture.md), the [Explorer taskbar](winshell-explorertaskbar.md), [media](winshell-media.md), [network](winshell-network.md), [notifications](winshell-notifications.md), [power](winshell-power.md), [session](winshell-session.md), the [tray](winshell-tray.md), [updates](winshell-updates.md), [windows](winshell-windows.md) and [Winland](winshell-winland.md). `Shell.Ipc` is what `winshell ipc` calls. Preferences are a [TomlFile](#tomlfile).
 
 ## Shell
 
@@ -42,11 +42,11 @@ The running shell: its screens and services. There is one in a process.
 | `SystemTray` | [SystemTray](winshell-tray.md#systemtray), read-only | The notification area. Only one running instance in the Windows session owns it. |
 | `Updates` | [UpdatesService](winshell-updates.md#updatesservice), read-only | Winshell's own updates. A configuration's own program does not update itself. |
 | `VirtualDesktops` | [VirtualDesktopsService](winshell-windows.md#virtualdesktopsservice), read-only |  |
+| `Version` | string, static, read-only | The Winshell release this program is built on. |
 | `WindowList` | [WindowListService](winshell-windows.md#windowlistservice), read-only | The app windows the taskbar and Alt+Tab list. |
 | `Winland` | [WinlandService](winshell-winland.md#winlandservice), read-only |  |
 | `CachePath(string path)` | string | A path in CacheDir. |
 | `ConfigPath(string path)` | string | A path in ConfigDir. |
-| `DarkFor(string? scheme, bool windowsDark)` | bool, static | Whether scheme is dark. `light` and `dark` override Windows; anything else follows windowsDark. |
 | `DataPath(string path)` | string | A path in DataDir. |
 | `Dispose()` | void |  |
 | `NewHotkey()` | [Hotkey](winshell-input.md#hotkey) | A hotkey that works anywhere in Windows. Set its Sequence, and dispose it to give the keys back. |
@@ -67,7 +67,6 @@ What a configuration sets before its shell starts.
 | `DataDir` | string?, init | Another folder for DataDir. A relative path is next to the program, `%NAME%` expands, and `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
 | `ShellId` | string?, init | The name that identifies this configuration across runs. It names its data, state and cache folders. Without it, a program in the config folder is named after its folder, and one anywhere else after its path. |
 | `StateDir` | string?, init | Another folder for StateDir, read as DataDir is. |
-| `Updater` | [Updater](winshell-updates.md#updater)?, init | The updater `winshell.exe` passes when it runs this shell in-process. Installing a download stays in `winshell.exe`, before the shell starts. Restart then starts this program again with `--after`. A configuration's own program leaves this null. |
 
 ## ShellConfiguration
 
@@ -124,7 +123,6 @@ Has the members of [ShellWindow](#shellwindow).
 | `ExclusiveZone` | double | How much of its edge the panel reserves, in logical pixels, so maximized windows stay out of it. |
 | `Focusable` | bool | Whether the panel can take the keyboard. A panel that cannot never takes activation from the app in front. |
 | `Margins` | Thickness |  |
-| `Namespace` | string |  |
 
 ## PopupWindow
 

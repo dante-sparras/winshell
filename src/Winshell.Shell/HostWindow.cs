@@ -241,7 +241,7 @@ internal sealed unsafe class HostWindow : IDisposable
         var edge = ExclusionEdge(p.Anchors);
         var zone = (int)Math.Round(p.ExclusiveZone * _scale);
         RECT area;
-        if (p.ExclusionMode == 1)
+        if (p.ExclusionMode == PanelExclusionMode.Ignore)
         {
             // Ignore: the whole monitor, over the taskbar and other bars.
             RemoveAppBar();

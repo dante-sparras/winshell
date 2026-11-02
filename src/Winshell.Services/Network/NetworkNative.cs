@@ -39,7 +39,7 @@ internal static unsafe partial class NetworkNative
         public fixed ulong Counters[18];
     }
 
-    public readonly record struct InterfaceRow(bool HardwareInterface, bool MediaConnected, ulong LinkSpeed);
+    internal readonly record struct InterfaceRow(bool HardwareInterface, bool MediaConnected, ulong LinkSpeed);
 
     /// <summary>The row of an interface by its GUID, or null when Windows does not know it.</summary>
     public static InterfaceRow? GetInterface(Guid interfaceGuid)
@@ -60,7 +60,7 @@ internal static unsafe partial class NetworkNative
 
     // wlanapi: interface states, saved profiles and change notifications.
 
-    public enum WlanInterfaceState
+    internal enum WlanInterfaceState
     {
         NotReady = 0,
         Connected = 1,

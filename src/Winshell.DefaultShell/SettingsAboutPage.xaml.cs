@@ -78,7 +78,7 @@ public sealed partial class SettingsAboutPage : UserControl
         try
         {
             var package = new DataPackage();
-            package.SetText(SettingsAbout.CopyText(ProductVersion.Current.Text));
+            package.SetText(SettingsAbout.CopyText(Shell.Version));
             Clipboard.SetContent(package);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -123,7 +123,7 @@ public sealed partial class SettingsAboutPage : UserControl
     private void Show()
     {
         var updates = _shell.Updates;
-        VersionCard.Description = ProductVersion.Current.Text;
+        VersionCard.Description = Shell.Version;
         UpdatesCard.Description = SettingsAbout.Updates(updates.Available, updates.Winget, updates.Packaged, updates.Status, updates.Version, updates.Error);
         Update.Content = SettingsAbout.UpdateButton(updates.Status);
         Update.Visibility = updates.Available ? Visibility.Visible : Visibility.Collapsed;

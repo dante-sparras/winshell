@@ -6,7 +6,7 @@ namespace Winshell;
 /// The zone Windows records for a downloaded file, in its <c>Zone.Identifier</c> stream. Browsers, mail and
 /// Explorer's zip extraction write it; Properties > Unblock and <c>Unblock-File</c> remove it.
 /// </summary>
-public static class ZoneIdentifier
+internal static class ZoneIdentifier
 {
     /// <summary>Whether a file came from the Internet (3) or Restricted (4) zone. A file without the stream did not.</summary>
     public static bool IsDownloaded(string path)

@@ -37,7 +37,7 @@ public sealed record ShellOptions
     /// <c>winshell.exe</c>, before the shell starts. Restart then starts this program again with <c>--after</c>.
     /// A configuration's own program leaves this null.
     /// </summary>
-    public Updater? Updater { get; init; }
+    internal Updater? Updater { get; init; }
 }
 
 /// <summary>A configuration: the program that defines a shell. <see cref="Start"/> makes its windows.</summary>
@@ -79,6 +79,9 @@ public sealed partial class Shell : IDisposable
 
     internal ShellPlatform Platform { get; }
 
+    /// <summary>The Winshell release this program is built on.</summary>
+    public static string Version => ProductVersion.Current.Text;
+
     /// <summary>The name that identifies this configuration across runs.</summary>
     public string ShellId => _identity.ShellId;
 
@@ -113,7 +116,7 @@ public sealed partial class Shell : IDisposable
     /// Whether <paramref name="scheme"/> is dark. <c>light</c> and <c>dark</c> override Windows; anything else follows
     /// <paramref name="windowsDark"/>.
     /// </summary>
-    public static bool DarkFor(string? scheme, bool windowsDark) => scheme switch
+    internal static bool DarkFor(string? scheme, bool windowsDark) => scheme switch
     {
         "dark" => true,
         "light" => false,

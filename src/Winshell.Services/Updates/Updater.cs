@@ -21,7 +21,7 @@ public enum UpdateStatus
 }
 
 /// <summary>An update put in place as Winshell started, or, with <see cref="Error"/>, one that was not.</summary>
-public sealed record InstalledUpdate(string Version, string? Error);
+internal sealed record InstalledUpdate(string Version, string? Error);
 
 /// <summary>What the updater knows: its status, the release it found, and why it failed.</summary>
 internal sealed record UpdateState(UpdateStatus Status, string Version, string Error);
@@ -32,7 +32,7 @@ internal sealed record UpdateState(UpdateStatus Status, string Version, string E
 /// checks its SHA-256 against the digest GitHub reports, and unzips it into a folder of its own under
 /// <c>%LOCALAPPDATA%\winshell\updates</c>. <see cref="UpdateInstall"/> applies it when Winshell next starts.
 /// </summary>
-public sealed class Updater : IDisposable
+internal sealed class Updater : IDisposable
 {
     /// <summary>The first automatic check, once a shell has started.</summary>
     internal static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(30);

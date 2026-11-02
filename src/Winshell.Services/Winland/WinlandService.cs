@@ -19,12 +19,12 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private readonly IWinlandLink _link;
     private readonly List<WinlandMonitor> _monitorList = [];
     private readonly List<WinlandWorkspace> _workspaceList = [];
-    private readonly List<WinlandWindow> _toplevelList = [];
+    private readonly List<WinlandWindow> _windowList = [];
     private WindowListService? _windows;
     private WinlandMonitor? _focusedMonitor;
     private WinlandWorkspace? _focusedWorkspace;
-    private WinlandWindow? _activeToplevel;
-    private bool _requestingMonitors, _requestingWorkspaces, _requestingToplevels, _monitorsRequested;
+    private WinlandWindow? _activeWindow;
+    private bool _requestingMonitors, _requestingWorkspaces, _requestingWindows, _monitorsRequested;
     private bool _disposed;
 
     // Bumped when the connection is lost, so replies to an older connection's requests are dropped.
@@ -52,21 +52,16 @@ public sealed class WinlandService : ObservableObject, IDisposable
     public ObservableCollection<WinlandWorkspace> Workspaces { get; } = [];
 
     /// <summary>The windows Winland manages, in the order they were first reported.</summary>
-    public ObservableCollection<WinlandWindow> Toplevels { get; } = [];
+    public ObservableCollection<WinlandWindow> Windows { get; } = [];
 
     public WinlandMonitor? FocusedMonitor => _focusedMonitor;
 
     public WinlandWorkspace? FocusedWorkspace => _focusedWorkspace;
 
-    public WinlandWindow? ActiveToplevel => _activeToplevel;
-
-    /// <summary>Winland has no Lua mode.</summary>
-    public bool UsingLua => false;
+    public WinlandWindow? ActiveWindow => _activeWindow;
 
     /// <summary>Winland's pipe. It takes requests and, after an <c>events</c> request, streams events.</summary>
-    public string RequestSocketPath => _link.PipePath;
-
-    public string EventSocketPath => _link.PipePath;
+    public string PipePath => _link.PipePath;
 
     /// <summary>The shell's window list, when one is in use. <see cref="WinlandWindow.Window"/> is resolved from it.</summary>
     internal WindowListService? WindowList => _windows;
@@ -81,16 +76,16 @@ public sealed class WinlandService : ObservableObject, IDisposable
         _windows = windows;
         if (windows is not null)
             windows.Windows.CollectionChanged += OnWindowsChanged;
-        foreach (var toplevel in _toplevelList)
-            toplevel.NotifyWindow();
+        foreach (var window in _windowList)
+            window.NotifyWindow();
     }
 
     internal AppWindow? FindWindow(nint handle) => _windows?.Find(handle);
 
     private void OnWindowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        foreach (var toplevel in _toplevelList)
-            toplevel.NotifyWindow();
+        foreach (var window in _windowList)
+            window.NotifyWindow();
     }
 
     /// <summary>Sends <c>dispatch</c> and the request to Winland. A failure is logged.</summary>
@@ -103,17 +98,17 @@ public sealed class WinlandService : ObservableObject, IDisposable
     public void RefreshWorkspaces() => RefreshWorkspaces(false);
 
     /// <summary>Asks Winland for its windows again, adding new ones and updating titles and Workspaces.</summary>
-    public void RefreshToplevels()
+    public void RefreshWindows()
     {
-        if (_requestingToplevels)
+        if (_requestingWindows)
             return;
-        _requestingToplevels = true;
+        _requestingWindows = true;
         Request("j/clients", reply =>
         {
-            _requestingToplevels = false;
+            _requestingWindows = false;
             if (ParseJson(reply) is not { ValueKind: JsonValueKind.Array } json)
             {
-                RetryIfConnected(reply, RefreshToplevels);
+                RetryIfConnected(reply, RefreshWindows);
                 return;
             }
             foreach (var entry in json.EnumerateArray())
@@ -121,12 +116,12 @@ public sealed class WinlandService : ObservableObject, IDisposable
                 var address = ParseAddress(Str(entry, "address"));
                 if (address == 0)
                     continue;
-                var toplevel = FindToplevel(address, create: true)!;
-                toplevel.SetTitle(Str(entry, "title"));
+                var window = FindWindow(address, create: true)!;
+                window.SetTitle(Str(entry, "title"));
                 var ws = Obj(entry, "workspace");
                 if (FindWorkspace(Str(ws, "name"), Str(ws, "monitor"), create: true, Int(ws, "id")) is { } workspace)
-                    MoveToplevel(toplevel, workspace);
-                toplevel.SetLastIpcObject(entry);
+                    MoveWindow(window, workspace);
+                window.SetLastIpcObject(entry);
             }
         });
     }
@@ -163,8 +158,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
             RefreshAll();
         else
             Reset();
-        Changed(nameof(RequestSocketPath));
-        Changed(nameof(EventSocketPath));
+        Changed(nameof(PipePath));
     });
 
     private void OnEventReceived(string line) => _loop.Post(() =>
@@ -187,12 +181,12 @@ public sealed class WinlandService : ObservableObject, IDisposable
     {
         RefreshMonitors(true);
         RefreshWorkspaces(true);
-        RefreshToplevels();
+        RefreshWindows();
         // Events only name the active window when the focus moves; asking once shows it before then.
         Request("j/activewindow", reply =>
         {
-            if (_activeToplevel is null && ParseJson(reply) is { ValueKind: JsonValueKind.Object } json)
-                SetActiveToplevel(FindToplevel(ParseAddress(Str(json, "address")), create: true));
+            if (_activeWindow is null && ParseJson(reply) is { ValueKind: JsonValueKind.Object } json)
+                SetActiveWindow(FindWindow(ParseAddress(Str(json, "address")), create: true));
         });
     }
 
@@ -200,10 +194,10 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private void Reset()
     {
         _generation++;
-        _requestingMonitors = _requestingWorkspaces = _requestingToplevels = false;
+        _requestingMonitors = _requestingWorkspaces = _requestingWindows = false;
         _monitorsRequested = false;
-        foreach (var toplevel in _toplevelList.ToArray())
-            RemoveToplevel(toplevel);
+        foreach (var window in _windowList.ToArray())
+            RemoveWindow(window);
         foreach (var workspace in _workspaceList.ToArray())
             RemoveWorkspace(workspace);
         foreach (var monitor in _monitorList.ToArray())
@@ -351,35 +345,35 @@ public sealed class WinlandService : ObservableObject, IDisposable
                     _log.Debug("winland", $"openwindow for workspace {args[1]} which was not previously tracked");
                     return;
                 }
-                var toplevel = FindToplevel(address, create: true)!;
-                toplevel.SetTitle(args[4]);
-                MoveToplevel(toplevel, workspace);
+                var window = FindWindow(address, create: true)!;
+                window.SetTitle(args[4]);
+                MoveWindow(window, workspace);
                 break;
             }
             case "closewindow":
-                if (FindToplevel(ParseAddress(data), create: false) is { } closed)
-                    RemoveToplevel(closed);
+                if (FindWindow(ParseAddress(data), create: false) is { } closed)
+                    RemoveWindow(closed);
                 break;
             case "movewindowv2":
             {
                 // address,id,name,monitor
                 var args = ParseArgs(data, 4);
-                if (FindToplevel(ParseAddress(args[0]), create: false) is { } toplevel
+                if (FindWindow(ParseAddress(args[0]), create: false) is { } window
                     && FindWorkspace(args[2], args[3], create: false) is { } workspace)
-                    MoveToplevel(toplevel, workspace);
+                    MoveWindow(window, workspace);
                 break;
             }
             case "windowtitlev2":
             {
                 var args = ParseArgs(data, 2);
-                FindToplevel(ParseAddress(args[0]), create: true)?.SetTitle(args[1]);
+                FindWindow(ParseAddress(args[0]), create: true)?.SetTitle(args[1]);
                 break;
             }
             case "activewindowv2":
-                SetActiveToplevel(FindToplevel(ParseAddress(data), create: true));
+                SetActiveWindow(FindWindow(ParseAddress(data), create: true));
                 break;
             case "urgent":
-                FindToplevel(ParseAddress(data), create: true)?.SetUrgent(true);
+                FindWindow(ParseAddress(data), create: true)?.SetUrgent(true);
                 break;
         }
     }
@@ -513,33 +507,33 @@ public sealed class WinlandService : ObservableObject, IDisposable
         return workspace;
     }
 
-    private WinlandWindow? FindToplevel(ulong address, bool create)
+    private WinlandWindow? FindWindow(ulong address, bool create)
     {
         if (address == 0)
             return null;
-        var toplevel = _toplevelList.FirstOrDefault(t => t.RawAddress == address);
-        if (toplevel is not null || !create)
-            return toplevel;
-        toplevel = new WinlandWindow(this);
-        toplevel.SetAddress(address);
-        _toplevelList.Add(toplevel);
-        return toplevel;
+        var window = _windowList.FirstOrDefault(t => t.RawAddress == address);
+        if (window is not null || !create)
+            return window;
+        window = new WinlandWindow(this);
+        window.SetAddress(address);
+        _windowList.Add(window);
+        return window;
     }
 
-    private static void MoveToplevel(WinlandWindow toplevel, WinlandWorkspace workspace)
+    private static void MoveWindow(WinlandWindow window, WinlandWorkspace workspace)
     {
-        if (toplevel.Workspace is { } old && old != workspace)
-            old.RemoveToplevel(toplevel);
-        toplevel.SetWorkspace(workspace);
-        workspace.InsertToplevel(toplevel);
+        if (window.Workspace is { } old && old != workspace)
+            old.RemoveWindow(window);
+        window.SetWorkspace(workspace);
+        workspace.InsertWindow(window);
     }
 
-    private void RemoveToplevel(WinlandWindow toplevel)
+    private void RemoveWindow(WinlandWindow window)
     {
-        if (_activeToplevel == toplevel)
-            SetActiveToplevel(null);
-        toplevel.Workspace?.RemoveToplevel(toplevel);
-        _toplevelList.Remove(toplevel);
+        if (_activeWindow == window)
+            SetActiveWindow(null);
+        window.Workspace?.RemoveWindow(window);
+        _windowList.Remove(window);
     }
 
     private void RemoveWorkspace(WinlandWorkspace workspace)
@@ -547,8 +541,8 @@ public sealed class WinlandService : ObservableObject, IDisposable
         _workspaceList.Remove(workspace);
         foreach (var monitor in _monitorList.Where(m => m.ActiveWorkspace == workspace))
             monitor.SetActiveWorkspace(null);
-        foreach (var toplevel in _toplevelList.Where(t => t.Workspace == workspace))
-            toplevel.SetWorkspace(null);
+        foreach (var window in _windowList.Where(t => t.Workspace == workspace))
+            window.SetWorkspace(null);
     }
 
     private void RemoveMonitor(WinlandMonitor monitor)
@@ -569,27 +563,27 @@ public sealed class WinlandService : ObservableObject, IDisposable
         Follow(Monitors, _monitorList.OrderBy(m => m.Id));
         // Sorted by id, and by Monitor where Winland repeats a number.
         Follow(Workspaces, _workspaceList.OrderBy(w => w.Id).ThenBy(w => w.Monitor?.Id ?? int.MaxValue));
-        Follow(Toplevels, _toplevelList);
+        Follow(Windows, _windowList);
 
         var focused = _focusedMonitor?.ActiveWorkspace;
         foreach (var monitor in _monitorList)
             monitor.SetFocused(monitor == _focusedMonitor);
         foreach (var workspace in _workspaceList)
             workspace.SetDerived(workspace.Monitor?.ActiveWorkspace == workspace, workspace == focused);
-        foreach (var toplevel in _toplevelList)
+        foreach (var window in _windowList)
         {
-            var activated = toplevel == _activeToplevel;
-            toplevel.SetDerived(activated, toplevel.Workspace?.Monitor);
+            var activated = window == _activeWindow;
+            window.SetDerived(activated, window.Workspace?.Monitor);
             if (activated)
-                toplevel.SetUrgent(false);
+                window.SetUrgent(false);
         }
         foreach (var workspace in _workspaceList)
         {
-            var urgent = workspace.Toplevels.Any(t => t.Urgent);
+            var urgent = workspace.Windows.Any(t => t.Urgent);
             if (urgent && workspace.Focused)
             {
-                foreach (var toplevel in workspace.Toplevels)
-                    toplevel.SetUrgent(false);
+                foreach (var window in workspace.Windows)
+                    window.SetUrgent(false);
                 urgent = false;
             }
             workspace.SetUrgent(urgent);
@@ -602,7 +596,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     private void SetFocusedMonitor(WinlandMonitor? monitor) => Set(ref _focusedMonitor, monitor, nameof(FocusedMonitor));
 
-    private void SetActiveToplevel(WinlandWindow? toplevel) => Set(ref _activeToplevel, toplevel, nameof(ActiveToplevel));
+    private void SetActiveWindow(WinlandWindow? window) => Set(ref _activeWindow, window, nameof(ActiveWindow));
 
     public void Dispose()
     {
