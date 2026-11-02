@@ -95,6 +95,10 @@ internal interface IInstanceControl
     {
     }
 
+    /// <summary>What <c>winshell inspect</c> asked of the shell, and the text it prints. <see cref="IpcException"/> is a failed request.</summary>
+    Task<string> Inspect(string command, IReadOnlyList<string> args) =>
+        throw new IpcException("This shell can't be inspected.");
+
     /// <summary>A failed request as the client reads it.</summary>
     string Describe(Exception e) => $"ipc: {e.GetType().Name}: {e.Message}";
 }
@@ -327,7 +331,9 @@ internal sealed class IpcServer : IDisposable
                 await Listen(request, writer, stream, once: request.Op == "wait").ConfigureAwait(false);
                 return;
             }
-            var response = await OnUiThread(() => Handle(request)).ConfigureAwait(false);
+            var response = request.Op == "inspect"
+                ? await Inspect(request).ConfigureAwait(false)
+                : await OnUiThread(() => Handle(request)).ConfigureAwait(false);
             try
             {
                 await Send(writer, response, _cancel.Token).ConfigureAwait(false);
@@ -574,6 +580,30 @@ internal sealed class IpcServer : IDisposable
     {
         lock (_limit)
             _serving.Remove(stream);
+    }
+
+    /// <summary>Starts on the shell's thread and ends where the shell's work does, since a screenshot awaits WinUI.</summary>
+    private Task<IpcResponse> Inspect(IpcRequest request)
+    {
+        var tcs = new TaskCompletionSource<IpcResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _loop.Post(() => _ = Run());
+        return tcs.Task;
+
+        async Task Run()
+        {
+            try
+            {
+                tcs.SetResult(new IpcResponse(true, await _control.Inspect(request.Target ?? "", request.Args ?? [])));
+            }
+            catch (IpcException e)
+            {
+                tcs.SetResult(new IpcResponse(false, Error: e.Message));
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                tcs.SetResult(new IpcResponse(false, Error: _control.Describe(e)));
+            }
+        }
     }
 
     private Task<T> OnUiThread<T>(Func<T> work)

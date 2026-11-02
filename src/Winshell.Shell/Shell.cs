@@ -371,6 +371,8 @@ public sealed partial class Shell : IDisposable
 
         public void ShowBuildError(string error, string projectFile) =>
             shell.Notices?.Show(ShellNotices.ForBuildError(error, projectFile));
+
+        public Task<string> Inspect(string command, IReadOnlyList<string> args) => Inspector.Run(shell, command, args);
     }
 
     /// <summary>
