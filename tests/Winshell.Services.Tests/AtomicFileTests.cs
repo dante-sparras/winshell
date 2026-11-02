@@ -1,4 +1,3 @@
-#pragma warning disable CA1416
 using System.Runtime.InteropServices;
 
 namespace Winshell.Services.Tests;

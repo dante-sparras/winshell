@@ -1,4 +1,3 @@
-#pragma warning disable CA1416
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Winshell.Audio;

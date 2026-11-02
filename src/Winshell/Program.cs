@@ -18,7 +18,9 @@ namespace Winshell
         /// synchronization context, so the commands that await continue on the thread pool while this thread waits.
         /// </summary>
         [STAThread]
+#pragma warning disable VSTHRD002 // WinUI needs an STA Main, and an async Main is not one.
         private static int Main(string[] args) => Cli.Run(args).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
     }
 
     /// <summary>The command line.</summary>

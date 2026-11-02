@@ -61,7 +61,8 @@ public sealed class Updater : IDisposable
         _current = ParseVersion(currentVersion) ?? new Version(0, 0, 0);
         _runtime = runtime;
         _log = log;
-        _http = handler is null ? new HttpClient() : new HttpClient(handler);
+        // One client for the life of the shell, so its connections must not outlive a DNS change.
+        _http = new HttpClient(handler ?? new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(15) });
         // A download on a slow connection takes longer than HttpClient's default 100 seconds.
         _http.Timeout = TimeSpan.FromMinutes(30);
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("winshell", _current.ToString(3)));
