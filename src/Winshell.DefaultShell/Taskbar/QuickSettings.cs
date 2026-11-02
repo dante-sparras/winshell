@@ -108,32 +108,32 @@ public sealed class QuickSettingsSession : ObservableObject
     {
         _node = node;
         node.PropertyChanged += OnNode;
-        node.Audio.PropertyChanged += OnAudio;
+        node.PropertyChanged += OnAudio;
     }
 
     public AudioNode Node => _node;
 
     public string Label => _node.Description;
 
-    public double Volume => _node.Audio.Volume;
+    public double Volume => _node.Volume;
 
-    public string Glyph => StatusGlyphs.VolumeGlyph(_node.Audio.Muted, _node.Audio.Volume);
+    public string Glyph => StatusGlyphs.VolumeGlyph(_node.Muted, _node.Volume);
 
-    public string MuteLabel => _node.Audio.Muted ? "Unmute" : "Mute";
+    public string MuteLabel => _node.Muted ? "Unmute" : "Mute";
 
     public void SetVolume(double value)
     {
-        if (value == _node.Audio.Volume)
+        if (value == _node.Volume)
             return;
-        _node.Audio.Volume = value;
+        _node.Volume = value;
     }
 
-    public void ToggleMute() => _node.Audio.Muted = !_node.Audio.Muted;
+    public void ToggleMute() => _node.Muted = !_node.Muted;
 
     internal void Release()
     {
         _node.PropertyChanged -= OnNode;
-        _node.Audio.PropertyChanged -= OnAudio;
+        _node.PropertyChanged -= OnAudio;
     }
 
     private void OnNode(object? sender, PropertyChangedEventArgs e)
@@ -144,12 +144,12 @@ public sealed class QuickSettingsSession : ObservableObject
 
     private void OnAudio(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AudioVolume.Volume))
+        if (e.PropertyName == nameof(AudioNode.Volume))
         {
             Changed(nameof(Volume));
             Changed(nameof(Glyph));
         }
-        else if (e.PropertyName == nameof(AudioVolume.Muted))
+        else if (e.PropertyName == nameof(AudioNode.Muted))
         {
             Changed(nameof(Glyph));
             Changed(nameof(MuteLabel));
@@ -536,9 +536,9 @@ public sealed class QuickSettings : ObservableObject
     public void SetVolume(double value)
     {
         var output = _audio.DefaultPlaybackDevice;
-        if (output is null || value == output.Audio.Volume)
+        if (output is null || value == output.Volume)
             return;
-        output.Audio.Volume = value;
+        output.Volume = value;
     }
 
     public void ToggleMute()
@@ -546,7 +546,7 @@ public sealed class QuickSettings : ObservableObject
         var output = _audio.DefaultPlaybackDevice;
         if (output is null)
             return;
-        output.Audio.Muted = !output.Audio.Muted;
+        output.Muted = !output.Muted;
     }
 
     public void MediaPrevious() => _session?.Previous();
@@ -681,7 +681,7 @@ public sealed class QuickSettings : ObservableObject
 
     private void OnOutputAudio(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AudioVolume.Volume) or nameof(AudioVolume.Muted))
+        if (e.PropertyName is nameof(AudioNode.Volume) or nameof(AudioNode.Muted))
             PublishVolume();
     }
 
@@ -778,10 +778,10 @@ public sealed class QuickSettings : ObservableObject
             return;
         }
         if (_output is not null)
-            _output.Audio.PropertyChanged -= OnOutputAudio;
+            _output.PropertyChanged -= OnOutputAudio;
         _output = output;
         if (_output is not null)
-            _output.Audio.PropertyChanged += OnOutputAudio;
+            _output.PropertyChanged += OnOutputAudio;
         PublishVolume();
     }
 
@@ -863,7 +863,7 @@ public sealed class QuickSettings : ObservableObject
 
     private void PublishVolume()
     {
-        var audio = _output?.Audio;
+        var audio = _output;
         Volume = audio?.Volume ?? 0;
         HasOutput = _output is not null;
         MuteLabel = audio is null || audio.Muted ? "Unmute" : "Mute";

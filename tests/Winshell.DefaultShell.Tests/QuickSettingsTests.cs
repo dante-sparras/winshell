@@ -181,18 +181,18 @@ public sealed class QuickSettingsTests
         await rig.Load();
         Assert.Equal(0.3, rig.Quick.Volume, 3);
         Assert.Equal("Mute", rig.Quick.MuteLabel);
-        Assert.Equal(StatusGlyphs.VolumeGlyph(false, rig.Speakers.Audio.Volume), rig.Status.VolumeGlyph);
+        Assert.Equal(StatusGlyphs.VolumeGlyph(false, rig.Speakers.Volume), rig.Status.VolumeGlyph);
 
         rig.Quick.SetVolume(0.8);
-        Assert.Equal(0.8, rig.Speakers.Audio.Volume, 3);
+        Assert.Equal(0.8, rig.Speakers.Volume, 3);
         Assert.Equal(0.8, rig.Quick.Volume, 3);
 
-        rig.Speakers.Audio.Volume = 0.5;
+        rig.Speakers.Volume = 0.5;
         Assert.Equal(0.5, rig.Quick.Volume, 3);
 
         rig.Quick.ToggleMute();
-        Assert.True(rig.Speakers.Audio.Muted);
-        Assert.Equal(0.5, rig.Speakers.Audio.Volume, 3);
+        Assert.True(rig.Speakers.Muted);
+        Assert.Equal(0.5, rig.Speakers.Volume, 3);
         Assert.Equal("Unmute", rig.Quick.MuteLabel);
         Assert.Equal("\uE74F", rig.Status.VolumeGlyph);
 
@@ -310,18 +310,18 @@ public sealed class QuickSettingsTests
         Assert.Equal(0.2, rig.Quick.Sessions[1].Volume, 3);
 
         rig.Quick.Sessions[0].SetVolume(0.8);
-        Assert.Equal(0.8, music.Audio.Volume, 3);
-        Assert.Equal(0.2, call.Audio.Volume, 3);
-        Assert.Equal(0.3, rig.Speakers.Audio.Volume, 3);
+        Assert.Equal(0.8, music.Volume, 3);
+        Assert.Equal(0.2, call.Volume, 3);
+        Assert.Equal(0.3, rig.Speakers.Volume, 3);
 
         rig.Quick.Sessions[0].ToggleMute();
-        Assert.True(music.Audio.Muted);
-        Assert.False(call.Audio.Muted);
-        Assert.Equal(0.8, music.Audio.Volume, 3);
+        Assert.True(music.Muted);
+        Assert.False(call.Muted);
+        Assert.Equal(0.8, music.Volume, 3);
         Assert.Equal("Unmute", rig.Quick.Sessions[0].MuteLabel);
         Assert.Equal("Mute", rig.Quick.Sessions[1].MuteLabel);
 
-        music.Audio.Volume = 0.5;
+        music.Volume = 0.5;
         Assert.Equal(0.5, rig.Quick.Sessions[0].Volume, 3);
 
         rig.Popup.Back();
@@ -344,15 +344,15 @@ public sealed class QuickSettingsTests
         var session = Assert.Single(rig.Quick.Sessions);
         Assert.Equal("\uE992", session.Glyph);
 
-        music.Audio.Volume = 0.2;
+        music.Volume = 0.2;
         Assert.Equal("\uE993", session.Glyph);
-        music.Audio.Volume = 0.5;
+        music.Volume = 0.5;
         Assert.Equal("\uE994", session.Glyph);
-        music.Audio.Volume = 1;
+        music.Volume = 1;
         Assert.Equal("\uE995", session.Glyph);
-        music.Audio.Muted = true;
+        music.Muted = true;
         Assert.Equal("\uE74F", session.Glyph);
-        Assert.Equal(StatusGlyphs.VolumeGlyph(music.Audio.Muted, music.Audio.Volume), session.Glyph);
+        Assert.Equal(StatusGlyphs.VolumeGlyph(music.Muted, music.Volume), session.Glyph);
     }
 
     [Fact]
@@ -874,8 +874,6 @@ internal sealed class ChoosingGraph : IAudioGraph
 
     public IReadOnlyList<AudioGraphNode> Nodes => _nodes;
 
-    public IReadOnlyList<AudioGraphLink> Links { get; } = [];
-
     public bool Ready => true;
 
     public AudioGraphNode? DefaultPlayback { get; private set; }
@@ -888,10 +886,6 @@ internal sealed class ChoosingGraph : IAudioGraph
 
 #pragma warning disable CS0067 // AudioService subscribes. These tests do not remove a node or add a link.
     public event Action<AudioGraphNode>? NodeRemoved;
-
-    public event Action<AudioGraphLink>? LinkAdded;
-
-    public event Action<AudioGraphLink>? LinkRemoved;
 #pragma warning restore CS0067
 
     public void SetDefault(AudioGraphNode node) => Use(node);
@@ -917,10 +911,10 @@ internal sealed class RigNode : AudioGraphNode
     public RigNode(string description, AudioNodeType type)
         : base(_next++)
     {
-        Type = (int)type;
+        Type = type;
         Description = description;
         Name = description;
-        Channels = [3];
+        Channels = [AudioChannel.FrontLeft];
         ApplyAudio([0f], false);
     }
 
