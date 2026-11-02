@@ -95,6 +95,20 @@ winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace $workspac
 winland reload
 ```
 
+## See what you changed
+
+`winshell inspect` is how to verify a visual change. It reads the running shell from inside, so it needs no mouse and no keyboard, and it does not move the user's pointer or focus.
+
+```powershell
+winshell inspect tree                                # every open window's elements, sizes and values, as JSON
+winshell inspect screenshot out.png TaskbarView      # a window as a PNG, which you can then read
+winshell inspect click StartButton                   # activate an element through its automation peer
+```
+
+Look at the screenshot, and check values in the tree rather than trusting that the code ran. Open what a test or run needs under "Live UI with Winland running". For a shell of your own, run it with private `WINSHELL_CONFIG_DIR` and `WINSHELL_LOCAL_DIR`, and pass `--pid`.
+
+`winshell inspect hover` shows a control's hover look only: a `PointerEntered` handler needs a real pointer, or a method of its own that a test can call.
+
 ## Agent skills
 
 ### Issue tracker

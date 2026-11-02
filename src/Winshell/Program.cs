@@ -122,7 +122,7 @@ namespace Winshell
                     return 2;
                 }
             }
-            else if (command is not ("ipc" or "msg") && options.Positional.Count > 0)
+            else if (command is not ("ipc" or "msg" or "inspect") && options.Positional.Count > 0)
             {
                 Console.Error.WriteLine($"Unexpected argument \"{options.Positional[0]}\".");
                 return 2;
@@ -166,6 +166,8 @@ namespace Winshell
                     return await Ipc(options);
                 case "doctor":
                     return Doctor(options);
+                case "inspect":
+                    return await Inspect(options);
                 case "dev":
                     return await Dev(options);
                 case "msg":
@@ -455,6 +457,17 @@ namespace Winshell
                           With several, this exits and lists them.
                         """);
                     return;
+                case "inspect":
+                    WriteHelp("""
+                        winshell inspect [instance options] <command>
+                          tree                            print each open window's live layout as JSON
+                          screenshot <file> [window]      save a window as a PNG
+                          click <name> [window]           activate an element, as Narrator does
+                          hover <name> [window]           put a control in its pointer look
+                          A window is the type of its content, or its number in tree. The first is the default.
+                          A name is an x:Name, or an automation id or name. Nothing goes through Windows' input.
+                        """);
+                    return;
                 case "dev":
                     WriteHelp("""
                         winshell dev [-c <name> | -p <path>]
@@ -521,6 +534,8 @@ namespace Winshell
                        winshell ipc prop get <target> <property>
                        winshell ipc wait <target> <signal>
                        winshell ipc listen <target> <signal>
+                       winshell inspect tree | screenshot <file> | click <name> | hover <name>
+                                                           look at a running shell, or act on it
                        winshell doctor [config options] [-j] [--no-color]
                                                            check this PC's setup for Winshell
                        winshell help                       print this summary
@@ -923,6 +938,43 @@ namespace Winshell
                 return 1;
             }
             return await DevSession.Run(project);
+        }
+
+        private static async Task<int> Inspect(Options o)
+        {
+            var args = o.Positional;
+            if (args is not (["tree"] or ["screenshot", _, ..] or ["click", _, ..] or ["hover", _, ..]))
+            {
+                PrintHelp("inspect");
+                return 2;
+            }
+            var choice = Select(o);
+            if (choice.Info is not { } info)
+            {
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
+            }
+            // The shell writes the file, so a relative path must mean what it means here.
+            var rest = args.Skip(1).Select((arg, i) => args[0] == "screenshot" && i == 0 ? Path.GetFullPath(arg) : arg).ToList();
+            try
+            {
+                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("inspect", args[0], Args: rest)))
+                {
+                    if (!response.Ok)
+                    {
+                        Console.Error.WriteLine(response.Error);
+                        return 1;
+                    }
+                    Console.WriteLine(response.Value);
+                    return 0;
+                }
+                Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
+            }
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+            }
+            return 1;
         }
 
         private static async Task<int> Reload(Options o)
