@@ -31,5 +31,5 @@ public static class ZoneIdentifier
 
     /// <summary>Why a downloaded configuration does not run, for the notice and the log.</summary>
     public static string Blocked(string rootFile) =>
-        $"{Path.GetFileName(rootFile)} was downloaded from the internet. It runs as you. If you trust it, unblock it (right-click > Properties > Unblock, or Unblock-File) and save it to load it.";
+        $"{Path.GetFileName(rootFile)} was downloaded from the internet. It runs as you. If you trust it, unblock it (right-click > Properties > Unblock, or Unblock-File) and run it again.";
 }

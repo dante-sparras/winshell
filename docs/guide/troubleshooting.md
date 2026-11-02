@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with the log. Winshell writes what it does, and every error with its file and line, to the terminal it runs in and to the instance's log file:
+Start with the log. Winshell writes what it does, and every error, to the terminal it runs in and to the instance's log file:
 
 ```powershell
 winshell log          # the running instance's log, or the last stopped one's
@@ -15,35 +15,31 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 
 | It says | What to do |
 | --- | --- |
-| `No shell.qml at <path>` | `--path` names a folder without a `shell.qml`, or a file that isn't there. |
-| `No config named "<name>" in <folder>` | `--config` names a folder of the config folder that has no `shell.qml`. |
-| `Several configs in <folder>; pick one with -c: …` | The config folder has no `shell.qml` of its own and several subfolders with one. Run `winshell -c <name>`. To make one the default, move its files up into the config folder, so the folder has a `shell.qml` of its own, or leave only one subfolder with a `shell.qml`. |
-| Nothing, and it exits at once | `--no-duplicate` found this configuration already running, or a second start overlapped the first. `winshell list` shows the one that is running. |
+| `No .csproj at <path>` | `--path` names a folder without a `.csproj`, or a file that isn't there. |
+| `No config named "<name>" in <folder>` | `--config` names a folder of the config folder that has no project. |
+| `Several configs in <folder>; pick one with -c: …` | The config folder has no project of its own and several subfolders with one. Run `winshell -c <name>`. |
+| `Several projects in <folder>; name one with -p: …` | The folder has more than one `.csproj`. Pass the file with `-p`. |
+| `<name> did not build.` | The build failed. The last good build is not started. The notice and the log have the compiler's lines. |
+| `<name> has not been built. Run winshell run once to build it.` | `--no-build` found no program in `bin\shell`. |
+| `Building a configuration needs the .NET SDK…` | A build needs the SDK. Running the default shell, or `--no-build` of a program that is already built, does not. |
+| A file `was downloaded from the internet` | The `.csproj`, or a `.props` or `.targets` beside it, has a `Zone.Identifier` stream. Unblock it if you trust it. Nothing is built until then. |
+| Nothing, and it exits at once | `--no-duplicate` found this shell id already running, or a second start overlapped the first. `winshell list` shows the one that is running. |
+| `This shell is Winshell … and this winshell is …` | The CLI and the shell are different releases. Use the `winshell` that matches, or build the shell with this one. `kill` still works. |
 | `Unknown command "<name>". Run winshell --help.` | The first word isn't a command. Options start with `-`. |
 
-Started from Start or at sign-in, and Winshell cannot start? It shows a dialog with the same text as the table, because those starts have no console window. **Open config folder** opens the folder the message is about. A console, including `winshell -d` from a terminal, prints the text and shows no dialog. Nothing in the dialog and nothing on screen means the shell is already running (`--no-duplicate`) or it started and the failure is in the log.
+Started from Start or at sign-in, and Winshell cannot start? It shows a dialog with the same text, because those starts have no console window. **Open config folder** opens the folder the message is about. A console, including `winshell -d` from a terminal, prints the text and shows no dialog. Nothing in the dialog and nothing on screen means the shell is already running (`--no-duplicate`) or it started and the failure is in the log.
 
-## My configuration has an error
+A leftover `shell.qml` with no `.csproj` does not fail this way. The default shell runs, and a notice says QML configurations stopped working.
 
-A notice in the bottom right corner of the main screen says **Your configuration has an error**, with the file, the line and the column. **Open file** opens that file. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`. The log has an `ERROR` line with the same error:
+## The build failed
 
-```text
-ERROR scene: Failed to load configuration: C:\Users\you\AppData\Roaming\winshell\shell.qml[12:5]: Cannot assign to non-existent property "colour"
-```
+A notice says the configuration did not build, with the compiler's lines. **Open file** opens the project. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`.
 
-Winshell keeps running. Fix the file and save it, and it loads again and the notice goes away. When a reload fails, the shell you had keeps running until a reload works. Errors in a binding or a signal handler don't stop the load: they are logged where they happen, and the rest of the shell goes on.
-
-Check names against the [reference](../reference/index.md). A Quickshell name, such as `import Quickshell` or `PwNode`, has a Winshell name in [Migrating from Quickshell](../migrating-from-quickshell.md).
-
-## Saving a file doesn't reload
-
-- Winshell watches the folders the configuration loaded files from, not their subfolders, and only `.qml`, `.js` and `qmldir` files. A file in a folder nothing has imported yet is seen once something imports it and you save again.
-- `settings.watchFiles: false` on the `ShellRoot`, or the `WINSHELL_DISABLE_FILE_WATCHER` environment variable, turns reloading off. `winshell reload` still reloads by hand.
-- You are editing `%LOCALAPPDATA%\winshell\default-shell`. Winshell writes that folder again when it runs the default shell and no other instance is running it; [copy it](getting-started.md#make-the-default-shell-your-own) and edit the copy.
+`winshell reload` leaves the running instance up when the build fails. Fix the project and reload again. `dotnet watch` is the loop while you are editing. Check names against the [reference](../reference/index.md).
 
 ## There are two taskbars
 
-By default Winshell does not hide or replace Explorer's taskbar, and it never restarts Explorer. Both reserve the bottom of the screen, so they stack. To leave Explorer's taskbar where it is and only get it out of the way, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar. `Alt+Tab`, `Win+Tab`, `Win+D` and `Win+X` stay with Windows unless `desktopChords` is true in `preferences.toml`, and while Explorer holds one it can still report `taken`.
+By default Winshell does not hide or replace Explorer's taskbar, and it never restarts Explorer. Both reserve the bottom of the screen, so they stack. To leave Explorer's taskbar where it is and only get it out of the way, turn on **Automatically hide the taskbar** in Windows Settings > Personalization > Taskbar. `Alt+Tab`, `Win+Tab`, `Win+D` and `Win+X` stay with Windows unless `desktopChords` is true in `preferences.toml`. While Explorer holds one it can still report `Taken`.
 
 To make Winshell the only bar, set this in `preferences.toml` and save:
 
@@ -68,11 +64,11 @@ A kill that skips the exit code is Task Manager's **End task**, `taskkill /F`, o
 
 ## A hotkey doesn't work
 
-Winshell Settings, or the `Hotkey`'s `taken` and `error`, say why:
+Winshell Settings, or the `Hotkey`'s `Taken` and `Error`, say why:
 
 - **Taken.** Windows or another app already holds that chord, and Winshell doesn't take it away. Pick another one, or close the app that holds it. Another Winshell instance counts as another app.
-- **Not a hotkey.** `sequence` uses `Win`, `Ctrl`, `Alt` and `Shift`. `Super` and `Meta` are rejected, and so are left or right `Ctrl`, `Alt` and `Shift`. A comma separates chords, so the comma key is `Comma`.
-- **The Windows key opens Windows' Start.** Winshell's Start opens on a tap of the Windows key only while a `Hotkey` with `sequence: "Win"` is enabled. In the default shell it is the Open Start hotkey on Winshell Settings' Hotkeys page.
+- **Not a hotkey.** `Sequence` uses `Win`, `Ctrl`, `Alt` and `Shift`. `Super` and `Meta` are rejected, and so are left or right `Ctrl`, `Alt` and `Shift`. A comma separates chords, so the comma key is `Comma`.
+- **The Windows key opens Windows' Start.** Winshell's Start opens on a tap of the Windows key only while a `Hotkey` with `Sequence` of `Win` is enabled. In the default shell it is the Open Start hotkey on Winshell Settings' Hotkeys page.
 
 See [hotkeys](../hotkeys.md).
 
@@ -82,14 +78,14 @@ The notification center is empty until you allow access: click **Allow notificat
 
 ## Wi-Fi networks or Bluetooth devices are missing
 
-- **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.requestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](../network.md).
-- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `Bluetooth.defaultAdapter.enabled`. The quick settings tile does not. See [Bluetooth](../bluetooth.md).
-- **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings. A configuration can set `Networking.wifiEnabled` and `BluetoothAdapter.enabled`. These tiles do not.
+- **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.RequestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](../network.md).
+- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `BluetoothAdapter.Enabled`. The quick settings tile does not. See [Bluetooth](../bluetooth.md).
+- **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings. A configuration can set `Networking.WifiEnabled` and `BluetoothAdapter.Enabled`. These tiles do not.
 
 ## Tray icons are missing
 
 - Only one instance in the Windows session hosts the tray icons. A second instance logs that it is waiting, and takes over within half a second when the first one exits.
-- The volume, network and battery icons are Explorer's own, not tray icons. Winshell shows its own from `Winshell.Audio`, `Winshell.Network` and `Winshell.Power`.
+- The volume, network and battery icons are Explorer's own, not tray icons. Winshell shows its own from `shell.Audio`, `shell.Networking` and `shell.Power`.
 - An icon Windows Settings hides is in the overflow behind the chevron. Choose which icons show in Windows Settings > Personalization > Taskbar > Other system tray icons.
 
 See [the notification area](../tray.md).
@@ -101,13 +97,13 @@ Winshell Settings' Startup page shows the switch as off when:
 - **Windows' Startup apps page turned it off.** Only that page (Windows Settings > Apps > Startup) can turn it back on. A Windows policy that keeps a packaged Winshell off is the same: the switch stays off.
 - **The unpackaged entry starts another `winshell.exe`**, as after unzipping an update into a new folder, or other options. Turn the switch on to point it at the Winshell you are running. A packaged Winshell has no path to rewrite: Windows starts the package.
 
-The unpackaged entry runs Winshell with the options it was started with. The packaged task starts `winshellw.exe --no-duplicate`. `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for your user account.
+The sign-in entry runs the last build. It does not build, so a broken edit and a missing SDK do not block signing in. `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for your user account.
 
-## Winshell crashed, or a surface closed
+## Winshell crashed
 
-When Winshell itself fails, as opposed to a mistake in the configuration, it writes a crash report to `%LOCALAPPDATA%\winshell\crashes`, and the log says where. Nothing is sent anywhere; reports leave out what scripts printed and the passwords, tokens and keys Winshell recognizes.
+When Winshell itself fails, as opposed to a project that did not build, it writes a crash report to `%LOCALAPPDATA%\winshell\crashes`, and the log says where. Nothing is sent anywhere. Reports leave out the passwords, tokens and keys Winshell recognizes.
 
-A notice in the bottom right corner says which window stopped working and what Winshell did about it, and **Open report** opens the crash report. It goes away after 25 seconds. A window that fails while handling input closes and opens again after 1, 2, 4, 8 and 16 seconds. If it fails a sixth time within five minutes, it stays closed until the configuration reloads; save a file or run `Shell.reload()` to bring it back. A window that fails while drawing stays up, and the notice says the panel could not draw. If Winshell itself closed, the next start shows that notice once. The rest of the shell keeps running throughout.
+A notice in the bottom right corner says what failed, and **Open report** opens the crash report. A crash notice goes away after 25 seconds. A build error stays until you dismiss it or the next build works. The rest of the shell keeps running when it can.
 
 A crash is a bug in Winshell. Please report it.
 

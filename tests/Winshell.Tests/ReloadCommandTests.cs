@@ -4,70 +4,79 @@ using System.Text.Json;
 
 namespace Winshell.Tests;
 
-/// <summary><c>winshell reload</c> reloads a running instance by hand, and says whether the configuration loaded.</summary>
+/// <summary>
+/// <c>winshell reload</c> builds a configuration project and then asks the instance to start the next process.
+/// A build that fails leaves that instance running and tells it to show the notice.
+/// </summary>
 public sealed class ReloadCommandTests : IDisposable
 {
-    private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _local;
+    private readonly string _config;
     private readonly List<Process> _started = [];
 
-    private static string Shell(string version) => $$"""
-        import Winshell
-        import Winshell.Io
-
-        ShellRoot {
-          IpcHandler {
-            target: "probe"
-            function version(): string { return "{{version}}" }
-          }
-        }
-        """;
-
-    private void Write(string text) => File.WriteAllText(Path.Combine(_dir, "shell.qml"), text);
-
-    private string Version(string pid) => Run("ipc", "--pid", pid, "call", "probe", "version").Output.TrimEnd();
-
-    // An instance is listed before its first load ends, and the file must not change until that load has read it.
-    private void Loaded(string pid)
+    public ReloadCommandTests()
     {
-        Wait.Until(() => Version(pid) == "one", "the first load");
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Reload_loads_a_change_the_watcher_did_not_see(bool hard)
-    {
-        Directory.CreateDirectory(_dir);
-        Write(Shell("one"));
-        var pid = Start().Id.ToString(CultureInfo.InvariantCulture);
-        Loaded(pid);
-        Write(Shell("two"));
-
-        var result = hard ? Run("reload", "--hard", "--pid", pid) : Run("reload", "--pid", pid);
-
-        Assert.Equal(0, result.Code);
-        Assert.Equal("", result.Error);
-        Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
-        Assert.Equal("two", Version(pid));
+        _local = Path.Combine(_dir, "local");
+        _config = Path.Combine(_dir, "config");
+        Directory.CreateDirectory(_local);
+        Directory.CreateDirectory(_config);
     }
 
     [Fact]
-    public void A_configuration_that_does_not_load_exits_1_and_the_old_one_keeps_running()
+    public void A_build_that_fails_leaves_the_instance_running()
     {
-        Directory.CreateDirectory(_dir);
-        Write(Shell("one"));
-        var pid = Start().Id.ToString(CultureInfo.InvariantCulture);
-        Loaded(pid);
-        Write("ShellRoot {");
+        lock (ProbeShell.Gate)
+        {
+            var source = Path.Combine(ProbeShell.Folder, "Program.cs");
+            var original = File.ReadAllText(source);
+            var process = StartProbe();
+            try
+            {
+                File.WriteAllText(source, original + "\nthis is not C#\n");
+                var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
 
-        var result = Run("reload", "--pid", pid);
+                Assert.Equal(1, result.Code);
+                Assert.Equal("", result.Output);
+                Assert.Contains("error ", result.Error, StringComparison.Ordinal);
+                Assert.DoesNotContain("did not reload", result.Error, StringComparison.Ordinal);
+                Assert.DoesNotContain("could not show the notice", result.Error, StringComparison.Ordinal);
+                Assert.False(process.HasExited);
+                Assert.Contains(Listed(), row => row.GetProperty("pid").GetInt32() == process.Id);
+            }
+            finally
+            {
+                File.WriteAllText(source, original);
+            }
+        }
+    }
 
-        Assert.Equal(1, result.Code);
-        Assert.Equal("", result.Output);
-        Assert.Contains("did not reload", result.Error, StringComparison.Ordinal);
-        Assert.Equal("one", Version(pid));
+    [Fact]
+    public void A_rebuild_starts_the_next_process()
+    {
+        lock (ProbeShell.Gate)
+        {
+            var source = Path.Combine(ProbeShell.Folder, "Program.cs");
+            var original = File.ReadAllText(source);
+            var process = StartProbe();
+            try
+            {
+                File.WriteAllText(source, original + "\n// rebuilt\n");
+                var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
+
+                Assert.Equal(0, result.Code);
+                Assert.Equal("", result.Error);
+                Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
+                Wait.Until(() => process.HasExited, "the old process to exit");
+                Wait.Until(
+                    () => Listed().Any(row => row.GetProperty("shellId").GetString() == "probe" && row.GetProperty("pid").GetInt32() != process.Id),
+                    "the process that took over");
+            }
+            finally
+            {
+                File.WriteAllText(source, original);
+            }
+        }
     }
 
     [Fact]
@@ -80,27 +89,14 @@ public sealed class ReloadCommandTests : IDisposable
         Assert.Equal("No instance with process id 0" + Environment.NewLine, result.Error);
     }
 
-    private Process Start()
+    private Process StartProbe()
     {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardError = true,
-        };
-        info.ArgumentList.Add("-p");
-        info.ArgumentList.Add(_dir);
-        // The test's edit must not reload the shell by itself.
-        info.Environment["WINSHELL_DISABLE_FILE_WATCHER"] = "1";
-        var process = Process.Start(info)!;
+        var process = ProbeShell.Start(_config, _local);
         _started.Add(process);
-        process.ErrorDataReceived += (_, _) => { };
-        process.BeginErrorReadLine();
-        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
-    private static List<JsonElement> Listed()
+    private List<JsonElement> Listed()
     {
         var result = Run("list", "--json");
         Assert.Equal(0, result.Code);
@@ -108,18 +104,40 @@ public sealed class ReloadCommandTests : IDisposable
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args) =>
-        WinshellCli.Run(args);
+    private (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
 
     public void Dispose()
     {
+        List<JsonElement> rows = [];
+        try
+        {
+            rows = Listed();
+        }
+        catch (Xunit.Sdk.XunitException)
+        {
+        }
+        foreach (var row in rows)
+        {
+            try
+            {
+                Run("kill", "--force", "--pid", row.GetProperty("pid").GetInt32().ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Xunit.Sdk.XunitException)
+            {
+            }
+        }
         foreach (var process in _started)
         {
             if (!process.HasExited)
             {
-                Run("kill", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
-                if (!process.WaitForExit(5000))
-                    process.Kill();
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception)
+                {
+                }
                 process.WaitForExit();
             }
             process.Dispose();

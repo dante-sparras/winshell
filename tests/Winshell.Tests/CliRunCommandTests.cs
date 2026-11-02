@@ -44,7 +44,7 @@ public class CliRunCommandTests
 
         Assert.Equal(1, code);
         Assert.Equal("", output);
-        Assert.Contains("No shell.qml", error, StringComparison.Ordinal);
+        Assert.Contains("No .csproj", error, StringComparison.Ordinal);
     }
 
     private static (int Code, string Output, string Error) Run(string[] args) =>

@@ -5,9 +5,10 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary>
-/// The configuration-error notice never takes the keyboard. <c>winshell ipc call notice dismiss</c> closes it
-/// even when the configuration did not load, so there is no <c>IpcHandler</c> to call.
+/// <c>winshell ipc call notice dismiss</c> closes whichever notice is showing, and it takes no arguments.
+/// A leftover <c>shell.qml</c> still starts the default shell, which is what shows that notice.
 /// </summary>
+[Collection(DefaultShellCollection.Name)]
 public sealed class NoticeDismissIpcTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
@@ -16,19 +17,12 @@ public sealed class NoticeDismissIpcTests : IDisposable
     private readonly List<Process> _started = [];
 
     [Fact]
-    public void Notice_dismiss_reaches_a_configuration_that_failed_to_load()
+    public void Notice_dismiss_reaches_a_shell_that_started_from_a_leftover_qml_file()
     {
-        var config = Path.Combine(_dir, "broken");
+        var config = Path.Combine(_dir, "leftover");
         Directory.CreateDirectory(config);
-        File.WriteAllText(Path.Combine(config, "shell.qml"), """
-            import Winshell
-            ShellRoot {
-              PanelWindow { colour: "red" }
-            }
-            """);
+        File.WriteAllText(Path.Combine(config, "shell.qml"), "import QtQuick\nItem {}\n");
         var process = Start(config);
-        var log = LogPath(process);
-        Wait.Until(() => File.Exists(log) && Read(log).Contains("Failed to load configuration", StringComparison.Ordinal), "the configuration error in the log");
 
         var pid = process.Id.ToString(CultureInfo.InvariantCulture);
         var dismissed = Run("ipc", "--pid", pid, "call", "notice", "dismiss");
@@ -54,24 +48,23 @@ public sealed class NoticeDismissIpcTests : IDisposable
         {
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        info.ArgumentList.Add("-p");
-        info.ArgumentList.Add(configDir);
-        info.Environment.Remove("WINSHELL_DISABLE_FILE_WATCHER");
-        info.Environment.Remove("WINSHELL_NO_RELOAD_POPUP");
+        info.ArgumentList.Add("run");
+        info.Environment["WINSHELL_CONFIG_DIR"] = configDir;
+        info.Environment["WINSHELL_LOCAL_DIR"] = Path.Combine(_dir, "local");
         var process = Process.Start(info)!;
         _started.Add(process);
         process.ErrorDataReceived += (_, _) => { };
+        process.OutputDataReceived += (_, _) => { };
         process.BeginErrorReadLine();
+        process.BeginOutputReadLine();
         Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
-    private static string LogPath(Process process) =>
-        Listed().Single(i => i.GetProperty("pid").GetInt32() == process.Id).GetProperty("log").GetString()!;
-
-    private static List<JsonElement> Listed()
+    private List<JsonElement> Listed()
     {
         var result = Run("list", "--json");
         Assert.Equal(0, result.Code);
@@ -79,15 +72,8 @@ public sealed class NoticeDismissIpcTests : IDisposable
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private static (int Code, string Output, string Error) Run(params string[] args) =>
-        WinshellCli.Run(args);
-
-    private static string Read(string path)
-    {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
+    private (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "leftover")));
 
     public void Dispose()
     {

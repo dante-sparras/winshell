@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Winshell;
 
-/// <summary>The thread every QML object lives on. Work from other threads is posted to it.</summary>
+/// <summary>The thread the shell's objects live on. Work from other threads is posted to it.</summary>
 public interface IEventLoop
 {
     /// <summary>Runs the action on the loop's thread. Safe to call from any thread.</summary>

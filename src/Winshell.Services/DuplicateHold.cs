@@ -16,7 +16,7 @@ internal readonly struct DuplicateHold : IDisposable
 
     public bool Acquired => _mutex is not null;
 
-    /// <summary>The mutex for a <c>shell.qml</c>. The name is a hash so a long path still fits, and the hash ignores case so Windows paths match.</summary>
+    /// <summary>The mutex for one config path. The name is a hash so a long path still fits, and the hash ignores case so Windows paths match.</summary>
     public static string ConfigMutexName(string configPath) =>
         @"Local\winshell-" + Hash(Path.GetFullPath(configPath));
 
@@ -24,7 +24,10 @@ internal readonly struct DuplicateHold : IDisposable
     /// The mutex for a configuration's program, which is one shell by its shell id, wherever it was built. An id means
     /// that shell only in one local folder, whose instances are the ones it can see.
     /// </summary>
-    public static string ShellMutexName(string shellId) => @"Local\winshell-shell-" + Hash(ShellLocations.LocalRoot + "\n" + shellId);
+    public static string ShellMutexName(string shellId) => ShellMutexName(shellId, ShellLocations.LocalRoot);
+
+    /// <summary>The mutex <paramref name="shellId"/> holds when its local folder is <paramref name="localRoot"/>.</summary>
+    internal static string ShellMutexName(string shellId, string localRoot) => @"Local\winshell-shell-" + Hash(localRoot + "\n" + shellId);
 
     private static string Hash(string text) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToUpperInvariant())));

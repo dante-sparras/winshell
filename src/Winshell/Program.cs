@@ -1,17 +1,12 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Winshell;
-using Winshell.Platform.Windows;
+using Winshell.DefaultShell;
 using Winshell.Diagnostics;
-using Winshell.Platform.Windows.Diagnostics;
-using Winshell.Platform.Windows.Services.ExplorerTaskbar;
-using Winshell.Platform.Windows.Services.Updates;
-using Winshell.Runtime;
-using Winshell.Runtime.Quick;
-using Winshell.Runtime.Shell;
+using Winshell.Updates;
 
 namespace Winshell
 {
@@ -57,11 +52,17 @@ namespace Winshell
 
             public bool Hard { get; set; }
 
+            /// <summary>Run the program the last build left. A failed build never starts that program unless this is set.</summary>
+            public bool NoBuild { get; set; }
+
             public bool NoColor { get; set; }
 
             public int? Tail { get; set; }
 
             public List<string> Positional { get; } = [];
+
+            /// <summary>The <c>--</c> and everything after it. Those words belong to the configuration's program.</summary>
+            public List<string> Rest { get; } = [];
         }
 
         private static readonly string Version = typeof(Cli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
@@ -229,8 +230,10 @@ namespace Winshell
             for (var i = 0; i < args.Length; i++)
             {
                 var token = args[i];
+                if (token == "--")
+                    return true;
                 if (token is not ("-p" or "--path" or "-c" or "--config" or "-n" or "--no-duplicate"
-                    or "-d" or "--daemonize" or "-v" or "--verbose"))
+                    or "-d" or "--daemonize" or "-v" or "--verbose" or "--no-build"))
                     return false;
                 if (TakesValue(token))
                     i++;
@@ -268,6 +271,11 @@ namespace Winshell
                 }
                 if (args[i] == "--")
                 {
+                    if (command is null or "run")
+                    {
+                        o.Rest.AddRange(args.Skip(i));
+                        break;
+                    }
                     raw = true;
                     continue;
                 }
@@ -312,6 +320,9 @@ namespace Winshell
                         break;
                     case "--no-color":
                         o.NoColor = true;
+                        break;
+                    case "--no-build":
+                        o.NoBuild = true;
                         break;
                     case "-V" or "--version" or "-h" or "--help":
                         break;
@@ -433,9 +444,9 @@ namespace Winshell
                 case "reload":
                     WriteHelp("""
                         winshell reload [--hard] [-i <id> | --pid <pid> | -c <name> | -p <path>]
-                          Reloads one running instance's configuration, and says whether it loaded.
-                          If it did not, the instance keeps running what it had.
-                          --hard does not hand the old objects to the new generation.
+                          Builds a configuration project and asks its instance to start again.
+                          A build that fails leaves the instance running and asks it to show the error.
+                          The default shell starts again. --hard is accepted.
                           With one running instance and no selector, that instance is used.
                           With several, this exits and lists them.
                         """);
@@ -500,7 +511,7 @@ namespace Winshell
                        winshell help                       print this summary
 
                 Config selection:
-                  -p, --path <path>      a shell.qml, or the folder it is in
+                  -p, --path <path>      a project file, or the folder it is in
                   -c, --config <name>    a named config in {ConfigPaths.Root()}
                                          ({ConfigPaths.OverrideVariable} overrides that folder)
                 Instance selection (kill, reload, log, ipc):
@@ -509,12 +520,13 @@ namespace Winshell
                 Other:
                   -d, --daemonize        run in the background
                   -n, --no-duplicate     exit quietly if this config is already running
+                      --no-build         run the last build, and do not build again
                   -v, --verbose          log debug messages
                   -j, --json             print list, ipc show or doctor as JSON
                       --no-color         print doctor without color
                   -h, --help, /?         print help and exit
                   -V, --version          print the version
-                  --                     end options; later words are arguments
+                  --                     end options; later words are the program's arguments
 
                 Exit codes: 0 done, 1 the command failed, 2 the command line was wrong.
                 """);
@@ -522,61 +534,18 @@ namespace Winshell
 
         private static void WriteHelp(string text) => Console.WriteLine(text.Replace("\r\n", "\n").TrimEnd());
 
-        /// <summary>The root file of the shell to run, or null with a message when there is none.</summary>
-        private static string? ResolveConfig(Options o, out string? error)
+        /// <summary>The project <c>run</c> would start, or null when the default shell runs. A reason means it cannot choose.</summary>
+        private static ConfigurationProject? FindProject(Options o, out string? error)
         {
-            if (o.Path is null)
-                CopyLegacyConfig();
-            var found = FindConfig(o, out error);
-            // No config yet: run the Windows 11 shell Winshell ships with.
-            return found ?? (error is null ? DefaultShell.Install() : null);
-        }
-
-        /// <summary>
-        /// The config <see cref="ResolveConfig"/> picks, without copying an old config or writing the default shell:
-        /// null with no error when Winshell would run its default shell, and null with the reason when it cannot pick.
-        /// </summary>
-        private static string? FindConfig(Options o, out string? error)
-        {
-            error = null;
-            if (o.Path is { } path)
+            try
             {
-                var full = System.IO.Path.GetFullPath(path);
-                if (File.Exists(full))
-                    return full;
-                var inDir = System.IO.Path.Combine(full, "shell.qml");
-                if (File.Exists(inDir))
-                    return inDir;
-                error = $"No shell.qml at {full}";
+                return ConfigurationProject.Find(o.Path, o.Config, ConfigPaths.Root(), out error);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                error = e.Message;
                 return null;
             }
-            var baseDir = ConfigPaths.Root();
-            if (o.Config is { } name)
-            {
-                var named = System.IO.Path.Combine(baseDir, name, "shell.qml");
-                if (File.Exists(named))
-                    return named;
-                error = $"No config named \"{name}\" in {baseDir}";
-                return null;
-            }
-            var root = System.IO.Path.Combine(baseDir, "shell.qml");
-            if (File.Exists(root))
-                return root;
-            var def = System.IO.Path.Combine(baseDir, "default", "shell.qml");
-            if (File.Exists(def))
-                return def;
-            if (Directory.Exists(baseDir))
-            {
-                var configs = Directory.EnumerateDirectories(baseDir).Select(d => System.IO.Path.Combine(d, "shell.qml")).Where(File.Exists).ToList();
-                if (configs.Count == 1)
-                    return configs[0];
-                if (configs.Count > 1)
-                {
-                    error = $"Several configs in {baseDir}; pick one with -c: {string.Join(", ", configs.Select(c => System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(c))))}";
-                    return null;
-                }
-            }
-            return null;
         }
 
         /// <summary>Copies <c>%USERPROFILE%\.config\winshell</c> into the default config root once. A set override skips it.</summary>
@@ -614,153 +583,102 @@ namespace Winshell
             if (update is { Error: { } updateError })
                 Console.Error.WriteLine($"Could not update Winshell to {update.Version}: {updateError}");
 
-            var root = ResolveConfig(o, out var error);
-            if (root is null)
+            var project = FindProject(o, out var error);
+            if (error is not null)
             {
                 // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
-                if (error is not null)
-                    StartupError.Report(error, StartupError.FolderFor(o.Path, ConfigPaths.Root()));
+                StartupError.Report(error, StartupError.FolderFor(o.Path, ConfigPaths.Root()));
                 return 1;
             }
-            // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
-            if (o.Daemonize)
+            if (project is null)
             {
-                var exe = Environment.ProcessPath!;
-                var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
-                var childArgs = originalArgs.Where(a => a is not ("-d" or "--daemonize")).ToList();
-                // The child has no console. A bare child would print help and exit, so name the run command.
-                if (FirstCommand([.. childArgs]) is null)
-                    childArgs.Insert(0, "run");
-                foreach (var a in childArgs)
-                    psi.ArgumentList.Add(a);
+                if (o.Path is null)
+                    CopyLegacyConfig();
+                // -d starts this program again. That child runs the shell, so this process must not also detach.
+                if (o.Daemonize)
+                    return DetachDefault(originalArgs);
+                return RunDefault(o, update);
+            }
+            var reason = project.Prepare(o.NoBuild, ConfigurationProject.Run);
+            if (reason is not null)
+            {
+                StartupError.Report(reason, project.Folder);
+                return 1;
+            }
+            return StartProgram(project.Program, ProgramArguments(o), o.Daemonize);
+        }
+
+        /// <summary>Starts <c>winshell.exe</c> again without <c>-d</c>, and returns at once. The child runs the default shell.</summary>
+        private static int DetachDefault(string[] originalArgs)
+        {
+            var exe = Environment.ProcessPath!;
+            var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
+            var childArgs = originalArgs.Where(a => a is not ("-d" or "--daemonize")).ToList();
+            // The child has no console. A bare child would print help and exit, so name the run command.
+            if (FirstCommand([.. childArgs]) is null)
+                childArgs.Insert(0, "run");
+            foreach (var a in childArgs)
+                psi.ArgumentList.Add(a);
+            try
+            {
                 using var child = Process.Start(psi);
                 return 0;
             }
-            // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
-            using var duplicate = o.NoDuplicate
-                ? DuplicateHold.TryClaim(DuplicateHold.ConfigMutexName(root), i => string.Equals(i.ConfigPath, root, StringComparison.OrdinalIgnoreCase))
-                : default;
-            if (o.NoDuplicate && !duplicate.Acquired)
-                return 0;
-
-            // Objects with no engine log through Log.Default. That is this process's log.
-            var log = Log.Default;
-            var instance = ShellInstance.Open(root, log, o.Verbose);
-            var crashes = instance.Crashes;
-            // Null until the shell is about to start. A crash before that has not hidden Explorer's taskbar.
-            ExplorerTaskbarSession? explorerTaskbar = null;
-            instance.Crashing = () => explorerTaskbar?.Restore();
-
-            using var loop = new WinEventLoop { Log = log };
-            loop.Failed += e => instance.Reported(crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
-            using var updater = Updater.ForRelease(ReleaseRepository, Version, log);
-            if (updater is not null)
+            catch (Win32Exception e)
             {
-                if (update is { Error: { } failure })
-                    updater.ReportApplyFailure(update.Version, failure);
-                // Starts this winshell.exe again, with the same arguments, which puts the update in place as it starts.
-                updater.Restart = () =>
-                {
-                    // That start would not install while another shell runs, so restarting would change nothing.
-                    if (Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId))
-                        return "Another Winshell is running. Close it, then restart this one.";
-                    loop.Post(Restart);
-                    return null;
-                };
-                void Restart()
-                {
-                    var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
-                    foreach (var a in originalArgs.Where(a => a is not ("-d" or "--daemonize")))
-                        psi.ArgumentList.Add(a);
-                    psi.ArgumentList.Add("--after");
-                    psi.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-                    log.Info("updates", "Restarting Winshell to update it.");
-                    using var next = Process.Start(psi);
-                    loop.Quit(0);
-                }
-            }
-            using var platform = new WindowsPlatform(loop, log);
-            WindowsModules.Install(platform);
-            var host = new ShellHost(root, loop, platform, log) { ConfigRoot = ConfigPaths.Root(), LogPath = instance.LogPath, Crashes = crashes };
-            crashes.ShellId = host.ShellId;
-            // Winshell's own notice for a config error or a window that failed; it shows even when the config does not.
-            using var notices = new ShellNotices(host, loop, platform, log, path => ShellNotices.Open(path, log));
-            // Creating this does not look at Explorer. The real taskbar is built only if the shell asks to hide it.
-            var taskbar = ExplorerTaskbarSession.ForThisProcess();
-            explorerTaskbar = taskbar;
-            host.Services.Add(engine =>
-            {
-                engine.AddService<IClipboard>(platform);
-                engine.AddService<IPlatformServices>(platform);
-                engine.AddService<IIconLookup>(IconProvider.Instance);
-                WindowsModules.AddServices(engine, platform);
-                WindowsModules.AddStartup(engine, Environment.ProcessPath!, originalArgs);
-                if (updater is not null)
-                    WindowsModules.AddUpdates(engine, updater);
-                // Winshell Settings' About page runs the same checks as winshell doctor, for this shell's config.
-                engine.AddService<IDoctor>(new CliDoctor(() => DoctorContextFor(root, null)));
-                engine.AddService(taskbar);
-            });
-            log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, config \"{root}\"");
-            log.Info("shell", $"Launching config: \"{root}\"");
-            log.Info("shell", $"Shell ID: \"{host.ShellId}\" Path ID: \"{host.ShellId}\"");
-            log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
-            if (!instance.TryOpenPipe())
-            {
-                instance.Abandon();
-                ShellInstance.Quietly(() => explorerTaskbar?.Dispose());
+                StartupError.Report($"Could not start \"{exe}\": {e.Message}", null);
                 return 1;
             }
-            instance.Listen(loop, new QmlInstanceControl(() => host, () => loop.Quit(0)), dismissNotice: () => notices.Hide());
-            instance.Publish(host.ShellId);
-            Console.CancelKeyPress += (_, e) =>
+        }
+
+        /// <summary>The default shell, in this process. <c>--no-duplicate</c> and <c>-v</c> are on the command line <see cref="Shell.Run{T}"/> reads.</summary>
+        private static int RunDefault(Options o, InstalledUpdate? update)
+        {
+            var retired = ConfigurationProject.LeftoverQml(o.Path, o.Config, ConfigPaths.Root());
+            using var updater = Updater.ForRelease(ReleaseRepository, Version, Log.Default);
+            if (updater is not null && update is { Error: { } failure })
+                updater.ReportApplyFailure(update.Version, failure);
+            var options = new ShellOptions
             {
-                e.Cancel = true;
-                loop.Post(() => loop.Quit(0));
+                ShellId = "winshell-default",
+                Updater = updater,
+                RetiredQml = retired,
             };
-            int code;
+            Shell.Run<DefaultShellConfiguration>(options);
+            return Environment.ExitCode;
+        }
+
+        /// <summary>What the configuration's program should see. Winshell's own selectors stay here.</summary>
+        private static List<string> ProgramArguments(Options o)
+        {
+            var args = new List<string>();
+            if (o.Daemonize)
+                args.Add("-d");
+            if (o.NoDuplicate)
+                args.Add("--no-duplicate");
+            if (o.Verbose)
+                args.Add("--verbose");
+            args.AddRange(o.Rest);
+            return args;
+        }
+
+        /// <summary>Starts a configuration's program and returns its exit code. <c>-d</c> makes that program return at once.</summary>
+        private static int StartProgram(string program, IReadOnlyList<string> args, bool daemonize)
+        {
+            var psi = new ProcessStartInfo(program) { UseShellExecute = false, CreateNoWindow = daemonize };
+            foreach (var a in args)
+                psi.ArgumentList.Add(a);
             try
             {
-                if (!host.Start() && host.Root is null)
-                    log.Warn("shell", "The config failed to load. Winshell keeps running and reloads it when the files change.");
-                if (host.Root is not null)
-                    ShellInstance.Quietly(() =>
-                    {
-                        if (CrashFollowUp.Find(crashes.Folder, ShellInstance.ExitState) is not { } closed)
-                            return;
-                        CrashFollowUp.MarkShown(ShellInstance.ExitState, closed.Path);
-                        var recovery = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
-                        var previous = new CrashReport(closed.Path, "Winshell", new InvalidOperationException(recovery), true)
-                        {
-                            Subject = "Winshell",
-                            Recovery = recovery,
-                        };
-                        loop.Post(() => notices.Show(ShellNotices.ForCrash(previous)));
-                    });
-#if DEBUG
-                if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
-                    loop.Schedule(TimeSpan.FromMilliseconds(300), () => loop.Quit(0));
-#endif
-                code = loop.Run();
-#if DEBUG
-                if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
-                    throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash after its config loaded.");
-#endif
+                using var process = Process.Start(psi)!;
+                process.WaitForExit();
+                return process.ExitCode;
             }
-            catch (Exception e) when (instance.ReportFatal(e))
+            catch (Win32Exception e)
             {
-                throw;
+                StartupError.Report($"Could not start \"{program}\": {e.Message}", System.IO.Path.GetDirectoryName(program));
+                return 1;
             }
-            finally
-            {
-                instance.MarkCleanExit();
-                host.Dispose();
-                // After the shell is gone, so a binding cannot hide the taskbar again. This runs when the loop
-                // returns and when an exception leaves this try, because the filter above does not swallow it.
-                ShellInstance.Quietly(() => explorerTaskbar?.Dispose());
-                instance.Close();
-            }
-            return code;
         }
 
         /// <summary>
@@ -818,22 +736,32 @@ namespace Winshell
             }
         }
 
-        /// <summary>winshell doctor: checks this PC's setup, prints a line each, and fails when a check fails.</summary>
+        /// <summary>winshell doctor: checks this PC's setup, prints a line each, and fails when a check fails. It never builds.</summary>
         private static int Doctor(Options o)
         {
-            string? file;
-            string? problem;
-            try
+            var root = ConfigPaths.Root();
+            var project = FindProject(o, out var problem);
+            string? search = project?.Folder;
+            if (search is null && o.Path is { } path)
             {
-                file = FindConfig(o, out problem);
+                var full = System.IO.Path.GetFullPath(path);
+                search = Directory.Exists(full) ? full : System.IO.Path.GetDirectoryName(full);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            else if (search is null && o.Config is { } name)
             {
-                // The config folder cannot be listed: that is the Config check's failure, and the others still run.
-                file = null;
-                problem = $"Winshell cannot read the config folder: {e.Message}";
+                search = System.IO.Path.Combine(root, name);
             }
-            var checks = Diagnostics.Doctor.Run(DoctorContextFor(file, problem), DoctorFacts.Pc);
+            var retired = problem is null && project is null ? ConfigurationProject.LeftoverQml(o.Path, o.Config, root) : null;
+            var checks = Diagnostics.Doctor.Run(new DoctorContext(
+                Environment.ProcessPath!,
+                root,
+                project?.ProjectFile,
+                problem,
+                DoctorInstances(),
+                ShellLocations.LocalRoot,
+                ShellLocations.CrashRoot,
+                retired,
+                search), DoctorFacts.Pc);
             if (o.Json)
             {
                 Console.WriteLine(Diagnostics.Doctor.ToJson(checks, Version));
@@ -846,15 +774,6 @@ namespace Winshell
             return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;
         }
 
-        private static DoctorContext DoctorContextFor(string? configFile, string? problem) => new(
-            Environment.ProcessPath!,
-            ConfigPaths.Root(),
-            configFile,
-            problem,
-            DoctorInstances(),
-            ShellLocations.LocalRoot,
-            ShellLocations.CrashRoot);
-
         /// <summary>The running instances, or none when their folder cannot be read: the doctor still runs its checks.</summary>
         private static List<DoctorInstance> DoctorInstances()
         {
@@ -866,11 +785,6 @@ namespace Winshell
             {
                 return [];
             }
-        }
-
-        private sealed class CliDoctor(Func<DoctorContext> context) : IDoctor
-        {
-            public IReadOnlyList<DoctorCheck> Run() => Diagnostics.Doctor.Run(context(), DoctorFacts.Pc);
         }
 
         private static InstanceChoice Select(Options o, bool includeDead = false)
@@ -893,11 +807,14 @@ namespace Winshell
             }
             if (o.Path is not null || o.Config is not null)
             {
-                var root = ResolveConfig(o, out var error);
-                if (root is null)
+                var project = FindProject(o, out var error);
+                if (error is not null)
                     return InstanceChoice.Miss(error);
-                var match = instances.FirstOrDefault(i => string.Equals(i.ConfigPath, root, StringComparison.OrdinalIgnoreCase));
-                return match is null ? InstanceChoice.Miss($"No running instance of {root}") : InstanceChoice.Found(match);
+                var match = project is null
+                    ? instances.FirstOrDefault(IsDefaultShell)
+                    : instances.FirstOrDefault(i => string.Equals(i.ConfigPath, project.Program, StringComparison.OrdinalIgnoreCase));
+                var label = project?.Program ?? "the default shell";
+                return match is null ? InstanceChoice.Miss($"No running instance of {label}") : InstanceChoice.Found(match);
             }
             return ChooseUnselected(instances);
         }
@@ -914,6 +831,14 @@ namespace Winshell
                 return InstanceChoice.Wrong($"Several instances are running; pick one with -i: {listed}");
             }
             return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss("No running instances");
+        }
+
+        /// <summary><c>winshell.exe</c> and <c>winshellw.exe</c> are the default shell. A project built into <c>bin\shell</c> is not.</summary>
+        private static bool IsDefaultShell(InstanceInfo info)
+        {
+            var name = System.IO.Path.GetFileName(info.ConfigPath);
+            return (name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase) || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase))
+                && ConfigurationProject.ForProgram(info.ConfigPath) is null;
         }
 
         internal readonly record struct InstanceChoice(InstanceInfo? Info, string? Error, int Code)
@@ -994,9 +919,32 @@ namespace Winshell
                 Console.Error.WriteLine(choice.Error);
                 return choice.Code;
             }
+            var project = ConfigurationProject.ForProgram(info.ConfigPath);
+            if (project is not null)
+            {
+                string? reason;
+                try
+                {
+                    reason = project.Prepare(noBuild: false, ConfigurationProject.Run);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    reason = e.Message;
+                }
+                if (reason is not null)
+                {
+                    Console.Error.WriteLine(reason);
+                    await ShowBuildError(info, reason, project.ProjectFile);
+                    return 1;
+                }
+            }
+            var beside = project?.RebuiltBeside;
             try
             {
-                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("reload", Hard: o.Hard)))
+                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest(
+                    "reload",
+                    Args: beside is null ? null : [beside],
+                    Hard: o.Hard)))
                 {
                     if (response.Ok)
                     {
@@ -1013,6 +961,25 @@ namespace Winshell
                 Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
             }
             return 1;
+        }
+
+        /// <summary>Asks the instance to show the build error. The instance keeps running either way.</summary>
+        private static async Task ShowBuildError(InstanceInfo info, string error, string projectFile)
+        {
+            try
+            {
+                await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("build-error", Args: [error, projectFile])))
+                {
+                    if (!response.Ok)
+                        Console.Error.WriteLine($"Instance {info.Id} could not show the notice: {response.Error}");
+                    return;
+                }
+                Console.Error.WriteLine($"Instance {info.Id} could not show the notice.");
+            }
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Instance {info.Id} could not show the notice: {e.Message}");
+            }
         }
 
         /// <summary>True when this instance's process has exited, or the process id now belongs to something else.</summary>

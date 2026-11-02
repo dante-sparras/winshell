@@ -76,8 +76,11 @@ internal interface IInstanceControl
     /// <summary>The shell's IPC targets now. A reload can replace them.</summary>
     IIpcTargets Ipc { get; }
 
-    /// <summary>Reloads the shell. Null when it worked, or else why not, for the client.</summary>
-    string? Reload(bool hard);
+    /// <summary>
+    /// Reloads the shell. <paramref name="program"/> is the build to start when the running one kept its folder, and
+    /// null starts this program again. Null when it worked, or else why not, for the client.
+    /// </summary>
+    string? Reload(bool hard, string? program);
 
     /// <summary>Runs after a client has the answer to a reload that worked, which a shell that goes on to end has to wait for.</summary>
     void Reloaded()
@@ -86,6 +89,11 @@ internal interface IInstanceControl
 
     /// <summary>Ends the shell.</summary>
     void Quit();
+
+    /// <summary>Shows the notice for a configuration that did not build. The shell keeps running.</summary>
+    void ShowBuildError(string error, string projectFile)
+    {
+    }
 
     /// <summary>A failed request as the client reads it.</summary>
     string Describe(Exception e) => $"ipc: {e.GetType().Name}: {e.Message}";
@@ -121,8 +129,8 @@ internal sealed class IpcServer : IDisposable
 
     /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
     /// <param name="dismissNotice">
-    /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it: that notice is not an <c>IpcHandler</c>,
-    /// and it is showing when the configuration failed to load, which is when a handler cannot exist.
+    /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it, including when the configuration did not
+    /// build and has registered nothing to call.
     /// </param>
     public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null)
     {
@@ -358,7 +366,8 @@ internal sealed class IpcServer : IDisposable
                 "call" => new IpcResponse(true, ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
                 "prop" => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
                 "kill" => Kill(),
-                "reload" => Reload(request.Hard),
+                "reload" => Reload(request),
+                "build-error" => BuildError(request),
                 _ => new IpcResponse(false, Error: $"Unknown request {request.Op}"),
             };
         }
@@ -388,9 +397,22 @@ internal sealed class IpcServer : IDisposable
         return new IpcResponse(true);
     }
 
-    private IpcResponse Reload(bool hard) => _control.Reload(hard) is { } error
-        ? new IpcResponse(false, Error: error)
-        : new IpcResponse(true);
+    private IpcResponse Reload(IpcRequest request)
+    {
+        var program = request.Args is { Count: > 0 } args ? args[0] : null;
+        return _control.Reload(request.Hard, program) is { } error
+            ? new IpcResponse(false, Error: error)
+            : new IpcResponse(true);
+    }
+
+    /// <summary><c>winshell reload</c> after a build that failed. The two arguments are the error and the project file.</summary>
+    private IpcResponse BuildError(IpcRequest request)
+    {
+        if (request.Args is not { Count: 2 } args)
+            return new IpcResponse(false, Error: "build-error takes the error and the project file");
+        _control.ShowBuildError(args[0], args[1]);
+        return new IpcResponse(true);
+    }
 
     private async Task Listen(IpcRequest request, StreamWriter writer, Stream stream, bool once)
     {

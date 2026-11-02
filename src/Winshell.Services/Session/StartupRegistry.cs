@@ -85,20 +85,33 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
     /// console or Windows Terminal at every sign-in. Start launches <c>winshellw.exe</c> in the same folder; that name
     /// is written as the sibling <c>winshell.exe</c>, so the Start menu and the installer describe one entry.
     /// <c>--no-duplicate</c> keeps a second sign-in entry from starting a second shell, and <c>--daemonize</c> is left
-    /// out because the console host already runs it in the background. A <c>--path</c> is made absolute, since a
+    /// out because the console host already runs it in the background. A configuration project gets <c>--no-build</c>,
+    /// so signing in never depends on the SDK or on a broken edit. A <c>--path</c> is made absolute, since a
     /// sign-in does not start in this working directory.
     /// </summary>
     public static string CommandFor(string exe, IEnumerable<string> args)
     {
+        var program = exe;
         exe = ConsoleTwin(exe);
         var kept = new List<string>();
         var path = false;
+        var selectsProject = global::Winshell.ConfigurationProject.ForProgram(program) is not null;
         foreach (var a in args)
         {
             if (a is "-d" or "--daemonize")
                 continue;
+            if (a is "-c" or "--config" or "-p" or "--path")
+                selectsProject = true;
             kept.Add(path ? Path.GetFullPath(a) : a);
             path = a is "-p" or "--path";
+        }
+        if (selectsProject && !kept.Any(a => a is "--no-build"))
+        {
+            var duplicate = kept.FindIndex(a => a is "-n" or "--no-duplicate");
+            if (duplicate >= 0)
+                kept.Insert(duplicate, "--no-build");
+            else
+                kept.Add("--no-build");
         }
         if (!kept.Any(a => a is "-n" or "--no-duplicate"))
             kept.Add("--no-duplicate");

@@ -34,6 +34,7 @@ public sealed class StartSeedTests : IDisposable
         var file = await File.ReadAllTextAsync(Path.Combine(_folder, "launcher.toml"), TestContext.Current.CancellationToken);
         Assert.Contains("Notepad!App", file, StringComparison.Ordinal);
         Assert.DoesNotContain("A first app", file, StringComparison.Ordinal);
+        Assert.Single(file.Split('\n'), line => line.Contains("without this file Start pins its defaults", StringComparison.Ordinal));
 
         // A new run reads the file as a choice, so what it holds is what the user is left with.
         using var next = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default);

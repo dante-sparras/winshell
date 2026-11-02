@@ -1,12 +1,12 @@
 # Winshell
 
-A desktop shell toolkit for Windows 11. A configuration written in QML describes the shell.
+A desktop shell toolkit for Windows 11. A configuration is a .NET project that builds into one program.
 
 ## Stack
 
-- Windows 11. The host and the platform target `net10.0-windows10.0.22621.0`. The parser and the runtime target `net10.0`.
+- Windows 11. Projects target `net10.0-windows10.0.22621.0`. The template package targets `net10.0`.
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
-- C# for the shell. `Winshell.Qml` parses QML. JavaScript runs on Jint. Items are drawn with Skia. Windows are DirectComposition surfaces with DWM backdrops.
+- C# and WinUI 3. `winshell.exe` runs the default shell and builds a configuration.
 - xUnit v3 for `tests/`, through VSTest.
 - PowerShell 7 for `scripts/`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1.
 
@@ -18,15 +18,13 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 ├── docs/
 │   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
-│   │   ├── quickshell/              # Quickshell v0.3.2 checkout and manual, where the API started; gitignored, made by scripts/dev.ps1
 │   │   └── release-notes/           # Notes for a release, once that release exists
 │   ├── guide/                       # The docs site's guide section
-│   ├── reference/                   # A page per module, checked against the code by DocsTests
+│   ├── reference/                   # A page per module
 │   ├── security/                    # The threat model
 │   ├── development.md               # Setup, environment, and every command
 │   ├── docfx.json                   # Builds docs/ into the docs site
-│   ├── index.md                     # The docs site's home page
-│   └── migrating-from-quickshell.md # Quickshell names and their Winshell names
+│   └── index.md                     # The docs site's home page
 ├── packaging/
 │   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs and winshell.ico
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
@@ -36,22 +34,15 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 ├── templates/                       # dotnet new winshell and winshell-default; the default shell is generated at pack time
 ├── src/
 │   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
-│   ├── Winshell/                    # The winshell CLI and the process that runs a shell
-│   ├── Winshell.Qml/                # The QML parser
-│   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Winshell modules
-│   ├── Winshell.Services/           # The Windows services, instances and the control pipe, with no QML, Jint or Skia
-│   ├── Winshell.Shell/              # Shell.Run and WinUI windows; ADR-0010 replaces the runtime with this
-│   ├── Winshell.DefaultShell/       # The default shell in XAML and C#, not shipped until the cut
-│   ├── Winshell.Next/               # winshell-next.exe, which runs it until the cut
-│   ├── Winshell.Package/            # Packs Winshell.Services and Winshell.Shell as the Winshell package
-│   └── Winshell.Platform.Windows/   # Windows 11 windows, composition, and the QML face of the services
+│   ├── Winshell/                    # winshell.exe: the CLI, and the process that runs the default shell
+│   ├── Winshell.Services/           # Windows services, instances, and the control pipe
+│   ├── Winshell.Shell/              # Shell.Run and WinUI windows
+│   ├── Winshell.DefaultShell/       # The default shell, in XAML and C#
+│   └── Winshell.Package/            # Packs Winshell.Services and Winshell.Shell as the Winshell package
 ├── tests/
-│   ├── Winshell.Qml.Tests/
-│   ├── Winshell.Runtime.Tests/
 │   ├── Winshell.DefaultShell.Tests/ # The default shell's logic, with no window
-│   ├── Winshell.Services.Tests/     # The services, with no window and no QML
+│   ├── Winshell.Services.Tests/     # The services, with no window
 │   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
-│   ├── Winshell.Platform.Windows.Tests/
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
 │   ├── Winshell.Package.Tests/      # Packs the templates and runs each shell; Category=Package, left out of the main run
 │   ├── TestSupport/                 # Source files every test project links instead of copying
@@ -66,7 +57,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Before you finish
 
-- Build with `dotnet build .\winshell.slnx -warnaserror`, which must pass with 0 warnings, then run the focused tests for what you changed. Add `dotnet test .\tests\Winshell.Qml.Tests -c Release --filter Category=Corpus` when you touch `src/Winshell.Qml`, `dotnet test .\winshell.slnx --filter Category=Leak` when you touch reload, and `dotnet test .\tests\Winshell.Runtime.Tests --filter Category=Performance` when you touch Jint. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The required `ci` job runs the build and the main test stage on a PR, and all of `pwsh scripts/check.ps1` on a push to `main` and on the release PR. `check.ps1` runs the Pester suites when Pester 5.6.1 is installed, and does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
+- Build with `dotnet build .\winshell.slnx -warnaserror`, which must pass with 0 warnings, then run the focused tests for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The required `ci` job runs the build and the main test stage on a PR, and all of `pwsh scripts/check.ps1` on a push to `main` and on the release PR. `check.ps1` runs the Pester suites when Pester 5.6.1 is installed, and does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
 - Say what you couldn't verify.
@@ -76,24 +67,27 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 
 ## Live UI with Winland running
 
-Winland tiles every normal window, so the windows a live run or a test opens change size and land among the user's windows. When `winland` is running, do that work on an empty workspace:
+Winland tiles every normal window, so the windows a live run or a test opens change size and land among the user's windows. When `winland` is running, do that work on an empty workspace on a monitor the user is not using, and never swap the focused monitor's workspace:
 
 ```powershell
-$start = winland -j activeworkspace | ConvertFrom-Json
-if ($start.windows -eq 0) { throw 'Another run is on this workspace.' }
-$workspace = $start.id
-winland keyword windowrule 'ignore, exe:(winshell|winshellw|winshell-next|Winshell\..*Tests)\.exe'
-winland dispatch workspace empty
+$monitors = winland -j monitors | ConvertFrom-Json
+$focused = $monitors | Where-Object focused | Select-Object -First 1
+$spare = $monitors | Where-Object { -not $_.focused } | Select-Object -First 1
+if (-not $spare) { throw 'One monitor: ask before swapping the workspace the user is on.' }
+$workspace = $spare.activeWorkspace.id
+winland keyword windowrule 'ignore, exe:(winshell|winshellw|Winshell\..*Tests)\.exe'
+winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace empty;dispatch focusmonitor $($focused.id)"
 ```
 
-- One run at a time on a machine. The workspace and the rule are shared, so a parallel run would note another run's empty workspace as the user's, and `winland reload` would drop its rule. An empty start means that: wait for it, and never note it.
-- The rule reaches windows that open after it, and `workspace empty` moves the focused monitor only. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
-- `winland -j clients` must list no Winshell window.
+- One run at a time on a machine. The workspace and the rule are shared, so a parallel run would note another run's empty workspace as the user's, and `winland reload` would drop its rule.
+- The rule reaches windows that open after it, and a workspace dispatch acts on the focused monitor, which is why the batch moves the focus and gives it back. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
+- The workspace does not contain what the rule ignores: an ignored window opens where Windows puts it, usually on the primary monitor, and a taskbar opens on every screen. Keep what a test opens small and short.
+- `winland -j clients` must list no Winshell window, and the user's windows must be where they were when you finish.
 - Open a real window there. Winland must tile it, it must open above the shell's windows, and no shell window may draw over it. Check again after `winland dispatch fullscreen`, where the taskbar goes behind it.
-- Finish in a `finally`, so the user gets their workspace back and the rule goes:
+- Finish in a `finally`, so the spare monitor goes back and the rule goes:
 
 ```powershell
-winland dispatch workspace $workspace
+winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace $workspace;dispatch focusmonitor $($focused.id)"
 winland reload
 ```
 

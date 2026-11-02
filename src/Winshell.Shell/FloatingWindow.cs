@@ -57,38 +57,91 @@ public sealed class FloatingWindow : ShellWindow
     public bool Maximized
     {
         get => _maximized;
-        set => RequestState(ref _maximized, value);
+        set
+        {
+            if (!Set(ref _maximized, value))
+                return;
+            // Fullscreen is borderless, so maximized is false while it is on. Setting it true leaves fullscreen, and
+            // only this says what comes next: leaving by Fullscreen = false goes back to what the window was.
+            if (value && _fullscreen)
+            {
+                _fullscreen = false;
+                Changed(nameof(Fullscreen));
+                _stateRequested = true;
+            }
+            OnPlacementChanged();
+        }
     }
 
     public bool Minimized
     {
         get => _minimized;
-        set => RequestState(ref _minimized, value);
+        set
+        {
+            if (Set(ref _minimized, value))
+                OnPlacementChanged();
+        }
     }
 
+    /// <summary>Whether the window is borderless and covering its monitor. A minimized fullscreen window stays fullscreen.</summary>
     public bool Fullscreen
     {
         get => _fullscreen;
-        set => RequestState(ref _fullscreen, value);
+        set
+        {
+            if (Set(ref _fullscreen, value))
+                OnPlacementChanged();
+        }
     }
 
-    /// <summary>The window this one stays above and closes with.</summary>
+    /// <summary>
+    /// The window this one stays above and closes with. It can be set before that window exists, or changed later. A
+    /// window can't own itself or a window that owns it.
+    /// </summary>
     public FloatingWindow? Owner
     {
         get => _owner;
         set
         {
-            if (Set(ref _owner, value))
-                OnPlacementChanged();
+            if (ReferenceEquals(_owner, value) || ReferenceEquals(value, this) || (value is not null && WouldOwn(value)))
+                return;
+            if (_owner is { } previous)
+            {
+                previous.HostCreated -= OnPlacementChanged;
+                previous.Disposing -= OnOwnerDisposing;
+            }
+            _owner = value;
+            if (value is not null)
+            {
+                value.HostCreated += OnPlacementChanged;
+                value.Disposing += OnOwnerDisposing;
+            }
+            Changed();
+            OnPlacementChanged();
         }
     }
 
-    private void RequestState(ref bool field, bool value, [System.Runtime.CompilerServices.CallerMemberName] string property = "")
+    /// <summary>The native owner stays linked: Windows then closes this window, and its handle goes with it.</summary>
+    private void OnOwnerDisposing()
     {
-        if (!Set(ref field, value, property))
+        if (_owner is not { } owner)
             return;
-        _stateRequested = true;
-        OnPlacementChanged();
+        owner.HostCreated -= OnPlacementChanged;
+        owner.Disposing -= OnOwnerDisposing;
+        _owner = null;
+        Changed(nameof(Owner));
+    }
+
+    private bool WouldOwn(FloatingWindow owner)
+    {
+        FloatingWindow? hop = owner;
+        for (var n = 0; hop is not null && n < 16; n++)
+        {
+            if (ReferenceEquals(hop, this))
+                return true;
+            hop = hop._owner;
+        }
+        return false;
     }
 
     private protected override void ApplyPlacement()

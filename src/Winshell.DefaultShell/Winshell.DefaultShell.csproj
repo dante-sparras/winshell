@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Winshell.DefaultShell.Tests" />
+    <InternalsVisibleTo Include="Winshell.Shell.Tests" />
   </ItemGroup>
 </Project>

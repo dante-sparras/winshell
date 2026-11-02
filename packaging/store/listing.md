@@ -8,13 +8,13 @@ Winshell
 
 ## Short description (≤ 270 recommended)
 
-A Windows 11 taskbar, Start, quick settings and notification center you can change, described in QML.
+A Windows 11 taskbar, Start, quick settings and notification center. A shell you write is a .NET program.
 
 ## Description (≤ 10,000)
 
 Winshell is a desktop shell for Windows 11. Out of the box it runs a taskbar, Start, quick settings, a notification center and on-screen displays that look and behave like Windows 11's own, with Mica and Acrylic, your accent color, light and dark mode, Narrator and keyboard support.
 
-Every part of it is a QML file. Change the default shell, or write your own: a bar, a launcher, a dock, widgets. Winshell gives your shell Windows' apps, windows, notifications, audio, media, network, Bluetooth, power and more, and reloads it as you save.
+The default shell is built in. To change it, or to write your own, you write a .NET project. It builds into one program: a bar, a launcher, a dock. Winshell gives that program Windows' apps, windows, notifications, audio, media, network, Bluetooth, power and more. Running the default shell needs no .NET SDK. Writing a shell does.
 
 Winshell Settings changes the default shell: the taskbar's alignment and auto-hide, which displays have a taskbar, Start's recommendations, quick settings' tiles, hotkeys and more.
 
@@ -29,12 +29,12 @@ Winshell runs alongside Windows. It does not change Windows settings. It leaves 
 - On-screen displays for volume, brightness and media
 - Mica, Acrylic, accent color, light and dark mode
 - Winshell Settings, laid out like Windows Settings
-- Write your own shell in QML; it reloads as you save
+- Write your own shell as a .NET project; it builds into one program
 - Works with Narrator and the keyboard
 
 ## Search terms (up to 7)
 
-taskbar, shell, start menu, qml, customization, desktop, widgets
+taskbar, shell, start menu, winui, customization, desktop, windows
 
 ## Category
 
@@ -60,7 +60,7 @@ https://github.com/dante-sparras/winshell/issues
 
 Paste the two bullets. Do not paste the note under them.
 
-- **runFullTrust:** Winshell is a desktop shell. It draws its own windows with DirectComposition, reserves screen edges for its taskbar, and reads the running windows and the notification area.
+- **runFullTrust:** Winshell is a desktop shell. It draws its windows with WinUI in a XAML island, reserves screen edges for its taskbar, and reads the running windows and the notification area.
 - **unvirtualizedResources:** Winshell keeps its configuration in `%APPDATA%\winshell`, which users edit by hand and share between the Store and portable versions. With file writes virtualized, that folder would land in a copy only the package sees. It also reads the user's real registry, such as the theme and which tray icons show. Registry virtualization would hide those. Sign-in does not use the `Run` key: it is the package's startup task.
 
 Not for pasting. Registry virtualization stays off because the shell reads the user's real registry, not because of sign-in. If review refuses `unvirtualizedResources`: MSIX virtualizes writes only under AppData and HKCU, so the Store build could keep its config in a folder outside AppData and drop this capability, and would then see a virtual registry instead of the user's theme and tray settings.

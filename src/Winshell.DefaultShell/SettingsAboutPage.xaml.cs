@@ -10,7 +10,7 @@ namespace Winshell.DefaultShell;
 
 /// <summary>
 /// The version, Winshell's own updates, the config folder, this instance's log, and the diagnostics card. The card
-/// checks the configuration project. Those checks read the project file and run off the UI thread.
+/// runs the same checks as <c>winshell doctor</c>. Those checks only read, and they run off the UI thread.
 /// </summary>
 public sealed partial class SettingsAboutPage : UserControl
 {

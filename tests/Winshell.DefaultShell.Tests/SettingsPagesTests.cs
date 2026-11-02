@@ -222,6 +222,21 @@ public sealed class SettingsPagesTests : IDisposable
     }
 
     [Fact]
+    public void A_diagnostics_run_that_runs_out_of_memory_finishes()
+    {
+        var session = new SettingsDiagnosticsSession(() => throw new OutOfMemoryException("doctor"));
+        Action? failed = null;
+
+        session.Run(action => failed = action);
+        Wait.Until(() => failed is not null, "the failed diagnostics run to post");
+        failed!();
+
+        Assert.False(session.Running);
+        Assert.Equal("0 passed, 0 warnings, 1 failed.", session.Summary);
+        Assert.Equal("Could not run: OutOfMemoryException: doctor", Assert.Single(session.Checks).Message);
+    }
+
+    [Fact]
     public void A_diagnostics_run_already_going_is_left_to_finish()
     {
         var entered = 0;
@@ -261,12 +276,22 @@ public sealed class SettingsPagesTests : IDisposable
 
         var checks = SettingsAbout.Checks(_folder);
 
-        Assert.Equal(["project", "downloaded", "built", "build"], checks.Select(c => c.Id));
-        Assert.Equal("pass", checks[0].Status);
-        Assert.Equal(project, checks[0].Message);
-        Assert.Equal("fail", checks[2].Status);
-        Assert.Equal("Run winshell run once to build it.", checks[2].Fix);
-        Assert.Equal("warn", checks[3].Status);
+        Assert.Equal(
+            ["windows", "dotnet", "project", "downloaded", "built", "build", "qml", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"],
+            checks.Select(c => c.Id));
+        var projectCheck = Assert.Single(checks, c => c.Id == "project");
+        var built = Assert.Single(checks, c => c.Id == "built");
+        var build = Assert.Single(checks, c => c.Id == "build");
+        Assert.Equal("pass", projectCheck.Status);
+        // Doctor prints the user's local folder as %LOCALAPPDATA%, and this temp project lives under it.
+        var printed = project.Replace(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "%LOCALAPPDATA%",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(printed, projectCheck.Message);
+        Assert.Equal("fail", built.Status);
+        Assert.Equal("Run winshell run once to build it.", built.Fix);
+        Assert.Equal("warn", build.Status);
         Assert.Equal(before, Directory.EnumerateFileSystemEntries(_folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray());
     }
 

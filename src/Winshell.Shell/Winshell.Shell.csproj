@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <InternalsVisibleTo Include="Winshell" />
     <InternalsVisibleTo Include="Winshell.Shell.Tests" />
   </ItemGroup>
   <ItemGroup>

@@ -41,20 +41,20 @@ Describe 'The quarantine list' {
 
     It 'is left out of the main filter and is all the quarantine filter selects' {
         $filter = Get-MainTestFilter -Quarantined @('Ns.Class.One', 'Ns.Class.Two')
-        $filter | Should -BeLike 'Category!=Performance&*&Category!=Package&FullyQualifiedName!=Ns.Class.One&FullyQualifiedName!=Ns.Class.Two'
+        $filter | Should -Be 'Category!=Package&FullyQualifiedName!=Ns.Class.One&FullyQualifiedName!=Ns.Class.Two'
         Get-NamedTestFilter -Names @('Ns.Class.One', 'Ns.Class.Two') | Should -Be 'FullyQualifiedName=Ns.Class.One|FullyQualifiedName=Ns.Class.Two'
     }
 
     It 'leaves the main filter alone when nothing is quarantined' {
-        Get-MainTestFilter | Should -Be 'Category!=Performance&Category!=Leak&Category!=Corpus&Category!=Media&Category!=Package'
+        Get-MainTestFilter | Should -Be 'Category!=Package'
     }
 
     It 'adds no clause for a list with only comments' {
         $path = Join-Path $TestDrive 'comments.txt'
         Set-Content -LiteralPath $path -Value @('# only a note')
         $list = Get-QuarantinedTest -Path $path
-        Get-MainTestFilter -Quarantined $list | Should -Be 'Category!=Performance&Category!=Leak&Category!=Corpus&Category!=Media&Category!=Package'
-        Get-MainTestFilter -Quarantined @($list) | Should -Be 'Category!=Performance&Category!=Leak&Category!=Corpus&Category!=Media&Category!=Package'
+        Get-MainTestFilter -Quarantined $list | Should -Be 'Category!=Package'
+        Get-MainTestFilter -Quarantined @($list) | Should -Be 'Category!=Package'
     }
 
     It 'runs nothing when nothing is quarantined' {

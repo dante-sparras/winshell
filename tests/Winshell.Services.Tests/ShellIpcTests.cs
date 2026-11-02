@@ -2,7 +2,7 @@ using Windows.UI;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>A C# registration has the checks an <c>IpcHandler</c> has: declared types, an exact argument count, and no eval.</summary>
+/// <summary>A C# registration checks declared types and an exact argument count, and does not evaluate text.</summary>
 public sealed class ShellIpcTests
 {
     private readonly List<string> _warnings = [];

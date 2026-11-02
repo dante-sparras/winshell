@@ -10,7 +10,7 @@ param(
 
 $script:Root = Split-Path -Parent $PSScriptRoot
 $script:TrxNamespace = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'
-$script:MainFilter = 'Category!=Performance&Category!=Leak&Category!=Corpus&Category!=Media&Category!=Package'
+$script:MainFilter = 'Category!=Package'
 $script:MaxRerun = 10
 
 function Get-QuarantinedTest {

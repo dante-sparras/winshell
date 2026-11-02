@@ -8,13 +8,14 @@ namespace Winshell;
 /// them, so anything else on the line is the program's. <c>--after</c> is for this start only: a reload names the
 /// process it replaces instead. <c>-d</c> is for this start only too: the process that takes over does not detach again.
 /// </summary>
-internal sealed record ShellArguments(int? After, bool NoDuplicate, bool Daemonize, IReadOnlyList<string> Kept, IReadOnlyList<string> Detached)
+internal sealed record ShellArguments(int? After, bool NoDuplicate, bool Daemonize, IReadOnlyList<string> Kept, IReadOnlyList<string> Detached, bool Verbose)
 {
     public static ShellArguments Parse(IEnumerable<string> args)
     {
         int? after = null;
         var noDuplicate = false;
         var daemonize = false;
+        var verbose = false;
         var kept = new List<string>();
         var detached = new List<string>();
         var list = args.ToList();
@@ -40,10 +41,11 @@ internal sealed record ShellArguments(int? After, bool NoDuplicate, bool Daemoni
                 continue;
             }
             noDuplicate |= list[i] is "-n" or "--no-duplicate";
+            verbose |= list[i] is "-v" or "--verbose";
             kept.Add(list[i]);
             detached.Add(list[i]);
         }
-        return new ShellArguments(after, noDuplicate, daemonize, kept, detached);
+        return new ShellArguments(after, noDuplicate, daemonize, kept, detached, verbose);
     }
 
     /// <summary>The arguments of the process that takes over from <paramref name="pid"/>. <c>--after</c> comes first, before any <c>--</c>.</summary>

@@ -23,28 +23,25 @@ pwsh scripts/dev.ps1
 
 | Command | What it does |
 | --- | --- |
-| `pwsh scripts/dev.ps1` | Clones Quickshell v0.3.2 into `docs/agents/quickshell/` and fetches its manual into `site/` there. |
-| `pwsh scripts/dev.ps1 -Refresh` | Downloads the Quickshell manual again. |
-| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, and the docs site with `--warningsAsErrors`. Then runs the main test stage with `scripts/run-tests.ps1`, which leaves out the tests in `tests/quarantine.txt` and reruns a failed test once, as "Flaky tests" in `CONTRIBUTING.md` describes. A test that passes only on its rerun is written to the file `WINSHELL_FLAKY_REPORT` names, when that is set. The reload leak test (`Category=Leak`) runs alone, because it counts handles and USER objects for the whole process. The QML parser corpus (`Category=Corpus`) runs alone after that, in Release on every core, because parsing every prefix of the shipped files would starve the UI tests. The Jint performance budgets (`Category=Performance`) run last and alone, and print what they measured. The media session test (`Category=Media`) isn't run here; the `media` job runs it. The packed shell test (`Category=Package`) isn't run here. When Pester 5.6.1 can be imported, it then runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1` and `ReleaseGate.Tests.ps1`. Otherwise it prints that those five were skipped. `-Quick` builds and runs only the main test stage. The required `ci` job runs that on a pull request, and the full check on a push to `main` and on the release pull request. `scripts/ReleaseGate.ps1` holds a release until the check on its commit passes. `check.ps1` does not run the link check, workflow audit, package build, or the Windows PowerShell 5.1 pass of the installer tests. |
-| `pwsh scripts/pack.ps1` | Packs the `Winshell` library a configuration references, and the `Winshell.Templates` package, into `artifacts/packages/`. The library carries `Winshell.Services` and `Winshell.Shell`, and depends on `Microsoft.WindowsAppSDK.WinUI` and `Microsoft.WindowsAppSDK.Foundation` 2.6.4. The template package is `dotnet new winshell` (one panel) and `dotnet new winshell-default` (the default shell, generated from `src/Winshell.DefaultShell` and `src/Winshell.Next` when this runs). Neither package is published, and no workflow runs this. `-Out` chooses the folder and `-Version` overrides the release from `.release-please-manifest.json`. |
+| `pwsh scripts/dev.ps1` | Checks that the .NET SDK is on PATH. |
+| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors, and the docs site with `--warningsAsErrors`. Then runs the main test stage with `scripts/run-tests.ps1`, which leaves out the tests in `tests/quarantine.txt` and reruns a failed test once, as "Flaky tests" in `CONTRIBUTING.md` describes. A test that passes only on its rerun is written to the file `WINSHELL_FLAKY_REPORT` names, when that is set. The packed shell test (`Category=Package`) isn't run here. When Pester 5.6.1 can be imported, it then runs `Install.Tests.ps1`, `Uninstall.Tests.ps1`, `PublishRelease.Tests.ps1`, `FlakyTests.Tests.ps1` and `ReleaseGate.Tests.ps1`. Otherwise it prints that those five were skipped. `-Quick` builds and runs only the main test stage. The required `ci` job runs that on a pull request, and the full check on a push to `main` and on the release pull request. `scripts/ReleaseGate.ps1` holds a release until the check on its commit passes. `check.ps1` does not run the link check, workflow audit, package build, or the Windows PowerShell 5.1 pass of the installer tests. |
+| `pwsh scripts/pack.ps1` | Packs the `Winshell` library a configuration references, and the `Winshell.Templates` package, into `artifacts/packages/`. The library carries `Winshell.Services` and `Winshell.Shell`, and depends on `Microsoft.WindowsAppSDK.WinUI` and `Microsoft.WindowsAppSDK.Foundation` 2.6.4. The template package is `dotnet new winshell` (one panel) and `dotnet new winshell-default` (the default shell, generated from `src/Winshell.DefaultShell` and `templates/winshell-default/Program.cs` when this runs). Neither package is published, and no workflow runs this. `-Out` chooses the folder and `-Version` overrides the release from `.release-please-manifest.json`. |
 | `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained, ReadyToRun `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, and the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
 | `pwsh scripts/install.ps1` | Installs the portable build for the current user from a GitHub release into `%LOCALAPPDATA%\Programs\winshell\bin`, adds that folder to the user PATH, and creates a Start menu shortcut. `-Version x.y.z` picks a release; `-AutoStart` registers sign-in. Under `irm \| iex` those are `WINSHELL_VERSION` and `WINSHELL_AUTOSTART`. A leftover `bin.old-*` folder is removed on a later install once nothing from that install is running. It also deletes a staged update in `%LOCALAPPDATA%\winshell\updates`, so that copy cannot replace this install on the next start. If a Microsoft Store copy is also installed, it says so and still finishes, because that copy's WindowsApps alias usually comes first on PATH. `irm \| iex`, and running the file with the call operator, also add that folder to the current window's PATH and tell you to run `winshell`. This command starts a process that exits, so it tells you to open a new terminal. The Package workflow uploads this script next to the zip. See the [README](https://github.com/dante-sparras/winshell/blob/main/README.md#install-with-powershell). |
 | `pwsh scripts/uninstall.ps1` | Removes that install folder, that PATH entry, that shortcut, that sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. Under `irm \| iex` it also removes that folder from the current window's PATH and leaves every other entry. The Package workflow uploads this script next to `install.ps1`. |
 | `dotnet run scripts/render-logo.cs` | Renders `packaging/logo.svg` into the package's PNGs (the manifest sizes, their scale-125, scale-150, and scale-200 variants, and the unplated target sizes), the Store listing's PNG, and `packaging/winshell.ico`. Commit them after changing the logo. |
 | `pwsh scripts/publish-release.ps1 -Tag v1.2.3 -PackageDirectory <packages> -Repository dante-sparras/winshell` | Normally called by CI: uploads the six required files to an existing draft, verifies GitHub's digests, then publishes it. Requires an authenticated `gh`. Refuses an incomplete published release, never replaces an existing asset, and leaves a failed upload/verification as a draft. Use only for an approved release. |
 | `Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI` | Tests draft publication with a mocked `gh`; makes no GitHub changes. Requires Pester 5.6.1 and PowerShell 7. This runs in CI's installer job. |
-| `pwsh scripts/update-snapshots.ps1 -FromRun <id>` | Downloads the `snapshot-diffs` artifact from a CI run and imports its actual renders as [snapshot](#visual-snapshots) baselines. Requires `gh` authenticated to GitHub. `-Surface taskbar` imports one surface; `-Surface notice` imports the notice baselines. Local renders are never used. |
 | `dotnet tool restore`, then `dotnet docfx docs/docfx.json --serve` | Builds the docs site into `docs/_site/` and serves it at `http://localhost:8080`. See [Docs](#docs). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
-Before opening a PR, build with warnings as errors and run the focused tests for what you changed. Add `dotnet test .\tests\Winshell.Qml.Tests -c Release --filter Category=Corpus` when you touch the parser, `dotnet test .\winshell.slnx --filter Category=Leak` when you touch reload, and `dotnet test .\tests\Winshell.Runtime.Tests --filter Category=Performance` when you touch Jint. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and the templates, builds each shell, and runs it; it is slow, and the main test stage leaves it out. The required `ci` job runs `check.ps1 -Quick` on a PR. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI turns on for itself.
+Before opening a PR, build with warnings as errors and run the focused tests for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and the templates, builds each shell, and runs it; it is slow, and the main test stage leaves it out. The required `ci` job runs `check.ps1 -Quick` on a PR. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI turns on for itself.
 
 `check.ps1` runs the PowerShell 7 Pester suites when Pester 5.6.1 is installed. The installer job also runs the Windows PowerShell 5.1 pass and PSScriptAnalyzer, which `check.ps1` does not. Of the jobs below, `installer` and `actionlint` are required:
 
 | Job | When it runs | How to run it locally |
 | --- | --- | --- |
 | `installer` | Every pull request, in `ci.yml`. That job downloads the Pester 5.6.1 and PSScriptAnalyzer 1.22.0 nupkgs and checks their SHA-256 before it imports them. | `check.ps1` runs the five Pester suites when Pester 5.6.1 imports. This job also runs them, then Windows PowerShell 5.1 runs the install, uninstall and release gate files again. PSScriptAnalyzer 1.22.0 must report no warning or error on `scripts/install.ps1` and `scripts/uninstall.ps1` (the `PSUseShouldProcessForStateChangingFunctions` rule is excluded, because prompting would break `irm \| iex`). |
-| `media` | Every push to `main`, in `ci.yml` | The media session test (`Category=Media`), on its own: `dotnet test .\tests\Winshell.Platform.Windows.Tests --filter 'Category=Media'`. Runners often don't publish Windows media sessions, so a failure here shows in the log and blocks nothing. |
 | `quarantine` | Every push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Quarantined`, which runs the tests in `tests/quarantine.txt`, or nothing when the list is empty. A failure shows in the log and blocks nothing. |
 | `flaky-report` | After `ci`, when a test passed only on its rerun | `pwsh scripts/report-flaky.ps1 -ReportPath <file> -RunUrl <url>` files or updates a `flaky` issue, so run it only on a real report. It needs `gh` signed in. |
 | `links` | Every pull request, in `docs.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents` and `https://about.signpath.io`. |
@@ -59,18 +56,18 @@ A push to `main` that changes only `docs/**` or Markdown does not run `package`.
 ## Run one test
 
 ```powershell
-dotnet test tests/Winshell.Runtime.Tests --filter FullyQualifiedName~DirectoryWatchTests
+dotnet test tests/Winshell.Services.Tests --filter FullyQualifiedName~DirectoryWatchTests
 ```
 
-`--filter` takes a class or a test name. `Winshell.Qml.Tests`, `Winshell.Runtime.Tests` and `Winshell.Services.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Platform.Windows.Tests` and `Winshell.Tests` put windows and shells on your desktop.
+`--filter` takes a class or a test name. `Winshell.Services.Tests` and `Winshell.DefaultShell.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Shell.Tests` and `Winshell.Tests` put windows and shells on your desktop.
 
 ## Run the shell from source
 
 ```powershell
-dotnet run --project src/Winshell -- run -p src/Winshell/DefaultShell
+dotnet run --project src/Winshell -- run
 ```
 
-`-p` takes any folder with a `shell.qml`, or the file. Saving a `.qml` file reloads the shell. The shell keeps `launcher.toml` and `preferences.toml` next to its `shell.qml`, and git ignores those two in `src/Winshell/DefaultShell`. From another terminal:
+That runs the default shell in this process. `-p` is a configuration project: a folder with a `.csproj`, or the project file. `--no-build` starts the last build and does not compile. From another terminal:
 
 ```powershell
 dotnet run --project src/Winshell -- list
@@ -173,7 +170,7 @@ The docs site is built from `docs/` by [DocFX](https://dotnet.github.io/docfx/),
 
 - **A new page** goes into a `toc.yml`. `DocsTests` fails for a page no table of contents lists.
 - **Links between pages** are relative `.md` links. DocFX fails the check on a link to a page or a heading that isn't there. Link to files outside `docs/`, such as `CONTRIBUTING.md`, with their GitHub URL.
-- **QML examples** in a `qml` code block are checked by `DocsTests`: each one parses, and every module, type, property and signal handler it uses exists. An example without imports is a fragment and can use any module's types. The default shell's files count as types, as they do in a copy of that folder.
+- **C# examples** in a `csharp` code block are checked by `DocsTests`: each one is text from `tests/Winshell.Shell.Tests/GuideSamples.cs`, which the test project builds.
 - **The reference** in `docs/reference/` has a page per `Winshell` module, `winshell-<module>.md`, with a `## Type` section for each type and a table whose first column names each member: `` `name` `` for a property, `` `name(args)` `` for a method or signal. `DocsTests` fails when a type, a member or an enum value is missing, or when a table names a member the type doesn't have. A type with a registered base type lists only what it adds. `reference/qt-quick.md` names every Qt Quick type, and each row of its "Where Winshell differs from Qt" table is a real `Type.member`; remove a row when that member starts working. Add a new type or member to its page in the PR that adds it.
 - **Links to other sites** are checked by the `links` job of the Docs workflow, on each PR and every Monday. That job isn't part of `check.ps1`.
 
@@ -191,15 +188,7 @@ Reading Bluetooth state uses Windows adapter and device-enumeration properties, 
 
 `Winshell.Capture` uses Windows.Graphics.Capture desktop interop with the system border enabled. No additional package or borderless capability is required. Windows policy, protected sources, session state and device availability can restrict capture. See [Windows capture](capture.md) for the API and limits.
 
-The default checks cover capture state, lifecycle, pixels, DPI, PNG export and clipboard encoding with synthetic frames. For native validation on an interactive Windows desktop, run:
-
-```powershell
-$env:WINSHELL_TEST_CAPTURE = '1'
-dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~CaptureTests --logger 'console;verbosity=detailed'
-Remove-Item Env:WINSHELL_TEST_CAPTURE
-```
-
-`WINSHELL_TEST_CAPTURE=1` opts the native capture test in; it is not read by a running shell. That test creates its own panel, captures/resizes it, reads monitor dimensions in memory, and reloads four live capture generations. Its one PNG is of the test panel, written inside a unique test temp folder and deleted in teardown. The test leaves the user's clipboard alone, never uploads pixels and changes no system settings. Without the variable, the native probe reports that it was not requested.
+The native capture command and `WINSHELL_TEST_CAPTURE` went with the QML platform tests. They are not run.
 
 ## Run at sign-in
 
@@ -209,46 +198,6 @@ Remove-Item Env:WINSHELL_TEST_CAPTURE
 
 Tests may register an unused chord such as Ctrl+Alt+Shift+F24 and may install a keyboard hook while a Windows-key hotkey is enabled or a key sequence is in progress. Each test removes the registration and the hook before it ends. Tests do not inject keystrokes or change keyboard settings. See [Windows hotkeys](hotkeys.md).
 
-## Notification surface validation
+## Notification, settings and snapshot renders
 
-`NotificationSurfaceTests` loads the actual default QML with synthetic notifications, renders it in memory, checks accessibility and keyboard interaction, and tests simulated 100%, 150% and 200% scale. It creates no native windows, requests no permission, dismisses no real notifications and sends no toasts. `CalendarMonthTests` covers regional formats, first weekdays, week-year boundaries, leap days and month navigation. These run in the default check.
-
-To save the synthetic render evidence outside the repo:
-
-```powershell
-$env:WINSHELL_NOTIFICATION_EVIDENCE = Join-Path $env:TEMP 'winshell-notification-evidence'
-dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~NotificationSurfaceTests
-Remove-Item Env:WINSHELL_NOTIFICATION_EVIDENCE
-```
-
-`WINSHELL_NOTIFICATION_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that explicit folder. CI attaches those PNGs as the `notification-surface` workflow artifact; no images are committed. A renderer scale is not a change to the PC's display settings. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md).
-
-## Settings surface validation
-
-To save the synthetic renders of Winshell Settings outside the repo:
-
-```powershell
-$env:WINSHELL_SETTINGS_EVIDENCE = Join-Path $env:TEMP 'winshell-settings-evidence'
-dotnet test tests/Winshell.Platform.Windows.Tests --filter FullyQualifiedName~SettingsTests
-Remove-Item Env:WINSHELL_SETTINGS_EVIDENCE
-```
-
-`WINSHELL_SETTINGS_EVIDENCE` is read only by the tests, never by a shell instance. Tests write PNGs to that folder, and CI attaches them as the `settings-surface` workflow artifact; no images are committed. The tests run each shell with no config folder or one of their own, so they never write the user's `preferences.toml`, and they never change a Windows setting. The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).
-
-## Visual snapshots
-
-`SnapshotTests` render every surface of the default shell (the taskbar, Start, quick settings, the notification center, the on-screen display and Winshell Settings) and compare each with a PNG in `tests/Winshell.Platform.Windows.Tests/Snapshots/Baselines`. Each surface is rendered at 100%, 150% and 200% scale, in light and dark, with the Windows default blue accent. They run in the default check. `NoticeSnapshotTests` do the same for Winshell's own notice (`notice-…`), for a configuration error and for a window that failed. `-Surface notice` replaces those baselines.
-
-The whole default shell runs on a fake 1920×1080 screen, against fake services, with its folders in a temporary folder. The surfaces are opened as a user opens them, and each window is painted offscreen the way its composition surface is. A solid color stands in for the Mica or Acrylic that Windows draws behind it. To keep the renders the same on every PC, the time is Thursday 29 October 2026, 09:41, the date and time patterns are en-US, animations are off, and app icons are drawn from shapes. Text is drawn with the Segoe fonts Windows ships and with this PC's text settings, so a PC with font smoothing turned off, or with ClearType Text Tuner settings other than the defaults, renders different text. Baselines are the renders from the CI runner, `windows-2025`. On 29 October 2026 that was the same image as `windows-latest` (`windows-2025-vs2026`). Change the label only in a pull request that refreshes the baselines. Do not regenerate the baselines on another machine: `update-snapshots.ps1` requires a CI run id and imports that run's pixels. When a PR's snapshots fail, download the `snapshot-diffs` artifact from that run and review those PNGs.
-
-A pixel differs when one of its channels moves by more than 2, and a render matches only when no pixel differs. That is as tight as the renders allow: CI renders the baselines pixel for pixel, and a Fluent hairline border moves a channel by only about 15. Loosen it only when a Windows update makes renders differ, and link the CI run that shows it. When one does not match, the test writes `<name>.expected.png`, `<name>.actual.png` and `<name>.diff.png`, with the differing pixels in magenta, to the folder in `WINSHELL_SNAPSHOT_DIFFS`, or to `%TEMP%\winshell-snapshot-diffs`. CI uploads them as the `snapshot-diffs` workflow artifact.
-
-When a change to a surface is intended, import the actual renders from that failed CI run and commit them with the change. The script requires the run id and never renders on this PC:
-
-```powershell
-pwsh scripts/update-snapshots.ps1 -FromRun 123456789                  # every surface in the artifact
-pwsh scripts/update-snapshots.ps1 -FromRun 123456789 -Surface taskbar # one surface
-pwsh scripts/update-snapshots.ps1 -FromRun 123456789 -Surface notice  # the notice baselines
-```
-
-`-Surface` takes one of `taskbar`, `start`, `quick-settings`, `notification-center`, `osd`, `settings` and `notice`. Only the artifact's `<name>.actual.png` files are imported, as `<name>.png`; expected images and diffs are ignored. Review the changed PNGs before committing them. `WINSHELL_UPDATE_SNAPSHOTS` remains a test-only variable and is ignored when `CI` is set. The import script does not set it or render locally.
+The offscreen notification renders, the offscreen settings renders, and the snapshot comparison are not produced. Those tests rendered QML surfaces. CI does not upload `notification-surface`, `settings-surface` or `snapshot-diffs`, and `scripts/update-snapshots.ps1` is gone. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md). The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).

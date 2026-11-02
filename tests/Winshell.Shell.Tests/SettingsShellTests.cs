@@ -1,0 +1,362 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Automation.Provider;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Winshell.DefaultShell;
+using Winshell.DefaultShell.Taskbar;
+using Winshell.Input;
+using Winshell.Native;
+
+// One shell, one dispatcher. A menu left open while this test yields, or a log sink that sees another test's
+// crash, fails a check that is about Settings alone.
+[assembly: global::Xunit.v3.Parallelization(Mode = global::Xunit.Sdk.ParallelMode.None)]
+
+namespace Winshell.ShellTests;
+
+/// <summary>
+/// Winshell Settings on the test shell. The window is the real one <see cref="SettingsHost"/> keeps. The taskbar's
+/// own right-click handler is not raised here: building that view takes the notification area and the Win hotkey.
+/// The menu it would show is opened on a real panel instead.
+/// </summary>
+public sealed class SettingsShellTests
+{
+    [Fact]
+    public async Task The_shell_follows_each_choice_at_once_without_a_reload()
+    {
+        var followed = await ShellFixture.On(async shell =>
+        {
+            var scheme = shell.ColorScheme;
+            using var rig = new Rig(shell, "taskbarCentered = false\n");
+            var messages = rig.Listen();
+            try
+            {
+                Assert.False(rig.Preferences.TaskbarCentered);
+                Assert.Same(shell, Shell.Current);
+                Winshell.DefaultShell.ShellPreferences.Follow(shell, rig.Preferences);
+
+                Assert.Equal("", shell.Ipc.Call("settings", "open", ["taskbarAutoHide"]));
+                var window = await rig.Shown();
+                Assert.True(window.Visible);
+                Assert.Equal("Winshell Settings", window.Title);
+                Assert.Equal("taskbar", Page(window));
+
+                rig.Preferences.TaskbarAutoHide = true;
+                rig.Loop.Process();
+                Assert.Equal(true, Read(rig.PreferencesPath, "taskbarAutoHide"));
+
+                rig.Preferences.TaskbarAllScreens = false;
+                rig.Loop.Process();
+                Assert.False(rig.Preferences.TaskbarAllScreens);
+
+                rig.Preferences.Backdrop = SettingsCatalog.Materials[1].Value;
+                Assert.Equal(WindowBackdrop.Mica, rig.Preferences.Material);
+
+                rig.Preferences.ColorScheme = SettingsCatalog.ColorSchemes[2].Value;
+                Assert.Equal("dark", shell.ColorScheme);
+                Assert.True(shell.IsDark);
+                Assert.Same(shell, Shell.Current);
+                return messages.Where(m => !m.StartsWith("hotkey:", StringComparison.Ordinal) && !m.StartsWith("ipc: Duplicate IPC name", StringComparison.Ordinal)).ToArray();
+            }
+            finally
+            {
+                shell.ColorScheme = scheme;
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(followed);
+    }
+
+    [Fact]
+    public async Task The_config_folder_setting_opens_About_at_its_button()
+    {
+        var enabled = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                Assert.Equal("", shell.Ipc.Call("settings", "open", ["configFolder"]));
+
+                var window = await rig.Shown();
+
+                Assert.Equal("about", Page(window));
+                return Button(window, "Open the config folder").IsEnabled;
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.True(enabled);
+    }
+
+    [Fact]
+    public async Task The_taskbar_menu_offers_Taskbar_settings_and_closes_when_it_is_chosen()
+    {
+        var opened = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            var messages = rig.Listen();
+            try
+            {
+                var bar = new Grid { Width = 400, Height = 48 };
+                using var panel = new PanelWindow
+                {
+                    Anchors = Edges.Bottom | Edges.Left | Edges.Right,
+                    ExclusiveZone = 0,
+                    Width = 400,
+                    Height = 48,
+                    Content = bar,
+                };
+                panel.Visible = true;
+                await ShellFixture.LaidOut(bar);
+
+                var chosen = "";
+                var menu = TaskMenuFlyout.Create(TaskMenu.BarName, [TaskMenu.Settings], id => chosen = id, 16);
+                var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                menu.Opened += (_, _) => shown.TrySetResult();
+                menu.ShowAt(bar, new FlyoutShowOptions { Position = new global::Windows.Foundation.Point(200, 24), Placement = FlyoutPlacementMode.Top });
+                await shown.Task;
+
+                var item = MenuItem(bar);
+                var peer = FrameworkElementAutomationPeer.CreatePeerForElement(item);
+                Assert.Equal("Taskbar settings", peer.GetName());
+                await Wait.UntilAsync(() => ItemFocused(bar, item), "the menu item to take focus", () =>
+                {
+                    var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    shell.Loop.Post(() => done.TrySetResult());
+                    return done.Task;
+                });
+                ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)!).Invoke();
+
+                Assert.Equal("taskbarSettings", chosen);
+                Assert.False(menu.IsOpen);
+                return messages.Where(m => !m.StartsWith("hotkey:", StringComparison.Ordinal) && !m.StartsWith("ipc: Duplicate IPC name", StringComparison.Ordinal)).ToArray();
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(opened);
+    }
+
+    [Fact]
+    public async Task Settings_is_built_on_its_first_open_and_closing_it_keeps_it_where_it_was()
+    {
+        var kept = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            var messages = rig.Listen();
+            try
+            {
+                Assert.DoesNotContain(shell.Platform.Windows, window => window.Content is SettingsView);
+
+                Assert.Equal("", shell.Ipc.Call("settings", "open", ["taskbarAutoHide"]));
+                var window = await rig.Shown();
+                Assert.True(window.Visible);
+                Assert.Equal("taskbar", Page(window));
+                var host = window.Host;
+
+                Win32.SendMessageW(host!.Handle, Win32.WM_CLOSE, 0, 0);
+                Assert.False(window.Visible);
+
+                shell.Ipc.Call("settings", "open", ["about"]);
+                await ShellFixture.LaidOut((FrameworkElement)window.Content!);
+
+                Assert.Same(window, SettingsWindow(shell));
+                Assert.Same(host, window.Host);
+                Assert.Equal("about", Page(window));
+
+                // An open that names no page brings it back where it was.
+                Win32.SendMessageW(host.Handle, Win32.WM_CLOSE, 0, 0);
+                shell.Ipc.Call("settings", "open", [""]);
+                await ShellFixture.LaidOut((FrameworkElement)window.Content!);
+
+                Assert.True(window.Visible);
+                Assert.Same(host, window.Host);
+                Assert.Equal("about", Page(window));
+                Assert.True(SearchFocused(window));
+                return messages.Where(m => !m.StartsWith("hotkey:", StringComparison.Ordinal) && !m.StartsWith("ipc: Duplicate IPC name", StringComparison.Ordinal)).ToArray();
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(kept);
+    }
+
+    private static string Page(FloatingWindow window)
+    {
+        var nav = Find<NavigationView>((DependencyObject)window.Content!) ?? throw new InvalidOperationException("Settings has no navigation view.");
+        return (nav.SelectedItem as NavigationViewItem)?.Tag as string ?? "";
+    }
+
+    private static bool SearchFocused(FloatingWindow window)
+    {
+        var focused = FocusManager.GetFocusedElement(window.Content!.XamlRoot) as DependencyObject;
+        for (DependencyObject? node = focused; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is AutoSuggestBox { Name: "Search" })
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ItemFocused(UIElement root, MenuFlyoutItem item)
+    {
+        var focused = FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
+        for (DependencyObject? node = focused; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (ReferenceEquals(node, item))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static MenuFlyoutItem MenuItem(UIElement root)
+    {
+        foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(root.XamlRoot))
+        {
+            if (popup.Child is not null && Find<MenuFlyoutItem>(popup.Child) is { } item)
+                return item;
+        }
+
+        throw new InvalidOperationException("The taskbar menu has no item.");
+    }
+
+    private static Button Button(FloatingWindow window, string name)
+    {
+        var found = Find<Button>((DependencyObject)window.Content!, button => AutomationProperties.GetName(button) == name);
+        return found ?? throw new InvalidOperationException($"Settings has no button \"{name}\".");
+    }
+
+    private static FloatingWindow SettingsWindow(Shell shell)
+    {
+        var host = shell.Platform.Windows.Single(window => window.Content is SettingsView);
+        return (FloatingWindow)ShellWindow.Of((SettingsView)host.Content!)!;
+    }
+
+    private static T? Find<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
+    {
+        if (root is T hit && (match is null || match(hit)))
+            return hit;
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var found = Find(VisualTreeHelper.GetChild(root, i), match);
+            if (found is not null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static object? Read(string path, string key)
+    {
+        Assert.True(TomlDocument.TryParse(path, File.ReadAllText(path), out var document, out var error), error);
+        Assert.True(document.Values.TryGetValue(key, out var value), key);
+        return value;
+    }
+
+    private sealed class Rig : IDisposable
+    {
+        private readonly string _directory = Directory.CreateTempSubdirectory("winshell-settings-shell-").FullName;
+        private readonly Action<LogLevel, string, string>? _sink;
+        private readonly List<string> _messages = [];
+
+        public Rig(Shell shell, string? preferences)
+        {
+            Shell = shell;
+            _sink = shell.Log.Sink;
+            try
+            {
+                shell.Log.Sink = (level, category, message) =>
+                {
+                    _messages.Add($"{category}: {message}");
+                    _sink?.Invoke(level, category, message);
+                };
+                Config = Path.Combine(_directory, "config");
+                Directory.CreateDirectory(Config);
+                PreferencesPath = Path.Combine(Config, "preferences.toml");
+                if (preferences is not null)
+                    File.WriteAllText(PreferencesPath, preferences);
+                Loop = new ManualEventLoop();
+                Preferences = new Preferences(PreferencesPath, Loop, shell.Log);
+                Start = new Start(Path.Combine(Config, "launcher.toml"), Loop, shell.Log);
+                Layout = new QuickSettingsLayout(Path.Combine(_directory, "quick-settings.toml"), Loop, shell.Log);
+                Hotkey = shell.NewHotkey();
+                Host = new SettingsHost(shell, Preferences, Start, Layout, Hotkey);
+            }
+            catch
+            {
+                shell.Log.Sink = _sink;
+                throw;
+            }
+        }
+
+        public Shell Shell { get; }
+
+        public string Config { get; }
+
+        public string PreferencesPath { get; }
+
+        public ManualEventLoop Loop { get; }
+
+        public Preferences Preferences { get; }
+
+        public Start Start { get; }
+
+        public QuickSettingsLayout Layout { get; }
+
+        public Hotkey Hotkey { get; }
+
+        public SettingsHost Host { get; }
+
+        public List<string> Listen() => _messages;
+
+        public async Task<FloatingWindow> Shown()
+        {
+            var window = SettingsWindow(Shell);
+            if (window.Content is FrameworkElement content)
+                await ShellFixture.LaidOut(content);
+            return window;
+        }
+
+        public void Restore() => Shell.Log.Sink = _sink;
+
+        public void Dispose()
+        {
+            Restore();
+            foreach (var host in Shell.Platform.Windows.Where(window => window.Content is SettingsView).ToList())
+            {
+                if (host.Content is UIElement view && ShellWindow.Of(view) is { } window)
+                    window.Dispose();
+                else
+                    host.Dispose();
+            }
+
+            Hotkey.Dispose();
+            Start.Dispose();
+            Layout.Dispose();
+            Preferences.Dispose();
+            try
+            {
+                Directory.Delete(_directory, true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+}

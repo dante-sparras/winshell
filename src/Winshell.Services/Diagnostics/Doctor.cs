@@ -11,13 +11,11 @@ using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 namespace Winshell.Diagnostics;
 
 /// <summary>
-/// What <see cref="Doctor.Run"/> reads from this PC. The QML stack supplies it. Every read stays a read: the doctor
-/// never builds, and a configuration project is judged from the project file alone.
+/// What <see cref="Doctor.Run"/> reads from this PC. Every read stays a read: the doctor never builds, and a
+/// configuration project is judged from the project file alone.
 /// </summary>
 public interface IDoctorFacts
 {
-    (string? LoadError, string? Unreadable) ReadInstanceLog(string logPath);
-
     int WindowsBuild();
 
     int WindowsUpdateRevision();
@@ -31,8 +29,6 @@ public interface IDoctorFacts
     bool ContrastThemeOn();
 
     bool SelfContained(string exePath);
-
-    Doctor.ConfigScan ParseConfig(string? rootFile);
 
     IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot);
 
@@ -78,8 +74,10 @@ public sealed record DoctorInstance(string Id, int Pid, string ConfigPath, strin
 /// What the doctor needs from <c>winshell.exe</c>: this executable, the config that would run (or why none would),
 /// the running instances and Winshell's folders.
 /// </summary>
-/// <param name="ConfigFile">The <c>shell.qml</c> that runs; null when Winshell would run its default shell, or cannot pick one.</param>
+/// <param name="ConfigFile">The project file that runs, or null when Winshell would run its default shell, or cannot pick one.</param>
 /// <param name="ConfigProblem">Why no config can be picked, such as several configs and no <c>-c</c>; null when one can.</param>
+/// <param name="RetiredQml">A <c>shell.qml</c> left behind with no project, or null.</param>
+/// <param name="ProjectRoot">The folder <see cref="Doctor.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
 public sealed record DoctorContext(
     string ExePath,
     string ConfigRoot,
@@ -87,7 +85,9 @@ public sealed record DoctorContext(
     string? ConfigProblem,
     IReadOnlyList<DoctorInstance> Instances,
     string LocalRoot,
-    string CrashRoot);
+    string CrashRoot,
+    string? RetiredQml = null,
+    string? ProjectRoot = null);
 
 /// <summary>Runs the checks <c>winshell doctor</c> and Winshell Settings' About page show. All of them only read.</summary>
 public interface IDoctor
@@ -106,31 +106,28 @@ public static class Doctor
 {
     public const string BugReports = "https://github.com/dante-sparras/winshell/issues/new/choose";
 
-    /// <summary>How many folders reading a config walks at most, so a config in a big folder ends quickly.</summary>
-    internal const int MaxFolders = 500;
-
     public static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
     {
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
-        var instance = context.ConfigFile is { } file
-            ? context.Instances.FirstOrDefault(i => string.Equals(i.ConfigPath, file, StringComparison.OrdinalIgnoreCase))
-            : null;
-        var instanceLog = instance is null ? default : facts.ReadInstanceLog(instance.LogPath);
-        var configFolder = Path.GetDirectoryName(context.ConfigFile) is { Length: > 0 } own ? own : context.ConfigRoot;
-        // A downloaded config does not run, so its files are not read either.
-        var downloaded = context.ConfigFile is { } root && ZoneIdentifier.IsDownloaded(root);
+        var search = context.ProjectRoot
+            ?? (context.ConfigFile is { } file && file.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                ? Path.GetDirectoryName(file) ?? context.ConfigRoot
+                : context.ConfigRoot);
+        var configFolder = search;
+        var configuration = Configuration(search).ToList();
+        var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
+        // A reason from the CLI, such as a path that is not a project, is not what searching the folder finds.
+        // A failure already found, such as a folder that cannot be read, keeps its own message.
+        if (context.ConfigProblem is not null && configuration[0].Status != CheckStatus.Fail)
+            configuration[0] = Project(null, context.ConfigProblem);
+        else if (!blocked && configuration[0].Status != CheckStatus.Fail)
+            configuration[0] = WithUserFiles(configuration[0], facts.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot));
         DoctorCheck[] checks =
         [
             Guard("windows", "Windows", () => Windows(facts.WindowsBuild(), facts.WindowsUpdateRevision(), facts.WindowsDisplayVersion(), facts.WindowsServer(), facts.TransparencyEffectsOff(), facts.ContrastThemeOn())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, facts.SelfContained(context.ExePath))),
-            Guard("config", "Config", () => Config(
-                context.ConfigFile,
-                context.ConfigProblem,
-                downloaded ? new ConfigScan(0, []) : facts.ParseConfig(context.ConfigFile),
-                instanceLog.LoadError,
-                instanceLog.Unreadable,
-                downloaded,
-                downloaded || context.ConfigProblem is not null ? null : facts.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot))),
+            .. configuration,
+            Guard("qml", "QML", () => Qml(context.RetiredQml)),
             Guard("folders", "Folders", () => Folders(
                 [("the config folder", configFolder, facts.CanWrite(configFolder)), ("its local folder", context.LocalRoot, facts.CanWrite(context.LocalRoot))],
                 context.Instances.Where(i => facts.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
@@ -210,58 +207,61 @@ public static class Doctor
         return new("dotnet", ".NET", CheckStatus.Pass, $"{description}, {how}");
     }
 
-    // Config
+    /// <summary>A leftover <c>shell.qml</c>. Nothing is converted: the default shell runs, and this says how to start a project.</summary>
+    internal static DoctorCheck Qml(string? file) => string.IsNullOrEmpty(file)
+        ? new("qml", "QML", CheckStatus.Pass, "No QML configuration.")
+        : new("qml", "QML", CheckStatus.Warn, $"{file} is a QML configuration, and QML configurations stopped working.", "Start a new one with dotnet new winshell.");
 
-    /// <summary>What reading the QML files of a config found.</summary>
-    /// <param name="Errors">What does not parse in the root file's own folder, whose files Winshell loads.</param>
-    public sealed record ConfigScan(int Files, IReadOnlyList<string> Errors)
+    /// <summary>User TOML that does not parse is a warning on the project check. A failure already says what to fix.</summary>
+    private static DoctorCheck WithUserFiles(DoctorCheck check, IReadOnlyList<string>? userFiles)
     {
-        /// <summary>What does not parse in a folder under it, which only matters if the config imports it.</summary>
-        public IReadOnlyList<string> SubfolderErrors { get; init; } = [];
-
-        /// <summary>Whether reading stopped at <see cref="MaxFolders"/> folders, leaving the rest unread.</summary>
-        public bool Stopped { get; init; }
+        if (userFiles is not { Count: > 0 })
+            return check;
+        var note = string.Join(" ", userFiles);
+        var message = check.Message.EndsWith('.') ? $"{check.Message} {note}" : $"{check.Message}. {note}";
+        if (check.Status != CheckStatus.Pass)
+            return check with { Message = message };
+        return check with { Status = CheckStatus.Warn, Message = message, Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses." };
     }
 
-    /// <param name="downloaded">Whether the config's <c>shell.qml</c> was downloaded and is not unblocked, so Winshell does not run it.</param>
-    /// <param name="userFiles">Why a user TOML file cannot be loaded. A missing file is not listed. They warn, and do not hide a failure.</param>
-    internal static DoctorCheck Config(string? file, string? problem, ConfigScan scan, string? loadError, string? logUnreadable = null, bool downloaded = false, IReadOnlyList<string>? userFiles = null)
+    /// <summary>
+    /// Every check, for the shell running in this process. A configuration project's program is checked in its own
+    /// folder. The default shell is checked in <paramref name="configRoot"/>. Nothing is built.
+    /// </summary>
+    public static IReadOnlyList<DoctorCheck> ForThisProcess(string configRoot)
     {
-        DoctorCheck Noted(DoctorCheck check)
+        var exe = Environment.ProcessPath ?? "";
+        ConfigurationProject? project = null;
+        try
         {
-            // A config that cannot be picked, or a downloaded one, does not read these files. Its message stays as it is.
-            if (userFiles is not { Count: > 0 } || downloaded || problem is not null)
-                return check;
-            var note = string.Join(" ", userFiles);
-            var message = check.Message.EndsWith('.') ? $"{check.Message} {note}" : $"{check.Message}. {note}";
-            if (check.Status != CheckStatus.Pass)
-                return check with { Message = message };
-            return check with { Status = CheckStatus.Warn, Message = message, Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses." };
+            project = ConfigurationProject.ForProgram(exe);
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+        var retired = project is null ? ConfigurationProject.LeftoverQml(null, null, configRoot) : null;
+        return Run(new DoctorContext(
+            exe,
+            configRoot,
+            project?.ProjectFile,
+            null,
+            ListedInstances(),
+            ShellLocations.LocalRoot,
+            ShellLocations.CrashRoot,
+            retired,
+            project?.Folder), DoctorFacts.Pc);
+    }
 
-        if (problem is not null)
-            return Noted(new("config", "Config", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it."));
-        if (file is null)
-            return Noted(new("config", "Config", CheckStatus.Pass, "No config of your own: Winshell runs its default shell. Copy that shell to your config folder to change it."));
-        if (downloaded)
-            return Noted(new("config", "Config", CheckStatus.Fail, $"{file} was downloaded from the internet, so Winshell does not run it. It would run as you.", "If you trust it, unblock it: right-click it > Properties > Unblock, or run Unblock-File. Then save it, or start Winshell again."));
-        if (scan.Errors.Count > 0)
+    private static List<DoctorInstance> ListedInstances()
+    {
+        try
         {
-            var more = scan.Errors.Count > 1 ? $" ({scan.Errors.Count - 1} more)" : "";
-            return Noted(new("config", "Config", CheckStatus.Fail, $"{scan.Errors[0]}{more}", "Correct that line and save. A running Winshell loads it again, and keeps the last version that loaded until then."));
+            return global::Winshell.Instances.List(false).Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
         }
-        var files = scan.Files == 1 ? "1 QML file" : $"{scan.Files} QML files";
-        if (loadError is not null)
-            return Noted(new("config", "Config", CheckStatus.Fail, $"{file}: {files} read, but the running instance could not load it: {loadError}", "Correct that line and save. Winshell keeps the last version that loaded until then."));
-        var stopped = scan.Stopped ? $" Stopped after {MaxFolders} folders; the rest were not read." : "";
-        if (scan.SubfolderErrors.Count > 0)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            var more = scan.SubfolderErrors.Count > 1 ? $" ({scan.SubfolderErrors.Count - 1} more)" : "";
-            return Noted(new("config", "Config", CheckStatus.Warn, $"{scan.SubfolderErrors[0]}{more}. It does not parse; Winshell only fails if the config imports it.{stopped}", "Correct that line, or delete the file if nothing uses it."));
+            return [];
         }
-        if (logUnreadable is not null)
-            return Noted(new("config", "Config", CheckStatus.Warn, $"Could not read the running instance's log: {logUnreadable}", "Make sure your account can read that log, then run winshell doctor again."));
-        return Noted(new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors{(stopped.Length > 0 ? "." + stopped : "")}"));
     }
 
     // Configuration project. These read the project file as data. They never build.

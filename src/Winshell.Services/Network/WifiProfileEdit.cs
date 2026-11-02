@@ -58,7 +58,7 @@ internal static class WifiProfileEdit
     }
 }
 
-/// <summary>Turns profile XML into the fields QML can see. The XML itself is not kept.</summary>
+/// <summary>Turns profile XML into the fields a configuration sees. The XML itself is not kept.</summary>
 internal static class WifiProfiles
 {
     public static string Id(Guid adapter, string profileName) => adapter + ":" + profileName;

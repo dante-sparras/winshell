@@ -8,7 +8,7 @@ namespace Winshell;
 /// <summary>
 /// What <c>winshell ipc</c> reaches in a C# configuration: functions, properties and signals, by target. A function's
 /// own types declare what it takes and returns, and only <see cref="string"/>, <see cref="int"/>, <see cref="bool"/>,
-/// <see cref="double"/>, <see cref="float"/> and <see cref="Color"/> cross the pipe, as with an <c>IpcHandler</c>. The
+/// <see cref="double"/>, <see cref="float"/> and <see cref="Color"/> cross the pipe. The
 /// CLI's text is parsed into those types and nothing is ever evaluated. Use this on the shell's thread.
 /// </summary>
 public sealed class ShellIpc(Log log) : IIpcTargets
@@ -207,6 +207,9 @@ public sealed class IpcSignal : IIpcMember
     internal IpcSignal(string name) => Name = name;
 
     public string Name { get; }
+
+    /// <summary>How many <c>listen</c> and <c>wait</c> clients are following this signal.</summary>
+    internal int ListenerCount => _listeners.Count;
 
     /// <summary>Tells every <c>winshell ipc wait</c> and <c>listen</c> following this signal, with <paramref name="value"/>.</summary>
     public void Emit(string value = "")

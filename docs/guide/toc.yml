@@ -4,8 +4,6 @@
   href: configuration.md
 - name: Troubleshooting
   href: troubleshooting.md
-- name: Migrating from Quickshell
-  href: ../migrating-from-quickshell.md
 - name: The default shell
   items:
   - name: Taskbar

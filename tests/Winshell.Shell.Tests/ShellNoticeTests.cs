@@ -62,6 +62,19 @@ public sealed class ShellNoticeTests : IDisposable
     private static Notice Build() => ShellNotices.ForBuildError("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj");
 
     [Fact]
+    public void A_leftover_qml_file_says_to_start_a_project()
+    {
+        var notice = ShellNotices.ForRetiredQml(@"C:\configs\shell.qml");
+
+        Assert.Equal(NoticeKind.RetiredQml, notice.Kind);
+        Assert.Equal("QML configurations stopped working", notice.Title);
+        Assert.Equal("shell.qml", notice.Detail);
+        Assert.Contains(@"C:\configs\shell.qml", notice.Body, StringComparison.Ordinal);
+        Assert.Equal("Start a new one with dotnet new winshell.", notice.Note);
+        Assert.Equal(TimeSpan.Zero, notice.Timeout);
+    }
+
+    [Fact]
     public void A_failure_says_what_stopped_and_what_Winshell_did()
     {
         Fail();

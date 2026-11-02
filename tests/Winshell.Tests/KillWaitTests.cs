@@ -1,26 +1,19 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
 
 namespace Winshell.Tests;
 
 /// <summary><c>winshell kill</c> waits until the instance's process has exited.</summary>
 public sealed class KillWaitTests : IDisposable
 {
-    private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
 
     [Fact]
     public void Kill_returns_after_the_process_has_exited()
     {
-        var config = Path.Combine(_dir, "shell");
+        var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
-        File.WriteAllText(Path.Combine(config, "shell.qml"), """
-            import Winshell
-            ShellRoot {}
-            """);
         var process = Start(config);
 
         var result = Run("kill", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
@@ -43,33 +36,13 @@ public sealed class KillWaitTests : IDisposable
 
     private Process Start(string configDir)
     {
-        var info = new ProcessStartInfo(Exe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardError = true,
-        };
-        info.ArgumentList.Add("-p");
-        info.ArgumentList.Add(configDir);
-        info.Environment["WINSHELL_CONFIG_DIR"] = _dir;
-        var process = Process.Start(info)!;
+        var process = ProbeShell.Start(configDir, Path.Combine(_dir, "local"));
         _started.Add(process);
-        process.ErrorDataReceived += (_, _) => { };
-        process.BeginErrorReadLine();
-        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
-    private static List<JsonElement> Listed()
-    {
-        var result = Run("list", "--json");
-        Assert.Equal(0, result.Code);
-        using var json = JsonDocument.Parse(result.Output);
-        return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
-    }
-
-    private static (int Code, string Output, string Error) Run(params string[] args) =>
-        WinshellCli.Run(args);
+    private (int Code, string Output, string Error) Run(params string[] args) =>
+        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
 
     public void Dispose()
     {

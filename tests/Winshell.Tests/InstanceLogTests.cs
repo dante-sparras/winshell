@@ -1,5 +1,3 @@
-using Winshell.Runtime;
-
 namespace Winshell.Tests;
 
 /// <summary>The instance log rolls instead of growing without limit, and a warning is on disk at once.</summary>

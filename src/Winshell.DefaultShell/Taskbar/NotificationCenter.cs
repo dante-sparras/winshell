@@ -132,7 +132,7 @@ public sealed class NotificationCenter : ObservableObject
         CanClear = next.Count > 0;
     }
 
-    // On and Off are named. Anything else, including Unknown, reads as Unknown, as the QML does.
+    // On and Off are named. Anything else, including Unknown, reads as Unknown.
     private static string Word(NotificationState state) => state switch
     {
         NotificationState.On => "On",

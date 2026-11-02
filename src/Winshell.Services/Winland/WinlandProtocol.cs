@@ -82,7 +82,7 @@ internal static class WinlandProtocol
     public static int IdFromName(string name) =>
         int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : name == DefaultSpecial ? -99 : -1;
 
-    /// <summary>A JSON value as QML sees it: objects become maps, arrays lists.</summary>
+    /// <summary>A JSON value as maps and lists: objects become maps, arrays lists.</summary>
     public static object? ToQml(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => ToQml(p.Value)),

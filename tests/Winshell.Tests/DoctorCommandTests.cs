@@ -1,70 +1,92 @@
-using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 
 namespace Winshell.Tests;
 
-/// <summary><c>winshell doctor</c> as a process. Every config is under a temp folder this class creates.</summary>
+/// <summary><c>winshell doctor</c> as a process. Every config is under a temp folder this class creates. It never builds.</summary>
 public sealed class DoctorCommandTests : IDisposable
 {
+    private static readonly string[] Ids =
+    [
+        "windows", "dotnet", "project", "downloaded", "built", "build", "qml",
+        "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes",
+    ];
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-doctor-tests", Guid.NewGuid().ToString("N"));
 
     public DoctorCommandTests() => Directory.CreateDirectory(_root);
 
     [Fact]
-    public void Json_lists_every_check_and_a_broken_config_fails()
+    public void Json_lists_every_check_and_an_unbuilt_project_fails()
     {
-        var broken = Path.Combine(_root, "broken");
-        Directory.CreateDirectory(broken);
-        File.WriteAllText(Path.Combine(broken, "shell.qml"), "import QtQuick\nItem {\n");
+        var project = Path.Combine(_root, "broken");
+        Directory.CreateDirectory(project);
+        File.WriteAllText(Path.Combine(project, "Broken.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
-        var (code, output, _) = Run("doctor", "--json", "-p", broken);
+        var (code, output, _) = Run("doctor", "--json", "-p", project);
 
         Assert.Equal(1, code);
         using var json = JsonDocument.Parse(output);
         var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
-        Assert.Equal(
-            ["windows", "dotnet", "config", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"],
-            checks.Select(c => c.GetProperty("id").GetString()));
-        var config = checks.Single(c => c.GetProperty("id").GetString() == "config");
-        Assert.Equal("fail", config.GetProperty("status").GetString());
-        Assert.Contains("shell.qml", config.GetProperty("message").GetString());
-        Assert.NotNull(config.GetProperty("fix").GetString());
+        Assert.Equal(Ids, checks.Select(c => c.GetProperty("id").GetString()));
+        var built = checks.Single(c => c.GetProperty("id").GetString() == "built");
+        Assert.Equal("fail", built.GetProperty("status").GetString());
+        Assert.Contains("has not been built", built.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Contains("Run winshell run once", built.GetProperty("fix").GetString(), StringComparison.Ordinal);
         Assert.True(json.RootElement.GetProperty("summary").GetProperty("fail").GetInt32() >= 1);
+    }
+
+    [Fact]
+    public void A_leftover_qml_file_warns_and_the_default_shell_still_passes()
+    {
+        var leftover = Path.Combine(_root, "leftover");
+        Directory.CreateDirectory(leftover);
+        File.WriteAllText(Path.Combine(leftover, "shell.qml"), "import QtQuick\nItem {}\n");
+
+        var (_, output, _) = Run("doctor", "--json", "-p", leftover);
+
+        using var json = JsonDocument.Parse(output);
+        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
+        var project = checks.Single(c => c.GetProperty("id").GetString() == "project");
+        var qml = checks.Single(c => c.GetProperty("id").GetString() == "qml");
+        Assert.Equal("pass", project.GetProperty("status").GetString());
+        Assert.Contains("default shell", project.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal("warn", qml.GetProperty("status").GetString());
+        Assert.Contains("shell.qml", qml.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Contains("dotnet new winshell", qml.GetProperty("fix").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
     public void Text_has_a_line_a_check_and_no_color_when_redirected()
     {
-        var good = Path.Combine(_root, "good");
-        Directory.CreateDirectory(good);
-        File.WriteAllText(Path.Combine(good, "shell.qml"), "import QtQuick\nItem {}\n");
+        var empty = Path.Combine(_root, "empty");
+        Directory.CreateDirectory(empty);
 
-        var (_, output, _) = Run("doctor", "-p", good);
+        var (_, output, _) = RunIn(empty, "doctor");
 
         Assert.DoesNotContain("\e[", output);
-        Assert.Contains("  PASS  Config", output);
+        Assert.Contains("  PASS  Project", output, StringComparison.Ordinal);
         Assert.Matches(@"\d+ passed, \d+ warnings?, \d+ failed\.", output);
     }
 
     [Fact]
     public void Without_a_config_it_checks_the_default_shell_and_writes_nothing()
     {
-        var empty = Path.Combine(_root, "empty");
+        var empty = Path.Combine(_root, "none");
         Directory.CreateDirectory(empty);
 
         var (_, output, _) = RunIn(empty, "doctor", "--json");
 
         using var json = JsonDocument.Parse(output);
-        var config = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("id").GetString() == "config");
-        Assert.Equal("pass", config.GetProperty("status").GetString());
-        Assert.Contains("default shell", config.GetProperty("message").GetString(), StringComparison.Ordinal);
+        var project = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("id").GetString() == "project");
+        Assert.Equal("pass", project.GetProperty("status").GetString());
+        Assert.Contains("default shell", project.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateFileSystemEntries(empty));
     }
 
     [Fact]
-    public void A_config_folder_it_cannot_list_fails_the_config_check_and_the_others_still_run()
+    public void A_config_folder_it_cannot_list_fails_the_project_check_and_the_others_still_run()
     {
         var unreadable = Path.Combine(_root, "unreadable");
         Directory.CreateDirectory(unreadable);
@@ -88,10 +110,10 @@ public sealed class DoctorCommandTests : IDisposable
         Assert.Empty(result.Error);
         using var json = JsonDocument.Parse(result.Output);
         var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
-        Assert.Equal(10, checks.Count);
-        var config = checks.Single(c => c.GetProperty("id").GetString() == "config");
-        Assert.Equal("fail", config.GetProperty("status").GetString());
-        Assert.StartsWith("Winshell cannot read the config folder", config.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal(Ids.Length, checks.Count);
+        var project = checks.Single(c => c.GetProperty("id").GetString() == "project");
+        Assert.Equal("fail", project.GetProperty("status").GetString());
+        Assert.StartsWith("Winshell cannot read the config folder", project.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     private (int Code, string Output, string Error) Run(params string[] args) => RunIn(_root, args);

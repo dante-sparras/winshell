@@ -23,7 +23,7 @@
     <Compile Include="TemplatePackage.cs" />
   </ItemGroup>
 
-  <!-- The default shell is copied from the projects it is, at pack time, so the template cannot drift from them. -->
+  <!-- The default shell's XAML and C# are copied from Winshell.DefaultShell at pack time, so the template cannot drift. -->
   <Target Name="StageTemplates" BeforeTargets="_GetPackageFiles">
     <PropertyGroup>
       <_Stage>$(IntermediateOutputPath)stage\</_Stage>
@@ -39,7 +39,7 @@
       <_SmallSource Remove="$(MSBuildThisFileDirectory)winshell\**\obj\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(_DefaultSource)" DestinationFiles="@(_DefaultSource->'$(_Stage)winshell-default\%(RecursiveDir)%(Filename)%(Extension)')" />
-    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\src\Winshell.Next\Program.cs" DestinationFiles="$(_Stage)winshell-default\Program.cs" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)winshell-default\Program.cs" DestinationFiles="$(_Stage)winshell-default\Program.cs" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)winshell-default\.template.config\template.json" DestinationFiles="$(_Stage)winshell-default\.template.config\template.json" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)winshell-default\MyShell.csproj.in" DestinationFiles="$(_Stage)winshell-default\MyShell.csproj" />
     <Copy SourceFiles="@(_SmallSource)" DestinationFiles="@(_SmallSource->'$(_Stage)winshell\%(RecursiveDir)%(Filename)%(Extension)')" />

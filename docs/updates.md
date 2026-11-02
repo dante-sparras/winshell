@@ -1,39 +1,41 @@
 # Winshell updates
 
-A portable Winshell, the zip from GitHub Releases, updates itself from that repository's releases. winget, once the package is accepted, installs that same portable build, and winget is the only updater for that copy. Winshell does not also update it. The Microsoft Store package is not published yet; once it is, the Store updates it and Winshell does not. The release build names the repository: `scripts/package.ps1` stamps it into `winshell.exe`. Three kinds of Winshell never update themselves:
+A portable Winshell, the zip from GitHub Releases, updates itself from that repository's releases. winget, once the package is accepted, installs that same portable build, and winget is the only updater for that copy. Winshell does not also update it. The Microsoft Store package is not published yet. Once it is, the Store updates it and Winshell does not. The release build names the repository: `scripts/package.ps1` stamps it into `winshell.exe`. Three kinds of Winshell never update themselves:
 
 - A build from source has no repository stamped in it.
 - A packaged Winshell, such as the Microsoft Store's, is updated by whatever installed it.
 - A winget install, under `%LOCALAPPDATA%\Microsoft\WinGet\Packages` or the Links alias next to it, is updated by winget. The package installs per user. A copy that winget put somewhere else, with `--location` or a custom portable root, isn't detected and still updates itself.
+
+A configuration's own program does not use the updater `winshell.exe` passes in. `Shell.Current.Updates` follows the process's updater. `Available` is false when this Winshell does not update itself.
 
 ## How an update arrives
 
 1. Winshell asks `https://api.github.com/repos/<repository>/releases/latest` for the latest release. A tag that is not newer than this Winshell is up to date.
 2. It downloads `winshell-<version>-win-x64.zip`, or `-win-arm64.zip` on an Arm PC. While downloading, it computes the file's SHA-256 and compares it with the `digest` GitHub reports for that file. A file without a digest, or whose hash differs, is deleted and never installed.
 3. It unzips the file into `%LOCALAPPDATA%\winshell\updates\<version>`. The update is now ready.
-4. The next `winshell.exe` that starts a shell while no other Winshell runs installs the update before the shell runs. When this Winshell's `winshell.exe` is signed, the update's own binaries, the ones `packaging/signpath/` lists, must be signed by the same signer; otherwise the update is deleted and not installed. An unsigned Winshell installs it on its SHA-256 alone. While another shell runs, it would keep loading files from the folder as it needs them and mix versions, so the update waits, still ready, until a start finds no other shell. Two starts at the same moment, before either is listed as running, share a named mutex so they do not install over each other. The start that gets the mutex installs. The other does not wait for it: it skips the install, and the update stays ready. Each file the update replaces moves into `.winshell-old` in Winshell's folder, and the new one is copied in. If a file cannot be replaced, every file goes back and the update stays ready for the next start. The new `winshell.exe` then runs the shell, in the same console, with the same arguments. A later start that finds no other shell deletes `.winshell-old` and older or unfinished downloads.
+4. The next `winshell.exe` that starts a shell while no other Winshell runs installs the update before the shell runs. When this Winshell's `winshell.exe` is signed, the update's own binaries, the ones `packaging/signpath/` lists, must be signed by the same signer. Otherwise the update is deleted and not installed. An unsigned Winshell installs it on its SHA-256 alone. While another shell runs, it would keep loading files from the folder as it needs them and mix versions, so the update waits, still ready, until a start finds no other shell. Two starts at the same moment, before either is listed as running, share a named mutex so they do not install over each other. The start that gets the mutex installs. The other does not wait for it: it skips the install, and the update stays ready. Each file the update replaces moves into `.winshell-old` in Winshell's folder, and the new one is copied in. If a file cannot be replaced, every file goes back and the update stays ready for the next start. The new `winshell.exe` then runs the shell, in the same console, with the same arguments. A later start that finds no other shell deletes `.winshell-old` and older or unfinished downloads.
 
 `install.ps1` and `uninstall.ps1` delete `%LOCALAPPDATA%\winshell\updates`. A staged update is not configuration. Leaving it would replace an older install the next time Winshell starts. Logs and state in the rest of `%LOCALAPPDATA%\winshell` stay.
 
 **Restart to update** starts `winshell.exe` again with no console window. It drops `-d` and `--daemonize`, keeps the other arguments this shell was started with, and adds `--after` with this process's id, then closes this shell. The new process waits up to 30 seconds for this one to exit, so the taskbar, the hotkeys and the tray can come free, and then installs the update as in step 4. While another Winshell runs, the restart could not install the update, so **Restart now** does not restart: the update stays ready and the About page says "Another Winshell is running. Close it, then restart this one."
 
-Winshell checks for itself only while `Updates.automatic` is on: 30 seconds after it is turned on, and once a day after that. The default shell turns it on unless `autoUpdate` is `false` in `preferences.toml`, which **Get Winshell updates automatically** on the About page of Winshell Settings changes. **Check for updates** works either way. Winshell must be able to write to its own folder; if it cannot, it says so and downloads nothing.
+Winshell checks for itself only while `Updates.Automatic` is on: shortly after it is turned on, and once a day after that. The default shell turns it on unless `autoUpdate` is `false` in `preferences.toml`, which **Get Winshell updates automatically** on the About page of Winshell Settings changes. **Check for updates** calls `Check()` and works either way. Winshell must be able to write to its own folder. If it cannot, it says so and downloads nothing.
 
-## The `Updates` singleton
+## `UpdatesService`
 
-`import Winshell` provides `Updates` and the `UpdateStatus` enum.
+Reach it from `Shell.Current.Updates`. The members are in the [reference](reference/winshell-updates.md).
 
 | Member | What it is |
 | --- | --- |
-| `available` | Whether this Winshell updates itself. |
-| `packaged` | Whether Winshell runs from an MSIX package, which its installer updates. |
-| `winget` | Whether this copy lives under winget's Packages or Links folder. winget updates it, and Winshell does not. |
-| `automatic` | Check by itself and download what it finds. Off until a shell turns it on. |
-| `status` | `UpdateStatus.Idle`, `Checking`, `UpToDate`, `Downloading`, `Ready` or `Failed`. An update downloaded before this run started is `Ready` from the start. |
-| `version` | The release found: the latest one when up to date, or the one downloading or ready. |
-| `error` | Why the last check, download or install failed, while `status` is `Failed`; or, while it is `Ready`, why `restart()` did not restart. |
-| `check()` | Checks now, and downloads a newer release. |
-| `restart()` | Starts Winshell over to install a `Ready` update. Does nothing otherwise. |
+| `Available` | Whether this Winshell updates itself. |
+| `Packaged` | Whether Winshell runs from an MSIX package, which its installer updates. |
+| `Winget` | Whether this copy lives under winget's Packages or Links folder. winget updates it, and Winshell does not. |
+| `Automatic` | Check by itself and download what it finds. Off until a shell turns it on. |
+| `Status` | `UpdateStatus`: `Idle`, `Checking`, `UpToDate`, `Downloading`, `Ready` or `Failed`. An update downloaded before this run started is `Ready` from the start. |
+| `Version` | The release found: the latest one when up to date, or the one downloading or ready. Empty before a check. |
+| `Error` | Why the last check, download or install failed, while `Status` is `Failed`. Or, while it is `Ready`, why `Restart()` did not restart. |
+| `Check()` | Checks now, and downloads a newer release. |
+| `Restart()` | Starts Winshell over to install a `Ready` update. Does nothing otherwise. |
 
 The default shell shows the status on the About page. While an update is `Ready`, an icon in the taskbar's notification area opens that card, like Windows Update's restart icon.
 

@@ -151,16 +151,25 @@ if ($Publish) {
         dotnet publish (Join-Path $root 'src/Winshell/Winshell.csproj') --nologo -c Release -r $rid --self-contained `
             -p:PublishReadyToRun=true "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
-        # SkiaSharp and HarfBuzz ship their native symbols, over 100 MB. Winshell's own symbols stay, for stack traces in logs.
-        Get-ChildItem -LiteralPath $dir -Filter 'lib*.pdb' | Remove-Item -Force
+        # Satellite resources, debugger helpers and symbols are not part of the install.
+        Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object {
+            $_.Extension -in '.mui', '.pdb' -or $_.Name -eq 'createdump.exe' -or $_.Name -eq 'mscordbi.dll' -or
+            $_.Name -like 'mscordaccore*' -or $_.Name -like 'Microsoft.DiaSymReader.Native.*.dll'
+        } | Remove-Item -Force
+        Get-ChildItem -LiteralPath $dir -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending | Where-Object {
+            -not (Get-ChildItem -LiteralPath $_.FullName -Force | Select-Object -First 1)
+        } | Remove-Item -Force
         # winshellw.exe: the same apphost, marked as a Windows app so it opens no console, as the Store package's Start
         # entry runs it. It runs winshell.dll as winshell.exe does; the SDK makes a WinExe's apphost the same way. It is
-        # made here, before anything signs the folder: the subsystem is inside a signature's hash.
+        # made here, before anything signs the folder: the subsystem is inside a signature's hash. WinUI loads the main
+        # resource index named after the exe, so the Windows app gets a copy of winshell.pri.
         $gui = [IO.File]::ReadAllBytes((Join-Path $dir 'winshell.exe'))
         $subsystem = [BitConverter]::ToInt32($gui, 0x3C) + 4 + 20 + 68
         if ([BitConverter]::ToUInt16($gui, $subsystem) -ne 3) { throw 'winshell.exe is not a console app' }
         $gui[$subsystem] = 2
         [IO.File]::WriteAllBytes((Join-Path $dir 'winshellw.exe'), $gui)
+        $pri = Join-Path $dir 'winshell.pri'
+        if (Test-Path -LiteralPath $pri) { Copy-Item -LiteralPath $pri -Destination (Join-Path $dir 'winshellw.pri') -Force }
     }
 }
 
@@ -239,14 +248,13 @@ PackageUrl: https://github.com/$Repository
 License: MIT
 LicenseUrl: https://github.com/$Repository/blob/main/LICENSE
 Copyright: Copyright (c) Dante Sparrås
-ShortDescription: A desktop shell for Windows 11, described in QML.
+ShortDescription: A desktop shell for Windows 11.
 Description: |-
   Winshell runs a Windows 11 taskbar, Start, quick settings, a notification center and on-screen displays out of the box.
-  Every part of it is a QML file you can change, or replace with a shell of your own.
+  Preferences change most of it, and a .NET project can replace it with a shell of your own.
 Moniker: winshell
 Tags:
   - desktop
-  - qml
   - shell
   - taskbar
   - windows-11
@@ -291,7 +299,7 @@ if ($Verify) {
     }
     $machines = @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }
     # What SignPath signs: the binaries built from this repository. The runtime and libraries keep their publishers' signatures.
-    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Qml.dll', 'Winshell.Runtime.dll', 'Winshell.Services.dll', 'Winshell.Platform.Windows.dll'
+    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll', 'Winshell.DefaultShell.dll'
     $verifyRoot = Join-Path $Out 'verify'
     foreach ($rid in $Runtime) {
         $name = "winshell-$Version-$rid.zip"
@@ -301,13 +309,23 @@ if ($Verify) {
         $dir = Assert-Inside (Join-Path $verifyRoot $rid) $Out
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         [IO.Compression.ZipFile]::ExtractToDirectory($zip, $dir)
-        # The apphost, the runtime, the native drawing libraries and the ReadyToRun code are all built for this architecture.
-        foreach ($binary in 'winshell.exe', 'hostfxr.dll', 'coreclr.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'winshell.dll', 'Jint.dll') {
+        # The apphost, the runtime and the ReadyToRun code are all built for this architecture.
+        foreach ($binary in 'winshell.exe', 'hostfxr.dll', 'coreclr.dll', 'winshell.dll') {
             $path = Join-Path $dir $binary
             if (-not (Test-Path -LiteralPath $path)) { throw "$name has no $binary at its root" }
             $bytes = [IO.File]::ReadAllBytes($path)
             $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
             if ($machine -ne $machines[$rid]) { throw "$binary in $name is for machine 0x$($machine.ToString('X4')), not $rid" }
+        }
+        # Every other binary is that architecture too, or plain IL, which says 0x014C. One built for the other
+        # architecture stops the program from starting, and this machine would never run it to find out.
+        foreach ($file in Get-ChildItem -LiteralPath $dir -Recurse -File -Include '*.dll', '*.exe') {
+            $bytes = [IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes.Length -lt 0x40 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { continue }
+            $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
+            if ($machine -ne $machines[$rid] -and $machine -ne 0x014C) {
+                throw "$($file.Name) in $name is for machine 0x$($machine.ToString('X4')), not $rid"
+            }
         }
         # arm64 runs only on arm64 hardware; this checks it on an x64 machine, as CI is.
         if ($rid -eq 'win-x64' -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64') {
