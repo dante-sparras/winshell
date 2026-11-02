@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Check your change** before you open the PR. Build with warnings as errors and run the focused tests for what you changed. The [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job.
+**Check your change** before you open the PR. Run `pwsh scripts/quick-check.ps1`, then the focused tests for what you changed. The [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job.
 
 ## Write tests that don't flake
 
