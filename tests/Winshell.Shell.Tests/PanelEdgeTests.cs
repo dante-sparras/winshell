@@ -15,7 +15,7 @@ public sealed class PanelEdgeTests
             {
                 Anchors = Edges.Top | Edges.Left | Edges.Right,
                 Height = 8,
-                ExclusiveZone = 8,
+                ReservedSize = 8,
             };
             panel.Visible = true;
             var host = panel.Host!;
