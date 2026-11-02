@@ -386,7 +386,7 @@ public sealed class WinlandServiceTests
     }
 
     [Fact]
-    public void The_pipe_path_and_lua_are_what_Winland_says()
+    public void The_pipe_path_is_what_Winland_says()
     {
         using var service = new WinlandService(_loop, Log.Default, _link);
 

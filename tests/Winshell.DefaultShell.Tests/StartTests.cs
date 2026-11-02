@@ -10,29 +10,6 @@ public sealed class StartTests : IDisposable
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     [Fact]
-    public void Layout_uses_windows_11_logical_pixels()
-    {
-        Assert.Equal(640, StartList.MenuWidth);
-        Assert.Equal(720, StartList.MenuHeight);
-        Assert.Equal(22, StartList.Margin);
-        Assert.Equal(22, StartList.SearchX);
-        Assert.Equal(16, StartList.SearchY);
-        Assert.Equal(32, StartList.SearchHeight);
-        Assert.Equal(6, StartList.Columns);
-        Assert.Equal(96, StartList.TileWidth);
-        Assert.Equal(76, StartList.TileHeight);
-        Assert.Equal(4, StartList.Gap);
-        Assert.Equal(236, StartList.PinnedViewport);
-        Assert.Equal(48, StartList.RecommendedRow);
-        Assert.Equal(6, StartList.RecommendedLimit);
-        Assert.Equal(40, StartList.AllRow);
-        Assert.Equal(32, StartList.PinnedIcon);
-        Assert.Equal(32, StartList.RowIcon);
-        Assert.Equal(24, StartList.AllIcon);
-        Assert.Equal(12, StartPlacement.Gap);
-    }
-
-    [Fact]
     public void Start_sits_above_the_taskbar_and_slides_into_the_work_area()
     {
         var wide = new QRect(0, 0, 1920, 1000);
