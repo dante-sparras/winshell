@@ -1,8 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-#pragma warning disable CA1416 // Winshell only runs on Windows; this project targets plain net10.0.
-
 namespace Winshell;
 
 /// <summary>

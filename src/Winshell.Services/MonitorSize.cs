@@ -48,9 +48,11 @@ internal sealed class MonitorSizeCache(Func<string, Task<(double WidthMm, double
     {
         if (string.IsNullOrEmpty(interfaceId))
             return (0, 0);
+#pragma warning disable VSTHRD002 // The result is read when it has come, and the query never needs this thread, so the wait ends.
         if (_queries.TryGetValue(interfaceId, out var known))
             return known.IsCompletedSuccessfully ? known.Result : (0, 0);
         var started = _queries.GetOrAdd(interfaceId, query);
         return started.Wait(wait) ? started.Result : (0, 0);
+#pragma warning restore VSTHRD002
     }
 }

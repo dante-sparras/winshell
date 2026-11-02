@@ -190,7 +190,9 @@ internal sealed class WindowsAppLogo(AppDisplayInfo display) : IAppLogoSource
         var reference = display.GetLogo(new global::Windows.Foundation.Size(Side, Side));
         if (reference is null)
             return null;
+#pragma warning disable VSTHRD002 // The icon thread is here to wait.
         var opened = reference.OpenReadAsync().AsTask(cancellation).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
         return opened is null ? null : new WinRtReadStream(opened);
     }
 

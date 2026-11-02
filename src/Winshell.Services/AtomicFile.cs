@@ -4,8 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-#pragma warning disable CA1416 // Winshell only runs on Windows.
-
 namespace Winshell;
 
 /// <summary>
