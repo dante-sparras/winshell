@@ -8,6 +8,7 @@ runs:
       with:
         global-json-file: global.json
     - name: Restore NuGet packages
+      if: false
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.nuget/packages
@@ -16,7 +17,7 @@ runs:
     # A push to main always builds clean. It is what the pull requests after it start from, and what ships.
     - name: Restore the last build of main
       id: build
-      if: github.event_name == 'pull_request'
+      if: false
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
