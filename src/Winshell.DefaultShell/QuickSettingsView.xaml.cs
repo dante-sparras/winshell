@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.System;
 using Winshell.DefaultShell.Taskbar;
 
@@ -25,6 +27,9 @@ public sealed partial class QuickSettingsView : UserControl
 
     public QuickSettingsPopup Popup { get; }
 
+    /// <summary>The tile grid, so a drag can say where the pointer is among the tiles.</summary>
+    internal ItemsControl TileHost => Tiles;
+
     /// <summary>How tall the content is, whatever height the window has now.</summary>
     public double ContentHeight => Body.ActualHeight;
 
@@ -41,6 +46,18 @@ public sealed partial class QuickSettingsView : UserControl
     private double Fade(bool shown) => shown ? 1 : 0;
 
     private Visibility Shown(bool shown) => shown ? Visibility.Visible : Visibility.Collapsed;
+
+    private Visibility BatteryShown(bool hasBattery, bool browsing) => Shown(hasBattery && browsing);
+
+    private bool CanAdd(bool hasUnpinned, bool showingAdd) => hasUnpinned && !showingAdd;
+
+    private ImageSource? MediaImage(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? new BitmapImage(uri) : null;
+
+    private void OnAddTile(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string key })
+            Popup.Add(key);
+    }
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {

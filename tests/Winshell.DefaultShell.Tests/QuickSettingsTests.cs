@@ -1,7 +1,10 @@
 using System.Reflection;
+using Windows.Media.Control;
+using Windows.System;
 using Winshell.Audio;
 using Winshell.Bluetooth;
 using Winshell.DefaultShell.Taskbar;
+using Winshell.Media;
 using Winshell.Network;
 using Winshell.Power;
 
@@ -353,6 +356,180 @@ public sealed class QuickSettingsTests
     }
 
     [Fact]
+    public async Task The_media_card_shows_the_playing_session_and_its_controls()
+    {
+        using var rig = QuickSettingsRig.Create(laptop: true);
+        await rig.Load();
+        var paused = rig.Sessions.Add("Spotify", "Paused song", "Someone", playing: false);
+        var playing = rig.Sessions.Add("Firefox", "A video", "A channel", playing: true, next: true);
+
+        Assert.True(rig.Quick.HasMedia);
+        Assert.Equal("Firefox", rig.Quick.MediaApp);
+        Assert.Equal("A video", rig.Quick.MediaTitle);
+        Assert.Equal("A channel", rig.Quick.MediaArtist);
+        Assert.False(rig.Quick.HasMediaArt);
+        Assert.False(rig.Quick.CanMediaPrevious);
+        Assert.True(rig.Quick.CanMediaNext);
+        Assert.True(rig.Quick.CanMediaToggle);
+        Assert.True(rig.Quick.MediaPlaying);
+        Assert.Equal("Pause", rig.Quick.MediaPlayLabel);
+        Assert.Equal("\uE769", rig.Quick.MediaPlayGlyph);
+
+        rig.Quick.MediaNext();
+        rig.Quick.MediaToggle();
+        Assert.Equal(["next", "pause"], playing.Sent);
+        Assert.Empty(paused.Sent!);
+
+        // The service records the command. The card follows the session once it reports that it stopped.
+        playing.ApplyPlayback(new SmtcPlayback(GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused) { CanPlay = true, CanGoNext = true });
+        Assert.Equal("Paused song", rig.Quick.MediaTitle);
+        Assert.Equal("Someone", rig.Quick.MediaArtist);
+        Assert.False(rig.Quick.MediaPlaying);
+        Assert.Equal("Play", rig.Quick.MediaPlayLabel);
+        Assert.Equal("\uE768", rig.Quick.MediaPlayGlyph);
+
+        rig.Sessions.Remove(playing);
+        rig.Sessions.Remove(paused);
+        Assert.False(rig.Quick.HasMedia);
+        Assert.Equal("", rig.Quick.MediaTitle);
+    }
+
+    [Fact]
+    public async Task Edit_mode_unpins_and_adds_tiles_and_saves_them()
+    {
+        using var rig = QuickSettingsRig.Create(laptop: true);
+        await rig.Load();
+        rig.Popup.Show();
+        rig.Popup.Edit();
+        Assert.True(rig.Popup.Editing);
+        Assert.False(rig.Popup.Browsing);
+        Assert.Empty(rig.Quick.Unpinned);
+        Assert.Equal("Wi-Fi", Tile(rig.Quick, "wifi").Title);
+        Assert.Equal("Home", Tile(rig.Quick, "wifi").Label);
+
+        rig.Popup.Activate(Tile(rig.Quick, "wifi"));
+        Assert.Empty(rig.Urls);
+        Assert.True(rig.Popup.IsOpen);
+
+        rig.Popup.Unpin("bluetooth", fromKeyboard: false);
+        Assert.Equal(["wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal(Keys(rig.Quick), Saved(rig));
+        Assert.Equal(["bluetooth"], rig.Quick.Unpinned.Select(tile => tile.Key));
+        Assert.Equal("Bluetooth", Assert.Single(rig.Quick.Unpinned).Title);
+
+        rig.Popup.ShowAdd();
+        Assert.True(rig.Popup.ShowingAdd);
+        Assert.False(rig.Popup.ShowingTiles);
+        rig.Popup.Add("bluetooth");
+        Assert.True(rig.Popup.ShowingTiles);
+        Assert.False(rig.Popup.ShowingAdd);
+        Assert.Equal(["wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility", "bluetooth"], Keys(rig.Quick));
+        Assert.Equal(Keys(rig.Quick), Saved(rig));
+        Assert.Empty(rig.Quick.Unpinned);
+
+        rig.Popup.Done();
+        Assert.False(rig.Popup.Editing);
+        Assert.True(rig.Popup.Browsing);
+        Assert.True(rig.Popup.IsOpen);
+
+        rig.Popup.Edit();
+        rig.Popup.Hide();
+        Assert.False(rig.Popup.Editing);
+        Assert.False(rig.Popup.IsOpen);
+        rig.Popup.Show();
+        Assert.False(rig.Popup.Editing);
+
+        File.WriteAllText(rig.LayoutPath, """pinned = ["nightLight"]""");
+        Wait.Until(() => Keys(rig.Quick).SequenceEqual(["nightLight"]), "the file written after an edit", rig.Loop.Process);
+        Assert.Empty(rig.Messages);
+    }
+
+    [Fact]
+    public async Task Dragging_a_tile_moves_it_to_where_it_is_let_go()
+    {
+        using var rig = QuickSettingsRig.Create(laptop: true);
+        await rig.Load();
+        rig.Popup.Show();
+        rig.Popup.Edit();
+
+        rig.Popup.BeginDrag(Tile(rig.Quick, "wifi"));
+        // The airplane tile's button, 80 across and 24 down. Column 2 starts at 216.
+        rig.Popup.DragTo(216 + 80, 24, 70);
+        Assert.Equal(0.5, rig.Popup.DragOpacity(0));
+        Assert.Equal(1, rig.Popup.DropSide(2));
+        Assert.Equal(0, rig.Popup.DropSide(0));
+        rig.Popup.EndDrag();
+        Assert.Equal(["bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal(Keys(rig.Quick), Saved(rig));
+        Assert.All(Enumerable.Range(0, rig.Quick.Shown.Count), index => Assert.Equal(0, rig.Popup.DropSide(index)));
+
+        rig.Popup.BeginDrag(Tile(rig.Quick, "nightLight"));
+        rig.Popup.DragTo(10, 24, 70);
+        rig.Popup.EndDrag();
+        Assert.Equal(["nightLight", "bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "accessibility"], Keys(rig.Quick));
+
+        rig.Popup.BeginDrag(Tile(rig.Quick, "energySaver"));
+        rig.Popup.EndDrag();
+        Assert.Equal(["nightLight", "bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "accessibility"], Keys(rig.Quick));
+        rig.Popup.Activate(Tile(rig.Quick, "energySaver"));
+        Assert.Empty(rig.Urls);
+    }
+
+    [Fact]
+    public async Task Alt_Shift_and_the_arrow_keys_move_the_focused_tile_and_Delete_unpins_it()
+    {
+        using var rig = QuickSettingsRig.Create(laptop: true);
+        await rig.Load();
+        rig.Popup.Show();
+        rig.Popup.Edit();
+
+        Assert.Equal(1, QuickSettingsTileView.KeyOffset(alt: true, shift: true, VirtualKey.Right));
+        Assert.Equal(-1, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Left));
+        Assert.Equal(-3, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Up));
+        Assert.Equal(3, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
+        Assert.Equal(0, QuickSettingsTileView.KeyOffset(alt: false, shift: false, VirtualKey.Right));
+        Assert.Equal(0, QuickSettingsTileView.KeyOffset(alt: true, shift: false, VirtualKey.Right));
+        Assert.Equal(0, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Delete));
+
+        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Right));
+        Assert.Equal(["bluetooth", "wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal("wifi", rig.Popup.FocusKey);
+
+        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal("wifi", rig.Popup.FocusKey);
+
+        // Without both modifiers an arrow key is not a move, so the order stays.
+        Assert.Equal(0, QuickSettingsTileView.KeyOffset(false, false, VirtualKey.Right));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Keys(rig.Quick));
+
+        rig.Popup.Unpin("nightLight", fromKeyboard: true);
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "accessibility"], Saved(rig));
+        Assert.Equal("accessibility", rig.Popup.FocusKey);
+
+        Assert.True(rig.Popup.Escape());
+        Assert.False(rig.Popup.Editing);
+        Assert.True(rig.Popup.IsOpen);
+        Assert.Empty(rig.Urls);
+    }
+
+    [Fact]
+    public async Task Unpinning_keeps_tiles_this_PC_has_no_hardware_for()
+    {
+        using var rig = QuickSettingsRig.Create(laptop: false);
+        await rig.Load();
+        Assert.Equal(["airplaneMode", "energySaver", "nightLight", "accessibility"], Keys(rig.Quick));
+        rig.Popup.Edit();
+        rig.Popup.Unpin("energySaver", fromKeyboard: false);
+        Assert.Equal(["airplaneMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal(["wifi", "bluetooth", "airplaneMode", "powerMode", "nightLight", "accessibility"], Saved(rig));
+
+        rig.Popup.MoveBy("nightLight", 1);
+        Assert.Equal(["airplaneMode", "accessibility", "nightLight"], Keys(rig.Quick));
+        Assert.Equal(["wifi", "bluetooth", "airplaneMode", "powerMode", "accessibility", "nightLight"], Saved(rig));
+    }
+
+    [Fact]
     public async Task A_saved_layout_is_restored_and_keeps_tiles_this_PC_has_no_hardware_for()
     {
         using (var desktop = QuickSettingsRig.Create(laptop: false, file: """pinned = ["wifi", "bluetooth", "airplaneMode", "powerMode", "nightLight", "accessibility"]"""))
@@ -485,6 +662,14 @@ public sealed class QuickSettingsTests
 
     private static QuickSettingsTile Tile(QuickSettings quick, string key) => Assert.Single(quick.Shown, tile => tile.Key == key);
 
+    /// <summary>The order written to the layout file, read back by a second watcher.</summary>
+    private static List<string> Saved(QuickSettingsRig rig)
+    {
+        rig.Loop.Process();
+        using var again = new QuickSettingsLayout(rig.LayoutPath, rig.Loop, rig.Log);
+        return again.Pinned!.OfType<string>().ToList();
+    }
+
     private static List<string> Strings(IReadOnlyList<object?>? pinned) =>
         pinned is null ? [] : [.. pinned.OfType<string>()];
 }
@@ -530,7 +715,9 @@ internal sealed class QuickSettingsRig : IDisposable
         Status = new SystemStatus(Networking, Audio, PowerService, PowerMode);
         LayoutPath = Path.Combine(_directory, "quick-settings.toml");
         Layout = new QuickSettingsLayout(LayoutPath, Loop, Log);
-        Quick = new QuickSettings(Status, Networking, Bluetooth, Audio, PowerService, PowerMode, Brightness, Layout);
+        Sessions = new RigSessions();
+        Media = new MediaService(Loop, Log, Sessions);
+        Quick = new QuickSettings(Status, Networking, Bluetooth, Audio, PowerService, PowerMode, Brightness, Layout, Media);
         Urls = [];
         Quick.SettingsRequested += Urls.Add;
         Speakers = Audio.DefaultPlaybackDevice!;
@@ -576,6 +763,10 @@ internal sealed class QuickSettingsRig : IDisposable
     public string LayoutPath { get; }
 
     public QuickSettingsLayout Layout { get; }
+
+    public RigSessions Sessions { get; }
+
+    public MediaService Media { get; }
 
     public QuickSettings Quick { get; }
 
@@ -641,6 +832,7 @@ internal sealed class QuickSettingsRig : IDisposable
     {
         foreach (var popup in _popups)
             popup.Hide();
+        Media.Dispose();
         Bluetooth.Dispose();
         Audio.Dispose();
         Networking.Dispose();
@@ -739,6 +931,41 @@ internal sealed class RigNode : AudioGraphNode
     public override void SetMuted(bool muted) => ApplyAudio([.. Volumes], muted);
 
     public void SetAudio(float volume, bool muted) => ApplyAudio([volume], muted);
+}
+
+/// <summary>Media sessions a test adds, in order. Commands land on <see cref="SmtcSession.Sent"/>.</summary>
+internal sealed class RigSessions : IMediaSessions
+{
+    private readonly List<SmtcSession> _sessions = [];
+
+    public IReadOnlyList<SmtcSession> Sessions => _sessions;
+
+    public event Action<SmtcSession>? SessionAdded;
+
+    public event Action<SmtcSession>? SessionRemoved;
+
+    public SmtcSession Add(string app, string title, string artist, bool playing, bool next = false)
+    {
+        var session = SmtcSession.CreateForTests(app);
+        session.ApplyTrack(title, artist, "", "", 0, null, null);
+        session.ApplyPlayback(new SmtcPlayback(playing
+            ? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+            : GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused)
+        {
+            CanPlay = true,
+            CanPause = true,
+            CanGoNext = next,
+        });
+        _sessions.Add(session);
+        SessionAdded?.Invoke(session);
+        return session;
+    }
+
+    public void Remove(SmtcSession session)
+    {
+        _sessions.Remove(session);
+        SessionRemoved?.Invoke(session);
+    }
 }
 
 /// <summary>A Bluetooth read that returns the snapshot a test stored.</summary>

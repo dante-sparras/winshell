@@ -34,7 +34,8 @@ internal sealed class Taskbars
             shell.Power,
             shell.PowerMode,
             shell.Brightness,
-            new QuickSettingsLayout(shell.StatePath("quick-settings.toml"), shell.Loop, shell.Log));
+            new QuickSettingsLayout(shell.StatePath("quick-settings.toml"), shell.Loop, shell.Log),
+            shell.Media);
         _quick.SettingsRequested += uri => ProgramStart.Start(uri, shell.Log);
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
