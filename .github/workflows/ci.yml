@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+# Every check of a pull request is in this file, except pr-title, which needs its own trigger. changes decides which of
+# them a pull request needs, so a docs change holds one runner and not a dozen.
+#
 # A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
 # a shared one would drop the ci run of a commit in a burst of merges, and a release commit would wait for a check that
 # never comes.
@@ -17,9 +20,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # What this pull request needs. The other jobs skip on false, and a skipped job counts as a passed required check.
+    # Only false skips, so a changes job that failed, or a push to main where it does not run, still runs everything.
+    name: changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.files.outputs.code }}
+      docs: ${{ steps.files.outputs.docs }}
+      scripts: ${{ steps.files.outputs.scripts }}
+      workflows: ${{ steps.files.outputs.workflows }}
+    steps:
+      - name: Look at the changed files
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+        run: |
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          [ -n "$files" ] || exit 0
+          grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^docs/|\.md$|^dotnet-tools\.json$|^global\.json$|^\.github/workflows/ci\.yml$' <<<"$files" || echo 'docs=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
+
   ci:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: windows-2025
     timeout-minutes: 15
     outputs:
@@ -78,32 +112,8 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
             'flaky=true' >> $env:GITHUB_OUTPUT
           }
-  changes:
-    # Whether slow has anything to prove. A pull request that only changes docs or Markdown does not.
-    name: changes
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      pull-requests: read
-    outputs:
-      code: ${{ steps.files.outputs.code }}
-    steps:
-      - name: Look at the changed files
-        id: files
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.number }}
-        run: |
-          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
-          if [ -n "$files" ] && ! grep -qvE '^docs/|\.md$' <<<"$files"; then
-            echo 'code=false' >> "$GITHUB_OUTPUT"
-          fi
-
   slow:
-    # The tests that start winshell.exe or open a real window. The ruleset requires this job by name, and a skipped job
-    # counts as passed. Skipping needs code to say false, so a changes job that failed still runs them.
+    # The tests that start winshell.exe or open a real window. The ruleset requires this job by name.
     name: slow
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
@@ -140,6 +150,55 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
             'flaky=true' >> $env:GITHUB_OUTPUT
           }
+
+  build:
+    # Builds docs/ into a site with DocFX. A broken link or anchor between pages fails the build.
+    name: build
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build the site
+        run: |
+          dotnet tool restore
+          dotnet docfx docs/docfx.json --warningsAsErrors
+
+  actionlint:
+    # actionlint catches broken expressions, typos and shell errors in .github/workflows/. zizmor audits .github/ for
+    # unpinned actions, risky triggers, leaked credentials and template injection. A finding that is safe on purpose gets
+    # a `# zizmor: ignore[<audit>]` comment explaining why. The ruleset requires this job by name.
+    name: actionlint
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.workflows != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+      security-events: write # publishes the SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          # The action's default is latest, which downloads whatever release rhysd/actionlint just published.
+          version: "1.7.12"
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          # The action's default is latest, which follows a lock that moves when this action pin moves.
+          # 1.31.1 is the newest stable release that lock can run.
+          version: "1.31.1"
+          # This repository is public, so code scanning accepts the SARIF. The action rejects annotations
+          # at the same time.
+          advanced-security: true
+          annotations: false
 
   flaky-report:
     # Files or updates an issue for each test in the flaky reports. It is a separate job so that the jobs that run the
@@ -194,6 +253,8 @@ jobs:
 
   installer:
     name: installer
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.scripts != 'false' }}
     runs-on: windows-2025
     timeout-minutes: 15
     steps:

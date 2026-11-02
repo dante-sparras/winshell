@@ -42,16 +42,15 @@ Before every push, run `pwsh scripts/quick-check.ps1`, then the focused tests fo
 
 | Job | When it runs | How to run it locally |
 | --- | --- | --- |
-| `installer` | Every pull request, in `ci.yml`. That job downloads the Pester 5.6.1 and PSScriptAnalyzer 1.22.0 nupkgs and checks their SHA-256 before it imports them. | `check.ps1` runs the five Pester suites when Pester 5.6.1 imports. This job also runs them, then Windows PowerShell 5.1 runs the install, uninstall and release gate files again. PSScriptAnalyzer 1.22.0 must report no warning or error on `scripts/install.ps1` and `scripts/uninstall.ps1` (the `PSUseShouldProcessForStateChangingFunctions` rule is excluded, because prompting would break `irm \| iex`). |
+| `installer` | Pull requests that change `scripts/` or a workflow, and every push to `main`, in `ci.yml`. That job downloads the Pester 5.6.1 and PSScriptAnalyzer 1.22.0 nupkgs and checks their SHA-256 before it imports them. | `check.ps1` runs the five Pester suites when Pester 5.6.1 imports. This job also runs them, then Windows PowerShell 5.1 runs the install, uninstall and release gate files again. PSScriptAnalyzer 1.22.0 must report no warning or error on `scripts/install.ps1` and `scripts/uninstall.ps1` (the `PSUseShouldProcessForStateChangingFunctions` rule is excluded, because prompting would break `irm \| iex`). |
 | `quarantine` | Every push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Quarantined`, which runs the tests in `tests/quarantine.txt`, or nothing when the list is empty. A failure shows in the log and blocks nothing. |
 | `slow` | Every pull request that changes more than docs or Markdown, and every push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Tier Slow`, on an empty Winland workspace. |
 | `flaky-report` | After `ci` or `slow`, when a test passed only on its rerun | `pwsh scripts/report-flaky.ps1 -ReportPath <file> -RunUrl <url>` files or updates a `flaky` issue, so run it only on a real report. It needs `gh` signed in. |
-| `links` | Every pull request, in `docs.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents` and `https://about.signpath.io`. |
-| `actionlint` | Every pull request and every push to `main` | actionlint on `.github/workflows`. |
-| `zizmor` | Every pull request and every push to `main` | zizmor on `.github`. |
+| `links` | Pushes to `main` that change docs or Markdown, and every Monday, in `links.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents` and `https://about.signpath.io`. |
+| `actionlint` | Pull requests that change a workflow, and every push to `main`, in `ci.yml` | actionlint on `.github/workflows`, then zizmor on `.github`. |
 | `package` | Pushes to `main`, and pull requests that change packaging or the package workflow | `pwsh scripts/package.ps1`. It publishes both architectures and needs the Windows SDK for the MSIX check. The `arm64` job then runs that zip's `winshell.exe --version` on `windows-11-arm`. |
 
-The `ci` job runs the fast tests. The `slow` job, also required, runs `Category=Slow`: the tests that start `winshell.exe` or open a real window. A pull request that only changes `docs/**` or Markdown skips it, and every push to `main` runs it. A test class that does either carries `[Trait("Category", "Slow")]`.
+Every check of a pull request is in `ci.yml`, except `pr-title`, which also looks at the branch name. The `changes` job decides which of them a pull request needs, and a skipped job counts as a passed required check, so a change to `docs/**` or Markdown runs `build` and nothing else. Every push to `main` runs everything. The `ci` job runs the fast tests. The `slow` job, also required, runs `Category=Slow`: the tests that start `winshell.exe` or open a real window. A test class that does either carries `[Trait("Category", "Slow")]`.
 
 The docs `build` job runs DocFX with warnings as errors, which `check.ps1` also runs and `-Quick` leaves out. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
 
@@ -169,9 +168,9 @@ The docs site is built from `docs/` by [DocFX](https://dotnet.github.io/docfx/),
 - **Links between pages** are relative `.md` links. DocFX fails the check on a link to a page or a heading that isn't there. Link to files outside `docs/`, such as `CONTRIBUTING.md`, with their GitHub URL.
 - **C# examples** in a `csharp` code block are checked by `DocsTests`: each one is text from `tests/Winshell.Shell.Tests/GuideSamples.cs`, which the test project builds.
 - **The reference** in `docs/reference/` has a page per `Winshell` module, `winshell-<module>.md`, with a `## Type` section for each type and a table whose first column names each member: `` `name` `` for a property, `` `name(args)` `` for a method or signal. `DocsTests` fails when a type, a member or an enum value is missing, or when a table names a member the type doesn't have. A type with a registered base type lists only what it adds. `reference/qt-quick.md` names every Qt Quick type, and each row of its "Where Winshell differs from Qt" table is a real `Type.member`; remove a row when that member starts working. Add a new type or member to its page in the PR that adds it.
-- **Links to other sites** are checked by the `links` job of the Docs workflow, on each PR and every Monday. That job isn't part of `check.ps1`.
+- **Links to other sites** are checked by `links.yml`, on `main` and every Monday. That job isn't part of `check.ps1`.
 
-The Docs workflow builds the site on every PR and on `main`. It does not publish that site. GitHub Pages is off.
+The `build` job builds the site on every PR that changes docs, and on `main`. It does not publish that site. GitHub Pages is off.
 
 ## Network permissions
 
