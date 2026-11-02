@@ -1,14 +1,65 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Winshell.Platform.Windows.Services.Updates;
-using Winshell.Runtime;
-using Winshell.Runtime.Shell;
+using Winshell.Native;
 using Winshell.Session;
+using Winshell.Updates;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Platform.Windows.Diagnostics;
+
+/// <summary>
+/// What <see cref="Doctor.Run"/> reads from this PC. The QML stack supplies it. Every read stays a read: the doctor
+/// never builds, and a configuration project is judged from the project file alone.
+/// </summary>
+public interface IDoctorFacts
+{
+    (string? LoadError, string? Unreadable) ReadInstanceLog(string logPath);
+
+    int WindowsBuild();
+
+    int WindowsUpdateRevision();
+
+    string? WindowsDisplayVersion();
+
+    bool WindowsServer();
+
+    bool TransparencyEffectsOff();
+
+    bool ContrastThemeOn();
+
+    bool SelfContained(string exePath);
+
+    Doctor.ConfigScan ParseConfig(string? rootFile);
+
+    IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot);
+
+    bool CanWrite(string folder);
+
+    bool IsElevated(int pid);
+
+    IReadOnlyList<Doctor.MonitorFacts> Monitors();
+
+    IReadOnlyList<Doctor.WindowFacts> EdgeWindows();
+
+    bool PerMonitorV2();
+
+    IReadOnlyList<string> CompatibilityLayers(string exePath);
+
+    string? RunEntry();
+
+    bool RunEntryTurnedOff();
+
+    string ResolveLinks(string path);
+
+    string NotificationAccess();
+
+    Doctor.CrashFolderRead ReadCrashReports(string folder);
+
+    Doctor.CrashPeek PeekCrash(string path);
+}
 
 public enum CheckStatus
 {
@@ -45,50 +96,53 @@ public interface IDoctor
 }
 
 /// <summary>
-/// Checks this PC's setup for Winshell. Each check reads what it needs through <see cref="DoctorProbe"/> and judges
+/// Checks this PC's setup for Winshell. Each check reads what it needs through <see cref="IDoctorFacts"/> and judges
 /// it here, so the judging is tested without the PC. Nothing is changed: no prompt, no registry or settings write,
-/// no instance started or stopped. Telling whether a folder can be written makes and removes one empty file. The
-/// user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so what it
-/// prints can go into a bug report without the Windows user name.
+/// no instance started or stopped, and no build. Telling whether a folder can be written makes and removes one empty
+/// file. The user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so
+/// what it prints can go into a bug report without the Windows user name.
 /// </summary>
 public static class Doctor
 {
     public const string BugReports = "https://github.com/dante-sparras/winshell/issues/new/choose";
 
-    public static IReadOnlyList<DoctorCheck> Run(DoctorContext context)
+    /// <summary>How many folders reading a config walks at most, so a config in a big folder ends quickly.</summary>
+    internal const int MaxFolders = 500;
+
+    public static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
     {
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var instance = context.ConfigFile is { } file
             ? context.Instances.FirstOrDefault(i => string.Equals(i.ConfigPath, file, StringComparison.OrdinalIgnoreCase))
             : null;
-        var instanceLog = instance is null ? default : DoctorProbe.ReadInstanceLog(instance.LogPath);
+        var instanceLog = instance is null ? default : facts.ReadInstanceLog(instance.LogPath);
         var configFolder = Path.GetDirectoryName(context.ConfigFile) is { Length: > 0 } own ? own : context.ConfigRoot;
         // A downloaded config does not run, so its files are not read either.
         var downloaded = context.ConfigFile is { } root && ZoneIdentifier.IsDownloaded(root);
         DoctorCheck[] checks =
         [
-            Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer(), DoctorProbe.TransparencyEffectsOff(), DoctorProbe.ContrastThemeOn())),
-            Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
+            Guard("windows", "Windows", () => Windows(facts.WindowsBuild(), facts.WindowsUpdateRevision(), facts.WindowsDisplayVersion(), facts.WindowsServer(), facts.TransparencyEffectsOff(), facts.ContrastThemeOn())),
+            Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, facts.SelfContained(context.ExePath))),
             Guard("config", "Config", () => Config(
                 context.ConfigFile,
                 context.ConfigProblem,
-                downloaded ? new ConfigScan(0, []) : DoctorProbe.ParseConfig(context.ConfigFile),
+                downloaded ? new ConfigScan(0, []) : facts.ParseConfig(context.ConfigFile),
                 instanceLog.LoadError,
                 instanceLog.Unreadable,
                 downloaded,
-                downloaded || context.ConfigProblem is not null ? null : DoctorProbe.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot))),
+                downloaded || context.ConfigProblem is not null ? null : facts.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot))),
             Guard("folders", "Folders", () => Folders(
-                [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
-                context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
+                [("the config folder", configFolder, facts.CanWrite(configFolder)), ("its local folder", context.LocalRoot, facts.CanWrite(context.LocalRoot))],
+                context.Instances.Where(i => facts.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
                 Environment.IsPrivilegedProcess)),
-            Guard("appBars", "App bars", () => AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
-            Guard("dpi", "DPI", () => Dpi(DoctorProbe.PerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath), DoctorProbe.Monitors())),
+            Guard("appBars", "App bars", () => AppBars(facts.Monitors(), facts.EdgeWindows())),
+            Guard("dpi", "DPI", () => Dpi(facts.PerMonitorV2(), facts.CompatibilityLayers(context.ExePath), facts.Monitors())),
             Guard("signIn", "Sign-in", () => Packaging.IsPackaged
                 ? SignIn(WindowsStartupTasks.Open())
-                : SignIn(DoctorProbe.RunEntry(), DoctorProbe.RunEntryTurnedOff(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
-            Guard("notifications", "Notifications", () => Notifications(DoctorProbe.NotificationAccess())),
+                : SignIn(facts.RunEntry(), facts.RunEntryTurnedOff(), context.ExePath, File.Exists, facts.ResolveLinks)),
+            Guard("notifications", "Notifications", () => Notifications(facts.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
-            Guard("crashes", "Crashes", () => CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now, DoctorProbe.PeekCrash)),
+            Guard("crashes", "Crashes", () => CrashesIn(facts.ReadCrashReports(context.CrashRoot), now, facts.PeekCrash)),
         ];
         return WithoutUserFolders(checks,
         [
@@ -165,7 +219,7 @@ public static class Doctor
         /// <summary>What does not parse in a folder under it, which only matters if the config imports it.</summary>
         public IReadOnlyList<string> SubfolderErrors { get; init; } = [];
 
-        /// <summary>Whether reading stopped at <see cref="DoctorProbe.MaxFolders"/> folders, leaving the rest unread.</summary>
+        /// <summary>Whether reading stopped at <see cref="MaxFolders"/> folders, leaving the rest unread.</summary>
         public bool Stopped { get; init; }
     }
 
@@ -199,7 +253,7 @@ public static class Doctor
         var files = scan.Files == 1 ? "1 QML file" : $"{scan.Files} QML files";
         if (loadError is not null)
             return Noted(new("config", "Config", CheckStatus.Fail, $"{file}: {files} read, but the running instance could not load it: {loadError}", "Correct that line and save. Winshell keeps the last version that loaded until then."));
-        var stopped = scan.Stopped ? $" Stopped after {DoctorProbe.MaxFolders} folders; the rest were not read." : "";
+        var stopped = scan.Stopped ? $" Stopped after {MaxFolders} folders; the rest were not read." : "";
         if (scan.SubfolderErrors.Count > 0)
         {
             var more = scan.SubfolderErrors.Count > 1 ? $" ({scan.SubfolderErrors.Count - 1} more)" : "";
@@ -208,6 +262,77 @@ public static class Doctor
         if (logUnreadable is not null)
             return Noted(new("config", "Config", CheckStatus.Warn, $"Could not read the running instance's log: {logUnreadable}", "Make sure your account can read that log, then run winshell doctor again."));
         return Noted(new("config", "Config", CheckStatus.Pass, $"{file}: {files} read without errors{(stopped.Length > 0 ? "." + stopped : "")}"));
+    }
+
+    // Configuration project. These read the project file as data. They never build.
+
+    /// <summary>
+    /// The configuration project in <paramref name="configRoot"/>, or why there is not one: whether it was found,
+    /// whether a file the build would run was downloaded, whether its program has been built, and whether a build
+    /// is needed. Nothing here runs MSBuild.
+    /// </summary>
+    public static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
+    {
+        var found = FindProject(configRoot);
+        return
+        [
+            Guard("project", "Project", () => Project(found.Project, found.Problem)),
+            Guard("downloaded", "Downloaded", () => Downloaded(found.Project)),
+            Guard("built", "Built", () => Built(found.Project)),
+            Guard("build", "Build", () => BuildNeeded(found.Project)),
+        ];
+    }
+
+    private readonly record struct FoundProject(ConfigurationProject? Project, string? Problem);
+
+    private static FoundProject FindProject(string root)
+    {
+        try
+        {
+            var project = ConfigurationProject.Find(null, null, root, out var problem);
+            return new(project, problem);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new(null, $"Winshell cannot read the config folder: {e.Message}");
+        }
+    }
+
+    internal static DoctorCheck Project(ConfigurationProject? project, string? problem)
+    {
+        if (problem is not null)
+            return new("project", "Project", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
+        if (project is null)
+            return new("project", "Project", CheckStatus.Pass, "No configuration project: Winshell runs its default shell.");
+        return new("project", "Project", CheckStatus.Pass, project.ProjectFile);
+    }
+
+    internal static DoctorCheck Downloaded(ConfigurationProject? project)
+    {
+        if (project is null)
+            return new("downloaded", "Downloaded", CheckStatus.Pass, "No configuration project to check.");
+        if (project.Downloaded() is { } file)
+            return new("downloaded", "Downloaded", CheckStatus.Fail, $"{file} was downloaded from the internet, so Winshell does not build it. It would run as you.", "If you trust it, unblock it: right-click it > Properties > Unblock, or run Unblock-File. Then save it, or start Winshell again.");
+        return new("downloaded", "Downloaded", CheckStatus.Pass, "Nothing the build would run was downloaded.");
+    }
+
+    internal static DoctorCheck Built(ConfigurationProject? project)
+    {
+        if (project is null)
+            return new("built", "Built", CheckStatus.Pass, "No configuration project to build.");
+        if (!File.Exists(project.Program))
+            return new("built", "Built", CheckStatus.Fail, $"{project.Name} has not been built.", "Run winshell run once to build it.");
+        return new("built", "Built", CheckStatus.Pass, project.Program);
+    }
+
+    internal static DoctorCheck BuildNeeded(ConfigurationProject? project)
+    {
+        if (project is null)
+            return new("build", "Build", CheckStatus.Pass, "No configuration project to build.");
+        if (!project.NeedsBuild())
+            return new("build", "Build", CheckStatus.Pass, $"{project.Name} is up to date.");
+        var why = File.Exists(project.Program) ? $"A file in {project.Name} is newer than the program." : $"{project.Name} has not been built.";
+        return new("build", "Build", CheckStatus.Warn, why, "Run winshell run to build it. Signing in uses the last build.");
     }
 
     // Folders
@@ -364,13 +489,43 @@ public static class Doctor
 
     // Sign-in
 
+    /// <summary>The <c>winshell.exe</c> a sign-in command starts: after <c>conhost.exe --headless</c>, as Winshell writes it, or first.</summary>
+    internal static string? ExeOf(string command)
+    {
+        var args = SplitCommand(command);
+        if (args.Length >= 3 && Path.GetFileName(args[0]).Equals("conhost.exe", StringComparison.OrdinalIgnoreCase) && args[1] == "--headless")
+            return args[2];
+        return args.Length > 0 ? args[0] : null;
+    }
+
+    /// <summary>A command line split as Windows splits it.</summary>
+    private static unsafe string[] SplitCommand(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+            return [];
+        var argv = Win32.CommandLineToArgvW(command, out var count);
+        if (argv == 0)
+            return [];
+        try
+        {
+            var args = new string[count];
+            for (var i = 0; i < count; i++)
+                args[i] = Marshal.PtrToStringUni(((nint*)argv)[i]) ?? "";
+            return args;
+        }
+        finally
+        {
+            Win32.LocalFree(argv);
+        }
+    }
+
     /// <param name="resolve">The file a path names in the end, past links: a winget install starts through one.</param>
     internal static DoctorCheck SignIn(string? command, bool turnedOff, string thisExe, Func<string, bool> exists, Func<string, string>? resolve = null)
     {
         resolve ??= path => path;
         if (command is null)
             return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on.");
-        var exe = DoctorProbe.ExeOf(command);
+        var exe = ExeOf(command);
         if (exe is null || !exists(exe))
             return new("signIn", "Sign-in", CheckStatus.Fail, $"The sign-in entry starts {exe ?? command}, which is not there.", "Turn Run Winshell when I sign in off and on again in Winshell Settings > Startup.");
         var started = resolve(Path.GetFullPath(exe));
@@ -422,14 +577,20 @@ public static class Doctor
 
     // Crash reports
 
-    internal static DoctorCheck CrashesIn(DoctorProbe.CrashFolderRead folder, DateTime nowUtc, Func<string, DoctorProbe.CrashPeek>? peek = null)
+    /// <summary>Crash reports in a folder, or why the folder could not be listed.</summary>
+    public readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
+
+    /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
+    public readonly record struct CrashPeek(string? Text, string? Unreadable);
+
+    internal static DoctorCheck CrashesIn(CrashFolderRead folder, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
     {
         if (folder.Unreadable is not null)
             return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read the crash folder: {folder.Unreadable}", "Make sure your account can read that folder, then run winshell doctor again.");
         return Crashes(folder.Reports, nowUtc, peek);
     }
 
-    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, DoctorProbe.CrashPeek>? peek = null)
+    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
     {
         var recent = reports.Where(r => nowUtc - r.WrittenUtc <= TimeSpan.FromDays(7)).OrderByDescending(r => r.WrittenUtc).ToList();
         if (peek is null)

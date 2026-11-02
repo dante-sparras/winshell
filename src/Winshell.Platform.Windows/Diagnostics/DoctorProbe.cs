@@ -75,7 +75,7 @@ internal static unsafe partial class DoctorProbe
     // Config
 
     /// <summary>How many folders reading a config walks at most, so a config in a big folder ends quickly.</summary>
-    public const int MaxFolders = 500;
+    public const int MaxFolders = Doctor.MaxFolders;
 
     /// <summary>
     /// Reads every QML file in the config's folder and the folders under it, as the parser does when they load. An
@@ -486,34 +486,7 @@ internal static unsafe partial class DoctorProbe
     }
 
     /// <summary>The <c>winshell.exe</c> a sign-in command starts: after <c>conhost.exe --headless</c>, as Winshell writes it, or first.</summary>
-    internal static string? ExeOf(string command)
-    {
-        var args = Split(command);
-        if (args.Length >= 3 && Path.GetFileName(args[0]).Equals("conhost.exe", StringComparison.OrdinalIgnoreCase) && args[1] == "--headless")
-            return args[2];
-        return args.Length > 0 ? args[0] : null;
-    }
-
-    /// <summary>A command line split as Windows splits it.</summary>
-    private static string[] Split(string command)
-    {
-        if (string.IsNullOrWhiteSpace(command))
-            return [];
-        var argv = Win32.CommandLineToArgvW(command, out var count);
-        if (argv == 0)
-            return [];
-        try
-        {
-            var args = new string[count];
-            for (var i = 0; i < count; i++)
-                args[i] = Marshal.PtrToStringUni(((nint*)argv)[i]) ?? "";
-            return args;
-        }
-        finally
-        {
-            Win32.LocalFree(argv);
-        }
-    }
+    internal static string? ExeOf(string command) => Doctor.ExeOf(command);
 
     // Notifications
 
@@ -532,14 +505,8 @@ internal static unsafe partial class DoctorProbe
 
     // Crash reports
 
-    /// <summary>Crash reports in a folder, or why the folder could not be listed.</summary>
-    public readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
-
-    /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
-    public readonly record struct CrashPeek(string? Text, string? Unreadable);
-
     /// <summary>Lists crash reports. A missing folder has none. A folder that cannot be listed says why.</summary>
-    public static CrashFolderRead ReadCrashReports(string folder)
+    public static Doctor.CrashFolderRead ReadCrashReports(string folder)
     {
         if (!Directory.Exists(folder))
             return new([], null);
@@ -558,7 +525,7 @@ internal static unsafe partial class DoctorProbe
         ReadCrashReports(folder).Reports;
 
     /// <summary>The first lines of a crash report. A file that does not start with the report heading is ignored.</summary>
-    public static CrashPeek PeekCrash(string path)
+    public static Doctor.CrashPeek PeekCrash(string path)
     {
         try
         {

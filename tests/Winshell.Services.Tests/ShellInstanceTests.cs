@@ -217,6 +217,84 @@ public sealed class ShellInstanceTests
         Assert.Equal((true, "old"), (response.Ok, response.Value));
         var request = JsonSerializer.Deserialize(await answering, IpcJson.Default.IpcRequest)!;
         Assert.Equal(IpcProtocol.Current, request.Protocol);
+        Assert.Equal(ProductVersion.Current.Text, request.Winshell);
+    }
+
+    [Fact]
+    public async Task A_client_of_another_release_is_refused_before_the_shell_acts()
+    {
+        var control = new FakeControl();
+        var (pipe, loop, server) = Serve(control);
+        using var _ = server;
+        var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
+
+        var line = await AskRaw(pipe, $$"""{"op":"reload","winshell":"{{other}}"}""");
+
+        var response = JsonSerializer.Deserialize(line!, IpcJson.Default.IpcResponse)!;
+        Assert.False(response.Ok);
+        Assert.Equal(IpcProtocol.ReleaseRefusal(ProductVersion.Current.Text, other), response.Error);
+        Assert.Contains("Use the winshell that matches", response.Error, StringComparison.Ordinal);
+        loop.RunDue();
+        Assert.Equal(0, control.Reloads);
+    }
+
+    [Fact]
+    public async Task A_client_of_another_release_can_still_stop_the_shell()
+    {
+        var control = new FakeControl();
+        var (pipe, loop, server) = Serve(control);
+        using var _ = server;
+        var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
+
+        var line = await Pumping(loop, () => AskRaw(pipe, $$"""{"op":"kill","winshell":"{{other}}"}"""));
+
+        Assert.True(JsonSerializer.Deserialize(line!, IpcJson.Default.IpcResponse)!.Ok);
+        loop.RunDue();
+        Assert.Equal(1, control.Quits);
+    }
+
+    [Fact]
+    public async Task A_shell_of_another_release_can_still_be_stopped_from_here()
+    {
+        var pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
+        await using var shell = IpcServer.OpenFirst(pipe);
+        var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
+        var answering = AnswerOnce(shell, $$"""{"ok":true,"winshell":"{{other}}"}""");
+
+        await Ask(pipe, new IpcRequest("kill"));
+
+        await answering;
+    }
+
+    [Fact]
+    public async Task A_client_of_this_release_is_served_and_one_with_no_release_still_is()
+    {
+        var control = new FakeControl();
+        var (pipe, loop, server) = Serve(control);
+        using var _ = server;
+        var version = JsonSerializer.Serialize(ProductVersion.Current.Text);
+
+        var same = await Pumping(loop, () => AskRaw(pipe, $$"""{"op":"show","winshell":{{version}}}"""));
+        var named = JsonSerializer.Deserialize(same!, IpcJson.Default.IpcResponse)!;
+        Assert.True(named.Ok);
+        Assert.Equal(ProductVersion.Current.Text, named.Winshell);
+
+        var old = await Pumping(loop, () => AskRaw(pipe, """{"op":"show"}"""));
+        Assert.True(JsonSerializer.Deserialize(old!, IpcJson.Default.IpcResponse)!.Ok);
+    }
+
+    [Fact]
+    public async Task A_shell_of_another_release_is_refused_with_a_plain_message()
+    {
+        var pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
+        await using var shell = IpcServer.OpenFirst(pipe);
+        var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
+        var answering = AnswerOnce(shell, $$"""{"ok":true,"winshell":"{{other}}"}""");
+
+        var error = await Assert.ThrowsAsync<IOException>(() => Ask(pipe, new IpcRequest("show")));
+
+        Assert.Equal(IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text), error.Message);
+        await answering;
     }
 
     private static async Task<string> AnswerOnce(NamedPipeServerStream shell, string answer)
@@ -246,6 +324,17 @@ public sealed class ShellInstanceTests
     public void A_client_refuses_only_a_shell_older_than_it_speaks(int shell, int oldest, int current, string? refusal)
     {
         AssertStarts(refusal, IpcProtocol.ShellRefusal(shell, current, oldest));
+    }
+
+    [Theory]
+    [InlineData(null, "1.2.3", null)]
+    [InlineData("1.2.3", "", null)]
+    [InlineData("1.2.3-dev", "1.2.3+abc", null)]
+    [InlineData("1.2.3", "1.2.4", "This shell is Winshell 1.2.3 and this winshell is 1.2.4.")]
+    [InlineData("2.0.0", "1.9.9", "This shell is Winshell 2.0.0 and this winshell is 1.9.9.")]
+    public void A_different_release_is_refused_and_a_missing_one_is_not(string? shell, string? client, string? refusal)
+    {
+        AssertStarts(refusal, IpcProtocol.ReleaseRefusal(shell, client));
     }
 
     private static void AssertStarts(string? expected, string? actual)

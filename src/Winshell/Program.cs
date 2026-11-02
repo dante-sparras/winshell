@@ -832,7 +832,7 @@ namespace Winshell
                 file = null;
                 problem = $"Winshell cannot read the config folder: {e.Message}";
             }
-            var checks = Platform.Windows.Diagnostics.Doctor.Run(DoctorContextFor(file, problem));
+            var checks = Platform.Windows.Diagnostics.Doctor.Run(DoctorContextFor(file, problem), DoctorFacts.Pc);
             if (o.Json)
             {
                 Console.WriteLine(Platform.Windows.Diagnostics.Doctor.ToJson(checks, Version));
@@ -869,7 +869,7 @@ namespace Winshell
 
         private sealed class CliDoctor(Func<DoctorContext> context) : IDoctor
         {
-            public IReadOnlyList<DoctorCheck> Run() => Platform.Windows.Diagnostics.Doctor.Run(context());
+            public IReadOnlyList<DoctorCheck> Run() => Platform.Windows.Diagnostics.Doctor.Run(context(), DoctorFacts.Pc);
         }
 
         private static InstanceChoice Select(Options o, bool includeDead = false)

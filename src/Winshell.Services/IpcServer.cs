@@ -15,13 +15,15 @@ internal sealed record IpcRequest(
     [property: JsonPropertyName("args")] List<string>? Args = null,
     [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false,
     [property: JsonPropertyName("hard"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hard = false,
-    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0);
+    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0,
+    [property: JsonPropertyName("winshell"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] string? Winshell = null);
 
 internal sealed record IpcResponse(
     [property: JsonPropertyName("ok")] bool Ok,
     [property: JsonPropertyName("value")] string? Value = null,
     [property: JsonPropertyName("error")] string? Error = null,
-    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0);
+    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0,
+    [property: JsonPropertyName("winshell"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] string? Winshell = null);
 
 [JsonSerializable(typeof(IpcRequest))]
 [JsonSerializable(typeof(IpcResponse))]
@@ -47,6 +49,22 @@ internal static class IpcProtocol
     /// <summary>Why a client speaking <paramref name="current"/> refuses a shell speaking <paramref name="shell"/>, or null. A newer shell decides for itself.</summary>
     public static string? ShellRefusal(int shell, int current = Current, int oldest = Oldest) =>
         shell >= oldest ? null : Mismatch(shell, current);
+
+    /// <summary>
+    /// Why a shell of release <paramref name="shell"/> refuses a winshell of release <paramref name="client"/>, or null.
+    /// A side that names no release is allowed, so a peer from before this check still answers. The release is
+    /// major.minor.patch: a prerelease and a build id do not refuse.
+    /// </summary>
+    public static string? ReleaseRefusal(string? shell, string? client)
+    {
+        if (string.IsNullOrEmpty(shell) || string.IsNullOrEmpty(client))
+            return null;
+        var left = ProductVersion.Parse(shell);
+        var right = ProductVersion.Parse(client);
+        if (left.Major == right.Major && left.Minor == right.Minor && left.Patch == right.Patch)
+            return null;
+        return $"This shell is Winshell {shell} and this winshell is {client}. Use the winshell that matches, or build the shell with this one.";
+    }
 
     private static string Mismatch(int shell, int client) =>
         $"This shell speaks control protocol {shell} and this winshell speaks {client}. Use the winshell that matches, or build the shell with this one.";
@@ -288,6 +306,12 @@ internal sealed class IpcServer : IDisposable
             if (IpcProtocol.ClientRefusal(request.Protocol) is { } mismatch)
             {
                 await Send(writer, new IpcResponse(false, Error: mismatch), _cancel.Token).ConfigureAwait(false);
+                return;
+            }
+            // Kill is left out: an update can change winshell under a running shell, and it must still be possible to stop it.
+            if (request.Op != "kill" && IpcProtocol.ReleaseRefusal(ProductVersion.Current.Text, request.Winshell) is { } release)
+            {
+                await Send(writer, new IpcResponse(false, Error: release), _cancel.Token).ConfigureAwait(false);
                 return;
             }
             if (request.Op is "listen" or "wait")
@@ -548,7 +572,7 @@ internal sealed class IpcServer : IDisposable
     }
 
     private static Task Send(StreamWriter writer, IpcResponse response, CancellationToken cancel) =>
-        writer.WriteLineAsync(JsonSerializer.Serialize(response with { Protocol = IpcProtocol.Current }, IpcJson.Default.IpcResponse).AsMemory(), cancel);
+        writer.WriteLineAsync(JsonSerializer.Serialize(response with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text }, IpcJson.Default.IpcResponse).AsMemory(), cancel);
 
     public void Dispose()
     {
@@ -587,7 +611,7 @@ internal sealed class IpcServer : IDisposable
             throw new IOException(refusal);
         using var reader = new StreamReader(client, Encoding.UTF8);
         await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
-        await writer.WriteLineAsync(JsonSerializer.Serialize(request with { Protocol = IpcProtocol.Current }, IpcJson.Default.IpcRequest)).ConfigureAwait(false);
+        await writer.WriteLineAsync(JsonSerializer.Serialize(request with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text }, IpcJson.Default.IpcRequest)).ConfigureAwait(false);
         while (true)
         {
             var line = await reader.ReadLineAsync(cancel).ConfigureAwait(false);
@@ -599,6 +623,8 @@ internal sealed class IpcServer : IDisposable
             // A failed response is already a sentence for the user, whichever side wrote it.
             if (response.Ok && IpcProtocol.ShellRefusal(response.Protocol) is { } mismatch)
                 throw new IOException(mismatch);
+            if (response.Ok && request.Op != "kill" && IpcProtocol.ReleaseRefusal(response.Winshell, ProductVersion.Current.Text) is { } release)
+                throw new IOException(release);
             yield return response;
         }
     }

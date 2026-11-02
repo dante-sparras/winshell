@@ -132,7 +132,7 @@ public sealed class DoctorUserConfigTests : IDisposable
         var problem = Assert.Single(DoctorProbe.UserConfigProblems(null, config, local));
 
         Assert.StartsWith(preferences + "[", problem, StringComparison.Ordinal);
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], local, Path.Combine(_dir, "crashes")));
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], local, Path.Combine(_dir, "crashes")), DoctorFacts.Pc);
         var check = checks.Single(c => c.Id == "config");
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Contains("default shell", check.Message, StringComparison.Ordinal);
@@ -183,7 +183,7 @@ public sealed class DoctorUserConfigTests : IDisposable
         File.WriteAllText(Path.Combine(config, "preferences.toml"), "colorScheme =\n");
         File.WriteAllText(root + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, root, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, root, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc);
 
         var check = checks.Single(c => c.Id == "config");
         Assert.Equal(CheckStatus.Fail, check.Status);

@@ -252,5 +252,23 @@ public sealed class SettingsPagesTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Diagnostics_checks_the_configuration_project_without_building_it()
+    {
+        var project = Path.Combine(_folder, "Mine.csproj");
+        File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var before = Directory.EnumerateFileSystemEntries(_folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+
+        var checks = SettingsAbout.Checks(_folder);
+
+        Assert.Equal(["project", "downloaded", "built", "build"], checks.Select(c => c.Id));
+        Assert.Equal("pass", checks[0].Status);
+        Assert.Equal(project, checks[0].Message);
+        Assert.Equal("fail", checks[2].Status);
+        Assert.Equal("Run winshell run once to build it.", checks[2].Fix);
+        Assert.Equal("warn", checks[3].Status);
+        Assert.Equal(before, Directory.EnumerateFileSystemEntries(_folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray());
+    }
+
     private static Log Quiet() => new() { MinimumLevel = LogLevel.Fatal };
 }

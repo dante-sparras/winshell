@@ -1,4 +1,5 @@
 using System.Globalization;
+using Winshell.Platform.Windows.Diagnostics;
 using Winshell.Updates;
 
 namespace Winshell.DefaultShell;
@@ -72,6 +73,14 @@ public static class SettingsAbout
         return string.Create(CultureInfo.InvariantCulture,
             $"{pass} passed, {warns} {(warns == 1 ? "warning" : "warnings")}, {fails} failed.");
     }
+
+    /// <summary>
+    /// The configuration project in <paramref name="configRoot"/>, as the About page lists it. The project file is
+    /// read as data. Nothing is built.
+    /// </summary>
+    public static IReadOnlyList<SettingsDiagnostic> Checks(string configRoot) =>
+        [.. Doctor.Configuration(configRoot).Select(check => new SettingsDiagnostic(
+            check.Id, Doctor.StatusName(check.Status), check.Title, check.Message, check.Fix ?? ""))];
 
     /// <summary>What Narrator reads for one check: the result, what it found, and the fix when there is one.</summary>
     public static string Spoken(SettingsDiagnostic check)

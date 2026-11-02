@@ -508,7 +508,7 @@ public sealed class DoctorTests : IDisposable
         File.WriteAllText(Path.Combine(config, "shell.qml"), "import Winshell\nShellRoot {}\n");
         var before = Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList();
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, Path.Combine(config, "shell.qml"), null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, Path.Combine(config, "shell.qml"), null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc);
 
         Assert.Equal(["windows", "dotnet", "config", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"], checks.Select(c => c.Id));
         Assert.DoesNotContain(checks, c => c.Message.StartsWith("Could not check", StringComparison.Ordinal));
@@ -539,7 +539,7 @@ public sealed class DoctorTests : IDisposable
         File.WriteAllText(root, "import Winshell\nShellRoot {\n");
         File.WriteAllText(root + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, root, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, root, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc);
 
         var check = checks.Single(c => c.Id == "config");
         Assert.Equal(CheckStatus.Fail, check.Status);
