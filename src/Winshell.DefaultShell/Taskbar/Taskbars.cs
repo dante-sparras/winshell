@@ -135,7 +135,7 @@ internal sealed class Taskbars
                 Screen = screen,
                 Anchors = Edges.Bottom | Edges.Left | Edges.Right,
                 Height = 48,
-                ExclusiveZone = 48,
+                ReservedSize = 48,
                 Backdrop = _preferences.Material,
             };
             window.Content = new TaskbarView(

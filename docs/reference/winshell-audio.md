@@ -39,17 +39,17 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | --- | --- | --- |
 | `Active` | bool, read-only | True while a session plays or records, false while it is open but idle. A device stays false. |
 | `Channels` | IReadOnlyList of [AudioChannel](#audiochannel), read-only | The speaker position of each entry of Volumes. |
-| `Device` | [AudioNode](#audionode)?, read-only | The device a session plays to or records from. Null for a device. |
-| `Muted` | bool |  |
-| `Volume` | double | The average of the channels, from 0 to 1: the slider position the Windows volume flyout shows. Setting it keeps the balance between channels. Windows cannot go above 1. |
-| `Volumes` | IReadOnlyList of double | The volume of each channel, from 0 to 1. A list of a different length sets every channel to its first entry. A session has one volume in Windows, so every entry shows it, and setting this sets it to their average. |
 | `Description` | string, read-only | The name to show. |
+| `Device` | [AudioNode](#audionode)?, read-only | The device a session plays to or records from. Null for a device. |
 | `Id` | int, read-only | A number that tells nodes apart while the shell runs. Windows does not store it. |
 | `InterfaceName` | string, read-only | For a device, the description Windows gives the endpoint, such as `Speakers`. Empty for a session. |
 | `IsPlayback` | bool, read-only | True for a playback device and for a session that plays to one. |
 | `IsSession` | bool, read-only | True for an app's audio session, false for a device. |
+| `Muted` | bool |  |
 | `Name` | string, read-only | For a device, the Windows endpoint id. For a session, the program's file name without `.exe`, or `system-sounds`. |
 | `Properties` | IReadOnlyDictionary of string, string, read-only | More about the node. A device has `endpointId`, `friendlyName`, `interfaceName`, `flow`, `adapter`, `icon` and `formFactor`. A session has `sessionId`, `friendlyName`, `flow`, `appName`, `icon`, `processId` and `processName`. |
+| `Volume` | double | The average of the channels, from 0 to 1: the slider position the Windows volume flyout shows. Setting it keeps the balance between channels. Windows cannot go above 1. |
+| `Volumes` | IReadOnlyList of double | The volume of each channel, from 0 to 1. A list of a different length sets every channel to its first entry. A session has one volume in Windows, so every entry shows it, and setting this sets it to their average. |
 
 ## AudioPeakMonitor
 

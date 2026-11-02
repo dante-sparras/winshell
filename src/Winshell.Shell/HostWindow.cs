@@ -239,18 +239,17 @@ internal sealed unsafe class HostWindow : IDisposable
         if (monitor is null)
             return;
         _scale = monitor.Scale;
-        var edge = ExclusionEdge(p.Anchors);
-        var zone = (int)Math.Round(p.ExclusiveZone * _scale);
+        var edge = ReservedEdge(p.Anchors);
+        var size = (int)Math.Round(p.ReservedSize * _scale);
         RECT area;
-        if (p.ExclusionMode == PanelExclusionMode.Ignore)
+        if (p.CoversScreen)
         {
-            // Ignore: the whole monitor, over the taskbar and other bars.
             RemoveAppBar();
             area = monitor.Bounds;
         }
-        else if (edge is { } e && zone > 0 && _visible)
+        else if (edge is { } e && size > 0 && _visible)
         {
-            area = ReserveAppBar(e, zone, monitor.Bounds);
+            area = ReserveAppBar(e, size, monitor.Bounds);
         }
         else
         {
@@ -265,7 +264,7 @@ internal sealed unsafe class HostWindow : IDisposable
         Move(rect.Left, rect.Top, rect.Width, rect.Height, after);
     }
 
-    private static Edges? ExclusionEdge(Edges anchors)
+    private static Edges? ReservedEdge(Edges anchors)
     {
         var h = anchors.HasFlag(Edges.Left) ^ anchors.HasFlag(Edges.Right);
         var v = anchors.HasFlag(Edges.Top) ^ anchors.HasFlag(Edges.Bottom);
