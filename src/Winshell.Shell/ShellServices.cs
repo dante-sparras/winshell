@@ -106,6 +106,9 @@ public sealed partial class Shell
     /// <summary>What <see cref="Updates"/> follows. <c>winshell.exe</c> sets it, and a configuration's program leaves it null.</summary>
     internal Updater? Updater { get; set; }
 
+    /// <summary>Winshell's own notices. Set as the shell starts.</summary>
+    internal ShellNotices? Notices { get; set; }
+
     /// <summary>A hotkey that works anywhere in Windows. Set its <see cref="Hotkey.Sequence"/>, and dispose it to give the keys back.</summary>
     public Hotkey NewHotkey() => new(Loop);
 
