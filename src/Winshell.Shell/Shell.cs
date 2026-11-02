@@ -68,6 +68,9 @@ public sealed partial class Shell : IDisposable
         Platform = new ShellPlatform(loop, log);
     }
 
+    /// <summary>The project folder <c>winshell dev</c> runs, where a shell follows its <c>.xaml</c> files.</summary>
+    internal const string DevProjectVariable = "WINSHELL_DEV_PROJECT";
+
     /// <summary>The shell of this process, or null before <see cref="Run{T}"/> has started it.</summary>
     internal static Shell? Running => _current;
 
@@ -244,6 +247,8 @@ public sealed partial class Shell : IDisposable
                         // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
                         if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
                             TomlFile.ErrorChanged += notices.ShowConfigError;
+                        if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
+                            XamlReload.Watch(shell, project);
                         instance.Listen(loop, new Control(shell), notices.Hide);
                         instance.Publish(identity.ShellId);
                         configuration.Start(shell);
