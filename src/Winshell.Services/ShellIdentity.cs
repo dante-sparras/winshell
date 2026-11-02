@@ -52,7 +52,7 @@ internal sealed record ShellIdentity(string ShellId, string DataDir, string Stat
         if (folder is null)
             return null;
         var text = Environment.ExpandEnvironmentVariables(folder.Replace("$BASE", baseDir, StringComparison.Ordinal));
-        // An empty pragma used to fail in GetFullPath. Keep that, instead of treating it as the shell folder.
+        // An empty folder fails in GetFullPath, and does not read as the shell folder.
         if (text.Length == 0)
             return Path.GetFullPath(text);
         if (!Path.IsPathRooted(text))

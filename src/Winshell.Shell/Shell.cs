@@ -20,9 +20,6 @@ public sealed record ShellOptions
     /// </summary>
     public string? ShellId { get; init; }
 
-    /// <summary>The app id the shell shows Windows, as <c>WINSHELL_APP_ID</c> does.</summary>
-    public string? AppId { get; init; }
-
     /// <summary>
     /// Another folder for <see cref="Shell.DataDir"/>. A relative path is next to the program, <c>%NAME%</c> expands,
     /// and <c>$BASE</c> is the folder above <c>by-shell</c>, such as <c>%LOCALAPPDATA%\winshell\data</c>.
@@ -41,12 +38,6 @@ public sealed record ShellOptions
     /// A configuration's own program leaves this null.
     /// </summary>
     public Updater? Updater { get; init; }
-
-    /// <summary>
-    /// A <c>shell.qml</c> left behind, with no project. The shell says once, as it starts, that QML configurations
-    /// stopped working. Null when there is nothing to say.
-    /// </summary>
-    internal string? RetiredQml { get; init; }
 }
 
 /// <summary>A configuration: the program that defines a shell. <see cref="Start"/> makes its windows.</summary>
@@ -251,8 +242,6 @@ public sealed partial class Shell : IDisposable
                         instance.Publish(identity.ShellId);
                         configuration.Start(shell);
                         ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
-                        if (options.RetiredQml is { Length: > 0 } qml)
-                            loop.Post(() => notices.Show(ShellNotices.ForRetiredQml(qml)));
 #if DEBUG
                         if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
                             throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash as it started.");

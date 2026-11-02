@@ -179,7 +179,7 @@ public sealed partial class CrashReports(string folder)
         }
     }
 
-    /// <summary><c>crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-qml.txt</c>: the UTC instant, the process, where.</summary>
+    /// <summary><c>crash-20261029-140312-1234567Z-4321-winshell.txt</c>: the UTC instant, the process, where.</summary>
     private static string FileName(long utcTicks, string where) =>
         $"crash-{new DateTime(utcTicks, DateTimeKind.Utc).ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-{Environment.ProcessId}-{Slug(where)}.txt";
 

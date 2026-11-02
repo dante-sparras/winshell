@@ -63,7 +63,6 @@ What a configuration sets before its shell starts.
 | Member | Type | Description |
 | --- | --- | --- |
 | `ShellOptions()` | constructor |  |
-| `AppId` | string?, init | The app id the shell shows Windows, as `WINSHELL_APP_ID` does. |
 | `CacheDir` | string?, init | Another folder for CacheDir, read as DataDir is. |
 | `DataDir` | string?, init | Another folder for DataDir. A relative path is next to the program, `%NAME%` expands, and `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
 | `ShellId` | string?, init | The name that identifies this configuration across runs. It names its data, state and cache folders. Without it, a program in the config folder is named after its folder, and one anywhere else after its path. |

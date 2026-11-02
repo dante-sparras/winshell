@@ -6,7 +6,6 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// <c>winshell ipc call notice dismiss</c> closes whichever notice is showing, and it takes no arguments.
-/// A leftover <c>shell.qml</c> still starts the default shell, which is what shows that notice.
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
 public sealed class NoticeDismissIpcTests : IDisposable
@@ -17,11 +16,10 @@ public sealed class NoticeDismissIpcTests : IDisposable
     private readonly List<Process> _started = [];
 
     [Fact]
-    public void Notice_dismiss_reaches_a_shell_that_started_from_a_leftover_qml_file()
+    public void Notice_dismiss_reaches_a_running_shell_and_takes_no_arguments()
     {
-        var config = Path.Combine(_dir, "leftover");
+        var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
-        File.WriteAllText(Path.Combine(config, "shell.qml"), "import QtQuick\nItem {}\n");
         var process = Start(config);
 
         var pid = process.Id.ToString(CultureInfo.InvariantCulture);

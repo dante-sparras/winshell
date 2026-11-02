@@ -5,7 +5,7 @@
     <IsPackable>true</IsPackable>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <PackageId>Winshell</PackageId>
-    <Description>The library a Winshell configuration references: services and WinUI windows, with no QML runtime.</Description>
+    <Description>The library a Winshell configuration references: services and WinUI windows.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/dante-sparras/winshell</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -13,7 +13,7 @@
     <!-- The project's own assembly is a marker. The package carries the two libraries below. -->
   </PropertyGroup>
 
-  <!-- What a configuration's project restores. WinUI is these two packages, self-contained in that project, and nothing from the QML stack. -->
+  <!-- What a configuration's project restores. WinUI is these two packages, self-contained in that project. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />

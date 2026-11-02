@@ -20,7 +20,7 @@ public sealed class LogSelectorTests : IDisposable
             ["id"] = StoppedId,
             ["pid"] = int.MaxValue - 1,
             ["shellId"] = "stopped",
-            ["configPath"] = Path.Combine(_root, "shell.qml"),
+            ["configPath"] = Path.Combine(_root, "MyShell.exe"),
             ["launchTime"] = DateTime.Now.AddHours(-1),
             ["pipe"] = "winshell-" + StoppedId,
             ["log"] = log,

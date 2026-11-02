@@ -43,8 +43,6 @@ A failure before that log exists, such as no project and no default shell to run
 
 A build that fails prints why and does not start a program. `Building a configuration needs the .NET SDK, from https://dot.net/download.` is the message when the SDK is missing. A downloaded `.csproj`, or a `.props` or `.targets` beside it, is refused before the build: the file name, then `was downloaded from the internet. It runs as you.`
 
-A folder that has a `shell.qml` and no `.csproj` runs the default shell. A notice says QML configurations stopped working. There is no converter.
-
 Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2.
 
 ## Pick an instance
@@ -154,7 +152,7 @@ An unexpected failure of `list`, `kill`, `reload`, `log`, `ipc` or `doctor` prin
 
 | Variable | What it does |
 | --- | --- |
-| `WINSHELL_CONFIG_DIR` | The folder configurations load from, instead of `%APPDATA%\winshell`. With it set, an old `%USERPROFILE%\.config\winshell` isn't copied. |
+| `WINSHELL_CONFIG_DIR` | The folder configurations load from, instead of `%APPDATA%\winshell`. |
 | `WINLAND_PIPE` | The named pipe [`Winshell.Winland`](winshell-winland.md) connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 ## Files

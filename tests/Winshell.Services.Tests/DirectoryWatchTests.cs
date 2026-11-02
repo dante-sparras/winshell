@@ -12,12 +12,12 @@ public sealed class DirectoryWatchTests : IDisposable
         using var seen = new ManualResetEventSlim();
         using var watch = DirectoryWatch.Start(_directory, DirectoryWatch.FileChanges, name =>
         {
-            if (name == "made.qml")
+            if (name == "made.txt")
                 seen.Set();
         }, () => { });
         Assert.NotNull(watch);
 
-        File.WriteAllText(Path.Combine(_directory, "made.qml"), "");
+        File.WriteAllText(Path.Combine(_directory, "made.txt"), "");
 
         Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The new file was not reported.");
     }
@@ -29,7 +29,7 @@ public sealed class DirectoryWatchTests : IDisposable
         DirectoryWatch? watch = null;
         var starter = new Thread(() => watch = DirectoryWatch.Start(_directory, DirectoryWatch.FileChanges, name =>
         {
-            if (name == "made.qml")
+            if (name == "made.txt")
                 seen.Set();
         }, () => { }));
         starter.Start();
@@ -38,7 +38,7 @@ public sealed class DirectoryWatchTests : IDisposable
         {
             Assert.NotNull(watch);
 
-            File.WriteAllText(Path.Combine(_directory, "made.qml"), "");
+            File.WriteAllText(Path.Combine(_directory, "made.txt"), "");
 
             Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The new file was not reported.");
         }

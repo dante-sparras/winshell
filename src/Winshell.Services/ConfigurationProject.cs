@@ -68,25 +68,6 @@ internal sealed class ConfigurationProject
         return Path.GetFileName(full).Equals(project.AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase) ? project : null;
     }
 
-    /// <summary>
-    /// A <c>shell.qml</c> left where a configuration used to be, when no project would run instead. Null when a project
-    /// is selected, when none can be chosen, or when there is no such file. Several QML-only folders still name one
-    /// file, so the default shell can say that QML configurations stopped working.
-    /// </summary>
-    public static string? LeftoverQml(string? path, string? name, string root)
-    {
-        try
-        {
-            if (Find(path, name, root, out var error) is not null || error is not null)
-                return null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-        return QmlChoice(path, name, root);
-    }
-
     public string Program => Path.Combine(OutputFolder, AssemblyName() + ".exe");
 
     /// <summary>
@@ -108,16 +89,13 @@ internal sealed class ConfigurationProject
             var full = Path.GetFullPath(path);
             if (File.Exists(full))
             {
-                // A leftover shell.qml is not a project and not an error: the default shell runs and says so.
                 if (full.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
                     return new ConfigurationProject(full);
-                if (IsShellQml(full))
-                    return null;
                 error = $"No .csproj at {full}";
                 return null;
             }
             var found = In(full, out error);
-            if (found is null && error is null && !File.Exists(Path.Combine(full, "shell.qml")))
+            if (found is null && error is null)
                 error = $"No .csproj at {full}";
             return found;
         }
@@ -125,7 +103,7 @@ internal sealed class ConfigurationProject
         {
             var folder = Path.Combine(root, name);
             var found = In(folder, out error);
-            if (found is null && error is null && !File.Exists(Path.Combine(folder, "shell.qml")))
+            if (found is null && error is null)
                 error = $"No config named \"{name}\" in {root}";
             return found;
         }
@@ -336,41 +314,6 @@ internal sealed class ConfigurationProject
 
     private static string[] Projects(string folder) =>
         Directory.Exists(folder) ? Directory.GetFiles(folder, "*.csproj") : [];
-
-    private static bool IsShellQml(string path) =>
-        Path.GetFileName(path).Equals("shell.qml", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>The <c>shell.qml</c> the old resolver would have run: the path, the named folder, the root, <c>default</c>, then one folder.</summary>
-    private static string? QmlChoice(string? path, string? name, string root)
-    {
-        if (path is not null)
-        {
-            var full = Path.GetFullPath(path);
-            if (File.Exists(full) && IsShellQml(full))
-                return full;
-            var inDir = Path.Combine(full, "shell.qml");
-            return File.Exists(inDir) ? inDir : null;
-        }
-        if (name is not null)
-        {
-            var named = Path.Combine(root, name, "shell.qml");
-            return File.Exists(named) ? named : null;
-        }
-        var top = Path.Combine(root, "shell.qml");
-        if (File.Exists(top))
-            return top;
-        var fallback = Path.Combine(root, "default", "shell.qml");
-        if (File.Exists(fallback))
-            return fallback;
-        if (!Directory.Exists(root))
-            return null;
-        var configs = Directory.EnumerateDirectories(root)
-            .Select(folder => Path.Combine(folder, "shell.qml"))
-            .Where(File.Exists)
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        return configs.Count > 0 ? configs[0] : null;
-    }
 
     /// <summary>The project's files. <c>bin</c>, <c>obj</c> and dot folders are what a build and an editor write.</summary>
     private static IEnumerable<string> Sources(string folder)

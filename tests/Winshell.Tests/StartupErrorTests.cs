@@ -21,17 +21,17 @@ public class StartupErrorTests
     [Fact]
     public void No_console_asks_the_dialog_with_the_message_and_the_folder()
     {
-        var seen = Asked(() => StartupError.Report("No shell.qml at C:\\missing", "C:\\configs", consoleWindow: 0, stderrType: 0));
+        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing", "C:\\configs", consoleWindow: 0, stderrType: 0));
 
         var call = Assert.Single(seen);
-        Assert.Equal("No shell.qml at C:\\missing", call.Message);
+        Assert.Equal("No .csproj at C:\\missing", call.Message);
         Assert.Equal("C:\\configs", call.Folder);
     }
 
     [Fact]
     public void A_console_does_not_ask_the_dialog()
     {
-        var seen = Asked(() => StartupError.Report("No shell.qml at C:\\missing", "C:\\configs", consoleWindow: 1, stderrType: 2));
+        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing", "C:\\configs", consoleWindow: 1, stderrType: 2));
 
         Assert.Empty(seen);
     }
@@ -48,14 +48,14 @@ public class StartupErrorTests
     public void A_path_opens_that_folder_and_a_missing_root_opens_nothing()
     {
         var root = Path.Combine(Path.GetTempPath(), "winshell-startup-error-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(root, "shell.qml");
+        var path = Path.Combine(root, "MyShell.exe");
         Directory.CreateDirectory(root);
         try
         {
             Assert.Equal(root, StartupError.FolderFor(path, Path.Combine(root, "absent")));
             Assert.Equal(root, StartupError.FolderFor(null, root));
             Assert.Null(StartupError.FolderFor(null, Path.Combine(root, "absent")));
-            Assert.Null(StartupError.FolderFor(Path.Combine(root, "gone", "shell.qml"), root));
+            Assert.Null(StartupError.FolderFor(Path.Combine(root, "gone", "MyShell.exe"), root));
         }
         finally
         {

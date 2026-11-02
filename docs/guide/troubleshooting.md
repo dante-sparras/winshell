@@ -29,8 +29,6 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 
 Started from Start or at sign-in, and Winshell cannot start? It shows a dialog with the same text, because those starts have no console window. **Open config folder** opens the folder the message is about. A console, including `winshell -d` from a terminal, prints the text and shows no dialog. Nothing in the dialog and nothing on screen means the shell is already running (`--no-duplicate`) or it started and the failure is in the log.
 
-A leftover `shell.qml` with no `.csproj` does not fail this way. The default shell runs, and a notice says QML configurations stopped working.
-
 ## The build failed
 
 A notice says the configuration did not build, with the compiler's lines. **Open file** opens the project. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`.

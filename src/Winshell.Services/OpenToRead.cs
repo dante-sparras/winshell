@@ -7,20 +7,15 @@ namespace Winshell;
 internal static class OpenToRead
 {
     /// <summary>
-    /// Opens a file off the loop, so a slow app does not hold up the shell. A crash report and a <c>.qml</c> file open with
-    /// what Windows opens them with. Any other file opens with its edit verb, since opening a <c>.js</c> file runs it in
-    /// Windows Script Host. A file no app opens that way is shown selected in File Explorer.
+    /// Opens a file off the loop, so a slow app does not hold up the shell. A crash report opens with what Windows opens
+    /// it with. Any other file opens with its edit verb, since opening a script runs it. A file no app opens that way is
+    /// shown selected in File Explorer.
     /// </summary>
     public static void Open(string path, Log log) => _ = Task.Run(() => OpenNow(path, log));
 
-    /// <summary>The verb a file is opened with: null for the default, which only a report or a <c>.qml</c> file gets.</summary>
-    internal static string? VerbFor(string path)
-    {
-        var extension = Path.GetExtension(path);
-        return extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) || extension.Equals(".qml", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : "edit";
-    }
+    /// <summary>The verb a file is opened with: null for the default, which only a report gets.</summary>
+    internal static string? VerbFor(string path) =>
+        Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase) ? null : "edit";
 
     private static void OpenNow(string path, Log log)
     {
