@@ -3,6 +3,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
 using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell;
@@ -92,7 +93,7 @@ public sealed partial class TaskbarClock : Button
         var point = TransformToVisual(null).TransformPoint(default);
         var origin = _bar.Origin;
         _popup.Screen = screen;
-        _popup.Rect = CalendarFlyoutPlacement.Place(new QRect(origin.X + point.X, origin.Y + point.Y, ActualWidth, ActualHeight), screen.WorkArea);
+        _popup.Rect = CalendarFlyoutPlacement.Place(new Rect(origin.X + point.X, origin.Y + point.Y, ActualWidth, ActualHeight), screen.WorkArea);
         _popup.Backdrop = _preferences.Material;
         _month.Date = _time.GetLocalNow().LocalDateTime;
         _month.Today();

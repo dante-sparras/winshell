@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.Foundation;
 
 namespace Winshell.DefaultShell.Taskbar;
 
@@ -397,7 +398,7 @@ public sealed class TaskPreview : ObservableObject, IDisposable
     /// <summary>
     /// Where the popup sits: centered on the button, <see cref="Gap"/> pixels above it, kept inside the work area.
     /// </summary>
-    public static QRect Place(QRect button, double width, double height, QRect work)
+    public static Rect Place(Rect button, double width, double height, Rect work)
     {
         var x = button.X + button.Width / 2 - width / 2;
         var y = button.Top - Gap - height;
@@ -405,7 +406,7 @@ public sealed class TaskPreview : ObservableObject, IDisposable
             x = Math.Clamp(x, work.Left, Math.Max(work.Left, work.Right - width));
         if (work.Height > 0)
             y = Math.Clamp(y, work.Top, Math.Max(work.Top, work.Bottom - height));
-        return new QRect(x, y, width, height);
+        return new Rect(x, y, width, height);
     }
 
     /// <summary>

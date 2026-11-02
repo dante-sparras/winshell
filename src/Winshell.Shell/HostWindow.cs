@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
 using WinRT;
@@ -52,7 +53,7 @@ internal sealed unsafe class HostWindow : IDisposable
     private bool _fullscreenAppActive;
     private bool _clickThrough;
     private bool _focusable;
-    private QPoint _origin;
+    private Point _origin;
     private string _screenId = "";
     private bool _placing;
     private bool _failed;
@@ -110,7 +111,7 @@ internal sealed unsafe class HostWindow : IDisposable
 
     public bool IsVisible => _visible;
 
-    public QPoint Origin => _origin;
+    public Point Origin => _origin;
 
     public double Scale => _scale;
 
@@ -370,7 +371,7 @@ internal sealed unsafe class HostWindow : IDisposable
         SetExStyle(Win32.WS_EX_NOACTIVATE, !placement.GrabFocus);
         // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
         var monitors = Screens.Enumerate();
-        var at = DesktopSpace.MonitorAt(new QPoint(placement.Rect.X, placement.Rect.Y), monitors.Select(m => m.Info.Geometry).ToList());
+        var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y), monitors.Select(m => m.Info.Geometry).ToList());
         var monitor = monitors.FirstOrDefault(m => m.Info.Id == placement.Screen?.Id) ?? (at is { } i ? monitors[i] : monitors.FirstOrDefault());
         if (monitor is null)
             return;
@@ -562,7 +563,7 @@ internal sealed unsafe class HostWindow : IDisposable
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
             normal = RestoredScreenRect(placement, shown);
-        var logical = bounds.Width > 0 ? DesktopSpace.ToLogical(normal, bounds, scale) : new QRect(0, 0, normal.Width, normal.Height);
+        var logical = bounds.Width > 0 ? DesktopSpace.ToLogical(normal, bounds, scale) : new Rect(0, 0, normal.Width, normal.Height);
         return new SavedFloatingPlace(
             (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE),
             scale,
@@ -833,7 +834,7 @@ internal sealed unsafe class HostWindow : IDisposable
     }
 
 
-    public void SetInputRegion(IReadOnlyList<QRect>? rects)
+    public void SetInputRegion(IReadOnlyList<Rect>? rects)
     {
         if (rects is null)
         {
@@ -874,7 +875,7 @@ internal sealed unsafe class HostWindow : IDisposable
     public void SetOpacity(double opacity) => _root.Opacity = opacity;
 
     /// <summary>Clips the content to a rectangle in logical window coordinates. It does not change <see cref="SetInputRegion"/>.</summary>
-    public void SetVisibleMask(QRect? bounds) => _root.Clip = bounds is { } b
+    public void SetVisibleMask(Rect? bounds) => _root.Clip = bounds is { } b
         ? new RectangleGeometry { Rect = new global::Windows.Foundation.Rect(b.X, b.Y, b.Width, b.Height) }
         : null;
 

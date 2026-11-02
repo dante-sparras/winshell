@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.Foundation;
 using Winshell;
 using Winshell.DefaultShell.Taskbar;
 
@@ -233,13 +234,13 @@ public sealed class TaskPreviewTests
     [Fact]
     public void The_preview_sits_above_the_button_and_inside_the_work_area()
     {
-        var work = new QRect(0, 0, 1920, 1080);
-        var placed = TaskPreview.Place(new QRect(100, 1000, 40, 48), 200, 160, work);
-        Assert.Equal(new QRect(20, 832, 200, 160), placed);
+        var work = new Rect(0, 0, 1920, 1080);
+        var placed = TaskPreview.Place(new Rect(100, 1000, 40, 48), 200, 160, work);
+        Assert.Equal(new Rect(20, 832, 200, 160), placed);
 
-        Assert.Equal(0, TaskPreview.Place(new QRect(0, 1000, 40, 48), 200, 160, work).X);
-        Assert.Equal(1720, TaskPreview.Place(new QRect(1900, 1000, 40, 48), 200, 160, work).X);
-        Assert.Equal(0, TaskPreview.Place(new QRect(100, 20, 40, 48), 200, 160, work).Y);
+        Assert.Equal(0, TaskPreview.Place(new Rect(0, 1000, 40, 48), 200, 160, work).X);
+        Assert.Equal(1720, TaskPreview.Place(new Rect(1900, 1000, 40, 48), 200, 160, work).X);
+        Assert.Equal(0, TaskPreview.Place(new Rect(100, 20, 40, 48), 200, 160, work).Y);
     }
 
     [Fact]

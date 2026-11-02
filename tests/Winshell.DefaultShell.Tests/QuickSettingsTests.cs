@@ -1,4 +1,5 @@
 using System.Reflection;
+using Windows.Foundation;
 using Windows.Media.Control;
 using Windows.System;
 using Winshell.Audio;
@@ -643,7 +644,7 @@ public sealed class QuickSettingsTests
     [Fact]
     public void Quick_settings_sits_above_its_button_and_lines_up_on_the_right()
     {
-        var button = new QRect(1000, 800, 40, 32);
+        var button = new Rect(1000, 800, 40, 32);
         var placed = QuickSettingsPlacement.Above(button, 420);
         Assert.Equal(button.Right - QuickSettingsPlacement.Width, placed.X);
         Assert.Equal(button.Top - QuickSettingsPlacement.Gap - 420, placed.Y);

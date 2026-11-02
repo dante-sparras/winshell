@@ -1,3 +1,5 @@
+using Windows.Foundation;
+
 namespace Winshell;
 
 internal enum WindowKind
@@ -43,8 +45,8 @@ internal sealed record FloatingPlacement(
     string Title,
     double Width,
     double Height,
-    QSize MinimumSize,
-    QSize MaximumSize,
+    Size MinimumSize,
+    Size MaximumSize,
     bool Maximized,
     bool Minimized,
     bool Fullscreen = false,

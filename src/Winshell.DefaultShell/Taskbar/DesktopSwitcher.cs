@@ -1,3 +1,5 @@
+using Windows.Foundation;
+
 namespace Winshell.DefaultShell.Taskbar;
 
 /// <summary>What a row of the Win+X menu does.</summary>
@@ -230,7 +232,7 @@ public static class DesktopChordLayout
     public static bool ShowDesktops(bool supported, int count) => supported && count > 0;
 
     /// <summary>Centered above the taskbar, one gap up. The width stops short of the screen edges.</summary>
-    public static QRect Switcher(QRect bar, double screenWidth, int windows, bool desktops)
+    public static Rect Switcher(Rect bar, double screenWidth, int windows, bool desktops)
     {
         var room = Math.Max(200, screenWidth - 48);
         var cards = windows == 0 ? 200 : Math.Min(Math.Max(windows * 208 - 8, 1), room);
@@ -239,13 +241,13 @@ public static class DesktopChordLayout
             height += 40;
         var width = cards + 16;
         var x = bar.X + Math.Max(0, (bar.Width - width) / 2);
-        return new QRect(x, bar.Y - height - 12, width, height);
+        return new Rect(x, bar.Y - height - 12, width, height);
     }
 
     /// <summary>The top left of the taskbar, opening upward.</summary>
-    public static QRect Power(QRect bar, int commands)
+    public static Rect Power(Rect bar, int commands)
     {
         var height = 8 + Math.Max(commands, 1) * 36;
-        return new QRect(bar.X, bar.Y - height - 8, 280, height);
+        return new Rect(bar.X, bar.Y - height - 8, 280, height);
     }
 }

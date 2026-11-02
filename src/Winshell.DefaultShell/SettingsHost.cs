@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.Foundation;
 using Winshell.DefaultShell.Taskbar;
 using Winshell.Input;
 
@@ -62,7 +63,7 @@ internal sealed class SettingsHost
             Title = "Winshell Settings",
             Width = SettingsCatalog.WindowWidth,
             Height = SettingsCatalog.WindowHeight,
-            MinimumSize = new QSize(SettingsCatalog.MinimumWidth, SettingsCatalog.MinimumHeight),
+            MinimumSize = new Size(SettingsCatalog.MinimumWidth, SettingsCatalog.MinimumHeight),
             Backdrop = WindowBackdrop.Mica,
             Content = _view,
         };

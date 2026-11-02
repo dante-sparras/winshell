@@ -1,3 +1,4 @@
+using Windows.Foundation;
 using Winshell.Apps;
 using Winshell.DefaultShell.Taskbar;
 
@@ -12,13 +13,13 @@ public sealed class StartTests : IDisposable
     [Fact]
     public void Start_sits_above_the_taskbar_and_slides_into_the_work_area()
     {
-        var wide = new QRect(0, 0, 1920, 1000);
-        var bar = new QRect(0, 1000, 1920, 48);
-        Assert.Equal(new QRect(640, 268, 640, 720), StartPlacement.Above(bar, wide, centered: true, startButtonX: 12));
-        Assert.Equal(new QRect(12, 268, 640, 720), StartPlacement.Above(bar, wide, centered: false, startButtonX: 12));
-        Assert.Equal(new QRect(740, 268, 640, 720), StartPlacement.Above(new QRect(100, 1000, 1920, 48), wide, centered: true, 0));
-        Assert.Equal(new QRect(0, 268, 500, 720), StartPlacement.Above(bar, new QRect(0, 0, 500, 1000), centered: false, startButtonX: 800));
-        Assert.Equal(new QRect(640, 0, 640, 388), StartPlacement.Above(new QRect(0, 400, 1920, 48), new QRect(0, 0, 1920, 400), centered: true, 0));
+        var wide = new Rect(0, 0, 1920, 1000);
+        var bar = new Rect(0, 1000, 1920, 48);
+        Assert.Equal(new Rect(640, 268, 640, 720), StartPlacement.Above(bar, wide, centered: true, startButtonX: 12));
+        Assert.Equal(new Rect(12, 268, 640, 720), StartPlacement.Above(bar, wide, centered: false, startButtonX: 12));
+        Assert.Equal(new Rect(740, 268, 640, 720), StartPlacement.Above(new Rect(100, 1000, 1920, 48), wide, centered: true, 0));
+        Assert.Equal(new Rect(0, 268, 500, 720), StartPlacement.Above(bar, new Rect(0, 0, 500, 1000), centered: false, startButtonX: 800));
+        Assert.Equal(new Rect(640, 0, 640, 388), StartPlacement.Above(new Rect(0, 400, 1920, 48), new Rect(0, 0, 1920, 400), centered: true, 0));
     }
 
     [Fact]

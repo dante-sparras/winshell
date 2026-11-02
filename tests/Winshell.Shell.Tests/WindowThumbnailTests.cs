@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
 
 namespace Winshell.ShellTests;
 
@@ -15,7 +16,7 @@ public sealed class WindowThumbnailTests
             var thumbnail = new WindowThumbnail { Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 40, screen.Y + 40, 200, 120),
+                Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
                 Content = new Grid { Children = { thumbnail } },
             };
             popup.Visible = true;
@@ -38,7 +39,7 @@ public sealed class WindowThumbnailTests
             var thumbnail = new WindowThumbnail { Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 40, screen.Y + 40, 200, 120),
+                Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
                 Content = new Grid { Children = { thumbnail } },
             };
             popup.Visible = true;
