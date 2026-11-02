@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Winshell;
 
 /// <summary>
-/// How much of a TOML file Winshell will read. A preferences file is a dozen keys.
+/// How much of a TOML file Winshell reads. A preferences file is a dozen keys.
 /// </summary>
 internal static class DataLimits
 {
