@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <PackageId>Winshell</PackageId>
+    <Description>The library a Winshell configuration references: services and WinUI windows, with no QML runtime.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/dante-sparras/winshell</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) 2026 Dante Sparrås</Copyright>
+    <!-- The project's own assembly is a marker. The package carries the two libraries below. -->
+  </PropertyGroup>
+
+  <!-- What a configuration's project restores. WinUI is these two packages, self-contained in that project, and nothing from the QML stack. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.Win32.SystemEvents" />
+    <PackageReference Include="System.Management" />
+    <PackageReference Include="Tomlyn" />
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.DXGI" />
+  </ItemGroup>
+
+  <!-- Private so the package does not depend on a Winshell.Shell or Winshell.Services package. The assemblies are included below. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Winshell.Shell\Winshell.Shell.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\Winshell.Services\Winshell.Services.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- IncludeBuildOutput stays false, so the marker assembly is not packed. NuGet only
+       copies BuildOutputInPackage when IncludeBuildOutput is true, so these two go in as files. -->
+  <Target Name="IncludeWinshellAssemblies" BeforeTargets="_GetPackageFiles" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <None Include="@(ReferenceCopyLocalPaths)"
+            Condition="'%(Extension)' == '.dll' and ('%(Filename)' == 'Winshell.Shell' or '%(Filename)' == 'Winshell.Services')">
+        <Pack>true</Pack>
+        <PackagePath>lib/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
+      </None>
+    </ItemGroup>
+  </Target>
+</Project>

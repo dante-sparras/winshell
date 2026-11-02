@@ -1,3 +1,4 @@
+using Winshell.Diagnostics;
 using Winshell.Platform.Windows.Diagnostics;
 
 namespace Winshell.Platform.Windows.Tests;

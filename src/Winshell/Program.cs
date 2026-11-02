@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Winshell;
 using Winshell.Platform.Windows;
+using Winshell.Diagnostics;
 using Winshell.Platform.Windows.Diagnostics;
 using Winshell.Platform.Windows.Services.ExplorerTaskbar;
 using Winshell.Platform.Windows.Services.Updates;
@@ -832,15 +833,15 @@ namespace Winshell
                 file = null;
                 problem = $"Winshell cannot read the config folder: {e.Message}";
             }
-            var checks = Platform.Windows.Diagnostics.Doctor.Run(DoctorContextFor(file, problem), DoctorFacts.Pc);
+            var checks = Diagnostics.Doctor.Run(DoctorContextFor(file, problem), DoctorFacts.Pc);
             if (o.Json)
             {
-                Console.WriteLine(Platform.Windows.Diagnostics.Doctor.ToJson(checks, Version));
+                Console.WriteLine(Diagnostics.Doctor.ToJson(checks, Version));
             }
             else
             {
                 var color = !o.NoColor && !Console.IsOutputRedirected && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
-                Console.Write(Platform.Windows.Diagnostics.Doctor.Format(checks, Version, color));
+                Console.Write(Diagnostics.Doctor.Format(checks, Version, color));
             }
             return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;
         }
@@ -869,7 +870,7 @@ namespace Winshell
 
         private sealed class CliDoctor(Func<DoctorContext> context) : IDoctor
         {
-            public IReadOnlyList<DoctorCheck> Run() => Platform.Windows.Diagnostics.Doctor.Run(context(), DoctorFacts.Pc);
+            public IReadOnlyList<DoctorCheck> Run() => Diagnostics.Doctor.Run(context(), DoctorFacts.Pc);
         }
 
         private static InstanceChoice Select(Options o, bool includeDead = false)

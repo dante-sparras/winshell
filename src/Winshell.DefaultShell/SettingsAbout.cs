@@ -1,5 +1,5 @@
 using System.Globalization;
-using Winshell.Platform.Windows.Diagnostics;
+using Winshell.Diagnostics;
 using Winshell.Updates;
 
 namespace Winshell.DefaultShell;

@@ -1,3 +1,5 @@
+using Winshell.Diagnostics;
+
 namespace Winshell.Platform.Windows.Diagnostics;
 
 /// <summary>

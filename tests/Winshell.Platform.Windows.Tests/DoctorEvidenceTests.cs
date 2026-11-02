@@ -1,5 +1,6 @@
+using Winshell.Diagnostics;
 using Winshell.Platform.Windows.Diagnostics;
-using static Winshell.Platform.Windows.Diagnostics.Doctor;
+using static Winshell.Diagnostics.Doctor;
 
 namespace Winshell.Platform.Windows.Tests;
 
