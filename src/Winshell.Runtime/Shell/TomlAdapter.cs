@@ -7,6 +7,7 @@ using Tomlyn;
 using Tomlyn.Model;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
+using static Winshell.TomlSyntax;
 using JsObject = Jint.Native.JsObject;
 
 namespace Winshell.Runtime.Shell;
@@ -259,15 +260,7 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         return false;
     }
 
-    /// <summary><c>path[line:column]: message</c>. Tomlyn's <c>Message</c> drops the span; the span's line is 0-based.</summary>
-    private string Locate(DiagnosticMessage diagnostic) => Locate(Where, diagnostic);
-
-    private static string Locate(string where, DiagnosticMessage diagnostic)
-    {
-        var line = diagnostic.Span.Start.Line + 1;
-        var column = diagnostic.Span.Start.Column + 1;
-        return string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {diagnostic.Message}");
-    }
+    private string Locate(DiagnosticMessage diagnostic) => TomlSyntax.Locate(Where, diagnostic);
 
     /// <summary><c>path: why</c> when <paramref name="text"/> is past the byte limit, or null.</summary>
     private string? OverBudget(string text)
@@ -287,52 +280,9 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         return TryLoad(Where, text, out table, out error);
     }
 
-    /// <summary>
-    /// Whether <paramref name="text"/> loads. <paramref name="error"/> is <c>path[line:column]: message</c>, or
-    /// <c>path: message</c> for a byte limit or for Tomlyn's depth limit, when it does not. This is the parse
-    /// <see cref="Deserialize"/> uses: the syntax tree, then the table. A file past 1 MiB does not load. Nesting past
-    /// 64 levels makes Tomlyn throw, which is reported here and is not applied.
-    /// </summary>
-    internal static bool TryLoad(string where, string text, out TomlTable table, out string error)
-    {
-        if (DataLimits.FileBytes(Encoding.UTF8.GetByteCount(text), DataLimits.MaxTextBytes) is { } why)
-        {
-            table = [];
-            error = $"{where}: {why}";
-            return false;
-        }
-        DocumentSyntax document;
-        try
-        {
-            document = SyntaxParser.Parse(text);
-        }
-        catch (TomlException e)
-        {
-            table = [];
-            error = $"{where}: {e.Message}";
-            return false;
-        }
-        if (document.HasErrors)
-        {
-            table = [];
-            error = document.Diagnostics.Count > 0 ? Locate(where, document.Diagnostics[0]) : $"{where}: invalid TOML";
-            return false;
-        }
-        try
-        {
-            table = TomlSerializer.Deserialize<TomlTable>(text) ?? [];
-            error = "";
-            return true;
-        }
-        catch (TomlException e)
-        {
-            table = [];
-            error = e.Line > 0
-                ? string.Create(CultureInfo.InvariantCulture, $"{where}[{e.Line}:{e.Column}]: {e.Message}")
-                : $"{where}: {e.Message}";
-            return false;
-        }
-    }
+    /// <summary>The parse <see cref="Deserialize"/> uses. See <see cref="TomlSyntax.TryLoad"/>.</summary>
+    internal static bool TryLoad(string where, string text, out TomlTable table, out string error) =>
+        TomlSyntax.TryLoad(where, text, out _, out table, out error);
 
     /// <summary>Loads a document that parses into the properties that have not been assigned since the last good read.</summary>
     private bool LoadClean(DocumentSyntax document)
@@ -588,16 +538,6 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         }
     }
 
-    private static void RemoveInline(InlineTableSyntax table, InlineTableItemSyntax item)
-    {
-        var index = 0;
-        while (table.Items.GetChild(index) != item)
-            index++;
-        table.Items.RemoveChild(item);
-        if (index > 0 && index == table.Items.ChildrenCount)
-            table.Items.GetChild(index - 1)!.Comma = null;
-    }
-
     private void ReplaceValue(KeyValueSyntax kv, JsValue desired, string newline)
     {
         if (Format(desired) is not { } text || kv.Value is null)
@@ -638,26 +578,6 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         AppendRaw(document, Key(name), text, newline, CommentLines(comments, name));
     }
 
-    private void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline, IEnumerable<string>? commentLines = null)
-    {
-        var fresh = ParseAssignment(keyText, tomlValue, newline);
-        var leading = new List<SyntaxTrivia>();
-        if (document.KeyValues.ChildrenCount == 0)
-            leading.AddRange(StealPreamble(document));
-        else
-            leading.Add(new SyntaxTrivia(TokenKind.NewLine, newline));
-        if (commentLines is not null)
-        {
-            foreach (var line in commentLines)
-            {
-                leading.Add(new SyntaxTrivia(TokenKind.Comment, line));
-                leading.Add(new SyntaxTrivia(TokenKind.NewLine, newline));
-            }
-        }
-        FirstToken(fresh.Key!).LeadingTrivia = leading;
-        Append(document, fresh, newline);
-    }
-
     private static IEnumerable<string> CommentLines(JsValue comments, string name)
     {
         var comment = comments.IsObject() ? comments.AsObject().Get(name) : JsValue.Undefined;
@@ -666,160 +586,6 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
         foreach (var line in comment.AsString().Replace("\r", "", StringComparison.Ordinal).Split('\n'))
             yield return line.Length > 0 ? "# " + line : "#";
     }
-
-    // A header comment, or a comment above the first table, belongs above the first key we add.
-    private static List<SyntaxTrivia> StealPreamble(DocumentSyntax document)
-    {
-        if (document.TrailingTrivia is { Count: > 0 } trailing)
-        {
-            document.TrailingTrivia = null;
-            return trailing;
-        }
-        if (document.Tables.ChildrenCount > 0 && document.Tables.GetChild(0) is TableSyntaxBase table
-            && table.LeadingTrivia is { Count: > 0 } leading)
-        {
-            table.LeadingTrivia = null;
-            return leading;
-        }
-        return [];
-    }
-
-    private static void Append(DocumentSyntax document, KeyValueSyntax fresh, string newline)
-    {
-        List<SyntaxTrivia>? after = document.Tables.ChildrenCount > 0 ? [new SyntaxTrivia(TokenKind.NewLine, newline)] : null;
-        var count = document.KeyValues.ChildrenCount;
-        if (count > 0)
-        {
-            var last = (KeyValueSyntax)document.KeyValues.GetChild(count - 1)!;
-            last.EndOfLineToken ??= new SyntaxToken(TokenKind.NewLine, newline);
-            after = last.EndOfLineToken.TrailingTrivia;
-            last.EndOfLineToken.TrailingTrivia = null;
-        }
-        document.KeyValues.Add(fresh);
-        fresh.EndOfLineToken ??= new SyntaxToken(TokenKind.NewLine, newline);
-        fresh.EndOfLineToken.TrailingTrivia = after;
-    }
-
-    private static KeyValueSyntax ParseAssignment(string keyText, string tomlValue, string newline)
-    {
-        var parsed = SyntaxParser.Parse(keyText + " = " + tomlValue + newline);
-        var fresh = (KeyValueSyntax)parsed.KeyValues.GetChild(0)!;
-        parsed.KeyValues.RemoveChild(fresh);
-        return fresh;
-    }
-
-    // What follows the last key, such as the blank line and comment before a table, follows the key added after it.
-    private static void Remove(SyntaxList<KeyValueSyntax> list, KeyValueSyntax kv, string newline)
-    {
-        var after = kv.EndOfLineToken?.TrailingTrivia;
-        var index = 0;
-        while (list.GetChild(index) != kv)
-            index++;
-        list.RemoveChild(kv);
-        if (after is null || after.Count == 0)
-            return;
-        if (index > 0)
-        {
-            var previous = list.GetChild(index - 1)!;
-            previous.EndOfLineToken ??= new SyntaxToken(TokenKind.NewLine, newline);
-            previous.EndOfLineToken.TrailingTrivia = [.. previous.EndOfLineToken.TrailingTrivia ?? [], .. after];
-        }
-        else if (index < list.ChildrenCount)
-        {
-            var next = FirstToken(list.GetChild(index)!.Key!);
-            next.LeadingTrivia = [.. after, .. next.LeadingTrivia ?? []];
-        }
-    }
-
-    private static void RemoveTable(DocumentSyntax document, TableSyntaxBase table)
-    {
-        var leading = table.LeadingTrivia;
-        var index = 0;
-        while (document.Tables.GetChild(index) != table)
-            index++;
-        document.Tables.RemoveChild(table);
-        if (leading is not { Count: > 0 })
-            return;
-        if (index < document.Tables.ChildrenCount)
-        {
-            var next = document.Tables.GetChild(index)!;
-            next.LeadingTrivia = [.. leading, .. next.LeadingTrivia ?? []];
-        }
-        else if (document.KeyValues.ChildrenCount > 0)
-        {
-            var last = (KeyValueSyntax)document.KeyValues.GetChild(document.KeyValues.ChildrenCount - 1)!;
-            if (last.EndOfLineToken is not null)
-                last.EndOfLineToken.TrailingTrivia = [.. last.EndOfLineToken.TrailingTrivia ?? [], .. leading];
-        }
-    }
-
-    private static void InsertAfter(DocumentSyntax document, TableSyntaxBase after, TableSyntaxBase table)
-    {
-        var following = new List<TableSyntaxBase>();
-        var seen = false;
-        foreach (var current in document.Tables)
-        {
-            if (seen)
-                following.Add(current);
-            else if (ReferenceEquals(current, after))
-                seen = true;
-        }
-        foreach (var current in following)
-            document.Tables.RemoveChild(current);
-        document.Tables.Add(table);
-        foreach (var current in following)
-            document.Tables.Add(current);
-    }
-
-    private static Owned FindOwned(DocumentSyntax document, string name)
-    {
-        var owned = new Owned();
-        foreach (var kv in document.KeyValues)
-        {
-            if (RootName(kv.Key) == name)
-                owned.KeyValues.Add(kv);
-        }
-        foreach (var table in document.Tables)
-        {
-            if (RootName(table.Name) == name)
-                owned.Tables.Add(table);
-        }
-        return owned;
-    }
-
-    private static KeyValueSyntax? FindItem(SyntaxList<KeyValueSyntax> items, string name)
-    {
-        foreach (var kv in items)
-        {
-            if (Names(kv.Key, name))
-                return kv;
-        }
-        return null;
-    }
-
-    private static bool Names(KeySyntax? key, string name) => IsSimple(key) && RootName(key) == name;
-
-    private static bool IsSimple(KeySyntax? key) => key is not null && key.DotKeys.ChildrenCount == 0;
-
-    private static string? RootName(KeySyntax? key) => key is null ? null : SegmentText(key.Key);
-
-    private static IEnumerable<string> Segments(KeySyntax key)
-    {
-        if (SegmentText(key.Key) is { } first)
-            yield return first;
-        foreach (var dot in key.DotKeys)
-        {
-            if (SegmentText(dot.Key) is { } part)
-                yield return part;
-        }
-    }
-
-    private static string? SegmentText(BareKeyOrStringValueSyntax? key) => key switch
-    {
-        BareKeySyntax bare => bare.Key?.Text,
-        StringValueSyntax quoted => quoted.Value,
-        _ => null,
-    };
 
     private static bool TryLeaf(ObjectInstance root, List<string> path, out JsValue leaf)
     {
@@ -838,71 +604,6 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
             }
         }
         return true;
-    }
-
-    private static string NewlineOf(DocumentSyntax document)
-    {
-        foreach (var kv in document.KeyValues)
-        {
-            if (Line(kv.EndOfLineToken) is { } line)
-                return line;
-        }
-        foreach (var table in document.Tables)
-        {
-            if (Line(table.EndOfLineToken) is { } line)
-                return line;
-            foreach (var kv in table.Items)
-            {
-                if (Line(kv.EndOfLineToken) is { } nested)
-                    return nested;
-            }
-        }
-        // A comment-only file has its newline in trivia, not on a key.
-        if (TriviaNewline(document.TrailingTrivia) is { } trailing)
-            return trailing;
-        return "\n";
-    }
-
-    private static string? TriviaNewline(List<SyntaxTrivia>? trivia)
-    {
-        if (trivia is null)
-            return null;
-        foreach (var item in trivia)
-        {
-            if (item.Kind == TokenKind.NewLine && item.Text is { Length: > 0 } text)
-                return text == "\r\n" ? "\r\n" : "\n";
-        }
-        return null;
-    }
-
-    private static string? Line(SyntaxToken? token) =>
-        token is { TokenKind: TokenKind.NewLine, Text: { } text } && text.Length > 0
-            ? text == "\r\n" ? "\r\n" : "\n"
-            : null;
-
-    private static SyntaxToken FirstToken(SyntaxNode node) => node.Tokens(false).OfType<SyntaxToken>().First();
-
-    private static SyntaxToken LastToken(SyntaxNode node) => node.Tokens(false).OfType<SyntaxToken>().Last();
-
-    private static SyntaxToken Comma()
-    {
-        var comma = new SyntaxToken(TokenKind.Comma, ",");
-        comma.TrailingTrivia = [new SyntaxTrivia(TokenKind.Whitespaces, " ")];
-        return comma;
-    }
-
-    private static void SetString(StringValueSyntax node, string text)
-    {
-        node.Value = text;
-        node.Token!.TokenKind = TokenKind.String;
-        node.Token.Text = Quote(text);
-    }
-
-    private static void SetBool(BooleanValueSyntax node, bool value)
-    {
-        node.Value = value;
-        node.Token!.TokenKind = value ? TokenKind.True : TokenKind.False;
-        node.Token.Text = value ? "true" : "false";
     }
 
     private static bool IsObjectArray(JsArray array)
@@ -1085,36 +786,5 @@ public sealed class TomlAdapter : FileViewAdapter, IPropertyObserver
             return items.Count == 0 ? "{}" : "{ " + string.Join(", ", items) + " }";
         }
         return null;
-    }
-
-    private static string Key(string key) =>
-        key.Length > 0 && key.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') ? key : Quote(key);
-
-    private static string Quote(string text)
-    {
-        var quoted = new StringBuilder("\"");
-        foreach (var c in text)
-        {
-            quoted.Append(c switch
-            {
-                '"' => "\\\"",
-                '\\' => "\\\\",
-                '\n' => "\\n",
-                '\r' => "\\r",
-                '\t' => "\\t",
-                _ when char.IsControl(c) => $"\\u{(int)c:X4}",
-                _ => c.ToString(),
-            });
-        }
-        return quoted.Append('"').ToString();
-    }
-
-    private sealed class Owned
-    {
-        public List<KeyValueSyntax> KeyValues { get; } = [];
-
-        public List<TableSyntaxBase> Tables { get; } = [];
-
-        public bool Defined => KeyValues.Count > 0 || Tables.Count > 0;
     }
 }

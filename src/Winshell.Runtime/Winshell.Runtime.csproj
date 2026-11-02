@@ -8,7 +8,6 @@
     <PackageReference Include="Jint" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Svg.Skia" />
-    <PackageReference Include="Tomlyn" />
     <PackageReference Include="Vortice.Direct2D1" />
   </ItemGroup>
   <ItemGroup>

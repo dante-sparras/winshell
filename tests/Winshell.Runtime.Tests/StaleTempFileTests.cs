@@ -26,7 +26,7 @@ public class StaleTempFileTests
         File.WriteAllText(junk, "junk");
         try
         {
-            FileView.DeleteStaleTemps(path);
+            AtomicFile.DeleteStaleTemps(path);
 
             Assert.False(File.Exists(dead));
             Assert.False(File.Exists(deadGuid));

@@ -832,15 +832,6 @@ public sealed class FileView : QObject
         return ok;
     }
 
-    /// <summary>
-    /// A hand save landed during this write when the destination changed after the write started and is not the
-    /// text about to be put down. <paramref name="diskAtStart"/> null means the file was missing.
-    /// </summary>
-    internal static bool HandSaveWins(string? onDisk, string? diskAtStart, string incoming)
-        => onDisk is not null
-            && !string.Equals(onDisk, diskAtStart, StringComparison.Ordinal)
-            && !string.Equals(onDisk, incoming, StringComparison.Ordinal);
-
     [QmlEnum]
     public enum FileViewError
     {
@@ -1104,239 +1095,25 @@ public sealed class FileView : QObject
         _ => FileViewError.Unknown,
     };
 
-    private static void WriteText(string path, string text, bool bom)
-    {
-        // Flush to disk before a later rename. A power loss after WriteAllText can leave an empty file.
-        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: bom);
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        using (var writer = new StreamWriter(stream, encoding, leaveOpen: true))
-        {
-            writer.Write(text);
-            writer.Flush();
-        }
-        stream.Flush(flushToDisk: true);
-    }
-
-    /// <summary>
-    /// Replaces <paramref name="path"/> with <paramref name="temp"/>.
-    /// Antivirus and indexers often hold the new file for a moment, so a sharing or lock failure is tried again.
-    /// </summary>
-    private static void MoveReplacing(string temp, string path)
-    {
-        int[] delays = [25, 50, 100, 200];
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                File.Move(temp, path, overwrite: true);
-                return;
-            }
-            catch (Exception e) when (IsTransientLock(e) && attempt < delays.Length)
-            {
-                Thread.Sleep(delays[attempt]);
-            }
-        }
-    }
-
-    private static bool IsTransientLock(Exception exception)
-    {
-        // Win32: ERROR_ACCESS_DENIED 5, ERROR_SHARING_VIOLATION 32, ERROR_LOCK_VIOLATION 33.
-        var code = exception.HResult & 0xFFFF;
-        return code is 5 or 32 or 33;
-    }
-
-    /// <summary>
-    /// Removes <c>path.tmp-*</c> left by a process that is no longer running.
-    /// The suffix is a process id, or <c>pid-guid</c> for a save in flight. A live process keeps its file.
-    /// </summary>
-    internal static void DeleteStaleTemps(string path)
-    {
-        var full = System.IO.Path.GetFullPath(path);
-        var dir = System.IO.Path.GetDirectoryName(full);
-        var name = System.IO.Path.GetFileName(full);
-        if (dir is null || name.Length == 0 || !Directory.Exists(dir))
-            return;
-        var prefix = name + ".tmp-";
-        foreach (var candidate in Directory.EnumerateFiles(dir, prefix + "*"))
-        {
-            var file = System.IO.Path.GetFileName(candidate);
-            if (file.Length <= prefix.Length || !file.StartsWith(prefix, StringComparison.Ordinal))
-                continue;
-            var suffix = file[prefix.Length..];
-            // The save names the temp pid-guid. An older temp is only the pid. Either way a live process keeps its file.
-            var pidText = suffix;
-            var dash = suffix.IndexOf('-');
-            if (dash >= 0)
-                pidText = suffix[..dash];
-            if (int.TryParse(pidText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid)
-                && ProcessIsRunning(pid))
-                continue;
-            try
-            {
-                File.Delete(candidate);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
-    }
-
-    private static bool ProcessIsRunning(int pid)
-    {
-        if (pid == Environment.ProcessId)
-            return true;
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            // ArgumentException is "no process with that id". Anything else means the id could not be checked.
-            return e is not ArgumentException;
-        }
-    }
-
-    /// <summary>
-    /// The path a watch should use. A symbolic link is followed to its final target.
-    /// A normal file is not opened. Counting hard links happens only when a save chooses how to write.
-    /// A path that is not there yet is returned unchanged.
-    /// </summary>
-    internal static string FollowLink(string path)
-    {
-        var full = System.IO.Path.GetFullPath(path);
-        // FindFirstFile reports the link itself. GetAttributes follows it, so it cannot tell a link from its target.
-        if (TryReparsePoint(full, out var reparse) && !reparse)
-            return full;
-        try
-        {
-            var target = new FileInfo(full).ResolveLinkTarget(returnFinalTarget: true);
-            if (target is not null)
-                return target.FullName;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-        return full;
-    }
-
-    /// <summary>
-    /// The file a save should change. A symbolic link is followed to its final target, so the link stays a link.
-    /// A hard link is the same path, and <paramref name="hardLink"/> is true so the save writes in place.
-    /// A path that is not there yet is returned unchanged.
-    /// </summary>
-    internal static string SaveTarget(string path, out bool hardLink)
-    {
-        hardLink = false;
-        var full = FollowLink(path);
-        if (File.Exists(full))
-            hardLink = LinkCount(full) > 1;
-        return full;
-    }
-
     /// <summary>
     /// Same destination as <see cref="SaveTarget"/>, remembered for this view so the next save does not open the
     /// file again just to count links.
     /// </summary>
     private string DestinationForSave(string path, out bool hardLink)
     {
-        var full = FollowLink(path);
+        var full = AtomicFile.FollowLink(path);
         if (_linkKindKnown && string.Equals(_linkKindPath, full, StringComparison.Ordinal))
         {
             hardLink = _linkKindHard;
             return full;
         }
         // Written before the flag, so a reader that sees the flag also sees this path and kind.
-        hardLink = File.Exists(full) && LinkCount(full) > 1;
+        hardLink = File.Exists(full) && AtomicFile.LinkCount(full) > 1;
         _linkKindPath = full;
         _linkKindHard = hardLink;
         _linkKindKnown = true;
         return full;
     }
-
-#pragma warning disable CA1416
-    private static int LinkCount(string path)
-    {
-        try
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            if (!GetFileInformationByHandle(stream.SafeFileHandle, out var info))
-                return 1;
-            return (int)info.NumberOfLinks;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return 1;
-        }
-    }
-
-    private const uint FileAttributeReparsePoint = 0x400;
-    private static readonly IntPtr InvalidFindHandle = new(-1);
-
-    /// <summary>
-    /// True when <paramref name="full"/> could be queried. <paramref name="reparse"/> is true for a symbolic link
-    /// and false for a normal file or a hard link. A missing file returns false.
-    /// </summary>
-    private static bool TryReparsePoint(string full, out bool reparse)
-    {
-        reparse = false;
-        var handle = FindFirstFileW(full, out var data);
-        if (handle == InvalidFindHandle)
-            return false;
-        try
-        {
-            reparse = (data.FileAttributes & FileAttributeReparsePoint) != 0;
-            return true;
-        }
-        finally
-        {
-            FindClose(handle);
-        }
-    }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr FindFirstFileW(string fileName, out Win32FindData data);
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool FindClose(IntPtr handle);
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-    private struct Win32FindData
-    {
-        public uint FileAttributes;
-        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
-        public uint FileSizeHigh;
-        public uint FileSizeLow;
-        public uint Reserved0;
-        public uint Reserved1;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string FileName;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 14)]
-        public string AlternateFileName;
-    }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetFileInformationByHandle(
-        Microsoft.Win32.SafeHandles.SafeFileHandle hFile, out ByHandleFileInformation lpFileInformation);
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct ByHandleFileInformation
-    {
-        public uint FileAttributes;
-        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
-        public uint VolumeSerialNumber;
-        public uint FileSizeHigh;
-        public uint FileSizeLow;
-        public uint NumberOfLinks;
-        public uint FileIndexHigh;
-        public uint FileIndexLow;
-    }
-
-#pragma warning restore CA1416
 
     private void Apply(int generation, (string? Text, bool Bom, FileViewError Error, string Message) result)
     {
@@ -1537,47 +1314,19 @@ public sealed class FileView : QObject
                 var directory = System.IO.Path.GetDirectoryName(destination);
                 if (directory is not null)
                     Directory.CreateDirectory(directory);
-                DeleteStaleTemps(destination);
+                AtomicFile.DeleteStaleTemps(destination);
                 // Captured before the temporary file exists. A hand save during that write changes the destination
                 // after this, which is the race. A change that is already on disk stays writable: TomlAdapter
                 // recovers from it and the text above already includes it.
                 var diskAtStart = Read(destination, maxFileBytes).Text;
                 // A hard link shares its bytes with another name. Replacing the name would break that link.
-                if (save.Atomic && !hardLink)
+                var inPlace = !save.Atomic || hardLink;
+                handSaveWon = !AtomicFile.Write(destination, text, save.Bom, inPlace, () =>
                 {
-                    var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
-                    WriteText(temp, text, save.Bom);
-                    try
-                    {
-                        // A slow scan of the temporary file is when a hand save usually lands.
-                        _beforeReplace?.Invoke(destination);
-                        if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
-                            handSaveWon = true;
-                        else
-                            MoveReplacing(temp, destination);
-                    }
-                    finally
-                    {
-                        try
-                        {
-                            // A successful replace has already moved the temp away. A hand save or a failed
-                            // replace leaves it, and the next save must not see it.
-                            if (File.Exists(temp))
-                                File.Delete(temp);
-                        }
-                        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                        {
-                        }
-                    }
-                }
-                else if (HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text))
-                {
-                    handSaveWon = true;
-                }
-                else
-                {
-                    WriteText(destination, text, save.Bom);
-                }
+                    // A slow scan of the temporary file is when a hand save usually lands.
+                    _beforeReplace?.Invoke(destination);
+                    return AtomicFile.HandSaveWins(Read(destination, maxFileBytes).Text, diskAtStart, text);
+                });
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -1670,7 +1419,7 @@ public sealed class FileView : QObject
             StopWatching();
             return;
         }
-        var full = FollowLink(_path);
+        var full = AtomicFile.FollowLink(_path);
         var dir = System.IO.Path.GetDirectoryName(full);
         var name = System.IO.Path.GetFileName(full);
         var parent = false;
