@@ -317,6 +317,16 @@ if ($Verify) {
             $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
             if ($machine -ne $machines[$rid]) { throw "$binary in $name is for machine 0x$($machine.ToString('X4')), not $rid" }
         }
+        # Every other binary is that architecture too, or plain IL, which says 0x014C. One built for the other
+        # architecture stops the program from starting, and this machine would never run it to find out.
+        foreach ($file in Get-ChildItem -LiteralPath $dir -Recurse -File -Include '*.dll', '*.exe') {
+            $bytes = [IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes.Length -lt 0x40 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { continue }
+            $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
+            if ($machine -ne $machines[$rid] -and $machine -ne 0x014C) {
+                throw "$($file.Name) in $name is for machine 0x$($machine.ToString('X4')), not $rid"
+            }
+        }
         # arm64 runs only on arm64 hardware; this checks it on an x64 machine, as CI is.
         if ($rid -eq 'win-x64' -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64') {
             $reported = & (Join-Path $dir 'winshell.exe') --version

@@ -9,9 +9,10 @@
     <ApplicationIcon>..\..\packaging\winshell.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <!-- WinUI's self-contained payload needs an architecture. The folder stays the ordinary one, so tests find winshell.exe. -->
+    <!-- WinUI's self-contained payload needs an architecture. A plain build keeps the ordinary folder, so tests find
+         winshell.exe. A publish for an architecture keeps its own: sharing obj would give arm64 the x64 ReadyToRun code. -->
+    <AppendRuntimeIdentifierToOutputPath Condition="'$(RuntimeIdentifier)' == ''">false</AppendRuntimeIdentifierToOutputPath>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
-    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
