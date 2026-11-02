@@ -29,7 +29,7 @@ internal sealed class QuickSettingsFlyout
         _popup = new PopupWindow { GrabFocus = true, Corners = WindowCorners.Round, Content = _view };
         _popup.Dismissed += OnDismissed;
         _quick.PropertyChanged += OnQuick;
-        _view.SizeChanged += OnViewSize;
+        _view.ContentSized += OnContentSized;
         _anchor.Click += OnClick;
     }
 
@@ -37,7 +37,7 @@ internal sealed class QuickSettingsFlyout
     public void Release()
     {
         _anchor.Click -= OnClick;
-        _view.SizeChanged -= OnViewSize;
+        _view.ContentSized -= OnContentSized;
         _quick.PropertyChanged -= OnQuick;
         _quick.Hide();
         _view.Release();
@@ -79,7 +79,7 @@ internal sealed class QuickSettingsFlyout
             _popup.Visible = false;
     }
 
-    private void OnViewSize(object sender, SizeChangedEventArgs e)
+    private void OnContentSized(object sender, SizeChangedEventArgs e)
     {
         if (_quick.IsOpen)
             Place();
@@ -91,10 +91,10 @@ internal sealed class QuickSettingsFlyout
         var point = _anchor.TransformToVisual(null).TransformPoint(default);
         var origin = _bar.Origin;
         var button = new QRect(origin.X + point.X, origin.Y + point.Y, _anchor.ActualWidth, _anchor.ActualHeight);
-        var height = _view.ActualHeight;
+        var height = _view.ContentHeight;
         if (height <= 0)
         {
-            // The view has no height before it is shown.
+            // The content has no height before it is first shown. This is a first guess; ContentSized corrects it.
             _view.Measure(new Size(QuickSettingsPlacement.Width, double.PositiveInfinity));
             height = _view.DesiredSize.Height;
         }

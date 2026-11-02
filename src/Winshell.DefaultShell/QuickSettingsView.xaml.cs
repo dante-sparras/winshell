@@ -16,6 +16,7 @@ public sealed partial class QuickSettingsView : UserControl
     {
         Popup = popup;
         InitializeComponent();
+        Main.SizeChanged += (_, e) => Pages.Height = e.NewSize.Height;
         VolumeRow.Moved += (_, value) => Popup.Settings.SetVolume(value);
         VolumeRow.GlyphActivated += (_, _) => Popup.Settings.ToggleMute();
         VolumeRow.PageActivated += (_, _) => Popup.ShowOutput();
@@ -23,6 +24,16 @@ public sealed partial class QuickSettingsView : UserControl
     }
 
     public QuickSettingsPopup Popup { get; }
+
+    /// <summary>How tall the content is, whatever height the window has now.</summary>
+    public double ContentHeight => Body.ActualHeight;
+
+    /// <summary>The content changed height, as it does between pages.</summary>
+    public event SizeChangedEventHandler ContentSized
+    {
+        add => Body.SizeChanged += value;
+        remove => Body.SizeChanged -= value;
+    }
 
     /// <summary>Drops the bindings. The window is about to close.</summary>
     public void Release() => Bindings.StopTracking();

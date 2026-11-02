@@ -18,9 +18,6 @@ public sealed partial class TrayAreaView : UserControl
 
     public TrayArea Area { get; }
 
-    /// <summary>The quick settings button on this bar was clicked.</summary>
-    public event EventHandler? QuickSettingsClicked;
-
     /// <summary>The button the flyout sits above.</summary>
     public Button QuickSettingsAnchor => QuickSettingsButton;
 
@@ -33,7 +30,6 @@ public sealed partial class TrayAreaView : UserControl
 
     private void OnQuickSettings(object sender, RoutedEventArgs e)
     {
-        QuickSettingsClicked?.Invoke(this, EventArgs.Empty);
         Area.RequestQuickSettings();
     }
 
