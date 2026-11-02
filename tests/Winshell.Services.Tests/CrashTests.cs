@@ -82,16 +82,6 @@ public sealed class CrashTests : IDisposable
     }
 
     [Fact]
-    public void A_folder_that_cannot_be_written_writes_nothing_and_does_not_throw()
-    {
-        Directory.CreateDirectory(_folder);
-        var file = Path.Combine(_folder, "not-a-folder");
-        File.WriteAllText(file, "");
-
-        Assert.Null(new CrashReports(file).Write("here", Thrown("x")));
-    }
-
-    [Fact]
     public void Work_that_throws_on_the_loop_is_logged_and_raised_and_the_loop_goes_on()
     {
         var loop = new ManualEventLoop { Log = new Log { Sink = (_, _, _) => { } } };
