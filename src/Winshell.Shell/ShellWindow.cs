@@ -28,6 +28,12 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
 
     private protected ShellWindow(Shell shell) => _shell = shell;
 
+    /// <summary>
+    /// The shell window an element is drawn in. Its root holds that, and a table keyed on the <c>XamlRoot</c> would not:
+    /// the wrapper of a <c>XamlRoot</c> goes in a collection, and the next read of it is another object.
+    /// </summary>
+    internal static ShellWindow? Of(UIElement element) => (element.XamlRoot?.Content as FrameworkElement)?.Tag as ShellWindow;
+
     private protected abstract WindowKind Kind { get; }
 
     internal HostWindow? Host => _host;

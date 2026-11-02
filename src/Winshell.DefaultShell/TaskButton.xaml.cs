@@ -32,6 +32,8 @@ public sealed partial class TaskButton : Button
         PointerCaptureLost += OnPointerEnded;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        PointerEntered += OnPointerEntered;
+        PointerExited += OnPointerExited;
     }
 
     public TaskItem? Item
@@ -70,6 +72,7 @@ public sealed partial class TaskButton : Button
     {
         if (Item is not { } task || Model() is not { } model)
             return;
+        Previews()?.Hide();
         var shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
         if (shift)
             model.Launch(task);
@@ -82,6 +85,8 @@ public sealed partial class TaskButton : Button
         if (Item is not { } task || Model() is not { } model)
             return;
         args.Handled = true;
+        // The menu takes this click. A preview open on the button closes, and the pointer staying here does not open another.
+        Previews()?.Hide();
         // The rows are read once. What a row does reads the app as it is when it is chosen.
         var menu = TaskMenuFlyout.Create(Tasks.Name(task), model.MenuRows(task), id =>
         {
@@ -124,6 +129,41 @@ public sealed partial class TaskButton : Button
             return;
         _pressed = false;
         Apply();
+    }
+
+    protected override void OnKeyDown(KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Up && Item is { Windows.Count: > 0 })
+        {
+            e.Handled = true;
+            Previews()?.OpenFromKeyboard(Item.Key);
+            return;
+        }
+        base.OnKeyDown(e);
+    }
+
+    private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (_menu is not null || Item is not { } task)
+            return;
+        Previews()?.HoverButton(task.Key);
+    }
+
+    private void OnPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (Item is not { } task)
+            return;
+        Previews()?.LeaveButton(task.Key);
+    }
+
+    private TaskPreview? Previews()
+    {
+        for (DependencyObject? node = this; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is TaskbarView view)
+                return view.Previews;
+        }
+        return null;
     }
 
     private TaskbarModel? Model()
