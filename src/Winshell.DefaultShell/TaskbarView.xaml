@@ -27,7 +27,35 @@
                     CornerRadius="{ThemeResource ControlCornerRadius}"
                     AutomationProperties.Name="Start"
                     Click="{x:Bind Model.RequestStart}">
-                    <FontIcon Glyph="&#xE782;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                    <Button.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="Default">
+                                    <SolidColorBrush x:Key="StartMarkBrush" Color="#4cc2ff" />
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="Light">
+                                    <SolidColorBrush x:Key="StartMarkBrush" Color="#0078d4" />
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="HighContrast">
+                                    <StaticResource x:Key="StartMarkBrush" ResourceKey="AccentFillColorDefaultBrush" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </Button.Resources>
+                    <Grid Width="19" Height="19" ColumnSpacing="1" RowSpacing="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="9" />
+                            <ColumnDefinition Width="9" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="9" />
+                            <RowDefinition Height="9" />
+                        </Grid.RowDefinitions>
+                        <Border Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        <Border Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        <Border Grid.Row="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        <Border Grid.Row="1" Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                    </Grid>
                 </Button>
                 <Button
                     x:Name="SearchButton"
@@ -48,8 +76,7 @@
                     ItemsSource="{x:Bind Model.Tasks, Mode=OneWay}"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Left"
-                    AutomationProperties.Name="Running applications"
-                    ElementPrepared="OnTaskPrepared">
+                    AutomationProperties.Name="Running applications">
                     <ItemsRepeater.Layout>
                         <StackLayout Orientation="Horizontal" Spacing="4" />
                     </ItemsRepeater.Layout>

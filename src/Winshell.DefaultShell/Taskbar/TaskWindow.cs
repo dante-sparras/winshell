@@ -3,17 +3,15 @@ using Winshell.Windows;
 
 namespace Winshell.DefaultShell.Taskbar;
 
-/// <summary>What a window tells the taskbar besides the fields <see cref="Tasks"/> reads: attention, and which screens it is on.</summary>
-public interface ITaskWindowView
+/// <summary>An open window the taskbar can read and act on. A test supplies its own.</summary>
+public interface IOpenWindow : ITaskWindow, INotifyPropertyChanged
 {
+    /// <summary>The window flashed to ask for attention and has not been activated since.</summary>
     bool Attention { get; }
 
+    /// <summary>The screens the window is on.</summary>
     IReadOnlyList<ScreenInfo> Screens { get; }
-}
 
-/// <summary>What the taskbar can ask a window to do. A test supplies its own.</summary>
-public interface ITaskControl
-{
     void Activate();
 
     void Minimize();
@@ -23,7 +21,7 @@ public interface ITaskControl
 /// An open window as the taskbar reads it. Equality is the window itself, so a fresh adapter for the same window
 /// compares equal and <see cref="Tasks.Click"/> can find the one used last.
 /// </summary>
-public sealed record TaskWindow(AppWindow Window) : ITaskWindow, ITaskWindowView, ITaskControl, INotifyPropertyChanged
+public sealed record TaskWindow(AppWindow Window) : IOpenWindow
 {
     public string AppId => Window.AppId;
 

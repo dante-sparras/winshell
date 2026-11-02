@@ -3,13 +3,11 @@ using System.Globalization;
 namespace Winshell.DefaultShell.Taskbar;
 
 /// <summary>The time and date the taskbar clock shows. Seconds follow <see cref="Preferences.ClockSeconds"/>.</summary>
-public sealed class TaskbarClockModel : ObservableObject
+public sealed class TaskbarClockModel
 {
     private readonly TimeProvider _time;
     private readonly Preferences _preferences;
     private readonly CultureInfo _culture;
-    private string _text = "";
-    private string _accessibleName = "";
 
     public TaskbarClockModel(TimeProvider time, Preferences preferences, CultureInfo? culture = null)
     {
@@ -19,17 +17,17 @@ public sealed class TaskbarClockModel : ObservableObject
     }
 
     /// <summary>The time, then the short date, on two lines.</summary>
-    public string Text => _text;
+    public string Text { get; private set; } = "";
 
     /// <summary>What Narrator reads: the time without seconds, then the long date.</summary>
-    public string AccessibleName => _accessibleName;
+    public string AccessibleName { get; private set; } = "";
 
     public void Refresh()
     {
         var local = _time.GetLocalNow().LocalDateTime;
         var time = local.ToString(_preferences.ClockSeconds ? "T" : "t", _culture);
-        Set(ref _text, time + "\n" + local.ToString("d", _culture));
-        Set(ref _accessibleName, local.ToString("t", _culture) + ", " + local.ToString("D", _culture), nameof(AccessibleName));
+        Text = time + "\n" + local.ToString("d", _culture);
+        AccessibleName = local.ToString("t", _culture) + ", " + local.ToString("D", _culture);
     }
 
     /// <summary>How long until the next second, or the next minute when seconds are hidden. Never zero.</summary>

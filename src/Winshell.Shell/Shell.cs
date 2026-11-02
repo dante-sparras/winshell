@@ -83,6 +83,9 @@ public sealed partial class Shell : IDisposable
     /// <summary>The folder of this configuration's program, where its own files are.</summary>
     public string ConfigDir => Path.GetDirectoryName(Environment.ProcessPath)!;
 
+    /// <summary>The config folder: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> when it is set.</summary>
+    public string ConfigRoot => ConfigPaths.Root();
+
     /// <summary>This shell's data folder, which exists once read.</summary>
     public string DataDir => Ensure(_identity.DataDir);
 

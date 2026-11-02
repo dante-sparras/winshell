@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Text.Json;
 using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell.Tests;
@@ -12,6 +14,13 @@ public sealed class TaskbarModelTests : IDisposable
 
     private Preferences Open() => new(Path.Combine(_folder, Guid.NewGuid().ToString("n") + ".toml"), new ManualEventLoop());
 
+    private TaskbarPins Pins(params string[] ids)
+    {
+        var path = Path.Combine(_folder, Guid.NewGuid().ToString("n") + ".json");
+        File.WriteAllText(path, JsonSerializer.Serialize(new Dictionary<string, string[]> { ["pinned"] = ids }));
+        return new TaskbarPins(path, new ManualEventLoop());
+    }
+
     private static ScreenInfo Screen(string id, bool primary = false, double x = 0) =>
         new(id, id, "", "", "", new QRect(x, 0, 800, 600), new QRect(x, 0, 800, 560), 1, 0, 0, 60, primary);
 
@@ -19,11 +28,11 @@ public sealed class TaskbarModelTests : IDisposable
     public void Pins_come_first_and_then_the_apps_that_are_running()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins("explorer", "store");
+        var desk = new Desk(preferences, pins);
         desk.Apps.Add(new FakeApp("explorer", "File Explorer"));
         desk.Apps.Add(new FakeApp("store", "Store"));
-        desk.Pins.Ids = ["explorer", "store"];
-        desk.Windows.Add(new FakeWindow { AppId = "tool", Executable = @"C:\Tools\tool.exe", Title = "Tool" });
+        desk.OpenWindows.Add(new FakeWindow { AppId = "tool", Executable = @"C:\Tools\tool.exe", Title = "Tool" });
 
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
 
@@ -36,7 +45,8 @@ public sealed class TaskbarModelTests : IDisposable
     public void Each_screen_shows_the_windows_its_setting_asks_for_and_one_taskbar_shows_them_all()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins("pinned");
+        var desk = new Desk(preferences, pins);
         var main = Screen("main", primary: true);
         var other = Screen("other", x: 1920);
         var onMain = new FakeWindow { AppId = "main-app", Executable = @"C:\main.exe", Title = "Main" };
@@ -46,12 +56,10 @@ public sealed class TaskbarModelTests : IDisposable
         var onBoth = new FakeWindow { AppId = "both-app", Executable = @"C:\both.exe", Title = "Both" };
         onBoth.Screens.Add(main);
         onBoth.Screens.Add(other);
-        desk.Windows.Add(onMain);
-        desk.Windows.Add(onOther);
-        desk.Windows.Add(onBoth);
+        desk.OpenWindows.Add(onMain);
+        desk.OpenWindows.Add(onOther);
+        desk.OpenWindows.Add(onBoth);
         desk.Apps.Add(new FakeApp("pinned", "Pinned"));
-        desk.Pins.Ids = ["pinned"];
-        desk.Pins.Raise();
 
         using var mainBar = desk.Bar(main, isMain: true);
         using var otherBar = desk.Bar(other, isMain: false);
@@ -76,10 +84,10 @@ public sealed class TaskbarModelTests : IDisposable
     public void A_click_launches_minimizes_or_brings_forward_the_window_used_last()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins("notes");
+        var desk = new Desk(preferences, pins);
         var app = new FakeApp("notes", "Notes");
         desk.Apps.Add(app);
-        desk.Pins.Ids = ["notes"];
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
 
         model.Click(model.Tasks.Single());
@@ -87,10 +95,9 @@ public sealed class TaskbarModelTests : IDisposable
 
         var first = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "One" };
         var second = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Two" };
-        desk.Windows.Add(first);
-        desk.Windows.Add(second);
-        desk.Active = second;
-        desk.ActiveSource.Raise();
+        desk.OpenWindows.Add(first);
+        desk.OpenWindows.Add(second);
+        desk.SetActive(second);
         model.Click(model.Tasks.Single());
         Assert.Equal(1, second.Activations);
         Assert.Equal(0, first.Activations);
@@ -99,9 +106,9 @@ public sealed class TaskbarModelTests : IDisposable
         model.Click(model.Tasks.Single());
         Assert.Equal(1, first.Activations);
 
-        desk.Windows.Clear();
+        desk.OpenWindows.Clear();
         var only = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Only" };
-        desk.Windows.Add(only);
+        desk.OpenWindows.Add(only);
         only.SetActivated(true);
         model.Click(model.Tasks.Single());
         Assert.Equal(1, only.Minimizations);
@@ -111,17 +118,17 @@ public sealed class TaskbarModelTests : IDisposable
     public void A_closed_window_is_forgotten_so_the_next_click_uses_one_that_is_open()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
         var first = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "One" };
         var second = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Two" };
-        desk.Windows.Add(first);
-        desk.Windows.Add(second);
+        desk.OpenWindows.Add(first);
+        desk.OpenWindows.Add(second);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
-        desk.Active = second;
-        desk.ActiveSource.Raise();
+        desk.SetActive(second);
 
-        desk.Windows.Remove(second);
-        desk.Windows.Add(second);
+        desk.OpenWindows.Remove(second);
+        desk.OpenWindows.Add(second);
         model.Click(model.Tasks.Single());
 
         Assert.Equal(1, first.Activations);
@@ -132,14 +139,14 @@ public sealed class TaskbarModelTests : IDisposable
     public void A_new_window_starts_the_app_or_the_program_the_pin_names()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins(@"C:\Tools\alone.exe");
+        var desk = new Desk(preferences, pins);
         var app = new FakeApp("notes", "Notes", appId: "notes");
         desk.Apps.Add(app);
         var running = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Notes" };
-        desk.Windows.Add(running);
+        desk.OpenWindows.Add(running);
         var loose = new FakeWindow { AppId = "tool", Executable = @"C:\Tools\tool.exe", Title = "Tool" };
-        desk.Windows.Add(loose);
-        desk.Pins.Ids = [@"C:\Tools\alone.exe"];
+        desk.OpenWindows.Add(loose);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
 
         model.Launch(model.Tasks.Single(task => task.Key == "app:notes"));
@@ -149,70 +156,144 @@ public sealed class TaskbarModelTests : IDisposable
         model.Launch(model.Tasks.Single(task => task.Key == "window:tool"));
         model.Launch(model.Tasks.Single(task => task.Pin == @"C:\Tools\alone.exe"));
         var quiet = new FakeWindow { AppId = "quiet", Executable = "", Title = "Quiet" };
-        desk.Windows.Add(quiet);
+        desk.OpenWindows.Add(quiet);
         model.Launch(model.Tasks.Single(task => task.Key == "window:quiet"));
 
         Assert.Equal([@"C:\Tools\tool.exe", @"C:\Tools\alone.exe"], desk.Started);
     }
 
     [Fact]
-    public void A_window_title_does_not_rebuild_the_buttons_and_the_states_that_move_them_do()
+    public void A_title_does_not_replace_a_button_and_focus_does_not_either()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
         var window = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Old", Icon = "old" };
-        desk.Windows.Add(window);
+        desk.OpenWindows.Add(window);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
         var before = model.Tasks.Single();
 
         window.Title = "New";
         window.Raise(nameof(ITaskWindow.Title));
-        window.Icon = "new";
-        window.Raise(nameof(ITaskWindow.Icon));
-
         Assert.Same(before, model.Tasks.Single());
         Assert.Equal("New - 1 running window", Tasks.AccessibleName(model.Tasks.Single()));
 
-        foreach (var name in new[]
-        {
-            nameof(ITaskWindow.AppId),
-            nameof(ITaskWindow.Activated),
-            nameof(ITaskWindow.Minimized),
-            nameof(ITaskWindowView.Attention),
-            nameof(ITaskWindowView.Screens),
-        })
-        {
-            var current = model.Tasks.Single();
-            window.Raise(name);
-            Assert.NotSame(current, model.Tasks.Single());
-        }
+        window.Activated = true;
+        window.Raise(nameof(ITaskWindow.Activated));
+        Assert.Same(before, model.Tasks.Single());
+        Assert.True(TaskbarModel.Indicator.Of(model.Tasks.Single()).Active);
+        Assert.Equal(16, TaskbarModel.Indicator.Of(model.Tasks.Single()).LineWidth);
+
+        window.Minimized = true;
+        window.Raise(nameof(ITaskWindow.Minimized));
+        Assert.Same(before, model.Tasks.Single());
+        Assert.False(TaskbarModel.Indicator.Of(model.Tasks.Single()).Active);
+
+        window.Attention = true;
+        window.Raise(nameof(IOpenWindow.Attention));
+        Assert.Same(before, model.Tasks.Single());
+        var waiting = TaskbarModel.Indicator.Of(model.Tasks.Single());
+        Assert.True(waiting.Attention);
+        Assert.False(waiting.Active);
+        Assert.Equal(6, waiting.LineWidth);
+
+        window.Icon = "new";
+        window.Raise(nameof(ITaskWindow.Icon));
+        Assert.NotSame(before, model.Tasks.Single());
+        Assert.Equal("new", model.Tasks.Single().Icon);
+    }
+
+    [Fact]
+    public void An_unchanged_rebuild_raises_no_collection_change()
+    {
+        using var preferences = Open();
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
+        var window = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Notes", Icon = "icon" };
+        window.Screens.Add(Screen("main", primary: true));
+        desk.OpenWindows.Add(window);
+        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
+        var changes = 0;
+        model.Tasks.CollectionChanged += (_, _) => changes++;
+
+        window.Raise(nameof(IOpenWindow.Screens));
+        window.Title = "Typed";
+        window.Raise(nameof(ITaskWindow.Title));
+
+        Assert.Equal(0, changes);
+        Assert.Equal("Typed - 1 running window", Tasks.AccessibleName(model.Tasks.Single()));
+    }
+
+    [Fact]
+    public void A_new_window_of_an_app_replaces_only_that_apps_button()
+    {
+        using var preferences = Open();
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
+        desk.OpenWindows.Add(new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "One" });
+        var other = new FakeWindow { AppId = "other", Executable = @"C:\other.exe", Title = "Other" };
+        desk.OpenWindows.Add(other);
+        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
+        var notes = model.Tasks.Single(task => task.Key == "window:notes");
+        var kept = model.Tasks.Single(task => task.Key == "window:other");
+        var actions = new List<NotifyCollectionChangedAction>();
+        model.Tasks.CollectionChanged += (_, e) => actions.Add(e.Action);
+
+        desk.OpenWindows.Add(new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Two" });
+
+        Assert.Equal([NotifyCollectionChangedAction.Replace], actions);
+        Assert.NotSame(notes, model.Tasks.Single(task => task.Key == "window:notes"));
+        Assert.Same(kept, model.Tasks.Single(task => task.Windows.Contains(other)));
+        Assert.Equal(2, model.Tasks.Single(task => task.Key == "window:notes").Windows.Count);
+    }
+
+    [Fact]
+    public void A_new_app_inserts_one_button_and_leaves_the_others()
+    {
+        using var preferences = Open();
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
+        var notes = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Notes" };
+        desk.OpenWindows.Add(notes);
+        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
+        var kept = model.Tasks.Single();
+        var actions = new List<NotifyCollectionChangedAction>();
+        model.Tasks.CollectionChanged += (_, e) => actions.Add(e.Action);
+
+        desk.OpenWindows.Add(new FakeWindow { AppId = "other", Executable = @"C:\other.exe", Title = "Other" });
+
+        Assert.Equal([NotifyCollectionChangedAction.Add], actions);
+        Assert.Same(kept, model.Tasks.Single(task => task.Windows.Contains(notes)));
+        Assert.Equal(2, model.Tasks.Count);
     }
 
     [Fact]
     public void The_buttons_rebuild_when_pins_windows_apps_or_the_screen_filter_change()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
         var window = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Notes" };
         window.Screens.Add(Screen("main", primary: true));
-        desk.Windows.Add(window);
+        desk.OpenWindows.Add(window);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
 
-        var pinned = model.Tasks.Single();
-        desk.Pins.Raise();
-        Assert.NotSame(pinned, model.Tasks.Single());
-
-        desk.Windows.Add(new FakeWindow { AppId = "other", Executable = @"C:\other.exe", Title = "Other" });
+        var notes = model.Tasks.Single();
+        pins.Pin(@"C:\Tools\alone.exe");
         Assert.Equal(2, model.Tasks.Count);
+        Assert.Same(notes, model.Tasks.Single(task => task.Windows.Contains(window)));
+
+        desk.OpenWindows.Add(new FakeWindow { AppId = "other", Executable = @"C:\other.exe", Title = "Other" });
+        Assert.Equal(3, model.Tasks.Count);
 
         var first = model.Tasks[0];
         desk.Apps.Add(new FakeApp("unused", "Unused"));
-        Assert.NotSame(first, model.Tasks[0]);
+        Assert.Same(first, model.Tasks[0]);
 
         preferences.TaskbarAppsOn = "where";
         window.Screens.Clear();
         window.Screens.Add(Screen("other", x: 1920));
-        window.Raise(nameof(ITaskWindowView.Screens));
+        window.Raise(nameof(IOpenWindow.Screens));
         Assert.DoesNotContain(model.Tasks, task => task.Windows.Contains(window));
     }
 
@@ -220,7 +301,8 @@ public sealed class TaskbarModelTests : IDisposable
     public void Start_and_Search_raise_an_event_and_open_nothing()
     {
         using var preferences = Open();
-        var desk = new Desk(preferences);
+        using var pins = Pins();
+        var desk = new Desk(preferences, pins);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
         var starts = 0;
         var searches = 0;
@@ -266,54 +348,46 @@ public sealed class TaskbarModelTests : IDisposable
 
     private static string[] Keys(TaskbarModel model) => [.. model.Tasks.Select(task => task.Entry?.Id ?? task.Key)];
 
-    private sealed class Desk(Preferences preferences)
+    private sealed class Desk : ITaskDesktop
     {
-        public ObservableCollection<ITaskWindow> Windows { get; } = [];
+        private readonly Preferences _preferences;
+        private readonly TaskbarPins _pins;
+
+        public Desk(Preferences preferences, TaskbarPins pins)
+        {
+            _preferences = preferences;
+            _pins = pins;
+            OpenWindows.CollectionChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
+            Apps.CollectionChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        public ObservableCollection<IOpenWindow> OpenWindows { get; } = [];
 
         public ObservableCollection<FakeApp> Apps { get; } = [];
 
-        public PinList Pins { get; } = new();
+        public IReadOnlyList<IOpenWindow> Windows => OpenWindows;
 
-        public ActiveSource ActiveSource { get; } = new();
-
-        public ITaskWindow? Active { get; set; }
+        public IOpenWindow? Active { get; private set; }
 
         public List<string> Started { get; } = [];
 
-        public TaskbarModel Bar(ScreenInfo screen, bool isMain) => new(
-            Windows,
-            Windows,
-            Find,
-            Apps,
-            () => Pins.Ids,
-            Pins,
-            () => Active,
-            ActiveSource,
-            preferences,
-            screen,
-            isMain,
-            Started.Add);
+        public event EventHandler? Changed;
 
-        private ITaskApp? Find(string name) =>
+        public event EventHandler? ActiveChanged;
+
+        public void SetActive(IOpenWindow? window)
+        {
+            Active = window;
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public ITaskApp? Find(string name) =>
             Apps.FirstOrDefault(app => app.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? Apps.FirstOrDefault(app => app.AppId.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? Apps.FirstOrDefault(app => app.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-    }
 
-    private sealed class PinList : INotifyPropertyChanged
-    {
-        public IReadOnlyList<string> Ids { get; set; } = [];
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        public void Raise() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Ids)));
-    }
-
-    private sealed class ActiveSource : INotifyPropertyChanged
-    {
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        public void Raise() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("ActiveWindow"));
+        public TaskbarModel Bar(ScreenInfo screen, bool isMain) =>
+            new(this, _pins, _preferences, screen, isMain, Started.Add);
     }
 
     private sealed class FakeApp(string id, string name, string icon = "", string appId = "") : ITaskApp, ITaskLaunch
@@ -331,7 +405,7 @@ public sealed class TaskbarModelTests : IDisposable
         public void Launch() => Launches++;
     }
 
-    private sealed class FakeWindow : ITaskWindow, ITaskWindowView, ITaskControl, INotifyPropertyChanged
+    private sealed class FakeWindow : IOpenWindow
     {
         public string AppId { get; set; } = "";
 
@@ -349,19 +423,19 @@ public sealed class TaskbarModelTests : IDisposable
 
         public List<ScreenInfo> Screens { get; } = [];
 
-        IReadOnlyList<ScreenInfo> ITaskWindowView.Screens => Screens;
+        IReadOnlyList<ScreenInfo> IOpenWindow.Screens => Screens;
 
         public int Activations { get; private set; }
 
         public int Minimizations { get; private set; }
 
-        public void Activate() => Activations++;
-
-        public void Minimize() => Minimizations++;
-
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        public void Activate() => Activations++;
+
+        public void Minimize() => Minimizations++;
 
         public void SetActivated(bool activated)
         {

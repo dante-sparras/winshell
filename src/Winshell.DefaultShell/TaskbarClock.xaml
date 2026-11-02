@@ -4,10 +4,9 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     VerticalAlignment="Center">
     <TextBlock
+        x:Name="Readout"
         Margin="10,0"
         Style="{ThemeResource CaptionTextBlockStyle}"
-        Text="{x:Bind Text}"
         TextAlignment="Center"
-        VerticalAlignment="Center"
-        AutomationProperties.Name="{x:Bind AccessibleName}" />
+        VerticalAlignment="Center" />
 </UserControl>

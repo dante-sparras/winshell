@@ -30,7 +30,6 @@ public sealed partial class TaskButton : Button
         PointerCaptureLost += OnPointerEnded;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-        ActualThemeChanged += (_, _) => Apply();
     }
 
     public TaskItem? Item
@@ -48,6 +47,7 @@ public sealed partial class TaskButton : Button
     {
         if (XamlRoot is not null)
             XamlRoot.Changed += OnRootChanged;
+        Watch(_item);
         Apply();
     }
 
@@ -142,13 +142,13 @@ public sealed partial class TaskButton : Button
         Stroke.Visibility = Shown(mark.Active || mark.Attention);
         MarkRest.Visibility = Shown(mark.Running && !mark.Active && !mark.Attention);
         MarkActive.Visibility = Shown(mark.Running && mark.Active && !mark.Attention);
-        MarkAttention.Visibility = Shown(mark.Running && mark.Attention && !mark.Active);
-        MarkAttentionActive.Visibility = Shown(mark.Running && mark.Attention && mark.Active);
+        MarkAttention.Width = mark.LineWidth;
+        MarkAttention.Visibility = Shown(mark.Running && mark.Attention);
     }
 
     private void ShowIcon(TaskItem? task)
     {
-        var path = IconOf(task);
+        var path = task is null ? "" : task.Icon;
         var size = IconSize();
         if (path == _iconPath && size == _iconSize)
             return;
@@ -163,18 +163,6 @@ public sealed partial class TaskButton : Button
         if (scale < 1)
             scale = 1;
         return Math.Max(1, (int)Math.Ceiling(24 * scale));
-    }
-
-    /// <summary>The icon the app has now: the index, or its first window, or the pin.</summary>
-    private static string IconOf(TaskItem? task)
-    {
-        if (task is null)
-            return "";
-        if (task.Entry is { Icon.Length: > 0 } entry)
-            return entry.Icon;
-        if (task.Windows.Count > 0 && task.Windows[0].Icon.Length > 0)
-            return task.Windows[0].Icon;
-        return task.Icon;
     }
 
     private static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;

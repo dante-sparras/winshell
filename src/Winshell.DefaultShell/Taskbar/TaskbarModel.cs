@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using TaskbarTasks = Winshell.DefaultShell.Taskbar.Tasks;
 
@@ -11,60 +10,34 @@ namespace Winshell.DefaultShell.Taskbar;
 /// </summary>
 public sealed class TaskbarModel : ObservableObject, IDisposable
 {
-    private readonly IReadOnlyList<ITaskWindow> _windows;
-    private readonly INotifyCollectionChanged _windowChanges;
-    private readonly Func<string, ITaskApp?> _find;
-    private readonly INotifyCollectionChanged? _appChanges;
-    private readonly Func<IReadOnlyList<string>> _pins;
-    private readonly INotifyPropertyChanged _pinChanges;
-    private readonly Func<ITaskWindow?> _activeWindow;
-    private readonly INotifyPropertyChanged _activeChanges;
+    private readonly ITaskDesktop _desktop;
+    private readonly TaskbarPins _pins;
     private readonly Preferences _preferences;
     private readonly Action<string> _startProgram;
-    private readonly List<ITaskWindow> _watched = [];
-    private readonly Dictionary<string, ITaskWindow> _lastUsed = [];
+    private readonly List<IOpenWindow> _watched = [];
+    private readonly Dictionary<string, IOpenWindow> _lastUsed = [];
     private ScreenInfo _screen;
     private bool _isMain;
     private bool _disposed;
 
-    public TaskbarModel(
-        IReadOnlyList<ITaskWindow> windows,
-        INotifyCollectionChanged windowChanges,
-        Func<string, ITaskApp?> find,
-        INotifyCollectionChanged? appChanges,
-        Func<IReadOnlyList<string>> pins,
-        INotifyPropertyChanged pinChanges,
-        Func<ITaskWindow?> activeWindow,
-        INotifyPropertyChanged activeChanges,
-        Preferences preferences,
-        ScreenInfo screen,
-        bool isMain,
-        Action<string> startProgram)
+    public TaskbarModel(ITaskDesktop desktop, TaskbarPins pins, Preferences preferences, ScreenInfo screen, bool isMain, Action<string> startProgram)
     {
-        _windows = windows;
-        _windowChanges = windowChanges;
-        _find = find;
-        _appChanges = appChanges;
+        _desktop = desktop;
         _pins = pins;
-        _pinChanges = pinChanges;
-        _activeWindow = activeWindow;
-        _activeChanges = activeChanges;
         _preferences = preferences;
         _screen = screen;
         _isMain = isMain;
         _startProgram = startProgram;
-        _windowChanges.CollectionChanged += OnWindows;
-        if (_appChanges is not null)
-            _appChanges.CollectionChanged += OnApps;
-        _pinChanges.PropertyChanged += OnPins;
-        _activeChanges.PropertyChanged += OnActive;
-        _preferences.PropertyChanged += OnPreferences;
+        desktop.Changed += OnDesktopChanged;
+        desktop.ActiveChanged += OnActiveChanged;
+        pins.PropertyChanged += OnPins;
+        preferences.PropertyChanged += OnPreferences;
         Resubscribe();
         NoteActive();
         Rebuild();
     }
 
-    /// <summary>The buttons, pinned apps first. Replaced when the buttons change. A window's title does not replace them.</summary>
+    /// <summary>The buttons, pinned apps first. A button that did not change stays the same object.</summary>
     public ObservableCollection<TaskItem> Tasks { get; } = [];
 
     /// <summary>The Start button was clicked. Nothing opens.</summary>
@@ -72,9 +45,6 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
 
     /// <summary>The Search button was clicked. Nothing opens.</summary>
     public event EventHandler? SearchRequested;
-
-    internal static TaskbarModel Live(TaskbarDesktop desktop, TaskbarPins pins, Preferences preferences, ScreenInfo screen, bool isMain, Action<string> startProgram) =>
-        new(desktop.Windows, desktop.Windows, desktop.Find, desktop.AppChanges, () => pins.Ids, pins, () => desktop.Active, desktop.ActiveChanged, preferences, screen, isMain, startProgram);
 
     public void RequestStart() => StartRequested?.Invoke(this, EventArgs.Empty);
 
@@ -99,10 +69,10 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
             case TaskClick.Launch:
                 Launch(task);
                 break;
-            case TaskClick.Minimize { Window: ITaskControl window }:
+            case TaskClick.Minimize { Window: IOpenWindow window }:
                 window.Minimize();
                 break;
-            case TaskClick.Activate { Window: ITaskControl window }:
+            case TaskClick.Activate { Window: IOpenWindow window }:
                 window.Activate();
                 break;
         }
@@ -124,16 +94,14 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        _windowChanges.CollectionChanged -= OnWindows;
-        if (_appChanges is not null)
-            _appChanges.CollectionChanged -= OnApps;
-        _pinChanges.PropertyChanged -= OnPins;
-        _activeChanges.PropertyChanged -= OnActive;
+        _desktop.Changed -= OnDesktopChanged;
+        _desktop.ActiveChanged -= OnActiveChanged;
+        _pins.PropertyChanged -= OnPins;
         _preferences.PropertyChanged -= OnPreferences;
         Unwatch();
     }
 
-    private void OnWindows(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnDesktopChanged(object? sender, EventArgs e)
     {
         if (_disposed)
             return;
@@ -142,11 +110,9 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
         Rebuild();
     }
 
-    private void OnApps(object? sender, NotifyCollectionChangedEventArgs e) => Rebuild();
-
     private void OnPins(object? sender, PropertyChangedEventArgs e) => Rebuild();
 
-    private void OnActive(object? sender, PropertyChangedEventArgs e) => NoteActive();
+    private void OnActiveChanged(object? sender, EventArgs e) => NoteActive();
 
     private void OnPreferences(object? sender, PropertyChangedEventArgs e)
     {
@@ -156,27 +122,24 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
 
     private void OnWindowProperty(object? sender, PropertyChangedEventArgs e)
     {
-        // A title changes while someone types. The button reads it from the window. The buttons stay put.
-        if (e.PropertyName is nameof(ITaskWindow.AppId)
-            or nameof(ITaskWindow.Activated)
-            or nameof(ITaskWindow.Minimized)
-            or nameof(ITaskWindowView.Attention)
-            or nameof(ITaskWindowView.Screens))
+        // A title, or a window coming forward, does not move the buttons. The button reads those itself.
+        if (e.PropertyName is nameof(ITaskWindow.AppId) or nameof(ITaskWindow.Icon) or nameof(IOpenWindow.Screens))
             Rebuild();
     }
 
     private void NoteActive()
     {
-        if (_disposed || _activeWindow() is not { } window)
+        if (_disposed || _desktop.Active is not { } window)
             return;
-        _lastUsed[TaskbarTasks.WindowKey(window, _find)] = window;
+        _lastUsed[TaskbarTasks.WindowKey(window, _desktop.Find)] = window;
     }
 
     private void DropClosed()
     {
+        var windows = _desktop.Windows;
         foreach (var key in _lastUsed.Keys.ToArray())
         {
-            if (!_windows.Any(window => Equals(window, _lastUsed[key])))
+            if (!windows.Any(window => Equals(window, _lastUsed[key])))
                 _lastUsed.Remove(key);
         }
     }
@@ -184,21 +147,17 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     private void Resubscribe()
     {
         Unwatch();
-        foreach (var window in _windows)
+        foreach (var window in _desktop.Windows)
         {
             _watched.Add(window);
-            if (window is INotifyPropertyChanged source)
-                source.PropertyChanged += OnWindowProperty;
+            window.PropertyChanged += OnWindowProperty;
         }
     }
 
     private void Unwatch()
     {
         foreach (var window in _watched)
-        {
-            if (window is INotifyPropertyChanged source)
-                source.PropertyChanged -= OnWindowProperty;
-        }
+            window.PropertyChanged -= OnWindowProperty;
         _watched.Clear();
     }
 
@@ -210,22 +169,74 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     private bool ShowPins => AppsOn == "all" || _isMain;
 
     private bool Shows(ITaskWindow window) =>
-        ShowsAll || (window is ITaskWindowView view && view.Screens.Any(screen => screen.Id == _screen.Id));
+        ShowsAll || (window is IOpenWindow open && open.Screens.Any(screen => screen.Id == _screen.Id));
 
     private void Rebuild()
     {
         if (_disposed)
             return;
-        var next = TaskbarTasks.Build(_windows, _pins(), _find, Shows, ShowPins);
-        if (next.Count == Tasks.Count)
-        {
-            for (var i = 0; i < next.Count; i++)
-                Tasks[i] = next[i];
-            return;
-        }
-        Tasks.Clear();
+        Place(TaskbarTasks.Build(_desktop.Windows, _pins.Ids, _desktop.Find, Shows, ShowPins));
+    }
+
+    /// <summary>
+    /// Puts <paramref name="next"/> into <see cref="Tasks"/> by <see cref="TaskItem.Key"/>. A button that left is removed,
+    /// one that arrived is inserted, and one that moved is moved. A button is replaced only when its pin, app, icon or
+    /// windows changed, so the others stay the same object.
+    /// </summary>
+    private void Place(IReadOnlyList<TaskItem> next)
+    {
+        var keep = new HashSet<string>(next.Count, StringComparer.Ordinal);
         foreach (var task in next)
-            Tasks.Add(task);
+            keep.Add(task.Key);
+        for (var i = Tasks.Count - 1; i >= 0; i--)
+        {
+            if (!keep.Contains(Tasks[i].Key))
+                Tasks.RemoveAt(i);
+        }
+        for (var i = 0; i < next.Count; i++)
+        {
+            var task = next[i];
+            var at = IndexOf(task.Key);
+            if (at < 0)
+            {
+                Tasks.Insert(i, task);
+                continue;
+            }
+            if (at != i)
+                Tasks.Move(at, i);
+            if (!Same(Tasks[i], task))
+                Tasks[i] = task;
+        }
+    }
+
+    private int IndexOf(string key)
+    {
+        for (var i = 0; i < Tasks.Count; i++)
+        {
+            if (Tasks[i].Key == key)
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>The windows are a new list on every build, so the button's own list is compared in order.</summary>
+    private static bool Same(TaskItem current, TaskItem next) =>
+        current.Pin == next.Pin
+        && Equals(current.Entry, next.Entry)
+        && current.Icon == next.Icon
+        && current.PinId == next.PinId
+        && SameWindows(current.Windows, next.Windows);
+
+    private static bool SameWindows(IReadOnlyList<ITaskWindow> current, IReadOnlyList<ITaskWindow> next)
+    {
+        if (current.Count != next.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!Equals(current[i], next[i]))
+                return false;
+        }
+        return true;
     }
 
     /// <summary>How a button draws its running line, from the windows it has now.</summary>
@@ -244,7 +255,7 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
             {
                 if (window.Activated && !window.Minimized)
                     active = true;
-                if (window is ITaskWindowView view && view.Attention)
+                if (window is IOpenWindow { Attention: true })
                     attention = true;
             }
             return new Indicator(true, active, attention);

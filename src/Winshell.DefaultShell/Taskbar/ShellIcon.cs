@@ -16,16 +16,26 @@ internal static class ShellIcon
 
     /// <summary>
     /// The path the shell reads. A packaged app id contains <c>!</c> and is the Start icon for that id. A program
-    /// path, or a path that already starts with <c>shell:</c>, is read as it is.
+    /// path, or a path that already starts with <c>shell:</c>, is read as it is. A <c>file://</c> URI, a
+    /// <c>%VAR%</c> and the escapes in the path are expanded first, and anything from <c>?</c> on is left out.
     /// </summary>
     public static string ShellPath(string icon)
     {
-        if (icon.Length == 0 || icon.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+        if (icon.Length == 0)
             return icon;
-        if (icon.Contains('!') && !Tasks.IsProgramPath(icon))
-            return @"shell:AppsFolder\" + icon;
-        return icon;
+        // "name?path=..." names the icon; the query is not part of the path.
+        var query = icon.IndexOf('?');
+        var name = query >= 0 ? icon[..query] : icon;
+        var path = Expand(name);
+        if (path.Length == 0 || path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            return path;
+        if (path.Contains('!') && !Tasks.IsProgramPath(path))
+            return @"shell:AppsFolder\" + path;
+        return path;
     }
+
+    private static string Expand(string name) =>
+        Environment.ExpandEnvironmentVariables(Uri.UnescapeDataString(name).Replace("file://", "", StringComparison.OrdinalIgnoreCase).TrimStart('/'));
 
     /// <summary>The icon at <paramref name="size"/> pixels, or null when Windows has none.</summary>
     public static ImageSource? Load(string icon, int size)
@@ -34,14 +44,10 @@ internal static class ShellIcon
         if (path.Length == 0 || size < 1)
             return null;
         var key = size + "|" + path;
-        lock (Cache)
-        {
-            if (Cache.TryGetValue(key, out var cached))
-                return cached;
-        }
+        if (Cache.TryGetValue(key, out var cached))
+            return cached;
         var loaded = LoadUncached(path, size);
-        lock (Cache)
-            Cache[key] = loaded;
+        Cache[key] = loaded;
         return loaded;
     }
 

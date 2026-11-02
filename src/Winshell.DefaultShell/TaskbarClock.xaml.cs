@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Winshell.DefaultShell.Taskbar;
 
@@ -8,40 +9,28 @@ namespace Winshell.DefaultShell;
 /// <summary>The time and the date on the right of the taskbar. Nothing opens from it.</summary>
 public sealed partial class TaskbarClock : UserControl
 {
-    private TaskbarClockModel? _model;
-    private Preferences? _preferences;
-    private TimeProvider? _time;
-    private DispatcherTimer? _timer;
+    private (TaskbarClockModel Model, Preferences Preferences, TimeProvider Time, DispatcherTimer Timer)? _run;
 
     public TaskbarClock() => InitializeComponent();
-
-    public string Text { get; private set; } = "";
-
-    public string AccessibleName { get; private set; } = "";
 
     public void Attach(Preferences preferences, TimeProvider time)
     {
         Detach();
-        _preferences = preferences;
-        _time = time;
-        _model = new TaskbarClockModel(time, preferences);
-        _timer = new DispatcherTimer();
-        _timer.Tick += (_, _) => Show();
+        var model = new TaskbarClockModel(time, preferences);
+        var timer = new DispatcherTimer();
+        timer.Tick += (_, _) => Show();
+        _run = (model, preferences, time, timer);
         preferences.PropertyChanged += OnPreferences;
         Show();
     }
 
     public void Detach()
     {
-        if (_preferences is not null)
-            _preferences.PropertyChanged -= OnPreferences;
-        _preferences = null;
-        _time = null;
-        _model = null;
-        if (_timer is null)
+        if (_run is not { } run)
             return;
-        _timer.Stop();
-        _timer = null;
+        run.Preferences.PropertyChanged -= OnPreferences;
+        run.Timer.Stop();
+        _run = null;
     }
 
     private void OnPreferences(object? sender, PropertyChangedEventArgs e)
@@ -52,14 +41,13 @@ public sealed partial class TaskbarClock : UserControl
 
     private void Show()
     {
-        if (_model is null || _timer is null || _time is null || _preferences is null)
+        if (_run is not { } run)
             return;
-        _model.Refresh();
-        Text = _model.Text;
-        AccessibleName = _model.AccessibleName;
-        Bindings.Update();
-        _timer.Stop();
-        _timer.Interval = TaskbarClockModel.UntilNext(_time.GetLocalNow(), _preferences.ClockSeconds);
-        _timer.Start();
+        run.Model.Refresh();
+        Readout.Text = run.Model.Text;
+        AutomationProperties.SetName(Readout, run.Model.AccessibleName);
+        run.Timer.Stop();
+        run.Timer.Interval = TaskbarClockModel.UntilNext(run.Time.GetLocalNow(), run.Preferences.ClockSeconds);
+        run.Timer.Start();
     }
 }

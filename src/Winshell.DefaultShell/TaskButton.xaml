@@ -19,7 +19,6 @@
         <Border x:Name="MarkRest" Width="6" Height="3" Margin="0,0,0,2" CornerRadius="1.5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed" Background="{ThemeResource TextFillColorTertiaryBrush}" />
         <Border x:Name="MarkActive" Width="16" Height="3" Margin="0,0,0,2" CornerRadius="1.5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed" Background="{ThemeResource AccentFillColorDefaultBrush}" />
         <Border x:Name="MarkAttention" Width="6" Height="3" Margin="0,0,0,2" CornerRadius="1.5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed" Background="{ThemeResource SystemFillColorCriticalBrush}" />
-        <Border x:Name="MarkAttentionActive" Width="16" Height="3" Margin="0,0,0,2" CornerRadius="1.5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed" Background="{ThemeResource SystemFillColorCriticalBrush}" />
         <Border x:Name="Stroke" CornerRadius="{ThemeResource ControlCornerRadius}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" Visibility="Collapsed" />
     </Grid>
 </Button>
