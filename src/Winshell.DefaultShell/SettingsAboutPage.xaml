@@ -1,0 +1,49 @@
+<UserControl
+    x:Class="Winshell.DefaultShell.SettingsAboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Winshell.DefaultShell"
+    HorizontalAlignment="Stretch">
+    <StackPanel Spacing="4">
+        <local:SettingsCard x:Name="VersionCard">
+            <local:SettingsCard.TrailContent>
+                <Button x:Name="Copy" Content="Copy" AutomationProperties.Name="Copy the version" Click="OnCopy" />
+            </local:SettingsCard.TrailContent>
+        </local:SettingsCard>
+        <local:SettingsCard x:Name="UpdatesCard">
+            <local:SettingsCard.TrailContent>
+                <Button x:Name="Update" Click="OnUpdate" />
+            </local:SettingsCard.TrailContent>
+        </local:SettingsCard>
+        <local:SettingsCard x:Name="AutomaticCard">
+            <local:SettingsCard.TrailContent>
+                <ToggleSwitch x:Name="Automatic" OnContent="On" OffContent="Off" Toggled="OnAutomaticToggled" />
+            </local:SettingsCard.TrailContent>
+        </local:SettingsCard>
+        <local:SettingsCard x:Name="FolderCard">
+            <local:SettingsCard.TrailContent>
+                <Button x:Name="OpenFolder" Content="Open folder" AutomationProperties.Name="Open the config folder" Click="OnOpenFolder" />
+            </local:SettingsCard.TrailContent>
+        </local:SettingsCard>
+        <local:SettingsCard x:Name="LogCard">
+            <local:SettingsCard.TrailContent>
+                <Button x:Name="OpenLog" Content="Open log" AutomationProperties.Name="Open the log" Click="OnOpenLog" />
+            </local:SettingsCard.TrailContent>
+        </local:SettingsCard>
+        <local:SettingsCard x:Name="DiagnosticsCard">
+            <local:SettingsCard.TrailContent>
+                <Button x:Name="RunDiagnostics" Content="Run diagnostics" AutomationProperties.Name="Run diagnostics" Click="OnDiagnostics" />
+            </local:SettingsCard.TrailContent>
+        </local:SettingsCard>
+        <Border
+            x:Name="Results"
+            Padding="16,8"
+            Visibility="Collapsed"
+            CornerRadius="{ThemeResource ControlCornerRadius}"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1">
+            <StackPanel x:Name="Checks" />
+        </Border>
+    </StackPanel>
+</UserControl>

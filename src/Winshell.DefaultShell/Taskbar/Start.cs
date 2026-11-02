@@ -78,12 +78,35 @@ public sealed class Start : ObservableObject, IDisposable
         Publish();
     }
 
-    public void TogglePin(string id)
+    public void TogglePin(string id) => ApplyChoice(StartList.TogglePin(_ids, id));
+
+    /// <summary>Moves a pin past the one <paramref name="offset"/> rows away. A pin Start cannot show keeps its place.</summary>
+    public bool MoveShown(string id, int offset)
     {
-        var next = StartList.TogglePin(_ids, id);
+        var shown = new string[Pinned.Count];
+        for (var i = 0; i < Pinned.Count; i++)
+            shown[i] = Pinned[i].Id;
+        var next = SettingsOrder.Move(_ids, shown, id, offset);
+        if (next is null)
+            return false;
+        ApplyChoice(next);
+        return true;
+    }
+
+    /// <summary>Unpins an app. An id Start cannot show stays in the file.</summary>
+    public void UnpinShown(string id)
+    {
+        if (!IsPinned(id))
+            return;
+        ApplyChoice(SettingsOrder.Remove(_ids, id));
+    }
+
+    // A choice. Written only when the file parses, so a broken launcher.toml is left as it is.
+    private void ApplyChoice(IReadOnlyList<string> ids)
+    {
         _choice = true;
         _ids.Clear();
-        _ids.AddRange(next);
+        _ids.AddRange(ids);
         if (_pins.Error.Length == 0)
             AssignPins();
         Publish();

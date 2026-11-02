@@ -6,6 +6,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
+using Winshell.DefaultShell.Taskbar;
+using Winshell.Input;
 
 namespace Winshell.DefaultShell;
 
@@ -28,12 +30,15 @@ public sealed partial class SettingsView : UserControl
     private readonly SettingsStartPage _start;
     private readonly SettingsNotificationsPage _notifications;
     private readonly SettingsStartupPage _startup;
-    private readonly SettingsStubPage _pins;
+    private readonly SettingsQuickSettingsPage _quickSettings;
+    private readonly SettingsHotkeysPage _hotkeys;
+    private readonly SettingsAboutPage _about;
+    private readonly SettingsPinsPage _pins;
     private bool _applying;
     private string _crumbs = "";
     private string _shown = "";
 
-    public SettingsView(Preferences preferences, Shell shell)
+    public SettingsView(Preferences preferences, Shell shell, Start start, QuickSettingsLayout layout, Hotkey startHotkey, Hotkey settingsHotkey)
     {
         _preferences = preferences;
         _shell = shell;
@@ -59,15 +64,18 @@ public sealed partial class SettingsView : UserControl
         _notifications = new SettingsNotificationsPage(preferences, shell);
         _startup = new SettingsStartupPage(shell);
         _start.PinsRequested += (_, _) => ShowPage("start", "pins");
+        _quickSettings = new SettingsQuickSettingsPage(layout);
+        _hotkeys = new SettingsHotkeysPage(preferences, startHotkey, settingsHotkey);
+        _about = new SettingsAboutPage(preferences, shell);
+        _pins = new SettingsPinsPage(start);
         Add("personalization", _personalization);
         Add("taskbar", _taskbar);
         Add("start", _start);
         Add("notifications", _notifications);
         Add("startup", _startup);
-        Add("quickSettings", new SettingsStubPage(SettingsCatalog.RequirePage("quickSettings").Title));
-        Add("hotkeys", new SettingsStubPage(SettingsCatalog.RequirePage("hotkeys").Title));
-        Add("about", new SettingsStubPage(SettingsCatalog.RequirePage("about").Title));
-        _pins = new SettingsStubPage(SettingsCatalog.FindSubpage("pins")!.Title);
+        Add("quickSettings", _quickSettings);
+        Add("hotkeys", _hotkeys);
+        Add("about", _about);
         Pages.Children.Add(_pins);
 
         preferences.PropertyChanged += OnPreferences;
@@ -223,7 +231,7 @@ public sealed partial class SettingsView : UserControl
         {
             if (i > 0)
             {
-                Breadcrumb.Children.Add(new TextBlock
+                var chevron = new TextBlock
                 {
                     Text = "\uE76C",
                     FontFamily = Icons,
@@ -231,7 +239,9 @@ public sealed partial class SettingsView : UserControl
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(4, 0, 4, 0),
                     IsHitTestVisible = false,
-                });
+                };
+                AutomationProperties.SetAccessibilityView(chevron, AccessibilityView.Raw);
+                Breadcrumb.Children.Add(chevron);
             }
             var crumb = crumbs[i];
             if (crumb.Link)
@@ -309,8 +319,11 @@ public sealed partial class SettingsView : UserControl
             "personalization" => _personalization.FocusSetting(key),
             "taskbar" => _taskbar.FocusSetting(key),
             "start" when _navigation.Subpage.Length == 0 => _start.FocusSetting(key),
+            "quickSettings" => _quickSettings.FocusSetting(key),
             "notifications" => _notifications.FocusSetting(key),
+            "hotkeys" => _hotkeys.FocusSetting(key),
             "startup" => _startup.FocusSetting(key),
+            "about" => _about.FocusSetting(key),
             _ => false,
         };
     }

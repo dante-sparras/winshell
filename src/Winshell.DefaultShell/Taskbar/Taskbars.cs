@@ -30,7 +30,8 @@ internal sealed class Taskbars
         _tray = new TrayArea(shell.SystemTray, new SystemStatus(shell.Networking, shell.Audio, shell.Power, shell.PowerMode), shell.Updates);
         // One center for every bar. Reading the listener never asks Windows for access.
         _notifications = new NotificationCenter(shell.Notifications, preferences, TimeProvider.System);
-        // One quick settings for every bar. Bluetooth is read only while a flyout is open.
+        // One quick settings for every bar, and the same layout for Winshell Settings. Bluetooth is read only while a flyout is open.
+        var layout = new QuickSettingsLayout(shell.StatePath("quick-settings.toml"), shell.Loop, shell.Log);
         _quick = new QuickSettings(
             _tray.Status,
             shell.Networking,
@@ -39,7 +40,7 @@ internal sealed class Taskbars
             shell.Power,
             shell.PowerMode,
             shell.Brightness,
-            new QuickSettingsLayout(shell.StatePath("quick-settings.toml"), shell.Loop, shell.Log),
+            layout,
             shell.Media);
         _quick.SettingsRequested += uri => ProgramStart.Start(uri, shell.Log);
         // One Start catalog for every bar, so two bars do not both write the default pins.
@@ -51,7 +52,7 @@ internal sealed class Taskbars
         _hotkey = shell.NewHotkey();
         _hotkey.Pressed += (_, _) => ToggleStart();
         _hotkey.Sequence = preferences.StartHotkey;
-        _settings = new SettingsHost(shell, preferences);
+        _settings = new SettingsHost(shell, preferences, _start, layout, _hotkey);
         _tray.UpdatesRequested += (_, _) => _settings.Open("winshellUpdates");
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
