@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
+using Winshell.Windows;
 
 namespace Winshell.Winland;
 
@@ -180,22 +181,25 @@ public sealed class WinlandWorkspace : ObservableObject
 /// <summary>A window as Winland reports it. Its address is the window handle.</summary>
 public sealed class WinlandWindow : ObservableObject
 {
+    private readonly WinlandService _service;
     private ulong _address;
     private string _title = "";
     private WinlandWorkspace? _workspace;
     private WinlandMonitor? _monitor;
     private bool _activated, _urgent;
+    private AppWindow? _seen;
     private JsonElement? _lastIpcObject;
 
-    internal WinlandWindow()
-    {
-    }
+    internal WinlandWindow(WinlandService service) => _service = service;
 
     /// <summary>The window handle in hexadecimal, without <c>0x</c>.</summary>
     public string Address => _address == 0 ? "" : _address.ToString("x", CultureInfo.InvariantCulture);
 
     /// <summary>The window handle, which names the same window in <c>Winshell.Windows</c>.</summary>
     public nint Handle => (nint)_address;
+
+    /// <summary>The same window in <see cref="WindowListService"/>, or null when that list is not in use or has no such window.</summary>
+    public AppWindow? Window => _service.FindWindow(Handle);
 
     public string Title => _title;
 
@@ -222,6 +226,16 @@ public sealed class WinlandWindow : ObservableObject
         _address = address;
         Changed(nameof(Address));
         Changed(nameof(Handle));
+        NotifyWindow();
+    }
+
+    internal void NotifyWindow()
+    {
+        var window = Window;
+        if (ReferenceEquals(_seen, window))
+            return;
+        _seen = window;
+        Changed(nameof(Window));
     }
 
     internal void SetTitle(string title) => Set(ref _title, title, nameof(Title));

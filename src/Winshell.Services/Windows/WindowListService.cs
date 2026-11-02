@@ -32,6 +32,9 @@ public sealed class WindowListService : ObservableObject, IDisposable
 
     public AppWindow? ActiveWindow => _activeWindow;
 
+    /// <summary>The window with this handle, or null when it is not listed.</summary>
+    internal AppWindow? Find(nint hwnd) => _byHwnd.GetValueOrDefault(hwnd);
+
     private void OnChanged() => _loop.Post(Apply);
 
     private void Apply()

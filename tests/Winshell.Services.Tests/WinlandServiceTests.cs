@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Winshell.Windows;
 using Winshell.Winland;
 
 namespace Winshell.Services.Tests;
@@ -106,6 +107,57 @@ public sealed class WinlandServiceTests
         Assert.True(threes[1].Active);
         Assert.Equal("20", Assert.Single(threes[1].Toplevels).Address);
         Assert.Empty(threes[0].Toplevels);
+    }
+
+    [Fact]
+    public void A_toplevel_is_the_app_window_with_its_handle()
+    {
+        var windows = new Listing();
+        windows.Open(Info(0x10));
+        using var list = new WindowListService(_loop, Log.Default, source: windows);
+        using var service = Connected();
+        var editor = service.Toplevels.Single(window => window.Address == "10");
+        var browser = service.Toplevels.Single(window => window.Address == "20");
+        Assert.Null(editor.Window);
+        Assert.Null(service.WindowList);
+
+        var changes = Watch(editor);
+        service.Attach(list);
+
+        Assert.Same(list, service.WindowList);
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x10), editor.Window);
+        Assert.Equal([nameof(WinlandWindow.Window)], changes);
+        Assert.Null(browser.Window);
+
+        windows.Open(Info(0x20));
+        windows.Push();
+        _loop.Process();
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20), browser.Window);
+
+        windows.Items.Remove(0x10);
+        windows.Push();
+        _loop.Process();
+        Assert.Null(editor.Window);
+        Assert.Contains(nameof(WinlandWindow.Window), changes);
+    }
+
+    [Fact]
+    public void A_window_list_attached_before_winland_reports_clients_still_resolves_them()
+    {
+        var windows = new Listing();
+        windows.Open(Info(0x10), Info(0x20));
+        using var list = new WindowListService(_loop, Log.Default, source: windows);
+        _link.Replies["j/monitors"] = Monitors;
+        _link.Replies["j/workspaces"] = Workspaces;
+        _link.Replies["j/clients"] = Clients;
+        _link.Replies["j/activewindow"] = """{"address":"0x10"}""";
+        _link.Connected = true;
+        using var service = new WinlandService(_loop, Log.Default, _link);
+        service.Attach(list);
+        _loop.Process();
+
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x10), service.Toplevels.Single(window => window.Address == "10").Window);
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20), service.Toplevels.Single(window => window.Address == "20").Window);
     }
 
     [Fact]
@@ -356,6 +408,59 @@ public sealed class WinlandServiceTests
         Assert.Equal(title, service.Toplevels[0].Title);
         Assert.Equal(1, _link.Disposals);
         Assert.Equal(0, _link.Listeners);
+    }
+
+    private static WindowInfo Info(nint hwnd) => new(hwnd, "Title", "app", @"C:\app.exe", "", 0, false, false, false, "M1");
+
+    private sealed class Listing : IWindowSource
+    {
+        public Dictionary<nint, WindowInfo> Items { get; } = [];
+
+        public IReadOnlyDictionary<nint, WindowInfo> Windows => Items;
+
+        public nint Active { get; set; }
+
+        public event Action? Changed;
+
+        public void Open(params WindowInfo[] windows)
+        {
+            foreach (var window in windows)
+                Items[window.Hwnd] = window;
+        }
+
+        public void Push() => Changed?.Invoke();
+
+        public void Start(IEventLoop loop, Log log)
+        {
+        }
+
+        public bool WantsAttention(nint hwnd) => false;
+
+        public ScreenInfo? Screen(string deviceName) => null;
+
+        public string DesktopId(nint hwnd) => "";
+
+        public bool MoveToDesktop(nint hwnd, Guid desktop) => false;
+
+        public void Activate(nint hwnd)
+        {
+        }
+
+        public void Close(nint hwnd)
+        {
+        }
+
+        public void SetMaximized(nint hwnd, bool maximized)
+        {
+        }
+
+        public void SetMinimized(nint hwnd, bool minimized)
+        {
+        }
+
+        public void MoveToMonitor(nint hwnd, string deviceName)
+        {
+        }
     }
 
     private sealed class FakeLink : IWinlandLink
