@@ -101,6 +101,9 @@ internal sealed unsafe class HostWindow : IDisposable
 
     public nint Handle { get; private set; }
 
+    /// <summary>Whether this window has an app bar with Explorer, which reserves its edge.</summary>
+    internal bool HoldsEdge => _appBarRegistered;
+
     public WindowKind Kind => _kind;
 
     public bool IsVisible => _visible;
@@ -214,7 +217,9 @@ internal sealed unsafe class HostWindow : IDisposable
     /// <summary>Puts the panel on its screen, reserving its exclusive zone through an app bar.</summary>
     internal void PlacePanel()
     {
-        if (_panel is not { } p)
+        // Explorer's notice that another bar moved can land on the loop after this window is gone. An app bar asked
+        // for with no window is one nothing can remove, and it holds the edge after the shell has exited.
+        if (_released || _panel is not { } p)
             return;
         // A panel whose screen was unplugged moves to the primary screen until that screen comes back.
         var monitor = (p.Screen is { } screen ? Screens.Find(screen.Id) : null) ?? Screens.Find(_platform.PrimaryScreenId);
