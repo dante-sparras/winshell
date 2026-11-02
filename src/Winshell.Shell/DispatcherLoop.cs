@@ -7,6 +7,9 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
 {
     private readonly long _started = TimeProvider.System.GetTimestamp();
 
+    // A timer nothing holds is collected and never fires, and a caller need not keep the handle.
+    private readonly HashSet<DispatcherQueueTimer> _timers = [];
+
     public TimeSpan Now => TimeProvider.System.GetElapsedTime(_started);
 
     /// <summary>Raised with what posted work or a timer threw, after it is logged.</summary>
@@ -19,13 +22,22 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
         var timer = queue.CreateTimer();
         timer.IsRepeating = false;
         timer.Interval = delay < TimeSpan.Zero ? TimeSpan.Zero : delay;
-        timer.Tick += (t, _) =>
+        lock (_timers)
+            _timers.Add(timer);
+        timer.Tick += (_, _) =>
         {
-            t.Stop();
+            Forget(timer);
             Run(action);
         };
         timer.Start();
-        return new Timer(timer);
+        return new Timer(this, timer);
+    }
+
+    private void Forget(DispatcherQueueTimer timer)
+    {
+        timer.Stop();
+        lock (_timers)
+            _timers.Remove(timer);
     }
 
     public void RequestFrame(Action action) => queue.TryEnqueue(DispatcherQueuePriority.Low, () => Run(action));
@@ -45,8 +57,8 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
         }
     }
 
-    private sealed class Timer(DispatcherQueueTimer timer) : IDisposable
+    private sealed class Timer(DispatcherLoop loop, DispatcherQueueTimer timer) : IDisposable
     {
-        public void Dispose() => timer.Stop();
+        public void Dispose() => loop.Forget(timer);
     }
 }
