@@ -46,6 +46,42 @@ public sealed class ShellNoticeTests : IDisposable
         return new Closes(this);
     }
 
+    [Fact]
+    public void A_config_file_that_does_not_read_shows_until_it_is_fixed()
+    {
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "preferences.toml[3:1]: expected a value");
+
+        var notice = Assert.Single(_shown);
+        Assert.Equal(NoticeKind.ConfigError, notice.Kind);
+        Assert.Equal("preferences.toml", notice.Detail);
+        Assert.Contains("[3:1]", notice.Body, StringComparison.Ordinal);
+        Assert.Equal(TimeSpan.Zero, notice.Timeout);
+
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+
+        Assert.Null(_notices.Current);
+    }
+
+    [Fact]
+    public void Fixing_one_config_file_leaves_the_notice_of_another()
+    {
+        _notices.ShowConfigError(@"C:\config\launcher.toml", "broken");
+
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+
+        Assert.NotNull(_notices.Current);
+    }
+
+    [Fact]
+    public void A_fixed_config_file_leaves_a_build_error_on_screen()
+    {
+        _notices.Show(ShellNotices.ForBuildError("no", "Mine.csproj"));
+
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+
+        Assert.Equal(NoticeKind.BuildError, _notices.Current?.Kind);
+    }
+
     private sealed class Closes(ShellNoticeTests test) : IDisposable
     {
         public void Dispose() => test._closed++;

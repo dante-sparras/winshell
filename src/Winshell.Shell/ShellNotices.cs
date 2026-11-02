@@ -7,6 +7,9 @@ internal enum NoticeKind
     /// <summary>The configuration did not build. It stays until it is fixed or dismissed.</summary>
     BuildError,
 
+    /// <summary>A TOML file does not read, under <c>winshell dev</c>. It stays until the file is fixed.</summary>
+    ConfigError,
+
     /// <summary>Something failed and Winshell wrote a crash report. It goes away by itself.</summary>
     Crash,
 }
@@ -72,6 +75,26 @@ internal sealed class ShellNotices : IDisposable
         projectFile,
         TimeSpan.Zero);
 
+    /// <summary>The notice for a config file that does not read, while the values from before keep working.</summary>
+    public static Notice ForConfigError(string error, string file) => new(
+        NoticeKind.ConfigError,
+        "A config file has an error",
+        Path.GetFileName(file),
+        error,
+        "Winshell keeps the values it had.",
+        "Open file",
+        file,
+        TimeSpan.Zero);
+
+    /// <summary>Shows a config file's error, or takes it away once the file reads again.</summary>
+    public void ShowConfigError(string file, string error)
+    {
+        if (error.Length > 0)
+            Show(ForConfigError(error, file));
+        else if (Current is { Kind: NoticeKind.ConfigError } current && current.Target == file)
+            Hide();
+    }
+
     /// <summary>The notice for something that failed: what failed, what Winshell did, and the report.</summary>
     public static Notice ForCrash(CrashReport report, TimeSpan timeout)
     {
@@ -88,6 +111,7 @@ internal sealed class ShellNotices : IDisposable
         Hide();
         try
         {
+            _log.Info("notice", $"{notice.Title}: {notice.Detail}");
             Current = notice;
             _window = _show(notice, Act, () => _loop.Post(Hide));
         }

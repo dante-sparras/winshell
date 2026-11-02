@@ -166,6 +166,8 @@ namespace Winshell
                     return await Ipc(options);
                 case "doctor":
                     return Doctor(options);
+                case "dev":
+                    return await Dev(options);
                 case "msg":
                     Console.Error.WriteLine("winshell msg is deprecated; use winshell ipc call.");
                     options.Positional.Insert(0, "call");
@@ -453,6 +455,15 @@ namespace Winshell
                           With several, this exits and lists them.
                         """);
                     return;
+                case "dev":
+                    WriteHelp("""
+                        winshell dev [-c <name> | -p <path>]
+                          Runs a configuration project and applies each edit to the running shell, until Ctrl+C.
+                          An edited panel is rebuilt in place, and the other windows are left alone.
+                          What does not compile shows on screen, and the last version that did keeps running.
+                          Needs the .NET SDK. See the guide for what an edit can change.
+                        """);
+                    return;
                 case "log":
                     WriteHelp("""
                         winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
@@ -502,6 +513,8 @@ namespace Winshell
                                                            stop an instance and wait until it exits
                        winshell reload [--hard] [instance options]
                                                            reload an instance's configuration
+                       winshell dev [-c <name> | -p <path>]
+                                                           run a project and apply each edit to it
                        winshell log [-f] [-t N] [file]     print an instance's log
                        winshell ipc show [-j]              list IPC targets
                        winshell ipc call <target> <function> [args...]
@@ -889,6 +902,27 @@ namespace Winshell
             }
             Console.WriteLine($"Killed {info.Id}");
             return 0;
+        }
+
+        private static async Task<int> Dev(Options o)
+        {
+            var project = FindProject(o, out var error);
+            if (error is not null)
+            {
+                Console.Error.WriteLine(error);
+                return 1;
+            }
+            if (project is null)
+            {
+                Console.Error.WriteLine("winshell dev needs a configuration project. Run dotnet new winshell to make one.");
+                return 1;
+            }
+            if (project.Downloaded() is { } file)
+            {
+                Console.Error.WriteLine($"{file}: {ZoneIdentifier.Blocked(file)}");
+                return 1;
+            }
+            return await DevSession.Run(project);
         }
 
         private static async Task<int> Reload(Options o)

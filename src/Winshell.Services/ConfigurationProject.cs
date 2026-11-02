@@ -19,6 +19,8 @@ internal delegate CommandResult RunCommand(string file, IReadOnlyList<string> ar
 internal sealed class ConfigurationProject
 {
     private const int MostErrors = 10;
+    internal const string NeedsSdk = "Building a configuration needs the .NET SDK, from https://dot.net/download.";
+
     private static readonly TimeSpan BuildLimit = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan StreamLimit = TimeSpan.FromSeconds(1);
 
@@ -199,7 +201,7 @@ internal sealed class ConfigurationProject
         }
         catch (Win32Exception)
         {
-            return new CommandResult(-1, "Building a configuration needs the .NET SDK, from https://dot.net/download.");
+            return new CommandResult(-1, NeedsSdk);
         }
     }
 

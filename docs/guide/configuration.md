@@ -107,3 +107,17 @@ Pass `Path.Combine(shell.ConfigRoot, "preferences.toml")` and `shell.Loop`. The 
 That starts this program again with `--after` and quits. It does not build. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over. There is no file watcher. `dotnet watch` rebuilds as you edit.
 
 `winshell run --no-build` skips the build. The sign-in entry uses it, so signing in does not need the SDK and does not run a broken edit.
+
+## Develop a shell
+
+```powershell
+winshell dev -c MyShell
+```
+
+`winshell dev` builds your project, starts it, and applies each save to the running shell until you press Ctrl+C. It needs the .NET SDK, and it runs a Debug build.
+
+- **A C# edit** reaches the running shell in about a second. The first one takes a little longer, while the compiler warms up. An edited method runs its new code at its next call.
+- **A window showing an edited type** gets a new one of its content, so a change to a constructor shows too. The window keeps its place, and every other window keeps its content and its state. A view whose constructor takes arguments stays, and its edited methods still run. Keep state that must survive in a model the view is given.
+- **An edit .NET can't apply to running code**, such as a new base class, restarts the shell. That takes as long as a build, and the state of every window goes with it.
+- **Code that doesn't compile** shows in a notice on screen, and the last version that did keeps running. The notice goes when the next save compiles. Before the first successful build there is no shell to show it, so the error is in the console.
+- **A TOML file with an error** shows in the same notice, and the values from before stay in use. Without `winshell dev` it goes to the log.

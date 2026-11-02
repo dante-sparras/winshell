@@ -79,8 +79,15 @@ public abstract class TomlFile : ObservableObject, IDisposable
     public string Error
     {
         get => _error;
-        private set => Set(ref _error, value);
+        private set
+        {
+            if (Set(ref _error, value))
+                ErrorChanged?.Invoke(_path, value);
+        }
     }
+
+    /// <summary>A TOML file's <see cref="Error"/> changed, on its loop: its path and the error, or empty when it is fixed.</summary>
+    internal static event Action<string, string>? ErrorChanged;
 
     /// <summary>Whether the file is there and parses. Without it the properties keep the values they had.</summary>
     public bool Loaded

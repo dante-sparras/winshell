@@ -104,6 +104,9 @@ internal sealed unsafe class HostWindow : IDisposable
 
     public nint Handle { get; private set; }
 
+    /// <summary>The shell window this native window shows.</summary>
+    internal IHostClient Client => _client;
+
     /// <summary>Whether this window has an app bar with Explorer, which reserves its edge.</summary>
     internal bool HoldsEdge => _appBarRegistered;
 
