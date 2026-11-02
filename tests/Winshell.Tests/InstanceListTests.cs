@@ -5,7 +5,7 @@ namespace Winshell.Tests;
 public class InstanceListTests
 {
     private static InstanceInfo Record(int pid, string? processName) =>
-        new("id", pid, "shell", "C:\\cfg\\shell.qml", DateTime.Now, "pipe", "log.txt", ProcessName: processName);
+        new("id", pid, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "log.txt", ProcessName: processName);
 
     [Theory]
     [InlineData(null)]

@@ -105,7 +105,6 @@ What the doctor needs from `winshell.exe`: this executable, the config that woul
 | `Instances` | IReadOnlyList of [DoctorInstance](#doctorinstance), init |  |
 | `LocalRoot` | string, init |  |
 | `ProjectRoot` | string?, init | The folder [Configuration](#doctor) searches. Null searches `ConfigRoot`. |
-| `RetiredQml` | string?, init | A `shell.qml` left behind with no project, or null. |
 
 ## DoctorInstance
 

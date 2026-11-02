@@ -132,17 +132,6 @@ These values combine.
 | `PlaybackDevice` | 17 |  |
 | `PlaybackSession` | 21 |  |
 
-## AudioObjectTracker
-
-Keeps a list of audio objects, for shells that come from Quickshell, where an object must be tracked before its properties are valid. Windows objects always are, so this only holds the list.
-
-Has the members of [ObservableObject](winshell.md#observableobject).
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `AudioObjectTracker()` | constructor |  |
-| `Objects` | IReadOnlyList of object |  |
-
 ## AudioPeakMonitor
 
 The peak level of a node's channels, read from the Windows peak meter about 30 times a second while enabled. Windows meters a device after its volume is applied. A recording device only meters while something records from it, so this keeps a recording stream open on it, and Windows shows its microphone privacy indicator meanwhile.

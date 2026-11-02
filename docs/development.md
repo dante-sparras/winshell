@@ -81,12 +81,8 @@ A running shell reads these. None is needed to build or test.
 
 | Variable | What it does |
 | --- | --- |
-| `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. This run does not copy an old `~/.config/winshell`. |
+| `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. |
 | `WINSHELL_LOCAL_DIR` | Folder used instead of `%LOCALAPPDATA%\winshell` for cache, state, data, the default shell, instance logs, crash reports and downloaded updates. A child process inherits it. |
-| `WINSHELL_APP_ID` | Sets `Shell.appId` when the configuration has no `//@ pragma AppId`. |
-| `WINSHELL_DISABLE_FILE_WATCHER` | Any value stops the shell from reloading when its files change. |
-| `WINSHELL_NO_RELOAD_POPUP` | `1` hides Winshell's notice for a configuration that failed to load. A shell can hide it for one failed reload with `Shell.inhibitReloadPopup()` in `Shell.onReloadFailed`. The notice for a window that failed still shows. |
-| `WINLAND_PIPE` | The named pipe `Winshell.Winland` connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 `WINSHELL_TEST_CRASH` is read only by a Debug build, for the crash tests: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. A Release build ignores it. Never set it otherwise.
 
@@ -109,16 +105,13 @@ A running shell reads these. None is needed to build or test.
 | Cache | `%LOCALAPPDATA%\winshell\cache\by-shell\<shell id>` |
 | State | `%LOCALAPPDATA%\winshell\state\by-shell\<shell id>` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>` |
-| The default shell | `%LOCALAPPDATA%\winshell\default-shell`, written when Winshell runs it and no other instance is running that shell. A `.qml` or `.js` file this build does not ship is removed. |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
 | Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. Reports leave out what scripts printed to the log and take out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
 | Downloaded updates | `%LOCALAPPDATA%\winshell\updates\<version>`, until the next start installs them. `install.ps1` and `uninstall.ps1` delete this folder. See [Winshell updates](updates.md) |
-| Winshell Settings choices | `preferences.toml` next to a config's `shell.qml`, or in the user configurations folder for the default shell; see [Winshell Settings](settings.md) |
-| Start pins | `launcher.toml` next to the default shell |
+| Winshell Settings choices | `preferences.toml` in the user configurations folder; see [Winshell Settings](settings.md) |
+| Start pins | `launcher.toml` in the user configurations folder |
 | Quick settings tiles | `quick-settings.toml` in the default shell's state folder |
 | Run at sign-in | An unpackaged Winshell writes the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens. A failure before the shell starts shows a dialog. The entry uses the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. `winshell.exe` and `winshellw.exe` in the same folder are one install: an entry for either reads as this Winshell. An entry that starts a Winshell in another folder, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. A packaged Winshell does not write that value. It enables the package's `windows.startupTask` (task id `Winshell`, declared off) which starts `winshellw.exe --no-duplicate`. Windows owns that launch, so a Store update does not leave a path, and `registeredElsewhere` stays false. |
-
-The first launch that uses the default config folder copies `%USERPROFILE%\.config\winshell` into `%APPDATA%\winshell` when the old folder exists. The copy leaves the old folder in place, and it does not replace a file already in the new folder.
 
 ## Releasing
 
@@ -182,13 +175,11 @@ Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires W
 
 ## Bluetooth permissions
 
-Reading Bluetooth state uses Windows adapter and device-enumeration properties, plus `BluetoothIsDiscoverable` and `BluetoothIsConnectable`, and does not request control of radios or open remote device handles. Packaged deployments need the `bluetooth` capability. Setting `BluetoothAdapter.enabled` requests radio control, and a packaged app also needs the `radios` capability. Setting `discoverable` or `pairable` calls `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are exposed to QML. Automated native validation only reads. Scanning, device actions, radio changes and these visibility changes use a fake backend and never call `Radio.SetStateAsync`, `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. See [Windows Bluetooth](bluetooth.md).
+Reading Bluetooth state uses Windows adapter and device-enumeration properties, plus `BluetoothIsDiscoverable` and `BluetoothIsConnectable`, and does not request control of radios or open remote device handles. Packaged deployments need the `bluetooth` capability. Setting `BluetoothAdapter.enabled` requests radio control, and a packaged app also needs the `radios` capability. Setting `discoverable` or `pairable` calls `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are reported on the service. Automated native validation only reads. Scanning, device actions, radio changes and these visibility changes use a fake backend and never call `Radio.SetStateAsync`, `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. See [Windows Bluetooth](bluetooth.md).
 
 ## Capture validation
 
 `Winshell.Capture` uses Windows.Graphics.Capture desktop interop with the system border enabled. No additional package or borderless capability is required. Windows policy, protected sources, session state and device availability can restrict capture. See [Windows capture](capture.md) for the API and limits.
-
-The native capture command and `WINSHELL_TEST_CAPTURE` went with the QML platform tests. They are not run.
 
 ## Run at sign-in
 
@@ -198,6 +189,6 @@ The native capture command and `WINSHELL_TEST_CAPTURE` went with the QML platfor
 
 Tests may register an unused chord such as Ctrl+Alt+Shift+F24 and may install a keyboard hook while a Windows-key hotkey is enabled or a key sequence is in progress. Each test removes the registration and the hook before it ends. Tests do not inject keystrokes or change keyboard settings. See [Windows hotkeys](hotkeys.md).
 
-## Notification, settings and snapshot renders
+## Checks only a live session can do
 
-The offscreen notification renders, the offscreen settings renders, and the snapshot comparison are not produced. Those tests rendered QML surfaces. CI does not upload `notification-surface`, `settings-surface` or `snapshot-diffs`, and `scripts/update-snapshots.ps1` is gone. Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md). The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).
+Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md). The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).

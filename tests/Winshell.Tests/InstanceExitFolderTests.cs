@@ -16,7 +16,7 @@ public sealed class InstanceExitFolderTests : IDisposable
         var id = "abc123abc123";
         var dir = Path.Combine(_root, id);
         Directory.CreateDirectory(dir);
-        var info = new InstanceInfo(id, 0, "shell", "C:\\cfg\\shell.qml", DateTime.Now, "winshell-" + id, Path.Combine(dir, "log.txt"), 1);
+        var info = new InstanceInfo(id, 0, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "winshell-" + id, Path.Combine(dir, "log.txt"), 1);
         File.WriteAllText(Path.Combine(dir, "instance.json"), JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo));
         File.WriteAllText(info.Log, "hello");
 
@@ -35,12 +35,12 @@ public sealed class InstanceExitFolderTests : IDisposable
     {
         var oldExit = Path.Combine(_root, "oldexitoldexi");
         Directory.CreateDirectory(oldExit);
-        var exited = new InstanceInfo("oldexitoldexi", 0, "shell", "C:\\cfg\\shell.qml", DateTime.Now.AddDays(-3), "pipe", Path.Combine(oldExit, "log.txt"), 1, DateTime.Now.AddDays(-2));
+        var exited = new InstanceInfo("oldexitoldexi", 0, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now.AddDays(-3), "pipe", Path.Combine(oldExit, "log.txt"), 1, DateTime.Now.AddDays(-2));
         File.WriteAllText(Path.Combine(oldExit, "instance.json"), JsonSerializer.Serialize(exited, InstanceJson.Default.InstanceInfo));
 
         var young = Path.Combine(_root, "youngeyoungex");
         Directory.CreateDirectory(young);
-        var fresh = new InstanceInfo("youngeyoungex", 0, "shell", "C:\\cfg\\shell.qml", DateTime.Now, "pipe", Path.Combine(young, "log.txt"), 1, DateTime.Now);
+        var fresh = new InstanceInfo("youngeyoungex", 0, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", Path.Combine(young, "log.txt"), 1, DateTime.Now);
         File.WriteAllText(Path.Combine(young, "instance.json"), JsonSerializer.Serialize(fresh, InstanceJson.Default.InstanceInfo));
 
         var orphan = Path.Combine(_root, "orphanorphan");

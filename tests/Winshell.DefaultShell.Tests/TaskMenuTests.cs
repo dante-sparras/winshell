@@ -3,7 +3,7 @@ using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell.Tests;
 
-/// <summary>The rows TaskMenu.qml builds, as literals: jump list, the app, one pin slot, then close.</summary>
+/// <summary>The rows a task menu has, as literals: jump list, the app, one pin slot, then close.</summary>
 public sealed class TaskMenuTests
 {
     private sealed record Entry(string Id, string Name, string Icon, string AppId) : ITaskApp;

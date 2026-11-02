@@ -1,9 +1,9 @@
-P:System.DateTime.Now;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-P:System.DateTime.UtcNow;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-P:System.DateTime.Today;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-P:System.DateTimeOffset.Now;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-P:System.DateTimeOffset.UtcNow;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-P:System.Environment.TickCount;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-P:System.Environment.TickCount64;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
-T:System.Diagnostics.Stopwatch;Use a TimeProvider: QmlEngine.Time, or TimeProvider.System where only real time makes sense
+P:System.DateTime.Now;Use a TimeProvider, which a test can replace
+P:System.DateTime.UtcNow;Use a TimeProvider, which a test can replace
+P:System.DateTime.Today;Use a TimeProvider, which a test can replace
+P:System.DateTimeOffset.Now;Use a TimeProvider, which a test can replace
+P:System.DateTimeOffset.UtcNow;Use a TimeProvider, which a test can replace
+P:System.Environment.TickCount;Use a TimeProvider, which a test can replace
+P:System.Environment.TickCount64;Use a TimeProvider, which a test can replace
+T:System.Diagnostics.Stopwatch;Use a TimeProvider, which a test can replace
 N:System.Runtime.InteropServices.ComTypes;A release trims the framework, and a trimmed COM interface calls the wrong method. Declare the interface in src
