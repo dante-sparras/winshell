@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Windows.Foundation;
 using Winshell.Audio;
 using Winshell.Bluetooth;
 using Winshell.Media;
@@ -16,7 +17,7 @@ public static class QuickSettingsPlacement
 
     public const double Gap = 8;
 
-    public static QRect Above(QRect button, double height) =>
+    public static Rect Above(Rect button, double height) =>
         new(button.Right - Width, button.Top - Gap - height, Width, height);
 }
 

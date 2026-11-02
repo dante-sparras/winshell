@@ -16,7 +16,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `FrameInterval` | int | Minimum time between frame reads; 16–1000 ms. Frames stay on D3D until consumed. |
 | `HasFrame` | bool, read-only |  |
 | `IncludeCursor` | bool | Applied on the next start. Previews omit the pointer by default. |
-| `PixelSize` | [QSize](winshell.md#qsize), read-only | The size of Frame in physical pixels, or zero without a frame. |
+| `PixelSize` | Size, read-only | The size of Frame in physical pixels, or zero without a frame. |
 | `Running` | bool, read-only |  |
 | `Target` | [CaptureTarget](#capturetarget)? | What to capture: an AppWindow from WindowListService, or a CaptureTarget. Changing it stops capture. Closing the app window clears this and stops capture. |
 | `FrameReady` | Action |  |

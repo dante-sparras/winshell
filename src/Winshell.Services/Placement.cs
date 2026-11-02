@@ -1,3 +1,5 @@
+using Windows.Foundation;
+
 namespace Winshell;
 
 /// <summary>How a panel treats the edges other bars reserve.</summary>
@@ -26,7 +28,7 @@ internal sealed record PanelPlacement(
     bool Focusable);
 
 /// <summary>Where a popup sits, in screen coordinates.</summary>
-internal sealed record PopupPlacement(ScreenInfo? Screen, QRect Rect, bool GrabFocus);
+internal sealed record PopupPlacement(ScreenInfo? Screen, Rect Rect, bool GrabFocus);
 
 [Flags]
 public enum Edges

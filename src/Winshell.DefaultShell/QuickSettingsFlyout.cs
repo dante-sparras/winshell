@@ -108,7 +108,7 @@ internal sealed class QuickSettingsFlyout
     {
         var point = _anchor.TransformToVisual(null).TransformPoint(default);
         var origin = _bar.Origin;
-        var button = new QRect(origin.X + point.X, origin.Y + point.Y, _anchor.ActualWidth, _anchor.ActualHeight);
+        var button = new Rect(origin.X + point.X, origin.Y + point.Y, _anchor.ActualWidth, _anchor.ActualHeight);
         var height = _view.ContentHeight;
         if (height <= 0)
         {

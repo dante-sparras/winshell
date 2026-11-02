@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Windows.Foundation;
 using Winshell.Audio;
 using Winshell.Media;
 using Winshell.Power;
@@ -332,7 +333,7 @@ public sealed class OnScreenDisplayTests
     private static ScreenInfo Secondary() => Screen("DISPLAY2", "Monitor B", false, 1920);
 
     private static ScreenInfo Screen(string name, string model, bool primary, double x) =>
-        new(@"\\.\" + name, name, model, "", "", new QRect(x, 0, 1920, 1080), new QRect(x, 0, 1920, 1040), 1, 0, 0, 60, primary);
+        new(@"\\.\" + name, name, model, "", "", new Rect(x, 0, 1920, 1080), new Rect(x, 0, 1920, 1040), 1, 0, 0, 60, primary);
 
     private static BrightnessInfo Monitor(string deviceName, string name, int brightness, int minimum = 0, int maximum = 100) =>
         new(deviceName, name, BrightnessConnection.External, minimum, maximum, brightness);
