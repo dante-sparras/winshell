@@ -1,0 +1,14 @@
+<UserControl
+    x:Class="Winshell.DefaultShell.SettingsStubPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    HorizontalAlignment="Stretch">
+    <StackPanel Spacing="8" Margin="0,8,0,0">
+        <TextBlock
+            Text="{x:Bind Title}"
+            Style="{ThemeResource SubtitleTextBlockStyle}" />
+        <TextBlock
+            Text="This page comes in the next part of Winshell Settings."
+            TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

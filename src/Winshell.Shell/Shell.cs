@@ -98,8 +98,36 @@ public sealed partial class Shell : IDisposable
     /// <summary>The connected screens. The primary screen comes first.</summary>
     public ObservableCollection<ScreenInfo> Screens => Platform.Screens;
 
-    /// <summary>Whether Windows mode is dark. Windows follow it on their own.</summary>
+    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <c>system</c> follows it.</summary>
     public bool IsDark => Platform.IsDark;
+
+    /// <summary>
+    /// Whether <paramref name="scheme"/> is dark. <c>light</c> and <c>dark</c> override Windows; anything else follows
+    /// <paramref name="windowsDark"/>.
+    /// </summary>
+    public static bool DarkFor(string? scheme, bool windowsDark) => scheme switch
+    {
+        "dark" => true,
+        "light" => false,
+        _ => windowsDark,
+    };
+
+    /// <summary>The color scheme every window follows: <c>system</c>, <c>light</c> or <c>dark</c>.</summary>
+    public string ColorScheme
+    {
+        get => Platform.ColorScheme;
+        set => Platform.ColorScheme = value;
+    }
+
+    /// <summary>The accent every window follows, as <c>#RRGGBB</c>, or <c>""</c> to follow Windows.</summary>
+    public string AccentColor
+    {
+        get => Platform.AccentColor;
+        set => Platform.AccentColor = value;
+    }
+
+    /// <summary>The accent Windows is using, as <c>#RRGGBB</c>.</summary>
+    public string SystemAccent => Platform.SystemAccent;
 
     /// <summary>A path in <see cref="ConfigDir"/>.</summary>
     public string ConfigPath(string path) => Path.Combine(ConfigDir, path);
