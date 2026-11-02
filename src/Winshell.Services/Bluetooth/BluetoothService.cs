@@ -288,13 +288,11 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private long _revision;
     private volatile bool _disposed;
 
-    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, bool monitor = true)
+    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null)
     {
         _loop = loop;
         _log = log;
         Backend = backend ?? new BluetoothBackend();
-        if (monitor)
-            StartMonitoring();
     }
 
     /// <summary>Starting or stopping discovery failed.</summary>
@@ -323,7 +321,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     public string Error => _error;
 
-    /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>. The service starts this when it is created.</summary>
+    /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>. Nothing is read before this.</summary>
     public void StartMonitoring()
     {
         if (_disposed)

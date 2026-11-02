@@ -97,7 +97,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Dispose()` | void |  |
 | `Refresh()` | void | Reads the state now, rather than at the next three-second read. |
 | `StartDiscovery()` | void | Starts looking for nearby devices. Needs an adapter that is on. |
-| `StartMonitoring()` | void | Reads adapter and device state until StopMonitoring. The service starts this when it is created. |
+| `StartMonitoring()` | void | Reads adapter and device state until StopMonitoring. Nothing is read before this. |
 | `StopDiscovery()` | void | Stops looking, and clears the unpaired devices it found. |
 | `StopMonitoring()` | void | Stops the three-second read. A later StartMonitoring starts it again. |
 
