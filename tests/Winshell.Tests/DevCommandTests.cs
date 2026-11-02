@@ -7,7 +7,7 @@ namespace Winshell.Tests;
 [Trait("Category", "Slow")]
 public sealed class DevCommandTests : IDisposable
 {
-    private static readonly TimeSpan BuildPatience = TimeSpan.FromSeconds(150);
+    private static readonly TimeSpan BuildPatience = TimeSpan.FromSeconds(140);
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly StringBuilder _printed = new();
@@ -51,7 +51,13 @@ public sealed class DevCommandTests : IDisposable
 
             internal sealed class Bare : ShellConfiguration
             {
-                public override void Start(Shell shell) => shell.Ipc.Handle("probe", "value", Marker.Value);
+                public override void Start(Shell shell)
+                {
+                    var view = new Dev.PanelView();
+                    _ = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 200, Height = 32, Content = view, Visible = true };
+                    shell.Ipc.Handle("probe", "value", Marker.Value);
+                    shell.Ipc.Handle("probe", "label", view.Shown);
+                }
             }
 
             internal static class Program
@@ -60,6 +66,19 @@ public sealed class DevCommandTests : IDisposable
                 private static void Main() => Shell.Run<Bare>(new ShellOptions { ShellId = "dev-probe" });
             }
             """);
+        File.WriteAllText(Path.Combine(Project, "PanelView.xaml.cs"), """
+            using Microsoft.UI.Xaml.Controls;
+
+            namespace Dev;
+
+            public sealed partial class PanelView : UserControl
+            {
+                public PanelView() => InitializeComponent();
+
+                public string Shown() => Label.Text;
+            }
+            """);
+        Label("one");
         Mark("""=> "one";""");
     }
 
@@ -70,6 +89,8 @@ public sealed class DevCommandTests : IDisposable
             _dev.Kill(entireProcessTree: true);
             _dev.WaitForExit();
             _dev.Dispose();
+            lock (_printed)
+                TestContext.Current.TestOutputHelper?.WriteLine(_printed.ToString());
         }
         Wait.Until(Removed, "the test folder to be free");
     }
@@ -89,6 +110,17 @@ public sealed class DevCommandTests : IDisposable
 
     private void Mark(string body) =>
         File.WriteAllText(Path.Combine(Project, "Marker.cs"), $"internal static class Marker {{ public static string Value() {body} }}");
+
+    private void Label(string text) => File.WriteAllText(Path.Combine(Project, "PanelView.xaml"), $"""
+        <UserControl
+            x:Class="Dev.PanelView"
+            xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+            xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+            <TextBlock x:Name="Label" Text="{text}" />
+        </UserControl>
+        """);
+
+    private string Shown() => WinshellCli.Run(["ipc", "call", "probe", "label"], Folders).Output.Trim();
 
     private (int Code, string Text) Value()
     {
@@ -150,9 +182,10 @@ public sealed class DevCommandTests : IDisposable
         Assert.Contains("dotnet new winshell", error, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Timeout = 170_000)]
     public void An_edit_reaches_the_running_shell_and_a_broken_one_leaves_it_running()
     {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
         StartDev();
         Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
         var shell = ShellProcess();
@@ -171,5 +204,12 @@ public sealed class DevCommandTests : IDisposable
 
         Assert.Equal(shell, ShellProcess());
         Assert.True(applied.Elapsed < TimeSpan.FromSeconds(10), $"An edit took {applied.Elapsed}.");
+
+        Label("two");
+        var saved = Stopwatch.StartNew();
+        Wait.Until(() => Shown() == "two", "the XAML edit");
+        Assert.True(saved.Elapsed < TimeSpan.FromSeconds(5), $"A XAML edit took {saved.Elapsed}.");
+        Assert.Equal(shell, ShellProcess());
+        TestContext.Current.TestOutputHelper?.WriteLine($"An edit took {applied.Elapsed}, and a XAML edit {saved.Elapsed}.");
     }
 }

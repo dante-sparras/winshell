@@ -34,7 +34,7 @@ internal sealed partial class DevOutput
         return "";
     }
 
-    [GeneratedRegex(@": error [A-Z]+\d+:")]
+    [GeneratedRegex(@"\berror [A-Z]+\d+:")]
     private static partial Regex CompileError();
 
     [GeneratedRegex(@"\s+\[[^\]]*\.csproj(::[^\]]*)?\]$")]
@@ -52,6 +52,17 @@ internal static class DevSession
 {
     public static async Task<int> Run(ConfigurationProject project)
     {
+        while (true)
+        {
+            if (await Watch(project) is { } exitCode)
+                return exitCode;
+            Console.WriteLine("Building, because the XAML you saved needs it.");
+        }
+    }
+
+    /// <summary>How <c>dotnet watch</c> ended, or null when a shell asked for a build, which only a new start gives it.</summary>
+    private static async Task<int?> Watch(ConfigurationProject project)
+    {
         var start = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = project.Folder,
@@ -65,6 +76,7 @@ internal static class DevSession
         // Its lines are what DevOutput reads, in the one form it knows.
         start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
         start.Environment["DOTNET_WATCH_SUPPRESS_EMOJIS"] = "1";
+        start.Environment[Shell.DevProjectVariable] = project.Folder;
         using var process = Start(start);
         if (process is null)
         {
@@ -80,6 +92,12 @@ internal static class DevSession
             Console.WriteLine(line);
             if (output.Read(line) is { } notice)
                 await Show(project, notice);
+            if (line.Contains(XamlReload.NeedsBuild, StringComparison.Ordinal))
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+                return null;
+            }
         }
         await process.WaitForExitAsync();
         return process.ExitCode;

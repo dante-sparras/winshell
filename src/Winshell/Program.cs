@@ -472,7 +472,7 @@ namespace Winshell
                     WriteHelp("""
                         winshell dev [-c <name> | -p <path>]
                           Runs a configuration project and applies each edit to the running shell, until Ctrl+C.
-                          An edited panel is rebuilt in place, and the other windows are left alone.
+                          A saved C# or XAML file reaches the shell in place, and the other windows are left alone.
                           What does not compile shows on screen, and the last version that did keeps running.
                           Needs the .NET SDK. See the guide for what an edit can change.
                         """);

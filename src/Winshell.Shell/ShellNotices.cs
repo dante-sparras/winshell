@@ -7,7 +7,7 @@ internal enum NoticeKind
     /// <summary>The configuration did not build. It stays until it is fixed or dismissed.</summary>
     BuildError,
 
-    /// <summary>A TOML file does not read, under <c>winshell dev</c>. It stays until the file is fixed.</summary>
+    /// <summary>A TOML or XAML file does not read, under <c>winshell dev</c>. It stays until the file is fixed.</summary>
     ConfigError,
 
     /// <summary>Something failed and Winshell wrote a crash report. It goes away by itself.</summary>
@@ -75,18 +75,18 @@ internal sealed class ShellNotices : IDisposable
         projectFile,
         TimeSpan.Zero);
 
-    /// <summary>The notice for a config file that does not read, while the values from before keep working.</summary>
+    /// <summary>The notice for a file that does not read, while what came from it before keeps working.</summary>
     public static Notice ForConfigError(string error, string file) => new(
         NoticeKind.ConfigError,
-        "A config file has an error",
+        "This file has an error",
         Path.GetFileName(file),
         error,
-        "Winshell keeps the values it had.",
+        "Winshell keeps what it had.",
         "Open file",
         file,
         TimeSpan.Zero);
 
-    /// <summary>Shows a config file's error, or takes it away once the file reads again.</summary>
+    /// <summary>Shows a file's error, or takes it away once the file reads again.</summary>
     public void ShowConfigError(string file, string error)
     {
         if (error.Length > 0)

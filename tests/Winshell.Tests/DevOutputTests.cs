@@ -36,6 +36,14 @@ public sealed class DevOutputTests
     }
 
     [Fact]
+    public void A_xaml_compiler_error_is_what_the_notice_says()
+    {
+        const string line = @"C:\Shells\Mine\PanelView.xaml(2,5): XamlCompiler error WMC0130: Invalid value for 'PanelView'.";
+
+        Assert.Equal(line, _output.Read(line));
+    }
+
+    [Fact]
     public void A_second_error_joins_the_first_and_the_list_stops_at_five()
     {
         var shown = Enumerable.Range(1, 7).Select(i => _output.Read($"A.cs({i},1): error CS0103: No name {i}")).ToList();
