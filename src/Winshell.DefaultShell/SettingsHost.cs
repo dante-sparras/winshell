@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Winshell.DefaultShell.Taskbar;
 using Winshell.Input;
 
 namespace Winshell.DefaultShell;
@@ -11,15 +12,21 @@ internal sealed class SettingsHost
 {
     private readonly Shell _shell;
     private readonly Preferences _preferences;
+    private readonly Start _start;
+    private readonly QuickSettingsLayout _layout;
+    private readonly Hotkey _startHotkey;
     private readonly Hotkey _hotkey;
     private readonly IDisposable _ipc;
     private FloatingWindow? _window;
     private SettingsView? _view;
 
-    public SettingsHost(Shell shell, Preferences preferences)
+    public SettingsHost(Shell shell, Preferences preferences, Start start, QuickSettingsLayout layout, Hotkey startHotkey)
     {
         _shell = shell;
         _preferences = preferences;
+        _start = start;
+        _layout = layout;
+        _startHotkey = startHotkey;
         _hotkey = shell.NewHotkey();
         _hotkey.Pressed += (_, _) => Open("");
         _hotkey.Sequence = preferences.SettingsHotkey;
@@ -49,7 +56,7 @@ internal sealed class SettingsHost
     {
         if (_window is not null)
             return;
-        _view = new SettingsView(_preferences, _shell);
+        _view = new SettingsView(_preferences, _shell, _start, _layout, _startHotkey, _hotkey);
         _window = new FloatingWindow
         {
             Title = "Winshell Settings",

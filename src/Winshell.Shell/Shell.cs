@@ -86,6 +86,9 @@ public sealed partial class Shell : IDisposable
     /// <summary>The config folder: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> when it is set.</summary>
     public string ConfigRoot => ConfigPaths.Root();
 
+    /// <summary>This instance's log file, or empty when it writes none.</summary>
+    public string LogPath { get; internal set; } = "";
+
     /// <summary>This shell's data folder, which exists once read.</summary>
     public string DataDir => Ensure(_identity.DataDir);
 
@@ -201,6 +204,7 @@ public sealed partial class Shell : IDisposable
                         var loop = new DispatcherLoop(queue, log);
                         loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
                         var shell = new Shell(loop, log, options, identity, arguments);
+                        shell.LogPath = instance.LogPath;
                         _current = shell;
                         instance.Listen(loop, new Control(shell));
                         instance.Publish(identity.ShellId);

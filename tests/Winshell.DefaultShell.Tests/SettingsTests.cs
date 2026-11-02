@@ -133,11 +133,37 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal("pins", SettingsCatalog.RequireSetting("startPins").Subpage);
         Assert.Equal("about", SettingsCatalog.RequireSetting("winshellUpdates").Page);
         Assert.Equal("hotkeys", SettingsCatalog.RequireSetting("hotkeySettings").Page);
+        Assert.Equal("hotkeys", SettingsCatalog.RequireSetting("desktopChords").Page);
         Assert.Equal("quickSettings", SettingsCatalog.RequireSetting("quickSettingsTiles").Page);
         Assert.Equal(2, SettingsCatalog.IndexOf(SettingsCatalog.TaskbarApps, "where"));
         Assert.Equal(0, SettingsCatalog.IndexOf(SettingsCatalog.TaskbarApps, "nope"));
         Assert.Equal(1, SettingsCatalog.IndexOf(SettingsCatalog.ColorSchemes, "light"));
         Assert.Equal(1, SettingsCatalog.IndexOf(SettingsCatalog.Alignments, "left"));
+    }
+
+    [Fact]
+    public void Part_two_opens_from_its_page_or_its_setting_and_search_finds_desktop_chords()
+    {
+        var navigation = new SettingsNavigation();
+        foreach (var key in new[]
+        {
+            "quickSettings", "hotkeys", "about", "quickSettingsTiles", "hotkeyStart", "hotkeySettings", "desktopChords",
+            "version", "winshellUpdates", "autoUpdate", "configFolder", "log", "diagnostics",
+        })
+        {
+            Assert.True(navigation.Open(key), key);
+            Assert.Null(SettingsCatalog.Unknown(key));
+            if (SettingsCatalog.FindSetting(key) is { } setting)
+            {
+                Assert.Equal(setting.Page, navigation.Page);
+                Assert.Equal(key, navigation.FocusKey);
+            }
+            else
+                Assert.Null(navigation.FocusKey);
+        }
+
+        Assert.Equal("desktopChords", Assert.Single(SettingsCatalog.Search("desktop chords")).Key);
+        Assert.Contains(SettingsCatalog.Search("alt tab"), entry => entry.Key == "desktopChords");
     }
 
     [Fact]

@@ -77,6 +77,7 @@ public static class SettingsCatalog
         Entry("notificationApps", "notifications", "\uEA8F", "Notifications from apps", "Turn an app off to leave its notifications out of the notification center. Windows still decides whether it shows banners.", "per app apps senders notification center"),
         Entry("hotkeyStart", "hotkeys", "\uE80F", "Open Start", "", "keyboard shortcut windows key win"),
         Entry("hotkeySettings", "hotkeys", "\uE713", "Open Winshell Settings", "", "keyboard shortcut"),
+        Entry("desktopChords", "hotkeys", "\uE765", "Desktop chords", "Alt+Tab, Win+Tab, Win+D and Win+X. Off leaves them with Windows.", "alt tab desktop chords win+d win+x"),
         Entry("runAtSignIn", "startup", "\uE7E8", "Run Winshell when I sign in", "For your account only", "startup start automatically login logon boot"),
         Entry("startupApps", "startup", "\uE7E8", "Startup apps in Windows", "Windows can turn off an app that runs at sign-in", "startup apps", "ms-settings:startupapps"),
         Entry("version", "about", "\uE946", "Version", "", "about release"),

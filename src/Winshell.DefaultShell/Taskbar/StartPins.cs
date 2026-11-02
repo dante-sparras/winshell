@@ -2,8 +2,8 @@ namespace Winshell.DefaultShell.Taskbar;
 
 /// <summary>
 /// <c>launcher.toml</c>, the apps pinned to Start, beside the shell. An empty array pins nothing. A missing file is
-/// not a choice: Start writes its defaults. Winshell Settings can reorder these pins; that window is not ported,
-/// and a change in the file still shows up here.
+/// not a choice: Start writes its defaults. Winshell Settings reorders these pins through Start, and a change in
+/// the file still shows up here.
 /// </summary>
 public sealed class StartPins(string path, IEventLoop loop, Log? log = null) : TomlFile(path, loop, log)
 {
