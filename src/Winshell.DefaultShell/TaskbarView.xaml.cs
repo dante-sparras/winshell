@@ -41,8 +41,7 @@ public sealed partial class TaskbarView : UserControl
         if (!args.TryGetPosition(this, out var point))
             return;
         args.Handled = true;
-        var menu = TaskMenuFlyout.Create(TaskMenu.BarName);
-        TaskMenuFlyout.Fill(menu, [TaskMenu.Settings], _ => Model.RequestSettings(), 16);
+        var menu = TaskMenuFlyout.Create(TaskMenu.BarName, [TaskMenu.Settings], _ => Model.RequestSettings(), 16);
         menu.ShowAt(this, new FlyoutShowOptions { Position = point, Placement = FlyoutPlacementMode.Top });
     }
 

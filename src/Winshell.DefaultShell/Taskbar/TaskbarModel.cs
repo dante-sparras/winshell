@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using Winshell.Apps;
 using TaskbarTasks = Winshell.DefaultShell.Taskbar.Tasks;
 
 namespace Winshell.DefaultShell.Taskbar;
@@ -17,7 +16,6 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     private readonly Action<string> _startProgram;
     private readonly List<IOpenWindow> _watched = [];
     private readonly Dictionary<string, IOpenWindow> _lastUsed = [];
-    private OpenTaskMenu? _openMenu;
     private ScreenInfo _screen;
     private bool _isMain;
     private bool _disposed;
@@ -58,39 +56,29 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     /// <summary>The bar's own menu asked for settings. Nothing opens.</summary>
     public void RequestSettings() => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
-    /// <summary>Pins this app by <see cref="TaskItem.PinId"/>, the id the taskbar stores.</summary>
-    public void Pin(TaskItem task) => _pins.Pin(task.PinId);
+    /// <summary>The rows of this app's menu, from its jump list as it reads now.</summary>
+    public IReadOnlyList<TaskMenuRow> MenuRows(TaskItem task) =>
+        TaskMenu.Rows(task, _desktop.JumpList(TaskbarTasks.AppUserModelId(task)));
 
-    /// <summary>Removes the pin <see cref="TaskItem.Pin"/>.</summary>
-    public void Unpin(TaskItem task) => _pins.Unpin(task.Pin);
-
-    /// <summary>Closes every window of this app.</summary>
-    public void Close(TaskItem task)
+    /// <summary>Does what a row of the menu asks. A destination is only shown: opening it would launch a document, and this menu does not.</summary>
+    public void Choose(TaskItem task, string id)
     {
-        foreach (var window in task.Windows.ToArray())
+        switch (id)
         {
-            if (window is IOpenWindow open)
-                open.Close();
+            case "launch":
+                Launch(task);
+                break;
+            case "pin" when task.Pinned:
+                _pins.Unpin(task.Pin);
+                break;
+            case "pin":
+                _pins.Pin(task.PinId);
+                break;
+            case "close":
+                foreach (var window in task.Windows.OfType<IOpenWindow>())
+                    window.Close();
+                break;
         }
-    }
-
-    /// <summary>The jump list for this app. The id is the one <see cref="Tasks.AppUserModelId(TaskItem)"/> reads.</summary>
-    public AppJumpList JumpList(TaskItem task) => _desktop.JumpList(TaskbarTasks.AppUserModelId(task));
-
-    /// <summary>Opens the menu for this app. The one that was open closes.</summary>
-    public OpenTaskMenu OpenMenu(TaskItem task)
-    {
-        _openMenu?.Dispose();
-        var menu = new OpenTaskMenu(this, task);
-        _openMenu = menu;
-        menu.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_openMenu, menu))
-                _openMenu = null;
-        };
-        if (!menu.IsOpen)
-            _openMenu = null;
-        return menu;
     }
 
     /// <summary>The screen this bar is on, and whether it is the main one. A change rebuilds the buttons.</summary>
@@ -137,8 +125,6 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        _openMenu?.Dispose();
-        _openMenu = null;
         _desktop.Changed -= OnDesktopChanged;
         _desktop.ActiveChanged -= OnActiveChanged;
         _pins.PropertyChanged -= OnPins;

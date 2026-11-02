@@ -356,18 +356,15 @@ public sealed class TaskbarModelTests : IDisposable
         desk.Apps.Add(new FakeApp("notes", "Notes", appId: "Contoso.Notes"));
         desk.OpenWindows.Add(new FakeWindow { AppId = "Contoso.Notes", Executable = @"C:\notes.exe", Title = "Notes" });
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
-        var menu = model.OpenMenu(model.Tasks.Single());
 
-        Assert.Equal(new TaskMenuRow("pin", "Pin to taskbar", "\uE718", "", true), PinRow(menu));
-        menu.Invoke("pin");
+        Assert.Equal(new TaskMenuRow("pin", "Pin to taskbar", "\uE718", "", true), PinRow(model));
+        model.Choose(model.Tasks.Single(), "pin");
         Assert.Equal(["notes"], pins.Ids);
-        Assert.Equal(new TaskMenuRow("pin", "Unpin from taskbar", "\uE77A", "", true), PinRow(menu));
-        Assert.True(menu.IsOpen);
+        Assert.Equal(new TaskMenuRow("pin", "Unpin from taskbar", "\uE77A", "", true), PinRow(model));
 
-        menu.Invoke("pin");
+        model.Choose(model.Tasks.Single(), "pin");
         Assert.Empty(pins.Ids);
-        Assert.Equal(new TaskMenuRow("pin", "Pin to taskbar", "\uE718", "", true), PinRow(menu));
-        Assert.True(menu.IsOpen);
+        Assert.Equal(new TaskMenuRow("pin", "Pin to taskbar", "\uE718", "", true), PinRow(model));
     }
 
     [Fact]
@@ -379,10 +376,9 @@ public sealed class TaskbarModelTests : IDisposable
         var only = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Only" };
         desk.OpenWindows.Add(only);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
-        var one = model.OpenMenu(model.Tasks.Single());
 
-        Assert.Equal(new TaskMenuRow("close", "Close window", "\uE8BB", "", true), one.Rows.Single(row => row.Id == "close"));
-        one.Invoke("close");
+        Assert.Equal(new TaskMenuRow("close", "Close window", "\uE8BB", "", true), CloseRow(model));
+        model.Choose(model.Tasks.Single(), "close");
         Assert.Equal(1, only.Closes);
 
         var first = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "One" };
@@ -390,13 +386,11 @@ public sealed class TaskbarModelTests : IDisposable
         desk.OpenWindows.Clear();
         desk.OpenWindows.Add(first);
         desk.OpenWindows.Add(second);
-        var many = model.OpenMenu(model.Tasks.Single());
-        Assert.Equal("Close all windows", many.Rows.Single(row => row.Id == "close").Label);
-        many.Invoke("close");
+        Assert.Equal("Close all windows", CloseRow(model).Label);
+        model.Choose(model.Tasks.Single(), "close");
 
         Assert.Equal(1, first.Closes);
         Assert.Equal(1, second.Closes);
-        Assert.True(many.IsOpen);
     }
 
     [Fact]
@@ -411,22 +405,20 @@ public sealed class TaskbarModelTests : IDisposable
         desk.OpenWindows.Add(window);
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
         var task = model.Tasks.Single();
-        var menu = model.OpenMenu(task);
 
-        menu.Invoke("unavailable");
-        model.JumpList(task).Apply(true, ["Budget.xlsx"]);
-        menu.Invoke("dest:0");
-        menu.Invoke("launch");
+        model.Choose(task, "unavailable");
+        model.Choose(task, "dest:0");
 
         Assert.Equal(0, window.Closes);
         Assert.Empty(pins.Ids);
+        Assert.Equal(0, app.Launches);
+
+        model.Choose(task, "launch");
         Assert.Equal(1, app.Launches);
-        Assert.Equal("Budget.xlsx", menu.Rows.Single(row => row.Id == "dest:0").Label);
-        Assert.False(menu.Rows.Single(row => row.Id == "dest:0").Enabled);
     }
 
     [Fact]
-    public void An_open_menu_shows_a_jump_list_that_fills_in_after_it_was_returned()
+    public void The_menu_reads_the_jump_list_each_time_it_opens()
     {
         using var preferences = Open();
         using var pins = Pins();
@@ -435,93 +427,19 @@ public sealed class TaskbarModelTests : IDisposable
         desk.OpenWindows.Add(new FakeWindow { AppId = "Contoso.Notes", Executable = @"C:\notes.exe", Title = "Notes" });
         using var model = desk.Bar(Screen("main", primary: true), isMain: true);
         var task = model.Tasks.Single();
-        var menu = model.OpenMenu(task);
-        var list = model.JumpList(task);
-
-        Assert.Equal(new TaskMenuRow("unavailable", "Jump list can't be read", "", "", false), menu.Rows[0]);
-
-        list.Apply(true, ["Budget.xlsx", "Notes.txt"]);
-
-        Assert.Equal(
-            [new TaskMenuRow("dest:0", "Budget.xlsx", "", "", false), new TaskMenuRow("dest:1", "Notes.txt", "", "", false)],
-            menu.Rows.Take(2));
-        Assert.DoesNotContain(menu.Rows, row => row.Id == "unavailable");
-        Assert.True(menu.IsOpen);
-    }
-
-    [Fact]
-    public void A_later_read_of_the_same_jump_list_replaces_the_open_rows()
-    {
-        using var preferences = Open();
-        using var pins = Pins();
-        var desk = new Desk(preferences, pins);
-        desk.Apps.Add(new FakeApp("notes", "Notes", appId: "Contoso.Notes"));
-        desk.OpenWindows.Add(new FakeWindow { AppId = "Contoso.Notes", Executable = @"C:\notes.exe", Title = "Notes" });
-        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
-        var task = model.Tasks.Single();
-        var menu = model.OpenMenu(task);
         var id = Tasks.AppUserModelId(task);
 
-        desk.Jumps.Result[id] = JumpListRead.From(["Budget.xlsx"], ["Budget.xlsx"]);
-        var updated = model.JumpList(task);
+        Assert.Equal(new TaskMenuRow("unavailable", "Jump list can't be read", "", "", false), model.MenuRows(task)[0]);
 
-        Assert.Same(updated, model.JumpList(task));
-        Assert.Equal("Budget.xlsx", menu.Rows.Single(row => row.Id == "dest:0").Label);
-        Assert.DoesNotContain(menu.Rows, row => row.Id == "dest:1");
+        desk.Jumps.Result[id] = JumpListRead.From(["Budget.xlsx", "Notes.txt"], ["Budget.xlsx", "Notes.txt"]);
+        var rows = model.MenuRows(task);
+        Assert.Equal(
+            [new TaskMenuRow("dest:0", "Budget.xlsx", "", "", false), new TaskMenuRow("dest:1", "Notes.txt", "", "", false)],
+            rows.Take(2));
+        Assert.DoesNotContain(rows, row => row.Id == "unavailable");
 
         desk.Jumps.Result[id] = JumpListRead.Missing;
-        model.JumpList(task);
-
-        Assert.Equal("unavailable", menu.Rows[0].Id);
-        Assert.Equal("Jump list can't be read", menu.Rows[0].Label);
-    }
-
-    [Fact]
-    public void The_menu_closes_when_its_app_leaves_and_stays_when_a_pinned_apps_last_window_closes()
-    {
-        using var preferences = Open();
-        using var pins = Pins("notes");
-        var desk = new Desk(preferences, pins);
-        desk.Apps.Add(new FakeApp("notes", "Notes", appId: "Contoso.Notes"));
-        var pinnedWindow = new FakeWindow { AppId = "Contoso.Notes", Executable = @"C:\notes.exe", Title = "Notes" };
-        var loose = new FakeWindow { AppId = "tool", Executable = @"C:\Tools\tool.exe", Title = "Tool" };
-        desk.OpenWindows.Add(pinnedWindow);
-        desk.OpenWindows.Add(loose);
-        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
-        var pinned = model.OpenMenu(model.Tasks.Single(task => task.Key == "app:notes"));
-        var other = model.OpenMenu(model.Tasks.Single(task => task.Key == "window:tool"));
-
-        Assert.False(pinned.IsOpen);
-        desk.OpenWindows.Remove(loose);
-        Assert.False(other.IsOpen);
-        Assert.DoesNotContain(model.Tasks, task => task.Key == "window:tool");
-
-        var again = model.OpenMenu(model.Tasks.Single(task => task.Key == "app:notes"));
-        Assert.Contains(again.Rows, row => row.Id == "close");
-        desk.OpenWindows.Remove(pinnedWindow);
-
-        Assert.True(again.IsOpen);
-        Assert.DoesNotContain(again.Rows, row => row.Id == "close");
-        Assert.Contains(model.Tasks, task => task.Key == "app:notes");
-    }
-
-    [Fact]
-    public void A_window_title_changes_the_open_menus_name()
-    {
-        using var preferences = Open();
-        using var pins = Pins();
-        var desk = new Desk(preferences, pins);
-        var window = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Old" };
-        desk.OpenWindows.Add(window);
-        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
-        var menu = model.OpenMenu(model.Tasks.Single());
-
-        window.Title = "New";
-        window.Raise(nameof(ITaskWindow.Title));
-
-        Assert.Equal("New", menu.Name);
-        Assert.Equal("New", menu.Rows.Single(row => row.Id == "launch").Label);
-        Assert.True(menu.IsOpen);
+        Assert.Equal("unavailable", model.MenuRows(task)[0].Id);
     }
 
     [Fact]
@@ -540,7 +458,9 @@ public sealed class TaskbarModelTests : IDisposable
         Assert.Empty(model.Tasks);
     }
 
-    private static TaskMenuRow PinRow(OpenTaskMenu menu) => menu.Rows.Single(row => row.Id == "pin");
+    private static TaskMenuRow PinRow(TaskbarModel model) => model.MenuRows(model.Tasks.Single()).Single(row => row.Id == "pin");
+
+    private static TaskMenuRow CloseRow(TaskbarModel model) => model.MenuRows(model.Tasks.Single()).Single(row => row.Id == "close");
 
     private static string[] Keys(TaskbarModel model) => [.. model.Tasks.Select(task => task.Entry?.Id ?? task.Key)];
 

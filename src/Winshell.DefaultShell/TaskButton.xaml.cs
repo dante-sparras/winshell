@@ -16,8 +16,7 @@ public sealed partial class TaskButton : Button
 {
     private readonly List<INotifyPropertyChanged> _watched = [];
     private TaskItem? _item;
-    private OpenTaskMenu? _menu;
-    private MenuFlyout? _flyout;
+    private MenuFlyout? _menu;
     private string _iconPath = "";
     private int _iconSize;
     private bool _pressed;
@@ -40,8 +39,9 @@ public sealed partial class TaskButton : Button
         get => _item;
         set
         {
-            if (_menu is { IsOpen: true } open && value?.Key != open.Key)
-                open.Dispose();
+            // The app left the bar, so its menu goes with it.
+            if (value?.Key != _item?.Key)
+                _menu?.Hide();
             _item = value;
             Watch(value);
             Apply();
@@ -61,7 +61,7 @@ public sealed partial class TaskButton : Button
         if (XamlRoot is not null)
             XamlRoot.Changed -= OnRootChanged;
         Watch(null);
-        _menu?.Dispose();
+        _menu?.Hide();
     }
 
     private void OnRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => Apply();
@@ -79,47 +79,22 @@ public sealed partial class TaskButton : Button
 
     private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
-        if (Item is null || Model() is null)
-            return;
-        args.Handled = true;
-        OpenMenu();
-    }
-
-    private void OpenMenu()
-    {
         if (Item is not { } task || Model() is not { } model)
             return;
-        var menu = model.OpenMenu(task);
-        if (!menu.IsOpen)
-            return;
-        var flyout = TaskMenuFlyout.Create(menu.Name);
-        var icon = MenuIconSize();
-        TaskMenuFlyout.Fill(flyout, menu.Rows, menu.Invoke, icon);
-        menu.Changed += (_, _) =>
+        args.Handled = true;
+        // The rows are read once. What a row does reads the app as it is when it is chosen.
+        var menu = TaskMenuFlyout.Create(Tasks.Name(task), model.MenuRows(task), id =>
         {
-            TaskMenuFlyout.Name(flyout, menu.Name);
-            TaskMenuFlyout.Fill(flyout, menu.Rows, menu.Invoke, MenuIconSize());
-        };
-        menu.Closed += (_, _) => flyout.Hide();
-        flyout.Closed += (_, _) =>
+            if (Item is { } current)
+                model.Choose(current, id);
+        }, Pixels(16));
+        menu.Closed += (_, _) =>
         {
             if (ReferenceEquals(_menu, menu))
                 _menu = null;
-            if (ReferenceEquals(_flyout, flyout))
-                _flyout = null;
-            menu.Dispose();
         };
         _menu = menu;
-        _flyout = flyout;
-        flyout.ShowAt(this);
-    }
-
-    private int MenuIconSize()
-    {
-        var scale = XamlRoot?.RasterizationScale ?? 1;
-        if (scale < 1)
-            scale = 1;
-        return Math.Max(1, (int)Math.Ceiling(16 * scale));
+        menu.ShowAt(this);
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -202,7 +177,7 @@ public sealed partial class TaskButton : Button
     private void ShowIcon(TaskItem? task)
     {
         var path = task is null ? "" : task.Icon;
-        var size = IconSize();
+        var size = Pixels(24);
         if (path == _iconPath && size == _iconSize)
             return;
         _iconPath = path;
@@ -210,12 +185,12 @@ public sealed partial class TaskButton : Button
         Icon.Source = path.Length == 0 ? null : ShellIcon.Load(path, size);
     }
 
-    private int IconSize()
+    private int Pixels(int size)
     {
         var scale = XamlRoot?.RasterizationScale ?? 1;
         if (scale < 1)
             scale = 1;
-        return Math.Max(1, (int)Math.Ceiling(24 * scale));
+        return Math.Max(1, (int)Math.Ceiling(size * scale));
     }
 
     private static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;

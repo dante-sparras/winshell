@@ -12,60 +12,23 @@ internal static class TaskMenuFlyout
 {
     private static readonly FontFamily Icons = new("Segoe Fluent Icons");
 
-    public static MenuFlyout Create(string name)
+    public static MenuFlyout Create(string name, IReadOnlyList<TaskMenuRow> rows, Action<string> choose, int iconSize)
     {
+        var presenter = new Style(typeof(MenuFlyoutPresenter));
+        presenter.Setters.Add(new Setter(AutomationProperties.NameProperty, name));
         var menu = new MenuFlyout
         {
             Placement = FlyoutPlacementMode.Top,
             ShouldConstrainToRootBounds = false,
+            MenuFlyoutPresenterStyle = presenter,
         };
-        Name(menu, name);
-        return menu;
-    }
-
-    public static void Name(MenuFlyout menu, string name)
-    {
-        var style = new Style(typeof(MenuFlyoutPresenter));
-        style.Setters.Add(new Setter(AutomationProperties.NameProperty, name));
-        menu.MenuFlyoutPresenterStyle = style;
-    }
-
-    public static void Fill(MenuFlyout menu, IReadOnlyList<TaskMenuRow> rows, Action<string> invoke, int iconSize)
-    {
-        if (menu.Items.Count == rows.Count && SameIds(menu, rows))
-        {
-            for (var i = 0; i < rows.Count; i++)
-                Apply((MenuFlyoutItem)menu.Items[i], rows[i], iconSize);
-            return;
-        }
-        menu.Items.Clear();
         foreach (var row in rows)
         {
-            var item = new MenuFlyoutItem();
-            var id = row.Id;
-            item.Click += (_, _) => invoke(id);
-            Apply(item, row, iconSize);
+            var item = new MenuFlyoutItem { Text = row.Label, IsEnabled = row.Enabled, Icon = Icon(row, iconSize) };
+            item.Click += (_, _) => choose(row.Id);
             menu.Items.Add(item);
         }
-    }
-
-    private static bool SameIds(MenuFlyout menu, IReadOnlyList<TaskMenuRow> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (menu.Items[i] is not MenuFlyoutItem item || item.Tag is not string id || id != rows[i].Id)
-                return false;
-        }
-        return true;
-    }
-
-    private static void Apply(MenuFlyoutItem item, TaskMenuRow row, int iconSize)
-    {
-        item.Tag = row.Id;
-        item.Text = row.Label;
-        item.IsEnabled = row.Enabled;
-        item.Icon = Icon(row, iconSize);
-        AutomationProperties.SetName(item, row.Label);
+        return menu;
     }
 
     private static IconElement? Icon(TaskMenuRow row, int iconSize)
