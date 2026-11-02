@@ -79,7 +79,7 @@ internal sealed class FakeAudioGraph : IAudioGraph
 
     public AudioGraphNode? DefaultPlayback { get; private set; }
 
-    public AudioGraphNode? DefaultRecording => null;
+    public AudioGraphNode? DefaultRecording { get; private set; }
 
     public event Action<AudioGraphNode>? NodeAdded;
 
@@ -109,16 +109,24 @@ internal sealed class FakeAudioGraph : IAudioGraph
         DefaultPlayback = node;
         DefaultsChanged?.Invoke();
     }
+
+    public FakePlayback AddRecording(string description) => Add(new FakePlayback(description, recording: true));
+
+    public void UseRecording(FakePlayback? node)
+    {
+        DefaultRecording = node;
+        DefaultsChanged?.Invoke();
+    }
 }
 
 internal sealed class FakePlayback : AudioGraphNode
 {
     private static int _next = 1;
 
-    public FakePlayback(string description)
+    public FakePlayback(string description, bool recording = false)
         : base(_next++)
     {
-        Type = (int)AudioNodeType.PlaybackDevice;
+        Type = (int)(recording ? AudioNodeType.RecordingDevice : AudioNodeType.PlaybackDevice);
         Description = description;
         Name = description;
         Channels = [3];
