@@ -1,19 +1,17 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using SkiaSharp;
 using Windows.Media;
 using Windows.Media.Control;
-using Winshell.Runtime;
 
-namespace Winshell.Platform.Windows.Services.Media;
+namespace Winshell.Media;
 
 /// <summary>
 /// The media sessions Windows shows in its media flyout (the Global System Media Transport Controls), one per
 /// app that plays media. One list serves the whole process, so a reload does not ask Windows again. It lives on
 /// the UI thread; Windows' events arrive on other threads and are posted to it.
 /// </summary>
-internal sealed class SmtcSessions
+internal sealed class SmtcSessions : IMediaSessions
 {
     private static SmtcSessions? _instance;
 
@@ -254,8 +252,8 @@ internal sealed class SmtcSession
         AppName = appName;
     }
 
-    /// <summary>No Windows session. Tests change the command flags this object already stores.</summary>
-    internal static SmtcSession CreateForTests() => new("test");
+    /// <summary>No Windows session. Tests change what this object stores, and its commands land in <see cref="Sent"/>.</summary>
+    internal static SmtcSession CreateForTests(string appId = "test") => new(appId);
 
     private SmtcSession(string appId)
     {
@@ -263,7 +261,11 @@ internal sealed class SmtcSession
         Session = null!;
         AppId = appId;
         AppName = appId;
+        Sent = [];
     }
+
+    /// <summary>What a test session was asked to do. Null on a real one.</summary>
+    internal List<string>? Sent { get; }
 
     /// <summary>Sets the playback commands this session accepts and reports which of them changed.</summary>
     internal void SetControls(bool canPlay = false, bool canPause = false, bool canStop = false,
@@ -441,30 +443,38 @@ internal sealed class SmtcSession
 
     // Commands. Each is asynchronous; Windows' events bring the result.
 
-    public void Play() => Run(Session.TryPlayAsync(), "play");
+    public void Play() => Send("play", s => s.TryPlayAsync());
 
-    public void Pause() => Run(Session.TryPauseAsync(), "pause");
+    public void Pause() => Send("pause", s => s.TryPauseAsync());
 
-    public void Stop() => Run(Session.TryStopAsync(), "stop");
+    public void Stop() => Send("stop", s => s.TryStopAsync());
 
-    public void Next() => Run(Session.TrySkipNextAsync(), "next");
+    public void Next() => Send("next", s => s.TrySkipNextAsync());
 
-    public void Previous() => Run(Session.TrySkipPreviousAsync(), "previous");
+    public void Previous() => Send("previous", s => s.TrySkipPreviousAsync());
 
-    public void SetShuffle(bool shuffle) => Run(Session.TryChangeShuffleActiveAsync(shuffle), "set shuffle");
+    public void SetShuffle(bool shuffle) => Send("set shuffle", s => s.TryChangeShuffleActiveAsync(shuffle));
 
-    public void SetLoopState(int state) => Run(Session.TryChangeAutoRepeatModeAsync((MediaPlaybackAutoRepeatMode)state), "set loopState");
+    public void SetLoopState(int state) => Send("set loopState", s => s.TryChangeAutoRepeatModeAsync((MediaPlaybackAutoRepeatMode)state));
 
-    public void SetRate(double rate) => Run(Session.TryChangePlaybackRateAsync(rate), "set rate");
+    public void SetRate(double rate) => Send("set rate", s => s.TryChangePlaybackRateAsync(rate));
 
     public void SetPosition(double seconds)
     {
         seconds = Length > 0 ? Math.Clamp(seconds, 0, Length) : Math.Max(0, seconds);
-        Run(Session.TryChangePlaybackPositionAsync((StartTime + TimeSpan.FromSeconds(seconds)).Ticks), "set position");
+        Send("set position", s => s.TryChangePlaybackPositionAsync((StartTime + TimeSpan.FromSeconds(seconds)).Ticks));
         // Show the new position now, as the app may report it late or not at all.
         _position = seconds;
         _positionTime = TimeProvider.System.GetUtcNow();
         Seeked?.Invoke();
+    }
+
+    private void Send(string what, Func<GlobalSystemMediaTransportControlsSession, global::Windows.Foundation.IAsyncOperation<bool>> command)
+    {
+        if (Sent is not null)
+            Sent.Add(what);
+        else
+            Run(command(Session), what);
     }
 
     private void Run(global::Windows.Foundation.IAsyncOperation<bool> operation, string what)
@@ -517,16 +527,19 @@ internal sealed class SmtcSession
         if (_released || request != _mediaRequest)
             return;
         _mediaApplied = request;
-        var title = properties.Title ?? "";
-        var artist = properties.Artist ?? "";
-        var album = properties.AlbumTitle ?? "";
-        var albumArtist = properties.AlbumArtist ?? "";
+        ApplyTrack(properties.Title ?? "", properties.Artist ?? "", properties.AlbumTitle ?? "", properties.AlbumArtist ?? "",
+            properties.TrackNumber, properties.Genres, properties.Thumbnail);
+    }
+
+    internal void ApplyTrack(string title, string artist, string album, string albumArtist, int trackNumber, IReadOnlyList<string>? genres,
+        global::Windows.Storage.Streams.IRandomAccessStreamReference? thumbnail)
+    {
         if (title == Title && artist == Artist && album == Album && albumArtist == AlbumArtist
-            && TrackNumber == properties.TrackNumber && SameGenres(properties.Genres))
+            && TrackNumber == trackNumber && SameGenres(genres))
         {
             // The title can land before the thumbnail. A later read with the same title still has to fetch art.
-            if (ArtUrl.Length == 0 && properties.Thumbnail is not null && _artApplied == _artRequest)
-                LoadArt(properties.Thumbnail);
+            if (ArtUrl.Length == 0 && thumbnail is not null && _artApplied == _artRequest)
+                LoadArt(thumbnail);
             return;
         }
         var trackChanged = title != Title || artist != Artist || album != Album;
@@ -540,13 +553,13 @@ internal sealed class SmtcSession
         Set(artist, Artist, v => Artist = v, "trackArtist", changed);
         Set(album, Album, v => Album = v, "trackAlbum", changed);
         Set(albumArtist, AlbumArtist, v => AlbumArtist = v, "trackAlbumArtist", changed);
-        Genres = properties.Genres?.ToArray() ?? [];
-        TrackNumber = properties.TrackNumber;
+        Genres = genres?.ToArray() ?? [];
+        TrackNumber = trackNumber;
         changed.Add("metadata");
         Changed?.Invoke(changed, trackChanged);
         if (trackChanged)
             Seeked?.Invoke();
-        LoadArt(properties.Thumbnail);
+        LoadArt(thumbnail);
     }
 
     private void LoadArt(global::Windows.Storage.Streams.IRandomAccessStreamReference? thumbnail)
@@ -625,8 +638,28 @@ internal sealed class SmtcSession
     {
         if (_released)
             return;
+        var controls = info.Controls;
+        ApplyPlayback(new SmtcPlayback(info.PlaybackStatus)
+        {
+            Rate = info.PlaybackRate ?? 1,
+            CanPlay = controls.IsPlayEnabled,
+            CanPause = controls.IsPauseEnabled,
+            CanStop = controls.IsStopEnabled,
+            CanGoNext = controls.IsNextEnabled,
+            CanGoPrevious = controls.IsPreviousEnabled,
+            CanSeek = controls.IsPlaybackPositionEnabled,
+            ShuffleSupported = controls.IsShuffleEnabled,
+            LoopSupported = controls.IsRepeatEnabled,
+            RateSupported = controls.IsPlaybackRateEnabled,
+            Shuffle = info.IsShuffleActive ?? false,
+            LoopState = (int)(info.AutoRepeatMode ?? MediaPlaybackAutoRepeatMode.None),
+        });
+    }
+
+    internal void ApplyPlayback(SmtcPlayback info)
+    {
         var changed = new List<string>();
-        var state = info.PlaybackStatus switch
+        var state = info.Status switch
         {
             GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing => MediaPlaybackStates.Playing,
             GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused => MediaPlaybackStates.Paused,
@@ -634,9 +667,8 @@ internal sealed class SmtcSession
             GlobalSystemMediaTransportControlsSessionPlaybackStatus.Changing => PlaybackState,
             _ => MediaPlaybackStates.Stopped,
         };
-        var rate = info.PlaybackRate ?? 1;
         var seeked = false;
-        if (state != PlaybackState || rate != Rate)
+        if (state != PlaybackState || info.Rate != Rate)
         {
             // Count the position up to now with the old state, then from now with the new one.
             _position = PositionNow();
@@ -646,21 +678,20 @@ internal sealed class SmtcSession
         Set(state, PlaybackState, v => PlaybackState = v, "playbackState", changed);
         if (changed.Contains("playbackState"))
             changed.Add("isPlaying");
-        var controls = info.Controls;
-        Set(controls.IsPlayEnabled, CanPlay, v => CanPlay = v, "canPlay", changed);
-        Set(controls.IsPauseEnabled, CanPause, v => CanPause = v, "canPause", changed);
-        Set(controls.IsStopEnabled, CanStop, v => CanStop = v, "canStop", changed);
-        Set(controls.IsNextEnabled, CanGoNext, v => CanGoNext = v, "canGoNext", changed);
-        Set(controls.IsPreviousEnabled, CanGoPrevious, v => CanGoPrevious = v, "canGoPrevious", changed);
-        Set(controls.IsPlaybackPositionEnabled, CanSeek, v => CanSeek = v, "canSeek", changed);
-        Set(controls.IsShuffleEnabled, ShuffleSupported, v => ShuffleSupported = v, "shuffleSupported", changed);
-        Set(controls.IsRepeatEnabled, LoopSupported, v => LoopSupported = v, "loopSupported", changed);
-        Set(controls.IsPlaybackRateEnabled, RateSupported, v => RateSupported = v, "minRate", changed);
+        Set(info.CanPlay, CanPlay, v => CanPlay = v, "canPlay", changed);
+        Set(info.CanPause, CanPause, v => CanPause = v, "canPause", changed);
+        Set(info.CanStop, CanStop, v => CanStop = v, "canStop", changed);
+        Set(info.CanGoNext, CanGoNext, v => CanGoNext = v, "canGoNext", changed);
+        Set(info.CanGoPrevious, CanGoPrevious, v => CanGoPrevious = v, "canGoPrevious", changed);
+        Set(info.CanSeek, CanSeek, v => CanSeek = v, "canSeek", changed);
+        Set(info.ShuffleSupported, ShuffleSupported, v => ShuffleSupported = v, "shuffleSupported", changed);
+        Set(info.LoopSupported, LoopSupported, v => LoopSupported = v, "loopSupported", changed);
+        Set(info.RateSupported, RateSupported, v => RateSupported = v, "minRate", changed);
         if (changed.Contains("minRate"))
             changed.Add("maxRate");
-        Set(ShuffleSupported && (info.IsShuffleActive ?? false), Shuffle, v => Shuffle = v, "shuffle", changed);
-        Set(LoopSupported ? (int)(info.AutoRepeatMode ?? MediaPlaybackAutoRepeatMode.None) : 0, LoopState, v => LoopState = v, "loopState", changed);
-        Set(rate, Rate, v => Rate = v, "rate", changed);
+        Set(ShuffleSupported && info.Shuffle, Shuffle, v => Shuffle = v, "shuffle", changed);
+        Set(LoopSupported ? info.LoopState : 0, LoopState, v => LoopState = v, "loopState", changed);
+        Set(info.Rate, Rate, v => Rate = v, "rate", changed);
         if (changed.Count == 0)
             return;
         changed.Add("canTogglePlaying");
@@ -684,23 +715,26 @@ internal sealed class SmtcSession
 
     private void ApplyTimeline(GlobalSystemMediaTransportControlsSessionTimelineProperties timeline, DateTimeOffset received)
     {
-        if (_released)
-            return;
-        var length = Math.Max(0, (timeline.EndTime - timeline.StartTime).TotalSeconds);
-        var supported = length > 0 || timeline.Position > TimeSpan.Zero;
-        var position = (timeline.Position - timeline.StartTime).TotalSeconds;
+        if (!_released)
+            ApplyTimeline(timeline.StartTime, timeline.EndTime, timeline.Position, timeline.LastUpdatedTime, received);
+    }
+
+    internal void ApplyTimeline(TimeSpan start, TimeSpan end, TimeSpan reported, DateTimeOffset updated, DateTimeOffset received)
+    {
+        var length = Math.Max(0, (end - start).TotalSeconds);
+        var supported = length > 0 || reported > TimeSpan.Zero;
+        var position = (reported - start).TotalSeconds;
         // A poll repeats the last report. Applying it again restarts interpolation and looks like a seek.
-        if (StartTime == timeline.StartTime && Length == length && PositionSupported == supported
+        if (StartTime == start && Length == length && PositionSupported == supported
             && Math.Abs(_position - position) < 0.001)
             return;
         var changed = new List<string>();
-        StartTime = timeline.StartTime;
+        StartTime = start;
         Set(supported, PositionSupported, v => PositionSupported = v, "positionSupported", changed);
         Set(length, Length, v => Length = v, "length", changed);
         if (changed.Contains("length"))
             changed.Add("lengthSupported");
         // The app says when it took the position; trust that unless the time is clearly wrong.
-        var updated = timeline.LastUpdatedTime;
         var time = updated.Year > 2000 && updated <= received && received - updated < TimeSpan.FromHours(1) ? updated : received;
         _position = position;
         _positionTime = time;
@@ -812,6 +846,35 @@ internal sealed class SmtcSession
     }
 }
 
+/// <summary>What Windows reports about a session's playback.</summary>
+internal sealed record SmtcPlayback(GlobalSystemMediaTransportControlsSessionPlaybackStatus Status)
+{
+    public double Rate { get; init; } = 1;
+
+    public bool CanPlay { get; init; }
+
+    public bool CanPause { get; init; }
+
+    public bool CanStop { get; init; }
+
+    public bool CanGoNext { get; init; }
+
+    public bool CanGoPrevious { get; init; }
+
+    public bool CanSeek { get; init; }
+
+    public bool ShuffleSupported { get; init; }
+
+    public bool LoopSupported { get; init; }
+
+    public bool RateSupported { get; init; }
+
+    public bool Shuffle { get; init; }
+
+    /// <summary>The <c>MediaLoopState</c>.</summary>
+    public int LoopState { get; init; }
+}
+
 /// <summary>
 /// The names of the apps behind media sessions, looked up off the loop and kept for the life of the
 /// process. Lives on the UI thread.
@@ -910,14 +973,8 @@ internal static class ArtCache
         return data.Length == 0 || IsBitmap(data) ? Store(data, contentType) : null;
     }
 
-    private static bool IsBitmap(byte[] data)
-    {
-        using var skData = SKData.CreateCopy(data);
-        using var codec = SKCodec.Create(skData);
-        return codec is not null
-            && codec.EncodedFormat is SKEncodedImageFormat.Png or SKEncodedImageFormat.Jpeg or SKEncodedImageFormat.Gif or SKEncodedImageFormat.Bmp or SKEncodedImageFormat.Webp
-            && (long)codec.Info.Width * codec.Info.Height <= MaxPixels;
-    }
+    private static bool IsBitmap(byte[] data) =>
+        ImageHeader.ReadSize(data) is (> 0 and var width, > 0 and var height) && (ulong)width * height <= MaxPixels;
 
     /// <summary>Writes the art and returns its url. Each url returned must be released once.</summary>
     public static string Store(byte[] data, string? contentType)

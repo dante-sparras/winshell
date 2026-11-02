@@ -8,7 +8,7 @@ namespace Winshell.Audio;
 /// whole process, so a reload does not enumerate devices again. It lives on the UI thread; Windows' callbacks
 /// are posted to it.
 /// </summary>
-internal sealed class AudioGraph
+internal sealed class AudioGraph : IAudioGraph
 {
     private static AudioGraph? _instance;
 
@@ -57,6 +57,10 @@ internal sealed class AudioGraph
 
     public EndpointNode? DefaultRecording { get; private set; }
 
+    AudioGraphNode? IAudioGraph.DefaultPlayback => DefaultPlayback;
+
+    AudioGraphNode? IAudioGraph.DefaultRecording => DefaultRecording;
+
     public Log Log => _log;
 
     public event Action<AudioGraphNode>? NodeAdded;
@@ -97,6 +101,8 @@ internal sealed class AudioGraph
             _log.Warn("audio", $"Cannot set the default audio device to \"{node.Description}\": {e.Message}");
         }
     }
+
+    void IAudioGraph.SetDefault(AudioGraphNode node) => SetDefault((EndpointNode)node);
 
     // Devices
 
