@@ -12,6 +12,14 @@ internal enum WindowKind
     Popup,
 }
 
+/// <summary>Whether windows are light or dark. <see cref="System"/> follows Windows.</summary>
+public enum ColorScheme
+{
+    System,
+    Light,
+    Dark,
+}
+
 /// <summary>What a window shows behind its content: nothing, or a Windows 11 material.</summary>
 public enum WindowBackdrop
 {

@@ -109,22 +109,19 @@ public sealed partial class Shell : IDisposable
     /// <summary>The connected screens. The primary screen comes first.</summary>
     public ObservableCollection<ScreenInfo> Screens => Platform.Screens;
 
-    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <c>system</c> follows it.</summary>
+    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <see cref="ColorScheme.System"/> follows it.</summary>
     public bool IsDark => Platform.IsDark;
 
-    /// <summary>
-    /// Whether <paramref name="scheme"/> is dark. <c>light</c> and <c>dark</c> override Windows; anything else follows
-    /// <paramref name="windowsDark"/>.
-    /// </summary>
-    internal static bool DarkFor(string? scheme, bool windowsDark) => scheme switch
+    /// <summary>Whether <paramref name="scheme"/> is dark, with Windows in <paramref name="windowsDark"/>.</summary>
+    internal static bool DarkFor(ColorScheme scheme, bool windowsDark) => scheme switch
     {
-        "dark" => true,
-        "light" => false,
+        ColorScheme.Dark => true,
+        ColorScheme.Light => false,
         _ => windowsDark,
     };
 
-    /// <summary>The color scheme every window follows: <c>system</c>, <c>light</c> or <c>dark</c>.</summary>
-    public string ColorScheme
+    /// <summary>The color scheme every window follows.</summary>
+    public ColorScheme ColorScheme
     {
         get => Platform.ColorScheme;
         set => Platform.ColorScheme = value;
