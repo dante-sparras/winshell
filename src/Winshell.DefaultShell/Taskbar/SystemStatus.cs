@@ -79,6 +79,7 @@ public sealed class SystemStatus : ObservableObject
     private AudioNode? _output;
     private string _networkGlyph = "";
     private string _networkTrackGlyph = "";
+    private string _wifiName = "";
     private string _volumeGlyph = "";
     private string _batteryGlyph = "";
     private bool _hasBattery;
@@ -109,6 +110,13 @@ public sealed class SystemStatus : ObservableObject
     {
         get => _networkTrackGlyph;
         private set => Set(ref _networkTrackGlyph, value);
+    }
+
+    /// <summary>The connected network's name, or empty when Wi-Fi is not on a network.</summary>
+    public string WifiName
+    {
+        get => _wifiName;
+        private set => Set(ref _wifiName, value);
     }
 
     public string VolumeGlyph
@@ -242,11 +250,13 @@ public sealed class SystemStatus : ObservableObject
 
     private void PublishNetwork()
     {
+        var network = ConnectedNetwork();
         var connected = _wifi is { Connected: true };
-        var bars = StatusGlyphs.WifiBars(ConnectedNetwork()?.SignalStrength);
+        var bars = StatusGlyphs.WifiBars(network?.SignalStrength);
         var online = StatusGlyphs.Online(_networking.Connectivity);
         NetworkGlyph = StatusGlyphs.NetworkGlyph(connected, bars, online);
         NetworkTrackGlyph = StatusGlyphs.NetworkTrackGlyph(connected, bars);
+        WifiName = network?.Name ?? "";
     }
 
     private void BindOutput()

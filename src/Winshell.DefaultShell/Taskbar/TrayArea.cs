@@ -58,7 +58,7 @@ public sealed class TrayArea : ObservableObject
         private set => Set(ref _updateLabel, value);
     }
 
-    /// <summary>The network, volume and battery icons were clicked. Nothing opens.</summary>
+    /// <summary>The network, volume and battery icons were clicked.</summary>
     public event EventHandler? QuickSettingsRequested;
 
     /// <summary>The update icon was clicked. Nothing opens.</summary>

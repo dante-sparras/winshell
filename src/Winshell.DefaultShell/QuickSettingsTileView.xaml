@@ -1,0 +1,51 @@
+<UserControl
+    x:Class="Winshell.DefaultShell.QuickSettingsTileView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Width="96"
+    HorizontalAlignment="Left"
+    VerticalAlignment="Top">
+    <StackPanel Width="96">
+        <ToggleButton
+            x:Name="Toggle"
+            Width="96"
+            Height="48"
+            MinWidth="0"
+            MinHeight="0"
+            Padding="0"
+            HorizontalAlignment="Left"
+            AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
+            AutomationProperties.HelpText="{x:Bind Tile.Description, Mode=OneWay}"
+            Visibility="{x:Bind Shown(Tile.Toggle), Mode=OneWay}"
+            Click="OnClick">
+            <Grid>
+                <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="{x:Bind Tile.Glyph, Mode=OneWay}" />
+                <FontIcon FontSize="12" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Glyph="&#xE76C;" Visibility="{x:Bind Shown(Tile.HasPage), Mode=OneWay}" />
+            </Grid>
+        </ToggleButton>
+        <Button
+            Width="96"
+            Height="48"
+            MinWidth="0"
+            MinHeight="0"
+            Padding="0"
+            HorizontalAlignment="Left"
+            AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
+            AutomationProperties.HelpText="{x:Bind Tile.Description, Mode=OneWay}"
+            Visibility="{x:Bind Hidden(Tile.Toggle), Mode=OneWay}"
+            Click="OnClick">
+            <Grid>
+                <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="{x:Bind Tile.Glyph, Mode=OneWay}" />
+                <FontIcon FontSize="12" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Glyph="&#xE76C;" Visibility="{x:Bind Shown(Tile.HasPage), Mode=OneWay}" />
+            </Grid>
+        </Button>
+        <TextBlock
+            Margin="0,6,0,0"
+            TextAlignment="Center"
+            TextTrimming="CharacterEllipsis"
+            Style="{ThemeResource CaptionTextBlockStyle}"
+            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+            AutomationProperties.AccessibilityView="Raw"
+            Text="{x:Bind Tile.Label, Mode=OneWay}" />
+    </StackPanel>
+</UserControl>
