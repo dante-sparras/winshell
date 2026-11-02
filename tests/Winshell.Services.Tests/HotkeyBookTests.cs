@@ -3,6 +3,7 @@ using Winshell.Native;
 
 namespace Winshell.Services.Tests;
 
+[Collection(KeyboardHookCollection.Name)]
 public sealed class HotkeyBookTests : IDisposable
 {
     public void Dispose()

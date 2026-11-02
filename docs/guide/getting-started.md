@@ -99,10 +99,6 @@ A configuration is a .NET project. Winshell looks for a `.csproj` in this order.
 
 `WINSHELL_CONFIG_DIR` replaces `%APPDATA%\winshell` in this table. The default shell keeps `preferences.toml` in that folder.
 
-The first time Winshell uses `%APPDATA%\winshell`, it copies an old `%USERPROFILE%\.config\winshell` there, if you have one, and leaves the old folder in place.
-
-A folder that still has a `shell.qml` and no `.csproj` is not a configuration. Winshell runs the default shell and shows a notice that QML configurations stopped working. There is no converter. Preferences that were already in the config folder stay there, as TOML. To write a shell, start a project, as the [configuration guide](configuration.md) describes.
-
 ## Make a shell of your own
 
 ```powershell

@@ -550,23 +550,6 @@ namespace Winshell
             }
         }
 
-        /// <summary>Copies <c>%USERPROFILE%\.config\winshell</c> into the default config root once. A set override skips it.</summary>
-        private static void CopyLegacyConfig()
-        {
-            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConfigPaths.OverrideVariable)))
-                return;
-            try
-            {
-                var message = ConfigPaths.MigrateLegacy();
-                if (message is not null)
-                    Console.Error.WriteLine(message);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                Console.Error.WriteLine($"Could not copy the old configuration from \"{ConfigPaths.LegacyRoot()}\": {e.Message}");
-            }
-        }
-
         private static int RunShell(Options o, string[] originalArgs)
         {
             // Restarted to update: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
@@ -595,7 +578,6 @@ namespace Winshell
             if (project is null)
             {
                 if (o.Path is null)
-                    CopyLegacyConfig();
                 // -d starts this program again. That child runs the shell, so this process must not also detach.
                 if (o.Daemonize)
                     return DetachDefault(originalArgs);
@@ -636,7 +618,6 @@ namespace Winshell
         /// <summary>The default shell, in this process. <c>--no-duplicate</c> and <c>-v</c> are on the command line <see cref="Shell.Run{T}"/> reads.</summary>
         private static int RunDefault(Options o, InstalledUpdate? update)
         {
-            var retired = ConfigurationProject.LeftoverQml(o.Path, o.Config, ConfigPaths.Root());
             using var updater = Updater.ForRelease(ReleaseRepository, Version, Log.Default);
             if (updater is not null && update is { Error: { } failure })
                 updater.ReportApplyFailure(update.Version, failure);
@@ -644,7 +625,6 @@ namespace Winshell
             {
                 ShellId = "winshell-default",
                 Updater = updater,
-                RetiredQml = retired,
             };
             Shell.Run<DefaultShellConfiguration>(options);
             return Environment.ExitCode;
@@ -753,7 +733,6 @@ namespace Winshell
             {
                 search = System.IO.Path.Combine(root, name);
             }
-            var retired = problem is null && project is null ? ConfigurationProject.LeftoverQml(o.Path, o.Config, root) : null;
             var checks = Diagnostics.Doctor.Run(new DoctorContext(
                 Environment.ProcessPath!,
                 root,
@@ -762,7 +741,6 @@ namespace Winshell
                 DoctorInstances(),
                 ShellLocations.LocalRoot,
                 ShellLocations.CrashRoot,
-                retired,
                 search), DoctorFacts.Pc);
             if (o.Json)
             {

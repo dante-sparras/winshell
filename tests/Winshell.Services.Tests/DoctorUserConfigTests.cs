@@ -134,12 +134,12 @@ public sealed class DoctorUserConfigTests : IDisposable
         var elsewhere = Path.Combine(_dir, "elsewhere");
         Directory.CreateDirectory(config);
         Directory.CreateDirectory(elsewhere);
-        File.WriteAllText(Path.Combine(elsewhere, "shell.qml"), "import Winshell\nShellRoot {}\n");
+        File.WriteAllText(Path.Combine(elsewhere, "MyShell.exe"), "");
         File.WriteAllText(Path.Combine(elsewhere, "preferences.toml"), "colorScheme = \"dark\"\n");
         var preferences = Path.Combine(config, "preferences.toml");
         File.WriteAllText(preferences, "colorScheme =\n");
 
-        var problem = Assert.Single(DoctorProbe.UserConfigProblems(Path.Combine(elsewhere, "shell.qml"), config, Path.Combine(_dir, "local")));
+        var problem = Assert.Single(DoctorProbe.UserConfigProblems(Path.Combine(elsewhere, "MyShell.exe"), config, Path.Combine(_dir, "local")));
 
         Assert.StartsWith(preferences + "[", problem, StringComparison.Ordinal);
     }

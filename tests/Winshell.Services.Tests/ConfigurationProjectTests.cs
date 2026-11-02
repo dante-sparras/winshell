@@ -107,35 +107,20 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
-    public void A_leftover_shell_qml_is_not_a_project_and_not_an_error()
+    public void A_file_that_is_not_a_project_is_refused()
     {
-        var qml = Path.Combine(_root, "shell.qml");
-        File.WriteAllText(qml, "import Winshell\n");
         File.WriteAllText(Path.Combine(_root, "notes.txt"), "hello");
 
-        Assert.Null(ConfigurationProject.Find(qml, null, _root, out var qmlError));
-        Assert.Null(qmlError);
-        Assert.Equal(qml, ConfigurationProject.LeftoverQml(qml, null, _root));
         Assert.StartsWith("No .csproj at ", Refusal(path: Path.Combine(_root, "notes.txt")), StringComparison.Ordinal);
-
-        var folder = Path.Combine(_root, "old");
-        Directory.CreateDirectory(folder);
-        var nested = Path.Combine(folder, "shell.qml");
-        File.WriteAllText(nested, "import Winshell\n");
-        Assert.Null(ConfigurationProject.Find(folder, null, _root, out var folderError));
-        Assert.Null(folderError);
-        Assert.Equal(nested, ConfigurationProject.LeftoverQml(null, "old", _root));
     }
 
     [Fact]
-    public void A_project_hides_a_leftover_shell_qml_and_a_program_finds_its_project()
+    public void A_program_finds_its_project()
     {
         var file = Project("mine\\Bar.csproj");
-        File.WriteAllText(Path.Combine(_root, "mine", "shell.qml"), "import Winshell\n");
         var project = Found(path: Path.Combine(_root, "mine"));
 
         Assert.Equal(file, project.ProjectFile);
-        Assert.Null(ConfigurationProject.LeftoverQml(Path.Combine(_root, "mine"), null, _root));
         Assert.Equal(file, ConfigurationProject.ForProgram(project.Program)!.ProjectFile);
         Assert.Equal(file, ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder + ".next", "Bar.exe"))!.ProjectFile);
         Assert.Null(ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder, "other.exe")));

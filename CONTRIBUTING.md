@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Check your change** before you open the PR. Build with warnings as errors and run the focused tests for what you changed. Add the Corpus stage when you touch the parser, Leak when you touch reload, and Performance when you touch Jint; the [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job.
+**Check your change** before you open the PR. Build with warnings as errors and run the focused tests for what you changed. The [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `installer`, `actionlint`, `pr-title`, and the docs `build` job.
 
 ## Write tests that don't flake
 
@@ -28,7 +28,7 @@ A test waits on a real signal: an event, a task's completion, or a fake clock.
 - **No sleeps or fixed timeouts as a way to wait.** A timeout can stop a test that hung, but a passing test must never depend on how long something took. `Thread.Sleep` and `Task.Delay` don't build in `tests/`. When nothing gives a signal, such as a file or another process, use `Wait.Until` from `tests/TestSupport/Wait.cs`.
 - **Only `Wait.ForNothingToHappen` waits for a set time.** Use it when a check is that something did not happen. A slow machine can then miss a bug, but it can't fail a test that should pass.
 - **Pass `TestContext.Current.CancellationToken` to anything that waits.** It is cancelled when a test has run for two minutes, so the test fails alone and the run goes on.
-- **Time comes through a `TimeProvider`.** `DateTime.Now`, `Stopwatch` and their relatives don't build in `src/`. Code in an engine reads `QmlEngine.Time`, and a test sets it with a `FakeTimeProvider` service, given a UTC time. `TimeProvider.System` is for what only real time can drive: a file's write time, a Windows object, the CLI's own process.
+- **Time comes through a `TimeProvider`.** `DateTime.Now`, `Stopwatch` and their relatives don't build in `src/`. A test passes a `FakeTimeProvider`, given a UTC time. `TimeProvider.System` is for what only real time can drive: a file's write time, a Windows object, the CLI's own process.
 - **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
 
 ## Flaky tests
@@ -40,7 +40,7 @@ The `ci` job runs a failed test once more. A failed test that passes on that rer
 
 A test that fails twice fails the job. So does a test run that crashed, and more than 10 failed tests, which are not rerun.
 
-To quarantine a flaky test while its cause is found, add its fully qualified name to [`tests/quarantine.txt`](tests/quarantine.txt) in a PR, add it to the [quarantine checklist](https://github.com/dante-sparras/winshell/issues/960), and use `Refs #` for its `flaky` issue. `Fixes #` would close that issue with the test still broken. `ci` then leaves the test out, and the `quarantine` job runs it on `main` without blocking anything. In the PR that fixes the test, remove the line and tick the checklist. Quarantine covers the main test stage, not the leak, corpus or performance tests.
+To quarantine a flaky test while its cause is found, add its fully qualified name to [`tests/quarantine.txt`](tests/quarantine.txt) in a PR, add it to the [quarantine checklist](https://github.com/dante-sparras/winshell/issues/960), and use `Refs #` for its `flaky` issue. `Fixes #` would close that issue with the test still broken. `ci` then leaves the test out, and the `quarantine` job runs it on `main` without blocking anything. In the PR that fixes the test, remove the line and tick the checklist.
 
 Don't skip or delete a flaky test to get a PR green.
 

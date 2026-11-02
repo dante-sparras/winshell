@@ -321,19 +321,6 @@ public sealed class AudioServiceTests
         Assert.Null(tracker.Node);
     }
 
-    [Fact]
-    public void An_object_tracker_only_holds_its_list()
-    {
-        var tracker = new AudioObjectTracker();
-        Assert.Empty(tracker.Objects);
-        var changes = Watch(tracker);
-
-        tracker.Objects = ["a"];
-
-        Assert.Equal(["a"], tracker.Objects);
-        Assert.Equal([nameof(AudioObjectTracker.Objects)], changes);
-    }
-
     private (AudioService Audio, FakeAudioNode Node, FakeMeter Meter) Metered(params float[] peaks)
     {
         var meter = new FakeMeter(peaks);

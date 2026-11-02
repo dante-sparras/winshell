@@ -20,7 +20,7 @@ A `winshell` and a shell of different releases refuse each other, except `kill`.
 
 ## The program
 
-`Shell.Run` runs until the shell quits. `ShellOptions` is where `//@ pragma` lines were. `ShellId` names the data, state and cache folders.
+`Shell.Run` runs until the shell quits. `ShellId` in `ShellOptions` names the data, state and cache folders.
 
 ```csharp
 Shell.Run<AppShell>(new ShellOptions { ShellId = "MyShell" });

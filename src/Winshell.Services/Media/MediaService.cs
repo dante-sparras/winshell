@@ -308,7 +308,7 @@ public sealed class MediaSession : ObservableObject
         _session.Seeked -= RefreshPosition;
     }
 
-    // Windows reports each command on its own. Quickshell's canControl is the player's single flag.
+    // Windows reports each command on its own. One flag says whether any of them works.
     private bool AcceptsControl() =>
         _session.CanPlay || _session.CanPause || _session.CanStop
         || _session.CanSeek || _session.CanGoNext || _session.CanGoPrevious;

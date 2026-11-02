@@ -303,7 +303,7 @@ public sealed class DoctorTests : IDisposable
     public void Running_instances_and_recent_crash_reports_are_listed()
     {
         Assert.Equal("No Winshell is running", Instances([]).Message);
-        Assert.Equal(@"abc (process 42) runs C:\c\shell.qml, log C:\l\log.txt", Instances([new DoctorInstance("abc", 42, @"C:\c\shell.qml", @"C:\l\log.txt")]).Message);
+        Assert.Equal(@"abc (process 42) runs C:\c\MyShell.exe, log C:\l\log.txt", Instances([new DoctorInstance("abc", 42, @"C:\c\MyShell.exe", @"C:\l\log.txt")]).Message);
 
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
         Assert.Equal(CheckStatus.Pass, Crashes([(@"C:\r\old.txt", now.AddDays(-8))], now).Status);
@@ -343,7 +343,7 @@ public sealed class DoctorTests : IDisposable
     [
         new("windows", "Windows", CheckStatus.Pass, "Windows 11 26H2, build 26300.1"),
         new("signIn", "Sign-in", CheckStatus.Warn, "Startup apps turned it off.", "Turn Winshell on in Settings > Apps > Startup."),
-        new("config", "Config", CheckStatus.Fail, "shell.qml[1:1]: x", "Correct that line."),
+        new("config", "Config", CheckStatus.Fail, "App.xaml[1:1]: x", "Correct that line."),
     ];
 
     [Fact]
@@ -358,7 +358,7 @@ public sealed class DoctorTests : IDisposable
             "  PASS  Windows  Windows 11 26H2, build 26300.1",
             "  WARN  Sign-in  Startup apps turned it off.",
             "                 Fix: Turn Winshell on in Settings > Apps > Startup.",
-            "  FAIL  Config   shell.qml[1:1]: x",
+            "  FAIL  Config   App.xaml[1:1]: x",
             "                 Fix: Correct that line.",
             "",
             "1 passed, 1 warning, 1 failed.",
@@ -389,23 +389,14 @@ public sealed class DoctorTests : IDisposable
     {
         var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
-        var qml = Path.Combine(config, "shell.qml");
-        File.WriteAllText(qml, "import Winshell\nShellRoot {}\n");
         var before = Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList();
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), qml), DoctorFacts.Pc);
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc);
 
-        Assert.Equal(["windows", "dotnet", "project", "downloaded", "built", "build", "qml", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"], checks.Select(c => c.Id));
+        Assert.Equal(["windows", "dotnet", "project", "downloaded", "built", "build", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"], checks.Select(c => c.Id));
         Assert.DoesNotContain(checks, c => c.Message.StartsWith("Could not check", StringComparison.Ordinal));
         Assert.Equal(CheckStatus.Pass, checks.Single(c => c.Id == "project").Status);
         Assert.Contains("default shell", checks.Single(c => c.Id == "project").Message, StringComparison.Ordinal);
-        var retired = checks.Single(c => c.Id == "qml");
-        Assert.Equal(CheckStatus.Warn, retired.Status);
-        Assert.Contains(
-            qml.Replace(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "%LOCALAPPDATA%", StringComparison.OrdinalIgnoreCase),
-            retired.Message,
-            StringComparison.Ordinal);
-        Assert.Contains("dotnet new winshell", retired.Fix, StringComparison.Ordinal);
         Assert.Equal(CheckStatus.Pass, checks.Single(c => c.Id == "crashes").Status);
         Assert.All(checks.Where(c => c.Status != CheckStatus.Pass), c => Assert.False(string.IsNullOrEmpty(c.Fix)));
         Assert.Equal(before, Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList());

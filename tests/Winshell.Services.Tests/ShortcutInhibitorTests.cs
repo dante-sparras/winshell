@@ -4,6 +4,7 @@ using Winshell.Native;
 namespace Winshell.Services.Tests;
 
 /// <summary>The hotkey registrar captures keys for one window and posts them on.</summary>
+[Collection(KeyboardHookCollection.Name)]
 public sealed class ShortcutInhibitorTests : IDisposable
 {
     public void Dispose()

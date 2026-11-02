@@ -60,7 +60,7 @@ public sealed class CliJsonOutputTests : IDisposable
     [Fact]
     public void The_instance_file_keeps_process_start_and_exited_at()
     {
-        var info = new InstanceInfo("id", 1, "shell", "C:\\cfg\\shell.qml", DateTime.Now, "pipe", "C:\\log.txt", 42, DateTime.Now);
+        var info = new InstanceInfo("id", 1, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "C:\\log.txt", 42, DateTime.Now);
         var file = JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo);
         Assert.Contains("\"processStart\": 42", file, StringComparison.Ordinal);
         Assert.Contains("\"exitedAt\":", file, StringComparison.Ordinal);

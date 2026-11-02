@@ -76,7 +76,6 @@ public sealed record DoctorInstance(string Id, int Pid, string ConfigPath, strin
 /// </summary>
 /// <param name="ConfigFile">The project file that runs, or null when Winshell would run its default shell, or cannot pick one.</param>
 /// <param name="ConfigProblem">Why no config can be picked, such as several configs and no <c>-c</c>; null when one can.</param>
-/// <param name="RetiredQml">A <c>shell.qml</c> left behind with no project, or null.</param>
 /// <param name="ProjectRoot">The folder <see cref="Doctor.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
 public sealed record DoctorContext(
     string ExePath,
@@ -86,7 +85,6 @@ public sealed record DoctorContext(
     IReadOnlyList<DoctorInstance> Instances,
     string LocalRoot,
     string CrashRoot,
-    string? RetiredQml = null,
     string? ProjectRoot = null);
 
 /// <summary>Runs the checks <c>winshell doctor</c> and Winshell Settings' About page show. All of them only read.</summary>
@@ -127,7 +125,6 @@ public static class Doctor
             Guard("windows", "Windows", () => Windows(facts.WindowsBuild(), facts.WindowsUpdateRevision(), facts.WindowsDisplayVersion(), facts.WindowsServer(), facts.TransparencyEffectsOff(), facts.ContrastThemeOn())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, facts.SelfContained(context.ExePath))),
             .. configuration,
-            Guard("qml", "QML", () => Qml(context.RetiredQml)),
             Guard("folders", "Folders", () => Folders(
                 [("the config folder", configFolder, facts.CanWrite(configFolder)), ("its local folder", context.LocalRoot, facts.CanWrite(context.LocalRoot))],
                 context.Instances.Where(i => facts.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
@@ -207,11 +204,6 @@ public static class Doctor
         return new("dotnet", ".NET", CheckStatus.Pass, $"{description}, {how}");
     }
 
-    /// <summary>A leftover <c>shell.qml</c>. Nothing is converted: the default shell runs, and this says how to start a project.</summary>
-    internal static DoctorCheck Qml(string? file) => string.IsNullOrEmpty(file)
-        ? new("qml", "QML", CheckStatus.Pass, "No QML configuration.")
-        : new("qml", "QML", CheckStatus.Warn, $"{file} is a QML configuration, and QML configurations stopped working.", "Start a new one with dotnet new winshell.");
-
     /// <summary>User TOML that does not parse is a warning on the project check. A failure already says what to fix.</summary>
     private static DoctorCheck WithUserFiles(DoctorCheck check, IReadOnlyList<string>? userFiles)
     {
@@ -239,7 +231,6 @@ public static class Doctor
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
-        var retired = project is null ? ConfigurationProject.LeftoverQml(null, null, configRoot) : null;
         return Run(new DoctorContext(
             exe,
             configRoot,
@@ -248,7 +239,6 @@ public static class Doctor
             ListedInstances(),
             ShellLocations.LocalRoot,
             ShellLocations.CrashRoot,
-            retired,
             project?.Folder), DoctorFacts.Pc);
     }
 

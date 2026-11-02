@@ -187,7 +187,7 @@ public sealed class SettingsPagesTests : IDisposable
             [
                 new SettingsDiagnostic("windows", "pass", "Windows", "Windows 11 26H2, build 26300.1", ""),
                 new SettingsDiagnostic("signIn", "warn", "Sign-in", "Startup apps turned it off.", "Turn Winshell on in Settings > Apps > Startup."),
-                new SettingsDiagnostic("config", "fail", "Config", "shell.qml[1:1]: Expected }", "Correct that line."),
+                new SettingsDiagnostic("config", "fail", "Config", "App.xaml[1:1]: Expected }", "Correct that line."),
             ];
         });
         Action? posted = null;
@@ -201,7 +201,7 @@ public sealed class SettingsPagesTests : IDisposable
         Assert.Equal("1 passed, 1 warning, 1 failed.", session.Summary);
         Assert.Equal("Passed: Windows. Windows 11 26H2, build 26300.1", SettingsAbout.Spoken(session.Checks[0]));
         Assert.Equal("Warning: Sign-in. Startup apps turned it off. Fix: Turn Winshell on in Settings > Apps > Startup.", SettingsAbout.Spoken(session.Checks[1]));
-        Assert.Equal("Failed: Config. shell.qml[1:1]: Expected } Fix: Correct that line.", SettingsAbout.Spoken(session.Checks[2]));
+        Assert.Equal("Failed: Config. App.xaml[1:1]: Expected } Fix: Correct that line.", SettingsAbout.Spoken(session.Checks[2]));
 
         var broken = new SettingsDiagnosticsSession(() => throw new InvalidOperationException("the registry is gone"));
         Action? failed = null;
@@ -277,7 +277,7 @@ public sealed class SettingsPagesTests : IDisposable
         var checks = SettingsAbout.Checks(_folder);
 
         Assert.Equal(
-            ["windows", "dotnet", "project", "downloaded", "built", "build", "qml", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"],
+            ["windows", "dotnet", "project", "downloaded", "built", "build", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"],
             checks.Select(c => c.Id));
         var projectCheck = Assert.Single(checks, c => c.Id == "project");
         var built = Assert.Single(checks, c => c.Id == "built");

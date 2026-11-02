@@ -94,7 +94,7 @@ public sealed class CrashReportSafetyTests : IDisposable
             "12:00:00.000  INFO: printed by a script before anything else: SENTINEL-EARLY",
             "  continued: SENTINEL-EARLY-2",
             "12:00:01.000  INFO window: opened",
-            "12:00:02.000  WARN scene: shell.qml[3:5]: Error: fetch https://example.com/feed?apikey=SENTINEL-LOG-1 failed",
+            "12:00:02.000  WARN scene: App.xaml[3:5]: Error: fetch https://example.com/feed?apikey=SENTINEL-LOG-1 failed",
             "12:00:03.000  INFO: console.log from the config: SENTINEL-CONSOLE-2",
             "    a second line of that message: SENTINEL-CONSOLE-3",
             "12:00:04.000 ERROR network: Proxy-Authorization: Basic SENTINEL-LOG-4",
@@ -118,7 +118,7 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Ordinary_text_is_left_alone()
     {
         const string text = "at Winshell.Runtime.Core.SignalSlot.Emit(Object[] args) in C:\\src\\Signals.cs:line 78\n" +
-            "Passed: 5, Author: Dante, shell id 5f4dcc3b5aa765d61d8327deb882cf99, crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-qml.txt";
+            "Passed: 5, Author: Dante, shell id 5f4dcc3b5aa765d61d8327deb882cf99, crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-xaml.txt";
 
         Assert.Equal(text, CrashRedaction.Redact(text));
     }

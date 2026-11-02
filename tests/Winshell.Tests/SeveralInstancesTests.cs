@@ -9,7 +9,7 @@ public class SeveralInstancesTests
     [Fact]
     public void One_instance_is_used_when_no_selector_was_given()
     {
-        var only = Instance("only", @"C:\only\shell.qml");
+        var only = Instance("only", @"C:\only\MyShell.exe");
         var choice = Cli.ChooseUnselected([only]);
 
         Assert.Equal(0, choice.Code);
@@ -30,14 +30,14 @@ public class SeveralInstancesTests
     public void Several_instances_are_a_command_line_error_that_names_each()
     {
         var choice = Cli.ChooseUnselected([
-            Instance("aaa", @"C:\a\shell.qml"),
-            Instance("bbb", @"C:\b\shell.qml"),
+            Instance("aaa", @"C:\a\MyShell.exe"),
+            Instance("bbb", @"C:\b\MyShell.exe"),
         ]);
 
         Assert.Equal(2, choice.Code);
         Assert.Null(choice.Info);
         Assert.Equal(
-            @"Several instances are running; pick one with -i: aaa (C:\a\shell.qml), bbb (C:\b\shell.qml)",
+            @"Several instances are running; pick one with -i: aaa (C:\a\MyShell.exe), bbb (C:\b\MyShell.exe)",
             choice.Error);
     }
 
