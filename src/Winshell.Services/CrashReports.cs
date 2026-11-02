@@ -22,7 +22,7 @@ internal sealed record CrashReport(string Path, string Where, Exception Error, b
 /// <summary>
 /// Writes crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent anywhere.
 /// A report says where the runtime failed, the exception with its stack, and the end of the instance's log, with
-/// the secrets <see cref="CrashRedaction"/> recognizes taken out and what scripts logged left out. Several instances
+/// the secrets <see cref="CrashRedaction"/> recognizes taken out. Several instances
 /// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted.
 /// </summary>
 internal sealed partial class CrashReports(string folder)
@@ -217,7 +217,7 @@ internal sealed partial class CrashReports(string folder)
     {
         var text = new StringBuilder();
         text.AppendLine(Heading);
-        text.AppendLine("This file stays on this PC. Passwords, tokens and keys Winshell recognizes are taken out, and what scripts logged is left out,");
+        text.AppendLine("This file stays on this PC. Passwords, tokens and keys Winshell recognizes are taken out,");
         text.AppendLine("but read it before you attach it to a bug report: it has the paths of your config.");
         text.AppendLine();
         text.AppendLine(CultureInfo.InvariantCulture, $"Time: {time:yyyy-MM-dd HH:mm:ss.fff zzz}");
@@ -236,13 +236,11 @@ internal sealed partial class CrashReports(string folder)
         text.AppendLine();
         text.AppendLine("Exception");
         text.AppendLine(CrashRedaction.Redact(Describe(error)));
-        var (log, omitted) = LogTail();
-        if (log.Count > 0 || omitted > 0)
+        var log = LogTail();
+        if (log.Count > 0)
         {
             text.AppendLine();
             text.AppendLine(CultureInfo.InvariantCulture, $"Log: {LogPath}, last {log.Count} lines");
-            if (omitted > 0)
-                text.AppendLine(CultureInfo.InvariantCulture, $"({omitted} lines of script output left out)");
             foreach (var line in log)
                 text.AppendLine(line);
         }
@@ -262,19 +260,11 @@ internal sealed partial class CrashReports(string folder)
         }
     }
 
-    // A log line as winshell.exe writes it: "2026-10-29 12:00:00.000  INFO window: message". Older logs omit
-    // the date. A line with no category is not a log line. A line that does not start like this continues the line before.
-    [GeneratedRegex(@"^(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}\.\d{3} +(?:DEBUG|INFO|WARN|ERROR|FATAL)(?<category> [^\s:]+)?:")]
-    private static partial Regex LogLine();
-
-    /// <summary>
-    /// The last lines of the log, cleaned. Lines without a category are what a configuration's scripts printed,
-    /// which can be anything, so they are left out and counted. Only the end of the log is read.
-    /// </summary>
-    private (List<string> Lines, int Omitted) LogTail()
+    /// <summary>The last lines of the log, cleaned. Only the end of the log is read.</summary>
+    private List<string> LogTail()
     {
         if (LogPath.Length == 0 || !File.Exists(LogPath))
-            return ([], 0);
+            return [];
         List<string> lines;
         try
         {
@@ -291,33 +281,9 @@ internal sealed partial class CrashReports(string folder)
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return ([], 0);
+            return [];
         }
-        var kept = new List<string>();
-        // For each kept line, how many lines were left out before the next kept one.
-        var gaps = new List<int>();
-        var before = 0;
-        // Until the first line that says what it is, a line cannot be told from script output.
-        var keep = false;
-        foreach (var line in lines)
-        {
-            if (LogLine().Match(line) is { Success: true } m)
-                keep = m.Groups["category"].Success;
-            if (keep)
-            {
-                kept.Add(CrashRedaction.Redact(line));
-                gaps.Add(0);
-            }
-            else if (gaps.Count > 0)
-                gaps[^1]++;
-            else
-                before++;
-        }
-        // Only what was left out among the lines shown. With nothing kept, that is every line.
-        if (kept.Count == 0)
-            return ([], before);
-        var first = Math.Max(0, kept.Count - LogLines);
-        return (kept.GetRange(first, kept.Count - first), gaps.Skip(first).Sum() + (first == 0 ? before : 0));
+        return [.. lines.TakeLast(LogLines).Select(CrashRedaction.Redact)];
     }
 
     /// <summary>
