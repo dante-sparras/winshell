@@ -9,6 +9,7 @@ winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
 winshell reload [instance options]
+winshell dev [-c <name> | -p <path>]
                                     build a configuration and replace the instance
 winshell log [-f] [-t N]            print an instance's log
 winshell ipc show [-j]              list IPC targets
@@ -63,6 +64,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. The shape is under [JSON](#json). |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. `kill` is the one command a CLI and a shell of different releases still accept. |
 | `winshell reload` | Builds the configuration. On failure the running instance stays, a notice shows, and the command prints why and exits with 1. On success a new instance starts with `--after` and takes over, then the command prints `Reloaded <id>`. There is no file watcher. |
+| `winshell dev` | Runs a configuration project under `dotnet watch` and applies each edit to the running shell, until Ctrl+C. See [Develop a shell](../guide/configuration.md#develop-a-shell). Takes `-c` and `-p`. |
 | `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. `-j`, `--json` prints that list as JSON. The shape is under [JSON](#json). |
 | `winshell ipc call <target> <function> [args...]` | Calls a function registered with [`ShellIpc.Handle`](winshell.md#shellipc) and prints what it returns. |

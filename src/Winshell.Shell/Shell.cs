@@ -68,6 +68,9 @@ public sealed partial class Shell : IDisposable
         Platform = new ShellPlatform(loop, log);
     }
 
+    /// <summary>The shell of this process, or null before <see cref="Run{T}"/> has started it.</summary>
+    internal static Shell? Running => _current;
+
     /// <summary>The shell of this process. Reading it before <see cref="Run{T}"/> has started it throws.</summary>
     public static Shell Current => _current ?? throw new InvalidOperationException("The shell has not started. Call Shell.Run first.");
 
@@ -238,6 +241,9 @@ public sealed partial class Shell : IDisposable
                             (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
                             path => OpenToRead.Open(path, log));
                         shell.Notices = notices;
+                        // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
+                        if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
+                            TomlFile.ErrorChanged += notices.ShowConfigError;
                         instance.Listen(loop, new Control(shell), notices.Hide);
                         instance.Publish(identity.ShellId);
                         configuration.Start(shell);
