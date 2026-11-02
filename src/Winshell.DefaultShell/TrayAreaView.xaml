@@ -66,6 +66,7 @@
             <FontIcon Glyph="&#xE777;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
         </Button>
         <Button
+            x:Name="QuickSettingsButton"
             Height="32"
             MinWidth="0"
             MinHeight="32"
@@ -75,7 +76,7 @@
             VerticalAlignment="Center"
             CornerRadius="{ThemeResource ControlCornerRadius}"
             AutomationProperties.Name="Quick settings"
-            Click="{x:Bind Area.RequestQuickSettings}">
+            Click="OnQuickSettings">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Grid Width="16" Height="16">
                     <FontIcon

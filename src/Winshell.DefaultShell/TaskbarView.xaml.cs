@@ -13,14 +13,16 @@ public sealed partial class TaskbarView : UserControl
     private readonly Preferences _preferences;
     private readonly TrayAreaView _tray;
     private readonly TaskbarClock _clock;
+    private readonly QuickSettingsFlyout _quick;
 
-    public TaskbarView(TaskbarModel model, TrayArea tray, PanelWindow window, Preferences preferences, TimeProvider time, NotificationCenter center)
+    public TaskbarView(TaskbarModel model, TrayArea tray, PanelWindow window, Preferences preferences, TimeProvider time, NotificationCenter center, QuickSettings settings)
     {
         Model = model;
         _preferences = preferences;
         InitializeComponent();
         _tray = new TrayAreaView(tray);
         _clock = new TaskbarClock(window, preferences, time, center);
+        _quick = new QuickSettingsFlyout(window, _tray.QuickSettingsAnchor, settings, preferences, time);
         Corner.Children.Add(_tray);
         Corner.Children.Add(_clock);
         Place();
@@ -30,10 +32,11 @@ public sealed partial class TaskbarView : UserControl
 
     public TaskbarModel Model { get; }
 
-    /// <summary>Drops the tray, the clock and the preference subscription. The window is about to close.</summary>
+    /// <summary>Drops the tray, the clock, quick settings and the preference subscription. The window is about to close.</summary>
     public void Release()
     {
         _preferences.PropertyChanged -= OnPreferences;
+        _quick.Release();
         _tray.Release();
         _clock.Release();
     }

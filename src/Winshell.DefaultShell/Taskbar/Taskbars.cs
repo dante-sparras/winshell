@@ -12,6 +12,7 @@ internal sealed class Taskbars
     private readonly TaskbarDesktop _desktop;
     private readonly TrayArea _tray;
     private readonly NotificationCenter _notifications;
+    private readonly QuickSettings _quick;
     private readonly List<Bar> _bars = [];
 
     public Taskbars(Shell shell, Preferences preferences, TaskbarPins pins)
@@ -24,6 +25,17 @@ internal sealed class Taskbars
         _tray = new TrayArea(shell.SystemTray, new SystemStatus(shell.Networking, shell.Audio, shell.Power, shell.PowerMode), shell.Updates);
         // One center for every bar. Reading the listener never asks Windows for access.
         _notifications = new NotificationCenter(shell.Notifications, preferences, TimeProvider.System);
+        // One quick settings for every bar. Bluetooth is read only while a flyout is open.
+        _quick = new QuickSettings(
+            _tray.Status,
+            shell.Networking,
+            shell.Bluetooth,
+            shell.Audio,
+            shell.Power,
+            shell.PowerMode,
+            shell.Brightness,
+            new QuickSettingsLayout(shell.StatePath("quick-settings.toml"), shell.Loop, shell.Log));
+        _quick.SettingsRequested += uri => ProgramStart.Start(uri, shell.Log);
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
         Sync();
@@ -75,7 +87,7 @@ internal sealed class Taskbars
                 ExclusiveZone = 48,
                 Backdrop = _preferences.Material,
             };
-            window.Content = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System, _notifications);
+            window.Content = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System, _notifications, _quick);
             window.Visible = true;
             _bars.Add(new Bar(model, window));
         }
