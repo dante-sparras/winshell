@@ -43,7 +43,7 @@ public abstract class ShellConfiguration
 }
 
 /// <summary>The running shell: its screens and services. There is one in a process.</summary>
-public sealed class Shell : IDisposable
+public sealed partial class Shell : IDisposable
 {
     private static Shell? _current;
 
@@ -259,6 +259,7 @@ public sealed class Shell : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        DisposeServices();
         Platform.Dispose();
     }
 
