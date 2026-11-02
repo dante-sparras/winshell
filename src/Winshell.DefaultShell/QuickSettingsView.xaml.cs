@@ -51,7 +51,7 @@ public sealed partial class QuickSettingsView : UserControl
 
     private bool CanAdd(bool hasUnpinned, bool showingAdd) => hasUnpinned && !showingAdd;
 
-    private ImageSource? MediaImage(string url) => url.Length == 0 ? null : new BitmapImage(new Uri(url));
+    private ImageSource? MediaImage(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? new BitmapImage(uri) : null;
 
     private void OnAddTile(object sender, RoutedEventArgs e)
     {
