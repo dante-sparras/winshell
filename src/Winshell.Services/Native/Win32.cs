@@ -318,7 +318,6 @@ internal static partial class Win32
     public const uint SWP_NOOWNERZORDER = 0x0200;
 
     public static readonly nint HWND_TOPMOST = -1;
-    public static readonly nint HWND_NOTOPMOST = -2;
     public static readonly nint HWND_TOP = 0;
     public static readonly nint HWND_BOTTOM = 1;
     public static readonly nint HWND_MESSAGE = -3;
