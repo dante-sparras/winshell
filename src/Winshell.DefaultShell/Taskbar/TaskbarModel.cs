@@ -140,6 +140,9 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
             _startProgram(task.Pin);
     }
 
+    /// <summary>A pinned app was dragged onto another. The pins list puts it before that one when moving back, and after it when moving on.</summary>
+    public void MovePin(string id, string target) => _pins.Move(id, target);
+
     public void Dispose()
     {
         if (_disposed)

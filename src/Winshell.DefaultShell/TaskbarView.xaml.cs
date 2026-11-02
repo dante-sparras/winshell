@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Windows.System;
 using Winshell.Apps;
 using Winshell.DefaultShell.Taskbar;
@@ -20,6 +21,9 @@ public sealed partial class TaskbarView : UserControl
     private readonly TaskbarKeyboard _keyboard = new();
     private readonly StartFlyout _start;
     private readonly TaskPreviewFlyout _previews;
+    private readonly TaskbarReveal _reveal;
+    private readonly TaskPinDrag _drag = new();
+    private bool _barMenu;
 
     public TaskbarView(
         TaskbarModel model,
@@ -39,18 +43,25 @@ public sealed partial class TaskbarView : UserControl
         _preferences = preferences;
         _window = window;
         InitializeComponent();
+        FaceHost.SizeChanged += OnFaceHostSize;
+        Bar.SizeChanged += OnLaidOut;
+        Corner.SizeChanged += OnLaidOut;
+        Strip.SizeChanged += OnStripSize;
+        PointerWheelChanged += OnWheel;
         _tray = new TrayAreaView(tray);
         _clock = new TaskbarClock(window, preferences, time, center);
         _quick = new QuickSettingsFlyout(window, _tray.QuickSettingsAnchor, settings, preferences, time);
         _start = new StartFlyout(window, StartButton, model, start, apps, documents, loop, log, preferences, time);
         _previews = new TaskPreviewFlyout(window, model, preferences, time, ButtonFor, AnyButton, StartButton);
-        _start.Popup.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is not (nameof(StartPopup.IsOpen) or nameof(StartPopup.SearchOpen)))
-                return;
-            StartFill.Visibility = _start.Popup.IsOpen ? Visibility.Visible : Visibility.Collapsed;
-            SearchFill.Visibility = _start.Popup.IsOpen && _start.Popup.SearchOpen ? Visibility.Visible : Visibility.Collapsed;
-        };
+        _start.Popup.PropertyChanged += OnStart;
+        _previews.Model.PropertyChanged += OnPreview;
+        _quick.OpenChanged += OnSurface;
+        _clock.OpenChanged += OnSurface;
+        _tray.HiddenChanged += OnSurface;
+        _reveal = new TaskbarReveal(time);
+        _reveal.PropertyChanged += OnReveal;
+        _reveal.SetAutoHide(_preferences.TaskbarAutoHide);
+        ApplyBar();
         Corner.Children.Add(_tray);
         Corner.Children.Add(_clock);
         Place();
@@ -59,6 +70,8 @@ public sealed partial class TaskbarView : UserControl
         Model.ActiveWindowChanged += OnActiveWindow;
         PreviewKeyDown += OnPreviewKeyDown;
         GotFocus += OnGotFocus;
+        PointerEntered += OnPointerEntered;
+        PointerExited += OnPointerExited;
         ContextRequested += OnContextRequested;
     }
 
@@ -74,8 +87,72 @@ public sealed partial class TaskbarView : UserControl
     {
         _keyboard.Enter(Model.ActiveWindow);
         _window.Focusable = true;
+        SyncOpen();
         _window.Focus();
         FocusStop(TaskbarKeyboard.FirstApp(Model.Tasks.Count, StopCount()));
+    }
+
+    /// <summary>A menu of this bar opened or closed. An auto-hiding bar reads it.</summary>
+    internal void SurfacesChanged() => SyncOpen();
+
+    /// <summary>A drag is in progress, so a hover preview does not open.</summary>
+    internal bool PinDragActive => _drag.Active;
+
+    /// <summary>This button is the one being dragged.</summary>
+    internal bool IsPinDrag(TaskButton button) => _drag.Active && IndexOf(button) == _drag.DragIndex;
+
+    /// <summary>A left press on a pinned app, without Shift.</summary>
+    internal bool BeginPinDrag(TaskButton button)
+    {
+        var index = IndexOf(button);
+        if (index < 0 || !_drag.Press(index, Model.Tasks[index].Pinned, leftButton: true, shift: false))
+            return false;
+        ShowDrop();
+        return true;
+    }
+
+    /// <summary>The pointer moved. Landing on another pin closes the hover preview.</summary>
+    internal void MovePinDrag(TaskButton button, double xInButton)
+    {
+        var index = IndexOf(button);
+        if (index < 0 || index != _drag.DragIndex)
+            return;
+        if (_drag.Move(TaskStrip.ButtonX(index) + xInButton, PinnedCount()))
+            _previews.Model.Hide();
+        ShowDrop();
+    }
+
+    /// <summary>The press ended. A landing on another pin is saved after this click has been swallowed.</summary>
+    internal void EndPinDrag(TaskButton button)
+    {
+        if (!IsPinDrag(button))
+            return;
+        var move = _drag.Release(Model.Tasks);
+        ShowDrop();
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _drag.ClearSuppress();
+            if (move is { } pin)
+                Model.MovePin(pin.Id, pin.Target);
+        });
+    }
+
+    /// <summary>The press was cancelled. Nothing is reordered.</summary>
+    internal void CancelPinDrag(TaskButton button)
+    {
+        if (!IsPinDrag(button))
+            return;
+        _drag.Cancel();
+        ShowDrop();
+    }
+
+    /// <summary>The release reordered, so this click does nothing. A press that stayed put still clicks.</summary>
+    internal bool TakeDragClick()
+    {
+        if (!_drag.SuppressClick)
+            return false;
+        _drag.ClearSuppress();
+        return true;
     }
 
     /// <summary>Win+A. Quick settings flips, with no same-click guard.</summary>
@@ -102,6 +179,20 @@ public sealed partial class TaskbarView : UserControl
         Model.ActiveWindowChanged -= OnActiveWindow;
         PreviewKeyDown -= OnPreviewKeyDown;
         GotFocus -= OnGotFocus;
+        PointerEntered -= OnPointerEntered;
+        PointerExited -= OnPointerExited;
+        FaceHost.SizeChanged -= OnFaceHostSize;
+        Bar.SizeChanged -= OnLaidOut;
+        Corner.SizeChanged -= OnLaidOut;
+        Strip.SizeChanged -= OnStripSize;
+        PointerWheelChanged -= OnWheel;
+        _start.Popup.PropertyChanged -= OnStart;
+        _previews.Model.PropertyChanged -= OnPreview;
+        _quick.OpenChanged -= OnSurface;
+        _clock.OpenChanged -= OnSurface;
+        _tray.HiddenChanged -= OnSurface;
+        _reveal.PropertyChanged -= OnReveal;
+        _reveal.Dispose();
         _start.Release();
         _previews.Release();
         _quick.Release();
@@ -113,6 +204,7 @@ public sealed partial class TaskbarView : UserControl
     private void LeaveKeyboard()
     {
         var back = _keyboard.Leave();
+        SyncOpen();
         _window.Focusable = false;
         IsTabStop = true;
         Focus(FocusState.Programmatic);
@@ -122,6 +214,7 @@ public sealed partial class TaskbarView : UserControl
 
     private void OnGotFocus(object sender, RoutedEventArgs e)
     {
+        RevealFocused();
         if (_keyboard.Active)
             return;
         if (e.OriginalSource is not DependencyObject source || ReferenceEquals(source, this))
@@ -130,6 +223,7 @@ public sealed partial class TaskbarView : UserControl
             return;
         _keyboard.Enter(Model.ActiveWindow);
         _window.Focusable = true;
+        SyncOpen();
     }
 
     private void OnActiveWindow(object? sender, EventArgs e)
@@ -139,10 +233,13 @@ public sealed partial class TaskbarView : UserControl
             return;
         _keyboard.Yield();
         _window.Focusable = false;
+        SyncOpen();
     }
 
     private void OnTasksUpdated(object? sender, EventArgs e)
     {
+        // The strip's width follows the apps, and a focused button that moved is scrolled back into view.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, Place);
         if (!_keyboard.Active)
             return;
         if (XamlRoot is null || FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject focused)
@@ -190,6 +287,16 @@ public sealed partial class TaskbarView : UserControl
             return;
         args.Handled = true;
         var menu = TaskMenuFlyout.Create(TaskMenu.BarName, [TaskMenu.Settings], _ => Model.RequestSettings(), 16);
+        menu.Opened += (_, _) =>
+        {
+            _barMenu = true;
+            SyncOpen();
+        };
+        menu.Closed += (_, _) =>
+        {
+            _barMenu = false;
+            SyncOpen();
+        };
         menu.ShowAt(this, new FlyoutShowOptions { Position = point, Placement = FlyoutPlacementMode.Top });
     }
 
@@ -208,6 +315,82 @@ public sealed partial class TaskbarView : UserControl
     {
         if (e.PropertyName == nameof(Preferences.TaskbarCentered))
             Place();
+        else if (e.PropertyName == nameof(Preferences.TaskbarAutoHide))
+            _reveal.SetAutoHide(_preferences.TaskbarAutoHide);
+    }
+
+    private void OnStart(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(StartPopup.IsOpen) or nameof(StartPopup.SearchOpen)))
+            return;
+        StartFill.Visibility = _start.Popup.IsOpen ? Visibility.Visible : Visibility.Collapsed;
+        SearchFill.Visibility = _start.Popup.IsOpen && _start.Popup.SearchOpen ? Visibility.Visible : Visibility.Collapsed;
+        SyncOpen();
+    }
+
+    private void OnPreview(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TaskPreview.IsOpen))
+            SyncOpen();
+    }
+
+    private void OnSurface(object? sender, EventArgs e) => SyncOpen();
+
+    private void OnReveal(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => ApplyBar();
+
+    /// <summary>
+    /// Auto-hide lays the bar on the whole screen and keeps a two-pixel line while it is down, so the pointer at the
+    /// bottom edge reaches it and the edge is not reserved. Off, the bar reserves its height again.
+    /// </summary>
+    private void ApplyBar()
+    {
+        if (_reveal.ReservesEdge)
+        {
+            _window.Height = TaskbarReveal.ShownHeight;
+            _window.ExclusiveZone = TaskbarReveal.ShownHeight;
+            _window.ExclusionMode = PanelExclusionMode.Normal;
+            return;
+        }
+        _window.ExclusionMode = PanelExclusionMode.Ignore;
+        _window.ExclusiveZone = 0;
+        _window.Height = _reveal.WindowHeight;
+    }
+
+    private void SyncOpen() => _reveal.SetOpen(new TaskbarSurfaces(
+        _start.Popup.IsOpen,
+        _quick.IsOpen,
+        _clock.IsOpen,
+        _previews.Model.IsOpen,
+        TaskMenuOpen(),
+        _tray.HiddenOpen,
+        _barMenu,
+        _keyboard.Active));
+
+    private bool TaskMenuOpen()
+    {
+        for (var i = 0; i < Model.Tasks.Count; i++)
+        {
+            if (TasksHost.TryGetElement(i) is TaskButton { MenuIsOpen: true })
+                return true;
+        }
+        return false;
+    }
+
+    private void OnFaceHostSize(object sender, SizeChangedEventArgs e)
+    {
+        if (Face.Width != e.NewSize.Width)
+            Face.Width = e.NewSize.Width;
+    }
+
+    private void OnPointerEntered(object sender, PointerRoutedEventArgs e) => _reveal.SetPointer(true);
+
+    private void OnPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        // The event bubbles from a button. The pointer left the bar only when it is outside this control.
+        var point = e.GetCurrentPoint(this).Position;
+        if (point.X >= 0 && point.Y >= 0 && point.X < ActualWidth && point.Y < ActualHeight)
+            return;
+        _reveal.SetPointer(false);
     }
 
     private TaskButton? ButtonFor(string key)
@@ -238,6 +421,7 @@ public sealed partial class TaskbarView : UserControl
         if (stop is not null)
         {
             stop.Focus(FocusState.Keyboard);
+            RevealApp(index);
             return;
         }
         var place = index;
@@ -246,6 +430,7 @@ public sealed partial class TaskbarView : UserControl
             if (!_keyboard.Active)
                 return;
             StopAt(place)?.Focus(FocusState.Keyboard);
+            RevealApp(place);
         });
     }
 
@@ -399,20 +584,132 @@ public sealed partial class TaskbarView : UserControl
         }
     }
 
-    /// <summary>Centered apps sit in the middle. Apps on the left stay clear of the clock.</summary>
+    /// <summary>The apps sit in the middle until they would meet the tray, and what does not fit scrolls.</summary>
     private void Place()
     {
-        if (_preferences.TaskbarCentered)
+        var content = Bar.ActualWidth;
+        if (content <= 0)
+            return;
+        var natural = TaskStrip.NaturalWidth(Model.Tasks.Count);
+        var (x, strip) = TaskStrip.Place(content, Corner.ActualWidth, natural, _preferences.TaskbarCentered);
+        var margin = new Thickness(x, 0, 0, 0);
+        if (Apps.Margin != margin)
+            Apps.Margin = margin;
+        if (Strip.Width != strip)
+            Strip.Width = strip;
+        if (TasksHost.Width != natural)
+            TasksHost.Width = natural;
+        RevealFocused();
+    }
+
+    private void OnLaidOut(object sender, SizeChangedEventArgs e) => Place();
+
+    private void OnStripSize(object sender, SizeChangedEventArgs e) => RevealFocused();
+
+    /// <summary>A downward wheel over the apps moves toward the later ones. The tray and the clock keep their own wheel.</summary>
+    private void OnWheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.Handled || Strip.ViewportWidth <= 0 || Strip.ScrollableWidth <= 0)
+            return;
+        var point = e.GetCurrentPoint(Strip);
+        if (point.Properties.IsHorizontalMouseWheel)
+            return;
+        var at = point.Position;
+        if (at.X < 0 || at.Y < 0 || at.X > Strip.ActualWidth || at.Y > Strip.ActualHeight)
+            return;
+        var content = double.IsFinite(TasksHost.Width) && TasksHost.Width > 0 ? TasksHost.Width : TasksHost.ActualWidth;
+        var next = TaskStrip.Wheel(Strip.HorizontalOffset, content, Strip.ViewportWidth, point.Properties.MouseWheelDelta);
+        if (Math.Abs(next - Strip.HorizontalOffset) < 0.5)
+            return;
+        Strip.ChangeView(next, null, null, true);
+        e.Handled = true;
+    }
+
+    /// <summary>Start is 0 and Search is 1. An app after those is scrolled fully into view.</summary>
+    private void RevealApp(int stop)
+    {
+        var index = stop - 2;
+        if ((uint)index < (uint)Model.Tasks.Count)
+            RevealIndex(index);
+    }
+
+    private void RevealFocused()
+    {
+        if (XamlRoot is null || FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject focused)
+            return;
+        for (var i = 0; i < Model.Tasks.Count; i++)
         {
-            Grid.SetColumn(Apps, 1);
-            Grid.SetColumnSpan(Apps, 1);
-            Apps.HorizontalAlignment = HorizontalAlignment.Center;
+            if (TasksHost.TryGetElement(i) is DependencyObject element && Contains(element, focused))
+            {
+                RevealIndex(i);
+                return;
+            }
         }
-        else
+    }
+
+    private int IndexOf(TaskButton button)
+    {
+        for (var i = 0; i < Model.Tasks.Count; i++)
         {
-            Grid.SetColumn(Apps, 0);
-            Grid.SetColumnSpan(Apps, 2);
-            Apps.HorizontalAlignment = HorizontalAlignment.Left;
+            if (ReferenceEquals(TasksHost.TryGetElement(i), button))
+                return i;
         }
+        if (button.Item is not { } item)
+            return -1;
+        for (var i = 0; i < Model.Tasks.Count; i++)
+        {
+            if (Model.Tasks[i].Key == item.Key)
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Pins are the buttons at the start.</summary>
+    private int PinnedCount()
+    {
+        var count = 0;
+        foreach (var task in Model.Tasks)
+        {
+            if (!task.Pinned)
+                break;
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>The line before or after the pin this drag would land on, and the dragged button faded.</summary>
+    private void ShowDrop()
+    {
+        for (var i = 0; i < Model.Tasks.Count; i++)
+        {
+            if (TasksHost.TryGetElement(i) is TaskButton button)
+                button.Opacity = _drag.Moved && i == _drag.DragIndex ? 0.5 : 1;
+        }
+        if (!_drag.Moved)
+        {
+            DropMark.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var target = TaskButtonAt(_drag.DropIndex);
+        if (target is null)
+        {
+            DropMark.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var before = _drag.DropIndex < _drag.DragIndex;
+        var point = target.TransformToVisual(Bar).TransformPoint(new Point(TaskPinDrag.MarkerOffset(target.ActualWidth, before), 0));
+        DropMark.Margin = new Thickness(point.X, point.Y, 0, 0);
+        DropMark.Height = target.ActualHeight > 0 ? target.ActualHeight : TaskStrip.Button;
+        DropMark.Visibility = Visibility.Visible;
+    }
+
+    private void RevealIndex(int index)
+    {
+        if ((uint)index >= (uint)Model.Tasks.Count || Strip.ViewportWidth <= 0)
+            return;
+        var next = TaskStrip.Reveal(Strip.HorizontalOffset, Strip.ViewportWidth, TaskStrip.ButtonX(index), TaskStrip.Button);
+        if (Math.Abs(next - Strip.HorizontalOffset) < 0.5)
+            return;
+        Strip.ChangeView(next, null, null, true);
     }
 }

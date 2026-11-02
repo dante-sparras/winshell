@@ -33,6 +33,12 @@ internal sealed class QuickSettingsFlyout
         _anchor.Click += OnClick;
     }
 
+    /// <summary>Quick settings is open, so an auto-hiding taskbar stays up.</summary>
+    internal bool IsOpen => _quick.IsOpen;
+
+    /// <summary>Quick settings opened or closed.</summary>
+    internal event EventHandler? OpenChanged;
+
     /// <summary>Drops the popup. The bar is about to close, and quick settings stays.</summary>
     public void Release()
     {
@@ -84,8 +90,11 @@ internal sealed class QuickSettingsFlyout
 
     private void OnQuick(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(QuickSettingsPopup.IsOpen) && !_quick.IsOpen)
+        if (e.PropertyName != nameof(QuickSettingsPopup.IsOpen))
+            return;
+        if (!_quick.IsOpen)
             _popup.Visible = false;
+        OpenChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnContentSized(object sender, SizeChangedEventArgs e)

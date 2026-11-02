@@ -27,9 +27,10 @@ public sealed partial class TaskButton : Button
         Click += OnClick;
         ContextRequested += OnContextRequested;
         PointerPressed += OnPointerPressed;
+        PointerMoved += OnPointerMoved;
         PointerReleased += OnPointerReleased;
-        PointerCanceled += OnPointerEnded;
-        PointerCaptureLost += OnPointerEnded;
+        PointerCanceled += OnPointerCanceled;
+        PointerCaptureLost += OnPointerCaptureLost;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
         PointerEntered += OnPointerEntered;
@@ -62,6 +63,8 @@ public sealed partial class TaskButton : Button
     {
         if (XamlRoot is not null)
             XamlRoot.Changed -= OnRootChanged;
+        if (Bar() is { } bar && bar.IsPinDrag(this))
+            bar.CancelPinDrag(this);
         Watch(null);
         _menu?.Hide();
     }
@@ -72,9 +75,13 @@ public sealed partial class TaskButton : Button
     internal bool MenuIsOpen => _menu is not null;
 
     private bool _pointerShift;
+    private bool _endingDrag;
 
     private void OnClick(object sender, RoutedEventArgs e)
     {
+        // A drag that landed on another pin is not also a click. A press that stayed put still is.
+        if (Bar()?.TakeDragClick() == true)
+            return;
         if (Item is not { } task || Model() is not { } model)
             return;
         Previews()?.Hide();
@@ -107,10 +114,12 @@ public sealed partial class TaskButton : Button
             if (Item is { } current)
                 model.Choose(current, id);
         }, ShellIcon.Pixels(XamlRoot, 16));
+        menu.Opened += (_, _) => Bar()?.SurfacesChanged();
         menu.Closed += (_, _) =>
         {
             if (ReferenceEquals(_menu, menu))
                 _menu = null;
+            Bar()?.SurfacesChanged();
         };
         _menu = menu;
         menu.ShowAt(this);
@@ -121,15 +130,38 @@ public sealed partial class TaskButton : Button
         var point = e.GetCurrentPoint(this);
         if (point.Properties.IsRightButtonPressed)
             return;
-        _pointerShift = point.Properties.IsLeftButtonPressed
-            && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+        var left = point.Properties.IsLeftButtonPressed;
+        _pointerShift = left && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
         _pressed = true;
         Apply();
+        // Only a pinned app, and not with Shift. The strip must not take the press for a scroll.
+        if (!left || _pointerShift || Item is not { Pinned: true } task || Bar() is not { } bar || !bar.BeginPinDrag(this))
+            return;
+        CapturePointer(e.Pointer);
+        if (Previews() is { IsOpen: false } previews)
+            previews.LeaveButton(task.Key);
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (Bar() is not { } bar || !bar.IsPinDrag(this))
+            return;
+        bar.MovePinDrag(this, e.GetCurrentPoint(this).Position.X);
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         var middle = e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.MiddleButtonReleased;
+        _endingDrag = true;
+        try
+        {
+            if (Bar() is { } bar && bar.IsPinDrag(this))
+                bar.EndPinDrag(this);
+        }
+        finally
+        {
+            _endingDrag = false;
+        }
         EndPress();
         if (!middle)
             return;
@@ -138,10 +170,21 @@ public sealed partial class TaskButton : Button
         e.Handled = true;
     }
 
-    private void OnPointerEnded(object sender, PointerRoutedEventArgs e)
+    private void OnPointerCanceled(object sender, PointerRoutedEventArgs e)
     {
+        if (Bar() is { } bar && bar.IsPinDrag(this))
+            bar.CancelPinDrag(this);
         EndPress();
         // After the click, which is raised on this same press. A cancelled press leaves no shift behind for the next key.
+        DispatcherQueue.TryEnqueue(() => _pointerShift = false);
+    }
+
+    private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        // Releasing the button raises this as well. That release reorders; a lost press does not.
+        if (!_endingDrag && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && Bar() is { } bar && bar.IsPinDrag(this))
+            bar.CancelPinDrag(this);
+        EndPress();
         DispatcherQueue.TryEnqueue(() => _pointerShift = false);
     }
 
@@ -184,7 +227,7 @@ public sealed partial class TaskButton : Button
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (_menu is not null || Item is not { } task)
+        if (_menu is not null || Item is not { } task || Bar()?.PinDragActive == true)
             return;
         Previews()?.HoverButton(task.Key);
     }
@@ -196,25 +239,19 @@ public sealed partial class TaskButton : Button
         Previews()?.LeaveButton(task.Key);
     }
 
-    private TaskPreview? Previews()
+    private TaskPreview? Previews() => Bar()?.Previews;
+
+    private TaskbarView? Bar()
     {
         for (DependencyObject? node = this; node is not null; node = VisualTreeHelper.GetParent(node))
         {
             if (node is TaskbarView view)
-                return view.Previews;
+                return view;
         }
         return null;
     }
 
-    private TaskbarModel? Model()
-    {
-        for (DependencyObject? node = this; node is not null; node = VisualTreeHelper.GetParent(node))
-        {
-            if (node is TaskbarView view)
-                return view.Model;
-        }
-        return null;
-    }
+    private TaskbarModel? Model() => Bar()?.Model;
 
     private void Watch(TaskItem? task)
     {
