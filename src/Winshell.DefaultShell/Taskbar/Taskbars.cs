@@ -17,6 +17,7 @@ internal sealed class Taskbars
     private readonly QuickSettings _quick;
     private readonly Start _start;
     private readonly Hotkey _hotkey;
+    private readonly SettingsHost _settings;
     private readonly List<Bar> _bars = [];
 
     public Taskbars(Shell shell, Preferences preferences, TaskbarPins pins)
@@ -50,6 +51,8 @@ internal sealed class Taskbars
         _hotkey = shell.NewHotkey();
         _hotkey.Pressed += (_, _) => ToggleStart();
         _hotkey.Sequence = preferences.StartHotkey;
+        _settings = new SettingsHost(shell, preferences);
+        _tray.UpdatesRequested += (_, _) => _settings.Open("winshellUpdates");
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
         Sync();
@@ -117,6 +120,7 @@ internal sealed class Taskbars
                 continue;
             }
             var model = new TaskbarModel(_desktop, _pins, _preferences, screen, isMain, path => ProgramStart.Start(path, _shell.Log));
+            model.SettingsRequested += OnSettingsRequested;
             var window = new PanelWindow
             {
                 Screen = screen,
@@ -133,8 +137,11 @@ internal sealed class Taskbars
         }
     }
 
-    private static void Close(Bar bar)
+    private void OnSettingsRequested(object? sender, EventArgs e) => _settings.Open("taskbar");
+
+    private void Close(Bar bar)
     {
+        bar.Model.SettingsRequested -= OnSettingsRequested;
         if (bar.Window.Content is TaskbarView view)
             view.Release();
         bar.Model.Dispose();

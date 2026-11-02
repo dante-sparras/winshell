@@ -85,6 +85,7 @@ internal sealed unsafe class HostWindow : IDisposable
                 Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, Win32.DWMWA_COLOR_NONE, 4);
             }
             _root.RequestedTheme = platform.RequestedTheme;
+            ApplyCaption();
             _root.KeyDown += OnRootKeyDown;
             _xaml = new DesktopWindowXamlSource();
             _xaml.Initialize(Win32Interop.GetWindowIdFromWindow(Handle));
@@ -129,11 +130,21 @@ internal sealed unsafe class HostWindow : IDisposable
     private void OnThemeChanged()
     {
         _root.RequestedTheme = _platform.RequestedTheme;
+        ApplyCaption();
         if (_backdropConfig is { } config)
         {
             config.Theme = _platform.BackdropTheme;
             config.IsHighContrast = _platform.IsHighContrast;
         }
+    }
+
+    /// <summary>The caption follows the shell's dark or light choice, including a window that has a title bar.</summary>
+    private void ApplyCaption()
+    {
+        if (Handle == 0)
+            return;
+        var dark = _platform.IsDark ? 1 : 0;
+        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, dark, 4);
     }
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
@@ -802,6 +813,9 @@ internal sealed unsafe class HostWindow : IDisposable
                 PlacePanel();
             var show = _kind == WindowKind.Floating ? Win32.SW_SHOW : (_kind == WindowKind.Popup && _popup?.GrabFocus == true ? Win32.SW_SHOW : Win32.SW_SHOWNOACTIVATE);
             Win32.ShowWindow(Handle, show);
+            // A process's first SW_SHOW takes the state its launcher asked for, so a hidden start would hide the window.
+            if (!Win32.IsWindowVisible(Handle))
+                Win32.ShowWindow(Handle, show);
             if (_kind == WindowKind.Floating && !Win32.IsIconic(Handle))
                 RaiseOwnedWindows();
             if (_kind == WindowKind.Popup && _popup?.GrabFocus == true)

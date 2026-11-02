@@ -2,7 +2,11 @@ using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
+using Windows.UI;
+using Windows.UI.ViewManagement;
 using Winshell.Native;
 
 namespace Winshell;
@@ -20,6 +24,10 @@ internal sealed unsafe class ShellPlatform : IDisposable
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
+    private bool _windowsDark;
+    private string _scheme = "system";
+    private string _accent = "";
+    private bool _accentPainted;
 
     public ShellPlatform(IEventLoop loop, Log log)
     {
@@ -49,10 +57,59 @@ internal sealed unsafe class ShellPlatform : IDisposable
 
     public string PrimaryScreenId => _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
 
-    /// <summary>Whether Windows mode is dark. The taskbar and Start follow Windows mode, so every window does.</summary>
-    public bool IsDark { get; private set; }
+    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <c>system</c> follows it.</summary>
+    public bool IsDark => Shell.DarkFor(_scheme, _windowsDark);
 
     public bool IsHighContrast { get; private set; }
+
+    /// <summary>The color scheme every window follows: <c>system</c>, <c>light</c> or <c>dark</c>.</summary>
+    internal string ColorScheme
+    {
+        get => _scheme;
+        set
+        {
+            var next = value is "light" or "dark" ? value : "system";
+            if (next == _scheme)
+                return;
+            var wasDark = IsDark;
+            _scheme = next;
+            if (wasDark != IsDark)
+                ThemeChanged?.Invoke();
+        }
+    }
+
+    /// <summary>The accent every window follows, as <c>#RRGGBB</c>, or <c>""</c> to follow Windows.</summary>
+    internal string AccentColor
+    {
+        get => _accent;
+        set
+        {
+            var next = AccentShades.Normalize(value);
+            if (next == _accent)
+                return;
+            _accent = next;
+            ApplyAccent();
+        }
+    }
+
+    /// <summary>The accent Windows is using, as <c>#RRGGBB</c>. A failure follows the default blue.</summary>
+    internal string SystemAccent
+    {
+        get
+        {
+            try
+            {
+                if (_uiSettings is null)
+                    return "#0078D4";
+                var color = _uiSettings.GetColorValue(global::Windows.UI.ViewManagement.UIColorType.Accent);
+                return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            }
+            catch (COMException)
+            {
+                return "#0078D4";
+            }
+        }
+    }
 
     public ElementTheme RequestedTheme => IsDark ? ElementTheme.Dark : ElementTheme.Light;
 
@@ -200,6 +257,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
 
     private void ReadTheme()
     {
+        ApplyAccent();
         var dark = false;
         try
         {
@@ -210,11 +268,79 @@ internal sealed unsafe class ShellPlatform : IDisposable
         {
         }
         var contrast = HighContrastOn();
-        if (dark == IsDark && contrast == IsHighContrast)
+        var contrastChanged = contrast != IsHighContrast;
+        if (dark == _windowsDark && !contrastChanged)
             return;
-        IsDark = dark;
+        var wasDark = IsDark;
+        _windowsDark = dark;
         IsHighContrast = contrast;
-        ThemeChanged?.Invoke();
+        if (wasDark != IsDark || contrastChanged)
+            ThemeChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The brushes that carry the accent, with the shade each takes in dark and in light. Every control's resource is
+    /// this same object, so a new color reaches what is already on screen, where a new <c>SystemAccentColor</c> reaches
+    /// only brushes not made yet. The contrast dictionary is not here: a contrast theme keeps the colors Windows gave it.
+    /// </summary>
+    private static readonly (string Key, Func<AccentShades, Color> Dark, Func<AccentShades, Color> Light)[] AccentBrushes =
+    [
+        ("AccentFillColorDefaultBrush", s => s.Light2, s => s.Dark1),
+        ("AccentFillColorSecondaryBrush", s => s.Light2, s => s.Dark1),
+        ("AccentFillColorTertiaryBrush", s => s.Light2, s => s.Dark1),
+        ("AccentFillColorSelectedTextBackgroundBrush", s => s.Accent, s => s.Accent),
+        ("AccentTextFillColorPrimaryBrush", s => s.Light3, s => s.Dark2),
+        ("AccentTextFillColorSecondaryBrush", s => s.Light3, s => s.Dark3),
+        ("AccentTextFillColorTertiaryBrush", s => s.Light2, s => s.Dark1),
+        ("AccentAAFillColorDefaultBrush", s => s.Light2, s => s.Dark1),
+        ("AccentAAFillColorSecondaryBrush", s => s.Light3, s => s.Dark2),
+        ("AccentAAFillColorTertiaryBrush", s => s.Light1, s => s.Accent),
+        ("SystemFillColorAttentionBrush", s => s.Light2, s => s.Accent),
+    ];
+
+    /// <summary>Paints the accent brushes. They are Windows's own until an accent is picked, and painted from then on.</summary>
+    private void ApplyAccent()
+    {
+        if (Application.Current?.Resources.MergedDictionaries.OfType<XamlControlsResources>().FirstOrDefault() is not { } controls)
+            return;
+        if (!AccentShades.TryFrom(_accent, out var shades))
+        {
+            if (!_accentPainted)
+                return;
+            shades = WindowsShades();
+        }
+        _accentPainted = true;
+        var dark = (ResourceDictionary)controls.ThemeDictionaries["Default"];
+        var light = (ResourceDictionary)controls.ThemeDictionaries["Light"];
+        foreach (var (key, inDark, inLight) in AccentBrushes)
+        {
+            ((SolidColorBrush)dark[key]).Color = inDark(shades);
+            ((SolidColorBrush)light[key]).Color = inLight(shades);
+        }
+    }
+
+    /// <summary>The shades Windows made for its accent. A failure follows the default blue.</summary>
+    private AccentShades WindowsShades()
+    {
+        try
+        {
+            if (_uiSettings is { } ui)
+            {
+                return new(
+                    ui.GetColorValue(UIColorType.Accent),
+                    ui.GetColorValue(UIColorType.AccentLight1),
+                    ui.GetColorValue(UIColorType.AccentLight2),
+                    ui.GetColorValue(UIColorType.AccentLight3),
+                    ui.GetColorValue(UIColorType.AccentDark1),
+                    ui.GetColorValue(UIColorType.AccentDark2),
+                    ui.GetColorValue(UIColorType.AccentDark3));
+            }
+        }
+        catch (COMException)
+        {
+        }
+        AccentShades.TryFrom("#0078D4", out var shades);
+        return shades;
     }
 
     /// <summary>
