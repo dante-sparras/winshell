@@ -23,6 +23,12 @@ internal interface INotificationBackend
 
 internal sealed class WindowsNotificationBackend : INotificationBackend
 {
+    /// <summary>
+    /// The toasts of the last read. A poll sees the same toasts, each of which costs Windows milliseconds to name its
+    /// app, and an app that changes a toast replaces it, which gives it a new creation time.
+    /// </summary>
+    private Dictionary<(uint Id, DateTimeOffset Created), IncomingToast> _read = [];
+
     public async Task<NotificationAccessStatus> RequestAccessAsync() =>
         MapAccess(await UserNotificationListener.Current.RequestAccessAsync());
 
@@ -46,16 +52,26 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             access = MapAccess(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
                 return new(access, [], focus, mode);
+            var known = _read;
+            Dictionary<(uint, DateTimeOffset), IncomingToast> read = [];
             List<IncomingToast> toasts = [];
             foreach (var notification in notifications)
             {
-                try { toasts.Add(ReadToast(notification)); }
+                try
+                {
+                    var key = (notification.Id, notification.CreationTime);
+                    if (!known.TryGetValue(key, out var toast))
+                        toast = ReadToast(notification);
+                    read[key] = toast;
+                    toasts.Add(toast);
+                }
                 catch (Exception e) when (IsExpectedFailure(e))
                 {
                     // An app can disappear between enumeration and reading its toast.
                     Log.Default.Warn("notifications", e.Message);
                 }
             }
+            _read = read;
             return new(access, toasts, focus, mode);
         }
         catch (Exception e) when (IsExpectedFailure(e))
