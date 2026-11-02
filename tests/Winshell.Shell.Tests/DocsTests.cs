@@ -10,7 +10,7 @@ namespace Winshell.ShellTests;
 /// </summary>
 public sealed class DocsTests
 {
-    private static readonly string Repo = FindRepo();
+    private static readonly string Repo = TestSupport.Repo.Root;
 
     private const BindingFlags Declared = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
@@ -340,15 +340,5 @@ public sealed class DocsTests
             .Where(file => !skipped.Any(dir => file.StartsWith(dir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
             .Append(Path.Combine(Repo, "README.md"))
             .Order(StringComparer.Ordinal);
-    }
-
-    private static string FindRepo()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "winshell.slnx")))
-                return dir.FullName;
-        }
-        throw new InvalidOperationException("The tests run outside the repository.");
     }
 }

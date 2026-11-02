@@ -126,7 +126,7 @@ internal static class ProbeShell
         {
             if (_program is not null && File.Exists(_program))
                 return;
-            var root = RepoRoot();
+            var root = Repo.Root;
             // One folder per checkout. The project names this checkout's source, so two sharing a folder break each other's build.
             var checkout = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root)))[..12];
             _folder = Path.Combine(Path.GetTempPath(), "winshell-probe-shell-" + checkout);
@@ -172,17 +172,6 @@ internal static class ProbeShell
         File.WriteAllText(path, text);
     }
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "winshell.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("The tests run outside the repository.");
-    }
 
     private static string Project(string defaultShell) =>
         $"""

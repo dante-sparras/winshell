@@ -73,8 +73,6 @@ internal sealed class FakeAudioGraph : IAudioGraph
 
     public IReadOnlyList<AudioGraphNode> Nodes => _nodes;
 
-    public IReadOnlyList<AudioGraphLink> Links { get; } = [];
-
     public bool Ready => true;
 
     public AudioGraphNode? DefaultPlayback { get; private set; }
@@ -88,9 +86,6 @@ internal sealed class FakeAudioGraph : IAudioGraph
 #pragma warning disable CS0067 // AudioService subscribes. These tests do not remove a node or add a link.
     public event Action<AudioGraphNode>? NodeRemoved;
 
-    public event Action<AudioGraphLink>? LinkAdded;
-
-    public event Action<AudioGraphLink>? LinkRemoved;
 #pragma warning restore CS0067
 
     public void SetDefault(AudioGraphNode node)
@@ -126,10 +121,10 @@ internal sealed class FakePlayback : AudioGraphNode
     public FakePlayback(string description, bool recording = false)
         : base(_next++)
     {
-        Type = (int)(recording ? AudioNodeType.RecordingDevice : AudioNodeType.PlaybackDevice);
+        Type = recording ? AudioNodeType.RecordingDevice : AudioNodeType.PlaybackDevice;
         Description = description;
         Name = description;
-        Channels = [3];
+        Channels = [AudioChannel.FrontLeft];
         ApplyAudio([0f], false);
     }
 

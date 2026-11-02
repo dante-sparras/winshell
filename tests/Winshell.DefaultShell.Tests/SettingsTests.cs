@@ -97,7 +97,7 @@ public sealed class SettingsTests : IDisposable
 
         Assert.Equal("sepia", preferences.ColorScheme);
         Assert.Equal(0, SettingsCatalog.IndexOf(SettingsCatalog.ColorSchemes, preferences.ValidColorScheme));
-        Assert.Equal("system", ShellPreferences.Scheme(preferences));
+        Assert.Equal(ColorScheme.System, ShellPreferences.Scheme(preferences));
         Assert.False(preferences.ValidAccent);
         Assert.Equal("", ShellPreferences.Accent(preferences));
         Assert.Equal(0, SettingsCatalog.IndexOf(SettingsCatalog.AccentChoices, "windows"));

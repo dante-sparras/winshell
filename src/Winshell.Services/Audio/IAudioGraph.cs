@@ -5,8 +5,6 @@ internal interface IAudioGraph
 {
     IReadOnlyList<AudioGraphNode> Nodes { get; }
 
-    IReadOnlyList<AudioGraphLink> Links { get; }
-
     bool Ready { get; }
 
     AudioGraphNode? DefaultPlayback { get; }
@@ -16,10 +14,6 @@ internal interface IAudioGraph
     event Action<AudioGraphNode>? NodeAdded;
 
     event Action<AudioGraphNode>? NodeRemoved;
-
-    event Action<AudioGraphLink>? LinkAdded;
-
-    event Action<AudioGraphLink>? LinkRemoved;
 
     event Action? DefaultsChanged;
 
