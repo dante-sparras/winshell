@@ -13,18 +13,21 @@ public sealed partial class TaskbarView : UserControl
     private readonly Preferences _preferences;
     private readonly TrayAreaView _tray;
 
-    public TaskbarView(TaskbarModel model, TrayArea tray, Preferences preferences, TimeProvider time)
+    public TaskbarView(TaskbarModel model, TrayArea tray, Preferences preferences, TimeProvider time, NotificationCenter center)
     {
         Model = model;
         _preferences = preferences;
         InitializeComponent();
-        Clock.Attach(preferences, time);
+        Clock.Attach(preferences, time, center);
         _tray = new TrayAreaView(tray);
         Corner.Children.Insert(0, _tray);
         Place();
         _preferences.PropertyChanged += OnPreferences;
         ContextRequested += OnContextRequested;
     }
+
+    /// <summary>The window this bar is. The clock places its popup from it.</summary>
+    public void Use(PanelWindow window) => Clock.Use(window);
 
     public TaskbarModel Model { get; }
 
@@ -64,6 +67,8 @@ public sealed partial class TaskbarView : UserControl
     {
         if (e.PropertyName == nameof(Preferences.TaskbarCentered))
             Place();
+        else if (e.PropertyName == nameof(Preferences.Backdrop))
+            Clock.UseBackdrop();
     }
 
     /// <summary>Centered apps sit in the middle. Apps on the left stay clear of the clock.</summary>

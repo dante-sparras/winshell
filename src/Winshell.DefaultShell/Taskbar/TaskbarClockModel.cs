@@ -19,15 +19,18 @@ public sealed class TaskbarClockModel
     /// <summary>The time, then the short date, on two lines.</summary>
     public string Text { get; private set; } = "";
 
-    /// <summary>What Narrator reads: the time without seconds, then the long date.</summary>
+    /// <summary>What Narrator reads: the time without seconds, the long date, and the notification count when there is one.</summary>
     public string AccessibleName { get; private set; } = "";
 
-    public void Refresh()
+    public void Refresh(int notificationCount = 0)
     {
         var local = _time.GetLocalNow().LocalDateTime;
         var time = local.ToString(_preferences.ClockSeconds ? "T" : "t", _culture);
         Text = time + "\n" + local.ToString("d", _culture);
-        AccessibleName = local.ToString("t", _culture) + ", " + local.ToString("D", _culture);
+        var name = local.ToString("t", _culture) + ", " + local.ToString("D", _culture);
+        if (notificationCount > 0)
+            name += ", " + notificationCount.ToString(_culture) + (notificationCount == 1 ? " notification" : " notifications");
+        AccessibleName = name;
     }
 
     /// <summary>How long until the next second, or the next minute when seconds are hidden. Never zero.</summary>
