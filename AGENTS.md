@@ -76,11 +76,14 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 Winland tiles every normal window, so the windows a live run or a test opens change size and land among the user's windows. When `winland` is running, do that work on an empty workspace:
 
 ```powershell
-$workspace = (winland -j activeworkspace | ConvertFrom-Json).id
+$start = winland -j activeworkspace | ConvertFrom-Json
+if ($start.windows -eq 0) { throw 'Another run is on this workspace.' }
+$workspace = $start.id
 winland keyword windowrule 'ignore, exe:(winshell|winshellw|winshell-next|Winshell\..*Tests)\.exe'
 winland dispatch workspace empty
 ```
 
+- One run at a time on a machine. The workspace and the rule are shared, so a parallel run would note another run's empty workspace as the user's, and `winland reload` would drop its rule. An empty start means that: wait for it, and never note it.
 - The rule reaches windows that open after it, and `workspace empty` moves the focused monitor only. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
 - `winland -j clients` must list no Winshell window.
 - Open a real window there. Winland must tile it, it must open above the shell's windows, and no shell window may draw over it. Check again after `winland dispatch fullscreen`, where the taskbar goes behind it.
