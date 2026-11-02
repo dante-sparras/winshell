@@ -13,6 +13,9 @@ namespace Winshell.Media;
 /// </summary>
 internal sealed class SmtcSessions : IMediaSessions
 {
+    /// <summary>SessionsChanged is not delivered for every session a later manager already lists, so the list is also read this often.</summary>
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+
     private static SmtcSessions? _instance;
 
     private readonly IEventLoop _loop;
@@ -20,17 +23,14 @@ internal sealed class SmtcSessions : IMediaSessions
     private readonly AppNames _names;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
-    private Timer? _refresh;
-    private int _syncPosted;
-    private global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>? _pending;
-    private long _pendingSince;
-    private int _pendingThread = -1;
+    private readonly MonitorWarning _warning;
     private int _nextId = 1;
 
     private SmtcSessions(IEventLoop loop, Log log)
     {
         _loop = loop;
         Log = log;
+        _warning = new MonitorWarning(() => log, "media");
         _names = new AppNames(loop, log, SmtcSession.DescribeApp, Sync);
         // Old art is older than a day, so cleaning it does not have to finish before the first read.
         _ = Task.Run(ArtCache.CleanOld);
@@ -52,82 +52,30 @@ internal sealed class SmtcSessions : IMediaSessions
 
     private void Begin()
     {
-        // SessionsChanged is not delivered for every session a later manager already lists. A manager requested
-        // on another thread can keep returning an empty list, so each read asks again on the pumping thread.
-        _refresh ??= new Timer(_ => RequestSync(), null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
-        RequestSync();
-    }
-
-    /// <summary>Posts one list read. A loop nobody is pumping must not grow a queue of them.</summary>
-    private void RequestSync()
-    {
-        if (Interlocked.Exchange(ref _syncPosted, 1) == 1)
-            return;
-        Post(() =>
-        {
-            Interlocked.Exchange(ref _syncPosted, 0);
-            Sync();
-        });
+        Sync();
+        _loop.Schedule(RefreshInterval, Begin);
     }
 
     /// <summary>
-    /// Asks Windows for a manager on this thread and reads it here. The completion callback is not delivered
-    /// on a thread that is not pumping messages, so the status is polled instead, and a request that stays
-    /// open is replaced.
+    /// Asks Windows for a manager and reads it on the UI thread: a manager requested on another thread can keep
+    /// returning an empty list. A request that never completes holds nothing up, because the next one does not wait for it.
     /// </summary>
     private void Sync()
     {
-        if (_pending is { } pending && _pendingThread == Environment.CurrentManagedThreadId)
-        {
-            if (pending.Status == global::Windows.Foundation.AsyncStatus.Completed)
-            {
-                _pending = null;
-                Apply(pending);
-                return;
-            }
-            if (pending.Status == global::Windows.Foundation.AsyncStatus.Started
-                && TimeProvider.System.GetElapsedTime(_pendingSince) < TimeSpan.FromSeconds(1))
-                return;
-        }
-        _pending = null;
-
-        global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation;
-        // AsTask captures the test synchronization context. The test thread is blocked in its wait, so that
-        // completion never runs and the list stays empty. Ask with no context, then read the result here.
-        var previous = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(null);
         try
         {
-            operation = GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            GlobalSystemMediaTransportControlsSessionManager.RequestAsync().Completed = (operation, status) =>
+            {
+                if (status == global::Windows.Foundation.AsyncStatus.Completed)
+                    Post(() => Apply(operation));
+                else if (status == global::Windows.Foundation.AsyncStatus.Error)
+                    Post(() => _warning.Failed(operation.ErrorCode));
+            };
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
-            Log.Warn("media", $"Windows media sessions are not available: {e.Message}");
-            return;
+            _warning.Failed(e);
         }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(previous);
-        }
-
-        var started = TimeProvider.System.GetTimestamp();
-        while (operation.Status == global::Windows.Foundation.AsyncStatus.Started
-            && TimeProvider.System.GetElapsedTime(started) < TimeSpan.FromMilliseconds(50))
-            Thread.Yield();
-
-        if (operation.Status == global::Windows.Foundation.AsyncStatus.Completed)
-        {
-            Apply(operation);
-            return;
-        }
-        if (operation.Status == global::Windows.Foundation.AsyncStatus.Error)
-        {
-            LogUnavailable(operation);
-            return;
-        }
-        _pending = operation;
-        _pendingSince = TimeProvider.System.GetTimestamp();
-        _pendingThread = Environment.CurrentManagedThreadId;
     }
 
     private void Apply(global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
@@ -137,21 +85,11 @@ internal sealed class SmtcSessions : IMediaSessions
             var manager = operation.GetResults();
             Subscribe(manager);
             Read(manager.GetSessions());
+            _warning.Succeeded();
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
         {
-            Log.Warn("media", $"Cannot list media sessions: {e.Message}");
-        }
-    }
-
-    private void LogUnavailable(global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
-    {
-        try
-        {
-            Log.Warn("media", $"Windows media sessions are not available: {operation.ErrorCode.Message}");
-        }
-        catch (InvalidOperationException)
-        {
+            _warning.Failed(e);
         }
     }
 
@@ -163,7 +101,7 @@ internal sealed class SmtcSessions : IMediaSessions
         if (_manager is not null && _sessionsChanged is not null)
             _manager.SessionsChanged -= _sessionsChanged;
         _manager = manager;
-        _sessionsChanged ??= (_, _) => RequestSync();
+        _sessionsChanged ??= (_, _) => Post(Sync);
         manager.SessionsChanged += _sessionsChanged;
     }
 
