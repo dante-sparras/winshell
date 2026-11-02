@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Winshell.Native;
 
@@ -29,6 +30,7 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private const string ClassName = "WinshellHotkey";
 
     private static readonly object Gate = new();
+    private static readonly ConditionalWeakTable<IEventLoop, WindowsHotkeyRegistrar> PerLoop = new();
     private static HookThread? Hook;
     private static WindowsHotkeyRegistrar? HookOwner;
 
@@ -51,6 +53,9 @@ internal sealed unsafe class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposa
     private bool _disposed;
 
     public WindowsHotkeyRegistrar(IEventLoop loop) => _loop = loop;
+
+    /// <summary>The registrar the hotkeys on a loop share. With nothing claimed, it holds no window and no hook.</summary>
+    public static WindowsHotkeyRegistrar For(IEventLoop loop) => PerLoop.GetValue(loop, static l => new WindowsHotkeyRegistrar(l));
 
     /// <summary>When false, a sequence can arm without installing a hook. Tests use this so a hook is never left behind.</summary>
     internal bool InstallNativeHook { get; set; } = true;

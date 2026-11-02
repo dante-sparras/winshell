@@ -292,7 +292,7 @@ public static class WindowsModules
     public static void AddServices(QmlEngine engine, WindowsPlatform platform)
     {
         engine.AddService<IHotkeyRegistrar>(platform.Hotkeys);
-        engine.AddService<Services.Session.IWorkstationLock>(Services.Session.WindowsWorkstationLock.Instance);
+        engine.AddService<Session.IWorkstationLock>(Session.WindowsWorkstationLock.Instance);
     }
 
     /// <summary>
@@ -304,12 +304,12 @@ public static class WindowsModules
     {
         if (Winshell.Updates.Packaging.IsPackaged)
         {
-            if (Services.Session.WindowsStartupTasks.Open() is { } task)
-                engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.StartupTaskRegistry(task));
+            if (Session.WindowsStartupTasks.Open() is { } task)
+                engine.AddService<Session.IStartupRegistry>(new Session.StartupTaskRegistry(task));
             return;
         }
 
-        engine.AddService<Services.Session.IStartupRegistry>(new Services.Session.WindowsStartupRegistry(Services.Session.WindowsStartupRegistry.CommandFor(exe, args)));
+        engine.AddService<Session.IStartupRegistry>(new Session.WindowsStartupRegistry(Session.WindowsStartupRegistry.CommandFor(exe, args)));
     }
 
     /// <summary>Lets <c>Updates</c> follow the process's updater. Without one, <c>Updates.available</c> is false.</summary>
