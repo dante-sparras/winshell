@@ -64,6 +64,7 @@ internal sealed class Taskbars
                 continue;
             }
             var model = new TaskbarModel(_desktop, _pins, _preferences, screen, isMain, path => ProgramStart.Start(path, _shell.Log));
+            var view = new TaskbarView(model, _tray, _preferences, TimeProvider.System);
             var window = new PanelWindow
             {
                 Screen = screen,
@@ -71,9 +72,8 @@ internal sealed class Taskbars
                 Height = 48,
                 ExclusiveZone = 48,
                 Backdrop = _preferences.Material,
+                Content = view,
             };
-            var view = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System);
-            window.Content = view;
             window.Visible = true;
             _bars.Add(new Bar(model, window));
         }

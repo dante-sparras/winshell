@@ -13,13 +13,13 @@ public sealed partial class TaskbarView : UserControl
     private readonly Preferences _preferences;
     private readonly TrayAreaView _tray;
 
-    public TaskbarView(TaskbarModel model, TrayArea tray, ShellWindow window, Preferences preferences, TimeProvider time)
+    public TaskbarView(TaskbarModel model, TrayArea tray, Preferences preferences, TimeProvider time)
     {
         Model = model;
         _preferences = preferences;
         InitializeComponent();
         Clock.Attach(preferences, time);
-        _tray = new TrayAreaView(tray, window);
+        _tray = new TrayAreaView(tray);
         Corner.Children.Insert(0, _tray);
         Place();
         _preferences.PropertyChanged += OnPreferences;

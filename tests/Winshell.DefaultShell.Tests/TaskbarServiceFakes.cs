@@ -208,7 +208,6 @@ internal sealed class StatusRig : IDisposable
 
     public void Dispose()
     {
-        Status.Dispose();
         Networking.Dispose();
         AudioService.Dispose();
         PowerService.Dispose();

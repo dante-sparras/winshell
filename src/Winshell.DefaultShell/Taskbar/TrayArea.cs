@@ -11,15 +11,13 @@ namespace Winshell.DefaultShell.Taskbar;
 /// update, and quick settings. One instance is shared. Reading the tray makes this process the notification area,
 /// so a bar that opens or closes does not read it again.
 /// </summary>
-public sealed class TrayArea : ObservableObject, IDisposable
+public sealed class TrayArea : ObservableObject
 {
     private readonly SystemTray _tray;
     private readonly UpdatesService _updates;
-    private readonly List<SystemTrayItem> _watched = [];
     private bool _hasOverflow;
     private bool _updateReady;
     private string _updateLabel = "";
-    private bool _disposed;
 
     public TrayArea(SystemTray tray, SystemStatus status, UpdatesService updates)
     {
@@ -28,7 +26,7 @@ public sealed class TrayArea : ObservableObject, IDisposable
         _updates = updates;
         tray.Items.CollectionChanged += OnItems;
         foreach (var item in tray.Items)
-            Watch(item);
+            item.PropertyChanged += OnItem;
         updates.PropertyChanged += OnUpdates;
         Place();
         PublishUpdate();
@@ -90,56 +88,25 @@ public sealed class TrayArea : ObservableObject, IDisposable
     public static string IconTip(string tooltip, string appName) =>
         tooltip.Length > 0 ? tooltip : appName;
 
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-        _tray.Items.CollectionChanged -= OnItems;
-        foreach (var item in _watched)
-            item.PropertyChanged -= OnItem;
-        _watched.Clear();
-        _updates.PropertyChanged -= OnUpdates;
-        Status.Dispose();
-    }
-
     private void OnItems(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems is not null)
-        {
-            foreach (SystemTrayItem item in e.NewItems)
-                Watch(item);
-        }
-        else if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems is not null)
-        {
-            foreach (SystemTrayItem item in e.OldItems)
-                Unwatch(item);
-        }
+        foreach (var item in e.NewItems?.OfType<SystemTrayItem>() ?? [])
+            item.PropertyChanged += OnItem;
+        foreach (var item in e.OldItems?.OfType<SystemTrayItem>() ?? [])
+            item.PropertyChanged -= OnItem;
         Place();
     }
 
     private void OnItem(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(SystemTrayItem.Overflow))
+        if (e.PropertyName == nameof(SystemTrayItem.Overflow))
             Place();
     }
 
     private void OnUpdates(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(UpdatesService.Status) or nameof(UpdatesService.Version))
+        if (e.PropertyName is nameof(UpdatesService.Status) or nameof(UpdatesService.Version))
             PublishUpdate();
-    }
-
-    private void Watch(SystemTrayItem item)
-    {
-        item.PropertyChanged += OnItem;
-        _watched.Add(item);
-    }
-
-    private void Unwatch(SystemTrayItem item)
-    {
-        item.PropertyChanged -= OnItem;
-        _watched.Remove(item);
     }
 
     private void Place()

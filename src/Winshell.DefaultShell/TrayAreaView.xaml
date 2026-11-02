@@ -20,8 +20,28 @@
             AutomationProperties.Name="Show hidden icons"
             Visibility="{x:Bind Shown(Area.HasOverflow), Mode=OneWay}">
             <FontIcon x:Name="ChevronIcon" Glyph="&#xE70E;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+            <Button.Flyout>
+                <Flyout x:Name="HiddenIcons" Placement="Top" ShouldConstrainToRootBounds="False" Opened="OnHiddenOpened" Closed="OnHiddenClosed">
+                    <Flyout.FlyoutPresenterStyle>
+                        <Style TargetType="FlyoutPresenter">
+                            <Setter Property="Padding" Value="4" />
+                            <Setter Property="AutomationProperties.Name" Value="Hidden icons" />
+                        </Style>
+                    </Flyout.FlyoutPresenterStyle>
+                    <ItemsRepeater ItemsSource="{x:Bind Area.Hidden, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout Orientation="Horizontal" MaximumRowsOrColumns="5" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="tray:SystemTrayItem">
+                                <local:TrayIconButton Item="{x:Bind}" Width="40" />
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Flyout>
+            </Button.Flyout>
         </Button>
-        <ItemsRepeater x:Name="BarIcons" ItemsSource="{x:Bind Area.OnBar, Mode=OneWay}" VerticalAlignment="Center">
+        <ItemsRepeater ItemsSource="{x:Bind Area.OnBar, Mode=OneWay}" VerticalAlignment="Center">
             <ItemsRepeater.Layout>
                 <StackLayout Orientation="Horizontal" Spacing="0" />
             </ItemsRepeater.Layout>

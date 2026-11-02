@@ -43,7 +43,7 @@ public sealed class TrayAreaTests
         var host = new FakeTrayHost();
         using var tray = new SystemTray(rig.Loop, rig.Log, host);
         using var updates = new UpdatesService(rig.Loop, rig.Log, null);
-        using var area = new TrayArea(tray, rig.Status, updates);
+        var area = new TrayArea(tray, rig.Status, updates);
 
         Assert.False(area.HasOverflow);
         Assert.Empty(area.OnBar);
@@ -110,7 +110,7 @@ public sealed class TrayAreaTests
         var host = new FakeTrayHost();
         using var tray = new SystemTray(rig.Loop, rig.Log, host);
         using var updates = new UpdatesService(rig.Loop, rig.Log, null);
-        using var area = new TrayArea(tray, rig.Status, updates);
+        var area = new TrayArea(tray, rig.Status, updates);
         var quick = 0;
         var update = 0;
         area.QuickSettingsRequested += (_, _) => quick++;
@@ -123,25 +123,6 @@ public sealed class TrayAreaTests
         area.RequestUpdates();
         Assert.Equal(1, quick);
         Assert.Equal(1, update);
-    }
-
-    [Fact]
-    public void Disposing_the_area_twice_stops_it_following_the_tray_and_the_status()
-    {
-        using var rig = new StatusRig();
-        var host = new FakeTrayHost();
-        using var tray = new SystemTray(rig.Loop, rig.Log, host);
-        using var updates = new UpdatesService(rig.Loop, rig.Log, null);
-        var area = new TrayArea(tray, rig.Status, updates);
-        var glyph = rig.Status.NetworkGlyph;
-
-        area.Dispose();
-        area.Dispose();
-        host.Add(Icon("z", overflow: false));
-        rig.Show(new NetworkSnapshot(true, [], NetworkConnectivity.InternetAccess, true, true));
-
-        Assert.Empty(area.OnBar);
-        Assert.Equal(glyph, rig.Status.NetworkGlyph);
     }
 
     private static TrayIcon Icon(string key, bool overflow) => new() { Key = key, Tip = key, Overflow = overflow };

@@ -274,19 +274,6 @@ public sealed class SystemStatusTests
         Assert.Equal("\uE855", rig.Status.BatteryGlyph);
     }
 
-    [Fact]
-    public void Disposing_the_status_twice_stops_the_glyphs_following()
-    {
-        using var rig = new StatusRig();
-        var glyph = rig.Status.NetworkGlyph;
-        rig.Status.Dispose();
-        rig.Status.Dispose();
-
-        rig.Show(Snap(NetworkConnectivity.InternetAccess, Wifi(WifiId, connected: true, Net("Home", connected: true, 0.1))));
-
-        Assert.Equal(glyph, rig.Status.NetworkGlyph);
-    }
-
     private static void ShowBattery(StatusRig rig, double percentage, PowerDeviceState state, bool present = true)
     {
         rig.Power.Push(new PowerSnapshot(true, Battery(percentage, state, present), [], false));

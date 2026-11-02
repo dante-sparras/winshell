@@ -68,7 +68,7 @@ public static class StatusGlyphs
 /// The network, volume and battery the status icons show. One instance is shared by every taskbar. It follows the
 /// first Wi-Fi adapter, the default playback device and the display battery.
 /// </summary>
-public sealed class SystemStatus : ObservableObject, IDisposable
+public sealed class SystemStatus : ObservableObject
 {
     private readonly NetworkingService _networking;
     private readonly AudioService _audio;
@@ -82,7 +82,6 @@ public sealed class SystemStatus : ObservableObject, IDisposable
     private string _volumeGlyph = "";
     private string _batteryGlyph = "";
     private bool _hasBattery;
-    private bool _disposed;
 
     public SystemStatus(NetworkingService networking, AudioService audio, PowerService power, PowerModeService powerMode)
     {
@@ -130,24 +129,9 @@ public sealed class SystemStatus : ObservableObject, IDisposable
         private set => Set(ref _batteryGlyph, value);
     }
 
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-        _networking.PropertyChanged -= OnNetworking;
-        _networking.Devices.CollectionChanged -= OnDevices;
-        UnfollowWifi();
-        _audio.PropertyChanged -= OnAudio;
-        if (_output is not null)
-            _output.Audio.PropertyChanged -= OnVolume;
-        _power.DisplayDevice.PropertyChanged -= OnPower;
-        _powerMode.PropertyChanged -= OnPowerMode;
-    }
-
     private void OnNetworking(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(NetworkingService.Connectivity))
+        if (e.PropertyName == nameof(NetworkingService.Connectivity))
             PublishNetwork();
     }
 
@@ -155,7 +139,7 @@ public sealed class SystemStatus : ObservableObject, IDisposable
 
     private void OnWifiDevice(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(NetworkDevice.Connected))
+        if (e.PropertyName == nameof(NetworkDevice.Connected))
             PublishNetwork();
     }
 
@@ -168,31 +152,31 @@ public sealed class SystemStatus : ObservableObject, IDisposable
 
     private void OnNetwork(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(WifiNetwork.SignalStrength) or nameof(WifiNetwork.Connected))
+        if (e.PropertyName is nameof(WifiNetwork.SignalStrength) or nameof(WifiNetwork.Connected))
             PublishNetwork();
     }
 
     private void OnAudio(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(AudioService.DefaultPlaybackDevice))
+        if (e.PropertyName == nameof(AudioService.DefaultPlaybackDevice))
             BindOutput();
     }
 
     private void OnVolume(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(AudioVolume.Volume) or nameof(AudioVolume.Muted))
+        if (e.PropertyName is nameof(AudioVolume.Volume) or nameof(AudioVolume.Muted))
             PublishVolume();
     }
 
     private void OnPower(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(PowerDevice.IsPresent) or nameof(PowerDevice.Percentage) or nameof(PowerDevice.State))
+        if (e.PropertyName is nameof(PowerDevice.IsPresent) or nameof(PowerDevice.Percentage) or nameof(PowerDevice.State))
             PublishBattery();
     }
 
     private void OnPowerMode(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or nameof(PowerModeService.Effective))
+        if (e.PropertyName == nameof(PowerModeService.Effective))
             PublishBattery();
     }
 

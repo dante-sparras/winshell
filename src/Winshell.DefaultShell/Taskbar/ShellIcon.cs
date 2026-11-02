@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
@@ -36,6 +37,10 @@ internal static class ShellIcon
 
     private static string Expand(string name) =>
         Environment.ExpandEnvironmentVariables(Uri.UnescapeDataString(name).Replace("file://", "", StringComparison.OrdinalIgnoreCase).TrimStart('/'));
+
+    /// <summary>A size in logical pixels, in pixels on the screen that holds <paramref name="root"/>.</summary>
+    public static int Pixels(XamlRoot? root, int size) =>
+        Math.Max(1, (int)Math.Ceiling(size * Math.Max(root?.RasterizationScale ?? 1, 1)));
 
     /// <summary>The icon at <paramref name="size"/> pixels, or null when Windows has none.</summary>
     public static ImageSource? Load(string icon, int size)
