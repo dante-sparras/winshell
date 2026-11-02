@@ -18,7 +18,7 @@ namespace Winshell;
 /// <summary>The native window behind a shell window, with a XAML island where its content goes.</summary>
 internal sealed unsafe class HostWindow : IDisposable
 {
-    private const string ClassName = "WinshellHostWindow";
+    private const string ClassName = Diagnostics.Doctor.WinshellClass;
     private static bool _registered;
     internal static readonly uint AppBarMessage = Win32.WM_APP + 1;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");

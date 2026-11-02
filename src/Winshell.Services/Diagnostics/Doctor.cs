@@ -346,7 +346,7 @@ public static class Doctor
 
     internal const string TaskbarClass = "Shell_TrayWnd";
     internal const string SecondaryTaskbarClass = "Shell_SecondaryTrayWnd";
-    internal const string WinshellClass = "WinshellWindow";
+    internal const string WinshellClass = "WinshellHostWindow";
 
     /// <summary>How thick a window must be to be named as an app bar beside a Winshell panel; thinner ones are borders and edge helpers.</summary>
     private const int MinAppBar = 8;
