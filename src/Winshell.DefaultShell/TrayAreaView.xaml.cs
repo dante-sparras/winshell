@@ -22,7 +22,7 @@ public sealed partial class TrayAreaView : UserControl
     public event EventHandler? QuickSettingsClicked;
 
     /// <summary>The button the flyout sits above.</summary>
-    public FrameworkElement QuickSettingsAnchor => QuickSettingsButton;
+    public Button QuickSettingsAnchor => QuickSettingsButton;
 
     /// <summary>The window is about to close, and the tray stays for the other bars.</summary>
     public void Release()

@@ -22,27 +22,18 @@ public static class QuickSettingsPlacement
 /// <summary>One tile. A tile the PC cannot show stays out of <see cref="QuickSettings.Shown"/> and keeps its place.</summary>
 public sealed class QuickSettingsTile : ObservableObject
 {
-    private string _label;
-    private string _description;
-    private bool _on;
-    private bool _available;
-
     internal QuickSettingsTile(string key, string title, string glyph, string description, bool toggle, string settingsUri, string page)
     {
         Key = key;
-        Title = title;
         Glyph = glyph;
-        _label = title;
-        _description = description;
+        Label = title;
+        Description = description;
         Toggle = toggle;
         SettingsUri = settingsUri;
         Page = page;
-        _available = true;
     }
 
     public string Key { get; }
-
-    public string Title { get; }
 
     public string Glyph { get; }
 
@@ -55,43 +46,25 @@ public sealed class QuickSettingsTile : ObservableObject
 
     public bool HasPage => Page.Length > 0;
 
-    public string Label
-    {
-        get => _label;
-        internal set => Set(ref _label, value);
-    }
+    public string Label { get; internal set => Set(ref field, value); }
 
-    public string Description
-    {
-        get => _description;
-        internal set => Set(ref _description, value);
-    }
+    public string Description { get; internal set => Set(ref field, value); }
 
-    public bool On
-    {
-        get => _on;
-        internal set => Set(ref _on, value);
-    }
+    public bool On { get; internal set => Set(ref field, value); }
 
-    public bool Available
-    {
-        get => _available;
-        internal set => Set(ref _available, value);
-    }
+    public bool Available { get; internal set => Set(ref field, value); } = true;
 }
 
 /// <summary>A power mode or a playback device on a page of choices.</summary>
 public sealed class QuickSettingsChoice : ObservableObject
 {
     private readonly Action _choose;
-    private string _text;
-    private bool _chosen;
 
     internal QuickSettingsChoice(AudioNode? node, string text, bool chosen, Action choose)
     {
         Node = node;
-        _text = text;
-        _chosen = chosen;
+        Text = text;
+        Chosen = chosen;
         _choose = choose;
         if (node is not null)
             node.PropertyChanged += OnNode;
@@ -99,17 +72,9 @@ public sealed class QuickSettingsChoice : ObservableObject
 
     public AudioNode? Node { get; }
 
-    public string Text
-    {
-        get => _text;
-        private set => Set(ref _text, value);
-    }
+    public string Text { get; private set => Set(ref field, value); }
 
-    public bool Chosen
-    {
-        get => _chosen;
-        internal set => Set(ref _chosen, value);
-    }
+    public bool Chosen { get; internal set => Set(ref field, value); }
 
     public void Choose() => _choose();
 
@@ -243,14 +208,6 @@ public sealed class QuickSettingsPopup : ObservableObject
         _settings.Closed();
     }
 
-    public void Toggle()
-    {
-        if (_open)
-            Hide();
-        else
-            Show();
-    }
-
     /// <summary>Leaves a page when one is open. False means the flyout itself closes.</summary>
     public bool Escape()
     {
@@ -311,13 +268,6 @@ public sealed class QuickSettings : ObservableObject
     private AudioNode? _output;
     private BrightnessMonitor? _panel;
     private int _openFlyouts;
-    private double _volume;
-    private bool _hasOutput;
-    private string _muteLabel = "Unmute";
-    private double _brightnessValue;
-    private bool _hasBrightness;
-    private string _batteryText = "Battery 0%";
-    private string _batteryPercent = "0%";
 
     public QuickSettings(
         SystemStatus status,
@@ -387,49 +337,21 @@ public sealed class QuickSettings : ObservableObject
 
     public ObservableCollection<QuickSettingsChoice> Modes { get; } = [];
 
-    public double Volume
-    {
-        get => _volume;
-        private set => Set(ref _volume, value);
-    }
+    public double Volume { get; private set => Set(ref field, value); }
 
-    public bool HasOutput
-    {
-        get => _hasOutput;
-        private set => Set(ref _hasOutput, value);
-    }
+    public bool HasOutput { get; private set => Set(ref field, value); }
 
-    public string MuteLabel
-    {
-        get => _muteLabel;
-        private set => Set(ref _muteLabel, value);
-    }
+    public string MuteLabel { get; private set => Set(ref field, value); } = "Unmute";
 
-    public double Brightness
-    {
-        get => _brightnessValue;
-        private set => Set(ref _brightnessValue, value);
-    }
+    public double Brightness { get; private set => Set(ref field, value); }
 
-    public bool HasBrightness
-    {
-        get => _hasBrightness;
-        private set => Set(ref _hasBrightness, value);
-    }
+    public bool HasBrightness { get; private set => Set(ref field, value); }
 
     /// <summary>What Narrator reads for the battery, including charging.</summary>
-    public string BatteryText
-    {
-        get => _batteryText;
-        private set => Set(ref _batteryText, value);
-    }
+    public string BatteryText { get; private set => Set(ref field, value); } = "Battery 0%";
 
     /// <summary>The percent drawn next to the battery glyph.</summary>
-    public string BatteryPercent
-    {
-        get => _batteryPercent;
-        private set => Set(ref _batteryPercent, value);
-    }
+    public string BatteryPercent { get; private set => Set(ref field, value); } = "0%";
 
     public event Action<string>? SettingsRequested;
 
@@ -621,15 +543,7 @@ public sealed class QuickSettings : ObservableObject
         _wifi.On = _networking.WifiEnabled;
         _wifi.Available = wifi is not null || _networking.WifiState != WifiRadioState.Unknown;
 
-        string? connected = null;
-        foreach (var device in _bluetooth.Devices)
-        {
-            if (!device.Connected)
-                continue;
-            connected = device.Name;
-            break;
-        }
-        _bluetoothTile.Label = connected ?? "Bluetooth";
+        _bluetoothTile.Label = _bluetooth.Devices.FirstOrDefault(device => device.Connected)?.Name ?? "Bluetooth";
         _bluetoothTile.On = _adapter?.Enabled ?? false;
         _bluetoothTile.Available = _adapter is not null;
 
@@ -648,37 +562,15 @@ public sealed class QuickSettings : ObservableObject
             if (tile is { Available: true })
                 shown.Add(tile);
         }
-        if (Shown.Count == shown.Count)
-        {
-            var same = true;
-            for (var i = 0; i < shown.Count; i++)
-            {
-                if (!ReferenceEquals(Shown[i], shown[i]))
-                {
-                    same = false;
-                    break;
-                }
-            }
-            if (same)
-                return;
-        }
+        if (Shown.SequenceEqual(shown))
+            return;
         Shown.Clear();
         foreach (var tile in shown)
             Shown.Add(tile);
     }
 
-    private IReadOnlyList<string> PinnedKeys()
-    {
-        if (_layout.Pinned is not { } pinned)
-            return DefaultKeys;
-        var keys = new List<string>();
-        foreach (var item in pinned)
-        {
-            if (item is string key)
-                keys.Add(key);
-        }
-        return keys;
-    }
+    private IReadOnlyList<string> PinnedKeys() =>
+        _layout.Pinned is { } pinned ? pinned.OfType<string>().ToList() : DefaultKeys;
 
     private void PublishVolume()
     {
@@ -717,14 +609,9 @@ public sealed class QuickSettings : ObservableObject
 
     private void PublishOutputs()
     {
-        var nodes = new List<AudioNode>();
-        foreach (var node in _audio.Nodes)
-        {
-            if (node.IsPlayback && !node.IsSession)
-                nodes.Add(node);
-        }
+        var nodes = _audio.Nodes.Where(node => node.IsPlayback && !node.IsSession).ToList();
         var chosen = _audio.DefaultPlaybackDevice;
-        if (SameNodes(Outputs, nodes))
+        if (Outputs.Select(item => item.Node).SequenceEqual(nodes))
         {
             foreach (var item in Outputs)
                 item.Chosen = ReferenceEquals(item.Node, chosen);
@@ -739,42 +626,13 @@ public sealed class QuickSettings : ObservableObject
 
     private void PublishSessions()
     {
-        var nodes = new List<AudioNode>();
-        foreach (var node in _audio.Nodes)
-        {
-            if (node.IsSession)
-                nodes.Add(node);
-        }
-        if (Sessions.Count == nodes.Count)
-        {
-            var same = true;
-            for (var i = 0; i < nodes.Count; i++)
-            {
-                if (!ReferenceEquals(Sessions[i].Node, nodes[i]))
-                {
-                    same = false;
-                    break;
-                }
-            }
-            if (same)
-                return;
-        }
+        var nodes = _audio.Nodes.Where(node => node.IsSession).ToList();
+        if (Sessions.Select(session => session.Node).SequenceEqual(nodes))
+            return;
         foreach (var session in Sessions)
             session.Release();
         Sessions.Clear();
         foreach (var node in nodes)
             Sessions.Add(new QuickSettingsSession(node));
-    }
-
-    private static bool SameNodes(ObservableCollection<QuickSettingsChoice> items, List<AudioNode> nodes)
-    {
-        if (items.Count != nodes.Count)
-            return false;
-        for (var i = 0; i < nodes.Count; i++)
-        {
-            if (!ReferenceEquals(items[i].Node, nodes[i]))
-                return false;
-        }
-        return true;
     }
 }

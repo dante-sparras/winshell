@@ -87,10 +87,8 @@ internal sealed class Taskbars
                 ExclusiveZone = 48,
                 Backdrop = _preferences.Material,
             };
-            var view = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System, _notifications);
-            window.Content = view;
+            window.Content = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System, _notifications, _quick);
             window.Visible = true;
-            view.BindQuickSettings(window, _quick);
             _bars.Add(new Bar(model, window));
         }
     }
