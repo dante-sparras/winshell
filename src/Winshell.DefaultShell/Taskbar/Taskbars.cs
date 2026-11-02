@@ -10,6 +10,7 @@ internal sealed class Taskbars
     private readonly Preferences _preferences;
     private readonly TaskbarPins _pins;
     private readonly TaskbarDesktop _desktop;
+    private readonly TrayArea _tray;
     private readonly List<Bar> _bars = [];
 
     public Taskbars(Shell shell, Preferences preferences, TaskbarPins pins)
@@ -18,6 +19,8 @@ internal sealed class Taskbars
         _preferences = preferences;
         _pins = pins;
         _desktop = new TaskbarDesktop(shell.WindowList, shell.Apps, shell.JumpLists);
+        // One tray for every bar. Reading it makes this process the notification area, and a bar closing must not do that again.
+        _tray = new TrayArea(shell.SystemTray, new SystemStatus(shell.Networking, shell.Audio, shell.Power, shell.PowerMode), shell.Updates);
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
         Sync();
@@ -61,7 +64,6 @@ internal sealed class Taskbars
                 continue;
             }
             var model = new TaskbarModel(_desktop, _pins, _preferences, screen, isMain, path => ProgramStart.Start(path, _shell.Log));
-            var view = new TaskbarView(model, _preferences, TimeProvider.System);
             var window = new PanelWindow
             {
                 Screen = screen,
@@ -69,8 +71,9 @@ internal sealed class Taskbars
                 Height = 48,
                 ExclusiveZone = 48,
                 Backdrop = _preferences.Material,
-                Content = view,
             };
+            var view = new TaskbarView(model, _tray, window, _preferences, TimeProvider.System);
+            window.Content = view;
             window.Visible = true;
             _bars.Add(new Bar(model, window));
         }

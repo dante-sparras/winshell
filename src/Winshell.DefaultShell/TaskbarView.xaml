@@ -87,7 +87,9 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
             </StackPanel>
-            <local:TaskbarClock x:Name="Clock" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            <StackPanel x:Name="Corner" Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <local:TaskbarClock x:Name="Clock" />
+            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>
