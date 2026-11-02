@@ -32,7 +32,6 @@ internal sealed class OnScreenDisplayHost
             Height = Model.PanelHeight,
             Anchors = Edges.Bottom,
             Margins = new Thickness(0, 0, 0, OnScreenDisplayModel.BottomGap),
-            ExclusiveZone = 0,
             AboveWindows = true,
             Focusable = false,
             Corners = WindowCorners.Round,

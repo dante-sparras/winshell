@@ -347,12 +347,12 @@ public sealed partial class TaskbarView : UserControl
         if (_reveal.ReservesEdge)
         {
             _window.Height = TaskbarReveal.ShownHeight;
-            _window.ExclusiveZone = TaskbarReveal.ShownHeight;
-            _window.ExclusionMode = PanelExclusionMode.Normal;
+            _window.ReservedSize = TaskbarReveal.ShownHeight;
+            _window.CoversScreen = false;
             return;
         }
-        _window.ExclusionMode = PanelExclusionMode.Ignore;
-        _window.ExclusiveZone = 0;
+        _window.CoversScreen = true;
+        _window.ReservedSize = 0;
         _window.Height = _reveal.WindowHeight;
     }
 

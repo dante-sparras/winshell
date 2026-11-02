@@ -119,10 +119,10 @@ Has the members of [ShellWindow](#shellwindow).
 | `PanelWindow()` | constructor |  |
 | `AboveWindows` | bool | Stays above normal windows. False puts it below them, as a wallpaper is. |
 | `Anchors` | [Edges](#edges) | The edges the panel sticks to. Two opposite edges stretch it across the screen. |
-| `ExclusionMode` | [PanelExclusionMode](#panelexclusionmode) |  |
-| `ExclusiveZone` | double | How much of its edge the panel reserves, in logical pixels, so maximized windows stay out of it. |
+| `CoversScreen` | bool | Lays the panel out on the whole screen, over the taskbar and other bars, and reserves nothing. False keeps it in the work area. |
 | `Focusable` | bool | Whether the panel can take the keyboard. A panel that cannot never takes activation from the app in front. |
 | `Margins` | Thickness |  |
+| `ReservedSize` | double | How much of its edge the panel reserves, in logical pixels, so maximized windows stay out of it. |
 
 ## PopupWindow
 
@@ -338,15 +338,6 @@ The base of what a service exposes. A change is raised on the thread that made i
 | Member | Type | Description |
 | --- | --- | --- |
 | `PropertyChanged` | PropertyChangedEventHandler |  |
-
-## PanelExclusionMode
-
-How a panel treats the edges other bars reserve.
-
-| Value | Number | Description |
-| --- | --- | --- |
-| `Normal` | 0 | Stays inside the work area, and reserves ExclusiveZone if that is set. |
-| `Ignore` | 1 | Covers the whole screen, over the taskbar and other bars. |
 
 ## PixelImage
 

@@ -11,7 +11,7 @@ public sealed class AppShell : ShellConfiguration
         {
             Anchors = Edges.Left | Edges.Right | Edges.Bottom,
             Height = 48,
-            ExclusiveZone = 48,
+            ReservedSize = 48,
             Content = new PanelView(),
             Visible = true,
         };

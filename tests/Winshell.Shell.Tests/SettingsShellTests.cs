@@ -108,7 +108,6 @@ public sealed class SettingsShellTests
                 using var panel = new PanelWindow
                 {
                     Anchors = Edges.Bottom | Edges.Left | Edges.Right,
-                    ExclusiveZone = 0,
                     Width = 400,
                     Height = 48,
                     Content = bar,
