@@ -50,6 +50,37 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
 
     public void RequestSearch() => SearchRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>Taskbar settings was chosen. Nothing opens.</summary>
+    public event EventHandler? SettingsRequested;
+
+    /// <summary>The bar's own menu asked for settings. Nothing opens.</summary>
+    public void RequestSettings() => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>The rows of this app's menu, from its jump list as it reads now.</summary>
+    public IReadOnlyList<TaskMenuRow> MenuRows(TaskItem task) =>
+        TaskMenu.Rows(task, _desktop.JumpList(TaskbarTasks.AppUserModelId(task)));
+
+    /// <summary>Does what a row of the menu asks. A destination is only shown: opening it would launch a document, and this menu does not.</summary>
+    public void Choose(TaskItem task, string id)
+    {
+        switch (id)
+        {
+            case "launch":
+                Launch(task);
+                break;
+            case "pin" when task.Pinned:
+                _pins.Unpin(task.Pin);
+                break;
+            case "pin":
+                _pins.Pin(task.PinId);
+                break;
+            case "close":
+                foreach (var window in task.Windows.OfType<IOpenWindow>())
+                    window.Close();
+                break;
+        }
+    }
+
     /// <summary>The screen this bar is on, and whether it is the main one. A change rebuilds the buttons.</summary>
     public void SetScreen(ScreenInfo screen, bool isMain)
     {

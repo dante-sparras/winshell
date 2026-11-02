@@ -4,9 +4,9 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Winshell.DefaultShell"
     xmlns:taskbar="using:Winshell.DefaultShell.Taskbar"
-    Background="Transparent"
     AutomationProperties.Name="Taskbar">
-    <Grid>
+    <!-- A UserControl draws no background, so this one is what takes a click on an empty part of the bar. -->
+    <Grid Background="Transparent">
         <Border Height="1" VerticalAlignment="Top" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" />
         <Grid Margin="12,0">
             <Grid.ColumnDefinitions>

@@ -16,6 +16,7 @@ public sealed partial class TaskButton : Button
 {
     private readonly List<INotifyPropertyChanged> _watched = [];
     private TaskItem? _item;
+    private MenuFlyout? _menu;
     private string _iconPath = "";
     private int _iconSize;
     private bool _pressed;
@@ -24,6 +25,7 @@ public sealed partial class TaskButton : Button
     {
         InitializeComponent();
         Click += OnClick;
+        ContextRequested += OnContextRequested;
         PointerPressed += OnPointerPressed;
         PointerReleased += OnPointerReleased;
         PointerCanceled += OnPointerEnded;
@@ -37,6 +39,9 @@ public sealed partial class TaskButton : Button
         get => _item;
         set
         {
+            // The app left the bar, so its menu goes with it.
+            if (value?.Key != _item?.Key)
+                _menu?.Hide();
             _item = value;
             Watch(value);
             Apply();
@@ -56,6 +61,7 @@ public sealed partial class TaskButton : Button
         if (XamlRoot is not null)
             XamlRoot.Changed -= OnRootChanged;
         Watch(null);
+        _menu?.Hide();
     }
 
     private void OnRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => Apply();
@@ -71,8 +77,30 @@ public sealed partial class TaskButton : Button
             model.Click(task);
     }
 
+    private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        if (Item is not { } task || Model() is not { } model)
+            return;
+        args.Handled = true;
+        // The rows are read once. What a row does reads the app as it is when it is chosen.
+        var menu = TaskMenuFlyout.Create(Tasks.Name(task), model.MenuRows(task), id =>
+        {
+            if (Item is { } current)
+                model.Choose(current, id);
+        }, Pixels(16));
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_menu, menu))
+                _menu = null;
+        };
+        _menu = menu;
+        menu.ShowAt(this);
+    }
+
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            return;
         _pressed = true;
         Apply();
     }
@@ -149,7 +177,7 @@ public sealed partial class TaskButton : Button
     private void ShowIcon(TaskItem? task)
     {
         var path = task is null ? "" : task.Icon;
-        var size = IconSize();
+        var size = Pixels(24);
         if (path == _iconPath && size == _iconSize)
             return;
         _iconPath = path;
@@ -157,12 +185,12 @@ public sealed partial class TaskButton : Button
         Icon.Source = path.Length == 0 ? null : ShellIcon.Load(path, size);
     }
 
-    private int IconSize()
+    private int Pixels(int size)
     {
         var scale = XamlRoot?.RasterizationScale ?? 1;
         if (scale < 1)
             scale = 1;
-        return Math.Max(1, (int)Math.Ceiling(24 * scale));
+        return Math.Max(1, (int)Math.Ceiling(size * scale));
     }
 
     private static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
