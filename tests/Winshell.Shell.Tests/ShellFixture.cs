@@ -10,6 +10,8 @@ internal static class ShellFixture
 
     private static Thread StartThread()
     {
+        // This process becomes an instance, and it must not join the user's own.
+        Environment.SetEnvironmentVariable("WINSHELL_LOCAL_DIR", Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N")));
         var thread = new Thread(() => Shell.Run<Configuration>(new ShellOptions { ShellId = "winshell-tests" }))
         {
             IsBackground = true,

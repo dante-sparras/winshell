@@ -8,7 +8,8 @@ namespace Winshell;
 /// <summary>
 /// The control pipe is current-user only, and that DACL does not stop a lower-integrity process of the same user.
 /// The server labels the pipe medium and refuses a client below its own integrity. The client accepts only a pipe
-/// owned by its user and served by winshell.exe or winshellw.exe at its own integrity or higher.
+/// owned by its user and served at its own integrity or higher. A configuration's program can have any name, so
+/// neither side looks at the other's file name.
 /// The owner is the user, not the token's default owner, which is Administrators when elevated. Then a shell and a
 /// CLI at different elevations still connect, and the side that refuses can say why.
 /// </summary>
@@ -23,15 +24,6 @@ internal static partial class PipeTrust
     private const uint FileFlagFirstPipeInstance = 0x00080000;
     private const uint PipeRejectRemoteClients = 0x8;
     private const int ErrorAccessDenied = 5;
-
-    internal static bool IsWinshellImage(string? path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return false;
-        var name = Path.GetFileName(path.AsSpan());
-        return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
-    }
 
     /// <summary>True when <paramref name="actor"/> is known and is not below <paramref name="floor"/>.</summary>
     internal static bool AtLeast(int actor, int floor) => actor != 0 && floor != 0 && actor >= floor;
@@ -167,9 +159,8 @@ internal static partial class PipeTrust
         var user = WindowsIdentity.GetCurrent().User;
         if (user is null || !user.Equals(pipe.GetAccessControl().GetOwner(typeof(SecurityIdentifier))))
             return "The control pipe belongs to another user.";
-        if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid)
-            || !IsWinshellImage(ImagePath((int)pid)))
-            return "The control pipe is not owned by Winshell.";
+        if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid))
+            return "The shell behind the control pipe could not be identified.";
         if (!AtLeast(IntegrityRid((int)pid), IntegrityRid(Environment.ProcessId)))
             return "The shell runs at a lower integrity level than this command. Run the command without elevation.";
         return null;
@@ -189,25 +180,6 @@ internal static partial class PipeTrust
         if (!AtLeast(client, floor))
             return $"The shell runs at a higher integrity level (0x{floor:X}) than process {pid} (0x{client:X}). Run the command elevated.";
         return null;
-    }
-
-    internal static string? ImagePath(int pid)
-    {
-        var process = OpenProcess(ProcessQueryLimitedInformation, false, (uint)pid);
-        if (process == 0)
-            return null;
-        try
-        {
-            var chars = new char[32768];
-            var size = (uint)chars.Length;
-            if (!QueryFullProcessImageNameW(process, 0, chars, ref size) || size == 0)
-                return null;
-            return new string(chars, 0, (int)size);
-        }
-        finally
-        {
-            CloseHandle(process);
-        }
     }
 
     internal static int IntegrityRid(int pid)
@@ -284,10 +256,6 @@ internal static partial class PipeTrust
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
-
-    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool QueryFullProcessImageNameW(nint process, uint flags, [Out] char[] name, ref uint size);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

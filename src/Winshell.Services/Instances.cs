@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Winshell.Runtime.Shell;
 
 namespace Winshell;
 
@@ -19,7 +18,9 @@ internal sealed record InstanceInfo(
     // Files written before this field existed leave it at 0.
     [property: JsonPropertyName("processStart")] long ProcessStart = 0,
     // Set when the shell exits cleanly. The folder stays so `winshell log` can still find it.
-    [property: JsonPropertyName("exitedAt")] DateTime? ExitedAt = null);
+    [property: JsonPropertyName("exitedAt")] DateTime? ExitedAt = null,
+    // The process's name, since a configuration's program can have any. Files from winshell.exe alone leave it out.
+    [property: JsonPropertyName("processName")] string? ProcessName = null);
 
 [JsonSerializable(typeof(InstanceInfo))]
 [JsonSerializable(typeof(List<InstanceInfo>))]
@@ -100,45 +101,18 @@ internal static class Instances
     }
 
     /// <summary>
-    /// The process id belongs to a running winshell. Callers that only have a pid cannot tell which
-    /// incarnation it is; <see cref="IsCurrent"/> can, and that is what <see cref="List"/> uses.
+    /// The file belongs to the shell that has this process id now. A killed instance leaves its file for a day, and
+    /// Windows can give that process id to the next shell; the old file then names the new process. This user may not
+    /// be able to open the process that has the id now, so the name is read first: reading it needs no handle.
     /// </summary>
-    internal static bool IsAlive(int pid)
-    {
-        try
-        {
-            using var p = Process.GetProcessById(pid);
-            // Windows reuses process ids, and this user may not be able to open the process that has the id now,
-            // so the name is read first: reading it needs no handle.
-            return p.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase) && !p.HasExited;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-        catch (Win32Exception)
-        {
-            // A winshell this user cannot open, such as one running elevated, is still running.
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// The file belongs to the winshell that has this process id now. A killed instance leaves its file for a
-    /// day, and Windows can give that process id to the next winshell; the old file then names the new process.
-    /// </summary>
-    private static bool IsCurrent(InstanceInfo info)
+    internal static bool IsCurrent(InstanceInfo info)
     {
         try
         {
             using var process = Process.GetProcessById(info.Pid);
             try
             {
-                if (!process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase) || process.HasExited)
+                if (!HasRecordedName(info, process) || process.HasExited)
                     return false;
             }
             catch (Win32Exception)
@@ -165,6 +139,42 @@ internal static class Instances
         catch (Win32Exception)
         {
             return true;
+        }
+    }
+
+    /// <summary>True when <paramref name="process"/> wrote the record, as far as this user can tell.</summary>
+    internal static bool IsThisInstance(InstanceInfo info, Process process)
+    {
+        if (!HasRecordedName(info, process))
+            return false;
+        if (info.ProcessStart == 0)
+            return true;
+        try
+        {
+            var started = process.StartTime.ToUniversalTime().Ticks;
+            return started == 0 || started == info.ProcessStart;
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or ArgumentException)
+        {
+            return true;
+        }
+    }
+
+    private static bool HasRecordedName(InstanceInfo info, Process process) => info.ProcessName is { Length: > 0 } name
+        ? string.Equals(process.ProcessName, name, StringComparison.OrdinalIgnoreCase)
+        : process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Waits for the shell a new one takes over from to let go of the taskbar, the hotkeys and the tray.</summary>
+    internal static void WaitForExit(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.WaitForExit(TimeSpan.FromSeconds(30));
+        }
+        catch (ArgumentException)
+        {
+            // It has already gone.
         }
     }
 

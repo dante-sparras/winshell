@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Winshell.Runtime.Shell;
+namespace Winshell;
 
 /// <summary>
 /// The next start's look at the crash folder. A fatal report newer than the last clean exit is shown once.

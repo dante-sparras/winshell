@@ -6,5 +6,8 @@
   <ItemGroup>
     <!-- The tests run winshell.exe itself, as separate processes. -->
     <ProjectReference Include="..\..\src\Winshell\Winshell.csproj" />
+    <!-- And winshell-next.exe, which is self-contained and stays in a folder of its own. -->
+    <ProjectReference Include="..\..\src\Winshell.Next\Winshell.Next.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <AssemblyMetadata Include="WinshellNext" Value="$(MSBuildThisFileDirectory)..\..\src\Winshell.Next\bin\$(Configuration)\$(TargetFramework)\$(NETCoreSdkRuntimeIdentifier)\winshell-next.exe" />
   </ItemGroup>
 </Project>

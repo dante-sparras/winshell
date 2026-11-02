@@ -38,7 +38,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 │   ├── Winshell/                    # The winshell CLI and the process that runs a shell
 │   ├── Winshell.Qml/                # The QML parser
 │   ├── Winshell.Runtime/            # The QML runtime, the item tree, and the Winshell modules
-│   ├── Winshell.Services/           # The Windows services and the code under them, with no QML, Jint or Skia
+│   ├── Winshell.Services/           # The Windows services, instances and the control pipe, with no QML, Jint or Skia
 │   ├── Winshell.Shell/              # Shell.Run and WinUI windows; ADR-0010 replaces the runtime with this
 │   ├── Winshell.DefaultShell/       # The default shell in XAML and C#, not shipped until the cut
 │   ├── Winshell.Next/               # winshell-next.exe, which runs it until the cut

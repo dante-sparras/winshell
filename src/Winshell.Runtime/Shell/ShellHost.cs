@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Winshell.Runtime.Shell;
@@ -93,23 +92,6 @@ public sealed class ShellHost : IShellHost, IDisposable
     private ShellPragmas _declared = new(null, null, null, null, null, false, new Dictionary<string, string>());
 
     /// <summary>
-    /// A pragma path is relative to the shell file, and <c>%NAME%</c> is expanded.
-    /// <c>$BASE</c> is the folder Winshell would have used for that kind of data.
-    /// </summary>
-    private string? Expand(string? pragma, string baseDir)
-    {
-        if (pragma is null)
-            return null;
-        var text = Environment.ExpandEnvironmentVariables(pragma.Replace("$BASE", baseDir, StringComparison.Ordinal));
-        // An empty pragma used to fail in GetFullPath. Keep that, instead of treating it as the shell folder.
-        if (text.Length == 0)
-            return Path.GetFullPath(text);
-        if (!Path.IsPathRooted(text))
-            text = Path.Combine(ShellDir, text);
-        return Path.GetFullPath(text);
-    }
-
-    /// <summary>
     /// ShellId, the data folders and Env are fixed at launch. A reload can see that they changed, and says so,
     /// without applying them to the running instance.
     /// </summary>
@@ -135,29 +117,7 @@ public sealed class ShellHost : IShellHost, IDisposable
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(ShellId), nameof(DataDir), nameof(StateDir), nameof(CacheDir))]
     private void Identify()
     {
-        ShellId = Pragmas.ShellId ?? DefaultShellId(_rootFile, ConfigRoot);
-        DataDir = Expand(Pragmas.DataDir, ShellLocations.DataRoot) ?? Path.Combine(ShellLocations.DataRoot, "by-shell", ShellId);
-        StateDir = Expand(Pragmas.StateDir, ShellLocations.StateRoot) ?? Path.Combine(ShellLocations.StateRoot, "by-shell", ShellId);
-        CacheDir = Expand(Pragmas.CacheDir, ShellLocations.CacheRoot) ?? Path.Combine(ShellLocations.CacheRoot, "by-shell", ShellId);
-    }
-
-    /// <summary>
-    /// A config in the config folder is named after its folder: <c>root</c> for the folder itself, or the <c>-c</c>
-    /// name. Moving the config folder, or switching between <c>-p</c> and <c>-c</c>, keeps its data and state. Any
-    /// other shell has only its path, hashed.
-    /// </summary>
-    internal static string DefaultShellId(string rootFile, string configRoot)
-    {
-        var dir = Path.GetDirectoryName(rootFile)!;
-        if (configRoot.Length > 0)
-        {
-            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configRoot));
-            if (string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))
-                return "root";
-            if (string.Equals(Path.GetDirectoryName(dir), root, StringComparison.OrdinalIgnoreCase))
-                return Path.GetFileName(dir).ToLowerInvariant();
-        }
-        return Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(rootFile.ToLowerInvariant())));
+        (ShellId, DataDir, StateDir, CacheDir) = ShellIdentity.Resolve(_rootFile, ConfigRoot, Pragmas.ShellId, Pragmas.DataDir, Pragmas.StateDir, Pragmas.CacheDir);
     }
 
     public Log Log { get; }

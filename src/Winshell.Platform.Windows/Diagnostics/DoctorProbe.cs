@@ -275,11 +275,11 @@ internal static unsafe partial class DoctorProbe
             var pragmas = ShellPragmas.Read(rootFile);
             statePragma = pragmas.StateDir;
             // The shipped default shell's id, used when that copy has not been written out yet.
-            id = pragmas.ShellId ?? (configFile is null && !File.Exists(rootFile) ? "winshell-default" : ShellHost.DefaultShellId(rootFile, configRoot));
+            id = pragmas.ShellId ?? (configFile is null && !File.Exists(rootFile) ? "winshell-default" : ShellIdentity.DefaultId(rootFile, configRoot));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            id = configFile is null ? "winshell-default" : ShellHost.DefaultShellId(rootFile, configRoot);
+            id = configFile is null ? "winshell-default" : ShellIdentity.DefaultId(rootFile, configRoot);
         }
         var shellDir = Path.GetDirectoryName(rootFile) ?? "";
         var stateDir = ExpandState(statePragma, shellDir, Path.Combine(localRoot, "state"))

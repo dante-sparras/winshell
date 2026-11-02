@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Winshell.Runtime.Shell;
+namespace Winshell;
 
 /// <summary>
 /// Takes secrets out of text that goes into a crash report or the instance log: authorization headers, bearer
