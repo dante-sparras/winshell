@@ -14,14 +14,14 @@ The running shell: its screens and services. There is one in a process.
 | `Bluetooth` | [BluetoothService](winshell-bluetooth.md#bluetoothservice), read-only |  |
 | `Brightness` | [BrightnessService](winshell-power.md#brightnessservice), read-only |  |
 | `CacheDir` | string, read-only | This shell's cache folder, which exists once read. |
-| `ColorScheme` | string | The color scheme every window follows: `system`, `light` or `dark`. |
+| `ColorScheme` | [ColorScheme](#colorscheme) | The color scheme every window follows. |
 | `ConfigDir` | string, read-only | The folder of this configuration's program, where its own files are. |
 | `ConfigRoot` | string, read-only | The config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR` when it is set. |
 | `Current` | [Shell](#shell), static, read-only | The shell of this process. Reading it before Run has started it throws. |
 | `DataDir` | string, read-only | This shell's data folder, which exists once read. |
 | `ExplorerTaskbar` | [ExplorerTaskbarService](winshell-explorertaskbar.md#explorertaskbarservice), read-only | Whether Explorer's taskbar is hidden. Winshell shows it again when it exits. |
 | `Ipc` | [ShellIpc](#shellipc), read-only | What `winshell ipc` reaches in this shell. |
-| `IsDark` | bool, read-only | Whether windows are dark. ColorScheme overrides Windows mode, and `system` follows it. |
+| `IsDark` | bool, read-only | Whether windows are dark. ColorScheme overrides Windows mode, and System follows it. |
 | `JumpLists` | [JumpListService](winshell-apps.md#jumplistservice), read-only |  |
 | `Log` | [Log](#log), read-only |  |
 | `LogPath` | string, read-only | This instance's log file, or empty when it writes none. |
@@ -91,13 +91,13 @@ Has the members of [ObservableObject](#observableobject).
 | `Content` | UIElement? |  |
 | `Corners` | [WindowCorners](#windowcorners) |  |
 | `Height` | double | The height in logical pixels. NaN leaves it to the window's kind: anchors, or the default size. |
-| `InputRegion` | IReadOnlyList of [QRect](#qrect)? | The parts of the window that take clicks, in logical pixels; clicks elsewhere go to the window below. Null is the whole window. An empty list lets every click through. |
+| `InputRegion` | IReadOnlyList of Rect? | The parts of the window that take clicks, in logical pixels; clicks elsewhere go to the window below. Null is the whole window. An empty list lets every click through. |
 | `Opacity` | double | Fades the content. The material behind it does not fade. |
-| `Origin` | [QPoint](#qpoint), read-only | The window's origin on the virtual desktop, in logical pixels. |
+| `Origin` | Point, read-only | The window's origin on the virtual desktop, in logical pixels. |
 | `Scale` | double, read-only | How many physical pixels this window draws for one logical pixel. |
 | `Screen` | [ScreenInfo](#screeninfo)? | The screen this window is on, or was asked to be on. Null is the primary screen. |
 | `Visible` | bool |  |
-| `VisibleMask` | [QRect](#qrect)? | Clips the content to a rectangle, in logical pixels. Null shows all of it. |
+| `VisibleMask` | Rect? | Clips the content to a rectangle, in logical pixels. Null shows all of it. |
 | `Width` | double | The width in logical pixels. NaN leaves it to the window's kind: anchors, or the default size. |
 | `Closed` | Action |  |
 | `Failed` | Action of Exception |  |
@@ -134,7 +134,7 @@ Has the members of [ShellWindow](#shellwindow).
 | --- | --- | --- |
 | `PopupWindow()` | constructor |  |
 | `GrabFocus` | bool | Takes the keyboard while shown. A click outside the popup, or Esc, then dismisses it. |
-| `Rect` | [QRect](#qrect) | Where the popup sits, in logical pixels on the virtual desktop. |
+| `Rect` | Rect | Where the popup sits, in logical pixels on the virtual desktop. |
 | `Dismissed` | Action |  |
 
 ## FloatingWindow
@@ -148,9 +148,9 @@ Has the members of [ShellWindow](#shellwindow).
 | `FloatingWindow()` | constructor |  |
 | `Fullscreen` | bool |  |
 | `Maximized` | bool |  |
-| `MaximumSize` | [QSize](#qsize) |  |
+| `MaximumSize` | Size |  |
 | `Minimized` | bool |  |
-| `MinimumSize` | [QSize](#qsize) |  |
+| `MinimumSize` | Size |  |
 | `Owner` | [FloatingWindow](#floatingwindow)? | The window this one stays above and closes with. |
 | `Title` | string |  |
 
@@ -167,6 +167,16 @@ A WinUI FrameworkElement. The members here are the ones Winshell adds.
 | `Window` | [AppWindow](winshell-windows.md#appwindow)? |  |
 | `PeekProperty` | DependencyProperty, static | While true, Windows shows this window at full size and hides the others. It stays off when the user turned peek off, and it ends when this element unloads or the window goes. |
 | `WindowProperty` | DependencyProperty, static | The app window to preview, from Windows. Null shows nothing. |
+
+## ColorScheme
+
+Whether windows are light or dark. System follows Windows.
+
+| Value | Number | Description |
+| --- | --- | --- |
+| `System` | 0 |  |
+| `Light` | 1 |  |
+| `Dark` | 2 |  |
 
 ## CaptureView
 
@@ -351,47 +361,15 @@ A picture in memory: BGRA, one byte a channel, top row first, with no gap betwee
 | `Width` | int, read-only |  |
 | `EncodePng()` | byte[] | The picture as a PNG file. Blocks while Windows encodes it. |
 
-## QPoint
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `QPoint(double X, double Y)` | constructor |  |
-| `X` | double, init |  |
-| `Y` | double, init |  |
-
-## QRect
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `QRect(double X, double Y, double Width, double Height)` | constructor |  |
-| `Bottom` | double, read-only |  |
-| `Height` | double, init |  |
-| `Left` | double, read-only |  |
-| `Right` | double, read-only |  |
-| `Top` | double, read-only |  |
-| `Width` | double, init |  |
-| `X` | double, init |  |
-| `Y` | double, init |  |
-| `Contains(double x, double y)` | bool |  |
-| `IntersectsWith([QRect](#qrect) other)` | bool |  |
-
-## QSize
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `QSize(double Width, double Height)` | constructor |  |
-| `Height` | double, init |  |
-| `Width` | double, init |  |
-
 ## ScreenInfo
 
 A monitor, as the platform reports it. Coordinates are logical pixels on the virtual desktop: a monitor keeps its physical top-left corner and its size is divided by its scale, so monitors of mixed DPI never overlap.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ScreenInfo(string Id, string Name, string Model, string Manufacturer, string SerialNumber, [QRect](#qrect) Geometry, [QRect](#qrect) WorkArea, double DevicePixelRatio, double PhysicalWidthMm, double PhysicalHeightMm, int RefreshRate, bool IsPrimary)` | constructor |  |
+| `ScreenInfo(string Id, string Name, string Model, string Manufacturer, string SerialNumber, Rect Geometry, Rect WorkArea, double DevicePixelRatio, double PhysicalWidthMm, double PhysicalHeightMm, int RefreshRate, bool IsPrimary)` | constructor |  |
 | `DevicePixelRatio` | double, init |  |
-| `Geometry` | [QRect](#qrect), init |  |
+| `Geometry` | Rect, init |  |
 | `Id` | string, init |  |
 | `IsPrimary` | bool, init |  |
 | `Manufacturer` | string, init |  |
@@ -401,7 +379,7 @@ A monitor, as the platform reports it. Coordinates are logical pixels on the vir
 | `PhysicalWidthMm` | double, init |  |
 | `RefreshRate` | int, init |  |
 | `SerialNumber` | string, init |  |
-| `WorkArea` | [QRect](#qrect), init |  |
+| `WorkArea` | Rect, init |  |
 
 ## ShellIpc
 

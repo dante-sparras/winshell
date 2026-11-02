@@ -25,7 +25,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
     private IDisposable? _screenRefresh;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
     private bool _windowsDark;
-    private string _scheme = "system";
+    private ColorScheme _scheme;
     private string _accent = "";
     private bool _accentPainted;
 
@@ -57,22 +57,21 @@ internal sealed unsafe class ShellPlatform : IDisposable
 
     public string PrimaryScreenId => _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
 
-    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <c>system</c> follows it.</summary>
+    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <see cref="ColorScheme.System"/> follows it.</summary>
     public bool IsDark => Shell.DarkFor(_scheme, _windowsDark);
 
     public bool IsHighContrast { get; private set; }
 
-    /// <summary>The color scheme every window follows: <c>system</c>, <c>light</c> or <c>dark</c>.</summary>
-    internal string ColorScheme
+    /// <summary>The color scheme every window follows.</summary>
+    internal ColorScheme ColorScheme
     {
         get => _scheme;
         set
         {
-            var next = value is "light" or "dark" ? value : "system";
-            if (next == _scheme)
+            if (value == _scheme)
                 return;
             var wasDark = IsDark;
-            _scheme = next;
+            _scheme = value;
             if (wasDark != IsDark)
                 ThemeChanged?.Invoke();
         }

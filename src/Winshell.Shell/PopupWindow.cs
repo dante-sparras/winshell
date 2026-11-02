@@ -1,9 +1,11 @@
+using Windows.Foundation;
+
 namespace Winshell;
 
 /// <summary>A frameless window placed next to another window.</summary>
 public sealed class PopupWindow : ShellWindow
 {
-    private QRect _rect = new(0, 0, 100, 100);
+    private Rect _rect = new(0, 0, 100, 100);
     private bool _grabFocus;
 
     public PopupWindow()
@@ -19,7 +21,7 @@ public sealed class PopupWindow : ShellWindow
     private protected override WindowKind Kind => WindowKind.Popup;
 
     /// <summary>Where the popup sits, in logical pixels on the virtual desktop.</summary>
-    public QRect Rect
+    public Rect Rect
     {
         get => _rect;
         set

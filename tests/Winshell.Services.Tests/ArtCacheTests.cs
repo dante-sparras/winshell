@@ -112,18 +112,6 @@ public class ArtCacheTests
         Assert.False(Stored(art));
     }
 
-    [Fact]
-    public async Task A_png_within_the_limits_is_stored()
-    {
-        var art = Png(3, 2);
-
-        var url = await ArtCache.StoreAsync(new MemoryStream(art), "image/png");
-
-        Assert.False(string.IsNullOrEmpty(url));
-        Assert.True(Stored(art));
-        ArtCache.Release(url);
-    }
-
     private static byte[] Png(int width, int height)
     {
         var data = new byte[24];

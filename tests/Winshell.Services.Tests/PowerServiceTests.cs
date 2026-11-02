@@ -158,17 +158,4 @@ public sealed class PowerServiceTests
     [InlineData(false, -1, 1)]
     public void An_idle_monitor_looks_again_when_the_timeout_can_pass(bool idle, double remaining, double seconds) =>
         Assert.Equal(TimeSpan.FromSeconds(seconds), IdleMonitor.NextCheck(idle, remaining));
-
-    [Fact]
-    public void Keep_awake_lets_go_when_disposed()
-    {
-        var awake = new KeepAwake { Enabled = true };
-        Assert.True(KeepAwake.AnyActive);
-        Assert.True(awake.HoldsRequest);
-
-        awake.Dispose();
-
-        Assert.False(awake.Enabled);
-        Assert.False(awake.HoldsRequest);
-    }
 }

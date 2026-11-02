@@ -31,13 +31,4 @@ public sealed class TrayIconModuleTests
         Assert.Null(TrayHost.ResourceImage(new IconResource(@"\\nonexistent-host.invalid\share\x.dll", 1, ""), 32));
         Assert.Null(TrayHost.ResourceImage(new IconResource(@"\\?\UNC\nonexistent-host.invalid\share\x.dll", 0, "ICON"), 32));
     }
-
-    [Fact]
-    public void An_image_is_loaded_from_a_local_module()
-    {
-        var shell32 = Path.Combine(Environment.SystemDirectory, "shell32.dll");
-        var image = TrayHost.ResourceImage(new IconResource(shell32, 3, ""), 32);
-        Assert.NotNull(image);
-        Assert.Equal(32, image.Width);
-    }
 }

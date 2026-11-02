@@ -112,15 +112,15 @@ internal sealed class OnScreenDisplayHost
         if (!ReferenceEquals(device, _playback))
         {
             if (_playback is not null)
-                _playback.Audio.PropertyChanged -= OnPlayback;
+                _playback.PropertyChanged -= OnPlayback;
             _playback = device;
             if (_playback is not null)
-                _playback.Audio.PropertyChanged += OnPlayback;
+                _playback.PropertyChanged += OnPlayback;
         }
         if (_playback is { } playback)
         {
-            Model.Volume = playback.Audio.Volume;
-            Model.PlaybackMuted = playback.Audio.Muted;
+            Model.Volume = playback.Volume;
+            Model.PlaybackMuted = playback.Muted;
             Model.VolumeKnown = true;
         }
         else
@@ -133,11 +133,11 @@ internal sealed class OnScreenDisplayHost
 
     private void OnPlayback(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not AudioVolume audio)
+        if (sender is not AudioNode audio)
             return;
-        if (e.PropertyName == nameof(AudioVolume.Volume))
+        if (e.PropertyName == nameof(AudioNode.Volume))
             Model.Volume = audio.Volume;
-        else if (e.PropertyName == nameof(AudioVolume.Muted))
+        else if (e.PropertyName == nameof(AudioNode.Muted))
             Model.PlaybackMuted = audio.Muted;
     }
 
@@ -147,14 +147,14 @@ internal sealed class OnScreenDisplayHost
         if (!ReferenceEquals(device, _recording))
         {
             if (_recording is not null)
-                _recording.Audio.PropertyChanged -= OnRecording;
+                _recording.PropertyChanged -= OnRecording;
             _recording = device;
             if (_recording is not null)
-                _recording.Audio.PropertyChanged += OnRecording;
+                _recording.PropertyChanged += OnRecording;
         }
         if (_recording is { } recording)
         {
-            Model.MicrophoneMuted = recording.Audio.Muted;
+            Model.MicrophoneMuted = recording.Muted;
             Model.MicrophoneKnown = true;
         }
         else
@@ -166,7 +166,7 @@ internal sealed class OnScreenDisplayHost
 
     private void OnRecording(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AudioVolume.Muted) && sender is AudioVolume audio)
+        if (e.PropertyName == nameof(AudioNode.Muted) && sender is AudioNode audio)
             Model.MicrophoneMuted = audio.Muted;
     }
 
