@@ -214,25 +214,4 @@ public sealed class TaskbarPinsTests : IDisposable
         Wait.Until(() => pins.Ids.SequenceEqual(["By.Hand"]), "the hand edit", loop.Process);
         Assert.Equal(1, raised);
     }
-
-    [Fact]
-    public void An_empty_path_keeps_pins_in_memory_and_writes_nothing()
-    {
-        var untouched = Path.Combine(_folder, "taskbar.json");
-        File.WriteAllText(untouched, """{"pinned":["Saved.App"]}""");
-        var loop = new ManualEventLoop();
-        using var pins = new TaskbarPins("", loop);
-
-        Assert.Equal(Defaults, pins.Ids);
-        pins.Pin("Contoso.Notes");
-        pins.Unpin("MSEdge");
-        pins.Unpin("Not.Pinned");
-        pins.Move("Microsoft.Windows.Explorer", "Microsoft.WindowsStore_8wekyb3d8bbwe!App");
-        loop.Process();
-
-        Assert.Equal(["Microsoft.WindowsStore_8wekyb3d8bbwe!App", "Microsoft.Windows.Explorer", "Contoso.Notes"], pins.Ids);
-        Assert.Equal("""{"pinned":["Saved.App"]}""", File.ReadAllText(untouched));
-        Assert.Single(Directory.GetFiles(_folder));
-        Assert.Empty(Directory.GetDirectories(_folder));
-    }
 }

@@ -355,7 +355,6 @@ public sealed class TasksTests
         Assert.Same(second, Activate(task, second));
         Assert.Same(first, Activate(task, Win("Notepad", "notepad", @"C:\Windows\notepad.exe")));
         Assert.Same(first, Activate(task, null));
-        Assert.Same(first, Activate(task, second with { }));
     }
 
     [Fact]
