@@ -5,7 +5,7 @@ namespace Winshell;
 /// missing is watched from the nearest one that exists, and each folder created under it moves the watch one step
 /// closer. Nothing is called after <see cref="Dispose"/>.
 /// </summary>
-internal sealed class FileWatch : IDisposable
+public sealed class FileWatch : IDisposable
 {
     private readonly string _path;
     private readonly IEventLoop _loop;
