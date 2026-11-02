@@ -1,12 +1,15 @@
 # Builds winshell.slnx with warnings as errors, and the docs site, where a broken link or anchor between pages is an
 # error. Then runs the tests on that build.
 # run-tests.ps1 runs the main stage: it leaves out tests/quarantine.txt and reruns a failed test once.
-# A push to main runs all of this in the ci job. A pull request runs -Quick. When Pester 5.6.1 is installed the full
-# check also runs the Pester suites.
+# A push to main runs all of this in the ci job, and a pull request runs -Quick, both with -Tier Fast: the slow job runs
+# the rest. When Pester 5.6.1 is installed the full check also runs the Pester suites.
 # See docs/development.md.
 param(
     # The build and the main test stage: what a pull request waits for.
-    [switch] $Quick
+    [switch] $Quick,
+    # Which tests the main stage runs. See run-tests.ps1.
+    [ValidateSet('All', 'Fast', 'Slow')]
+    [string] $Tier = 'All'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,7 +25,7 @@ try {
         dotnet docfx .\docs\docfx.json --warningsAsErrors --logLevel warning
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
-    & (Join-Path $PSScriptRoot 'run-tests.ps1')
+    & (Join-Path $PSScriptRoot 'run-tests.ps1') -Tier $Tier
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     if ($Quick) { exit 0 }
     $pester = @(Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -eq [version]'5.6.1' })

@@ -1,5 +1,6 @@
 namespace Winshell.ShellTests;
 
+[Trait("Category", "Slow")]
 public sealed class DispatcherLoopTests
 {
     [Fact]

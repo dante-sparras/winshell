@@ -47,6 +47,8 @@ Describe 'The quarantine list' {
 
     It 'leaves the main filter alone when nothing is quarantined' {
         Get-MainTestFilter | Should -Be 'Category!=Package'
+        Get-MainTestFilter -Tier Fast | Should -Be 'Category!=Package&Category!=Slow'
+        Get-MainTestFilter -Tier Slow | Should -Be 'Category!=Package&Category=Slow'
     }
 
     It 'adds no clause for a list with only comments' {

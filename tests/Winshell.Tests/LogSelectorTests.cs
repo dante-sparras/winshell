@@ -4,6 +4,7 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary><c>winshell log</c> never prints a different instance's log than the one asked for.</summary>
+[Trait("Category", "Slow")]
 public sealed class LogSelectorTests : IDisposable
 {
     private const string StoppedId = "abc123stopped";

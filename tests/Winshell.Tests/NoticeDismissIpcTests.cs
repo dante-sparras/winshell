@@ -8,6 +8,7 @@ namespace Winshell.Tests;
 /// <c>winshell ipc call notice dismiss</c> closes whichever notice is showing, and it takes no arguments.
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
+[Trait("Category", "Slow")]
 public sealed class NoticeDismissIpcTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");

@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Winshell.Tests;
 
+[Trait("Category", "Slow")]
 public class InstanceListTests
 {
     private static InstanceInfo Record(int pid, string? processName) =>

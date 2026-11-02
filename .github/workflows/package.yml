@@ -72,8 +72,8 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ inputs.tag }}
-      - name: Wait until ci succeeded on this commit
-        # A release-please merge starts this workflow and ci together. Publishing before ci finishes would ship a
+      - name: Wait until ci and slow succeeded on this commit
+        # A release-please merge starts this workflow and those jobs together. Publishing before they finish would ship a
         # commit whose tests failed. Pull requests and main pushes skip this: inputs.tag is empty.
         if: ${{ inputs.tag != '' }}
         shell: pwsh

@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary><c>--pid</c> and <c>--tail</c> that are not whole numbers exit 2, before any instance is touched.</summary>
+[Trait("Category", "Slow")]
 public class CliUsageTests
 {
     [Theory]

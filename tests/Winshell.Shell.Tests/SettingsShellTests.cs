@@ -22,6 +22,7 @@ namespace Winshell.ShellTests;
 /// own right-click handler is not raised here: building that view takes the notification area and the Win hotkey.
 /// The menu it would show is opened on a real panel instead.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class SettingsShellTests
 {
     [Fact]

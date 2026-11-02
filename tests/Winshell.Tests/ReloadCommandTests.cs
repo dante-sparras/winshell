@@ -8,6 +8,7 @@ namespace Winshell.Tests;
 /// <c>winshell reload</c> builds a configuration project and then asks the instance to start the next process.
 /// A build that fails leaves that instance running and tells it to show the notice.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class ReloadCommandTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
