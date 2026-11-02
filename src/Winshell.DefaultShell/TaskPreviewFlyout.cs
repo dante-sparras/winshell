@@ -8,8 +8,8 @@ namespace Winshell.DefaultShell;
 
 /// <summary>
 /// The preview above one taskbar button. Hovering does not take the keyboard. Up on a running app does, and the
-/// window is focused, because showing it is not enough. The taskbar has no keyboard mode of its own yet: when the
-/// app goes away, focus lands on a button that is still there, or on Start.
+/// window is focused, because showing it is not enough. The taskbar's keyboard mode keeps Escape on a button that
+/// is still there: when the app goes away, focus lands on one, or on Start.
 /// </summary>
 internal sealed class TaskPreviewFlyout
 {

@@ -630,6 +630,8 @@ public sealed class TaskPreviewTests
 
         public void Minimize() => Minimized = true;
 
+        public void Restore() => Minimized = false;
+
         public void Close() => Closes++;
 
         public void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

@@ -11,6 +11,7 @@
     VerticalAlignment="Center"
     HorizontalContentAlignment="Center"
     VerticalContentAlignment="Center"
+    UseSystemFocusVisuals="True"
     Click="OnClick"
     AutomationProperties.HelpText="Open notification center and calendar"
     AutomationProperties.FullDescription="Open notification center and calendar">

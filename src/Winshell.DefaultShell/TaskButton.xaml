@@ -11,6 +11,7 @@
     Background="Transparent"
     HorizontalAlignment="Left"
     VerticalAlignment="Center"
+    UseSystemFocusVisuals="True"
     CornerRadius="{ThemeResource ControlCornerRadius}">
     <Grid Width="40" Height="40">
         <Border x:Name="FillActive" CornerRadius="{ThemeResource ControlCornerRadius}" Visibility="Collapsed" Background="{ThemeResource SubtleFillColorSecondaryBrush}" />

@@ -68,12 +68,19 @@ public sealed partial class TaskButton : Button
 
     private void OnRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => Apply();
 
+    /// <summary>The app's menu is open, so the taskbar leaves Escape and the arrows to it.</summary>
+    internal bool MenuIsOpen => _menu is not null;
+
+    private bool _pointerShift;
+
     private void OnClick(object sender, RoutedEventArgs e)
     {
         if (Item is not { } task || Model() is not { } model)
             return;
         Previews()?.Hide();
-        var shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+        // Shift+Enter is handled on the key. Shift here is a pointer click.
+        var shift = _pointerShift;
+        _pointerShift = false;
         if (shift)
             model.Launch(task);
         else
@@ -82,9 +89,16 @@ public sealed partial class TaskButton : Button
 
     private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
-        if (Item is not { } task || Model() is not { } model)
+        if (Item is null || Model() is null)
             return;
         args.Handled = true;
+        ShowMenu();
+    }
+
+    private void ShowMenu()
+    {
+        if (Item is not { } task || Model() is not { } model)
+            return;
         // The menu takes this click. A preview open on the button closes, and the pointer staying here does not open another.
         Previews()?.Hide();
         // The rows are read once. What a row does reads the app as it is when it is chosen.
@@ -104,8 +118,11 @@ public sealed partial class TaskButton : Button
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        var point = e.GetCurrentPoint(this);
+        if (point.Properties.IsRightButtonPressed)
             return;
+        _pointerShift = point.Properties.IsLeftButtonPressed
+            && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
         _pressed = true;
         Apply();
     }
@@ -121,7 +138,12 @@ public sealed partial class TaskButton : Button
         e.Handled = true;
     }
 
-    private void OnPointerEnded(object sender, PointerRoutedEventArgs e) => EndPress();
+    private void OnPointerEnded(object sender, PointerRoutedEventArgs e)
+    {
+        EndPress();
+        // After the click, which is raised on this same press. A cancelled press leaves no shift behind for the next key.
+        DispatcherQueue.TryEnqueue(() => _pointerShift = false);
+    }
 
     private void EndPress()
     {
@@ -133,6 +155,24 @@ public sealed partial class TaskButton : Button
 
     protected override void OnKeyDown(KeyRoutedEventArgs e)
     {
+        var shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+        // Shift+Enter opens a new window. Enter and Space still activate, which is the button's own click.
+        if (e.Key == VirtualKey.Enter && shift)
+        {
+            e.Handled = true;
+            if (Item is { } task && Model() is { } model)
+            {
+                Previews()?.Hide();
+                model.Launch(task);
+            }
+            return;
+        }
+        if (e.Key == VirtualKey.Application || (e.Key == VirtualKey.F10 && shift))
+        {
+            e.Handled = true;
+            ShowMenu();
+            return;
+        }
         if (e.Key == VirtualKey.Up && Item is { Windows.Count: > 0 })
         {
             e.Handled = true;

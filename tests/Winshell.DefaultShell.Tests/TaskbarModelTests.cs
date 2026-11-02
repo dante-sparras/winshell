@@ -458,6 +458,43 @@ public sealed class TaskbarModelTests : IDisposable
         Assert.Empty(model.Tasks);
     }
 
+    [Fact]
+    public void Win_number_does_what_a_click_does_and_Shift_opens_a_new_window()
+    {
+        using var preferences = Open();
+        using var pins = Pins("notes");
+        var desk = new Desk(preferences, pins);
+        var app = new FakeApp("notes", "Notes");
+        desk.Apps.Add(app);
+        var window = new FakeWindow { AppId = "notes", Executable = @"C:\notes.exe", Title = "Notes" };
+        desk.OpenWindows.Add(window);
+        using var model = desk.Bar(Screen("main", primary: true), isMain: true);
+        var changes = 0;
+        model.ActiveWindowChanged += (_, _) => changes++;
+
+        Assert.Null(model.ActiveWindow);
+        desk.SetActive(window);
+        Assert.Same(window, model.ActiveWindow);
+        Assert.Equal(1, changes);
+
+        model.InvokeAt(0, newWindow: true);
+        Assert.Equal(1, app.Launches);
+        Assert.Equal(0, window.Activations);
+        Assert.Equal(0, window.Minimizations);
+
+        window.SetActivated(true);
+        model.InvokeAt(0, newWindow: false);
+        Assert.Equal(1, window.Minimizations);
+
+        model.InvokeAt(1, newWindow: false);
+        Assert.Equal(1, app.Launches);
+        Assert.Equal(1, window.Minimizations);
+
+        desk.SetActive(null);
+        Assert.Null(model.ActiveWindow);
+        Assert.Equal(2, changes);
+    }
+
     private static TaskMenuRow PinRow(TaskbarModel model) => model.MenuRows(model.Tasks.Single()).Single(row => row.Id == "pin");
 
     private static TaskMenuRow CloseRow(TaskbarModel model) => model.MenuRows(model.Tasks.Single()).Single(row => row.Id == "close");
@@ -569,6 +606,8 @@ public sealed class TaskbarModelTests : IDisposable
         public void Activate() => Activations++;
 
         public void Minimize() => Minimizations++;
+
+        public void Restore() => Minimized = false;
 
         public void Close() => Closes++;
 

@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Winshell.DefaultShell"
     xmlns:taskbar="using:Winshell.DefaultShell.Taskbar"
+    IsTabStop="False"
     AutomationProperties.Name="Taskbar">
     <!-- A UserControl draws no background, so this one is what takes a click on an empty part of the bar. -->
     <Grid Background="Transparent">
@@ -25,6 +26,7 @@
                     BorderThickness="0"
                     Background="Transparent"
                     CornerRadius="{ThemeResource ControlCornerRadius}"
+                    UseSystemFocusVisuals="True"
                     AutomationProperties.Name="Start"
                     Click="{x:Bind Model.RequestStart}">
                     <Button.Resources>
@@ -70,6 +72,7 @@
                     BorderThickness="0"
                     Background="Transparent"
                     CornerRadius="{ThemeResource ControlCornerRadius}"
+                    UseSystemFocusVisuals="True"
                     AutomationProperties.Name="Search"
                     Click="{x:Bind Model.RequestSearch}">
                     <Grid Width="40" Height="40">

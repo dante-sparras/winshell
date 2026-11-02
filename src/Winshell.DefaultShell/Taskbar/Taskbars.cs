@@ -17,8 +17,11 @@ internal sealed class Taskbars
     private readonly QuickSettings _quick;
     private readonly Start _start;
     private readonly Hotkey _hotkey;
+    private readonly ChordRegistration _taskbarChords;
+    private readonly DesktopChordSession _desktopChords = new();
     private readonly SettingsHost _settings;
     private readonly List<Bar> _bars = [];
+    private DesktopChordHost? _desktopHost;
 
     public Taskbars(Shell shell, Preferences preferences, TaskbarPins pins)
     {
@@ -57,6 +60,9 @@ internal sealed class Taskbars
         shell.Screens.CollectionChanged += OnScreens;
         preferences.PropertyChanged += OnPreferences;
         Sync();
+        // One hotkey for each taskbar chord, for the life of the shell. The same sequence is not registered twice.
+        _taskbarChords = TaskbarChords.Register(() => shell.NewHotkey(), new ChordActions(this));
+        SyncDesktopChords();
     }
 
     private static StartApp ToStartApp(AppEntry app) =>
@@ -77,6 +83,8 @@ internal sealed class Taskbars
             _hotkey.Sequence = _preferences.StartHotkey;
         else if (e.PropertyName == nameof(Preferences.StartRecommended))
             _start.ShowRecommended = _preferences.StartRecommended;
+        else if (e.PropertyName == nameof(Preferences.DesktopChords))
+            SyncDesktopChords();
     }
 
     /// <summary>One hotkey. An open Start closes. Otherwise the main taskbar's Start opens.</summary>
@@ -136,6 +144,54 @@ internal sealed class Taskbars
             window.Visible = true;
             _bars.Add(new Bar(model, window, isMain));
         }
+        _desktopHost?.Retarget();
+    }
+
+    /// <summary>
+    /// Alt+Tab and the rest exist only while the preference is on. Turning it off gives the keys back and drops the
+    /// windows. A resting shell registers none of them.
+    /// </summary>
+    private void SyncDesktopChords()
+    {
+        if (!_preferences.DesktopChords)
+        {
+            _desktopHost?.Dispose();
+            _desktopHost = null;
+        }
+        _desktopChords.Sync(
+            _preferences.DesktopChords,
+            () => _shell.NewHotkey(),
+            () => _desktop.Windows,
+            () => _desktop.Active,
+            () => MainWindow() is not null);
+        if (!_preferences.DesktopChords)
+            return;
+        _desktopHost ??= new DesktopChordHost(_shell, _desktopChords.Switcher, _preferences, MainWindow, MainView, () => _settings.Open("taskbar"));
+        _desktopHost.Retarget();
+    }
+
+    private TaskbarView? MainView()
+    {
+        TaskbarView? first = null;
+        foreach (var bar in _bars)
+        {
+            if (bar.Window.Content is not TaskbarView view)
+                continue;
+            if (bar.IsMain)
+                return view;
+            first ??= view;
+        }
+        return first;
+    }
+
+    private PanelWindow? MainWindow()
+    {
+        foreach (var bar in _bars)
+        {
+            if (bar.IsMain)
+                return bar.Window;
+        }
+        return _bars.Count == 0 ? null : _bars[0].Window;
     }
 
     private void OnSettingsRequested(object? sender, EventArgs e) => _settings.Open("taskbar");
@@ -147,6 +203,19 @@ internal sealed class Taskbars
             view.Release();
         bar.Model.Dispose();
         bar.Window.Dispose();
+    }
+
+    private sealed class ChordActions(Taskbars bars) : ITaskbarChordActions
+    {
+        public void FocusApps() => bars.MainView()?.FocusApps();
+
+        public void ToggleQuickSettings() => bars.MainView()?.ToggleQuickSettings();
+
+        public void ToggleNotifications() => bars.MainView()?.ToggleNotifications();
+
+        public void OpenSearch() => bars.MainView()?.OpenSearch();
+
+        public void InvokeApp(int index, bool newWindow) => bars.MainView()?.InvokeApp(index, newWindow);
     }
 
     private sealed class Bar(TaskbarModel model, PanelWindow window, bool isMain)
