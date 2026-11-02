@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Winshell.Capture;
+using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
 
@@ -91,6 +92,52 @@ public sealed class CaptureSessionTests
         stale();
         loop.Process();
         Assert.True(session.Running);
+    }
+
+    [Fact]
+    public void An_app_window_is_captured_without_its_handle_and_closing_it_stops()
+    {
+        var loop = new ManualEventLoop();
+        var windows = new Listing();
+        windows.Open(Info(10), Info(20));
+        using var list = new WindowListService(loop, Log.Default, source: windows);
+        var first = list.Windows.Single(window => window.Hwnd == 10);
+        var second = list.Windows.Single(window => window.Hwnd == 20);
+        var backends = new List<FakeCapture>();
+        using var session = new CaptureSession(loop, () =>
+        {
+            var backend = new FakeCapture();
+            backends.Add(backend);
+            return backend;
+        })
+        { Target = first };
+
+        Assert.Same(first, session.Target!.Source);
+        Assert.Equal(new CaptureTarget(10, ""), new CaptureTarget(session.Target.Window, session.Target.MonitorId));
+        Assert.True(session.Start());
+        Assert.Equal(new CaptureTarget(10, ""), backends[0].Target);
+        Assert.True(session.Running);
+
+        session.Target = first;
+        Assert.True(session.Running);
+
+        session.Target = second;
+        Assert.False(session.Running);
+        Assert.True(session.Start());
+        Assert.Equal(new CaptureTarget(20, ""), backends[1].Target);
+
+        windows.Items.Remove(10);
+        windows.Push();
+        loop.Process();
+        Assert.True(session.Running);
+        Assert.Same(second, session.Target!.Source);
+
+        windows.Items.Remove(20);
+        windows.Push();
+        loop.Process();
+        Assert.False(session.Running);
+        Assert.Null(session.Target);
+        Assert.Equal(1, backends[1].Disposals);
     }
 
     [Fact]
@@ -290,6 +337,59 @@ public sealed class CaptureSessionTests
         {
             from.Free();
             to.Free();
+        }
+    }
+
+    private static WindowInfo Info(nint hwnd) => new(hwnd, "Title", "app", @"C:\app.exe", "", 0, false, false, false, "M1");
+
+    private sealed class Listing : IWindowSource
+    {
+        public Dictionary<nint, WindowInfo> Items { get; } = [];
+
+        public IReadOnlyDictionary<nint, WindowInfo> Windows => Items;
+
+        public nint Active { get; set; }
+
+        public event Action? Changed;
+
+        public void Open(params WindowInfo[] windows)
+        {
+            foreach (var window in windows)
+                Items[window.Hwnd] = window;
+        }
+
+        public void Push() => Changed?.Invoke();
+
+        public void Start(IEventLoop loop, Log log)
+        {
+        }
+
+        public bool WantsAttention(nint hwnd) => false;
+
+        public ScreenInfo? Screen(string deviceName) => null;
+
+        public string DesktopId(nint hwnd) => "";
+
+        public bool MoveToDesktop(nint hwnd, Guid desktop) => false;
+
+        public void Activate(nint hwnd)
+        {
+        }
+
+        public void Close(nint hwnd)
+        {
+        }
+
+        public void SetMaximized(nint hwnd, bool maximized)
+        {
+        }
+
+        public void SetMinimized(nint hwnd, bool minimized)
+        {
+        }
+
+        public void MoveToMonitor(nint hwnd, string deviceName)
+        {
         }
     }
 

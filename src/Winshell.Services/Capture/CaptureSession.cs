@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Winshell.Windows;
 
 namespace Winshell.Capture;
 
@@ -12,6 +13,7 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     private ICaptureBackend? _backend;
     private IDisposable? _timer;
     private CaptureTarget? _target;
+    private AppWindow? _watched;
     private PixelImage? _frame;
     private bool _includeCursor;
     private int _frameInterval = 33;
@@ -34,16 +36,20 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     /// <summary>A new frame arrived. <see cref="Frame"/> is that frame.</summary>
     public event Action? FrameReady;
 
-    /// <summary>What to capture. Changing it stops capture.</summary>
+    /// <summary>
+    /// What to capture: an <see cref="AppWindow"/> from <see cref="WindowListService"/>, or a
+    /// <see cref="CaptureTarget"/>. Changing it stops capture. Closing the app window clears this and stops capture.
+    /// </summary>
     public CaptureTarget? Target
     {
         get => _target;
         set
         {
-            if (_target == value)
+            if (_target == value && ReferenceEquals(_watched, value?.Source))
                 return;
             Stop();
             _target = value;
+            Watch(value?.Source);
             Changed();
         }
     }
@@ -84,7 +90,9 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         Set(ref _error, "", nameof(Error));
         try
         {
-            var target = _target ?? throw new InvalidOperationException("Choose a window or a screen before starting capture.");
+            var chosen = _target ?? throw new InvalidOperationException("Choose a window or a screen before starting capture.");
+            // The backend captures a handle. The app window stays here, so closing it can stop the session.
+            var target = new CaptureTarget(chosen.Window, chosen.MonitorId);
             var generation = _generation;
             _backend = _create();
             _backend.Start(target, _includeCursor, () => _loop.Post(() =>
@@ -221,9 +229,27 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         InvalidOperationException or ArgumentException or IOException or NotSupportedException or Win32Exception or
         SharpGen.Runtime.SharpGenException;
 
+    private void Watch(AppWindow? window)
+    {
+        if (ReferenceEquals(_watched, window))
+            return;
+        if (_watched is not null)
+            _watched.Closed -= OnWindowClosed;
+        _watched = window;
+        if (window is not null)
+            window.Closed += OnWindowClosed;
+    }
+
+    private void OnWindowClosed(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, _watched))
+            Target = null;
+    }
+
     public void Dispose()
     {
         _disposed = true;
         Stop();
+        Watch(null);
     }
 }

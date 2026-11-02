@@ -14,6 +14,14 @@ public sealed class ShellServicesTests
     }
 
     [Fact]
+    public async Task Winland_resolves_windows_from_the_shells_window_list()
+    {
+        var same = await ShellFixture.On(shell => ReferenceEquals(shell.WindowList, shell.Winland.WindowList));
+
+        Assert.True(same);
+    }
+
+    [Fact]
     public async Task A_hotkey_with_no_sequence_takes_no_keys()
     {
         var registered = await ShellFixture.On(shell =>
