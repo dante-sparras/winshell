@@ -53,7 +53,7 @@ Before every push, run `pwsh scripts/quick-check.ps1`, then the focused tests fo
 
 The `ci` job runs the fast tests. The `slow` job, also required, runs `Category=Slow`: the tests that start `winshell.exe` or open a real window. A pull request that only changes `docs/**` or Markdown skips it, and every push to `main` runs it. A test class that does either carries `[Trait("Category", "Slow")]`.
 
-The docs `build` job is DocFX with warnings as errors, which `check.ps1` also runs and `-Quick` leaves out. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
+The docs `build` job runs DocFX with warnings as errors, which `check.ps1` also runs and `-Quick` leaves out. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
 
 A push to `main` that changes only `docs/**` or Markdown does not run `package`. A release still calls that workflow. The `store-package` artifact is kept for 14 days.
 
