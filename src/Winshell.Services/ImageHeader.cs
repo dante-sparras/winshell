@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Winshell.Media;
+namespace Winshell;
 
 /// <summary>Reads what kind of picture a file says it is, and how big, without decoding it.</summary>
 internal static class ImageHeader
@@ -19,6 +19,26 @@ internal static class ImageHeader
         if (data.StartsWith("RIFF"u8) && data.Length >= 12 && data[8..12].SequenceEqual("WEBP"u8))
             return WebP(data);
         return null;
+    }
+
+    /// <summary>Whether the data starts like a PNG, JPEG, GIF, BMP or WebP. <paramref name="extension"/> is its file extension.</summary>
+    public static bool TryRead(ReadOnlySpan<byte> data, out string extension, out long width, out long height)
+    {
+        extension = data switch
+        {
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ..] => ".png",
+            [0xFF, 0xD8, 0xFF, ..] => ".jpg",
+            [(byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'7' or (byte)'9', (byte)'a', ..] => ".gif",
+            [(byte)'B', (byte)'M', ..] => ".bmp",
+            [(byte)'R', (byte)'I', (byte)'F', (byte)'F', _, _, _, _, (byte)'W', (byte)'E', (byte)'B', (byte)'P', ..] => ".webp",
+            _ => "",
+        };
+        width = height = 0;
+        if (extension.Length == 0 || ReadSize(data) is not (var readWidth, var readHeight))
+            return false;
+        width = readWidth;
+        height = readHeight;
+        return true;
     }
 
     private static (uint, uint)? Png(ReadOnlySpan<byte> data) =>

@@ -88,9 +88,20 @@ public sealed partial class Shell
     public VirtualDesktopsService VirtualDesktops => Own(ref _virtualDesktops, () => new VirtualDesktopsService(Loop, Log));
 
     /// <summary>The app windows the taskbar and Alt+Tab list.</summary>
-    public WindowListService WindowList => Own(ref _windows, () => new WindowListService(Loop, Log, VirtualDesktops));
+    public WindowListService WindowList => Own(ref _windows, () =>
+    {
+        var list = new WindowListService(Loop, Log, VirtualDesktops);
+        _winland?.Attach(list);
+        return list;
+    });
 
-    public WinlandService Winland => Own(ref _winland, () => new WinlandService(Loop, Log));
+    public WinlandService Winland => Own(ref _winland, () =>
+    {
+        var service = new WinlandService(Loop, Log);
+        if (_windows is not null)
+            service.Attach(_windows);
+        return service;
+    });
 
     /// <summary>What <see cref="Updates"/> follows. <c>winshell.exe</c> sets it, and a configuration's program leaves it null.</summary>
     internal Updater? Updater { get; set; }

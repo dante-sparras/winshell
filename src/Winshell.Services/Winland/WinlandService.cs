@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Text.Json;
+using Winshell.Windows;
 using static Winshell.Winland.WinlandProtocol;
 
 namespace Winshell.Winland;
@@ -18,6 +20,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private readonly List<WinlandMonitor> _monitorList = [];
     private readonly List<WinlandWorkspace> _workspaceList = [];
     private readonly List<WinlandWindow> _toplevelList = [];
+    private WindowListService? _windows;
     private WinlandMonitor? _focusedMonitor;
     private WinlandWorkspace? _focusedWorkspace;
     private WinlandWindow? _activeToplevel;
@@ -64,6 +67,31 @@ public sealed class WinlandService : ObservableObject, IDisposable
     public string RequestSocketPath => _link.PipePath;
 
     public string EventSocketPath => _link.PipePath;
+
+    /// <summary>The shell's window list, when one is in use. <see cref="WinlandWindow.Window"/> is resolved from it.</summary>
+    internal WindowListService? WindowList => _windows;
+
+    /// <summary>Resolves windows from this list. Null clears them. The list is not created just to answer a window.</summary>
+    internal void Attach(WindowListService? windows)
+    {
+        if (ReferenceEquals(_windows, windows))
+            return;
+        if (_windows is not null)
+            _windows.Windows.CollectionChanged -= OnWindowsChanged;
+        _windows = windows;
+        if (windows is not null)
+            windows.Windows.CollectionChanged += OnWindowsChanged;
+        foreach (var toplevel in _toplevelList)
+            toplevel.NotifyWindow();
+    }
+
+    internal AppWindow? FindWindow(nint handle) => _windows?.Find(handle);
+
+    private void OnWindowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var toplevel in _toplevelList)
+            toplevel.NotifyWindow();
+    }
 
     /// <summary>Sends <c>dispatch</c> and the request to Winland. A failure is logged.</summary>
     public void Dispatch(string request) => Send("dispatch " + request);
@@ -492,7 +520,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
         var toplevel = _toplevelList.FirstOrDefault(t => t.RawAddress == address);
         if (toplevel is not null || !create)
             return toplevel;
-        toplevel = new WinlandWindow();
+        toplevel = new WinlandWindow(this);
         toplevel.SetAddress(address);
         _toplevelList.Add(toplevel);
         return toplevel;
@@ -581,6 +609,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        Attach(null);
         _link.ConnectionChanged -= OnConnectionChanged;
         _link.EventReceived -= OnEventReceived;
         _link.Dispose();

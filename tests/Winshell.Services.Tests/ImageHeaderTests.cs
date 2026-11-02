@@ -83,6 +83,27 @@ public sealed class ImageHeaderTests
     }
 
     [Fact]
+    public void A_picture_reports_the_extension_its_header_names()
+    {
+        Assert.Equal(".png", Extension(Bytes(Png)));
+        Assert.Equal(".jpg", Extension(Bytes(Jpeg)));
+        Assert.Equal(".gif", Extension(GifOf(3, 2)));
+        Assert.Equal(".bmp", Extension(BmpOf(3, 2)));
+        Assert.Equal(".bmp", Extension(CoreBmpOf(3, 2)));
+        Assert.Equal(".webp", Extension(Bytes(WebP)));
+        Assert.Equal(".webp", Extension(LosslessWebP()));
+        Assert.Equal(".webp", Extension(ExtendedWebP()));
+    }
+
+    private static string Extension(byte[] data)
+    {
+        Assert.True(ImageHeader.TryRead(data, out var extension, out var width, out var height));
+        Assert.True(width > 0);
+        Assert.True(height > 0);
+        return extension;
+    }
+
+    [Fact]
     public void Every_format_reads_its_own_size_fields()
     {
         Assert.Equal(((uint)8193, (uint)2049), ImageHeader.ReadSize(PngOf(8193, 2049)));
@@ -126,6 +147,7 @@ public sealed class ImageHeaderTests
         byte[] jpeg = [0xFF, 0xD8, .. Segment(0xDA, 1, 2, 3), .. JpegFrame(0xC0, 32, 16)];
 
         Assert.Null(ImageHeader.ReadSize(jpeg));
+        Assert.False(ImageHeader.TryRead(jpeg, out _, out _, out _));
     }
 
     [Fact]
@@ -140,7 +162,12 @@ public sealed class ImageHeaderTests
     [InlineData("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>")]
     [InlineData("not a picture")]
     [InlineData("")]
-    public void Anything_else_has_no_size(string text) => Assert.Null(ImageHeader.ReadSize(Encoding.UTF8.GetBytes(text)));
+    public void Anything_else_has_no_size(string text)
+    {
+        var data = Encoding.UTF8.GetBytes(text);
+        Assert.Null(ImageHeader.ReadSize(data));
+        Assert.False(ImageHeader.TryRead(data, out _, out _, out _));
+    }
 
     [Fact]
     public void A_webp_with_a_broken_frame_has_no_size()
