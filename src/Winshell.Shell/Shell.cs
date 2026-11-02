@@ -206,9 +206,17 @@ public sealed partial class Shell : IDisposable
                         var shell = new Shell(loop, log, options, identity, arguments);
                         shell.LogPath = instance.LogPath;
                         _current = shell;
-                        instance.Listen(loop, new Control(shell));
+                        var notices = new ShellNotices(
+                            loop,
+                            log,
+                            instance.Crashes,
+                            (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
+                            path => OpenToRead.Open(path, log));
+                        shell.Notices = notices;
+                        instance.Listen(loop, new Control(shell), notices.Hide);
                         instance.Publish(identity.ShellId);
                         configuration.Start(shell);
+                        ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
 #if DEBUG
                         if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
                             throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash as it started.");
@@ -294,6 +302,7 @@ public sealed partial class Shell : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        Notices?.Dispose();
         DisposeServices();
         Platform.Dispose();
     }
