@@ -1,10 +1,8 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using SkiaSharp;
-using Winshell.Runtime;
 
-namespace Winshell.Platform.Windows.Services.Notifications;
+namespace Winshell.Notifications;
 
 /// <summary>One read of a logo. Release <see cref="Hold"/> once, whether or not the url is kept.</summary>
 internal readonly record struct IconRead(string Url, IconHold Hold);
@@ -16,7 +14,7 @@ internal readonly record struct IconHold(string Key, long Token)
 }
 
 /// <summary>
-/// App logos Windows hands over as image data. One file per app, in this process's temp folder, given to QML
+/// App logos Windows hands over as image data. One file per app, in this process's temp folder, given to the UI
 /// as a <c>file:///</c> url. The file goes away when nothing is showing that app's notifications, so a later
 /// generation of the same app writes a new file rather than deleting the one a previous read still names.
 /// </summary>
@@ -196,25 +194,8 @@ internal static class NotificationAppIcons
     }
 
     /// <summary>PNG, JPEG, GIF, BMP or WebP within <see cref="MaxPixels"/>. SVG is left out: the shell would render it at whatever size it asks for.</summary>
-    private static bool TryDescribe(byte[] data, out string extension)
-    {
-        extension = "";
-        using var skData = SKData.CreateCopy(data);
-        using var codec = SKCodec.Create(skData);
-        if (codec is null
-            || codec.EncodedFormat is not (SKEncodedImageFormat.Png or SKEncodedImageFormat.Jpeg or SKEncodedImageFormat.Gif or SKEncodedImageFormat.Bmp or SKEncodedImageFormat.Webp)
-            || (long)codec.Info.Width * codec.Info.Height > MaxPixels)
-            return false;
-        extension = codec.EncodedFormat switch
-        {
-            SKEncodedImageFormat.Png => ".png",
-            SKEncodedImageFormat.Bmp => ".bmp",
-            SKEncodedImageFormat.Gif => ".gif",
-            SKEncodedImageFormat.Webp => ".webp",
-            _ => ".jpg",
-        };
-        return true;
-    }
+    internal static bool TryDescribe(ReadOnlySpan<byte> data, out string extension) =>
+        ImageHeader.TryRead(data, out extension, out var width, out var height) && width > 0 && height > 0 && width <= MaxPixels / height;
 
     private static string Write(string appKey, long token, byte[] data, string extension)
     {

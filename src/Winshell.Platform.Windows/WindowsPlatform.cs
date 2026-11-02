@@ -21,7 +21,7 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     private nint _mouseHook;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
-    private Services.Tray.TrayHost? _tray;
+    private TrayHost? _tray;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
     private readonly SystemChanges _systemChanges = new();
     private static WindowsPlatform? _current;
@@ -53,13 +53,13 @@ public sealed unsafe class WindowsPlatform : IShellPlatform, IClipboard, IPlatfo
     public event Action? ScreensChanged;
 
     /// <summary>The notification area host, started the first time a shell uses the system tray.</summary>
-    internal Services.Tray.TrayHost Tray
+    internal TrayHost Tray
     {
         get
         {
             if (_tray is null)
             {
-                _tray = new Services.Tray.TrayHost(Loop, Log, Services.Tray.TrayNames.Session, Services.Tray.TrayHost.BroadcastTaskbarCreated);
+                _tray = new TrayHost(Loop, Log, TrayNames.Session, TrayHost.BroadcastTaskbarCreated);
                 Services.Tray.TrayIconProvider.Host = _tray;
                 _tray.Start();
             }

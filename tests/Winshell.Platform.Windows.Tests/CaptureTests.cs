@@ -13,11 +13,12 @@ public class CaptureTests
     private static ShellScreen Screen() => new(new ScreenInfo("display", "display", "", "", "", new QRect(1920, 0, 800, 600),
         new QRect(1920, 0, 800, 600), 2, 0, 0, 60, false));
 
-    private static SKImage Pixels(int width = 4, int height = 2)
+    private static PixelImage Pixels(int width = 4, int height = 2)
     {
-        using var surface = SKSurface.Create(new SKImageInfo(width, height));
-        surface.Canvas.Clear(SKColors.Red);
-        return surface.Snapshot();
+        var bgra = new byte[width * height * 4];
+        for (var i = 0; i < bgra.Length; i += 4)
+            (bgra[i + 2], bgra[i + 3]) = (255, 255);
+        return new PixelImage(width, height, bgra, premultiplied: true);
     }
 
     [Fact]
@@ -252,7 +253,7 @@ public class CaptureTests
     [Fact]
     public void Clipboard_encoding_has_top_down_straight_alpha_Bgra_and_explicit_masks()
     {
-        using var image = Pixels(2, 1);
+        var image = Pixels(2, 1);
         var dib = CaptureClipboard.EncodeDib(image);
         Assert.Equal(132, dib.Length);
         Assert.Equal(124, BitConverter.ToInt32(dib, 0));
@@ -360,7 +361,7 @@ public class CaptureTests
         public int Starts { get; private set; }
         public int Reads { get; private set; }
         public int Disposals { get; private set; }
-        public SKImage? Next { get; set; }
+        public PixelImage? Next { get; set; }
         public bool FailStart { get; init; }
         public bool FailRead { get; init; }
         public bool FailDispose { get; init; }
@@ -374,7 +375,7 @@ public class CaptureTests
             if (FailStart) throw new UnauthorizedAccessException("Capture denied by Windows policy.");
         }
 
-        public SKImage? ReadLatest()
+        public PixelImage? ReadLatest()
         {
             Reads++;
             if (FailRead) throw new COMException("Device removed.");
@@ -386,7 +387,6 @@ public class CaptureTests
         public void Dispose()
         {
             Disposals++;
-            Next?.Dispose();
             Next = null;
             if (FailDispose) throw new COMException("Device removed during teardown.");
         }

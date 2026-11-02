@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using SkiaSharp;
+using Winshell.Capture;
 using Winshell.Platform.Windows.Services.WindowList;
 using Winshell.Runtime;
 using Winshell.Runtime.Quick;
@@ -20,6 +21,7 @@ public sealed class CaptureSession : QObject
     private int _frameInterval = 33;
     private int _generation;
     private string _error = "";
+    private PixelImage? _frame;
     private SKImage? _image;
 
     public CaptureSession() : this(() => new WindowsCaptureBackend()) { }
@@ -99,9 +101,9 @@ public sealed class CaptureSession : QObject
             return;
         try
         {
-            if (_backend.ReadLatest() is { } image)
+            if (_backend.ReadLatest() is { } frame)
             {
-                SetImage(image);
+                SetFrame(frame);
                 Emit("frameReady");
             }
         }
@@ -131,7 +133,7 @@ public sealed class CaptureSession : QObject
         }
         finally
         {
-            SetImage(null);
+            SetFrame(null);
             if (backend is not null)
                 NotifyChanged("running");
         }
@@ -167,9 +169,9 @@ public sealed class CaptureSession : QObject
     {
         try
         {
-            if (_image is null || owner?.Backend is not Win32Window window)
+            if (_frame is null || owner?.Backend is not Win32Window window)
                 throw new InvalidOperationException("A capture frame and an open shell window are required.");
-            CaptureClipboard.Copy(_image, window.Handle);
+            CaptureClipboard.Copy(_frame, window.Handle);
             SetField(ref _error, "", nameof(Error));
             return true;
         }
@@ -180,10 +182,11 @@ public sealed class CaptureSession : QObject
         }
     }
 
-    private void SetImage(SKImage? image)
+    private void SetFrame(PixelImage? frame)
     {
         var previous = _image;
-        _image = image;
+        _frame = frame;
+        _image = frame?.ToSkImage();
         previous?.Dispose();
         NotifyChanged("hasFrame");
         NotifyChanged("pixelSize");
