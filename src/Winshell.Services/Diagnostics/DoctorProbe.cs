@@ -74,34 +74,13 @@ internal static unsafe partial class DoctorProbe
     public static IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot)
     {
         var paths = new List<string?>();
-        if (configFile is not null && configFile.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrEmpty(configRoot))
         {
-            var folder = Path.GetDirectoryName(Path.GetFullPath(configFile));
-            if (!string.IsNullOrEmpty(folder))
-            {
-                paths.Add(Path.Combine(folder, "preferences.toml"));
-                paths.Add(Path.Combine(folder, "launcher.toml"));
-            }
-            try
-            {
-                var project = ConfigurationProject.Find(configFile, null, configRoot, out _);
-                if (project is not null && !string.IsNullOrEmpty(localRoot))
-                    paths.Add(Path.Combine(localRoot, "state", "by-shell", ShellIdentity.DefaultId(project.Program, configRoot), "quick-settings.toml"));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
+            paths.Add(Path.Combine(configRoot, "preferences.toml"));
+            paths.Add(Path.Combine(configRoot, "launcher.toml"));
         }
-        else
-        {
-            if (!string.IsNullOrEmpty(configRoot))
-            {
-                paths.Add(Path.Combine(configRoot, "preferences.toml"));
-                paths.Add(Path.Combine(configRoot, "launcher.toml"));
-            }
-            if (!string.IsNullOrEmpty(localRoot))
-                paths.Add(Path.Combine(localRoot, "state", "by-shell", "winshell-default", "quick-settings.toml"));
-        }
+        if (!string.IsNullOrEmpty(localRoot))
+            paths.Add(Path.Combine(localRoot, "state", "by-shell", ShellIdOf(configFile, configRoot), "quick-settings.toml"));
         var problems = new List<string>();
         foreach (var path in paths)
         {
@@ -109,6 +88,21 @@ internal static unsafe partial class DoctorProbe
                 problems.Add(problem);
         }
         return problems;
+    }
+
+    private static string ShellIdOf(string? configFile, string configRoot)
+    {
+        if (configFile is null || !configFile.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            return "winshell-default";
+        try
+        {
+            var project = ConfigurationProject.Find(configFile, null, configRoot, out _);
+            return project is null ? "winshell-default" : ShellIdentity.DefaultId(project.Program, configRoot);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return "winshell-default";
+        }
     }
 
     /// <summary>Why this file cannot be loaded, or null when it is missing or loads.</summary>
