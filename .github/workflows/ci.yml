@@ -57,12 +57,17 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 15
     outputs:
+      built: ${{ steps.build.outcome }}
       flaky: ${{ steps.flaky.outputs.flaky }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/prepare
+      - name: Build
+        id: build
+        shell: pwsh
+        run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Check
         # A pull request waits for the build and the main tests. A push to main runs everything, and so does the release
         # pull request: once its commit is tagged, a failure can't be fixed in that version.
@@ -70,7 +75,7 @@ jobs:
         shell: pwsh
         env:
           WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
-        run: ./scripts/check.ps1 -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
+        run: ./scripts/check.ps1 -NoBuild -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
       # Only main writes the caches, so a pull request can't change what another one starts from.
       - name: Note which files this build saw
         if: github.ref == 'refs/heads/main'
@@ -112,6 +117,24 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
             'flaky=true' >> $env:GITHUB_OUTPUT
           }
+  stop:
+    # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
+    # which runs the code under test, gets no token that can cancel a run.
+    name: stop
+    needs: ci
+    if: ${{ failure() && github.event_name == 'pull_request' && needs.ci.outputs.built == 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # cancels this run
+    steps:
+      - name: Cancel the rest of this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: gh run cancel "$RUN"
+
   slow:
     # The tests that start winshell.exe or open a real window. The ruleset requires this job by name.
     name: slow

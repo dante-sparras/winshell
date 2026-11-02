@@ -9,6 +9,10 @@ on:
 permissions:
   pull-requests: read
 
+concurrency:
+  group: pr-title-${{ github.event.number }}
+  cancel-in-progress: true
+
 jobs:
   pr-title:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
