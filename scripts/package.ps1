@@ -5,8 +5,8 @@
 #   pwsh scripts/package.ps1 -Pack            only packs what artifacts/publish/ already has
 #   pwsh scripts/package.ps1 -Verify          only checks what artifacts/ already has
 #
-# Publishing is a self-contained ReadyToRun build of src/Winshell for each runtime, so no .NET install is needed and
-# sign-in does less JIT work. It names -Repository as where the build is released, so it updates itself from
+# Publishing is a self-contained, trimmed ReadyToRun build of src/Winshell for each runtime, so no .NET install is needed
+# and sign-in does less JIT work. It names -Repository as where the build is released, so it updates itself from
 # that repository's GitHub Releases.
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
 # and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
@@ -188,11 +188,15 @@ if ($Publish) {
         dotnet publish (Join-Path $root 'src/Winshell/Winshell.csproj') --nologo -c Release -r $rid --self-contained `
             -p:PublishReadyToRun=true "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
-        # Debugger helpers and symbols are not part of the install. The .mui files are: without them WinUI ends the
-        # process, with no crash report, when a control asks for one of its strings.
+        # Debugger helpers and symbols are not part of the install, and neither is what nothing in Winshell loads: WebView2,
+        # the other garbage collectors, and HTTP/3. The .mui files are: without them WinUI ends the process, with no crash
+        # report, when a control asks for one of its strings. So is Microsoft.UI.Xaml.Phone.dll, whatever its name says:
+        # Winshell Settings does not open without it.
         Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object {
             $_.Extension -eq '.pdb' -or $_.Name -eq 'createdump.exe' -or $_.Name -eq 'mscordbi.dll' -or
-            $_.Name -like 'mscordaccore*' -or $_.Name -like 'Microsoft.DiaSymReader.Native.*.dll'
+            $_.Name -like 'mscordaccore*' -or $_.Name -like 'Microsoft.DiaSymReader.Native.*.dll' -or
+            $_.Name -like 'Microsoft.Web.WebView2.*' -or $_.Name -eq 'WebView2Loader.dll' -or
+            $_.Name -like 'clrgc*.dll' -or $_.Name -eq 'msquic.dll'
         } | Remove-Item -Force
         Get-ChildItem -LiteralPath $dir -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending | Where-Object {
             -not (Get-ChildItem -LiteralPath $_.FullName -Force | Select-Object -First 1)

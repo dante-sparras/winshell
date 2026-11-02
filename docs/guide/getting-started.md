@@ -8,7 +8,7 @@ The portable zip and the PowerShell command install the same self-contained buil
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is 72 MB before ReadyToRun, and it needs no .NET install. Unzip one into a folder of its own and run `winshell.exe`.
+A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB, and it needs no .NET install. Unzip one into a folder of its own and run `winshell.exe`.
 
 The portable build updates itself from GitHub Releases, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A shell you built yourself does not.
 

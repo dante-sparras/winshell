@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Winshell.DefaultShell.Taskbar;
 
@@ -82,7 +83,7 @@ public sealed class TaskbarPins : ObservableObject, IDisposable
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(temp, JsonSerializer.Serialize(new Dictionary<string, IReadOnlyList<string>> { ["pinned"] = ids }));
+            File.WriteAllText(temp, JsonSerializer.Serialize(new Dictionary<string, IReadOnlyList<string>> { ["pinned"] = ids }, TaskbarPinsJson.Default.DictionaryStringIReadOnlyListString));
             File.Move(temp, _path, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -93,3 +94,7 @@ public sealed class TaskbarPins : ObservableObject, IDisposable
 
     public void Dispose() => _watch.Dispose();
 }
+
+/// <summary>Written ahead of time, because a trimmed release serializes nothing by reflection.</summary>
+[JsonSerializable(typeof(Dictionary<string, IReadOnlyList<string>>))]
+internal sealed partial class TaskbarPinsJson : JsonSerializerContext;
