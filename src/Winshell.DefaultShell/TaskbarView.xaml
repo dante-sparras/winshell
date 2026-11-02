@@ -1,0 +1,93 @@
+<UserControl
+    x:Class="Winshell.DefaultShell.TaskbarView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Winshell.DefaultShell"
+    xmlns:taskbar="using:Winshell.DefaultShell.Taskbar"
+    Background="Transparent"
+    AutomationProperties.Name="Taskbar">
+    <Grid>
+        <Border Height="1" VerticalAlignment="Top" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" />
+        <Grid Margin="12,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel x:Name="Apps" Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button
+                    x:Name="StartButton"
+                    Width="40"
+                    Height="40"
+                    MinWidth="40"
+                    MinHeight="40"
+                    Padding="0"
+                    BorderThickness="0"
+                    Background="Transparent"
+                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                    AutomationProperties.Name="Start"
+                    Click="{x:Bind Model.RequestStart}">
+                    <Button.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="Default">
+                                    <SolidColorBrush x:Key="StartMarkBrush" Color="#4cc2ff" />
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="Light">
+                                    <SolidColorBrush x:Key="StartMarkBrush" Color="#0078d4" />
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="HighContrast">
+                                    <StaticResource x:Key="StartMarkBrush" ResourceKey="AccentFillColorDefaultBrush" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </Button.Resources>
+                    <Grid Width="19" Height="19" ColumnSpacing="1" RowSpacing="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="9" />
+                            <ColumnDefinition Width="9" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="9" />
+                            <RowDefinition Height="9" />
+                        </Grid.RowDefinitions>
+                        <Border Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        <Border Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        <Border Grid.Row="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                        <Border Grid.Row="1" Grid.Column="1" Width="9" Height="9" CornerRadius="1" Background="{ThemeResource StartMarkBrush}" />
+                    </Grid>
+                </Button>
+                <Button
+                    x:Name="SearchButton"
+                    Width="40"
+                    Height="40"
+                    MinWidth="40"
+                    MinHeight="40"
+                    Padding="0"
+                    BorderThickness="0"
+                    Background="Transparent"
+                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                    AutomationProperties.Name="Search"
+                    Click="{x:Bind Model.RequestSearch}">
+                    <FontIcon Glyph="&#xE721;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                </Button>
+                <ItemsRepeater
+                    x:Name="TasksHost"
+                    ItemsSource="{x:Bind Model.Tasks, Mode=OneWay}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.Name="Running applications">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Orientation="Horizontal" Spacing="4" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="taskbar:TaskItem">
+                            <local:TaskButton Item="{x:Bind}" />
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </StackPanel>
+            <local:TaskbarClock x:Name="Clock" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" />
+        </Grid>
+    </Grid>
+</UserControl>

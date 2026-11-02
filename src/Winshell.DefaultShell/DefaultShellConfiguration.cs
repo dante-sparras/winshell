@@ -1,27 +1,16 @@
-using Microsoft.UI.Xaml;
+using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell;
 
-/// <summary>The default shell: what runs when no configuration is found.</summary>
+/// <summary>The default shell: a taskbar along the bottom of the screen.</summary>
 public sealed class DefaultShellConfiguration : ShellConfiguration
 {
-    private readonly List<PanelWindow> _bars = [];
+    private Taskbars? _bars;
 
     public override void Start(Shell shell)
     {
-        foreach (var screen in shell.Screens)
-        {
-            var bar = new PanelWindow
-            {
-                Screen = screen,
-                Anchors = Edges.Top | Edges.Left | Edges.Right,
-                Height = 48,
-                ExclusiveZone = 48,
-                Backdrop = WindowBackdrop.Acrylic,
-                Content = new Hello(),
-            };
-            bar.Visible = true;
-            _bars.Add(bar);
-        }
+        var preferences = new Preferences(Path.Combine(shell.ConfigRoot, "preferences.toml"), shell.Loop, shell.Log);
+        var pins = new TaskbarPins(shell.DataPath("taskbar.json"), shell.Loop, shell.Log);
+        _bars = new Taskbars(shell, preferences, pins);
     }
 }

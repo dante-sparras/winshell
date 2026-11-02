@@ -21,5 +21,6 @@
     <InternalsVisibleTo Include="Winshell.Runtime.Tests" />
     <InternalsVisibleTo Include="Winshell.Platform.Windows.Tests" />
     <InternalsVisibleTo Include="Winshell.Tests" />
+    <InternalsVisibleTo Include="Winshell.DefaultShell.Tests" />
   </ItemGroup>
 </Project>
