@@ -20,7 +20,7 @@ internal sealed unsafe class HostWindow : IDisposable
 {
     private const string ClassName = "WinshellHostWindow";
     private static bool _registered;
-    private static readonly uint AppBarMessage = Win32.WM_APP + 1;
+    internal static readonly uint AppBarMessage = Win32.WM_APP + 1;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
 
     private readonly ShellPlatform _platform;
@@ -259,7 +259,8 @@ internal sealed unsafe class HostWindow : IDisposable
         var rect = DesktopSpace.Anchor(area, p, _scale);
         var topmost = p.AboveWindows && !_fullscreenAppActive;
         SetExStyle(Win32.WS_EX_TOPMOST, topmost);
-        var after = p.AboveWindows ? (topmost ? Win32.HWND_TOPMOST : Win32.HWND_NOTOPMOST) : Win32.HWND_BOTTOM;
+        // HWND_NOTOPMOST would put it above every window that is not topmost, so over the fullscreen app.
+        var after = topmost ? Win32.HWND_TOPMOST : Win32.HWND_BOTTOM;
         Move(rect.Left, rect.Top, rect.Width, rect.Height, after);
     }
 

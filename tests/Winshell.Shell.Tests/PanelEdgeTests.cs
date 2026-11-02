@@ -1,3 +1,6 @@
+using Microsoft.UI.Xaml.Controls;
+using Winshell.Native;
+
 namespace Winshell.ShellTests;
 
 public sealed class PanelEdgeTests
@@ -24,5 +27,41 @@ public sealed class PanelEdgeTests
         });
 
         Assert.False(holds);
+    }
+
+    [Fact]
+    public async Task A_panel_goes_behind_a_fullscreen_app_and_comes_back_when_it_leaves()
+    {
+        var (covered, back) = await ShellFixture.On(_ =>
+        {
+            using var app = new FloatingWindow { Width = 300, Height = 200, Content = new Grid() };
+            app.Visible = true;
+            using var panel = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
+            panel.Visible = true;
+            var host = panel.Host!;
+
+            // Explorer tells an app bar when a fullscreen window takes its screen, and when it leaves.
+            Win32.SendMessageW(host.Handle, HostWindow.AppBarMessage, (nint)Win32.ABN_FULLSCREENAPP, 1);
+            host.PlacePanel();
+            var behind = InFront(app.Host!.Handle, host.Handle);
+            Win32.SendMessageW(host.Handle, HostWindow.AppBarMessage, (nint)Win32.ABN_FULLSCREENAPP, 0);
+            host.PlacePanel();
+
+            return (behind, InFront(host.Handle, app.Host.Handle));
+        });
+
+        Assert.True(covered);
+        Assert.True(back);
+    }
+
+    private static bool InFront(nint window, nint other)
+    {
+        const uint next = 2;
+        for (var at = window; at != 0; at = Win32.GetWindow(at, next))
+        {
+            if (at == other)
+                return true;
+        }
+        return false;
     }
 }
