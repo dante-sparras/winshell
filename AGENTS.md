@@ -46,6 +46,7 @@ A desktop shell toolkit for Windows 11. A configuration written in QML describes
 ├── tests/
 │   ├── Winshell.Qml.Tests/
 │   ├── Winshell.Runtime.Tests/
+│   ├── Winshell.DefaultShell.Tests/ # The default shell's logic, with no window
 │   ├── Winshell.Services.Tests/     # The services, with no window and no QML
 │   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
 │   ├── Winshell.Platform.Windows.Tests/
