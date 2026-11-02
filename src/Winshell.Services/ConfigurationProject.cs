@@ -20,6 +20,7 @@ internal sealed class ConfigurationProject
 {
     private const int MostErrors = 10;
     private static readonly TimeSpan BuildLimit = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan StreamLimit = TimeSpan.FromSeconds(1);
 
     private ConfigurationProject(string projectFile)
     {
@@ -153,7 +154,7 @@ internal sealed class ConfigurationProject
             .Order(StringComparer.Ordinal)
             .FirstOrDefault(ZoneIdentifier.IsDownloaded);
 
-    /// <summary>Runs a program and collects what it prints, up to a limit. Waiting on the process, not its streams, stops a build server that outlives it from holding this up.</summary>
+    /// <summary>Runs a program and collects what it prints, up to a limit. The streams get a short wait after it exits, because a build server that outlives it keeps them open. They have threads of their own, so a busy pool cannot lose the last lines.</summary>
     public static CommandResult Run(string file, IReadOnlyList<string> arguments, string folder)
     {
         var start = new ProcessStartInfo(file)
@@ -167,27 +168,32 @@ internal sealed class ConfigurationProject
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         var lines = new List<string>();
-        void Add(object sender, DataReceivedEventArgs e)
+        Thread Read(StreamReader stream)
         {
-            lock (lines)
+            var reader = new Thread(() =>
             {
-                if (e.Data is not null)
-                    lines.Add(e.Data);
-            }
+                while (stream.ReadLine() is { } line)
+                {
+                    lock (lines)
+                        lines.Add(line);
+                }
+            })
+            { IsBackground = true };
+            reader.Start();
+            return reader;
         }
         try
         {
-            using var process = new Process { StartInfo = start };
-            process.OutputDataReceived += Add;
-            process.ErrorDataReceived += Add;
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            // Not disposed: a reader may still be waiting on a stream that a build server holds.
+            var process = Process.Start(start)!;
+            Thread[] readers = [Read(process.StandardOutput), Read(process.StandardError)];
             if (!process.WaitForExit(BuildLimit))
             {
                 process.Kill(entireProcessTree: true);
                 return new CommandResult(-1, $"{Path.GetFileName(file)} was still running after {BuildLimit.TotalMinutes} minutes.");
             }
+            foreach (var reader in readers)
+                reader.Join(StreamLimit);
             lock (lines)
                 return new CommandResult(process.ExitCode, string.Join('\n', lines));
         }
