@@ -7,6 +7,7 @@ namespace Winshell.ShellTests;
 /// Fullscreen uses a real window for a moment, then puts it back. When the work area is the whole monitor
 /// (the taskbar hides itself), covering the monitor is the whole check: the window's rectangle is the monitor.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class FloatingWindowFullscreenTests
 {
     [Fact]

@@ -9,6 +9,7 @@ using Winshell.Capture;
 namespace Winshell.ShellTests;
 
 /// <summary>The view shows a session's frames and lets go of it. What the screen then looks like is not asserted here.</summary>
+[Trait("Category", "Slow")]
 public sealed class CaptureViewTests
 {
     [Fact]

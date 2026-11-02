@@ -11,6 +11,7 @@ namespace Winshell.Tests;
 /// so it sees only its own shells and can't touch the user's.
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
+[Trait("Category", "Slow")]
 public sealed partial class ShellProgramTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));

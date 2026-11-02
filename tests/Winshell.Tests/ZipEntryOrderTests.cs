@@ -6,6 +6,7 @@ namespace Winshell.Tests;
 /// <summary>
 /// Package zips sort entry names with ordinal comparison. Lithuanian sorts "y" after "į"; ordinal does not.
 /// </summary>
+[Trait("Category", "Slow")]
 public class ZipEntryOrderTests
 {
     [Fact]

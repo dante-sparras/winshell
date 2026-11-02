@@ -7,6 +7,7 @@ namespace Winshell.Tests;
 /// Runs several winshell instances at once, as separate processes, and checks that they keep apart: each has its own
 /// id, pipe and log, each answers for itself, and one that crashes or has a broken config leaves the others running.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class InstanceIsolationTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));

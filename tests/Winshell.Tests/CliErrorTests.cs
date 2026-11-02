@@ -6,6 +6,7 @@ namespace Winshell.Tests;
 /// A command other than <c>run</c> prints one sentence when the environment fails, and exits 1.
 /// The shell's own crash reporting is left alone.
 /// </summary>
+[Trait("Category", "Slow")]
 public class CliErrorTests
 {
     [Fact]

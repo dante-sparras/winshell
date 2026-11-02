@@ -43,11 +43,14 @@ Before opening a PR, build with warnings as errors and run the focused tests for
 | --- | --- | --- |
 | `installer` | Every pull request, in `ci.yml`. That job downloads the Pester 5.6.1 and PSScriptAnalyzer 1.22.0 nupkgs and checks their SHA-256 before it imports them. | `check.ps1` runs the five Pester suites when Pester 5.6.1 imports. This job also runs them, then Windows PowerShell 5.1 runs the install, uninstall and release gate files again. PSScriptAnalyzer 1.22.0 must report no warning or error on `scripts/install.ps1` and `scripts/uninstall.ps1` (the `PSUseShouldProcessForStateChangingFunctions` rule is excluded, because prompting would break `irm \| iex`). |
 | `quarantine` | Every push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Quarantined`, which runs the tests in `tests/quarantine.txt`, or nothing when the list is empty. A failure shows in the log and blocks nothing. |
-| `flaky-report` | After `ci`, when a test passed only on its rerun | `pwsh scripts/report-flaky.ps1 -ReportPath <file> -RunUrl <url>` files or updates a `flaky` issue, so run it only on a real report. It needs `gh` signed in. |
+| `slow` | Every pull request that changes more than docs or Markdown, and every push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Tier Slow`, on an empty Winland workspace. |
+| `flaky-report` | After `ci` or `slow`, when a test passed only on its rerun | `pwsh scripts/report-flaky.ps1 -ReportPath <file> -RunUrl <url>` files or updates a `flaky` issue, so run it only on a real report. It needs `gh` signed in. |
 | `links` | Every pull request, in `docs.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents` and `https://about.signpath.io`. |
 | `actionlint` | Every pull request and every push to `main` | actionlint on `.github/workflows`. |
 | `zizmor` | Every pull request and every push to `main` | zizmor on `.github`. |
 | `package` | Pushes to `main`, and pull requests that change packaging or the package workflow | `pwsh scripts/package.ps1`. It publishes both architectures and needs the Windows SDK for the MSIX check. The `arm64` job then runs that zip's `winshell.exe --version` on `windows-11-arm`. |
+
+The `ci` job runs the fast tests. The `slow` job, also required, runs `Category=Slow`: the tests that start `winshell.exe` or open a real window. A pull request that only changes `docs/**` or Markdown skips it, and every push to `main` runs it. A test class that does either carries `[Trait("Category", "Slow")]`.
 
 The docs `build` job is DocFX with warnings as errors, which `check.ps1` also runs and `-Quick` leaves out. `pr-title` checks the pull request title. CodeQL analyzes the languages it finds.
 

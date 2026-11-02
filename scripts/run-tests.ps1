@@ -1,10 +1,14 @@
 #requires -Version 7.0
 # The main test stage of check.ps1. Tests listed in tests/quarantine.txt are left out.
+# -Tier Fast leaves out the tests that start winshell.exe or open a real window, which are Category=Slow, and -Tier Slow
+# runs only those. ci runs them as two jobs.
 # A failed test runs once more. If it passes then, it is flaky: it is written to the report and the run passes. If it
 # fails again, the run fails. A run that did not finish, or more failures than a flake explains, is not rerun.
 # With -Quarantined, runs only the listed tests, once. See "Flaky tests" in CONTRIBUTING.md.
 param(
     [switch] $Quarantined,
+    [ValidateSet('All', 'Fast', 'Slow')]
+    [string] $Tier = 'All',
     [string] $ReportPath = $env:WINSHELL_FLAKY_REPORT
 )
 
@@ -19,8 +23,16 @@ function Get-QuarantinedTest {
 }
 
 function Get-MainTestFilter {
-    param([string[]] $Quarantined = @())
-    (@($script:MainFilter) + @($Quarantined | Where-Object { $_ } | ForEach-Object { "FullyQualifiedName!=$_" })) -join '&'
+    param(
+        [string[]] $Quarantined = @(),
+        [string] $Tier = 'All'
+    )
+    $tierFilter = switch ($Tier) {
+        'Fast' { @('Category!=Slow') }
+        'Slow' { @('Category=Slow') }
+        default { @() }
+    }
+    (@($script:MainFilter) + $tierFilter + @($Quarantined | Where-Object { $_ } | ForEach-Object { "FullyQualifiedName!=$_" })) -join '&'
 }
 
 function Get-NamedTestFilter {
@@ -79,13 +91,14 @@ function Invoke-DotnetTest {
 function Invoke-MainTest {
     param(
         [string[]] $Quarantined = @(),
+        [string] $Tier = 'All',
         [string] $ReportPath,
         [Parameter(Mandatory)][int] $ProjectCount
     )
     $results = Join-Path ([IO.Path]::GetTempPath()) ('winshell-test-results-' + [guid]::NewGuid().ToString('N'))
     try {
         $firstRun = Join-Path $results 'first'
-        $exit = Invoke-DotnetTest -Filter (Get-MainTestFilter -Quarantined $Quarantined) -ResultsDirectory $firstRun
+        $exit = Invoke-DotnetTest -Filter (Get-MainTestFilter -Quarantined $Quarantined -Tier $Tier) -ResultsDirectory $firstRun
         $first = Read-TestResult -Directory $firstRun -ProjectCount $ProjectCount
         if ($exit -eq 0) {
             # dotnet test exits 0 for a filter it can't read, having run nothing, and for a project it left out.
@@ -139,5 +152,5 @@ if ($MyInvocation.InvocationName -ne '.') {
         exit (Invoke-QuarantinedTest -Quarantined $list)
     }
     $projects = @(Get-ChildItem -Path (Join-Path $script:Root 'tests\*\*.Tests.csproj')).Count
-    exit (Invoke-MainTest -Quarantined $list -ReportPath $ReportPath -ProjectCount $projects)
+    exit (Invoke-MainTest -Quarantined $list -Tier $Tier -ReportPath $ReportPath -ProjectCount $projects)
 }

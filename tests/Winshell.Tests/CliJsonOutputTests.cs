@@ -10,6 +10,7 @@ namespace Winshell.Tests;
 /// targets. Neither is the on-disk instance file.
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
+[Trait("Category", "Slow")]
 public sealed class CliJsonOutputTests : IDisposable
 {
     private static readonly string Exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");

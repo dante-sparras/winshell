@@ -1,13 +1,13 @@
-# Decides whether a release may publish from the ci check runs on its commit.
+# Decides whether a release may publish from the ci and slow check runs on its commit.
 # The workflow waits while the result is pending, and stops when it is red.
 
-function Get-WinshellReleaseCiState {
-    param($CheckRuns)
+function Get-WinshellReleaseCheckState {
+    param($CheckRuns, [string]$Name)
 
-    $ci = @($CheckRuns | Where-Object { $_ -and $_.name -eq 'ci' })
-    if ($ci.Count -eq 0) { return 'pending' }
+    $runs = @($CheckRuns | Where-Object { $_ -and $_.name -eq $Name })
+    if ($runs.Count -eq 0) { return 'pending' }
 
-    $latest = $ci | Sort-Object -Property @{
+    $latest = $runs | Sort-Object -Property @{
         Expression = {
             if ($_.started_at) { [datetimeoffset]::Parse([string]$_.started_at) }
             else { [datetimeoffset]::MaxValue }
@@ -17,6 +17,15 @@ function Get-WinshellReleaseCiState {
     if ([string]$latest.status -ne 'completed') { return 'pending' }
     if ([string]$latest.conclusion -eq 'success') { return 'green' }
     return 'red'
+}
+
+function Get-WinshellReleaseCiState {
+    param($CheckRuns)
+
+    $states = @('ci', 'slow' | ForEach-Object { Get-WinshellReleaseCheckState -CheckRuns $CheckRuns -Name $_ })
+    if ($states -contains 'red') { return 'red' }
+    if ($states -contains 'pending') { return 'pending' }
+    return 'green'
 }
 
 function Get-WinshellCheckRuns {

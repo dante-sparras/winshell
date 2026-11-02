@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary>A wrong <c>ipc</c> command line is a usage error, whether or not anything is running.</summary>
+[Trait("Category", "Slow")]
 public sealed class IpcSyntaxTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));

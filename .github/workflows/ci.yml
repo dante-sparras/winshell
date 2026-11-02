@@ -28,19 +28,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Turn Windows animation effects on
-        # The runner has them off. Winshell follows that setting, and tests of a sliding taskbar or a fading on-screen
-        # display need the frames in between, so this makes the runner match a default Windows desktop.
-        shell: pwsh
-        run: |
-          Add-Type -Namespace Native -Name Spi -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfoW(uint action, uint param, nint value, uint flags);'
-          # SPI_SETCLIENTAREAANIMATION, on, SPIF_SENDCHANGE.
-          if (-not [Native.Spi]::SystemParametersInfoW(0x1043, 0, 1, 2)) {
-            throw "Could not turn animation effects on: error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
-          }
+      - uses: ./.github/actions/prepare
       - name: Check
         # A pull request waits for the build and the main tests. A push to main runs everything, and so does the release
         # pull request: once its commit is tagged, a failure can't be fixed in that version.
@@ -48,7 +36,7 @@ jobs:
         shell: pwsh
         env:
           WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
-        run: ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
+        run: ./scripts/check.ps1 -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
       - name: Flaky tests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -64,12 +52,75 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
             'flaky=true' >> $env:GITHUB_OUTPUT
           }
+  changes:
+    # Whether slow has anything to prove. A pull request that only changes docs or Markdown does not.
+    name: changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.files.outputs.code }}
+    steps:
+      - name: Look at the changed files
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+        run: |
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          if [ -n "$files" ] && ! grep -qvE '^docs/|\.md$' <<<"$files"; then
+            echo 'code=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  slow:
+    # The tests that start winshell.exe or open a real window. The ruleset requires this job by name, and a skipped job
+    # counts as passed. Skipping needs code to say false, so a changes job that failed still runs them.
+    name: slow
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    runs-on: windows-2025
+    timeout-minutes: 15
+    outputs:
+      flaky: ${{ steps.flaky.outputs.flaky }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare
+      - name: Build
+        shell: pwsh
+        run: dotnet build .\winshell.slnx -warnaserror --nologo
+      - name: Slow tests
+        timeout-minutes: 10
+        shell: pwsh
+        env:
+          WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
+        run: ./scripts/run-tests.ps1 -Tier Slow
+      - name: Flaky tests
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flaky-tests-slow
+          path: ${{ runner.temp }}/flaky-tests.txt
+          if-no-files-found: ignore
+      - name: Flag flaky tests
+        id: flaky
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
+            'flaky=true' >> $env:GITHUB_OUTPUT
+          }
+
   flaky-report:
-    # Files or updates an issue for each test in the flaky report. It is a separate job so that ci, which
-    # runs the code under test, gets no write token. A fork's token can't write, so a failure here blocks nothing.
+    # Files or updates an issue for each test in the flaky reports. It is a separate job so that the jobs that run the
+    # code under test get no write token. A fork's token can't write, so a failure here blocks nothing.
     name: flaky-report
-    needs: ci
-    if: always() && needs.ci.outputs.flaky == 'true'
+    needs: [ci, slow]
+    if: always() && (needs.ci.outputs.flaky == 'true' || needs.slow.outputs.flaky == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -81,7 +132,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: flaky-tests
+          pattern: flaky-tests*
           path: ${{ runner.temp }}/flaky-tests
       - name: Report
         continue-on-error: true
@@ -90,7 +141,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: pwsh scripts/report-flaky.ps1 -ReportPath (Join-Path $env:RUNNER_TEMP 'flaky-tests/flaky-tests.txt') -RunUrl $env:RUN_URL
+        run: |
+          foreach ($report in Get-ChildItem -Path (Join-Path $env:RUNNER_TEMP 'flaky-tests') -Filter flaky-tests.txt -Recurse) {
+            pwsh scripts/report-flaky.ps1 -ReportPath $report.FullName -RunUrl $env:RUN_URL
+          }
 
   quarantine:
     # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing.
