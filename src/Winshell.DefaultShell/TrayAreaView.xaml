@@ -17,6 +17,7 @@
             BorderThickness="0"
             Background="Transparent"
             CornerRadius="{ThemeResource ControlCornerRadius}"
+            UseSystemFocusVisuals="True"
             AutomationProperties.Name="Show hidden icons"
             Visibility="{x:Bind Shown(Area.HasOverflow), Mode=OneWay}">
             <FontIcon x:Name="ChevronIcon" Glyph="&#xE70E;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
@@ -60,6 +61,7 @@
             BorderThickness="0"
             Background="Transparent"
             CornerRadius="{ThemeResource ControlCornerRadius}"
+            UseSystemFocusVisuals="True"
             AutomationProperties.Name="{x:Bind Area.UpdateLabel, Mode=OneWay}"
             Visibility="{x:Bind Shown(Area.UpdateReady), Mode=OneWay}"
             Click="{x:Bind Area.RequestUpdates}">
@@ -75,6 +77,7 @@
             Background="Transparent"
             VerticalAlignment="Center"
             CornerRadius="{ThemeResource ControlCornerRadius}"
+            UseSystemFocusVisuals="True"
             AutomationProperties.Name="Quick settings"
             Click="OnQuickSettings">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">

@@ -43,6 +43,23 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     /// <summary>The buttons were rebuilt. One event for the whole change, after every button is in place.</summary>
     public event EventHandler? Updated;
 
+    /// <summary>The window in front, when there is one. Win+T remembers it, and Escape activates it.</summary>
+    public IOpenWindow? ActiveWindow => _desktop.Active;
+
+    /// <summary>The window in front changed. The keyboard leaves when another window takes it.</summary>
+    public event EventHandler? ActiveWindowChanged;
+
+    /// <summary>Win+number. The app at <paramref name="index"/>, as a click, or a new window when Shift is held. Past the end does nothing.</summary>
+    public void InvokeAt(int index, bool newWindow)
+    {
+        if ((uint)index >= (uint)Tasks.Count)
+            return;
+        if (newWindow)
+            Launch(Tasks[index]);
+        else
+            Click(Tasks[index]);
+    }
+
     /// <summary>The Start button was clicked. Nothing opens.</summary>
     public event EventHandler? StartRequested;
 
@@ -146,7 +163,13 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
 
     private void OnPins(object? sender, PropertyChangedEventArgs e) => Rebuild();
 
-    private void OnActiveChanged(object? sender, EventArgs e) => NoteActive();
+    private void OnActiveChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
+            return;
+        NoteActive();
+        ActiveWindowChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnPreferences(object? sender, PropertyChangedEventArgs e)
     {

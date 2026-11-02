@@ -16,6 +16,9 @@ public interface IOpenWindow : ITaskWindow, INotifyPropertyChanged
 
     void Minimize();
 
+    /// <summary>Puts a minimized window back. Win+D's second press does this.</summary>
+    void Restore();
+
     /// <summary>Asks the window to close.</summary>
     void Close();
 }
@@ -45,6 +48,8 @@ public sealed record TaskWindow(AppWindow Window) : IOpenWindow
     public void Activate() => Window.Activate();
 
     public void Minimize() => Window.Minimized = true;
+
+    public void Restore() => Window.Minimized = false;
 
     public void Close() => Window.Close();
 

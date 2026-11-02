@@ -70,6 +70,15 @@ public sealed partial class TaskbarClock : Button
             Open();
     }
 
+    /// <summary>Win+N. It flips, including the click that just closed it. A clock that is not on screen yet does nothing.</summary>
+    public void Toggle()
+    {
+        if (_popup.Visible)
+            OnClose();
+        else if (IsLoaded)
+            Open();
+    }
+
     private void Open()
     {
         if (_bar.Screen is not { } screen)

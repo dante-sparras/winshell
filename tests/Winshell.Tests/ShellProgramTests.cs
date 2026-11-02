@@ -51,6 +51,20 @@ public sealed class ShellProgramTests : IDisposable
     }
 
     [Fact]
+    public void A_shell_with_the_desktop_chords_on_keeps_running()
+    {
+        var config = Path.Combine(_dir, "config");
+        Directory.CreateDirectory(config);
+        File.WriteAllText(Path.Combine(config, "preferences.toml"), "startHotkey = \"\"\ndesktopChords = true\n");
+
+        var process = Start();
+
+        // The chords' windows are made after the instance is listed.
+        Wait.ForNothingToHappen(TimeSpan.FromSeconds(4));
+        Assert.False(process.HasExited, "The shell ended while it started.");
+    }
+
+    [Fact]
     public void A_second_start_of_the_same_shell_id_exits_and_leaves_the_first()
     {
         var first = Start("--no-duplicate");

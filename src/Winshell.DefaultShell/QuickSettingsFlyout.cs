@@ -53,6 +53,15 @@ internal sealed class QuickSettingsFlyout
             Open();
     }
 
+    /// <summary>Win+A. It flips, including the click that just closed it. A button that is not on screen yet does nothing.</summary>
+    public void Toggle()
+    {
+        if (_popup.Visible)
+            Close();
+        else if (_anchor.IsLoaded)
+            Open();
+    }
+
     private void Open()
     {
         if (_bar.Screen is not { } screen)
