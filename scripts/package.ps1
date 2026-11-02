@@ -13,8 +13,9 @@
 # from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
 # makeappx.exe from the Windows SDK. The same files pack to the same bytes: entries are in ordinal path order and dated
 # the day of the commit, which is also the manifests' ReleaseDate.
-# Verifying checks the checksums, that each zip's binaries are for its architecture, that the x64 winshell.exe runs
-# and reports the version, and that the manifests pass the validator wingetcreate runs before it submits them.
+# Verifying checks the checksums, that each zip's binaries are for its architecture, that the x64 winshell.exe runs,
+# reports the version, starts the default shell and opens Winshell Settings, and that the manifests pass the validator
+# wingetcreate runs before it submits them.
 param(
     [switch] $Publish,
     [switch] $Pack,
@@ -123,6 +124,42 @@ function New-Zip([string] $dir, [string] $zip) {
     } finally { $stream.Dispose() }
 }
 
+# Starts the default shell from an unpacked zip, on folders of its own, and opens Winshell Settings. A file a release
+# left out or cut fails only here, because tests run the build and not the zip.
+function Test-DefaultShell([string] $exe, [string] $work) {
+    $config = Join-Path $work 'config'
+    $local = Join-Path $work 'local'
+    New-Item -ItemType Directory -Force -Path $config, $local | Out-Null
+    $env:WINSHELL_CONFIG_DIR = $config
+    $env:WINSHELL_LOCAL_DIR = $local
+    $info = [Diagnostics.ProcessStartInfo]::new($exe)
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.ArgumentList.Add('run')
+    $shell = [Diagnostics.Process]::Start($info)
+    try {
+        $deadline = [DateTime]::UtcNow.AddSeconds(60)
+        do {
+            if ($shell.HasExited) { throw "The default shell exited with $($shell.ExitCode) as it started." }
+            if ([DateTime]::UtcNow -gt $deadline) { throw 'The default shell did not start in 60 seconds.' }
+            Start-Sleep -Milliseconds 250
+            $targets = @(& $exe ipc show 2>$null)
+        } until ($targets -match 'target settings')
+        & $exe ipc call settings open about
+        if ($LASTEXITCODE -ne 0) { throw "Winshell Settings did not open: winshell ipc exited with $LASTEXITCODE." }
+        Start-Sleep -Seconds 2
+        if ($shell.HasExited) { throw "The default shell exited with $($shell.ExitCode) after Winshell Settings opened." }
+        $crashes = @(Get-ChildItem -LiteralPath (Join-Path $local 'crashes') -File -ErrorAction SilentlyContinue)
+        if ($crashes.Count -gt 0) { throw "The default shell wrote a crash report: $(Get-Content -LiteralPath $crashes[0].FullName -Raw)" }
+    } finally {
+        if (-not $shell.HasExited) {
+            & $exe kill | Out-Null
+            if (-not $shell.WaitForExit(10000)) { $shell.Kill() }
+        }
+        Remove-Item -LiteralPath Env:WINSHELL_CONFIG_DIR, Env:WINSHELL_LOCAL_DIR
+    }
+}
+
 # The Store package version of this release. The first part is one more than Winshell's, because the Store takes no 0
 # there and always installs the highest version. The fourth part is the Store's.
 function Get-PackageVersion {
@@ -151,9 +188,10 @@ if ($Publish) {
         dotnet publish (Join-Path $root 'src/Winshell/Winshell.csproj') --nologo -c Release -r $rid --self-contained `
             -p:PublishReadyToRun=true "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
-        # Satellite resources, debugger helpers and symbols are not part of the install.
+        # Debugger helpers and symbols are not part of the install. The .mui files are: without them WinUI ends the
+        # process, with no crash report, when a control asks for one of its strings.
         Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object {
-            $_.Extension -in '.mui', '.pdb' -or $_.Name -eq 'createdump.exe' -or $_.Name -eq 'mscordbi.dll' -or
+            $_.Extension -eq '.pdb' -or $_.Name -eq 'createdump.exe' -or $_.Name -eq 'mscordbi.dll' -or
             $_.Name -like 'mscordaccore*' -or $_.Name -like 'Microsoft.DiaSymReader.Native.*.dll'
         } | Remove-Item -Force
         Get-ChildItem -LiteralPath $dir -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending | Where-Object {
@@ -334,6 +372,8 @@ if ($Verify) {
                 throw "The x64 winshell.exe reported '$reported', not version $Version"
             }
             Write-Output "$name runs: $reported"
+            Test-DefaultShell (Join-Path $dir 'winshell.exe') (Join-Path $verifyRoot 'shell')
+            Write-Output "$name starts the default shell and opens Winshell Settings"
         }
         # The product name and version SignPath's artifact configuration requires of each binary it signs.
         foreach ($binary in $ownBinaries) {
