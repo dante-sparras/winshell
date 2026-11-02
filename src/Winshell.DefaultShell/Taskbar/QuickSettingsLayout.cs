@@ -1,8 +1,8 @@
 namespace Winshell.DefaultShell.Taskbar;
 
 /// <summary>
-/// <c>quick-settings.toml</c>, the tiles in order. Quick settings watches this file. A key the file does not have keeps
-/// the default order. Nothing here writes the file.
+/// <c>quick-settings.toml</c>, the tiles in order. Quick settings watches this file, and assigning <see cref="Pinned"/>
+/// writes it. A key the file does not have keeps the default order.
 /// </summary>
 public sealed class QuickSettingsLayout(string path, IEventLoop loop, Log? log = null) : TomlFile(path, loop, log)
 {

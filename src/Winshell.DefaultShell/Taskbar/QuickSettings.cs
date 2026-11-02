@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Winshell.Audio;
 using Winshell.Bluetooth;
+using Winshell.Media;
 using Winshell.Network;
 using Winshell.Power;
 
@@ -25,6 +26,7 @@ public sealed class QuickSettingsTile : ObservableObject
     internal QuickSettingsTile(string key, string title, string glyph, string description, bool toggle, string settingsUri, string page)
     {
         Key = key;
+        Title = title;
         Glyph = glyph;
         Label = title;
         Description = description;
@@ -34,6 +36,9 @@ public sealed class QuickSettingsTile : ObservableObject
     }
 
     public string Key { get; }
+
+    /// <summary>The tile's name. The label under it can show more, such as the network it is on.</summary>
+    public string Title { get; }
 
     public string Glyph { get; }
 
@@ -156,8 +161,6 @@ public sealed class QuickSettingsSession : ObservableObject
 public sealed class QuickSettingsPopup : ObservableObject
 {
     private readonly QuickSettings _settings;
-    private string _page = "";
-    private bool _open;
 
     internal QuickSettingsPopup(QuickSettings settings) => _settings = settings;
 
@@ -165,60 +168,120 @@ public sealed class QuickSettingsPopup : ObservableObject
 
     public string Page
     {
-        get => _page;
+        get;
         private set
         {
-            if (!Set(ref _page, value))
+            if (!Set(ref field, value))
                 return;
             Changed(nameof(ShowingTiles));
             Changed(nameof(ShowingPowerMode));
             Changed(nameof(ShowingOutput));
             Changed(nameof(ShowingVolume));
+            Changed(nameof(ShowingAdd));
+        }
+    } = "";
+
+    public bool IsOpen { get; private set => Set(ref field, value); }
+
+    /// <summary>The tiles can be unpinned, added and reordered. Opening or closing the flyout leaves this.</summary>
+    public bool Editing
+    {
+        get;
+        private set
+        {
+            if (!Set(ref field, value))
+                return;
+            if (!value)
+                ClearDrag();
+            Changed(nameof(Browsing));
         }
     }
 
-    public bool IsOpen => _open;
+    /// <summary>The footer shows the battery, edit and settings while the tiles are not being edited.</summary>
+    public bool Browsing => !Editing;
 
-    public bool ShowingTiles => _page.Length == 0;
+    public bool ShowingTiles => Page.Length == 0;
 
-    public bool ShowingPowerMode => _page == "powerMode";
+    public bool ShowingPowerMode => Page == "powerMode";
 
-    public bool ShowingOutput => _page == "output";
+    public bool ShowingOutput => Page == "output";
 
-    public bool ShowingVolume => _page == "volume";
+    public bool ShowingVolume => Page == "volume";
+
+    public bool ShowingAdd => Page == "add";
+
+    /// <summary>The tile a drag picked up, as an index into <see cref="QuickSettings.Shown"/>, or -1.</summary>
+    public int DragIndex { get; private set => Set(ref field, value); } = -1;
+
+    /// <summary>Where the dragged tile would land, as an index into <see cref="QuickSettings.Shown"/>, or -1.</summary>
+    public int DropIndex { get; private set => Set(ref field, value); } = -1;
+
+    /// <summary>The tile the keyboard should be on after a move or an unpin, or empty.</summary>
+    public string FocusKey { get; private set => Set(ref field, value); } = "";
 
     /// <summary>Shows the tiles. Opening one that was on a page comes back to them.</summary>
     public void Show()
     {
         Page = "";
-        if (_open)
+        if (IsOpen)
             return;
-        _open = true;
-        Changed(nameof(IsOpen));
+        Editing = false;
+        IsOpen = true;
         _settings.Opened();
     }
 
     public void Hide()
     {
         Page = "";
-        if (!_open)
+        Editing = false;
+        if (!IsOpen)
             return;
-        _open = false;
-        Changed(nameof(IsOpen));
+        IsOpen = false;
         _settings.Closed();
     }
 
-    /// <summary>Leaves a page when one is open. False means the flyout itself closes.</summary>
+    /// <summary>Leaves a page, or edit mode when the tiles are showing. False means the flyout itself closes.</summary>
     public bool Escape()
     {
-        if (_page.Length == 0)
-            return false;
+        if (Page.Length > 0)
+        {
+            Page = "";
+            return true;
+        }
+        if (Editing)
+        {
+            Editing = false;
+            return true;
+        }
+        return false;
+    }
+
+    public void Edit()
+    {
         Page = "";
-        return true;
+        Editing = true;
+    }
+
+    public void Done()
+    {
+        Page = "";
+        Editing = false;
+    }
+
+    public void ShowAdd() => Page = "add";
+
+    /// <summary>Pins a tile at the end and returns to the tiles.</summary>
+    public void Add(string key)
+    {
+        _settings.Add(key);
+        Page = "";
     }
 
     public void Activate(QuickSettingsTile tile)
     {
+        // A tile does nothing while it is being edited. The drag surface takes the press.
+        if (Editing)
+            return;
         if (tile.Page.Length > 0)
             Page = tile.Page;
         else
@@ -236,11 +299,70 @@ public sealed class QuickSettingsPopup : ObservableObject
     public void OpenAllSettings() => _settings.Open("ms-settings:", this);
 
     public void OpenVolumeSettings() => _settings.Open("ms-settings:apps-volume", this);
+
+    /// <summary>Moves the tile by an offset among the tiles on show, and keeps the keyboard on it.</summary>
+    public void MoveBy(string key, int offset) => AskFocus(_settings.MoveBy(key, offset));
+
+    /// <summary>Unpins a tile. From the keyboard, the focus goes to the tile that takes its place.</summary>
+    public void Unpin(string key, bool fromKeyboard)
+    {
+        if (_settings.Unpin(key, fromKeyboard) is { } focus)
+            AskFocus(focus);
+    }
+
+    public void BeginDrag(QuickSettingsTile tile)
+    {
+        var index = _settings.Shown.IndexOf(tile);
+        DragIndex = index;
+        DropIndex = index;
+    }
+
+    public void DragTo(double x, double y, double tileHeight)
+    {
+        if (DragIndex < 0)
+            return;
+        DropIndex = QuickSettings.IndexAt(x, y, _settings.Shown.Count, tileHeight);
+    }
+
+    /// <summary>Drops the tile. The order changes when it lands on another tile.</summary>
+    public void EndDrag()
+    {
+        var from = DragIndex;
+        var to = DropIndex;
+        var shown = _settings.Shown;
+        var key = from >= 0 && from < shown.Count ? shown[from].Key : null;
+        var target = to >= 0 && to < shown.Count ? shown[to].Key : null;
+        ClearDrag();
+        if (key is not null && target is not null && from != to)
+            _settings.Move(key, target);
+    }
+
+    /// <summary>How dim a tile is while another drag holds it. The one being dragged is half shown.</summary>
+    public double DragOpacity(int index) => DragIndex == index ? 0.5 : 1;
+
+    /// <summary>Where a dragged tile would land: -1 before this tile, 1 after it, 0 not here.</summary>
+    public int DropSide(int index) =>
+        DragIndex < 0 || DropIndex != index || DragIndex == index ? 0 : DropIndex < DragIndex ? -1 : 1;
+
+    private void ClearDrag()
+    {
+        DragIndex = -1;
+        DropIndex = -1;
+    }
+
+    private void AskFocus(string key)
+    {
+        // The same tile can move twice. The view still has to focus the new one.
+        if (FocusKey == key)
+            Changed(nameof(FocusKey));
+        else
+            FocusKey = key;
+    }
 }
 
 /// <summary>
-/// The tiles, volume, brightness and pages every taskbar's quick settings shows. One instance lives with the shell.
-/// Bluetooth is read only while a flyout is open.
+/// The tiles, volume, brightness, media and pages every taskbar's quick settings shows. One instance lives with the
+/// shell. Bluetooth is read only while a flyout is open.
 /// </summary>
 public sealed class QuickSettings : ObservableObject
 {
@@ -255,6 +377,7 @@ public sealed class QuickSettings : ObservableObject
     private readonly PowerModeService _powerMode;
     private readonly BrightnessService _brightness;
     private readonly QuickSettingsLayout _layout;
+    private readonly MediaService _media;
     private readonly QuickSettingsTile _wifi;
     private readonly QuickSettingsTile _bluetoothTile;
     private readonly QuickSettingsTile _airplane;
@@ -266,7 +389,9 @@ public sealed class QuickSettings : ObservableObject
     private readonly List<BluetoothDevice> _devices = [];
     private BluetoothAdapter? _adapter;
     private AudioNode? _output;
+    private readonly List<MediaSession> _mediaSessions = [];
     private BrightnessMonitor? _panel;
+    private MediaSession? _session;
     private int _openFlyouts;
 
     public QuickSettings(
@@ -277,7 +402,8 @@ public sealed class QuickSettings : ObservableObject
         PowerService power,
         PowerModeService powerMode,
         BrightnessService brightness,
-        QuickSettingsLayout layout)
+        QuickSettingsLayout layout,
+        MediaService media)
     {
         _status = status;
         _networking = networking;
@@ -287,6 +413,7 @@ public sealed class QuickSettings : ObservableObject
         _powerMode = powerMode;
         _brightness = brightness;
         _layout = layout;
+        _media = media;
         _wifi = new QuickSettingsTile("wifi", "Wi-Fi", "\uE701", "Opens Wi-Fi settings", true, "ms-settings:network-wifi", "");
         _bluetoothTile = new QuickSettingsTile("bluetooth", "Bluetooth", "\uE702", "Opens Bluetooth settings", true, "ms-settings:bluetooth", "");
         _airplane = new QuickSettingsTile("airplaneMode", "Airplane mode", "\uE709", "Opens airplane mode settings", true, "ms-settings:network-airplanemode", "");
@@ -312,6 +439,7 @@ public sealed class QuickSettings : ObservableObject
         powerMode.PropertyChanged += OnPowerMode;
         brightness.Monitors.CollectionChanged += OnMonitors;
         layout.PropertyChanged += OnLayout;
+        media.Sessions.CollectionChanged += OnMediaSessions;
         // The service starts reading when the shell does. Enumeration waits until a flyout is open.
         bluetooth.StopMonitoring();
         BindBluetooth();
@@ -324,12 +452,19 @@ public sealed class QuickSettings : ObservableObject
         PublishSessions();
         PublishModes();
         RefreshTiles();
+        WatchSessions();
     }
 
     public SystemStatus Status => _status;
 
     /// <summary>The pinned tiles this PC can show, in the saved order.</summary>
     public ObservableCollection<QuickSettingsTile> Shown { get; } = [];
+
+    /// <summary>Tiles this PC can show that are not pinned, in the tile list's order.</summary>
+    public ObservableCollection<QuickSettingsTile> Unpinned { get; } = [];
+
+    /// <summary>Whether <see cref="Unpinned"/> has a tile the add page can put back.</summary>
+    public bool HasUnpinned => Unpinned.Count > 0;
 
     public ObservableCollection<QuickSettingsChoice> Outputs { get; } = [];
 
@@ -353,6 +488,32 @@ public sealed class QuickSettings : ObservableObject
     /// <summary>The percent drawn next to the battery glyph.</summary>
     public string BatteryPercent { get; private set => Set(ref field, value); } = "0%";
 
+    /// <summary>Whether the media card has a session to show.</summary>
+    public bool HasMedia { get; private set => Set(ref field, value); }
+
+    public string MediaApp { get; private set => Set(ref field, value); } = "";
+
+    public string MediaTitle { get; private set => Set(ref field, value); } = "";
+
+    public string MediaArtist { get; private set => Set(ref field, value); } = "";
+
+    /// <summary>The track art url, or empty when the session has none.</summary>
+    public string MediaArt { get; private set => Set(ref field, value); } = "";
+
+    public bool HasMediaArt { get; private set => Set(ref field, value); }
+
+    public bool CanMediaPrevious { get; private set => Set(ref field, value); }
+
+    public bool CanMediaNext { get; private set => Set(ref field, value); }
+
+    public bool CanMediaToggle { get; private set => Set(ref field, value); }
+
+    public bool MediaPlaying { get; private set => Set(ref field, value); }
+
+    public string MediaPlayGlyph { get; private set => Set(ref field, value); } = "\uE768";
+
+    public string MediaPlayLabel { get; private set => Set(ref field, value); } = "Play";
+
     public event Action<string>? SettingsRequested;
 
     public QuickSettingsPopup CreatePopup() => new(this);
@@ -372,6 +533,60 @@ public sealed class QuickSettings : ObservableObject
             return;
         output.Audio.Muted = !output.Audio.Muted;
     }
+
+    public void MediaPrevious() => _session?.Previous();
+
+    public void MediaNext() => _session?.Next();
+
+    public void MediaToggle() => _session?.TogglePlaying();
+
+    /// <summary>Where a point in the tile grid lands. The grid is three tiles across, with 12 between them.</summary>
+    public static int IndexAt(double x, double y, int count, double tileHeight)
+    {
+        if (count <= 0)
+            return -1;
+        const double tileWidth = 96;
+        const double spacing = 12;
+        var column = Math.Clamp((int)Math.Floor((x + spacing / 2) / (tileWidth + spacing)), 0, 2);
+        var row = Math.Max(0, (int)Math.Floor((y + spacing / 2) / (tileHeight + spacing)));
+        return Math.Min(count - 1, row * 3 + column);
+    }
+
+    /// <summary>Puts the tile with this key where the tile with another key is.</summary>
+    public void Move(string key, string target)
+    {
+        var pinned = PinnedKeys();
+        var at = pinned.IndexOf(target);
+        // Before the target when moving back, after it when moving on: the index is taken before the key is removed.
+        if (key == target || at < 0)
+            return;
+        var keys = pinned.Where(item => item != key).ToList();
+        keys.Insert(at, key);
+        SetPinned(keys);
+    }
+
+    /// <summary>Moves a tile by an offset among the tiles on show, and returns the key the keyboard stays on.</summary>
+    public string MoveBy(string key, int offset)
+    {
+        var shown = Shown.Select(tile => tile.Key).ToList();
+        var from = shown.IndexOf(key);
+        var to = Math.Max(0, Math.Min(shown.Count - 1, from + offset));
+        Move(key, shown[to]);
+        return key;
+    }
+
+    /// <summary>Unpins a tile. From the keyboard, the result is the key that takes its place.</summary>
+    public string? Unpin(string key, bool fromKeyboard)
+    {
+        var at = Shown.Select(tile => tile.Key).ToList().IndexOf(key);
+        SetPinned(PinnedKeys().Where(item => item != key).ToList());
+        if (!fromKeyboard || Shown.Count == 0)
+            return null;
+        return Shown[Math.Min(at, Shown.Count - 1)].Key;
+    }
+
+    /// <summary>Pins a tile at the end of the order.</summary>
+    public void Add(string key) => SetPinned([.. PinnedKeys(), key]);
 
     public void SetBrightness(double value)
     {
@@ -484,6 +699,39 @@ public sealed class QuickSettings : ObservableObject
             RefreshTiles();
     }
 
+    private void OnMediaSessions(object? sender, NotifyCollectionChangedEventArgs e) => WatchSessions();
+
+    private void OnMediaSession(object? sender, PropertyChangedEventArgs e) => PublishMedia();
+
+    private void WatchSessions()
+    {
+        foreach (var session in _mediaSessions)
+            session.PropertyChanged -= OnMediaSession;
+        _mediaSessions.Clear();
+        _mediaSessions.AddRange(_media.Sessions);
+        foreach (var session in _mediaSessions)
+            session.PropertyChanged += OnMediaSession;
+        PublishMedia();
+    }
+
+    /// <summary>The playing session, or the first one, or nothing. The card hides when there is nothing.</summary>
+    private void PublishMedia()
+    {
+        _session = _media.Sessions.FirstOrDefault(session => session.IsPlaying) ?? _media.Sessions.FirstOrDefault();
+        HasMedia = _session is not null;
+        MediaApp = _session?.AppName ?? "";
+        MediaTitle = _session?.TrackTitle ?? "";
+        MediaArtist = _session?.TrackArtist ?? "";
+        MediaArt = _session?.TrackArtUrl ?? "";
+        HasMediaArt = MediaArt.Length > 0;
+        CanMediaPrevious = _session?.CanGoPrevious == true;
+        CanMediaNext = _session?.CanGoNext == true;
+        CanMediaToggle = _session?.CanTogglePlaying == true;
+        MediaPlaying = _session?.IsPlaying == true;
+        MediaPlayGlyph = MediaPlaying ? "\uE769" : "\uE768";
+        MediaPlayLabel = MediaPlaying ? "Pause" : "Play";
+    }
+
     private void BindBluetooth()
     {
         var adapter = _bluetooth.DefaultAdapter;
@@ -555,22 +803,38 @@ public sealed class QuickSettings : ObservableObject
         _powerModeTile.Available = _powerMode.Available;
 
         var keys = PinnedKeys();
-        var shown = new List<QuickSettingsTile>(keys.Count);
-        foreach (var key in keys)
-        {
-            var tile = _tiles.FirstOrDefault(item => item.Key == key);
-            if (tile is { Available: true })
-                shown.Add(tile);
-        }
-        if (Shown.SequenceEqual(shown))
-            return;
-        Shown.Clear();
-        foreach (var tile in shown)
-            Shown.Add(tile);
+        var shown = keys
+            .Select(key => _tiles.FirstOrDefault(tile => tile.Key == key))
+            .OfType<QuickSettingsTile>()
+            .Where(tile => tile.Available)
+            .ToList();
+        Replace(Shown, shown);
+        var hadUnpinned = HasUnpinned;
+        var unpinned = _tiles.Where(tile => tile.Available && !keys.Contains(tile.Key)).ToList();
+        Replace(Unpinned, unpinned);
+        if (hadUnpinned != HasUnpinned)
+            Changed(nameof(HasUnpinned));
     }
 
-    private IReadOnlyList<string> PinnedKeys() =>
-        _layout.Pinned is { } pinned ? pinned.OfType<string>().ToList() : DefaultKeys;
+    private List<string> PinnedKeys() =>
+        _layout.Pinned is { } pinned ? pinned.OfType<string>().ToList() : [.. DefaultKeys];
+
+    /// <summary>Writes the order. A list the file already has is left, so a read does not write it back.</summary>
+    private void SetPinned(IReadOnlyList<string> keys)
+    {
+        if (_layout.Pinned is { } current && current.Count == keys.Count && current.Zip(keys).All(pair => Equals(pair.First, pair.Second)))
+            return;
+        _layout.Pinned = [.. keys.Cast<object?>()];
+    }
+
+    private static void Replace<T>(ObservableCollection<T> target, List<T> next)
+    {
+        if (target.SequenceEqual(next))
+            return;
+        target.Clear();
+        foreach (var item in next)
+            target.Add(item);
+    }
 
     private void PublishVolume()
     {

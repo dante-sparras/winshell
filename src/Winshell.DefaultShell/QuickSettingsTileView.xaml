@@ -5,47 +5,89 @@
     Width="96"
     HorizontalAlignment="Left"
     VerticalAlignment="Top">
-    <StackPanel Width="96">
-        <ToggleButton
-            x:Name="Toggle"
+    <Grid Width="96">
+        <StackPanel Width="96">
+            <ToggleButton
+                x:Name="Toggle"
+                Width="96"
+                Height="48"
+                MinWidth="0"
+                MinHeight="0"
+                Padding="0"
+                HorizontalAlignment="Left"
+                AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
+                Click="OnClick"
+                KeyDown="OnKeyDown">
+                <Grid>
+                    <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="{x:Bind Tile.Glyph, Mode=OneWay}" />
+                    <FontIcon FontSize="12" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Glyph="&#xE76C;" Visibility="{x:Bind Shown(Tile.HasPage), Mode=OneWay}" />
+                </Grid>
+            </ToggleButton>
+            <Button
+                x:Name="Plain"
+                Width="96"
+                Height="48"
+                MinWidth="0"
+                MinHeight="0"
+                Padding="0"
+                HorizontalAlignment="Left"
+                AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
+                Click="OnClick"
+                KeyDown="OnKeyDown">
+                <Grid>
+                    <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="{x:Bind Tile.Glyph, Mode=OneWay}" />
+                    <FontIcon FontSize="12" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Glyph="&#xE76C;" Visibility="{x:Bind Shown(Tile.HasPage), Mode=OneWay}" />
+                </Grid>
+            </Button>
+            <TextBlock
+                Margin="0,6,0,0"
+                TextAlignment="Center"
+                TextTrimming="CharacterEllipsis"
+                Style="{ThemeResource CaptionTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                AutomationProperties.AccessibilityView="Raw"
+                Text="{x:Bind Tile.Label, Mode=OneWay}" />
+        </StackPanel>
+        <Border
+            x:Name="DropMark"
+            Width="2"
+            Height="48"
+            CornerRadius="1"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="{ThemeResource AccentFillColorDefaultBrush}"
+            Visibility="Collapsed"
+            IsHitTestVisible="False" />
+        <Border
+            x:Name="Drag"
             Width="96"
             Height="48"
-            MinWidth="0"
-            MinHeight="0"
-            Padding="0"
             HorizontalAlignment="Left"
-            AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
-            AutomationProperties.HelpText="{x:Bind Tile.Description, Mode=OneWay}"
-            Visibility="{x:Bind Shown(Tile.Toggle), Mode=OneWay}"
-            Click="OnClick">
-            <Grid>
-                <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="{x:Bind Tile.Glyph, Mode=OneWay}" />
-                <FontIcon FontSize="12" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Glyph="&#xE76C;" Visibility="{x:Bind Shown(Tile.HasPage), Mode=OneWay}" />
-            </Grid>
-        </ToggleButton>
+            VerticalAlignment="Top"
+            Background="Transparent"
+            Visibility="Collapsed"
+            PointerPressed="OnDragPressed"
+            PointerMoved="OnDragMoved"
+            PointerReleased="OnDragReleased"
+            PointerCanceled="OnDragReleased"
+            PointerCaptureLost="OnDragReleased" />
         <Button
-            Width="96"
-            Height="48"
+            x:Name="Unpin"
+            Width="20"
+            Height="20"
             MinWidth="0"
             MinHeight="0"
+            Margin="82,-6,0,0"
             Padding="0"
             HorizontalAlignment="Left"
-            AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
-            AutomationProperties.HelpText="{x:Bind Tile.Description, Mode=OneWay}"
-            Visibility="{x:Bind Hidden(Tile.Toggle), Mode=OneWay}"
-            Click="OnClick">
-            <Grid>
-                <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Center" VerticalAlignment="Center" Glyph="{x:Bind Tile.Glyph, Mode=OneWay}" />
-                <FontIcon FontSize="12" FontFamily="Segoe Fluent Icons" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Glyph="&#xE76C;" Visibility="{x:Bind Shown(Tile.HasPage), Mode=OneWay}" />
-            </Grid>
+            VerticalAlignment="Top"
+            CornerRadius="10"
+            Background="{ThemeResource ControlSolidFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            Visibility="Collapsed"
+            Click="OnUnpin">
+            <FontIcon Glyph="&#xE77A;" FontSize="10" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
         </Button>
-        <TextBlock
-            Margin="0,6,0,0"
-            TextAlignment="Center"
-            TextTrimming="CharacterEllipsis"
-            Style="{ThemeResource CaptionTextBlockStyle}"
-            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-            AutomationProperties.AccessibilityView="Raw"
-            Text="{x:Bind Tile.Label, Mode=OneWay}" />
-    </StackPanel>
+    </Grid>
 </UserControl>
