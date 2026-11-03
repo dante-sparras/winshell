@@ -101,8 +101,15 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        if (_notifications is not null)
-            _enumerator?.UnregisterEndpointNotificationCallback(_notifications);
+        try
+        {
+            if (_notifications is not null)
+                _enumerator?.UnregisterEndpointNotificationCallback(_notifications);
+        }
+        catch (COMException)
+        {
+            // Windows audio failed before the callback was registered.
+        }
         foreach (var endpoint in _endpoints.Values)
         {
             foreach (var session in endpoint.Sessions)
