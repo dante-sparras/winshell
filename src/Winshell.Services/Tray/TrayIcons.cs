@@ -28,8 +28,8 @@ internal sealed class TrayIcons(
     public event Action<TrayIcon, string, string, uint>? Balloon;
 
     /// <summary>
-    /// Applies a call, and answers it the way Explorer answers about its own icons. A change to an icon this table does
-    /// not have fails, so an app that changes its icon when asked to add it again, as Windows Security does, adds it.
+    /// Applies a call. A change to an icon this table does not have fails, as in Explorer, so an app that changes its icon
+    /// when asked to add it again, as Windows Security does, adds it. Every other call succeeds.
     /// </summary>
     public bool Apply(NotifyIconCall call)
     {

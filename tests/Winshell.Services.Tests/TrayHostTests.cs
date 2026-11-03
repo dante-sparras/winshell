@@ -53,10 +53,13 @@ public sealed class TrayHostTests : IDisposable
     [Fact]
     public void An_app_that_changes_an_icon_the_host_does_not_have_is_told_so_and_adds_it()
     {
+        var explorer = StartExplorer();
         var host = Start(HostNames, out _);
-        // Windows Security, asked to add its icon again, changes it, and adds it only when that fails.
+        // Windows Security added its icon to Explorer before the host took over. Asked to add it again, it changes it,
+        // and adds it only when that fails. Explorer has the icon and would say yes; the host's own answer is the one.
         var guid = Guid.NewGuid();
         var flags = TrayProtocol.NIF_TIP | TrayProtocol.NIF_GUID;
+        Assert.Equal(1, Send(explorer.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
         Assert.Equal(0, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Security", guid: guid)));
         Assert.Empty(host.Icons);
 
@@ -69,8 +72,8 @@ public sealed class TrayHostTests : IDisposable
     public void A_message_only_window_hears_the_broadcast()
     {
         // Hex keeps its icon on a message-only window, which a broadcast to every window does not reach. This message
-        // is the test's own, so no app in the session acts on it.
-        var message = Win32.RegisterWindowMessageW($"WinshellTestTaskbarCreated-{_id}");
+        // is the test's own, so no app in the session acts on it, and one fixed name holds one atom for the session.
+        var message = Win32.RegisterWindowMessageW("WinshellTestTaskbarCreated");
         var window = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
         Assert.NotEqual(0, window);
         try

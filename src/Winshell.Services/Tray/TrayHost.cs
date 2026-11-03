@@ -382,7 +382,8 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         var answer = 1;
         if (data->dwData == TrayProtocol.NotifyIconData && TrayProtocol.Read(new ReadOnlySpan<byte>(data->lpData, (int)data->cbData)) is { } call)
             answer = _icons.Apply(call) ? 1 : 0;
-        // Explorer keeps its own tray, app bars and icon positions: it gets every message, and its answer is the answer.
+        // Explorer keeps its own tray, app bars and icon positions: it gets every message. Its answer is the answer to an
+        // app bar message; an icon is answered by this host, which may not have an icon Explorer has.
         var explorer = ExplorerTray();
         if (explorer == 0)
             return answer;
