@@ -230,7 +230,9 @@ public sealed class TrayHostTests : IDisposable
         try
         {
             var host = Start(HostNames, out _);
-            // Explorer here is a test window, but the commands are still ones no real taskbar acts on.
+            // Explorer here is a test window, but the commands are still ones no real taskbar acts on. It also gets
+            // whatever is broadcast to every window meanwhile, which is not a command.
+            Win32.PostMessageW(explorer.Window, 0x8005, 0, 0);
             (uint, nint, nint)[] commands = [(WM_COMMAND, 0x1234, 0), (WM_SYSCOMMAND, 0xF120, 0)];
             foreach (var (message, wParam, lParam) in commands)
                 Win32.PostMessageW(host.Window, message, wParam, lParam);
@@ -305,7 +307,9 @@ public sealed class TrayHostTests : IDisposable
                 busy?.Wait();
                 while (Win32.GetMessageW(out var msg, 0, 0, 0) > 0 && !(msg.hwnd == Window && msg.message == Quit))
                 {
-                    if (msg.hwnd == Window)
+                    // Only the commands a host forwards. Any shell that takes the tray, a test's included, broadcasts
+                    // TaskbarCreated to every window, this one too.
+                    if (msg.hwnd == Window && msg.message is WM_COMMAND or WM_SYSCOMMAND)
                         Posted.Add((msg.message, msg.wParam, msg.lParam));
                     Win32.DispatchMessageW(msg);
                 }
