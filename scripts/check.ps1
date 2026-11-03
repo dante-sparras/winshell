@@ -7,6 +7,8 @@
 param(
     # The build and the main test stage: what a pull request waits for.
     [switch] $Quick,
+    # Skips the build, for a caller that has just built.
+    [switch] $NoBuild,
     # Which tests the main stage runs. See run-tests.ps1.
     [ValidateSet('All', 'Fast', 'Slow')]
     [string] $Tier = 'All'
@@ -17,8 +19,10 @@ Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
-    dotnet build .\winshell.slnx -warnaserror --nologo
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if (-not $NoBuild) {
+        dotnet build .\winshell.slnx -warnaserror --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
     if (-not $Quick) {
         dotnet tool restore
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
