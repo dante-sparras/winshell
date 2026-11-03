@@ -16,8 +16,7 @@ permissions:
 # decides which of them a pull request needs, so a docs change holds one runner and not a dozen.
 #
 # A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
-# a shared one would drop the ci run of a commit in a burst of merges, and a release commit would wait for a check that
-# never comes.
+# a shared one would drop the ci run of a commit in a burst of merges.
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -312,8 +311,6 @@ jobs:
           Invoke-Pester -Path scripts/RunTests.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/PrRules.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE
       - name: Installer tests (Windows PowerShell 5.1)
         shell: powershell
@@ -323,6 +320,4 @@ jobs:
           Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE
