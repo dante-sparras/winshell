@@ -4,7 +4,7 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// A command other than <c>run</c> prints one sentence when the environment fails, and exits 1.
-/// The shell's own crash reporting is left alone.
+/// The shell's own crash reporting is left alone. Nothing running reads the same for every command.
 /// </summary>
 [Trait("Category", "Slow")]
 public class CliErrorTests
@@ -28,6 +28,17 @@ public class CliErrorTests
         Assert.Equal(1, code);
         Assert.Contains("winshell kill:", error, StringComparison.Ordinal);
         Assert.Contains("   at ", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void List_and_kill_say_the_same_when_nothing_runs()
+    {
+        var local = ("WINSHELL_LOCAL_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-error-absent-local"));
+        var list = WinshellCli.Run(["list"], local);
+        var kill = WinshellCli.Run(["kill"], local);
+
+        Assert.Equal((0, "No running instances" + Environment.NewLine, ""), list);
+        Assert.Equal((1, "", "No running instances" + Environment.NewLine), kill);
     }
 
     private static (int Code, string Output, string Error) Run(params string[] args) =>

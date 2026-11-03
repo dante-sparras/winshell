@@ -1,6 +1,6 @@
 # Command line
 
-`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
+`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command, and so does `winshell help <command>`. A word that is not a command prints `Unknown command "<name>". Run winshell --help.`, whatever follows it, and a first word after `ipc` or `inspect` that is not one of theirs prints `Unknown ipc command "<name>". Run winshell ipc --help.`, or the same for `inspect`. Both exit with code 2. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
 
 ```text
 winshell run [options]              start a shell
@@ -23,7 +23,7 @@ winshell inspect tree | screenshot <file> | click <name> | hover <name>
                                     look at a running shell, or act on it
 winshell doctor [config options] [-j] [--no-color]
                                     check this PC's setup for Winshell
-winshell help                       print this summary
+winshell help [command]             print this summary, or that command's help
 ```
 
 ## Run a shell

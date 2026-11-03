@@ -114,7 +114,7 @@ internal static class HelpCommand
                                                        look at a running shell, or act on it
                    winshell doctor [config options] [-j] [--no-color]
                                                        check this PC's setup for Winshell
-                   winshell help                       print this summary
+                   winshell help [command]             print this summary, or that command's help
 
             Config selection:
               -p, --path <path>      a project file, or the folder it is in

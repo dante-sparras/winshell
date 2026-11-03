@@ -12,7 +12,7 @@ internal static class ListCommand
         }
         if (instances.Count == 0)
         {
-            Console.WriteLine("No running instances.");
+            Console.WriteLine(InstanceSelection.NoneRunning);
             return 0;
         }
         foreach (var (info, _) in instances)
