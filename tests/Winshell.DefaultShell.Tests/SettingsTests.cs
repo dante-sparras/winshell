@@ -89,6 +89,25 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void The_body_shows_one_page_and_Pinned_apps_takes_the_place_of_Start_until_a_search_covers_it()
+    {
+        var navigation = new SettingsNavigation();
+        Assert.Equal("personalization/", navigation.Shown);
+
+        navigation.Show("start", "pins");
+        Assert.Equal("start/pins", navigation.Shown);
+
+        navigation.Search("mica");
+        Assert.Equal("search", navigation.Shown);
+
+        navigation.Search("");
+        Assert.Equal("start/pins", navigation.Shown);
+
+        Assert.True(navigation.Open("runAtSignIn"));
+        Assert.Equal("startup/", navigation.Shown);
+    }
+
+    [Fact]
     public void A_wrong_scheme_or_accent_shows_the_Windows_choice_and_stays_in_the_file()
     {
         var path = Path.Combine(_folder, "preferences.toml");
