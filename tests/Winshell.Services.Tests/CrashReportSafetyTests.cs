@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -291,5 +292,46 @@ public sealed class CrashReportSafetyTests : IDisposable
         var newest = keeping.Write("after", new InvalidOperationException("x"))!.Path;
         Assert.Equal(10, Directory.GetFiles(Folder()).Length);
         Assert.True(File.Exists(newest));
+    }
+
+    [Fact]
+    public void A_reader_of_the_folder_only_ever_finds_whole_reports()
+    {
+        // As a test, winshell doctor or a person would: read every file in the folder while reports go in. A long
+        // message keeps each write busy long enough for the reader to land in the middle of it.
+        var folder = Folder();
+        Directory.CreateDirectory(folder);
+        var crashes = new CrashReports(folder);
+        var message = string.Join('\n', Enumerable.Range(0, 5_000).Select(i => $"line {i} of a long message"));
+        var lengths = new ConcurrentDictionary<string, ConcurrentQueue<int>>(StringComparer.OrdinalIgnoreCase);
+        var failures = new ConcurrentQueue<string>();
+        var writing = true;
+        var reader = new Thread(() =>
+        {
+            while (Volatile.Read(ref writing))
+            {
+                foreach (var file in Directory.GetFiles(folder))
+                {
+                    try
+                    {
+                        lengths.GetOrAdd(file, _ => new()).Enqueue(File.ReadAllText(file).Length);
+                    }
+                    catch (Exception e)
+                    {
+                        failures.Enqueue($"{Path.GetFileName(file)}: {e.GetType().Name}: {e.Message}");
+                    }
+                }
+            }
+        }) { IsBackground = true };
+        reader.Start();
+
+        var paths = Enumerable.Range(0, 5).Select(i => crashes.Write($"report {i}", new InvalidOperationException(message))!.Path).ToList();
+        Volatile.Write(ref writing, false);
+        reader.Join();
+
+        Assert.True(failures.IsEmpty, string.Join(Environment.NewLine, failures.Distinct()));
+        Assert.Equal(paths.Order(StringComparer.OrdinalIgnoreCase), Directory.GetFiles(folder).Order(StringComparer.OrdinalIgnoreCase));
+        foreach (var (file, seen) in lengths)
+            Assert.All(seen, length => Assert.Equal(File.ReadAllText(file).Length, length));
     }
 }
