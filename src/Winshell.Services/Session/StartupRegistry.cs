@@ -243,6 +243,7 @@ internal static class WindowsStartupTasks
     {
         try
         {
+            // Sync because StartupService reads the task as it is made, and a UI binds its properties.
 #pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
             var task = Task.Run(static async () => await StartupTask.GetAsync(TaskId).AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002

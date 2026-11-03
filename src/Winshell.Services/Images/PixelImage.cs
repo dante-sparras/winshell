@@ -37,7 +37,7 @@ public sealed class PixelImage
     public byte[] EncodePng()
     {
         using var output = new InMemoryRandomAccessStream();
-#pragma warning disable VSTHRD002 // The caller asked to block: it runs off the loop.
+#pragma warning disable VSTHRD002 // WIC's encoder is async only. The encode needs no thread of the caller's, so this ends on a UI thread too.
         var encoder = BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output).AsTask().GetAwaiter().GetResult();
         encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, (uint)Width, (uint)Height, 96, 96, StraightBgra());
         encoder.FlushAsync().AsTask().GetAwaiter().GetResult();
