@@ -6,77 +6,109 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// <c>winshell reload</c> builds a configuration project and then asks the instance to start the next process.
-/// A build that fails leaves that instance running and tells it to show the notice.
+/// A build that fails leaves that instance running and tells it to show the notice. These tests edit and rebuild the
+/// probe, so they build one of their own that no other test starts.
 /// </summary>
 [Trait("Category", "Slow")]
-public sealed class ReloadCommandTests : IDisposable
+public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadCommandTests.OwnProbe>
 {
+    // Each test runs a build, which can take minutes on a busy runner.
+    private const int BuildTimeout = 600_000;
+
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly string _local;
     private readonly string _config;
+    private readonly OwnProbe _probe;
     private readonly List<Process> _started = [];
 
-    public ReloadCommandTests()
+    /// <summary>
+    /// The probe these tests build and edit, once for the class. The shared one is built first, so that no other build
+    /// of the src/ projects is still to come when <c>winshell reload</c> runs one.
+    /// </summary>
+    public sealed class OwnProbe : IDisposable
     {
+        private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+
+        public OwnProbe()
+        {
+            ProbeShell.Ensure();
+            Program = ProbeShell.Build(Folder);
+        }
+
+        public string Folder => Path.Combine(_dir, "probe");
+
+        public string Program { get; }
+
+        public void Dispose()
+        {
+            try
+            {
+                Directory.Delete(_dir, true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    public ReloadCommandTests(OwnProbe probe)
+    {
+        _probe = probe;
         _local = Path.Combine(_dir, "local");
         _config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(_local);
         Directory.CreateDirectory(_config);
     }
 
-    [Fact]
+    [Fact(Timeout = BuildTimeout)]
     public void A_build_that_fails_leaves_the_instance_running()
     {
-        lock (ProbeShell.Gate)
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        var source = Path.Combine(_probe.Folder, "Program.cs");
+        var original = File.ReadAllText(source);
+        var process = StartProbe();
+        try
         {
-            var source = Path.Combine(ProbeShell.Folder, "Program.cs");
-            var original = File.ReadAllText(source);
-            var process = StartProbe();
-            try
-            {
-                File.WriteAllText(source, original + "\nthis is not C#\n");
-                var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllText(source, original + "\nthis is not C#\n");
+            var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
 
-                Assert.Equal(1, result.Code);
-                Assert.Equal("", result.Output);
-                Assert.Contains("error ", result.Error, StringComparison.Ordinal);
-                Assert.DoesNotContain("did not reload", result.Error, StringComparison.Ordinal);
-                Assert.DoesNotContain("could not show the notice", result.Error, StringComparison.Ordinal);
-                Assert.False(process.HasExited);
-                Assert.Contains(Listed(), row => row.GetProperty("pid").GetInt32() == process.Id);
-            }
-            finally
-            {
-                File.WriteAllText(source, original);
-            }
+            Assert.Equal(1, result.Code);
+            Assert.Equal("", result.Output);
+            Assert.Contains("error ", result.Error, StringComparison.Ordinal);
+            Assert.DoesNotContain("did not reload", result.Error, StringComparison.Ordinal);
+            Assert.DoesNotContain("could not show the notice", result.Error, StringComparison.Ordinal);
+            Assert.False(process.HasExited);
+            Assert.Contains(Listed(), row => row.GetProperty("pid").GetInt32() == process.Id);
+        }
+        finally
+        {
+            File.WriteAllText(source, original);
         }
     }
 
-    [Fact]
+    [Fact(Timeout = BuildTimeout)]
     public void A_rebuild_starts_the_next_process()
     {
-        lock (ProbeShell.Gate)
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        var source = Path.Combine(_probe.Folder, "Program.cs");
+        var original = File.ReadAllText(source);
+        var process = StartProbe();
+        try
         {
-            var source = Path.Combine(ProbeShell.Folder, "Program.cs");
-            var original = File.ReadAllText(source);
-            var process = StartProbe();
-            try
-            {
-                File.WriteAllText(source, original + "\n// rebuilt\n");
-                var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllText(source, original + "\n// rebuilt\n");
+            var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
 
-                Assert.Equal(0, result.Code);
-                Assert.Equal("", result.Error);
-                Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
-                Wait.Until(() => process.HasExited, "the old process to exit");
-                Wait.Until(
-                    () => Listed().Any(row => row.GetProperty("shellId").GetString() == "probe" && row.GetProperty("pid").GetInt32() != process.Id),
-                    "the process that took over");
-            }
-            finally
-            {
-                File.WriteAllText(source, original);
-            }
+            Assert.Equal(0, result.Code);
+            Assert.Equal("", result.Error);
+            Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
+            Wait.Until(() => process.HasExited, "the old process to exit");
+            Wait.Until(
+                () => Listed().Any(row => row.GetProperty("shellId").GetString() == "probe" && row.GetProperty("pid").GetInt32() != process.Id),
+                "the process that took over");
+        }
+        finally
+        {
+            File.WriteAllText(source, original);
         }
     }
 
@@ -92,7 +124,7 @@ public sealed class ReloadCommandTests : IDisposable
 
     private Process StartProbe()
     {
-        var process = ProbeShell.Start(_config, _local);
+        var process = ProbeShell.Start(_config, _local, program: _probe.Program);
         _started.Add(process);
         return process;
     }
