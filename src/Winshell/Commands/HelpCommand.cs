@@ -8,28 +8,39 @@ internal static class HelpCommand
         return 0;
     }
 
-    internal static void Print(string? command)
+    internal static void Print(string? command) => Console.WriteLine(Text(command));
+
+    /// <summary>The help for <paramref name="command"/>, or the summary for null or a command with no help of its own.</summary>
+    internal static string Text(string? command)
     {
         switch (command)
         {
+            case "run":
+                return Help("""
+                    winshell run [-c <name> | -p <path>] [-d] [-n] [--no-build] [-- <args>...]
+                      Starts a shell: a configuration project, built first when a source is newer than its
+                      program, or the default shell when there is no project.
+                      -d, --daemonize        run in the background
+                      -n, --no-duplicate     exit quietly if this config is already running
+                          --no-build         run the last build, and do not build again
+                      Words after -- go to the configuration's program.
+                    """);
             case "list":
-                WriteHelp("""
+                return Help("""
                     winshell list [-j]
                       Lists running instances. -j, --json prints them as JSON.
                       Stopped instances are not listed.
                     """);
-                return;
             case "kill":
-                WriteHelp("""
+                return Help("""
                     winshell kill [--force] [-i <id> | --pid <pid> | -c <name> | -p <path>]
                       Asks one running instance to exit, then waits until that process has exited.
                       --force ends the process when it does not exit.
                       With one running instance and no selector, that instance is used.
                       With several, this exits and lists them.
                     """);
-                return;
             case "reload":
-                WriteHelp("""
+                return Help("""
                     winshell reload [-i <id> | --pid <pid> | -c <name> | -p <path>]
                       Builds a configuration project and asks its instance to start again.
                       A build that fails leaves the instance running and asks it to show the error.
@@ -37,10 +48,9 @@ internal static class HelpCommand
                       With one running instance and no selector, that instance is used.
                       With several, this exits and lists them.
                     """);
-                return;
             case "inspect":
-                WriteHelp("""
-                    winshell inspect [instance options] <command>
+                return Help("""
+                    winshell inspect [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
                       tree                            print each open window's live layout as JSON
                       screenshot <file> [window]      save a window as a PNG
                       click <name> [window]           activate an element, as Narrator does
@@ -48,18 +58,16 @@ internal static class HelpCommand
                       A window is the type of its content, or its number in tree. The first is the default.
                       A name is an x:Name, or an automation id or name. Nothing goes through Windows' input.
                     """);
-                return;
             case "dev":
-                WriteHelp("""
+                return Help("""
                     winshell dev [-c <name> | -p <path>]
                       Runs a configuration project and applies each edit to the running shell, until Ctrl+C.
                       A saved C# or XAML file reaches the shell in place, and the other windows are left alone.
                       What does not compile shows on screen, and the last version that did keeps running.
                       Needs the .NET SDK. See the guide for what an edit can change.
                     """);
-                return;
             case "log":
-                WriteHelp("""
+                return Help("""
                     winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
                       Prints an instance's log. -t, --tail <n> prints the last n lines.
                       -f, --follow keeps printing new lines. winshell log <file> prints that file.
@@ -67,9 +75,8 @@ internal static class HelpCommand
                       With several, this exits and lists them.
                       With nothing running and no selector, the log of a stopped instance is printed.
                     """);
-                return;
             case "ipc":
-                WriteHelp("""
+                return Help("""
                     winshell ipc [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
                       show [-j]                             list IPC targets. -j prints JSON
                       call <target> <function> [args...]    call a function and print the result
@@ -80,18 +87,16 @@ internal static class HelpCommand
                       Words after the function name are arguments, even when they start with -.
                       A -- ends options on every command.
                     """);
-                return;
             case "doctor":
-                WriteHelp($"""
+                return Help($"""
                     winshell doctor [-c <name> | -p <path>] [-j] [--no-color]
                       Checks this PC's setup for Winshell and changes nothing.
                       -c, --config <name>    a named config in {ConfigPaths.Root()}
                       -j, --json             print the checks as JSON
                           --no-color         print without color
                     """);
-                return;
         }
-        WriteHelp($"""
+        return Help($"""
             winshell {CliMetadata.Version}: a desktop shell for Windows 11
 
             Usage: winshell run [options]              start a shell
@@ -120,7 +125,7 @@ internal static class HelpCommand
               -p, --path <path>      a project file, or the folder it is in
               -c, --config <name>    a named config in {ConfigPaths.Root()}
                                      ({ConfigPaths.OverrideVariable} overrides that folder)
-            Instance selection (kill, reload, log, ipc):
+            Instance selection (kill, reload, log, ipc, inspect):
               -i, --id <id>          an instance id, or the start of one
                   --pid <pid>        an instance's process id
             Other:
@@ -138,5 +143,5 @@ internal static class HelpCommand
             """);
     }
 
-    private static void WriteHelp(string text) => Console.WriteLine(text.Replace("\r\n", "\n").TrimEnd());
+    private static string Help(string text) => text.Replace("\r\n", "\n").TrimEnd();
 }

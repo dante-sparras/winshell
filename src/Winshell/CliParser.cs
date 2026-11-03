@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 
 namespace Winshell;
@@ -8,7 +9,7 @@ internal static class CliParser
     {
         args = WithoutAfter(args, out var after);
         var command = FirstCommand(args);
-        if (command is not null && !Commands.Contains(command))
+        if (command is not null && !Commands.ContainsKey(command))
             throw UnknownCommand(command);
         // Help wins over the rest of validation and execution. Arguments after -- or an IPC function are data.
         if (HelpRequested(args))
@@ -25,7 +26,7 @@ internal static class CliParser
             // help <command> is <command> --help.
             case "help":
                 var topic = positional.FirstOrDefault();
-                if (topic is not null && !Commands.Contains(topic))
+                if (topic is not null && !Commands.ContainsKey(topic))
                     throw UnknownCommand(topic);
                 return new CliOptions { Command = topic, ShowHelp = true };
             case "log":
@@ -50,8 +51,46 @@ internal static class CliParser
         };
     }
 
-    /// <summary>The cases <see cref="Cli.RunAsync"/> runs.</summary>
-    private static readonly string[] Commands = ["run", "list", "kill", "reload", "log", "ipc", "inspect", "dev", "doctor", "help"];
+    private static readonly string[] Instance = ["--id", "--pid", "--path", "--config"];
+
+    /// <summary>
+    /// The cases <see cref="Cli.RunAsync"/> runs, and the options each takes by its long name. Every command also
+    /// takes <c>-v</c>, <c>-h</c> and <c>-V</c>.
+    /// </summary>
+    private static readonly FrozenDictionary<string, string[]> Commands = new Dictionary<string, string[]>
+    {
+        ["run"] = ["--path", "--config", "--daemonize", "--no-duplicate", "--no-build"],
+        ["list"] = ["--json"],
+        ["kill"] = [.. Instance, "--force"],
+        ["reload"] = Instance,
+        ["log"] = [.. Instance, "--tail", "--follow"],
+        ["ipc"] = [.. Instance, "--json"],
+        ["inspect"] = Instance,
+        ["dev"] = ["--path", "--config"],
+        ["doctor"] = ["--path", "--config", "--json", "--no-color"],
+        ["help"] = [],
+    }.ToFrozenDictionary();
+
+    private static bool Takes(string command, string option) =>
+        option is "--verbose" or "--help" or "--version" || Commands[command].Contains(option);
+
+    /// <summary>The long name of an option winshell has, such as <c>--path</c> for <c>-p</c>; null for any other word.</summary>
+    private static string? LongName(string option) => option switch
+    {
+        "-p" or "--path" => "--path",
+        "-c" or "--config" => "--config",
+        "-i" or "--id" => "--id",
+        "-d" or "--daemonize" => "--daemonize",
+        "-n" or "--no-duplicate" => "--no-duplicate",
+        "-v" or "--verbose" => "--verbose",
+        "-j" or "--json" => "--json",
+        "-f" or "--follow" => "--follow",
+        "-t" or "--tail" => "--tail",
+        "-V" or "--version" => "--version",
+        "-h" or "--help" => "--help",
+        "--pid" or "--force" or "--no-color" or "--no-build" => option,
+        _ => null,
+    };
 
     /// <summary>The first words <see cref="Winshell.Commands.IpcCommand"/> and <see cref="Winshell.Commands.InspectCommand"/> take.</summary>
     private static string[] Subcommands(string command) => command switch
@@ -104,8 +143,7 @@ internal static class CliParser
         return [.. rest];
     }
 
-    private static bool TakesValue(string option) => option is
-        "-p" or "--path" or "-c" or "--config" or "-i" or "--id" or "--pid" or "-t" or "--tail";
+    private static bool TakesValue(string option) => LongName(option) is "--path" or "--config" or "--id" or "--pid" or "--tail";
 
     /// <summary>The Start tile and a sign-in entry pass these, and no command word.</summary>
     private static bool OnlyShellStartOptions(string[] args)
@@ -115,8 +153,7 @@ internal static class CliParser
             var token = args[i];
             if (token == "--")
                 return true;
-            if (token is not ("-p" or "--path" or "-c" or "--config" or "-n" or "--no-duplicate"
-                or "-d" or "--daemonize" or "-v" or "--verbose" or "--no-build"))
+            if (LongName(token) is not { } name || !Takes("run", name))
                 return false;
             if (TakesValue(token))
                 i++;
@@ -161,39 +198,42 @@ internal static class CliParser
                 continue;
             }
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value");
-            switch (args[i])
+            var name = LongName(args[i]);
+            if (name is not null && command is not null && !Takes(command, name))
+                throw new ArgumentException($"winshell {command} does not take \"{args[i]}\".");
+            switch (name)
             {
-                case "-p" or "--path":
+                case "--path":
                     options = options with { Path = Next() };
                     break;
-                case "-c" or "--config":
+                case "--config":
                     options = options with { Config = ConfigName(args[i], Next()) };
                     break;
-                case "-i" or "--id":
+                case "--id":
                     options = options with { Id = Next() };
                     break;
                 case "--pid":
                     options = options with { Pid = WholeNumber(args[i], Next()) };
                     break;
-                case "-d" or "--daemonize":
+                case "--daemonize":
                     options = options with { Daemonize = true };
                     break;
-                case "-n" or "--no-duplicate":
+                case "--no-duplicate":
                     options = options with { NoDuplicate = true };
                     break;
-                case "-v" or "--verbose":
+                case "--verbose":
                     options = options with { Verbose = true };
                     break;
-                case "-j" or "--json":
+                case "--json":
                     options = options with { Json = true };
                     break;
-                case "-f" or "--follow":
+                case "--follow":
                     options = options with { Follow = true };
                     break;
                 case "--force":
                     options = options with { Force = true };
                     break;
-                case "-t" or "--tail":
+                case "--tail":
                     options = options with { Tail = WholeNumber(args[i], Next()) };
                     break;
                 case "--no-color":
@@ -202,7 +242,7 @@ internal static class CliParser
                 case "--no-build":
                     options = options with { NoBuild = true };
                     break;
-                case "-V" or "--version" or "-h" or "--help":
+                case "--version" or "--help":
                     break;
                 default:
                     if (args[i].StartsWith('-'))
