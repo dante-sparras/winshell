@@ -69,19 +69,33 @@ public sealed class TrayHostTests : IDisposable
     }
 
     [Fact]
-    public void The_broadcast_reaches_message_only_windows()
+    public void The_broadcast_reaches_message_only_windows_while_others_come_and_go()
     {
         // Hex keeps its icon on a message-only window, which a broadcast to every window does not reach, so the shell
         // also posts to each one it finds. Nothing is posted here: other tests and apps own message-only windows too.
         var window = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
         Assert.NotEqual(0, window);
+        // Apps open and close message-only windows all the time, as test runs beside this one do.
+        var stop = false;
+        var churn = new Thread(() =>
+        {
+            while (!Volatile.Read(ref stop))
+                Win32.DestroyWindow(Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0));
+        });
+        churn.Start();
         try
         {
-            Assert.Contains(window, TrayHost.MessageOnlyWindows());
-            Assert.Contains(_app, TrayHost.MessageOnlyWindows());
+            for (var i = 0; i < 200; i++)
+            {
+                var windows = TrayHost.MessageOnlyWindows();
+                Assert.Contains(window, windows);
+                Assert.Contains(_app, windows);
+            }
         }
         finally
         {
+            Volatile.Write(ref stop, true);
+            Assert.True(churn.Join(TimeSpan.FromMinutes(1)), "The thread that opens and closes windows did not stop");
             Win32.DestroyWindow(window);
         }
         Assert.DoesNotContain(window, TrayHost.MessageOnlyWindows());
