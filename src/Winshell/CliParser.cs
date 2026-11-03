@@ -20,7 +20,7 @@ internal static class CliParser
             if (options.Positional.Length > 1)
                 throw new ArgumentException($"Unexpected argument \"{options.Positional[1]}\".");
         }
-        else if (command is not ("ipc" or "msg" or "inspect") && options.Positional.Length > 0)
+        else if (command is not ("ipc" or "inspect") && options.Positional.Length > 0)
         {
             throw new ArgumentException($"Unexpected argument \"{options.Positional[0]}\".");
         }
@@ -102,8 +102,8 @@ internal static class CliParser
 
     /// <summary>
     /// Reads options. <paramref name="command"/> is the word <see cref="FirstCommand"/> already took out of
-    /// <paramref name="args"/>. A <c>--</c> ends options. So does the function name of <c>ipc call</c> and
-    /// <c>msg</c>: hotkeys pass <c>-v</c> and <c>-p</c> as arguments, and those must not become winshell options.
+    /// <paramref name="args"/>. A <c>--</c> ends options. So does the function name of <c>ipc call</c>:
+    /// hotkeys pass <c>-v</c> and <c>-p</c> as arguments, and those must not become winshell options.
     /// </summary>
     internal static CliOptions ParseOptions(string[] args, string? command = null)
     {
@@ -186,11 +186,10 @@ internal static class CliParser
 
     /// <summary>
     /// True when <paramref name="positional"/> already holds the function name. Later words belong to the call.
-    /// <paramref name="command"/> is <c>ipc</c> or <c>msg</c>; the positionals are what follows that word.
+    /// The positionals are what follows <paramref name="command"/>.
     /// </summary>
     private static bool IpcCallArguments(string? command, List<string> positional) =>
-        (command == "ipc" && positional.Count >= 3 && positional[0] == "call")
-        || (command == "msg" && positional.Count >= 2);
+        command == "ipc" && positional.Count >= 3 && positional[0] == "call";
 
     private static readonly string[] HelpFlags = ["-h", "--help", "/?"];
 
@@ -214,7 +213,7 @@ internal static class CliParser
     }
 
     /// <summary>
-    /// How far options extend. <c>--</c> ends them, and so does the first argument of <c>ipc call</c> or <c>msg</c>.
+    /// How far options extend. <c>--</c> ends them, and so does the first argument of <c>ipc call</c>.
     /// </summary>
     private static int OptionRegionLength(string[] args)
     {
@@ -254,7 +253,7 @@ internal static class CliParser
     /// <summary>
     /// Takes <c>--after &lt;pid&gt;</c> out of the options. Only an update's restart passes it, and it is not one
     /// of the arguments the shell was started with: a restart or a sign-in entry must not repeat it. It stays in
-    /// place after <c>--</c> and after an <c>ipc call</c> or <c>msg</c> function name, where it is an argument.
+    /// place after <c>--</c> and after an <c>ipc call</c> function name, where it is an argument.
     /// </summary>
     internal static string[] WithoutAfter(string[] args, out int? after)
     {

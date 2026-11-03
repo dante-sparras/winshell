@@ -90,11 +90,6 @@ internal static class HelpCommand
                           --no-color         print without color
                     """);
                 return;
-            case "msg":
-                WriteHelp("""
-                    winshell msg is the old name of winshell ipc call.
-                    """);
-                return;
         }
         WriteHelp($"""
             winshell {CliMetadata.Version}: a desktop shell for Windows 11
