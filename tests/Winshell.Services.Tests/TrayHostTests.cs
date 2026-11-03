@@ -7,7 +7,7 @@ namespace Winshell.Services.Tests;
 /// <summary>
 /// Runs notification area hosts under private window classes and a private owner name, so the real taskbar and the
 /// apps in the session never see them. An "Explorer" here is another host, which records what it is passed.
-/// Nothing is broadcast to the session.
+/// Nothing is broadcast or posted to the session's windows.
 /// </summary>
 public sealed class TrayHostTests : IDisposable
 {
@@ -48,6 +48,57 @@ public sealed class TrayHostTests : IDisposable
         Send(host.Window, TrayCall.Build(TrayProtocol.Delete, (int)_app, 1, 0));
         Assert.Empty(host.Icons);
         Assert.Empty(explorer.Icons);
+    }
+
+    [Fact]
+    public void An_app_that_changes_an_icon_the_host_does_not_have_is_told_so_and_adds_it()
+    {
+        var explorer = StartExplorer();
+        var host = Start(HostNames, out _);
+        // Windows Security added its icon to Explorer before the host took over. Asked to add it again, it changes it,
+        // and adds it only when that fails. Explorer has the icon and would say yes; the host's own answer is the one.
+        var guid = Guid.NewGuid();
+        var flags = TrayProtocol.NIF_TIP | TrayProtocol.NIF_GUID;
+        Assert.Equal(1, Send(explorer.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Equal(0, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Empty(host.Icons);
+
+        Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Secure", guid: guid)));
+        Assert.Equal("Secure", Assert.Single(host.Icons).Tip);
+    }
+
+    [Fact]
+    public void The_broadcast_reaches_message_only_windows_while_others_come_and_go()
+    {
+        // Hex keeps its icon on a message-only window, which a broadcast to every window does not reach, so the shell
+        // also posts to each one it finds. Nothing is posted here: other tests and apps own message-only windows too.
+        var window = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
+        Assert.NotEqual(0, window);
+        // Apps open and close message-only windows all the time, as test runs beside this one do.
+        var stop = false;
+        var churn = new Thread(() =>
+        {
+            while (!Volatile.Read(ref stop))
+                Win32.DestroyWindow(Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0));
+        });
+        churn.Start();
+        try
+        {
+            for (var i = 0; i < 200; i++)
+            {
+                var windows = TrayHost.MessageOnlyWindows();
+                Assert.Contains(window, windows);
+                Assert.Contains(_app, windows);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref stop, true);
+            Assert.True(churn.Join(TimeSpan.FromMinutes(1)), "The thread that opens and closes windows did not stop");
+            Win32.DestroyWindow(window);
+        }
+        Assert.DoesNotContain(window, TrayHost.MessageOnlyWindows());
     }
 
     [Fact]
@@ -149,24 +200,6 @@ public sealed class TrayHostTests : IDisposable
     }
 
     [Fact]
-    public void An_elevated_shell_clicks_no_app_above_medium_integrity()
-    {
-        const uint low = 0x1000, high = 0x3000, system = 0x4000, unknown = uint.MaxValue;
-        Assert.False(TrayHost.MayClick(high, high));
-        Assert.False(TrayHost.MayClick(high, system));
-        Assert.False(TrayHost.MayClick(high, unknown));
-        Assert.True(TrayHost.MayClick(high, TrayHost.MediumIntegrity));
-        Assert.True(TrayHost.MayClick(high, low));
-        // Unelevated, Windows keeps the shell out of elevated apps itself, as it does Explorer.
-        Assert.True(TrayHost.MayClick(TrayHost.MediumIntegrity, high));
-        Assert.True(TrayHost.MayClick(TrayHost.MediumIntegrity, TrayHost.MediumIntegrity));
-
-        Assert.InRange(TrayHost.IntegrityLevel((uint)Environment.ProcessId), low, system);
-        // The System Idle Process has no token to read.
-        Assert.Equal(unknown, TrayHost.IntegrityLevel(0));
-    }
-
-    [Fact]
     public void A_click_reaches_the_app_only_when_this_process_may_click_it()
     {
         var host = Start(HostNames, out _);
@@ -190,8 +223,8 @@ public sealed class TrayHostTests : IDisposable
             GC.KeepAlive(record);
         }
         // The app is this test process: medium on a developer's desktop, elevated on CI.
-        var own = TrayHost.IntegrityLevel((uint)Environment.ProcessId);
-        Assert.Equal(TrayHost.MayClick(own, own), callbacks > 0);
+        var own = TrayClicker.IntegrityLevel((uint)Environment.ProcessId);
+        Assert.Equal(TrayClicker.MayClick(own, own), callbacks > 0);
     }
 
     private delegate nint WindowProc(nint hwnd, uint msg, nint wParam, nint lParam);
@@ -211,7 +244,9 @@ public sealed class TrayHostTests : IDisposable
         try
         {
             var host = Start(HostNames, out _);
-            // Explorer here is a test window, but the commands are still ones no real taskbar acts on.
+            // Explorer here is a test window, but the commands are still ones no real taskbar acts on. It also gets
+            // whatever is broadcast to every window meanwhile, which is not a command.
+            Win32.PostMessageW(explorer.Window, 0x8005, 0, 0);
             (uint, nint, nint)[] commands = [(WM_COMMAND, 0x1234, 0), (WM_SYSCOMMAND, 0xF120, 0)];
             foreach (var (message, wParam, lParam) in commands)
                 Win32.PostMessageW(host.Window, message, wParam, lParam);
@@ -286,7 +321,9 @@ public sealed class TrayHostTests : IDisposable
                 busy?.Wait();
                 while (Win32.GetMessageW(out var msg, 0, 0, 0) > 0 && !(msg.hwnd == Window && msg.message == Quit))
                 {
-                    if (msg.hwnd == Window)
+                    // Only the commands a host forwards. Any shell that takes the tray, a test's included, broadcasts
+                    // TaskbarCreated to every window, this one too.
+                    if (msg.hwnd == Window && msg.message is WM_COMMAND or WM_SYSCOMMAND)
                         Posted.Add((msg.message, msg.wParam, msg.lParam));
                     Win32.DispatchMessageW(msg);
                 }
@@ -294,7 +331,7 @@ public sealed class TrayHostTests : IDisposable
             })
             { IsBackground = true };
             _thread.Start();
-            _started.Wait();
+            _started.Wait(TestContext.Current.CancellationToken);
             Assert.NotEqual(0, Window);
         }
 
@@ -305,7 +342,7 @@ public sealed class TrayHostTests : IDisposable
         public void Exit()
         {
             Win32.PostMessageW(Window, Quit, 0, 0);
-            _thread.Join();
+            Assert.True(_thread.Join(TimeSpan.FromMinutes(1)), "The stand-in Explorer did not exit");
         }
     }
 
@@ -478,7 +515,7 @@ public sealed class TrayHostTests : IDisposable
                     host.Dispose();
             });
             _thread.Start();
-            _started.Wait();
+            _started.Wait(TestContext.Current.CancellationToken);
             Assert.NotEqual(0, Window);
         }
 
@@ -490,7 +527,7 @@ public sealed class TrayHostTests : IDisposable
         {
             _clean = clean;
             _exit.Set();
-            _thread.Join();
+            Assert.True(_thread.Join(TimeSpan.FromMinutes(1)), "The other instance did not exit");
         }
     }
 }

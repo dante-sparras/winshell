@@ -9,7 +9,7 @@ public class UpdateRestartTests
     [Fact]
     public void After_is_taken_out_of_the_arguments_the_shell_runs_with()
     {
-        var args = Cli.WithoutAfter(["-c", "bar", "--after", "4242", "-n"], out var after);
+        var args = CliParser.WithoutAfter(["-c", "bar", "--after", "4242", "-n"], out var after);
         Assert.Equal(4242, after);
         Assert.Equal(["-c", "bar", "-n"], args);
     }
@@ -21,7 +21,7 @@ public class UpdateRestartTests
     public void Without_a_process_id_nothing_is_taken_out(string line)
     {
         var given = line.Split(' ');
-        var args = Cli.WithoutAfter(given, out var after);
+        var args = CliParser.WithoutAfter(given, out var after);
         Assert.Null(after);
         Assert.Equal(given, args);
     }

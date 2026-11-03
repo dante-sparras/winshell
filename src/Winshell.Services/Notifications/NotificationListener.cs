@@ -19,7 +19,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     private bool _disposed;
     private long _revision;
 
-    public NotificationListener(IEventLoop loop)
+    internal NotificationListener(IEventLoop loop)
         : this(loop, Log.Default, new WindowsNotificationBackend(), monitor: true)
     {
     }

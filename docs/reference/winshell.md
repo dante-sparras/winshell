@@ -222,57 +222,15 @@ The shell's thread. Work from other threads is posted to it.
 | `RequestFrame(Action action)` | void | Runs the action before the next frame is drawn, once per request. |
 | `Schedule(TimeSpan delay, Action action)` | IDisposable | Runs the action once after the delay, on the loop's thread. Dispose to cancel. |
 
-## IIpcTargets
-
-What the `ipc` commands reach in a running shell. Every member runs on the shell's thread.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `Call(string target, string function, IReadOnlyList of string args)` | string | Calls a function. Returns its result as text, or throws IpcException with a message for the CLI. |
-| `Describe()` | IReadOnlyList of [IpcTargetView](#ipctargetview) | Every target with the functions, properties and signals `ipc show` lists. |
-| `GetProperty(string target, string property)` | string |  |
-| `Listen(string target, string signal, Action of string onSignal)` | IDisposable | Calls back with a signal's argument as text each time it fires, until disposed. |
-
 ## IpcException
 
-A refused IPC request. The message goes to the client as it is.
+A refused IPC request. A handler throws it to refuse a call: its message goes to the client as it is, where another exception arrives with its type name.
 
 An exception.
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `IpcException(string message)` | constructor |  |
-
-## IpcFunctionView
-
-A function `ipc show` can call.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcFunctionView(string Name, IReadOnlyList of [IpcParameterView](#ipcparameterview) Parameters, string Returns)` | constructor |  |
-| `Name` | string, init |  |
-| `Parameters` | IReadOnlyList of [IpcParameterView](#ipcparameterview), init |  |
-| `Returns` | string, init |  |
-
-## IpcParameterView
-
-One parameter of a function or a signal `ipc show` can list.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcParameterView(string Name, string? Type)` | constructor |  |
-| `Name` | string, init |  |
-| `Type` | string?, init |  |
-
-## IpcPropertyView
-
-A property `ipc show` can read.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcPropertyView(string Name, string Type)` | constructor |  |
-| `Name` | string, init |  |
-| `Type` | string, init |  |
 
 ## IpcSignal
 
@@ -283,37 +241,12 @@ A signal of a ShellIpc target. Use it on the shell's thread.
 | `Name` | string, read-only |  |
 | `Emit(string value = "")` | void | Tells every `winshell ipc wait` and `listen` following this signal, with value. |
 
-## IpcSignalView
-
-A signal `ipc wait` and `ipc listen` can follow.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcSignalView(string Name, IReadOnlyList of [IpcParameterView](#ipcparameterview) Parameters)` | constructor |  |
-| `Name` | string, init |  |
-| `Parameters` | IReadOnlyList of [IpcParameterView](#ipcparameterview), init |  |
-
-## IpcTargetView
-
-One IPC target, as `ipc show` knows it. `ipc show -j` prints these records as they are.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcTargetView(string Target, IReadOnlyList of [IpcFunctionView](#ipcfunctionview) Functions, IReadOnlyList of [IpcPropertyView](#ipcpropertyview) Properties, IReadOnlyList of [IpcSignalView](#ipcsignalview) Signals)` | constructor |  |
-| `Functions` | IReadOnlyList of [IpcFunctionView](#ipcfunctionview), init |  |
-| `Properties` | IReadOnlyList of [IpcPropertyView](#ipcpropertyview), init |  |
-| `Signals` | IReadOnlyList of [IpcSignalView](#ipcsignalview), init |  |
-| `Target` | string, init |  |
-
 ## Log
 
 Writes messages as ` WARN category: message`.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Log()` | constructor |  |
-| `MinimumLevel` | [LogLevel](#loglevel) |  |
-| `Sink` | Action of [LogLevel](#loglevel), string, string? | Where messages go. The default writes to the standard error stream. |
 | `Default` | [Log](#log), static |  |
 | `Debug(string category, string message)` | void |  |
 | `Error(string category, string message)` | void |  |
@@ -378,12 +311,7 @@ What `winshell ipc` reaches in a C# configuration: functions, properties and sig
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ShellIpc([Log](#log) log)` | constructor |  |
-| `Call(string target, string function, IReadOnlyList of string args)` | string |  |
-| `Describe()` | IReadOnlyList of [IpcTargetView](#ipctargetview) |  |
-| `GetProperty(string target, string property)` | string |  |
 | `Handle(string target, string function, Delegate handler)` | IDisposable | Lets `winshell ipc call` run handler, such as `(string page) => Open(page)`. Dispose the result to take it away. A later handler for the same function replaces this one. ArgumentException when the handler takes or returns a type IPC can't pass. |
-| `Listen(string target, string signal, Action of string onSignal)` | IDisposable |  |
 | `Property<T>(string target, string property, Func of T read)` | IDisposable | Lets `winshell ipc prop get` read a value. Dispose the result to take it away. ArgumentException when T is a type IPC can't pass. |
 | `Signal(string target, string signal)` | [IpcSignal](#ipcsignal) | A signal `winshell ipc wait` and `listen` can follow. |
 

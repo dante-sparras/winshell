@@ -50,4 +50,11 @@ public class MediaAppNameTests
         Assert.Equal("Player.exe", names.Get("Player.exe"));
         Assert.Contains(warnings, w => w.Contains("no shell", StringComparison.Ordinal));
     }
+
+    [Theory]
+    [InlineData("Spotify.exe", "Spotify")]
+    [InlineData("VLC.EXE", "VLC")]
+    [InlineData("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic")]
+    public void The_fallback_name_is_the_program_without_its_extension_or_else_the_app_id(string appId, string name) =>
+        Assert.Equal(name, AppDisplayName.Fallback(appId));
 }

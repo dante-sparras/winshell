@@ -10,7 +10,6 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Hotkey([IEventLoop](winshell.md#ieventloop) loop)` | constructor |  |
 | `Active` | bool, read-only |  |
 | `Enabled` | bool |  |
 | `Error` | string, read-only |  |

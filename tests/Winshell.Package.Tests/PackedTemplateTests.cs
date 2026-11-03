@@ -36,7 +36,8 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     public void The_default_shell_is_listed_and_killed()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
-        Run("winshell-default", templates.DefaultProject);
+        // The project's own name, not the built-in default shell's id, whose folders and mutex it would share.
+        Run("PackedShell", templates.DefaultProject);
     }
 
     private void Run(string shellId, string projectFile)

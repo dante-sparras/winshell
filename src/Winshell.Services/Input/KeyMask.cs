@@ -19,10 +19,8 @@ internal static partial class KeyMask
 
     public static void Tap()
     {
-        var stroke = new Input[2];
-        stroke[0] = Key(up: false);
-        stroke[1] = Key(up: true);
-        _ = SendInput(2, stroke, Marshal.SizeOf<Input>());
+        var stroke = Array.ConvertAll(Stroke(), Key);
+        _ = SendInput((uint)stroke.Length, stroke, InputSize);
     }
 
     internal static bool IsOurs(nint extraInfo) => extraInfo == ExtraInfo;
@@ -35,16 +33,16 @@ internal static partial class KeyMask
 
     internal static int InputSize => Marshal.SizeOf<Input>();
 
-    private static Input Key(bool up) => new()
+    private static Input Key(MaskEvent key) => new()
     {
         type = InputKeyboard,
         U = new InputUnion
         {
             ki = new KeybdInput
             {
-                wVk = VirtualKey,
-                dwFlags = up ? KeyUp : 0,
-                dwExtraInfo = ExtraInfo,
+                wVk = key.VirtualKey,
+                dwFlags = key.Up ? KeyUp : 0,
+                dwExtraInfo = key.ExtraInfo,
             },
         },
     };

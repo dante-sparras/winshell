@@ -10,7 +10,7 @@ A normal chord, including `Win+E`, is registered with `RegisterHotKey`. That API
 
 A sequence waits one second for the next chord. A different key cancels it. Modifier keys alone do not. The shell keeps one `RegisterHotKey` registration while any of its hotkeys use that chord. A chord that is already taken is reported and is not stolen.
 
-Ctrl+Alt+Del and Win+L cannot be blocked. Windows does not deliver Ctrl+Alt+Del to a user-mode hook. When L is pressed with the Windows key down, the hook passes that key on and does not give it to a Winshell hotkey.
+Ctrl+Alt+Del and Win+L cannot be blocked: Windows handles both before any hook, so the security screen opens or the session locks whatever a hotkey does. Ctrl+Alt+Del never reaches the hook. Win+L does, so a sequence waiting for `Win+L` as its next chord still fires as Windows locks.
 
 Warnings use the `hotkey` category.
 

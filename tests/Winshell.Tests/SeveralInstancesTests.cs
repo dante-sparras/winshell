@@ -10,7 +10,7 @@ public class SeveralInstancesTests
     public void One_instance_is_used_when_no_selector_was_given()
     {
         var only = Instance("only", @"C:\only\MyShell.exe");
-        var choice = Cli.ChooseUnselected([only]);
+        var choice = InstanceSelection.ChooseUnselected([only]);
 
         Assert.Equal(0, choice.Code);
         Assert.Same(only, choice.Info);
@@ -19,7 +19,7 @@ public class SeveralInstancesTests
     [Fact]
     public void No_instance_is_a_miss()
     {
-        var choice = Cli.ChooseUnselected([]);
+        var choice = InstanceSelection.ChooseUnselected([]);
 
         Assert.Equal(1, choice.Code);
         Assert.Equal("No running instances", choice.Error);
@@ -29,7 +29,7 @@ public class SeveralInstancesTests
     [Fact]
     public void Several_instances_are_a_command_line_error_that_names_each()
     {
-        var choice = Cli.ChooseUnselected([
+        var choice = InstanceSelection.ChooseUnselected([
             Instance("aaa", @"C:\a\MyShell.exe"),
             Instance("bbb", @"C:\b\MyShell.exe"),
         ]);

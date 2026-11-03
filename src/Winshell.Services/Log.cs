@@ -16,10 +16,14 @@ public sealed class Log
 
     private readonly object _lock = new();
 
-    /// <summary>Where messages go. The default writes to the standard error stream.</summary>
-    public Action<LogLevel, string, string>? Sink { get; set; }
+    internal Log()
+    {
+    }
 
-    public LogLevel MinimumLevel { get; set; } = LogLevel.Info;
+    /// <summary>Where messages go. The default writes to the standard error stream.</summary>
+    internal Action<LogLevel, string, string>? Sink { get; set; }
+
+    internal LogLevel MinimumLevel { get; set; } = LogLevel.Info;
 
     public void Write(LogLevel level, string category, string message)
     {

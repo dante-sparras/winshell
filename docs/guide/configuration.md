@@ -4,12 +4,24 @@ A configuration is a .NET project that references the Winshell package and build
 
 ## Create one
 
-You need the [.NET SDK](https://dotnet.microsoft.com/download). Running the default shell does not.
+You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](getting-started.md#build-from-source), so the two are the same release.
 
 ```powershell
+git clone https://github.com/dante-sparras/winshell.git
+cd winshell
+pwsh scripts/pack.ps1
+dotnet new install .\artifacts\packages\Winshell.Templates.<version>.nupkg
+```
+
+`scripts/pack.ps1` writes both packages to `artifacts\packages`, and `<version>` is the release in their names. Then make the project beside the clone, and tell NuGet where the `Winshell` package is:
+
+```powershell
+cd ..
 dotnet new winshell -n MyShell
 cd MyShell
-winshell --path .
+dotnet new nugetconfig
+dotnet nuget add source ..\winshell\artifacts\packages --name winshell --configfile nuget.config
+winshell run --path .
 ```
 
 `dotnet new winshell-default -n MyShell` starts from the default shell. Winshell builds to `MyShell\bin\shell` when a source is newer, then starts that program. `--no-build` runs the program the last build left, and does not build. A failed build does not start the last good build.
@@ -77,7 +89,7 @@ Reading does not ask for permission and does not change anything. Wi-Fi scanning
         shell.Ipc.Handle("notes", "hello", (string name) => "hi " + name);
 ```
 
-`winshell ipc call notes hello Ada` prints `hi Ada`. `Property`, `Signal`, `GetProperty` and `Listen` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
+`winshell ipc call notes hello Ada` prints `hi Ada`. `Property` and `Signal` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
 
 `winshell ipc call notice dismiss` closes Winshell's own notice. That call is not a target you register, so `ipc show` does not list it.
 
@@ -104,14 +116,14 @@ Pass `Path.Combine(shell.ConfigRoot, "preferences.toml")` and `shell.Loop`. The 
             shell.Log.Warn("shell", "Reload did not start.");
 ```
 
-That starts this program again with `--after` and quits. It does not build. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over. There is no file watcher. `dotnet watch` rebuilds as you edit.
+That starts this program again with `--after` and quits. It does not build. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over. There is no file watcher. [`winshell dev`](#develop-a-shell) applies each edit as you save.
 
 `winshell run --no-build` skips the build. The sign-in entry uses it, so signing in does not need the SDK and does not run a broken edit.
 
 ## Develop a shell
 
 ```powershell
-winshell dev -c MyShell
+winshell dev --path .
 ```
 
 `winshell dev` builds your project, starts it, and applies each save to the running shell until you press Ctrl+C. It needs the .NET SDK, and it runs a Debug build.

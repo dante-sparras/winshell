@@ -23,9 +23,9 @@ public sealed class ShellInstanceTests
 
         public string? BuildProject { get; private set; }
 
-        public IIpcTargets Ipc { get; } = new ShellIpc(new Log());
+        public ShellIpc Ipc { get; } = new ShellIpc(new Log());
 
-        public string? Reload(bool hard, string? program)
+        public string? Reload(string? program)
         {
             Reloads++;
             return ReloadError;

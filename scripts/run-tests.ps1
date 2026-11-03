@@ -62,6 +62,42 @@ function Read-TestResult {
     [pscustomobject]@{ Failed = @($failed); Passed = @($passed | Where-Object { -not $failed.Contains($_) }); Results = $count; Complete = $complete }
 }
 
+# Test programs under $Root that have been asked only for their assembly info for $After seconds or more. That takes a
+# second, and xUnit fails the whole assembly with "Test process did not respond within 60 seconds" before any test, so
+# the hang timeout never names one. xUnit passes the arguments in a response file, "@@ <file>", one to a line.
+function Get-StalledStart {
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [Parameter(Mandatory)][int] $After
+    )
+    $folder = $Root.TrimEnd('\') + '\'
+    foreach ($process in Get-CimInstance Win32_Process) {
+        if (-not $process.ExecutablePath -or -not $process.ExecutablePath.StartsWith($folder, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if ($process.CommandLine -notmatch '@@\s+"([^"]+)"') { continue }
+        if (((Get-Date) - $process.CreationDate).TotalSeconds -lt $After) { continue }
+        $arguments = Get-Content -LiteralPath $Matches[1] -ErrorAction SilentlyContinue
+        if ($arguments -contains '-assemblyInfo') { $process }
+    }
+}
+
+# What a stalled test program was doing, and how busy the machine was: a program that uses no CPU is waiting on
+# something, and one that started no runtime never reached its own code.
+function Format-StalledStart {
+    param([Parameter(Mandatory)] $Process)
+    $program = Get-Process -Id $Process.ProcessId -ErrorAction SilentlyContinue
+    if (-not $program) { return "$($Process.Name) $($Process.ProcessId) was asked for its assembly info and has exited." }
+    $age = [int]((Get-Date) - $Process.CreationDate).TotalSeconds
+    $threads = $program.Threads | Group-Object { if ("$($_.ThreadState)" -eq 'Wait') { "waiting ($($_.WaitReason))" } else { "$($_.ThreadState)".ToLowerInvariant() } } | ForEach-Object { "$($_.Count) $($_.Name)" }
+    $modules = @($program.Modules | ForEach-Object ModuleName)
+    $processor = (Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
+    $memory = [int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
+    $disk = (Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'").PercentIdleTime
+    "$($Process.Name) $($Process.ProcessId) was asked for its assembly info $age s ago and has not exited. xUnit gives it 60 s."
+    "  It used $([Math]::Round($program.TotalProcessorTime.TotalSeconds, 1)) s of CPU. Threads: $($threads -join ', ')."
+    "  $($modules.Count) modules; the runtime $(if ($modules -contains 'coreclr.dll') { 'started' } else { 'did not start' }), and the Windows App SDK $(if ($modules -contains 'Microsoft.WindowsAppRuntime.dll') { 'loaded' } else { 'did not load' }). The last: $($modules | Select-Object -Last 5)."
+    "  The machine: $processor% CPU busy, $memory MB of memory free, disks $disk% idle."
+}
+
 function Invoke-DotnetTest {
     param(
         [Parameter(Mandatory)][string] $Filter,
@@ -69,10 +105,33 @@ function Invoke-DotnetTest {
         [string] $Target = (Join-Path $script:Root 'winshell.slnx'),
         [int] $Seed = 1
     )
-    # The hang timeout ends the run and names the test, which the ci step's own time limit can't do.
-    # More threads than cores, so tests that need the same thing to themselves meet here and not on a slower machine.
-    dotnet test $Target --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
-    $LASTEXITCODE
+    # Says what a stalled test program is doing while it still runs: xUnit ends it once it gives up, so this looks at
+    # half its 60 seconds.
+    # A script block belongs to the runspace that made it, so the job gets the functions as text.
+    $watch = Start-ThreadJob -ArgumentList $script:Root, "${function:Get-StalledStart}", "${function:Format-StalledStart}" -ScriptBlock {
+        param($root, $find, $describe)
+        $find = [scriptblock]::Create($find)
+        $describe = [scriptblock]::Create($describe)
+        $told = @{}
+        while ($true) {
+            foreach ($process in & $find -Root $root -After 30) {
+                if ($told[$process.ProcessId]) { continue }
+                $told[$process.ProcessId] = $true
+                # A program can exit while it is described.
+                try { & $describe -Process $process | ForEach-Object { [Console]::Out.WriteLine($_) } } catch { }
+            }
+            Start-Sleep -Seconds 5
+        }
+    }
+    try {
+        # The hang timeout ends the run and names the test, which the ci step's own time limit can't do.
+        # More threads than cores, so tests that need the same thing to themselves meet here and not on a slower machine.
+        dotnet test $Target --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
+        $LASTEXITCODE
+    }
+    finally {
+        $watch | Remove-Job -Force
+    }
 }
 
 function Invoke-MainTest {
