@@ -1,7 +1,5 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Winshell.Native;
 using Winshell.Session;
@@ -105,7 +103,7 @@ internal sealed record DoctorContext(
 /// Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance
 /// started or stopped, and no build. Telling whether a folder can be written makes and removes one empty file. The
 /// user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so what it
-/// prints can go into a bug report without the Windows user name.
+/// reports can go into a bug report without the Windows user name.
 /// </summary>
 public static class Doctor
 {
@@ -663,76 +661,6 @@ public static class Doctor
                 return line;
         }
         return null;
-    }
-
-    // Output
-
-    /// <summary>The checks as <c>winshell doctor</c> prints them: a line each, a fix under each problem, and a count.</summary>
-    internal static string Format(IReadOnlyList<DoctorCheck> checks, string version, bool color)
-    {
-        var text = new StringBuilder();
-        text.AppendLine(CultureInfo.InvariantCulture, $"Winshell {version}: this PC's setup");
-        text.AppendLine();
-        var width = checks.Max(c => c.Title.Length) + 2;
-        foreach (var check in checks)
-        {
-            var label = check.Status switch
-            {
-                CheckStatus.Pass => "PASS",
-                CheckStatus.Warn => "WARN",
-                _ => "FAIL",
-            };
-            if (color)
-                label = (check.Status switch { CheckStatus.Pass => "\e[32m", CheckStatus.Warn => "\e[33m", _ => "\e[31m" }) + label + "\e[0m";
-            text.AppendLine(CultureInfo.InvariantCulture, $"  {label}  {check.Title.PadRight(width)}{check.Message}");
-            if (check.Fix is not null)
-                text.AppendLine(CultureInfo.InvariantCulture, $"        {new string(' ', width)}Fix: {check.Fix}");
-        }
-        text.AppendLine();
-        text.AppendLine(Summary(checks));
-        return text.ToString();
-    }
-
-    internal static string Summary(IReadOnlyList<DoctorCheck> checks)
-    {
-        var warns = checks.Count(c => c.Status == CheckStatus.Warn);
-        var fails = checks.Count(c => c.Status == CheckStatus.Fail);
-        return string.Create(CultureInfo.InvariantCulture,
-            $"{checks.Count(c => c.Status == CheckStatus.Pass)} passed, {warns} {(warns == 1 ? "warning" : "warnings")}, {fails} failed.");
-    }
-
-    /// <summary>The checks as <c>winshell doctor --json</c> prints them.</summary>
-    internal static string ToJson(IReadOnlyList<DoctorCheck> checks, string version)
-    {
-        using var stream = new MemoryStream();
-        // Read by people too: paths and messages are written as they are, not escaped for HTML.
-        using (var json = new Utf8JsonWriter(stream, JsonText.IndentedWriter))
-        {
-            json.WriteStartObject();
-            json.WriteString("version", version);
-            json.WriteStartArray("checks");
-            foreach (var check in checks)
-            {
-                json.WriteStartObject();
-                json.WriteString("id", check.Id);
-                json.WriteString("title", check.Title);
-                json.WriteString("status", StatusName(check.Status));
-                json.WriteString("message", check.Message);
-                if (check.Fix is null)
-                    json.WriteNull("fix");
-                else
-                    json.WriteString("fix", check.Fix);
-                json.WriteEndObject();
-            }
-            json.WriteEndArray();
-            json.WriteStartObject("summary");
-            json.WriteNumber("pass", checks.Count(c => c.Status == CheckStatus.Pass));
-            json.WriteNumber("warn", checks.Count(c => c.Status == CheckStatus.Warn));
-            json.WriteNumber("fail", checks.Count(c => c.Status == CheckStatus.Fail));
-            json.WriteEndObject();
-            json.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>The status as <c>winshell doctor</c> writes it: <c>pass</c>, <c>warn</c> or <c>fail</c>.</summary>

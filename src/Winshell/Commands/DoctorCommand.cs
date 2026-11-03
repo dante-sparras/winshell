@@ -30,12 +30,12 @@ internal static class DoctorCommand
             search), DoctorFacts.Pc);
         if (options.Json)
         {
-            Console.WriteLine(Diagnostics.Doctor.ToJson(checks, CliMetadata.Version));
+            Console.WriteLine(Diagnostics.DoctorReport.ToJson(checks, CliMetadata.Version));
         }
         else
         {
             var color = !options.NoColor && !Console.IsOutputRedirected && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
-            Console.Write(Diagnostics.Doctor.Format(checks, CliMetadata.Version, color));
+            Console.Write(Diagnostics.DoctorReport.Format(checks, CliMetadata.Version, color));
         }
         return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;
     }
