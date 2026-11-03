@@ -194,7 +194,7 @@ public class IpcBoundsTests
 
         public IIpcTargets Ipc => _ipc;
 
-        public string? Reload(bool hard, string? program) => null;
+        public string? Reload(string? program) => null;
 
         public void Quit()
         {
@@ -215,7 +215,7 @@ public class IpcBoundsTests
 
         public IIpcTargets Ipc { get; } = new ShellIpc(Log.Default);
 
-        public string? Reload(bool hard, string? program) => null;
+        public string? Reload(string? program) => null;
 
         public void Quit() => Killed = true;
     }

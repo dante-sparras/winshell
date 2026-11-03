@@ -158,9 +158,6 @@ internal static class CliParser
                 case "-f" or "--follow":
                     options = options with { Follow = true };
                     break;
-                case "--hard":
-                    options = options with { Hard = true };
-                    break;
                 case "--force":
                     options = options with { Force = true };
                     break;
