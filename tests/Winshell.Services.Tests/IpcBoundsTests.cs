@@ -192,7 +192,7 @@ public class IpcBoundsTests
 
         public IpcSignal Ping { get; }
 
-        public IIpcTargets Ipc => _ipc;
+        public ShellIpc Ipc => _ipc;
 
         public string? Reload(string? program) => null;
 
@@ -213,7 +213,7 @@ public class IpcBoundsTests
     {
         public bool Killed { get; private set; }
 
-        public IIpcTargets Ipc { get; } = new ShellIpc(Log.Default);
+        public ShellIpc Ipc { get; } = new ShellIpc(Log.Default);
 
         public string? Reload(string? program) => null;
 

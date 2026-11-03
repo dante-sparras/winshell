@@ -77,6 +77,5 @@ Recent documents Windows already keeps as shortcuts in the Recent folder. This r
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `RecentDocuments()` | constructor |  |
 | `Search(string query)` | IReadOnlyList of [RecentDocument](#recentdocument) | Shortcuts whose name contains every word of query, newest first, at most Limit. A blank query matches nothing and does not read a folder. The path is not searched. |
 
