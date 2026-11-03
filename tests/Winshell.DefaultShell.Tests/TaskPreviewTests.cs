@@ -352,6 +352,9 @@ public sealed class TaskPreviewTests
         Assert.Equal(2, bar.Preview.FocusIndex);
         Assert.True(bar.Preview.FocusClose);
         Assert.True(bar.Preview.ShowsClose(2));
+        Assert.True(bar.Preview.MoveHorizontal(-1));
+        Assert.Equal(2, bar.Preview.FocusIndex);
+        Assert.False(bar.Preview.FocusClose);
 
         bar.Preview.Escape();
         Assert.False(bar.Preview.IsOpen);
@@ -437,7 +440,9 @@ public sealed class TaskPreviewTests
         Assert.True(bar.Preview.IsOpen);
         Assert.Equal(30, bar.Preview.Windows.Count);
 
-        Assert.True(bar.Preview.MoveVertical(-1));
+        Assert.True(bar.Preview.Tab(false));
+        Assert.Equal(29, bar.Preview.FocusIndex);
+        Assert.False(bar.Preview.FocusClose);
         Assert.True(bar.Preview.MoveVertical(-1));
         Assert.Equal(28, bar.Preview.FocusIndex);
         Assert.False(bar.Preview.FocusClose);

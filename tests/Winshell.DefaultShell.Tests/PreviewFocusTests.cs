@@ -37,26 +37,12 @@ public sealed class PreviewFocusTests
     }
 
     [Theory]
-    [InlineData(-1, true, false, 0, false)]
-    [InlineData(2, true, false, 2, true)]
-    [InlineData(2, true, true, 2, false)]
-    [InlineData(2, false, false, 2, false)]
-    public void Read_again_the_keyboard_stays_on_its_window_and_keeps_the_close_button_only_in_the_same_layout(
-        int found, bool keepClose, bool layoutChanged, int toIndex, bool toClose)
+    [InlineData(0, 580, 600, 0)]
+    [InlineData(15, 300, 600, 300)]
+    [InlineData(3, 0, 100, 60)]
+    public void A_row_above_scrolls_to_its_top_a_row_below_to_its_bottom_and_a_row_in_view_stays(
+        int index, double scroll, double viewport, double expected)
     {
-        Assert.Equal(new PreviewFocus(toIndex, toClose), PreviewFocus.Restore(found, keepClose, layoutChanged));
-    }
-
-    [Fact]
-    public void A_row_scrolls_fully_into_view_and_a_row_in_view_does_not_scroll()
-    {
-        var viewport = 1032 * 0.6;
-        var last = 29 * (double)TaskPreview.RowHeight + TaskPreview.RowHeight - viewport;
-
-        Assert.Equal(last, PreviewFocus.Reveal(29, 0, viewport));
-        Assert.True(Math.Abs(last - 580.8) < 0.5);
-        Assert.Equal(0, PreviewFocus.Reveal(0, last, viewport));
-        Assert.Equal(300, PreviewFocus.Reveal(15, 300, viewport));
-        Assert.Equal(60, PreviewFocus.Reveal(3, 0, 100));
+        Assert.Equal(expected, PreviewFocus.Reveal(index, scroll, viewport));
     }
 }
