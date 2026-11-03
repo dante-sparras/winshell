@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - main
@@ -43,7 +44,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.number }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
+          # A draft leaves ci and slow to ready_for_review. A draft can't merge, so their skipped checks pass nothing.
+          if [ "$DRAFT" = true ]; then
+            echo 'fast=false' >> "$GITHUB_OUTPUT"
+            echo 'code=false' >> "$GITHUB_OUTPUT"
+          fi
           # A rename lists the path it left too: moving a file out of src/ can break what used it.
           files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
           # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
