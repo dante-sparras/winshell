@@ -153,6 +153,21 @@ public sealed class BluetoothServiceTests
     }
 
     [Fact]
+    public async Task An_unexpected_failure_ends_the_action_and_still_fails_its_task()
+    {
+        using var session = await Session.OpenAsync(Snapshot(Device()));
+        var device = session.Device;
+        // A bug, not a failure Windows reports. The shell reports the task that failed; the action still ends.
+        var bug = new NullReferenceException("A bug");
+        session.Backend.Failure = bug;
+
+        Assert.Same(bug, await Assert.ThrowsAsync<NullReferenceException>(device.UnpairAsync));
+        session.Loop.Process();
+
+        Assert.False(device.Busy);
+    }
+
+    [Fact]
     public async Task A_failed_action_sets_the_error_and_raises_the_event()
     {
         using var session = await Session.OpenAsync(Snapshot(Device()));
