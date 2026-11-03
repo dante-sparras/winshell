@@ -30,7 +30,7 @@ Boundaries, from the cheapest up:
 | `Winshell.Tests` | `winshell.exe` and shell programs as separate processes |
 | `Winshell.Package.Tests` | The packed library and templates, `Category=Package` |
 
-A regression test goes red before the fix for the intended reason and green after it. Say so in the PR, or say why you could not show it. One bug gets one test at its owner, however many layers it crossed. A refactor that keeps behavior leaves tests untouched. Tests wait as [CONTRIBUTING.md](../../../CONTRIBUTING.md#write-tests-that-dont-flake) says.
+A regression test goes red before the fix for the intended reason and green after it. Say so in the PR, or say why you could not show it. One bug gets one test at its owner, however many layers it crossed. A refactor that keeps behavior leaves tests untouched. Tests wait as [CONTRIBUTING.md](../../../CONTRIBUTING.md#write-tests-that-dont-flake) says, and a test that fails sometimes is a defect in its owner: find the cause. Nothing retries it.
 
 ## Junk patterns
 
