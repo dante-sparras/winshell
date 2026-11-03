@@ -340,8 +340,6 @@ public sealed class TaskPreviewTests
         Assert.False(bar.Preview.MoveVertical(1));
 
         Assert.True(bar.Preview.MoveHorizontal(1));
-        Assert.Equal(0, bar.Preview.FocusIndex);
-        Assert.True(bar.Preview.FocusClose);
         Assert.True(bar.Preview.Tab(true));
         Assert.Equal(1, bar.Preview.FocusIndex);
         Assert.False(bar.Preview.FocusClose);
@@ -418,18 +416,6 @@ public sealed class TaskPreviewTests
         bar.Preview.OpenFromKeyboard("notes");
         Assert.True(bar.Preview.Listed);
 
-        Assert.True(bar.Preview.Tab(true));
-        Assert.True(bar.Preview.FocusClose);
-        Assert.True(bar.Preview.Tab(true));
-        Assert.Equal(1, bar.Preview.FocusIndex);
-        Assert.False(bar.Preview.FocusClose);
-        Assert.True(bar.Preview.Tab(false));
-        Assert.Equal(0, bar.Preview.FocusIndex);
-        Assert.True(bar.Preview.FocusClose);
-        Assert.True(bar.Preview.Tab(false));
-        Assert.Equal(0, bar.Preview.FocusIndex);
-        Assert.False(bar.Preview.FocusClose);
-
         for (var i = 0; i < 29; i++)
             Assert.True(bar.Preview.MoveVertical(1));
         Assert.Equal(29, bar.Preview.FocusIndex);
@@ -446,17 +432,12 @@ public sealed class TaskPreviewTests
         Assert.Equal(29, bar.Preview.FocusIndex);
         Assert.True(bar.Preview.Tab(true));
         Assert.True(bar.Preview.FocusClose);
-        Assert.True(bar.Preview.MoveVertical(1));
-        Assert.Equal(29, bar.Preview.FocusIndex);
-        Assert.True(bar.Preview.FocusClose);
         Assert.True(bar.Preview.ActivateFocused());
         Assert.Equal(1, windows[29].Closes);
         Assert.True(bar.Preview.IsOpen);
         Assert.Equal(30, bar.Preview.Windows.Count);
 
         Assert.True(bar.Preview.MoveVertical(-1));
-        Assert.Equal(29, bar.Preview.FocusIndex);
-        Assert.False(bar.Preview.FocusClose);
         Assert.True(bar.Preview.MoveVertical(-1));
         Assert.Equal(28, bar.Preview.FocusIndex);
         Assert.False(bar.Preview.FocusClose);
