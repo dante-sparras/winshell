@@ -41,6 +41,8 @@ pwsh scripts/dev.ps1
 
 Before every push, run `pwsh scripts/quick-check.ps1`, then the focused tests for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and the templates, builds each shell, and runs it; it is slow, and the main test stage leaves it out. The required `ci` job checks the links between pages and runs `check.ps1 -Quick` on a PR. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title` and `pr-rules`. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI turns on for itself.
 
+To try packed templates without installing them into your own `dotnet new`, pass `--debug:custom-hive <folder>` to each `dotnet new` command, as the package tests do. Don't point `DOTNET_CLI_HOME` at a new folder: the SDK's first run there appends that folder's `.dotnet\tools` to your user `Path`, and `DOTNET_SKIP_FIRST_TIME_EXPERIENCE` no longer stops it.
+
 `check.ps1` runs the PowerShell 7 Pester suites when Pester 5.6.1 is installed. The installer job also runs the Windows PowerShell 5.1 pass and PSScriptAnalyzer, which `check.ps1` does not. Of the jobs below, `installer` and `actionlint` are required:
 
 | Job | When it runs | How to run it locally |
