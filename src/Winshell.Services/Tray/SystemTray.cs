@@ -175,7 +175,7 @@ public sealed class SystemTrayItem : ObservableObject
     {
         if (_icon.Image is not { } image)
             return null;
-        return size > 0 && size != image.Width && _icon.Resource is { } resource ? TrayHost.ResourceImage(resource, size) ?? image : image;
+        return size > 0 && size != image.Width && _icon.Resource is { } resource ? IconImage.FromResource(resource, size) ?? image : image;
     }
 
     /// <summary>A left click at the cursor, which most apps answer by showing their window.</summary>

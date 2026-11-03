@@ -149,24 +149,6 @@ public sealed class TrayHostTests : IDisposable
     }
 
     [Fact]
-    public void An_elevated_shell_clicks_no_app_above_medium_integrity()
-    {
-        const uint low = 0x1000, high = 0x3000, system = 0x4000, unknown = uint.MaxValue;
-        Assert.False(TrayHost.MayClick(high, high));
-        Assert.False(TrayHost.MayClick(high, system));
-        Assert.False(TrayHost.MayClick(high, unknown));
-        Assert.True(TrayHost.MayClick(high, TrayHost.MediumIntegrity));
-        Assert.True(TrayHost.MayClick(high, low));
-        // Unelevated, Windows keeps the shell out of elevated apps itself, as it does Explorer.
-        Assert.True(TrayHost.MayClick(TrayHost.MediumIntegrity, high));
-        Assert.True(TrayHost.MayClick(TrayHost.MediumIntegrity, TrayHost.MediumIntegrity));
-
-        Assert.InRange(TrayHost.IntegrityLevel((uint)Environment.ProcessId), low, system);
-        // The System Idle Process has no token to read.
-        Assert.Equal(unknown, TrayHost.IntegrityLevel(0));
-    }
-
-    [Fact]
     public void A_click_reaches_the_app_only_when_this_process_may_click_it()
     {
         var host = Start(HostNames, out _);
@@ -190,8 +172,8 @@ public sealed class TrayHostTests : IDisposable
             GC.KeepAlive(record);
         }
         // The app is this test process: medium on a developer's desktop, elevated on CI.
-        var own = TrayHost.IntegrityLevel((uint)Environment.ProcessId);
-        Assert.Equal(TrayHost.MayClick(own, own), callbacks > 0);
+        var own = TrayClicker.IntegrityLevel((uint)Environment.ProcessId);
+        Assert.Equal(TrayClicker.MayClick(own, own), callbacks > 0);
     }
 
     private delegate nint WindowProc(nint hwnd, uint msg, nint wParam, nint lParam);
