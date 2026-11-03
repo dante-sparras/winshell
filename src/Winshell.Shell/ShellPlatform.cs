@@ -121,7 +121,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
 
     public HostWindow CreateWindow(WindowKind kind, IHostClient client)
     {
-        var window = new HostWindow(this, kind, client);
+        var window = new HostWindow(this, kind, client, NativeMenu.Dismiss);
         _windows.Add(window);
         return window;
     }

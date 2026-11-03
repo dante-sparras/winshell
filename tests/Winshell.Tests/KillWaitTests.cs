@@ -5,7 +5,7 @@ namespace Winshell.Tests;
 
 /// <summary><c>winshell kill</c> waits until the instance's process has exited.</summary>
 [Trait("Category", "Slow")]
-public sealed class KillWaitTests : IDisposable
+public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
