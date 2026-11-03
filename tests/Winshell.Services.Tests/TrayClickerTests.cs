@@ -25,7 +25,7 @@ public sealed class TrayClickerTests
     }
 
     [Fact]
-    public void A_click_reaches_the_app_after_the_foreground_handoff_only_when_this_process_may_click_it()
+    public void A_click_hands_over_the_foreground_then_reaches_the_app_only_when_this_process_may_click_it()
     {
         // The app is this test process: medium on a developer's desktop, elevated on CI. Its window is message-only,
         // so nothing else can find it.

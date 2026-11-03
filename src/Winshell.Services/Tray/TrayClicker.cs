@@ -6,7 +6,8 @@ namespace Winshell.Tray;
 /// <summary>Sends an app the clicks on its notification area icon, the way Explorer sends them.</summary>
 /// <param name="loop">The loop the pointer is put back on.</param>
 /// <param name="letAppTakeForeground">
-/// Lets the app with this window and process id take the foreground; <see cref="LetAppTakeForeground"/> in a shell.
+/// Lets the app with this window and process id take the foreground; <see cref="TrayHost"/> passes
+/// <see cref="LetAppTakeForeground"/>.
 /// </param>
 internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
 {
