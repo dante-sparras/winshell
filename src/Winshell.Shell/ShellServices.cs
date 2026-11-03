@@ -20,6 +20,7 @@ public sealed partial class Shell
 {
     private readonly List<IDisposable> _services = [];
     private AppsService? _apps;
+    private AudioGraph? _audioGraph;
     private AudioService? _audio;
     private BluetoothService? _bluetooth;
     private BrightnessService? _brightness;
@@ -43,8 +44,9 @@ public sealed partial class Shell
     /// <summary>The apps Start lists.</summary>
     public AppsService Apps => Own(ref _apps, () => new AppsService(Loop, Log));
 
+    // The graph is owned first, so it is disposed after the service whose peak meters read it.
     /// <summary>Playback and recording devices, and the audio sessions on them.</summary>
-    public AudioService Audio => Own(ref _audio, () => new AudioService(Loop, Log));
+    public AudioService Audio => Own(ref _audio, () => new AudioService(Own(ref _audioGraph, () => new AudioGraph(Loop, Log)), Log));
 
     /// <summary>The Bluetooth adapter and the paired and nearby devices.</summary>
     public BluetoothService Bluetooth => Own(ref _bluetooth, () => new BluetoothService(Loop, Log));

@@ -175,7 +175,7 @@ internal sealed class StatusRig : IDisposable
         Power = new FakeSource<PowerSnapshot>(PowerSnapshot.Initial);
         Modes = new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial);
         Networking = new NetworkingService(Loop, Network);
-        AudioService = new AudioService(Loop, Log, Audio);
+        AudioService = new AudioService(Audio, Log);
         PowerService = new PowerService(Loop, Power);
         PowerMode = new PowerModeService(Loop, Log, Modes, static _ => 0);
         Status = new SystemStatus(Networking, AudioService, PowerService, PowerMode);

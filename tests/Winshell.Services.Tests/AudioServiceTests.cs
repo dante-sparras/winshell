@@ -12,7 +12,7 @@ public sealed class AudioServiceTests
 
     public AudioServiceTests() => _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
 
-    private AudioService Service() => new(_loop, _log, _graph);
+    private AudioService Service() => new(_graph, _log);
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {

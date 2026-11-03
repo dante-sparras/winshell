@@ -158,10 +158,10 @@ public sealed class AudioService : ObservableObject, IDisposable
     private AudioNode? _defaultPlayback;
     private AudioNode? _defaultRecording;
 
-    internal AudioService(IEventLoop loop, Log log, IAudioGraph? graph = null)
+    internal AudioService(IAudioGraph graph, Log log)
     {
         _log = log;
-        _graph = graph ?? AudioGraph.Get(loop, log);
+        _graph = graph;
         Refresh();
         OnDefaultsChanged();
         _graph.NodeAdded += OnNodeChanged;
