@@ -1,6 +1,6 @@
 # Command line
 
-`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command, and so does `winshell help <command>`. A word that is not a command prints `Unknown command "<name>". Run winshell --help.`, whatever follows it, and a first word after `ipc` or `inspect` that is not one of theirs prints `Unknown ipc command "<name>". Run winshell ipc --help.`, or the same for `inspect`. Both exit with code 2. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
+`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command, and so does `winshell help <command>`. A word that is not a command prints `Unknown command "<name>". Run winshell --help.`, whatever follows it, and a first word after `ipc` or `inspect` that is not one of theirs prints `Unknown ipc command "<name>". Run winshell ipc --help.`, or the same for `inspect`. Both exit with code 2. So does an option the command does not take: `winshell list --force` prints `winshell list does not take "--force".` Every command takes `-v`, and `-h` or `-V` with any command prints the help or the version and exits. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
 
 ```text
 winshell run [options]              start a shell
@@ -39,7 +39,7 @@ winshell help [command]             print this summary, or that command's help
 | `-n`, `--no-duplicate` | Exits 0 without starting, and without a message, when this shell id is already running. Two starts that overlap do the same: only one of them keeps running. |
 | `-v`, `--verbose` | Also logs debug messages. |
 | `-V`, `--version` | Prints the version, such as `winshell 0.6.0+e8d05d1…` for a build from source, and exits. |
-| `-h`, `--help` | Prints the summary and exits. |
+| `-h`, `--help` | Prints `run`'s usage, or with no command the summary, and exits. |
 
 The program a project builds also takes `--no-duplicate` and `-d` on its own command line. `--no-duplicate` exits at once when its shell id is already running. `-d` starts that program again and returns. A start that carries `--after` keeps it.
 

@@ -22,6 +22,11 @@ internal static class Cli
         var command = options.Command;
         if (options.ShowHelp)
             return HelpCommand.Run(command);
+        if (options.ShowVersion)
+        {
+            Console.WriteLine($"winshell {CliMetadata.Version}");
+            return 0;
+        }
 
         // Commands report failures as exit 1. The shell reports its own crashes.
         try
@@ -29,11 +34,6 @@ internal static class Cli
             switch (command)
             {
                 case null:
-                    if (options.ShowVersion)
-                    {
-                        Console.WriteLine($"winshell {CliMetadata.Version}");
-                        return 0;
-                    }
                     // The Start tile and sign-in host still start a shell without a command word.
                     if (options.Arguments.IsEmpty && !IsWindowlessHost())
                         return HelpCommand.Run();

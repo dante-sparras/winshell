@@ -6,11 +6,14 @@ namespace Winshell.Tests;
 [Trait("Category", "Slow")]
 public class VersionTests
 {
-    [Fact]
-    public void The_cli_prints_the_release_please_version()
+    // list only reads, so a version option it ignored could not change this PC.
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("list -V")]
+    public void The_cli_prints_the_release_please_version(string line)
     {
         var manifest = ManifestVersion();
-        var (code, output, error) = WinshellCli.Run(["--version"]);
+        var (code, output, error) = WinshellCli.Run(line.Split(' '));
         Assert.Equal(0, code);
         Assert.Equal("", error);
         Assert.Matches($"^winshell {Regex.Escape(manifest)}(\\+\\S+)?\\r?\\n$", output);
