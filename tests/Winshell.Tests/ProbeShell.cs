@@ -104,13 +104,16 @@ internal static class ProbeShell
 
     internal static void Ensure()
     {
+        // Not behind the gate once built: a test reads Program, and must not wait out another class's build of its own probe.
+        if (Volatile.Read(ref _program) is { } built && File.Exists(built))
+            return;
         lock (Gate)
         {
             if (_program is not null && File.Exists(_program))
                 return;
             // One folder per checkout. The project names this checkout's source, so two sharing a folder break each other's build.
             var checkout = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Repo.Root)))[..12];
-            _program = Build(Path.Combine(Path.GetTempPath(), "winshell-probe-shell-" + checkout));
+            Volatile.Write(ref _program, Build(Path.Combine(Path.GetTempPath(), "winshell-probe-shell-" + checkout)));
         }
     }
 

@@ -1,7 +1,7 @@
 using Microsoft.Win32;
 using Winshell.Native;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.ShellTests;
 
 /// <summary>One settings broadcast reaches every window. The shell follows that change once.</summary>
 public class SystemChangesTests
