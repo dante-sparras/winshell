@@ -53,7 +53,6 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `NotificationListener([IEventLoop](winshell.md#ieventloop) loop)` | constructor |  |
 | `AccessStatus` | [NotificationAccessStatus](#notificationaccessstatus), read-only |  |
 | `DoNotDisturbState` | [NotificationState](#notificationstate), read-only | On for priority-only or alarms-only, Off for unrestricted. |
 | `Error` | string, read-only | Why access or the last operation failed. |

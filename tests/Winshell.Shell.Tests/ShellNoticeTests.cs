@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Winshell.ShellTests;
 
+[Trait("Category", "Slow")]
 public sealed class ShellNoticeTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
@@ -45,6 +46,42 @@ public sealed class ShellNoticeTests : IDisposable
         return new Closes(this);
     }
 
+    [Fact]
+    public void A_config_file_that_does_not_read_shows_until_it_is_fixed()
+    {
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "preferences.toml[3:1]: expected a value");
+
+        var notice = Assert.Single(_shown);
+        Assert.Equal(NoticeKind.ConfigError, notice.Kind);
+        Assert.Equal("preferences.toml", notice.Detail);
+        Assert.Contains("[3:1]", notice.Body, StringComparison.Ordinal);
+        Assert.Equal(TimeSpan.Zero, notice.Timeout);
+
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+
+        Assert.Null(_notices.Current);
+    }
+
+    [Fact]
+    public void Fixing_one_config_file_leaves_the_notice_of_another()
+    {
+        _notices.ShowConfigError(@"C:\config\launcher.toml", "broken");
+
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+
+        Assert.NotNull(_notices.Current);
+    }
+
+    [Fact]
+    public void A_fixed_config_file_leaves_a_build_error_on_screen()
+    {
+        _notices.Show(ShellNotices.ForBuildError("no", "Mine.csproj"));
+
+        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+
+        Assert.Equal(NoticeKind.BuildError, _notices.Current?.Kind);
+    }
+
     private sealed class Closes(ShellNoticeTests test) : IDisposable
     {
         public void Dispose() => test._closed++;
@@ -60,19 +97,6 @@ public sealed class ShellNoticeTests : IDisposable
     }
 
     private static Notice Build() => ShellNotices.ForBuildError("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj");
-
-    [Fact]
-    public void A_leftover_qml_file_says_to_start_a_project()
-    {
-        var notice = ShellNotices.ForRetiredQml(@"C:\configs\shell.qml");
-
-        Assert.Equal(NoticeKind.RetiredQml, notice.Kind);
-        Assert.Equal("QML configurations stopped working", notice.Title);
-        Assert.Equal("shell.qml", notice.Detail);
-        Assert.Contains(@"C:\configs\shell.qml", notice.Body, StringComparison.Ordinal);
-        Assert.Equal("Start a new one with dotnet new winshell.", notice.Note);
-        Assert.Equal(TimeSpan.Zero, notice.Timeout);
-    }
 
     [Fact]
     public void A_failure_says_what_stopped_and_what_Winshell_did()

@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary>An option Winshell does not have, and a spare word, exit 2 before a shell starts.</summary>
+[Trait("Category", "Slow")]
 public class UnknownOptionTests
 {
     // Each run names a path that is not there, so a bug in the check cannot start the default shell.
@@ -12,11 +13,12 @@ public class UnknownOptionTests
     [InlineData("run -p {missing} --any-display", "Unknown option \"--any-display\".")]
     [InlineData("run -p {missing} --newest", "Unknown option \"--newest\".")]
     [InlineData("run -p {missing} --log-rules x", "Unknown option \"--log-rules\".")]
-    [InlineData("run -p {missing} -m shell.qml", "Unknown option \"-m\".")]
-    [InlineData("run -p {missing} --manifest shell.qml", "Unknown option \"--manifest\".")]
+    [InlineData("run -p {missing} -m MyShell.exe", "Unknown option \"-m\".")]
+    [InlineData("run -p {missing} --manifest MyShell.exe", "Unknown option \"--manifest\".")]
     [InlineData("run -p {missing} --debug 1", "Unknown option \"--debug\".")]
     [InlineData("list -a", "Unknown option \"-a\".")]
     [InlineData("list --all", "Unknown option \"--all\".")]
+    [InlineData("reload --pid 0 --hard", "Unknown option \"--hard\".")]
     [InlineData("list extra", "Unexpected argument \"extra\".")]
     [InlineData("kill --pid 0 extra", "Unexpected argument \"extra\".")]
     [InlineData("run -p {missing} extra", "Unexpected argument \"extra\".")]

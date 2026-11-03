@@ -1,0 +1,121 @@
+using System.ComponentModel;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
+using Winshell.DefaultShell.Taskbar;
+
+namespace Winshell.DefaultShell;
+
+/// <summary>Quick settings above one taskbar's button. The tiles are shared; this window is not.</summary>
+internal sealed class QuickSettingsFlyout
+{
+    private readonly PanelWindow _bar;
+    private readonly Button _anchor;
+    private readonly Preferences _preferences;
+    private readonly TimeProvider _time;
+    private readonly QuickSettingsPopup _quick;
+    private readonly QuickSettingsView _view;
+    private readonly PopupWindow _popup;
+    private DateTimeOffset _dismissed;
+
+    public QuickSettingsFlyout(PanelWindow bar, Button anchor, QuickSettings settings, Preferences preferences, TimeProvider time)
+    {
+        _bar = bar;
+        _anchor = anchor;
+        _preferences = preferences;
+        _time = time;
+        _quick = settings.CreatePopup();
+        _view = new QuickSettingsView(_quick);
+        _popup = new PopupWindow { GrabFocus = true, Corners = WindowCorners.Round, Content = _view };
+        _popup.Dismissed += OnDismissed;
+        _quick.PropertyChanged += OnQuick;
+        _view.ContentSized += OnContentSized;
+        _anchor.Click += OnClick;
+    }
+
+    /// <summary>Quick settings is open, so an auto-hiding taskbar stays up.</summary>
+    internal bool IsOpen => _quick.IsOpen;
+
+    /// <summary>Quick settings opened or closed.</summary>
+    internal event EventHandler? OpenChanged;
+
+    /// <summary>Drops the popup. The bar is about to close, and quick settings stays.</summary>
+    public void Release()
+    {
+        _anchor.Click -= OnClick;
+        _view.ContentSized -= OnContentSized;
+        _quick.PropertyChanged -= OnQuick;
+        _quick.Hide();
+        _view.Release();
+        _popup.Dismissed -= OnDismissed;
+        _popup.Dispose();
+    }
+
+    private void OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_popup.Visible)
+            Close();
+        else if (!TaskbarClockModel.ClosedBySameClick(_dismissed, _time.GetUtcNow()))
+            Open();
+    }
+
+    /// <summary>Win+A. It flips, including the click that just closed it. A button that is not on screen yet does nothing.</summary>
+    public void Toggle()
+    {
+        if (_popup.Visible)
+            Close();
+        else if (_anchor.IsLoaded)
+            Open();
+    }
+
+    private void Open()
+    {
+        if (_bar.Screen is not { } screen)
+            return;
+        _popup.Screen = screen;
+        Place();
+        _popup.Backdrop = _preferences.Material;
+        _quick.Show();
+        _popup.Visible = true;
+        _view.Focus(FocusState.Programmatic);
+    }
+
+    private void Close() => _quick.Hide();
+
+    private void OnDismissed()
+    {
+        _dismissed = _time.GetUtcNow();
+        _quick.Hide();
+    }
+
+    private void OnQuick(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(QuickSettingsPopup.IsOpen))
+            return;
+        if (!_quick.IsOpen)
+            _popup.Visible = false;
+        OpenChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnContentSized(object sender, SizeChangedEventArgs e)
+    {
+        if (_quick.IsOpen)
+            Place();
+    }
+
+    /// <summary>Above the quick settings button, lined up with its right edge.</summary>
+    private void Place()
+    {
+        var point = _anchor.TransformToVisual(null).TransformPoint(default);
+        var origin = _bar.Origin;
+        var button = new Rect(origin.X + point.X, origin.Y + point.Y, _anchor.ActualWidth, _anchor.ActualHeight);
+        var height = _view.ContentHeight;
+        if (height <= 0)
+        {
+            // The content has no height before it is first shown. This is a first guess; ContentSized corrects it.
+            _view.Measure(new Size(QuickSettingsPlacement.Width, double.PositiveInfinity));
+            height = _view.DesiredSize.Height;
+        }
+        _popup.Rect = QuickSettingsPlacement.Above(button, height);
+    }
+}

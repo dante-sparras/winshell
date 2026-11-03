@@ -2,13 +2,19 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - main
+  # A merge queue runs every check on its merge group, as on a push to main.
+  merge_group:
 
 permissions:
   contents: read
 
+# Every check of a pull request is in this file, except pr-title and pr-rules, which need their own trigger. changes
+# decides which of them a pull request needs, so a docs change holds one runner and not a dozen.
+#
 # A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
 # a shared one would drop the ci run of a commit in a burst of merges, and a release commit would wait for a check that
 # never comes.
@@ -17,89 +23,135 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # What this pull request needs. The other jobs skip on false, and a skipped job counts as a passed required check.
+    # Only false skips, so a changes job that failed, or a push to main where it does not run, still runs everything.
+    name: changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.files.outputs.code }}
+      fast: ${{ steps.files.outputs.fast }}
+      tests: ${{ steps.files.outputs.tests }}
+      docs: ${{ steps.files.outputs.docs }}
+      scripts: ${{ steps.files.outputs.scripts }}
+      workflows: ${{ steps.files.outputs.workflows }}
+    steps:
+      - name: Look at the changed files
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          # A draft leaves ci and slow to ready_for_review. A draft can't merge, so their skipped checks pass nothing.
+          if [ "$DRAFT" = true ]; then
+            echo 'fast=false' >> "$GITHUB_OUTPUT"
+            echo 'code=false' >> "$GITHUB_OUTPUT"
+          fi
+          # A rename lists the path it left too: moving a file out of src/ can break what used it.
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
+          if [ -z "$files" ] || [ "$(wc -l <<<"$files")" -ge 3000 ]; then exit 0; fi
+          grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
+          # DocsTests reads every page and the README, against the public API, so only other Markdown skips ci.
+          grep -qvE '\.md$' <<<"$files" || grep -qE '^docs/|^README\.md$' <<<"$files" || echo 'fast=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^docs/|\.md$|^dotnet-tools\.json$|^global\.json$|^\.github/workflows/ci\.yml$' <<<"$files" || echo 'docs=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
+          # The test classes it changed, which ci and slow repeat. More than 30 is a sweep, and repeating one would outlast the job.
+          tests=$(grep -E '^tests/.*Tests\.cs$' <<<"$files" || true)
+          if [ "$(wc -l <<<"$tests")" -le 30 ]; then echo "tests=$(paste -sd, <<<"$tests")" >> "$GITHUB_OUTPUT"; fi
+
   ci:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.fast != 'false' }}
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 25
     outputs:
-      flaky: ${{ steps.flaky.outputs.flaky }}
+      built: ${{ steps.build.outcome }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Turn Windows animation effects on
-        # The runner has them off. Winshell follows that setting, and tests of a sliding taskbar or a fading on-screen
-        # display need the frames in between, so this makes the runner match a default Windows desktop.
+      - uses: ./.github/actions/prepare
+      - name: Build
+        id: build
         shell: pwsh
-        run: |
-          Add-Type -Namespace Native -Name Spi -MemberDefinition '[DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfoW(uint action, uint param, nint value, uint flags);'
-          # SPI_SETCLIENTAREAANIMATION, on, SPIF_SENDCHANGE.
-          if (-not [Native.Spi]::SystemParametersInfoW(0x1043, 0, 1, 2)) {
-            throw "Could not turn animation effects on: error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
-          }
+        run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Check
         # A pull request waits for the build and the main tests. A push to main runs everything, and so does the release
         # pull request: once its commit is tagged, a failure can't be fixed in that version.
         timeout-minutes: 10
         shell: pwsh
-        env:
-          WINSHELL_FLAKY_REPORT: ${{ runner.temp }}/flaky-tests.txt
-        run: ./scripts/check.ps1 -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
-      - name: Flaky tests
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: flaky-tests
-          path: ${{ runner.temp }}/flaky-tests.txt
-          if-no-files-found: ignore
-      - name: Flag flaky tests
-        id: flaky
-        if: always()
+        run: ./scripts/check.ps1 -NoBuild -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
+      - name: Run changed tests over and over
+        # A test that only passes sometimes stops here, before it reaches main.
+        if: github.event_name == 'pull_request' && needs.changes.outputs.tests != ''
+        timeout-minutes: 15
         shell: pwsh
-        run: |
-          if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'flaky-tests.txt')) {
-            'flaky=true' >> $env:GITHUB_OUTPUT
-          }
-  flaky-report:
-    # Files or updates an issue for each test in the flaky report. It is a separate job so that ci, which
-    # runs the code under test, gets no write token. A fork's token can't write, so a failure here blocks nothing.
-    name: flaky-report
+        env:
+          TESTS: ${{ needs.changes.outputs.tests }}
+        run: ./scripts/repeat-tests.ps1 -Tests $env:TESTS -Tier Fast -Times 20
+  stop:
+    # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
+    # which runs the code under test, gets no token that can cancel a run.
+    name: stop
     needs: ci
-    if: always() && needs.ci.outputs.flaky == 'true'
+    if: ${{ failure() && github.event_name == 'pull_request' && needs.ci.outputs.built == 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: read # checkout
-      issues: write # files and comments on the flaky issues
+      actions: write # cancels this run
+    steps:
+      - name: Cancel the rest of this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: gh run cancel "$RUN"
+
+  slow:
+    # The tests that start winshell.exe or open a real window. The ruleset requires this job by name.
+    name: slow
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    runs-on: windows-2025
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: flaky-tests
-          path: ${{ runner.temp }}/flaky-tests
-      - name: Report
-        continue-on-error: true
+      - uses: ./.github/actions/prepare
+      - name: Build
+        shell: pwsh
+        run: dotnet build .\winshell.slnx -warnaserror --nologo
+      - name: Slow tests
+        timeout-minutes: 10
+        shell: pwsh
+        run: ./scripts/run-tests.ps1 -Tier Slow
+      - name: Run changed tests over and over
+        # Five, not twenty: one of these can take a minute. A test that only passes sometimes stops here.
+        if: github.event_name == 'pull_request' && needs.changes.outputs.tests != ''
+        timeout-minutes: 20
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: pwsh scripts/report-flaky.ps1 -ReportPath (Join-Path $env:RUNNER_TEMP 'flaky-tests/flaky-tests.txt') -RunUrl $env:RUN_URL
+          TESTS: ${{ needs.changes.outputs.tests }}
+        run: ./scripts/repeat-tests.ps1 -Tests $env:TESTS -Tier Slow -Times 5
 
-  quarantine:
-    # The tests in tests/quarantine.txt. A failed test shows in this job's log and blocks nothing.
-    # continue-on-error is on the step, and the job skips pull requests, where a check that can't fail would only look
-    # like a pass.
-    name: quarantine
-    if: github.event_name == 'push'
-    runs-on: windows-2025
-    timeout-minutes: 15
+  build:
+    # Builds docs/ into a site with DocFX. A broken link or anchor between pages fails the build.
+    name: build
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,13 +159,70 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      - name: Quarantined tests
+      - name: Build the site
+        run: |
+          dotnet tool restore
+          dotnet docfx docs/docfx.json --warningsAsErrors
+
+  actionlint:
+    # actionlint catches broken expressions, typos and shell errors in .github/workflows/. zizmor audits .github/ for
+    # unpinned actions, risky triggers, leaked credentials and template injection. A finding that is safe on purpose gets
+    # a `# zizmor: ignore[<audit>]` comment explaining why. The ruleset requires this job by name.
+    name: actionlint
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.workflows != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+      security-events: write # publishes the SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          # The action's default is latest, which downloads whatever release rhysd/actionlint just published.
+          version: "1.7.12"
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          # The action's default is latest, which follows a lock that moves when this action pin moves.
+          # 1.31.1 is the newest stable release that lock can run.
+          version: "1.31.1"
+          # This repository is public, so code scanning accepts the SARIF. The action rejects annotations
+          # at the same time.
+          advanced-security: true
+          annotations: false
+
+  trim-caches:
+    # CodeQL's default setup saves a database per language on each push to main and reads only the newest, which fills
+    # the 10 GB GitHub keeps. It is a separate job so that the job that runs the code under test gets no token that can
+    # delete caches.
+    name: trim-caches
+    needs: ci
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # deletes cache entries
+    steps:
+      - name: Delete all but the newest databases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        # Two per language and CodeQL version, which the key names before the commit: this push's may still be saving
+        # while the last push's is the one read. Two pushes can race to delete the same entry, and nothing needs this
+        # step to pass.
         continue-on-error: true
-        shell: pwsh
-        run: pwsh scripts/run-tests.ps1 -Quarantined
+        run: |
+          gh api --paginate "repos/$GH_REPO/actions/caches?key=codeql-overlay-base-database-&sort=created_at&direction=desc&per_page=100" \
+            --jq '.actions_caches[] | "\(.id) \(.key)"' | sed -E 's/-[0-9a-f]{40}-.*//' | awk 'seen[$2]++ >= 2 { print $1 }' |
+            xargs -r -I{} gh api --method DELETE "repos/$GH_REPO/actions/caches/{}"
 
   installer:
     name: installer
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.scripts != 'false' }}
     runs-on: windows-2025
     timeout-minutes: 15
     steps:
@@ -203,7 +312,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/FlakyTests.Tests.ps1 -CI
+          Invoke-Pester -Path scripts/RunTests.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/PrRules.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE

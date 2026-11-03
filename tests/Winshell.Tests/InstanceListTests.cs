@@ -2,10 +2,11 @@ using System.Diagnostics;
 
 namespace Winshell.Tests;
 
+[Trait("Category", "Slow")]
 public class InstanceListTests
 {
     private static InstanceInfo Record(int pid, string? processName) =>
-        new("id", pid, "shell", "C:\\cfg\\shell.qml", DateTime.Now, "pipe", "log.txt", ProcessName: processName);
+        new("id", pid, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "log.txt", ProcessName: processName);
 
     [Theory]
     [InlineData(null)]
@@ -21,8 +22,9 @@ public class InstanceListTests
     [InlineData("myshell")]
     public void An_instance_id_that_now_belongs_to_another_program_is_not_running(string? processName)
     {
-        // This test program's own name starts with Winshell, so it takes another one. cmd waits on its open input.
-        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true };
+        // This test program's own name starts with Winshell, so it takes another one. cmd waits on its open input. Its
+        // banner stays out of this process's output, which carries xUnit's results.
+        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true };
         using var other = Process.Start(info)!;
         try
         {
@@ -37,7 +39,7 @@ public class InstanceListTests
     [Fact]
     public void A_configuration_program_of_any_name_is_running_under_the_name_it_recorded()
     {
-        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true };
+        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true };
         using var other = Process.Start(info)!;
         try
         {

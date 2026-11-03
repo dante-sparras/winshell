@@ -10,7 +10,7 @@ public class AppIconTests
     [Fact]
     public void The_logo_icon_contains_each_shell_size()
     {
-        var bytes = File.ReadAllBytes(Path.Combine(RepoRoot(), "packaging", "winshell.ico"));
+        var bytes = File.ReadAllBytes(Path.Combine(Repo.Root, "packaging", "winshell.ico"));
         Assert.Equal(Sizes, SizesIn(bytes));
         foreach (var image in ImagesIn(bytes))
             Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, image[..4]);
@@ -75,17 +75,6 @@ public class AppIconTests
         return BitConverter.ToUInt16(bytes, 4);
     }
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "winshell.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("The tests run outside the repository.");
-    }
 
     private delegate bool EnumResNameProc(nint module, nint type, nint name, nint param);
 

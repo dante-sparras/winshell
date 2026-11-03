@@ -94,7 +94,7 @@ public class WinlandProtocolTests
     }
 
     [Fact]
-    public void Json_becomes_maps_and_lists_for_qml()
+    public void Json_becomes_maps_and_lists()
     {
         // A monitors entry as Winland 0.3 writes it.
         using var doc = JsonDocument.Parse("""
@@ -102,7 +102,7 @@ public class WinlandProtocolTests
              "activeWorkspace":{"address":"1","id":1,"type":"normal","name":"1","monitor":"\\\\.\\DISPLAY2"},
              "specialWorkspace":{"address":"","type":"","name":"","monitor":""},"solitaryBlockedBy":null}
             """);
-        var map = Assert.IsType<Dictionary<string, object?>>(WinlandProtocol.ToQml(doc.RootElement));
+        var map = Assert.IsType<Dictionary<string, object?>>(WinlandProtocol.ToObject(doc.RootElement));
         Assert.Equal(0, map["id"]);
         Assert.Equal(@"\\.\DISPLAY2", map["name"]);
         Assert.Equal(1.25, map["scale"]);

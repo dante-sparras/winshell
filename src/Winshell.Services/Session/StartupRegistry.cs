@@ -243,7 +243,10 @@ internal static class WindowsStartupTasks
     {
         try
         {
+            // Sync because StartupService reads the task as it is made, and a UI binds its properties.
+#pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
             var task = Task.Run(static async () => await StartupTask.GetAsync(TaskId).AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
             return task is null ? null : new Real(task);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
@@ -258,7 +261,9 @@ internal static class WindowsStartupTasks
 
         // Off the caller. Completing a WinRT async call on the shell's thread can deadlock it.
         public StartupTaskState RequestEnable() =>
+#pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
             Task.Run(async () => await task.RequestEnableAsync().AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
 
         public bool Disable()
         {

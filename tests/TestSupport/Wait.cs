@@ -16,14 +16,17 @@ internal static class Wait
     /// <param name="done">What to wait for.</param>
     /// <param name="what">What the test was waiting for, in its failure message.</param>
     /// <param name="between">Runs between checks, usually to pump a loop.</param>
-    internal static void Until(Func<bool> done, string what, Action? between = null)
+    internal static void Until(Func<bool> done, string what, Action? between = null) => Until(done, what, Patience, between);
+
+    /// <summary><see cref="Until"/> for what takes longer than a test should, such as a first build.</summary>
+    internal static void Until(Func<bool> done, string what, TimeSpan patience, Action? between = null)
     {
         var token = TestContext.Current.CancellationToken;
         var started = Stopwatch.GetTimestamp();
         var pause = FirstPause;
         while (!done())
         {
-            Assert.True(Stopwatch.GetElapsedTime(started) < Patience, $"Timed out: {what}");
+            Assert.True(Stopwatch.GetElapsedTime(started) < patience, $"Timed out: {what}");
             token.WaitHandle.WaitOne(pause);
             token.ThrowIfCancellationRequested();
             pause = Next(pause);

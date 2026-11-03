@@ -19,7 +19,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     private bool _disposed;
     private long _revision;
 
-    public NotificationListener(IEventLoop loop)
+    internal NotificationListener(IEventLoop loop)
         : this(loop, Log.Default, new WindowsNotificationBackend(), monitor: true)
     {
     }
@@ -142,7 +142,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 try
                 {
                     await changed.WaitAsync(wait, cancellation).ConfigureAwait(false);
-                    while (changed.Wait(0)) { }
+                    while (changed.Wait(0, cancellation)) { }
                 }
                 catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
             }

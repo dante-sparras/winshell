@@ -7,11 +7,11 @@ internal enum NoticeKind
     /// <summary>The configuration did not build. It stays until it is fixed or dismissed.</summary>
     BuildError,
 
+    /// <summary>A TOML or XAML file does not read, under <c>winshell dev</c>. It stays until the file is fixed.</summary>
+    ConfigError,
+
     /// <summary>Something failed and Winshell wrote a crash report. It goes away by itself.</summary>
     Crash,
-
-    /// <summary>A <c>shell.qml</c> was left behind. QML configurations stopped working. It stays until it is dismissed.</summary>
-    RetiredQml,
 }
 
 /// <summary>What a notice says, and the file its button opens. A zero <paramref name="Timeout"/> keeps it until it is dismissed.</summary>
@@ -75,16 +75,25 @@ internal sealed class ShellNotices : IDisposable
         projectFile,
         TimeSpan.Zero);
 
-    /// <summary>The notice for a <c>shell.qml</c> left behind, shown once as the shell starts.</summary>
-    public static Notice ForRetiredQml(string qmlFile) => new(
-        NoticeKind.RetiredQml,
-        "QML configurations stopped working",
-        Path.GetFileName(qmlFile),
-        $"{qmlFile} is a QML configuration, and QML configurations stopped working.",
-        "Start a new one with dotnet new winshell.",
+    /// <summary>The notice for a file that does not read, while what came from it before keeps working.</summary>
+    public static Notice ForConfigError(string error, string file) => new(
+        NoticeKind.ConfigError,
+        "This file has an error",
+        Path.GetFileName(file),
+        error,
+        "Winshell keeps what it had.",
         "Open file",
-        qmlFile,
+        file,
         TimeSpan.Zero);
+
+    /// <summary>Shows a file's error, or takes it away once the file reads again.</summary>
+    public void ShowConfigError(string file, string error)
+    {
+        if (error.Length > 0)
+            Show(ForConfigError(error, file));
+        else if (Current is { Kind: NoticeKind.ConfigError } current && current.Target == file)
+            Hide();
+    }
 
     /// <summary>The notice for something that failed: what failed, what Winshell did, and the report.</summary>
     public static Notice ForCrash(CrashReport report, TimeSpan timeout)
@@ -102,6 +111,7 @@ internal sealed class ShellNotices : IDisposable
         Hide();
         try
         {
+            _log.Info("notice", $"{notice.Title}: {notice.Detail}");
             Current = notice;
             _window = _show(notice, Act, () => _loop.Post(Hide));
         }

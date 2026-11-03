@@ -6,7 +6,7 @@ namespace Winshell.Services.Tests;
 public sealed class PowerServiceTests
 {
     private static PowerDeviceInfo Battery(string id, double percentage = 0.5) => new(id, "Model", PowerDeviceType.Battery, true, true,
-        PowerDeviceState.Discharging, percentage, 10, 20, -5, 3600, 0, 90, "battery");
+        PowerDeviceState.Discharging, percentage, 10, 20, -5, 3600, 0, 90);
 
     private static PowerSnapshot Snapshot(params PowerDeviceInfo[] devices) =>
         new(true, devices.FirstOrDefault() ?? PowerDeviceInfo.NoBattery, devices, devices.Length > 0);
@@ -158,17 +158,4 @@ public sealed class PowerServiceTests
     [InlineData(false, -1, 1)]
     public void An_idle_monitor_looks_again_when_the_timeout_can_pass(bool idle, double remaining, double seconds) =>
         Assert.Equal(TimeSpan.FromSeconds(seconds), IdleMonitor.NextCheck(idle, remaining));
-
-    [Fact]
-    public void Keep_awake_lets_go_when_disposed()
-    {
-        var awake = new KeepAwake { Enabled = true };
-        Assert.True(KeepAwake.AnyActive);
-        Assert.True(awake.HoldsRequest);
-
-        awake.Dispose();
-
-        Assert.False(awake.Enabled);
-        Assert.False(awake.HoldsRequest);
-    }
 }

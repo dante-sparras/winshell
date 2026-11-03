@@ -123,7 +123,7 @@ public sealed class WinlandWorkspace : ObservableObject
 
     public bool HasFullscreen => _hasFullscreen;
 
-    public ObservableCollection<WinlandWindow> Toplevels { get; } = [];
+    public ObservableCollection<WinlandWindow> Windows { get; } = [];
 
     /// <summary>The Workspace's entry from Winland's last workspace list. Null before the first one.</summary>
     public JsonElement? LastIpcObject => _lastIpcObject;
@@ -169,13 +169,13 @@ public sealed class WinlandWorkspace : ObservableObject
 
     internal void SetUrgent(bool urgent) => Set(ref _urgent, urgent, nameof(Urgent));
 
-    internal void InsertToplevel(WinlandWindow toplevel)
+    internal void InsertWindow(WinlandWindow window)
     {
-        if (!Toplevels.Contains(toplevel))
-            Toplevels.Add(toplevel);
+        if (!Windows.Contains(window))
+            Windows.Add(window);
     }
 
-    internal void RemoveToplevel(WinlandWindow toplevel) => Toplevels.Remove(toplevel);
+    internal void RemoveWindow(WinlandWindow window) => Windows.Remove(window);
 }
 
 /// <summary>A window as Winland reports it. Its address is the window handle.</summary>
@@ -208,7 +208,7 @@ public sealed class WinlandWindow : ObservableObject
     /// <summary>The Monitor of the window's Workspace, or null.</summary>
     public WinlandMonitor? Monitor => _monitor;
 
-    /// <summary>Whether this is <see cref="WinlandService.ActiveToplevel"/>.</summary>
+    /// <summary>Whether this is <see cref="WinlandService.ActiveWindow"/>.</summary>
     public bool Activated => _activated;
 
     /// <summary>Whether Winland marked the window urgent. It clears when the window is activated or its Workspace is focused.</summary>

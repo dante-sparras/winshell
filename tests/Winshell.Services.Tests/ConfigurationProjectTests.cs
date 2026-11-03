@@ -107,35 +107,20 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
-    public void A_leftover_shell_qml_is_not_a_project_and_not_an_error()
+    public void A_file_that_is_not_a_project_is_refused()
     {
-        var qml = Path.Combine(_root, "shell.qml");
-        File.WriteAllText(qml, "import Winshell\n");
         File.WriteAllText(Path.Combine(_root, "notes.txt"), "hello");
 
-        Assert.Null(ConfigurationProject.Find(qml, null, _root, out var qmlError));
-        Assert.Null(qmlError);
-        Assert.Equal(qml, ConfigurationProject.LeftoverQml(qml, null, _root));
         Assert.StartsWith("No .csproj at ", Refusal(path: Path.Combine(_root, "notes.txt")), StringComparison.Ordinal);
-
-        var folder = Path.Combine(_root, "old");
-        Directory.CreateDirectory(folder);
-        var nested = Path.Combine(folder, "shell.qml");
-        File.WriteAllText(nested, "import Winshell\n");
-        Assert.Null(ConfigurationProject.Find(folder, null, _root, out var folderError));
-        Assert.Null(folderError);
-        Assert.Equal(nested, ConfigurationProject.LeftoverQml(null, "old", _root));
     }
 
     [Fact]
-    public void A_project_hides_a_leftover_shell_qml_and_a_program_finds_its_project()
+    public void A_program_finds_its_project()
     {
         var file = Project("mine\\Bar.csproj");
-        File.WriteAllText(Path.Combine(_root, "mine", "shell.qml"), "import Winshell\n");
         var project = Found(path: Path.Combine(_root, "mine"));
 
         Assert.Equal(file, project.ProjectFile);
-        Assert.Null(ConfigurationProject.LeftoverQml(Path.Combine(_root, "mine"), null, _root));
         Assert.Equal(file, ConfigurationProject.ForProgram(project.Program)!.ProjectFile);
         Assert.Equal(file, ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder + ".next", "Bar.exe"))!.ProjectFile);
         Assert.Null(ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder, "other.exe")));
@@ -393,6 +378,36 @@ public sealed class ConfigurationProjectTests : IDisposable
         Assert.Null(why);
         Assert.False(project.NeedsBuild());
         Assert.Equal((0, "built"), ToTuple(ConfigurationProject.Run(project.Program, [], project.Folder)));
+    }
+
+    [Fact]
+    public async Task What_a_program_prints_arrives_with_its_exit_on_a_busy_pool()
+    {
+        // Hold every thread the pool has, and more than it can add meanwhile. Starting processes until it runs out takes
+        // a burst so large that Windows refuses some of them.
+        using var busy = new ManualResetEventSlim();
+        var held = Enumerable.Range(0, ThreadPool.ThreadCount + (Environment.ProcessorCount * 2)).Select(_ => Task.Run(busy.Wait)).ToArray();
+        try
+        {
+            for (var i = 0; i < 8; i++)
+                Assert.Equal((0, "built"), ToTuple(ConfigurationProject.Run("cmd", ["/c", "echo built"], _root)));
+        }
+        finally
+        {
+            busy.Set();
+            await Task.WhenAll(held);
+        }
+    }
+
+    [Fact]
+    public void A_server_that_outlives_its_build_does_not_hold_up_the_result()
+    {
+        var watch = Stopwatch.StartNew();
+
+        var result = ConfigurationProject.Run("cmd", ["/c", "start /b ping -n 15 127.0.0.1 >nul & echo built"], Path.GetTempPath());
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Took {watch.Elapsed}.");
+        Assert.Equal((0, "built"), ToTuple(result));
     }
 
     private static (int, string) ToTuple(CommandResult result) => (result.ExitCode, result.Output);

@@ -5,10 +5,10 @@ BeforeAll {
     }
 }
 
-Describe 'Get-WinshellReleaseCiState' {
+Describe 'Get-WinshellReleaseCheckState' {
     It 'waits when this commit has no ci run' {
-        Get-WinshellReleaseCiState -CheckRuns @() | Should -Be 'pending'
-        Get-WinshellReleaseCiState -CheckRuns @([pscustomobject]@{ name = 'pr-title'; status = 'completed'; conclusion = 'success'; started_at = '2026-10-29T12:00:00Z' }) | Should -Be 'pending'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns @() | Should -Be 'pending'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns @([pscustomobject]@{ name = 'pr-title'; status = 'completed'; conclusion = 'success'; started_at = '2026-10-29T12:00:00Z' }) | Should -Be 'pending'
     }
 
     It 'waits while the newest ci run has not finished' {
@@ -16,8 +16,8 @@ Describe 'Get-WinshellReleaseCiState' {
             (New-CiRun 'completed' 'success' '2026-10-29T12:00:00Z'),
             (New-CiRun 'in_progress' $null '2026-10-29T12:05:00Z')
         )
-        Get-WinshellReleaseCiState -CheckRuns $runs | Should -Be 'pending'
-        Get-WinshellReleaseCiState -CheckRuns @((New-CiRun 'queued' $null $null)) | Should -Be 'pending'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns $runs | Should -Be 'pending'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns @((New-CiRun 'queued' $null $null)) | Should -Be 'pending'
     }
 
     It 'is green only when the newest finished ci run succeeded' {
@@ -25,7 +25,7 @@ Describe 'Get-WinshellReleaseCiState' {
             (New-CiRun 'completed' 'failure' '2026-10-29T12:00:00Z'),
             (New-CiRun 'completed' 'success' '2026-10-29T12:05:00Z')
         )
-        Get-WinshellReleaseCiState -CheckRuns $runs | Should -Be 'green'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns $runs | Should -Be 'green'
     }
 
     It 'is red when the newest finished ci run failed' {
@@ -33,8 +33,8 @@ Describe 'Get-WinshellReleaseCiState' {
             (New-CiRun 'completed' 'success' '2026-10-29T12:00:00Z'),
             (New-CiRun 'completed' 'failure' '2026-10-29T12:05:00Z')
         )
-        Get-WinshellReleaseCiState -CheckRuns $runs | Should -Be 'red'
-        Get-WinshellReleaseCiState -CheckRuns @((New-CiRun 'completed' 'cancelled' '2026-10-29T12:00:00Z')) | Should -Be 'red'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns $runs | Should -Be 'red'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns @((New-CiRun 'completed' 'cancelled' '2026-10-29T12:00:00Z')) | Should -Be 'red'
     }
 
     It 'waits when a later ci run is queued after an older success' {
@@ -42,7 +42,29 @@ Describe 'Get-WinshellReleaseCiState' {
             (New-CiRun 'completed' 'success' '2026-10-29T12:00:00Z'),
             (New-CiRun 'queued' $null $null)
         )
-        Get-WinshellReleaseCiState -CheckRuns $runs | Should -Be 'pending'
+        Get-WinshellReleaseCheckState -Name ci -CheckRuns $runs | Should -Be 'pending'
+    }
+}
+
+Describe 'Get-WinshellReleaseCiState' {
+    BeforeAll {
+        function script:New-Run([string]$Name, [string]$Status, [string]$Conclusion) {
+            [pscustomobject]@{ name = $Name; status = $Status; conclusion = $Conclusion; started_at = '2026-10-29T12:00:00Z' }
+        }
+    }
+
+    It 'is green only when ci and slow both succeeded' {
+        Get-WinshellReleaseCiState -CheckRuns @((New-Run 'ci' 'completed' 'success'), (New-Run 'slow' 'completed' 'success')) | Should -Be 'green'
+    }
+
+    It 'waits for the one that has not finished' {
+        Get-WinshellReleaseCiState -CheckRuns @(New-Run 'ci' 'completed' 'success') | Should -Be 'pending'
+        Get-WinshellReleaseCiState -CheckRuns @((New-Run 'ci' 'completed' 'success'), (New-Run 'slow' 'in_progress' $null)) | Should -Be 'pending'
+    }
+
+    It 'is red when either failed, without waiting for the other' {
+        Get-WinshellReleaseCiState -CheckRuns @((New-Run 'ci' 'in_progress' $null), (New-Run 'slow' 'completed' 'failure')) | Should -Be 'red'
+        Get-WinshellReleaseCiState -CheckRuns @((New-Run 'ci' 'completed' 'failure'), (New-Run 'slow' 'completed' 'success')) | Should -Be 'red'
     }
 }
 

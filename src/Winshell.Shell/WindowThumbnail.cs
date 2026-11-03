@@ -265,7 +265,7 @@ public sealed class WindowThumbnail : FrameworkElement
     private void ReleaseThumbnail()
     {
         if (_thumbnail != 0)
-            DwmUnregisterThumbnail(_thumbnail);
+            _ = DwmUnregisterThumbnail(_thumbnail);
         _thumbnail = 0;
         _destination = 0;
         _applied = default;

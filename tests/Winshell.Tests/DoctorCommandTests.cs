@@ -5,11 +5,12 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary><c>winshell doctor</c> as a process. Every config is under a temp folder this class creates. It never builds.</summary>
+[Trait("Category", "Slow")]
 public sealed class DoctorCommandTests : IDisposable
 {
     private static readonly string[] Ids =
     [
-        "windows", "dotnet", "project", "downloaded", "built", "build", "qml",
+        "windows", "dotnet", "project", "downloaded", "built", "build",
         "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes",
     ];
 
@@ -35,26 +36,6 @@ public sealed class DoctorCommandTests : IDisposable
         Assert.Contains("has not been built", built.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Contains("Run winshell run once", built.GetProperty("fix").GetString(), StringComparison.Ordinal);
         Assert.True(json.RootElement.GetProperty("summary").GetProperty("fail").GetInt32() >= 1);
-    }
-
-    [Fact]
-    public void A_leftover_qml_file_warns_and_the_default_shell_still_passes()
-    {
-        var leftover = Path.Combine(_root, "leftover");
-        Directory.CreateDirectory(leftover);
-        File.WriteAllText(Path.Combine(leftover, "shell.qml"), "import QtQuick\nItem {}\n");
-
-        var (_, output, _) = Run("doctor", "--json", "-p", leftover);
-
-        using var json = JsonDocument.Parse(output);
-        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
-        var project = checks.Single(c => c.GetProperty("id").GetString() == "project");
-        var qml = checks.Single(c => c.GetProperty("id").GetString() == "qml");
-        Assert.Equal("pass", project.GetProperty("status").GetString());
-        Assert.Contains("default shell", project.GetProperty("message").GetString(), StringComparison.Ordinal);
-        Assert.Equal("warn", qml.GetProperty("status").GetString());
-        Assert.Contains("shell.qml", qml.GetProperty("message").GetString(), StringComparison.Ordinal);
-        Assert.Contains("dotnet new winshell", qml.GetProperty("fix").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

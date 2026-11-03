@@ -23,9 +23,9 @@ public sealed class ShellInstanceTests
 
         public string? BuildProject { get; private set; }
 
-        public IIpcTargets Ipc { get; } = new ShellIpc(new Log());
+        public ShellIpc Ipc { get; } = new ShellIpc(new Log());
 
-        public string? Reload(bool hard, string? program)
+        public string? Reload(string? program)
         {
             Reloads++;
             return ReloadError;
@@ -97,6 +97,21 @@ public sealed class ShellInstanceTests
         Assert.NotNull(row.Info.ExitedAt);
         // The pipe closed with it, so the name is free again.
         IpcServer.OpenFirst(instance.Pipe).Dispose();
+    }
+
+    [Fact]
+    public void A_listed_instance_has_its_log_on_disk()
+    {
+        var log = new Log();
+        var instance = ShellInstance.Open(Program, log);
+        Assert.True(instance.TryOpenPipe());
+        log.Info("shell", "Shell ID: \"mine\"");
+
+        instance.Publish("mine");
+
+        using var reader = new StreamReader(new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+        Assert.Contains("Shell ID: \"mine\"", reader.ReadToEnd(), StringComparison.Ordinal);
+        instance.Close();
     }
 
     [Fact]

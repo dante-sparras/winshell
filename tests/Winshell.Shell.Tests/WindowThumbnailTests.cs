@@ -1,9 +1,11 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Foundation;
 
 namespace Winshell.ShellTests;
 
 /// <summary>The thumbnail can find the shell window it is drawn in. What DWM then paints is not asserted here.</summary>
+[Trait("Category", "Slow")]
 public sealed class WindowThumbnailTests
 {
     [Fact]
@@ -15,7 +17,7 @@ public sealed class WindowThumbnailTests
             var thumbnail = new WindowThumbnail { Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 40, screen.Y + 40, 200, 120),
+                Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
                 Content = new Grid { Children = { thumbnail } },
             };
             popup.Visible = true;
@@ -38,7 +40,7 @@ public sealed class WindowThumbnailTests
             var thumbnail = new WindowThumbnail { Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 40, screen.Y + 40, 200, 120),
+                Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
                 Content = new Grid { Children = { thumbnail } },
             };
             popup.Visible = true;

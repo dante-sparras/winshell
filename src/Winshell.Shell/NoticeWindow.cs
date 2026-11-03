@@ -34,12 +34,10 @@ internal sealed class NoticeWindow : IDisposable
         content.Measure(new Size(NoticeWidth, double.PositiveInfinity));
         _window = new PanelWindow
         {
-            Namespace = "notice",
             Anchors = Edges.Bottom | Edges.Right,
             Margins = new Thickness(0, 0, 12, 12),
             Width = NoticeWidth,
             Height = Math.Ceiling(content.DesiredSize.Height),
-            ExclusiveZone = 0,
             AboveWindows = true,
             Focusable = true,
             Backdrop = WindowBackdrop.Acrylic,

@@ -4,6 +4,7 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary><c>winshell log</c> never prints a different instance's log than the one asked for.</summary>
+[Trait("Category", "Slow")]
 public sealed class LogSelectorTests : IDisposable
 {
     private const string StoppedId = "abc123stopped";
@@ -20,7 +21,7 @@ public sealed class LogSelectorTests : IDisposable
             ["id"] = StoppedId,
             ["pid"] = int.MaxValue - 1,
             ["shellId"] = "stopped",
-            ["configPath"] = Path.Combine(_root, "shell.qml"),
+            ["configPath"] = Path.Combine(_root, "MyShell.exe"),
             ["launchTime"] = DateTime.Now.AddHours(-1),
             ["pipe"] = "winshell-" + StoppedId,
             ["log"] = log,

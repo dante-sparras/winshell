@@ -36,7 +36,8 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     public void The_default_shell_is_listed_and_killed()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
-        Run("winshell-default", templates.DefaultProject);
+        // The project's own name, not the built-in default shell's id, whose folders and mutex it would share.
+        Run("PackedShell", templates.DefaultProject);
     }
 
     private void Run(string shellId, string projectFile)
@@ -273,14 +274,7 @@ public sealed class PackedTemplates : IDisposable
         using var zip = ZipFile.OpenRead(nupkg);
         var names = zip.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
         var lib = "lib/net10.0-windows10.0.22621.0/";
-        Assert.Contains(lib + "Winshell.Services.dll", names);
-        Assert.Contains(lib + "Winshell.Shell.dll", names);
-        Assert.DoesNotContain(names, name =>
-            name.Contains("Jint", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Skia", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("HarfBuzz", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Qml", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Winshell.Runtime", StringComparison.Ordinal));
+        Assert.Equal([lib + "Winshell.Services.dll", lib + "Winshell.Shell.dll"], names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order());
 
         var services = zip.GetEntry(lib + "Winshell.Services.dll")!;
         var extracted = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
@@ -297,10 +291,9 @@ public sealed class PackedTemplates : IDisposable
             .ToDictionary(element => element.Attribute("id")!.Value, element => element.Attribute("version")!.Value);
         Assert.Equal("2.6.4", dependencies["Microsoft.WindowsAppSDK.WinUI"]);
         Assert.Equal("2.6.4", dependencies["Microsoft.WindowsAppSDK.Foundation"]);
-        Assert.DoesNotContain(dependencies.Keys, id =>
-            id.Contains("Jint", StringComparison.OrdinalIgnoreCase)
-            || id.Contains("Skia", StringComparison.OrdinalIgnoreCase)
-            || id.Contains("Qml", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            ["Microsoft.Win32.SystemEvents", "Microsoft.WindowsAppSDK.Foundation", "Microsoft.WindowsAppSDK.WinUI", "System.Management", "Tomlyn", "Vortice.Direct3D11", "Vortice.DXGI"],
+            dependencies.Keys.Order(StringComparer.OrdinalIgnoreCase));
     }
 
     private static string InformationalVersion(string path)

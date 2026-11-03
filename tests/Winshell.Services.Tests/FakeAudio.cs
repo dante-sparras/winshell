@@ -7,12 +7,8 @@ namespace Winshell.Services.Tests;
 internal sealed class FakeAudioGraph : IAudioGraph
 {
     private readonly List<AudioGraphNode> _nodes = [];
-    private readonly List<AudioGraphLink> _links = [];
-    private int _nextLink = 1;
 
     public IReadOnlyList<AudioGraphNode> Nodes => _nodes;
-
-    public IReadOnlyList<AudioGraphLink> Links => _links;
 
     public bool Ready => true;
 
@@ -25,10 +21,6 @@ internal sealed class FakeAudioGraph : IAudioGraph
     public event Action<AudioGraphNode>? NodeAdded;
 
     public event Action<AudioGraphNode>? NodeRemoved;
-
-    public event Action<AudioGraphLink>? LinkAdded;
-
-    public event Action<AudioGraphLink>? LinkRemoved;
 
     public event Action? DefaultsChanged;
 
@@ -47,20 +39,6 @@ internal sealed class FakeAudioGraph : IAudioGraph
         NodeRemoved?.Invoke(node);
     }
 
-    public AudioGraphLink Link(AudioGraphNode source, AudioGraphNode target)
-    {
-        var link = new AudioGraphLink(_nextLink++, source, target);
-        _links.Add(link);
-        LinkAdded?.Invoke(link);
-        return link;
-    }
-
-    public void Unlink(AudioGraphLink link)
-    {
-        _links.Remove(link);
-        LinkRemoved?.Invoke(link);
-    }
-
     public void SetDefaults(AudioGraphNode? playback, AudioGraphNode? recording)
     {
         DefaultPlayback = playback;
@@ -73,15 +51,18 @@ internal sealed class FakeAudioNode : AudioGraphNode
 {
     private static int _nextId;
 
-    public FakeAudioNode(AudioNodeType type, string description = "Node", int[]? channels = null)
+    public FakeAudioNode(AudioNodeType type, string description = "Node", AudioChannel[]? channels = null, FakeAudioNode? device = null)
         : base(Interlocked.Increment(ref _nextId))
     {
-        Type = (int)type;
+        Type = type;
+        Device = device;
         Description = description;
         Name = description;
-        Channels = channels ?? [3, 4];
+        Channels = channels ?? [AudioChannel.FrontLeft, AudioChannel.FrontRight];
         ApplyAudio(new float[Channels.Length], false);
     }
+
+    public override FakeAudioNode? Device { get; }
 
     public FakeMeter? FakeMeter { get; set; }
 
@@ -92,6 +73,8 @@ internal sealed class FakeAudioNode : AudioGraphNode
     public override IAudioMeterInformation? Meter => FakeMeter;
 
     public void SetAudio(float[] volumes, bool muted) => ApplyAudio(volumes, muted);
+
+    public void SetActive(bool active) => ApplyActive(active);
 
     public void Rename(string description)
     {

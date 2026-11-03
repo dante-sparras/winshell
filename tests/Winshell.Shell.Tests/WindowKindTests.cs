@@ -2,10 +2,12 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Winshell.Native;
 
 namespace Winshell.ShellTests;
 
+[Trait("Category", "Slow")]
 public sealed class WindowKindTests
 {
     [Fact]
@@ -17,7 +19,7 @@ public sealed class WindowKindTests
             var content = new Grid();
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 60, screen.Y + 60, 200, 120),
+                Rect = new Rect(screen.X + 60, screen.Y + 60, 200, 120),
                 Content = content,
             };
             popup.Visible = true;
@@ -37,7 +39,7 @@ public sealed class WindowKindTests
             var screen = shell.Screens[0].Geometry;
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 60, screen.Y + 60, 200, 120),
+                Rect = new Rect(screen.X + 60, screen.Y + 60, 200, 120),
                 GrabFocus = true,
                 Content = new Grid(),
             };
@@ -62,7 +64,7 @@ public sealed class WindowKindTests
             var screen = shell.Screens[0].Geometry;
             using var popup = new PopupWindow
             {
-                Rect = new QRect(screen.X + 60, screen.Y + 60, 200, 120),
+                Rect = new Rect(screen.X + 60, screen.Y + 60, 200, 120),
                 GrabFocus = true,
                 Content = new Grid(),
             };

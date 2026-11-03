@@ -18,7 +18,8 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 ├── docs/
 │   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
-│   │   └── release-notes/           # Notes for a release, once that release exists
+│   │   ├── release-notes/           # Notes for a release, once that release exists
+│   │   └── test-audit/              # The gate every test passes
 │   ├── guide/                       # The docs site's guide section
 │   ├── reference/                   # A page per module
 │   ├── security/                    # The threat model
@@ -46,8 +47,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
 │   ├── Winshell.Package.Tests/      # Packs the templates and runs each shell; Category=Package, left out of the main run
 │   ├── TestSupport/                 # Source files every test project links instead of copying
-│   ├── Directory.Build.props        # What every test project shares
-│   └── quarantine.txt               # Flaky tests ci leaves out and the quarantine job runs
+│   └── Directory.Build.props        # What every test project shares
 ├── winshell.slnx                    # The solution the check builds
 ├── dotnet-tools.json                # DocFX, pinned
 ├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
@@ -57,9 +57,14 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 
 ## Before you finish
 
-- Build with `dotnet build .\winshell.slnx -warnaserror`, which must pass with 0 warnings, then run the focused tests for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The required `ci` job runs the build and the main test stage on a PR, and all of `pwsh scripts/check.ps1` on a push to `main` and on the release PR. `check.ps1` runs the Pester suites when Pester 5.6.1 is installed, and does not run PSScriptAnalyzer, lychee, actionlint, zizmor or `package.ps1`. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
+- Writing, refactoring or reviewing C#? Follow [docs/agents/csharp-practices.md](docs/agents/csharp-practices.md).
+- Writing, changing or reviewing a test? It must pass the gate in [docs/agents/test-audit/SKILL.md](docs/agents/test-audit/SKILL.md).
+- Before every push, `pwsh scripts/quick-check.ps1` must pass: the build with 0 warnings, the formatting and the fast tests, in under two minutes, with no window opened.
+- Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/run-tests.ps1 -Tier Slow`, under "Live UI with Winland running". `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out.
+- CI runs the rest, so leave full `check.ps1`, `package.ps1` and arm64 to it. The required `ci` job runs the build and the fast tests on a PR, and all of `pwsh scripts/check.ps1 -Tier Fast` on a push to `main` and on the release PR. The required `slow` job runs the slow tests. `slow` skips a PR that only changes docs or Markdown, and `ci` skips one that only changes Markdown outside `docs/` and the README. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, `pr-rules`, and the docs `build` job.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
-- Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes.
+- Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
+- Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
 - Say what you couldn't verify.
 - Added or changed a command, prerequisite, environment variable, or top-level folder? Update [docs/development.md](docs/development.md) or Project Structure.
 - Don't edit `.agents/skills/` or `.claude/skills/`; the `skills` CLI overwrites them.
@@ -91,6 +96,20 @@ winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace $workspac
 winland reload
 ```
 
+## See what you changed
+
+`winshell inspect` is how to verify a visual change. It reads the running shell from inside, so it needs no mouse and no keyboard, and it does not move the user's pointer or focus.
+
+```powershell
+winshell inspect tree                                # every open window's elements, sizes and values, as JSON
+winshell inspect screenshot out.png TaskbarView      # a window as a PNG, which you can then read
+winshell inspect click StartButton                   # activate an element through its automation peer
+```
+
+Look at the screenshot, and check values in the tree rather than trusting that the code ran. Open what a test or run needs under "Live UI with Winland running". For a shell of your own, run it with private `WINSHELL_CONFIG_DIR` and `WINSHELL_LOCAL_DIR`, and pass `--pid`.
+
+`winshell inspect hover` shows a control's hover look only: a `PointerEntered` handler needs a real pointer, or a method of its own that a test can call.
+
 ## Agent skills
 
 ### Issue tracker
@@ -100,6 +119,10 @@ Issues live in GitHub Issues for enpaze/winshell, used through `gh`. See `docs/a
 ### Triage labels
 
 The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Test audit
+
+Audits and sweeps of `tests/` follow `docs/agents/test-audit/SKILL.md`. It is this repo's own, adapted from OpenClaw's skill, so it lives outside `.agents/skills/`.
 
 ### Domain docs
 

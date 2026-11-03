@@ -44,9 +44,9 @@ public sealed class CaptureView : Panel
         set => SetValue(SessionProperty, value);
     }
 
-    protected override Size MeasureOverride(Size available)
+    protected override Size MeasureOverride(Size availableSize)
     {
-        var size = Fit(Natural(), available);
+        var size = Fit(Natural(), availableSize);
         _image.Measure(size);
         return size;
     }

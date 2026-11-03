@@ -7,7 +7,7 @@ namespace Winshell;
 /// JSON a person reads. Characters outside ASCII stay as themselves, which is how
 /// <c>winshell doctor --json</c> writes a path.
 /// </summary>
-public static class JsonText
+internal static class JsonText
 {
     public static JavaScriptEncoder Encoder { get; } = JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
 

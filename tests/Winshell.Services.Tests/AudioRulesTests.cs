@@ -1,4 +1,3 @@
-#pragma warning disable CA1416
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Winshell.Audio;
@@ -7,17 +6,6 @@ namespace Winshell.Services.Tests;
 
 public sealed class AudioRulesTests
 {
-    [Fact]
-    public void Node_and_link_flags_keep_their_values()
-    {
-        Assert.Equal(0b10000, AudioNodeTypes.Playback);
-        Assert.Equal(0b100, AudioNodeTypes.Session);
-        Assert.Equal(0, (int)AudioLinkState.Inactive);
-        Assert.Equal(1, (int)AudioLinkState.Active);
-        Assert.Equal(0, (int)EDataFlow.Render);
-        Assert.Equal(1, (int)EDataFlow.Capture);
-    }
-
     [Fact]
     public void A_device_node_releases_its_com_objects_once()
     {

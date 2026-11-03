@@ -7,15 +7,25 @@ namespace Winshell.Audio;
 public sealed class AudioNode : ObservableObject
 {
     private readonly AudioGraphNode _node;
+    private readonly Log _log;
     private string _description;
+    private IReadOnlyList<float> _volumes;
+    private bool _muted;
+    private bool _active;
 
     internal AudioNode(AudioService service, AudioGraphNode node, Log log)
     {
         Service = service;
         _node = node;
+        _log = log;
         _description = node.Description;
-        Audio = new AudioVolume(node, log);
+        _volumes = node.Volumes;
+        _muted = node.Muted;
+        _active = node.Active;
+        Channels = node.Channels;
         node.PropertiesChanged += OnPropertiesChanged;
+        node.AudioChanged += OnAudioChanged;
+        node.ActiveChanged += OnActiveChanged;
     }
 
     internal AudioService Service { get; }
@@ -43,9 +53,13 @@ public sealed class AudioNode : ObservableObject
     public bool IsPlayback => _node.IsPlayback;
 
     /// <summary>True for an app's audio session, false for a device.</summary>
-    public bool IsSession => Type.HasFlag(AudioNodeType.Session);
+    public bool IsSession => _node.IsSession;
 
-    public AudioNodeType Type => (AudioNodeType)_node.Type;
+    /// <summary>The device a session plays to or records from. Null for a device.</summary>
+    public AudioNode? Device => Service.Find(_node.Device);
+
+    /// <summary>True while a session plays or records, false while it is open but idle. A device stays false.</summary>
+    public bool Active => _active;
 
     /// <summary>
     /// More about the node. A device has <c>endpointId</c>, <c>friendlyName</c>, <c>interfaceName</c>, <c>flow</c>,
@@ -53,47 +67,6 @@ public sealed class AudioNode : ObservableObject
     /// <c>flow</c>, <c>appName</c>, <c>icon</c>, <c>processId</c> and <c>processName</c>.
     /// </summary>
     public IReadOnlyDictionary<string, string> Properties => _node.Properties;
-
-    /// <summary>The node's volume and mute. Every Windows node carries audio.</summary>
-    public AudioVolume Audio { get; }
-
-    /// <summary>Windows nodes are always fully known, so always ready.</summary>
-    public bool Ready => true;
-
-    internal void Remove()
-    {
-        if (IsRemoved)
-            return;
-        IsRemoved = true;
-        _node.PropertiesChanged -= OnPropertiesChanged;
-        Audio.Detach();
-        Removed?.Invoke();
-    }
-
-    private void OnPropertiesChanged()
-    {
-        Changed(nameof(Properties));
-        Set(ref _description, _node.Description, nameof(Description));
-    }
-}
-
-/// <summary>A node's volume, per channel, and its mute.</summary>
-public sealed class AudioVolume : ObservableObject
-{
-    private readonly AudioGraphNode _node;
-    private readonly Log _log;
-    private IReadOnlyList<float> _volumes;
-    private bool _muted;
-
-    internal AudioVolume(AudioGraphNode node, Log log)
-    {
-        _node = node;
-        _log = log;
-        _volumes = node.Volumes;
-        _muted = node.Muted;
-        Channels = [.. node.Channels.Select(c => (AudioChannel)c)];
-        node.AudioChanged += OnAudioChanged;
-    }
 
     public bool Muted
     {
@@ -133,7 +106,16 @@ public sealed class AudioVolume : ObservableObject
     /// <summary>The speaker position of each entry of <see cref="Volumes"/>.</summary>
     public IReadOnlyList<AudioChannel> Channels { get; }
 
-    internal void Detach() => _node.AudioChanged -= OnAudioChanged;
+    internal void Remove()
+    {
+        if (IsRemoved)
+            return;
+        IsRemoved = true;
+        _node.PropertiesChanged -= OnPropertiesChanged;
+        _node.AudioChanged -= OnAudioChanged;
+        _node.ActiveChanged -= OnActiveChanged;
+        Removed?.Invoke();
+    }
 
     private static double Average(IReadOnlyList<float> volumes) => volumes.Count == 0 ? 0 : volumes.Average();
 
@@ -149,6 +131,12 @@ public sealed class AudioVolume : ObservableObject
         }
     }
 
+    private void OnPropertiesChanged()
+    {
+        Changed(nameof(Properties));
+        Set(ref _description, _node.Description, nameof(Description));
+    }
+
     private void OnAudioChanged()
     {
         var old = _volumes;
@@ -157,67 +145,8 @@ public sealed class AudioVolume : ObservableObject
         Changed(Average(old) != Average(_volumes), nameof(Volume));
         Set(ref _muted, _node.Muted, nameof(Muted));
     }
-}
 
-/// <summary>The connection between an audio session and its device.</summary>
-public sealed class AudioLink : ObservableObject
-{
-    private readonly AudioGraphLink _link;
-
-    internal AudioLink(AudioGraphLink link, AudioNode source, AudioNode target)
-    {
-        _link = link;
-        Source = source;
-        Target = target;
-        link.StateChanged += OnStateChanged;
-    }
-
-    internal AudioGraphLink Link => _link;
-
-    /// <summary>A number that tells links apart while the shell runs.</summary>
-    public int Id => _link.Id;
-
-    /// <summary>Where the sound comes from: a playback session, or a recording device.</summary>
-    public AudioNode Source { get; }
-
-    /// <summary>Where the sound goes: a playback device, or a recording session.</summary>
-    public AudioNode Target { get; }
-
-    /// <summary>Active while the app plays or records, Inactive while its session is idle.</summary>
-    public AudioLinkState State => _link.Active ? AudioLinkState.Active : AudioLinkState.Inactive;
-
-    internal void Detach() => _link.StateChanged -= OnStateChanged;
-
-    private void OnStateChanged() => Changed(nameof(State));
-}
-
-/// <summary>The connections between one source and one target. Windows has one per session.</summary>
-public sealed class AudioLinkGroup : ObservableObject
-{
-    private readonly AudioGraphLink _link;
-
-    internal AudioLinkGroup(AudioGraphLink link, AudioNode source, AudioNode target)
-    {
-        _link = link;
-        Source = source;
-        Target = target;
-        link.StateChanged += OnStateChanged;
-    }
-
-    internal AudioGraphLink Link => _link;
-
-    /// <summary>Where the sound comes from: a playback session, or a recording device.</summary>
-    public AudioNode Source { get; }
-
-    /// <summary>Where the sound goes: a playback device, or a recording session.</summary>
-    public AudioNode Target { get; }
-
-    /// <summary>Active while the app plays or records, Inactive while its session is idle.</summary>
-    public AudioLinkState State => _link.Active ? AudioLinkState.Active : AudioLinkState.Inactive;
-
-    internal void Detach() => _link.StateChanged -= OnStateChanged;
-
-    private void OnStateChanged() => Changed(nameof(State));
+    private void OnActiveChanged() => Set(ref _active, _node.Active, nameof(Active));
 }
 
 /// <summary>Every playback device, recording device and audio session Windows has.</summary>
@@ -236,19 +165,11 @@ public sealed class AudioService : ObservableObject, IDisposable
         OnDefaultsChanged();
         _graph.NodeAdded += OnNodeChanged;
         _graph.NodeRemoved += OnNodeChanged;
-        _graph.LinkAdded += OnLinkChanged;
-        _graph.LinkRemoved += OnLinkChanged;
         _graph.DefaultsChanged += OnDefaultsChanged;
     }
 
     /// <summary>Every node: the active devices and the audio sessions on them.</summary>
     public ObservableCollection<AudioNode> Nodes { get; } = [];
-
-    /// <summary>One link per audio session.</summary>
-    public ObservableCollection<AudioLink> Links { get; } = [];
-
-    /// <summary>One group for each entry of <see cref="Links"/>.</summary>
-    public ObservableCollection<AudioLinkGroup> LinkGroups { get; } = [];
 
     /// <summary>The default playback device. Setting it makes that device the Windows default.</summary>
     public AudioNode? DefaultPlaybackDevice
@@ -267,7 +188,7 @@ public sealed class AudioService : ObservableObject, IDisposable
     /// <summary>False when Windows audio cannot be opened, and then <see cref="Nodes"/> is empty.</summary>
     public bool Ready => _graph.Ready;
 
-    private AudioNode? Find(AudioGraphNode? node) => Nodes.FirstOrDefault(n => n.Node == node);
+    internal AudioNode? Find(AudioGraphNode? node) => Nodes.FirstOrDefault(n => n.Node == node);
 
     private void SetDefault(AudioNode? node, bool playback)
     {
@@ -284,13 +205,9 @@ public sealed class AudioService : ObservableObject, IDisposable
 
     private void OnNodeChanged(AudioGraphNode _) => Refresh();
 
-    private void OnLinkChanged(AudioGraphLink _) => Refresh();
-
     private void Refresh()
     {
         Nodes.Sync(_graph.Nodes, n => n.Node, n => n, n => new AudioNode(this, n, _log), static (_, _) => { }, n => n.Remove());
-        Links.Sync(_graph.Links, l => l.Link, l => l, l => new AudioLink(l, Find(l.Source)!, Find(l.Target)!), static (_, _) => { }, l => l.Detach());
-        LinkGroups.Sync(_graph.Links, g => g.Link, l => l, l => new AudioLinkGroup(l, Find(l.Source)!, Find(l.Target)!), static (_, _) => { }, g => g.Detach());
     }
 
     private void OnDefaultsChanged()
@@ -303,13 +220,7 @@ public sealed class AudioService : ObservableObject, IDisposable
     {
         _graph.NodeAdded -= OnNodeChanged;
         _graph.NodeRemoved -= OnNodeChanged;
-        _graph.LinkAdded -= OnLinkChanged;
-        _graph.LinkRemoved -= OnLinkChanged;
         _graph.DefaultsChanged -= OnDefaultsChanged;
-        foreach (var link in Links)
-            link.Detach();
-        foreach (var group in LinkGroups)
-            group.Detach();
         foreach (var node in Nodes)
             node.Remove();
     }

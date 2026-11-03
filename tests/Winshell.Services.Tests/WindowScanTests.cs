@@ -17,7 +17,8 @@ public sealed class WindowScanTests
             made.SetResult(hwnd);
             release.Wait();
             Win32.DestroyWindow(hwnd);
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         owner.Start();
         var window = await made.Task.WaitAsync(TestContext.Current.CancellationToken);
 

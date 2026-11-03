@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary>Starting a shell is <c>winshell run</c>. A bare <c>winshell</c> prints help, and options may precede the command.</summary>
+[Trait("Category", "Slow")]
 public class CliRunCommandTests
 {
     [Fact]

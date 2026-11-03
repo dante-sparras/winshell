@@ -22,6 +22,7 @@ namespace Winshell.ShellTests;
 /// own right-click handler is not raised here: building that view takes the notification area and the Win hotkey.
 /// The menu it would show is opened on a real panel instead.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class SettingsShellTests
 {
     [Fact]
@@ -56,7 +57,7 @@ public sealed class SettingsShellTests
                 Assert.Equal(WindowBackdrop.Mica, rig.Preferences.Material);
 
                 rig.Preferences.ColorScheme = SettingsCatalog.ColorSchemes[2].Value;
-                Assert.Equal("dark", shell.ColorScheme);
+                Assert.Equal(ColorScheme.Dark, shell.ColorScheme);
                 Assert.True(shell.IsDark);
                 Assert.Same(shell, Shell.Current);
                 return messages.Where(m => !m.StartsWith("hotkey:", StringComparison.Ordinal) && !m.StartsWith("ipc: Duplicate IPC name", StringComparison.Ordinal)).ToArray();
@@ -108,7 +109,6 @@ public sealed class SettingsShellTests
                 using var panel = new PanelWindow
                 {
                     Anchors = Edges.Bottom | Edges.Left | Edges.Right,
-                    ExclusiveZone = 0,
                     Width = 400,
                     Height = 48,
                     Content = bar,
@@ -120,18 +120,13 @@ public sealed class SettingsShellTests
                 var menu = TaskMenuFlyout.Create(TaskMenu.BarName, [TaskMenu.Settings], id => chosen = id, 16);
                 var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 menu.Opened += (_, _) => shown.TrySetResult();
-                menu.ShowAt(bar, new FlyoutShowOptions { Position = new global::Windows.Foundation.Point(200, 24), Placement = FlyoutPlacementMode.Top });
+                // Transient takes no focus. A menu that does closes when another program's window opens, even before Opened.
+                menu.ShowAt(bar, new FlyoutShowOptions { Position = new global::Windows.Foundation.Point(200, 24), Placement = FlyoutPlacementMode.Top, ShowMode = FlyoutShowMode.Transient });
                 await shown.Task;
 
                 var item = MenuItem(bar);
                 var peer = FrameworkElementAutomationPeer.CreatePeerForElement(item);
                 Assert.Equal("Taskbar settings", peer.GetName());
-                await Wait.UntilAsync(() => ItemFocused(bar, item), "the menu item to take focus", () =>
-                {
-                    var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                    shell.Loop.Post(() => done.TrySetResult());
-                    return done.Task;
-                });
                 ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)!).Invoke();
 
                 Assert.Equal("taskbarSettings", chosen);
@@ -206,18 +201,6 @@ public sealed class SettingsShellTests
         for (DependencyObject? node = focused; node is not null; node = VisualTreeHelper.GetParent(node))
         {
             if (node is AutoSuggestBox { Name: "Search" })
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool ItemFocused(UIElement root, MenuFlyoutItem item)
-    {
-        var focused = FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
-        for (DependencyObject? node = focused; node is not null; node = VisualTreeHelper.GetParent(node))
-        {
-            if (ReferenceEquals(node, item))
                 return true;
         }
 

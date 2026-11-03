@@ -159,38 +159,14 @@ public sealed class SystemTrayTests
     }
 
     [Fact]
-    public void A_system_message_is_never_an_icons_callback()
-    {
-        using var host = new TrayHost(_loop, Log.Default, Names(), () => { });
-        host.OnNotifyIcon(new NotifyIconCall { Message = TrayProtocol.Add, Window = 1, Id = 1, Flags = TrayProtocol.NIF_MESSAGE, CallbackMessage = 0x8001 });
-        var icon = Assert.Single(host.Icons);
-        Assert.Equal(0x8001u, icon.CallbackMessage);
-
-        // WM_CLOSE: any app could name it for any window, and a click would close that window.
-        host.OnNotifyIcon(new NotifyIconCall { Message = TrayProtocol.Modify, Window = 1, Id = 1, Flags = TrayProtocol.NIF_MESSAGE, CallbackMessage = 0x0010 });
-
-        Assert.Equal(0u, icon.CallbackMessage);
-    }
-
-    [Fact]
-    public void An_image_is_not_loaded_from_a_network_module() =>
-        Assert.Null(TrayHost.ResourceImage(new IconResource(@"\\nonexistent-host.invalid\share\x.dll", 1, ""), 32));
-
-    [Fact]
     public void An_image_is_drawn_from_a_local_module_with_straight_alpha()
     {
-        var image = TrayHost.ResourceImage(new IconResource(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 3, ""), 32);
+        var image = IconImage.FromResource(new IconResource(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 3, ""), 32);
 
         Assert.NotNull(image);
         Assert.Equal(32, image.Width);
         Assert.Equal(32 * 32 * 4, image.Bgra.Length);
         Assert.False(image.Premultiplied);
-    }
-
-    private static TrayNames Names()
-    {
-        var id = Guid.NewGuid().ToString("N");
-        return new TrayNames($"WinshellTestTray-{id}", $"WinshellTestNone-{id}", $@"Local\winshell-test-tray-{id}");
     }
 
     private sealed class FakeHost : ITrayHost

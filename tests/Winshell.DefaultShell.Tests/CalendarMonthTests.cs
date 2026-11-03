@@ -5,7 +5,7 @@ namespace Winshell.DefaultShell.Tests;
 
 public sealed class CalendarMonthTests
 {
-    private static FakeTimeProvider Clock(int year = 2026, int month = 11, int day = 2, int hour = 12) 
+    private static FakeTimeProvider Clock(int year = 2026, int month = 11, int day = 2, int hour = 12)
     {
         var time = new FakeTimeProvider(new DateTimeOffset(year, month, day, hour, 0, 0, TimeSpan.Zero));
         time.SetLocalTimeZone(TimeZoneInfo.Utc);

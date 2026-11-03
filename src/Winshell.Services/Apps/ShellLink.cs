@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using Winshell.Native;
 using Winshell.Windows;
@@ -77,26 +76,19 @@ internal static partial class ShellLink
         }
     }
 
-    /// <summary>A command line's arguments, split as programs on Windows split their own.</summary>
-    public static unsafe List<string> SplitArguments(string arguments)
+    [ComImport]
+    [Guid("0000010b-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPersistFile
     {
-        if (string.IsNullOrWhiteSpace(arguments))
-            return [];
-        // The first word is read as a program name, by other rules, so a placeholder takes its place.
-        var argv = Win32.CommandLineToArgvW("x " + arguments, out var count);
-        if (argv == 0)
-            return [];
-        try
-        {
-            var result = new List<string>(count);
-            for (var i = 1; i < count; i++)
-                result.Add(Marshal.PtrToStringUni(((nint*)argv)[i]) ?? "");
-            return result;
-        }
-        finally
-        {
-            Win32.LocalFree(argv);
-        }
+        void GetClassID(out Guid classId);
+
+        [PreserveSig]
+        int IsDirty();
+
+        void Load([MarshalAs(UnmanagedType.LPWStr)] string fileName, int mode);
+
+        void Save([MarshalAs(UnmanagedType.LPWStr)] string? fileName, [MarshalAs(UnmanagedType.Bool)] bool remember);
     }
 
     [ComImport]

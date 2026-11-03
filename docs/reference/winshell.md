@@ -1,6 +1,6 @@
 # Winshell
 
-The configuration's program uses these types. `Shell.Run<T>()` starts one, from `Main` marked `[STAThread]`. Windows are `PanelWindow`, `PopupWindow` and `FloatingWindow`. Their content is any WinUI element. Services hang off `Shell.Current`: [apps](winshell-apps.md), [audio](winshell-audio.md), [Bluetooth](winshell-bluetooth.md), [capture](winshell-capture.md), the [Explorer taskbar](winshell-explorertaskbar.md), [media](winshell-media.md), [network](winshell-network.md), [notifications](winshell-notifications.md), [power](winshell-power.md), [session](winshell-session.md), the [tray](winshell-tray.md), [updates](winshell-updates.md), [windows](winshell-windows.md) and [Winland](winshell-winland.md). `Shell.Ipc` is what `winshell ipc` calls. Preferences are a [TomlFile](#tomlfile). `doctor` reads a project through [Doctor](winshell-diagnostics.md#doctor) and does not build it.
+The configuration's program uses these types. `Shell.Run<T>()` starts one, from `Main` marked `[STAThread]`. Windows are `PanelWindow`, `PopupWindow` and `FloatingWindow`. Their content is any WinUI element. Services hang off `Shell.Current`: [apps](winshell-apps.md), [audio](winshell-audio.md), [Bluetooth](winshell-bluetooth.md), [capture](winshell-capture.md), the [Explorer taskbar](winshell-explorertaskbar.md), [media](winshell-media.md), [network](winshell-network.md), [notifications](winshell-notifications.md), [power](winshell-power.md), [session](winshell-session.md), the [tray](winshell-tray.md), [updates](winshell-updates.md), [windows](winshell-windows.md) and [Winland](winshell-winland.md). `Shell.Ipc` is what `winshell ipc` calls. Preferences are a [TomlFile](#tomlfile).
 
 ## Shell
 
@@ -14,14 +14,14 @@ The running shell: its screens and services. There is one in a process.
 | `Bluetooth` | [BluetoothService](winshell-bluetooth.md#bluetoothservice), read-only |  |
 | `Brightness` | [BrightnessService](winshell-power.md#brightnessservice), read-only |  |
 | `CacheDir` | string, read-only | This shell's cache folder, which exists once read. |
-| `ColorScheme` | string | The color scheme every window follows: `system`, `light` or `dark`. |
+| `ColorScheme` | [ColorScheme](#colorscheme) | The color scheme every window follows. |
 | `ConfigDir` | string, read-only | The folder of this configuration's program, where its own files are. |
 | `ConfigRoot` | string, read-only | The config folder: `%APPDATA%\winshell`, or `WINSHELL_CONFIG_DIR` when it is set. |
 | `Current` | [Shell](#shell), static, read-only | The shell of this process. Reading it before Run has started it throws. |
 | `DataDir` | string, read-only | This shell's data folder, which exists once read. |
 | `ExplorerTaskbar` | [ExplorerTaskbarService](winshell-explorertaskbar.md#explorertaskbarservice), read-only | Whether Explorer's taskbar is hidden. Winshell shows it again when it exits. |
 | `Ipc` | [ShellIpc](#shellipc), read-only | What `winshell ipc` reaches in this shell. |
-| `IsDark` | bool, read-only | Whether windows are dark. ColorScheme overrides Windows mode, and `system` follows it. |
+| `IsDark` | bool, read-only | Whether windows are dark. ColorScheme overrides Windows mode, and System follows it. |
 | `JumpLists` | [JumpListService](winshell-apps.md#jumplistservice), read-only |  |
 | `Log` | [Log](#log), read-only |  |
 | `LogPath` | string, read-only | This instance's log file, or empty when it writes none. |
@@ -42,11 +42,11 @@ The running shell: its screens and services. There is one in a process.
 | `SystemTray` | [SystemTray](winshell-tray.md#systemtray), read-only | The notification area. Only one running instance in the Windows session owns it. |
 | `Updates` | [UpdatesService](winshell-updates.md#updatesservice), read-only | Winshell's own updates. A configuration's own program does not update itself. |
 | `VirtualDesktops` | [VirtualDesktopsService](winshell-windows.md#virtualdesktopsservice), read-only |  |
+| `Version` | string, static, read-only | The Winshell release this program is built on. |
 | `WindowList` | [WindowListService](winshell-windows.md#windowlistservice), read-only | The app windows the taskbar and Alt+Tab list. |
 | `Winland` | [WinlandService](winshell-winland.md#winlandservice), read-only |  |
 | `CachePath(string path)` | string | A path in CacheDir. |
 | `ConfigPath(string path)` | string | A path in ConfigDir. |
-| `DarkFor(string? scheme, bool windowsDark)` | bool, static | Whether scheme is dark. `light` and `dark` override Windows; anything else follows windowsDark. |
 | `DataPath(string path)` | string | A path in DataDir. |
 | `Dispose()` | void |  |
 | `NewHotkey()` | [Hotkey](winshell-input.md#hotkey) | A hotkey that works anywhere in Windows. Set its Sequence, and dispose it to give the keys back. |
@@ -63,12 +63,10 @@ What a configuration sets before its shell starts.
 | Member | Type | Description |
 | --- | --- | --- |
 | `ShellOptions()` | constructor |  |
-| `AppId` | string?, init | The app id the shell shows Windows, as `WINSHELL_APP_ID` does. |
 | `CacheDir` | string?, init | Another folder for CacheDir, read as DataDir is. |
 | `DataDir` | string?, init | Another folder for DataDir. A relative path is next to the program, `%NAME%` expands, and `$BASE` is the folder above `by-shell`, such as `%LOCALAPPDATA%\winshell\data`. |
 | `ShellId` | string?, init | The name that identifies this configuration across runs. It names its data, state and cache folders. Without it, a program in the config folder is named after its folder, and one anywhere else after its path. |
 | `StateDir` | string?, init | Another folder for StateDir, read as DataDir is. |
-| `Updater` | [Updater](winshell-updates.md#updater)?, init | The updater `winshell.exe` passes when it runs this shell in-process. Installing a download stays in `winshell.exe`, before the shell starts. Restart then starts this program again with `--after`. A configuration's own program leaves this null. |
 
 ## ShellConfiguration
 
@@ -93,13 +91,13 @@ Has the members of [ObservableObject](#observableobject).
 | `Content` | UIElement? |  |
 | `Corners` | [WindowCorners](#windowcorners) |  |
 | `Height` | double | The height in logical pixels. NaN leaves it to the window's kind: anchors, or the default size. |
-| `InputRegion` | IReadOnlyList of [QRect](#qrect)? | The parts of the window that take clicks, in logical pixels; clicks elsewhere go to the window below. Null is the whole window. An empty list lets every click through. |
+| `InputRegion` | IReadOnlyList of Rect? | The parts of the window that take clicks, in logical pixels; clicks elsewhere go to the window below. Null is the whole window. An empty list lets every click through. |
 | `Opacity` | double | Fades the content. The material behind it does not fade. |
-| `Origin` | [QPoint](#qpoint), read-only | The window's origin on the virtual desktop, in logical pixels. |
+| `Origin` | Point, read-only | The window's origin on the virtual desktop, in logical pixels. |
 | `Scale` | double, read-only | How many physical pixels this window draws for one logical pixel. |
 | `Screen` | [ScreenInfo](#screeninfo)? | The screen this window is on, or was asked to be on. Null is the primary screen. |
 | `Visible` | bool |  |
-| `VisibleMask` | [QRect](#qrect)? | Clips the content to a rectangle, in logical pixels. Null shows all of it. |
+| `VisibleMask` | Rect? | Clips the content to a rectangle, in logical pixels. Null shows all of it. |
 | `Width` | double | The width in logical pixels. NaN leaves it to the window's kind: anchors, or the default size. |
 | `Closed` | Action |  |
 | `Failed` | Action of Exception |  |
@@ -121,11 +119,10 @@ Has the members of [ShellWindow](#shellwindow).
 | `PanelWindow()` | constructor |  |
 | `AboveWindows` | bool | Stays above normal windows. False puts it below them, as a wallpaper is. |
 | `Anchors` | [Edges](#edges) | The edges the panel sticks to. Two opposite edges stretch it across the screen. |
-| `ExclusionMode` | [PanelExclusionMode](#panelexclusionmode) |  |
-| `ExclusiveZone` | double | How much of its edge the panel reserves, in logical pixels, so maximized windows stay out of it. |
+| `CoversScreen` | bool | Lays the panel out on the whole screen, over the taskbar and other bars, and reserves nothing. False keeps it in the work area. |
 | `Focusable` | bool | Whether the panel can take the keyboard. A panel that cannot never takes activation from the app in front. |
 | `Margins` | Thickness |  |
-| `Namespace` | string |  |
+| `ReservedSize` | double | How much of its edge the panel reserves, in logical pixels, so maximized windows stay out of it. |
 
 ## PopupWindow
 
@@ -137,7 +134,7 @@ Has the members of [ShellWindow](#shellwindow).
 | --- | --- | --- |
 | `PopupWindow()` | constructor |  |
 | `GrabFocus` | bool | Takes the keyboard while shown. A click outside the popup, or Esc, then dismisses it. |
-| `Rect` | [QRect](#qrect) | Where the popup sits, in logical pixels on the virtual desktop. |
+| `Rect` | Rect | Where the popup sits, in logical pixels on the virtual desktop. |
 | `Dismissed` | Action |  |
 
 ## FloatingWindow
@@ -151,9 +148,9 @@ Has the members of [ShellWindow](#shellwindow).
 | `FloatingWindow()` | constructor |  |
 | `Fullscreen` | bool |  |
 | `Maximized` | bool |  |
-| `MaximumSize` | [QSize](#qsize) |  |
+| `MaximumSize` | Size |  |
 | `Minimized` | bool |  |
-| `MinimumSize` | [QSize](#qsize) |  |
+| `MinimumSize` | Size |  |
 | `Owner` | [FloatingWindow](#floatingwindow)? | The window this one stays above and closes with. |
 | `Title` | string |  |
 
@@ -170,6 +167,16 @@ A WinUI FrameworkElement. The members here are the ones Winshell adds.
 | `Window` | [AppWindow](winshell-windows.md#appwindow)? |  |
 | `PeekProperty` | DependencyProperty, static | While true, Windows shows this window at full size and hides the others. It stays off when the user turned peek off, and it ends when this element unloads or the window goes. |
 | `WindowProperty` | DependencyProperty, static | The app window to preview, from Windows. Null shows nothing. |
+
+## ColorScheme
+
+Whether windows are light or dark. System follows Windows.
+
+| Value | Number | Description |
+| --- | --- | --- |
+| `System` | 0 |  |
+| `Light` | 1 |  |
+| `Dark` | 2 |  |
 
 ## CaptureView
 
@@ -215,57 +222,15 @@ The shell's thread. Work from other threads is posted to it.
 | `RequestFrame(Action action)` | void | Runs the action before the next frame is drawn, once per request. |
 | `Schedule(TimeSpan delay, Action action)` | IDisposable | Runs the action once after the delay, on the loop's thread. Dispose to cancel. |
 
-## IIpcTargets
-
-What the `ipc` commands reach in a running shell. Every member runs on the shell's thread.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `Call(string target, string function, IReadOnlyList of string args)` | string | Calls a function. Returns its result as text, or throws IpcException with a message for the CLI. |
-| `Describe()` | IReadOnlyList of [IpcTargetView](#ipctargetview) | Every target with the functions, properties and signals `ipc show` lists. |
-| `GetProperty(string target, string property)` | string |  |
-| `Listen(string target, string signal, Action of string onSignal)` | IDisposable | Calls back with a signal's argument as text each time it fires, until disposed. |
-
 ## IpcException
 
-A refused IPC request. The message goes to the client as it is.
+A refused IPC request. A handler throws it to refuse a call: its message goes to the client as it is, where another exception arrives with its type name.
 
 An exception.
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `IpcException(string message)` | constructor |  |
-
-## IpcFunctionView
-
-A function `ipc show` can call.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcFunctionView(string Name, IReadOnlyList of [IpcParameterView](#ipcparameterview) Parameters, string Returns)` | constructor |  |
-| `Name` | string, init |  |
-| `Parameters` | IReadOnlyList of [IpcParameterView](#ipcparameterview), init |  |
-| `Returns` | string, init |  |
-
-## IpcParameterView
-
-One parameter of a function or a signal `ipc show` can list.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcParameterView(string Name, string? Type)` | constructor |  |
-| `Name` | string, init |  |
-| `Type` | string?, init |  |
-
-## IpcPropertyView
-
-A property `ipc show` can read.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcPropertyView(string Name, string Type)` | constructor |  |
-| `Name` | string, init |  |
-| `Type` | string, init |  |
 
 ## IpcSignal
 
@@ -276,37 +241,12 @@ A signal of a ShellIpc target. Use it on the shell's thread.
 | `Name` | string, read-only |  |
 | `Emit(string value = "")` | void | Tells every `winshell ipc wait` and `listen` following this signal, with value. |
 
-## IpcSignalView
-
-A signal `ipc wait` and `ipc listen` can follow.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcSignalView(string Name, IReadOnlyList of [IpcParameterView](#ipcparameterview) Parameters)` | constructor |  |
-| `Name` | string, init |  |
-| `Parameters` | IReadOnlyList of [IpcParameterView](#ipcparameterview), init |  |
-
-## IpcTargetView
-
-One IPC target, as `ipc show` knows it. `ipc show -j` prints these records as they are.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `IpcTargetView(string Target, IReadOnlyList of [IpcFunctionView](#ipcfunctionview) Functions, IReadOnlyList of [IpcPropertyView](#ipcpropertyview) Properties, IReadOnlyList of [IpcSignalView](#ipcsignalview) Signals)` | constructor |  |
-| `Functions` | IReadOnlyList of [IpcFunctionView](#ipcfunctionview), init |  |
-| `Properties` | IReadOnlyList of [IpcPropertyView](#ipcpropertyview), init |  |
-| `Signals` | IReadOnlyList of [IpcSignalView](#ipcsignalview), init |  |
-| `Target` | string, init |  |
-
 ## Log
 
 Writes messages as ` WARN category: message`.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Log()` | constructor |  |
-| `MinimumLevel` | [LogLevel](#loglevel) |  |
-| `Sink` | Action of [LogLevel](#loglevel), string, string? | Where messages go. The default writes to the standard error stream. |
 | `Default` | [Log](#log), static |  |
 | `Debug(string category, string message)` | void |  |
 | `Error(string category, string message)` | void |  |
@@ -332,15 +272,6 @@ The base of what a service exposes. A change is raised on the thread that made i
 | --- | --- | --- |
 | `PropertyChanged` | PropertyChangedEventHandler |  |
 
-## PanelExclusionMode
-
-How a panel treats the edges other bars reserve.
-
-| Value | Number | Description |
-| --- | --- | --- |
-| `Normal` | 0 | Stays inside the work area, and reserves ExclusiveZone if that is set. |
-| `Ignore` | 1 | Covers the whole screen, over the taskbar and other bars. |
-
 ## PixelImage
 
 A picture in memory: BGRA, one byte a channel, top row first, with no gap between rows. Nothing writes to the pixels after this is made, so the constructor keeps `bgra` rather than copying it, and a UI can hold on to one.
@@ -354,47 +285,15 @@ A picture in memory: BGRA, one byte a channel, top row first, with no gap betwee
 | `Width` | int, read-only |  |
 | `EncodePng()` | byte[] | The picture as a PNG file. Blocks while Windows encodes it. |
 
-## QPoint
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `QPoint(double X, double Y)` | constructor |  |
-| `X` | double, init |  |
-| `Y` | double, init |  |
-
-## QRect
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `QRect(double X, double Y, double Width, double Height)` | constructor |  |
-| `Bottom` | double, read-only |  |
-| `Height` | double, init |  |
-| `Left` | double, read-only |  |
-| `Right` | double, read-only |  |
-| `Top` | double, read-only |  |
-| `Width` | double, init |  |
-| `X` | double, init |  |
-| `Y` | double, init |  |
-| `Contains(double x, double y)` | bool |  |
-| `IntersectsWith([QRect](#qrect) other)` | bool |  |
-
-## QSize
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `QSize(double Width, double Height)` | constructor |  |
-| `Height` | double, init |  |
-| `Width` | double, init |  |
-
 ## ScreenInfo
 
 A monitor, as the platform reports it. Coordinates are logical pixels on the virtual desktop: a monitor keeps its physical top-left corner and its size is divided by its scale, so monitors of mixed DPI never overlap.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ScreenInfo(string Id, string Name, string Model, string Manufacturer, string SerialNumber, [QRect](#qrect) Geometry, [QRect](#qrect) WorkArea, double DevicePixelRatio, double PhysicalWidthMm, double PhysicalHeightMm, int RefreshRate, bool IsPrimary)` | constructor |  |
+| `ScreenInfo(string Id, string Name, string Model, string Manufacturer, string SerialNumber, Rect Geometry, Rect WorkArea, double DevicePixelRatio, double PhysicalWidthMm, double PhysicalHeightMm, int RefreshRate, bool IsPrimary)` | constructor |  |
 | `DevicePixelRatio` | double, init |  |
-| `Geometry` | [QRect](#qrect), init |  |
+| `Geometry` | Rect, init |  |
 | `Id` | string, init |  |
 | `IsPrimary` | bool, init |  |
 | `Manufacturer` | string, init |  |
@@ -404,7 +303,7 @@ A monitor, as the platform reports it. Coordinates are logical pixels on the vir
 | `PhysicalWidthMm` | double, init |  |
 | `RefreshRate` | int, init |  |
 | `SerialNumber` | string, init |  |
-| `WorkArea` | [QRect](#qrect), init |  |
+| `WorkArea` | Rect, init |  |
 
 ## ShellIpc
 
@@ -412,12 +311,7 @@ What `winshell ipc` reaches in a C# configuration: functions, properties and sig
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ShellIpc([Log](#log) log)` | constructor |  |
-| `Call(string target, string function, IReadOnlyList of string args)` | string |  |
-| `Describe()` | IReadOnlyList of [IpcTargetView](#ipctargetview) |  |
-| `GetProperty(string target, string property)` | string |  |
 | `Handle(string target, string function, Delegate handler)` | IDisposable | Lets `winshell ipc call` run handler, such as `(string page) => Open(page)`. Dispose the result to take it away. A later handler for the same function replaces this one. ArgumentException when the handler takes or returns a type IPC can't pass. |
-| `Listen(string target, string signal, Action of string onSignal)` | IDisposable |  |
 | `Property<T>(string target, string property, Func of T read)` | IDisposable | Lets `winshell ipc prop get` read a value. Dispose the result to take it away. ArgumentException when T is a type IPC can't pass. |
 | `Signal(string target, string signal)` | [IpcSignal](#ipcsignal) | A signal `winshell ipc wait` and `listen` can follow. |
 

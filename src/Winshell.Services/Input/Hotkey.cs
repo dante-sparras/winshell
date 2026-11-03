@@ -29,7 +29,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
     private int _polls;
     private bool _disposed;
 
-    public Hotkey(IEventLoop loop)
+    internal Hotkey(IEventLoop loop)
         : this(loop, Log.Default, WindowsHotkeyRegistrar.For(loop))
     {
     }

@@ -376,7 +376,8 @@ public sealed class UpdatesTests : IDisposable
         Directory.CreateDirectory(outside);
         File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
         var junction = Path.Combine(staged, "linked");
-        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+        // mklink prints a line. This process's own output carries xUnit's results, and a line in the middle loses one.
+        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         info.ArgumentList.Add("/c");
         info.ArgumentList.Add("mklink");
         info.ArgumentList.Add("/J");

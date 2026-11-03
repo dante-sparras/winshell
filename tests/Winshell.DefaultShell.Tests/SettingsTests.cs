@@ -97,7 +97,7 @@ public sealed class SettingsTests : IDisposable
 
         Assert.Equal("sepia", preferences.ColorScheme);
         Assert.Equal(0, SettingsCatalog.IndexOf(SettingsCatalog.ColorSchemes, preferences.ValidColorScheme));
-        Assert.Equal("system", ShellPreferences.Scheme(preferences));
+        Assert.Equal(ColorScheme.System, ShellPreferences.Scheme(preferences));
         Assert.False(preferences.ValidAccent);
         Assert.Equal("", ShellPreferences.Accent(preferences));
         Assert.Equal(0, SettingsCatalog.IndexOf(SettingsCatalog.AccentChoices, "windows"));
@@ -164,17 +164,6 @@ public sealed class SettingsTests : IDisposable
 
         Assert.Equal("desktopChords", Assert.Single(SettingsCatalog.Search("desktop chords")).Key);
         Assert.Contains(SettingsCatalog.Search("alt tab"), entry => entry.Key == "desktopChords");
-    }
-
-    [Fact]
-    public void The_color_scheme_overrides_Windows_mode()
-    {
-        Assert.True(Shell.DarkFor("dark", false));
-        Assert.False(Shell.DarkFor("light", true));
-        Assert.True(Shell.DarkFor("system", true));
-        Assert.False(Shell.DarkFor("system", false));
-        Assert.True(Shell.DarkFor("sepia", true));
-        Assert.False(Shell.DarkFor(null, false));
     }
 
     [Fact]

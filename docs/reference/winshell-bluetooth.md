@@ -45,7 +45,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `CanPair` | bool, read-only |  |
 | `Connected` | bool, read-only |  |
 | `Error` | string, read-only |  |
-| `Icon` | string, read-only | A BlueZ device-type icon name. Empty when Windows reports no class, or a class BlueZ does not name. |
+| `Icon` | string, read-only | A device-type name, such as `audio-headset` or `input-keyboard`. Empty when Windows reports no class, or a class that has no name. |
 | `Id` | string, read-only |  |
 | `Name` | string, read-only |  |
 | `Operation` | [BluetoothOperation](#bluetoothoperation), read-only |  |
@@ -97,7 +97,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Dispose()` | void |  |
 | `Refresh()` | void | Reads the state now, rather than at the next three-second read. |
 | `StartDiscovery()` | void | Starts looking for nearby devices. Needs an adapter that is on. |
-| `StartMonitoring()` | void | Reads adapter and device state until StopMonitoring. The service starts this when it is created. |
+| `StartMonitoring()` | void | Reads adapter and device state until StopMonitoring. Nothing is read before this. |
 | `StopDiscovery()` | void | Stops looking, and clears the unpaired devices it found. |
 | `StopMonitoring()` | void | Stops the three-second read. A later StartMonitoring starts it again. |
 

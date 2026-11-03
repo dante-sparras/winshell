@@ -22,7 +22,7 @@ public interface IEventLoop
 /// The timer queue and posted work shared by the real loop and the test loop. The owner calls
 /// <see cref="RunDue"/> when work may be ready, and waits until <see cref="NextDue"/> otherwise.
 /// </summary>
-public class EventQueue : IEventLoop
+internal class EventQueue : IEventLoop
 {
     private readonly ConcurrentQueue<Action> _posted = new();
     private readonly Queue<Action> _batch = new();
@@ -246,7 +246,7 @@ public class EventQueue : IEventLoop
 }
 
 /// <summary>An event loop for tests: time moves only when the test advances it.</summary>
-public sealed class ManualEventLoop : EventQueue
+internal sealed class ManualEventLoop : EventQueue
 {
     private TimeSpan _now;
 

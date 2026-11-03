@@ -14,8 +14,11 @@ Then show the smallest view that makes the point: a diagram, a diff sketch, or a
 ## Evidence
 
 <!-- A before and after: the tests or manual checks you ran and what you observed. "Tests pass" alone is not enough.
-
-For a change to the settings or notification surfaces, link the settings-surface or notification-surface artifact from this PR's ci run. Upload evidence to GitHub; never commit PR-only assets. -->
+Upload evidence to GitHub; never commit PR-only assets to main.
+A fix adds a test and says here how it failed before the fix, or says why it can't have one on a "**No test:**" line.
+A perf change gives a number for each, here or in a table with Before and After headings.
+A feat, fix or perf change to XAML in src/ shows a winshell inspect screenshot, or says why not on a "**Not visual:**"
+line. pwsh scripts/pr-screenshot.ps1 <png> publishes one and prints the Markdown to paste. -->
 
 - **Before:**
   **After:**

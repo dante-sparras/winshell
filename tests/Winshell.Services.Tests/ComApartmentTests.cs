@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Winshell.Audio;
@@ -14,14 +15,14 @@ public class ComApartmentTests
         var source = Activator.CreateInstance(type!)!;
         try
         {
-            source.GetType().InvokeMember("Add", BindingFlags.InvokeMethod, null, source, ["k", "v"]);
+            source.GetType().InvokeMember("Add", BindingFlags.InvokeMethod, null, source, ["k", "v"], CultureInfo.InvariantCulture);
             var stream = ComApartment.Capture(source);
             object? restored = null;
             string? value = null;
             var thread = new Thread(() =>
             {
                 restored = ComApartment.Restore(stream);
-                value = (string)restored.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, restored, ["k"])!;
+                value = (string)restored.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, restored, ["k"], CultureInfo.InvariantCulture)!;
             });
             thread.SetApartmentState(ApartmentState.STA);
             thread.Start();

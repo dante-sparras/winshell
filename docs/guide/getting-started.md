@@ -8,7 +8,7 @@ The portable zip and the PowerShell command install the same self-contained buil
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is 72 MB before ReadyToRun, and it needs no .NET install. Unzip one into a folder of its own and run `winshell.exe`.
+A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB, and it needs no .NET install. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or [run it from a terminal](#first-run).
 
 The portable build updates itself from GitHub Releases, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A shell you built yourself does not.
 
@@ -62,7 +62,7 @@ cd winshell
 dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
 ```
 
-That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, not in the PowerShell installer's folder. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed.
+That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, not in the PowerShell installer's folder. Add that folder to your `PATH` to run `winshell` from anywhere. Like a release, the build carries its own .NET runtime.
 
 To update a source build, close Winshell, pull the newer source and publish it over the same folder. A build from source never updates itself.
 
@@ -70,17 +70,19 @@ To uninstall a source build, turn off **Run Winshell when I sign in** in Winshel
 
 ## First run
 
-Open a terminal in Winshell's folder, or anywhere if it is on your `PATH`, and run:
+Open a terminal anywhere, if Winshell is on your `PATH`, and run:
 
 ```powershell
-winshell
+winshell run
 ```
+
+In Winshell's own folder, PowerShell needs the path: `.\winshell run`. `winshell` with no command prints the list of commands and starts nothing.
 
 With no project of your own, Winshell runs its default shell: a Windows 11 [taskbar](../taskbar.md) on every screen, with Start, quick settings, the notification center and calendar, the on-screen display, and [Winshell Settings](../settings.md). It writes the log to the terminal and to a file. The default shell is built in. It is not a folder of files Winshell writes out.
 
 By default Winshell leaves Explorer's taskbar in place. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. To hide Explorer's taskbar and release its edge while Winshell is running, set `hideExplorerTaskbar = true` in [preferences.toml](../settings.md#where-the-choices-live). That key stays off until the file sets it, and there is no switch for it in Winshell Settings. Winshell puts the window and the edge back when it exits. If you would rather leave Explorer's taskbar visible, turn on **Automatically hide the taskbar** for it in Windows Settings > Personalization > Taskbar. See [Explorer's taskbar is missing](troubleshooting.md#explorers-taskbar-is-missing) if a killed Winshell leaves it hidden.
 
-- **Run it without a terminal:** `winshell -d` starts it in the background and returns. From a terminal, a failure before it starts is printed there. The Start tile and the sign-in entry have no console, so that same failure is a dialog.
+- **Run it without a terminal:** `winshell run -d` starts it in the background and returns. From a terminal, a failure before it starts is printed there. The Start tile and the sign-in entry have no console, so that same failure is a dialog.
 - **Stop it:** press Ctrl+C in its terminal, or run `winshell kill`.
 - **Start it when you sign in:** right-click an empty part of the taskbar, choose **Taskbar settings**, and turn on **Run Winshell when I sign in** on the Startup page. Signing in runs the last build and does not build again.
 - **See what is running:** `winshell list`. `winshell log` prints the log of the running instance.
@@ -93,29 +95,21 @@ A configuration is a .NET project. Winshell looks for a `.csproj` in this order.
 
 | What you run | The project it builds and runs |
 | --- | --- |
-| `winshell --path <folder or file>` | That `.csproj`, or the one `.csproj` in that folder |
-| `winshell --config <name>` | The project in `%APPDATA%\winshell\<name>` |
-| `winshell` | The project in `%APPDATA%\winshell`; else `%APPDATA%\winshell\default`; else the one subfolder of `%APPDATA%\winshell` that has a project. With several, Winshell asks you to pick one with `--config`. With none, it runs the default shell. |
+| `winshell run --path <folder or file>` | That `.csproj`, or the one `.csproj` in that folder |
+| `winshell run --config <name>` | The project in `%APPDATA%\winshell\<name>` |
+| `winshell run` | The project in `%APPDATA%\winshell`; else `%APPDATA%\winshell\default`; else the one subfolder of `%APPDATA%\winshell` that has a project. With several, Winshell asks you to pick one with `--config`. With none, it runs the default shell. |
 
 `WINSHELL_CONFIG_DIR` replaces `%APPDATA%\winshell` in this table. The default shell keeps `preferences.toml` in that folder.
 
-The first time Winshell uses `%APPDATA%\winshell`, it copies an old `%USERPROFILE%\.config\winshell` there, if you have one, and leaves the old folder in place.
-
-A folder that still has a `shell.qml` and no `.csproj` is not a configuration. Winshell runs the default shell and shows a notice that QML configurations stopped working. There is no converter. Preferences that were already in the config folder stay there, as TOML. To write a shell, start a project, as the [configuration guide](configuration.md) describes.
-
 ## Make a shell of your own
 
-```powershell
-dotnet new winshell -n MyShell
-```
-
-That needs the .NET SDK. `dotnet new winshell-default -n MyShell` starts from the default shell instead of an empty panel. Run it with `winshell --path MyShell`. Winshell builds the project to `bin\shell` when a source is newer than that program, then starts the program. A build that fails does not start the last program that built.
+A shell of your own is a project from `dotnet new winshell`, or from `dotnet new winshell-default` to start from the default shell instead of an empty panel. That needs the .NET SDK and, for now, a clone of Winshell: the templates and the `Winshell` package they reference are not published yet. [Create one](configuration.md#create-one) has the steps. Run it with `winshell run --path MyShell`. Winshell builds the project to `bin\shell` when a source is newer than that program, then starts the program. A build that fails does not start the last program that built.
 
 The [configuration guide](configuration.md) is the rest of that, and the [default shell reference](../reference/default-shell.md) is what the built-in shell does.
 
 ## Reload
 
-`winshell reload` builds the configuration. When the build fails, the running instance stays and Winshell shows a notice. When it builds, a new instance starts and takes over with `--after`. There is no file watcher. While you are writing the shell, `dotnet watch` is the fast loop.
+`winshell reload` builds the configuration. When the build fails, the running instance stays and Winshell shows a notice. When it builds, a new instance starts and takes over with `--after`. There is no file watcher. While you are writing the shell, [`winshell dev`](configuration.md#develop-a-shell) is the fast loop.
 
 `shell.Reload()` starts the same program again with `--after` and then quits. It does not build. False means that process did not start, and the shell keeps running.
 

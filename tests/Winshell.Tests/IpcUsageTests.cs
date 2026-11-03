@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary><c>winshell ipc</c> with no command shows how to use it.</summary>
+[Trait("Category", "Slow")]
 public sealed class IpcUsageTests
 {
     [Fact]

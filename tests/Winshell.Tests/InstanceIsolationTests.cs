@@ -7,10 +7,16 @@ namespace Winshell.Tests;
 /// Runs several winshell instances at once, as separate processes, and checks that they keep apart: each has its own
 /// id, pipe and log, each answers for itself, and one that crashes or has a broken config leaves the others running.
 /// </summary>
-public sealed class InstanceIsolationTests : IDisposable
+[Trait("Category", "Slow")]
+public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBuild>
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
+
+    // The instances' own local folder, so the list holds only what this test started and the user's is left alone.
+    private string Local => Path.Combine(_dir, "local");
+
+    private string RunDir(string id) => Path.Combine(Local, "run", id);
 
     private string Config(string folder)
     {
@@ -58,10 +64,10 @@ public sealed class InstanceIsolationTests : IDisposable
         var live = Info(process);
         var liveId = live.GetProperty("id").GetString()!;
         var staleId = Instances.NewId();
-        var dir = Instances.DirOf(staleId);
+        var dir = RunDir(staleId);
         Directory.CreateDirectory(dir);
         // The shape left on disk before processStart was recorded: same pid, earlier launch, no processStart.
-        var legacy = File.ReadAllText(Path.Combine(Instances.DirOf(liveId), "instance.json"));
+        var legacy = File.ReadAllText(Path.Combine(RunDir(liveId), "instance.json"));
         legacy = legacy.Replace($"\"id\": \"{liveId}\"", $"\"id\": \"{staleId}\"", StringComparison.Ordinal);
         legacy = legacy.Replace($"\"pipe\": \"winshell-{liveId}\"", $"\"pipe\": \"winshell-{staleId}\"", StringComparison.Ordinal);
         var launched = live.GetProperty("launchTime").GetDateTime().AddHours(-3);
@@ -72,71 +78,52 @@ public sealed class InstanceIsolationTests : IDisposable
         legacy = System.Text.RegularExpressions.Regex.Replace(legacy, ",\\s*\"processStart\": \\d+", "");
         File.WriteAllText(Path.Combine(dir, "instance.json"), legacy);
         var reusedId = Instances.NewId();
-        var reusedDir = Instances.DirOf(reusedId);
-        try
-        {
-            // This process id already belongs to a winshell, but the file records a different process start.
-            Instances.Write(new InstanceInfo(
-                reusedId,
-                process.Id,
-                "reused",
-                live.GetProperty("configPath").GetString()!,
-                DateTime.Now,
-                "winshell-" + reusedId,
-                Path.Combine(reusedDir, "log.txt"),
-                ProcessStart: 1,
-                ProcessName: process.ProcessName));
-            var rows = Listed().Where(i => i.GetProperty("pid").GetInt32() == process.Id).ToList();
-            Assert.Single(rows);
-            Assert.Equal(liveId, rows[0].GetProperty("id").GetString());
-        }
-        finally
-        {
-            Instances.Remove(staleId);
-            Instances.Remove(reusedId);
-            try
-            {
-                Directory.Delete(dir, true);
-            }
-            catch (IOException)
-            {
-            }
-            try
-            {
-                Directory.Delete(reusedDir, true);
-            }
-            catch (IOException)
-            {
-            }
-        }
+        var reusedDir = RunDir(reusedId);
+        Directory.CreateDirectory(reusedDir);
+        // This process id already belongs to a winshell, but the file records a different process start.
+        var reused = new InstanceInfo(
+            reusedId,
+            process.Id,
+            "reused",
+            live.GetProperty("configPath").GetString()!,
+            DateTime.Now,
+            "winshell-" + reusedId,
+            Path.Combine(reusedDir, "log.txt"),
+            ProcessStart: 1,
+            ProcessName: process.ProcessName);
+        File.WriteAllText(Path.Combine(reusedDir, "instance.json"), JsonSerializer.Serialize(reused, InstanceJson.Default.InstanceInfo));
+
+        var rows = Listed().Where(i => i.GetProperty("pid").GetInt32() == process.Id).ToList();
+        Assert.Single(rows);
+        Assert.Equal(liveId, rows[0].GetProperty("id").GetString());
     }
 
     private Process Start(string configDir, string? shellId = null)
     {
-        var process = ProbeShell.Start(configDir, null, shellId);
+        var process = ProbeShell.Start(configDir, Local, shellId);
         _started.Add(process);
         return process;
     }
 
-    private static JsonElement Info(Process process) => Listed().Single(i => i.GetProperty("pid").GetInt32() == process.Id);
+    private JsonElement Info(Process process) => Listed().Single(i => i.GetProperty("pid").GetInt32() == process.Id);
 
-    private static List<JsonElement> Listed()
+    private List<JsonElement> Listed()
     {
         using var json = JsonDocument.Parse(Winshell("list", "--json"));
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private static int Show(Process process)
+    private int Show(Process process)
     {
-        var (code, _, error) = WinshellCli.Run(["ipc", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "show"]);
+        var (code, _, error) = WinshellCli.Run(["ipc", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "show"], ("WINSHELL_LOCAL_DIR", Local));
         Assert.True(code == 0, error);
         return code;
     }
 
     /// <summary>Runs the winshell CLI and returns what it printed.</summary>
-    private static string Winshell(params string[] args)
+    private string Winshell(params string[] args)
     {
-        var (code, output, error) = WinshellCli.Run(args);
+        var (code, output, error) = WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Local));
         Assert.True(code == 0, $"winshell {string.Join(' ', args)} exited with {code}: {error}");
         return output;
     }

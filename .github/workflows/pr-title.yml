@@ -5,20 +5,48 @@ on:
   # check reports on every PR. The job reads only the title and never checks out PR code.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, edited, synchronize, reopened]
+  # A merge queue waits for every required check on its merge group. The title was checked on the pull request.
+  merge_group:
 
 permissions:
   pull-requests: read
+
+concurrency:
+  # A merge group has no number, and each has its own commit.
+  group: pr-title-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   pr-title:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: pr-title
-    # GitHub's Revert button titles PRs `Revert "<original title>"` on a `revert-<n>-…` branch. A skipped
-    # job still satisfies the required check.
-    if: ${{ !(startsWith(github.event.pull_request.title, 'Revert "') && startsWith(github.head_ref, 'revert-')) }}
+    # GitHub's Revert button titles PRs `Revert "<original title>"` on a `revert-<n>-…` branch, and a merge group has no
+    # title. A skipped job still satisfies the required check.
+    if: ${{ github.event_name != 'merge_group' && !(startsWith(github.event.pull_request.title, 'Revert "') && startsWith(github.head_ref, 'revert-')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Check branch name
+        # A guide, not a merge gate, so it fails without failing the job. Fork branches are skipped.
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          # Keep this list in step with the types table in CONTRIBUTING.md.
+          types='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert'
+          if [[ "$BRANCH" =~ ^($types)/[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo "Branch \"$BRANCH\" follows <type>/<short-description>."
+            exit 0
+          fi
+          # Branches created by Dependabot, release-please, GitHub's Revert button, and coding agents.
+          if [[ "$BRANCH" == dependabot/* || "$BRANCH" == release-please--* || "$BRANCH" =~ ^revert-[0-9]+- \
+            || "$BRANCH" =~ ^(claude|codex|copilot|cursor|grok)/ ]]; then
+            echo "Branch \"$BRANCH\" is created by automation."
+            exit 0
+          fi
+          echo "::error::Branch \"$BRANCH\" must be named <type>/<short-description> in lowercase, such as fix/duplicate-orders. Allowed types: ${types//|/, }. Rename the branch and open a new PR; see the Branch name section of CONTRIBUTING.md."
+          exit 1
       # Reads only the PR title; never check out or run PR code in this pull_request_target job.
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:

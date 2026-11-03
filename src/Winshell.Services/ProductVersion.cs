@@ -7,7 +7,7 @@ namespace Winshell;
 /// The Winshell release a build reports. The number is the assembly informational version,
 /// which the build stamps from the release-please manifest.
 /// </summary>
-public sealed class ProductVersion
+internal sealed class ProductVersion
 {
     /// <summary>This assembly's release.</summary>
     public static ProductVersion Current { get; } = Parse(
@@ -29,20 +29,6 @@ public sealed class ProductVersion
 
     /// <summary>The informational version text this was parsed from, or <c>0.0.0</c> when it was missing.</summary>
     public string Text { get; }
-
-    /// <summary>
-    /// True when this release is at least <paramref name="major"/>.<paramref name="minor"/> and every named
-    /// unreleased feature is present. A newer release is treated as having those features. No unreleased
-    /// features are declared, so a feature list matches only on a newer release.
-    /// </summary>
-    public bool Satisfies(int major, int minor, IReadOnlyList<string>? features)
-    {
-        if (Major > major || (Major == major && Minor > minor))
-            return true;
-        if (Major != major || Minor != minor)
-            return false;
-        return features is null || features.Count == 0;
-    }
 
     /// <summary>Reads major.minor.patch from an informational version, ignoring a prerelease and build id.</summary>
     public static ProductVersion Parse(string? informational)

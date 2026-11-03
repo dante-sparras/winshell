@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Windows.Foundation;
 
 namespace Winshell;
 
@@ -22,8 +23,8 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     private ScreenInfo? _screen;
     private WindowBackdrop _backdrop;
     private WindowCorners _corners;
-    private IReadOnlyList<QRect>? _inputRegion;
-    private QRect? _visibleMask;
+    private IReadOnlyList<Rect>? _inputRegion;
+    private Rect? _visibleMask;
     private bool _disposed;
 
     private protected ShellWindow(Shell shell) => _shell = shell;
@@ -102,7 +103,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     public double Scale => _scale;
 
     /// <summary>The window's origin on the virtual desktop, in logical pixels.</summary>
-    public QPoint Origin => _host?.Origin ?? default;
+    public Point Origin => _host?.Origin ?? default;
 
     /// <summary>The screen this window is on, or was asked to be on. Null is the primary screen.</summary>
     public ScreenInfo? Screen
@@ -150,7 +151,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     /// The parts of the window that take clicks, in logical pixels; clicks elsewhere go to the window below. Null is
     /// the whole window. An empty list lets every click through.
     /// </summary>
-    public IReadOnlyList<QRect>? InputRegion
+    public IReadOnlyList<Rect>? InputRegion
     {
         get => _inputRegion;
         set
@@ -162,7 +163,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     }
 
     /// <summary>Clips the content to a rectangle, in logical pixels. Null shows all of it.</summary>
-    public QRect? VisibleMask
+    public Rect? VisibleMask
     {
         get => _visibleMask;
         set
@@ -296,5 +297,6 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         _host?.Dispose();
         _host = null;
         Set(ref _visible, false, nameof(Visible));
+        GC.SuppressFinalize(this);
     }
 }

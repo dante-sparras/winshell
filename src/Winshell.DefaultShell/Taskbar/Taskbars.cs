@@ -30,7 +30,11 @@ internal sealed class Taskbars
         _pins = pins;
         _desktop = new TaskbarDesktop(shell.WindowList, shell.Apps, shell.JumpLists);
         // One tray for every bar. Reading it makes this process the notification area, and a bar closing must not do that again.
-        _tray = new TrayArea(shell.SystemTray, new SystemStatus(shell.Networking, shell.Audio, shell.Power, shell.PowerMode), shell.Updates);
+        _tray = new TrayArea(
+            shell.SystemTray,
+            new SystemStatus(shell.Networking, shell.Audio, shell.Power, shell.PowerMode),
+            shell.Updates,
+            new WinlandMenu(() => shell.Winland, File.Exists, path => WinlandMenu.Open(path, shell.Log)));
         // One center for every bar. Reading the listener never asks Windows for access.
         _notifications = new NotificationCenter(shell.Notifications, preferences, TimeProvider.System);
         // One quick settings for every bar, and the same layout for Winshell Settings. Bluetooth is read only while a flyout is open.
@@ -135,7 +139,7 @@ internal sealed class Taskbars
                 Screen = screen,
                 Anchors = Edges.Bottom | Edges.Left | Edges.Right,
                 Height = 48,
-                ExclusiveZone = 48,
+                ReservedSize = 48,
                 Backdrop = _preferences.Material,
             };
             window.Content = new TaskbarView(

@@ -20,9 +20,6 @@ public sealed record ShellOptions
     /// </summary>
     public string? ShellId { get; init; }
 
-    /// <summary>The app id the shell shows Windows, as <c>WINSHELL_APP_ID</c> does.</summary>
-    public string? AppId { get; init; }
-
     /// <summary>
     /// Another folder for <see cref="Shell.DataDir"/>. A relative path is next to the program, <c>%NAME%</c> expands,
     /// and <c>$BASE</c> is the folder above <c>by-shell</c>, such as <c>%LOCALAPPDATA%\winshell\data</c>.
@@ -40,13 +37,7 @@ public sealed record ShellOptions
     /// <c>winshell.exe</c>, before the shell starts. Restart then starts this program again with <c>--after</c>.
     /// A configuration's own program leaves this null.
     /// </summary>
-    public Updater? Updater { get; init; }
-
-    /// <summary>
-    /// A <c>shell.qml</c> left behind, with no project. The shell says once, as it starts, that QML configurations
-    /// stopped working. Null when there is nothing to say.
-    /// </summary>
-    internal string? RetiredQml { get; init; }
+    internal Updater? Updater { get; init; }
 }
 
 /// <summary>A configuration: the program that defines a shell. <see cref="Start"/> makes its windows.</summary>
@@ -77,6 +68,12 @@ public sealed partial class Shell : IDisposable
         Platform = new ShellPlatform(loop, log);
     }
 
+    /// <summary>The project folder <c>winshell dev</c> runs, where a shell follows its <c>.xaml</c> files.</summary>
+    internal const string DevProjectVariable = "WINSHELL_DEV_PROJECT";
+
+    /// <summary>The shell of this process, or null before <see cref="Run{T}"/> has started it.</summary>
+    internal static Shell? Running => _current;
+
     /// <summary>The shell of this process. Reading it before <see cref="Run{T}"/> has started it throws.</summary>
     public static Shell Current => _current ?? throw new InvalidOperationException("The shell has not started. Call Shell.Run first.");
 
@@ -87,6 +84,9 @@ public sealed partial class Shell : IDisposable
     public ShellOptions Options { get; }
 
     internal ShellPlatform Platform { get; }
+
+    /// <summary>The Winshell release this program is built on.</summary>
+    public static string Version => ProductVersion.Current.Text;
 
     /// <summary>The name that identifies this configuration across runs.</summary>
     public string ShellId => _identity.ShellId;
@@ -115,22 +115,19 @@ public sealed partial class Shell : IDisposable
     /// <summary>The connected screens. The primary screen comes first.</summary>
     public ObservableCollection<ScreenInfo> Screens => Platform.Screens;
 
-    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <c>system</c> follows it.</summary>
+    /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <see cref="ColorScheme.System"/> follows it.</summary>
     public bool IsDark => Platform.IsDark;
 
-    /// <summary>
-    /// Whether <paramref name="scheme"/> is dark. <c>light</c> and <c>dark</c> override Windows; anything else follows
-    /// <paramref name="windowsDark"/>.
-    /// </summary>
-    public static bool DarkFor(string? scheme, bool windowsDark) => scheme switch
+    /// <summary>Whether <paramref name="scheme"/> is dark, with Windows in <paramref name="windowsDark"/>.</summary>
+    internal static bool DarkFor(ColorScheme scheme, bool windowsDark) => scheme switch
     {
-        "dark" => true,
-        "light" => false,
+        ColorScheme.Dark => true,
+        ColorScheme.Light => false,
         _ => windowsDark,
     };
 
-    /// <summary>The color scheme every window follows: <c>system</c>, <c>light</c> or <c>dark</c>.</summary>
-    public string ColorScheme
+    /// <summary>The color scheme every window follows.</summary>
+    public ColorScheme ColorScheme
     {
         get => Platform.ColorScheme;
         set => Platform.ColorScheme = value;
@@ -247,12 +244,15 @@ public sealed partial class Shell : IDisposable
                             (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
                             path => OpenToRead.Open(path, log));
                         shell.Notices = notices;
+                        // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
+                        if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
+                            TomlFile.ErrorChanged += notices.ShowConfigError;
+                        if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
+                            XamlReload.Watch(shell, project);
                         instance.Listen(loop, new Control(shell), notices.Hide);
                         instance.Publish(identity.ShellId);
                         configuration.Start(shell);
                         ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
-                        if (options.RetiredQml is { Length: > 0 } qml)
-                            loop.Post(() => notices.Show(ShellNotices.ForRetiredQml(qml)));
 #if DEBUG
                         if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
                             throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash as it started.");
@@ -366,9 +366,9 @@ public sealed partial class Shell : IDisposable
     /// <summary>The control pipe's way into this shell. A reload ends the process, so that waits for the client's answer.</summary>
     private sealed class Control(Shell shell) : IInstanceControl
     {
-        public IIpcTargets Ipc => shell.Ipc;
+        public ShellIpc Ipc => shell.Ipc;
 
-        public string? Reload(bool hard, string? program) => shell.StartNext(program);
+        public string? Reload(string? program) => shell.StartNext(program);
 
         public void Reloaded() => shell.Quit();
 
@@ -376,6 +376,8 @@ public sealed partial class Shell : IDisposable
 
         public void ShowBuildError(string error, string projectFile) =>
             shell.Notices?.Show(ShellNotices.ForBuildError(error, projectFile));
+
+        public Task<string> Inspect(string command, IReadOnlyList<string> args) => Inspector.Run(shell, command, args);
     }
 
     /// <summary>

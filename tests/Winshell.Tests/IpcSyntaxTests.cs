@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary>A wrong <c>ipc</c> command line is a usage error, whether or not anything is running.</summary>
+[Trait("Category", "Slow")]
 public sealed class IpcSyntaxTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
@@ -22,6 +23,19 @@ public sealed class IpcSyntaxTests : IDisposable
         Assert.Equal(2, code);
         Assert.Contains("Usage: winshell ipc", text);
         Assert.DoesNotContain("No running instances", text);
+    }
+
+    [Fact]
+    public void Msg_prints_its_deprecation_and_keeps_the_ipc_usage_exit_code()
+    {
+        var (code, output, error) = WinshellCli.Run(["msg", "target"], ("WINSHELL_LOCAL_DIR", _root));
+
+        Assert.Equal(2, code);
+        Assert.Equal("", output);
+        Assert.Equal(
+            "winshell msg is deprecated; use winshell ipc call." + Environment.NewLine +
+            "Usage: winshell ipc call <target> <function> [args...] | prop get <target> <property> | wait|listen <target> <signal> | show" + Environment.NewLine,
+            error);
     }
 
     public void Dispose()

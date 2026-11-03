@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary><c>--help</c> after a command prints that command's usage and does not run it.</summary>
+[Trait("Category", "Slow")]
 public class CliHelpTests
 {
     [Theory]

@@ -104,7 +104,7 @@ public sealed class BluetoothDevice : ObservableObject
 
     public string Name => _info.Name;
 
-    /// <summary>A BlueZ device-type icon name. Empty when Windows reports no class, or a class BlueZ does not name.</summary>
+    /// <summary>A device-type name, such as <c>audio-headset</c> or <c>input-keyboard</c>. Empty when Windows reports no class, or a class that has no name.</summary>
     public string Icon => _info.Icon;
 
     public bool Paired => _info.Paired;
@@ -288,13 +288,11 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private long _revision;
     private volatile bool _disposed;
 
-    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, bool monitor = true)
+    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null)
     {
         _loop = loop;
         _log = log;
         Backend = backend ?? new BluetoothBackend();
-        if (monitor)
-            StartMonitoring();
     }
 
     /// <summary>Starting or stopping discovery failed.</summary>
@@ -323,7 +321,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     public string Error => _error;
 
-    /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>. The service starts this when it is created.</summary>
+    /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>. Nothing is read before this.</summary>
     public void StartMonitoring()
     {
         if (_disposed)

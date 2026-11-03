@@ -35,7 +35,9 @@ internal sealed unsafe class HookThread
         var started = new TaskCompletionSource<(nint Hook, uint ThreadId)>();
         var thread = new Thread(() => Pump(hookId, proc, started, life)) { IsBackground = true, Name = name };
         thread.Start();
+#pragma warning disable VSTHRD002 // The thread it waits for runs no continuation of this one.
         var (hook, threadId) = started.Task.Result;
+#pragma warning restore VSTHRD002
         if (hook != 0)
             return new HookThread(hook, thread, threadId, life);
         thread.Join();

@@ -83,10 +83,10 @@ internal static class WinlandProtocol
         int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : name == DefaultSpecial ? -99 : -1;
 
     /// <summary>A JSON value as maps and lists: objects become maps, arrays lists.</summary>
-    public static object? ToQml(JsonElement element) => element.ValueKind switch
+    public static object? ToObject(JsonElement element) => element.ValueKind switch
     {
-        JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => ToQml(p.Value)),
-        JsonValueKind.Array => element.EnumerateArray().Select(ToQml).ToList(),
+        JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => ToObject(p.Value)),
+        JsonValueKind.Array => element.EnumerateArray().Select(ToObject).ToList(),
         JsonValueKind.String => element.GetString(),
         JsonValueKind.Number => element.TryGetInt64(out var l) && l is >= int.MinValue and <= int.MaxValue ? (object)(int)l : element.GetDouble(),
         JsonValueKind.True => true,

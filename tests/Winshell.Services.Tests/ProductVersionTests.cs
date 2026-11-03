@@ -26,21 +26,6 @@ public class ProductVersionTests
     }
 
     [Fact]
-    public void Satisfies_is_at_least_the_requested_release()
-    {
-        var version = ProductVersion.Parse("0.3.0+abc");
-        Assert.True(version.Satisfies(0, 3, null));
-        Assert.True(version.Satisfies(0, 3, []));
-        Assert.True(version.Satisfies(0, 2, ["later"]));
-        Assert.True(version.Satisfies(0, 0, null));
-        Assert.False(version.Satisfies(0, 3, ["not-released"]));
-        Assert.False(version.Satisfies(0, 3, ["one", "two"]));
-        Assert.False(version.Satisfies(0, 4, null));
-        Assert.False(version.Satisfies(1, 0, []));
-        Assert.True(version.Satisfies(-1, 9, ["x"]));
-    }
-
-    [Fact]
     public void The_assembly_version_is_the_release_please_manifest()
     {
         var manifest = ManifestVersion();

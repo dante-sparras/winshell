@@ -1,4 +1,3 @@
-#pragma warning disable CA1416
 using Winshell.Tray;
 
 namespace Winshell.Services.Tests;

@@ -11,6 +11,7 @@ namespace Winshell.Tests;
 /// so it sees only its own shells and can't touch the user's.
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
+[Trait("Category", "Slow")]
 public sealed partial class ShellProgramTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
@@ -145,7 +146,7 @@ public sealed partial class ShellProgramTests : IDisposable
             Assert.Equal(0, parent.ExitCode);
         }
 
-        Wait.Until(() => Listed().Any(), "the background shell");
+        Wait.Until(() => Listed().Count > 0, "the background shell");
         var child = Assert.Single(Listed());
         Assert.Equal("winshell-default", child.GetProperty("shellId").GetString());
 

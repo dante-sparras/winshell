@@ -5,19 +5,25 @@
 ```text
 winshell run [options]              start a shell
 winshell                            print this help
+winshell <command> --help           help for that command, which does not run
 winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
 winshell reload [instance options]
-                                    build a configuration and replace the instance
-winshell log [-f] [-t N]            print an instance's log
+                                    reload an instance's configuration
+winshell dev [-c <name> | -p <path>]
+                                    run a project and apply each edit to it
+winshell log [-f] [-t N] [file]     print an instance's log
 winshell ipc show [-j]              list IPC targets
 winshell ipc call <target> <function> [args...]
 winshell ipc prop get <target> <property>
 winshell ipc wait <target> <signal>
 winshell ipc listen <target> <signal>
+winshell inspect tree | screenshot <file> | click <name> | hover <name>
+                                    look at a running shell, or act on it
 winshell doctor [config options] [-j] [--no-color]
                                     check this PC's setup for Winshell
+winshell help                       print this summary
 ```
 
 ## Run a shell
@@ -43,13 +49,11 @@ A failure before that log exists, such as no project and no default shell to run
 
 A build that fails prints why and does not start a program. `Building a configuration needs the .NET SDK, from https://dot.net/download.` is the message when the SDK is missing. A downloaded `.csproj`, or a `.props` or `.targets` beside it, is refused before the build: the file name, then `was downloaded from the internet. It runs as you.`
 
-A folder that has a `shell.qml` and no `.csproj` runs the default shell. A notice says QML configurations stopped working. There is no converter.
-
 Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2.
 
 ## Pick an instance
 
-`kill`, `reload`, `log` and `ipc` act on one running instance:
+`kill`, `reload`, `log`, `ipc` and `inspect` act on one running instance:
 
 | Option | Picks |
 | --- | --- |
@@ -64,14 +68,21 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | --- | --- |
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. The shape is under [JSON](#json). |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. `kill` is the one command a CLI and a shell of different releases still accept. |
-| `winshell reload` | Builds the configuration. On failure the running instance stays, a notice shows, and the command prints why and exits with 1. On success a new instance starts with `--after` and takes over, then the command prints `Reloaded <id>`. There is no file watcher. |
+| `winshell reload` | Builds the configuration. On failure the running instance stays, a notice shows, and the command prints why and exits with 1. On success a new instance starts with `--after` and takes over, then the command prints `Reloaded <id>`. The default shell has nothing to build, so it starts again. There is no file watcher. |
+| `winshell dev` | Runs a configuration project under `dotnet watch` and applies each edit to the running shell, until Ctrl+C. See [Develop a shell](../guide/configuration.md#develop-a-shell). Takes `-c` and `-p`. |
 | `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. `-j`, `--json` prints that list as JSON. The shape is under [JSON](#json). |
 | `winshell ipc call <target> <function> [args...]` | Calls a function registered with [`ShellIpc.Handle`](winshell.md#shellipc) and prints what it returns. |
 | `winshell ipc prop get <target> <property>` | Prints a property registered with `ShellIpc.Property`. |
 | `winshell ipc wait <target> <signal>` | Waits for a signal once and prints its first argument. |
 | `winshell ipc listen <target> <signal>` | Prints the first argument of each signal until you press Ctrl+C. |
+| `winshell inspect tree` | Prints each open window of an instance as JSON: its kind, place and size, and its live XAML tree, with each element's type, `x:Name`, automation id and name, position in the window, size and what it holds, such as `text`, `value`, `on`, `checked` or `selectedIndex`. What the window's open flyouts and menus show is under `popups`, each placed from its own corner. A password is left out. |
+| `winshell inspect screenshot <file> [window]` | Saves a window's content as a PNG at its real size in pixels. The system draws a backdrop such as Mica, so a capture sits on the plain dark or light color of the theme instead. A `[window]` that names the type of an open popup's content, such as `MenuFlyoutPresenter`, saves that popup. |
+| `winshell inspect click <name> [window]` | Activates an element through its UI Automation peer, as Narrator does: it invokes a button, toggles a toggle and opens what expands. A disabled control refuses. Nothing goes through Windows' input. |
+| `winshell inspect hover <name> [window]` | Puts a control in its `PointerOver` look. A `PointerEntered` handler does not run, because XAML has no way to raise one from code. |
 | `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. It reads a project as data and never builds. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. See [winshell doctor](../doctor.md). |
+
+In `winshell inspect`, a `[window]` is the type of a window's content, such as `TaskbarView`, or its `window` number in `tree`, and the default is the first. A `<name>` is an `x:Name`, an automation id or an automation name, in a window or in its open popups. The first match wins, so a window narrows it down when two taskbars both have a `StartButton`.
 
 `winshell msg` is the old name of `winshell ipc call`; it still works and says so. `winshell ipc call notice dismiss` closes Winshell's own notice for a build error or a failure. That notice is not a target the configuration registered, so `ipc show` does not list it. It takes no arguments. `winshell msg notice dismiss` is the same call.
 
@@ -148,13 +159,14 @@ A parameter has `name` and `type`. `type` is null when the signal's parameter wa
 
 `--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
 
-An unexpected failure of `list`, `kill`, `reload`, `log`, `ipc` or `doctor` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
+An unexpected failure of any command but `run` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
 
 ## Environment variables
 
 | Variable | What it does |
 | --- | --- |
-| `WINSHELL_CONFIG_DIR` | The folder configurations load from, instead of `%APPDATA%\winshell`. With it set, an old `%USERPROFILE%\.config\winshell` isn't copied. |
+| `WINSHELL_CONFIG_DIR` | The folder configurations load from, instead of `%APPDATA%\winshell`. |
+| `WINSHELL_LOCAL_DIR` | The folder for logs, crash reports, and each shell's data, state and cache, instead of `%LOCALAPPDATA%\winshell`. |
 | `WINLAND_PIPE` | The named pipe [`Winshell.Winland`](winshell-winland.md) connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 ## Files

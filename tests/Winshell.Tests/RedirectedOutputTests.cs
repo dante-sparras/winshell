@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Winshell.Tests;
 
 /// <summary>Redirected output is UTF-8, whatever the console's code page is, so a pipe or file gets the text intact.</summary>
+[Trait("Category", "Slow")]
 public sealed class RedirectedOutputTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));

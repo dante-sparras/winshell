@@ -1,5 +1,6 @@
 namespace Winshell.ShellTests;
 
+[Trait("Category", "Slow")]
 public sealed class ShellServicesTests
 {
     [Fact]
@@ -31,5 +32,14 @@ public sealed class ShellServicesTests
         });
 
         Assert.False(registered);
+    }
+
+    [Fact]
+    public void The_color_scheme_overrides_Windows_mode()
+    {
+        Assert.True(Shell.DarkFor(ColorScheme.Dark, false));
+        Assert.False(Shell.DarkFor(ColorScheme.Light, true));
+        Assert.True(Shell.DarkFor(ColorScheme.System, true));
+        Assert.False(Shell.DarkFor(ColorScheme.System, false));
     }
 }

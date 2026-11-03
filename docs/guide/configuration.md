@@ -4,12 +4,24 @@ A configuration is a .NET project that references the Winshell package and build
 
 ## Create one
 
-You need the [.NET SDK](https://dotnet.microsoft.com/download). Running the default shell does not.
+You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](getting-started.md#build-from-source), so the two are the same release.
 
 ```powershell
+git clone https://github.com/enpaze/winshell.git
+cd winshell
+pwsh scripts/pack.ps1
+dotnet new install .\artifacts\packages\Winshell.Templates.<version>.nupkg
+```
+
+`scripts/pack.ps1` writes both packages to `artifacts\packages`, and `<version>` is the release in their names. Then make the project beside the clone, and tell NuGet where the `Winshell` package is:
+
+```powershell
+cd ..
 dotnet new winshell -n MyShell
 cd MyShell
-winshell --path .
+dotnet new nugetconfig
+dotnet nuget add source ..\winshell\artifacts\packages --name winshell --configfile nuget.config
+winshell run --path .
 ```
 
 `dotnet new winshell-default -n MyShell` starts from the default shell. Winshell builds to `MyShell\bin\shell` when a source is newer, then starts that program. `--no-build` runs the program the last build left, and does not build. A failed build does not start the last good build.
@@ -20,7 +32,7 @@ A `winshell` and a shell of different releases refuse each other, except `kill`.
 
 ## The program
 
-`Shell.Run` runs until the shell quits. `ShellOptions` is where `//@ pragma` lines were. `ShellId` names the data, state and cache folders.
+`Shell.Run` runs until the shell quits. `ShellId` in `ShellOptions` names the data, state and cache folders.
 
 ```csharp
 Shell.Run<AppShell>(new ShellOptions { ShellId = "MyShell" });
@@ -37,13 +49,13 @@ Windows stay Winshell's. The content is any `UIElement`. Sizes are logical pixel
         {
             Anchors = Edges.Left | Edges.Right | Edges.Bottom,
             Height = 48,
-            ExclusiveZone = 48,
+            ReservedSize = 48,
             Content = new TextBlock { Text = "Winshell" },
             Visible = true,
         };
 ```
 
-- **[PanelWindow](../reference/winshell.md#panelwindow)** sits on the edges of a screen. `Anchors` chooses the edges. `ExclusiveZone` reserves that edge, so maximized windows stop short of it. `ExclusionMode` of `Ignore` reserves nothing. `AboveWindows` set false puts it behind other windows.
+- **[PanelWindow](../reference/winshell.md#panelwindow)** sits on the edges of a screen. `Anchors` chooses the edges. `ReservedSize` reserves that edge, so maximized windows stop short of it. `ExclusionMode` of `Ignore` reserves nothing. `AboveWindows` set false puts it behind other windows.
 - **[PopupWindow](../reference/winshell.md#popupwindow)** is a frameless window placed next to another. `GrabFocus` gives it the keyboard. `Dismissed` fires when it closes.
 - **[FloatingWindow](../reference/winshell.md#floatingwindow)** is a normal window with a title bar.
 
@@ -77,7 +89,7 @@ Reading does not ask for permission and does not change anything. Wi-Fi scanning
         shell.Ipc.Handle("notes", "hello", (string name) => "hi " + name);
 ```
 
-`winshell ipc call notes hello Ada` prints `hi Ada`. `Property`, `Signal`, `GetProperty` and `Listen` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
+`winshell ipc call notes hello Ada` prints `hi Ada`. `Property` and `Signal` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
 
 `winshell ipc call notice dismiss` closes Winshell's own notice. That call is not a target you register, so `ipc show` does not list it.
 
@@ -104,6 +116,21 @@ Pass `Path.Combine(shell.ConfigRoot, "preferences.toml")` and `shell.Loop`. The 
             shell.Log.Warn("shell", "Reload did not start.");
 ```
 
-That starts this program again with `--after` and quits. It does not build. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over. There is no file watcher. `dotnet watch` rebuilds as you edit.
+That starts this program again with `--after` and quits. It does not build. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over. There is no file watcher. [`winshell dev`](#develop-a-shell) applies each edit as you save.
 
 `winshell run --no-build` skips the build. The sign-in entry uses it, so signing in does not need the SDK and does not run a broken edit.
+
+## Develop a shell
+
+```powershell
+winshell dev --path .
+```
+
+`winshell dev` builds your project, starts it, and applies each save to the running shell until you press Ctrl+C. It needs the .NET SDK, and it runs a Debug build.
+
+- **A C# edit** reaches the running shell in about a second. The first one takes a little longer, while the compiler warms up. An edited method runs its new code at its next call.
+- **A window showing an edited type** gets a new one of its content, so a change to a constructor shows too. The window keeps its place, and every other window keeps its content and its state. A view whose constructor takes arguments stays, and its edited methods still run. Keep state that must survive in a model the view is given.
+- **A XAML edit** goes into the panels of that class as you save, in a moment and with no build. The control stays the same object, so its C# fields keep their values, and its `x:Name` fields and event handlers point at the new elements. `{x:Bind}`, `x:Load` and `x:Phase` are the compiler's, and so is a file with no `x:Class`, so saving one of those builds and starts the shell again. A panel with no window open yet shows the new markup when it opens.
+- **An edit .NET can't apply to running code**, such as a new base class, restarts the shell. That takes as long as a build, and the state of every window goes with it.
+- **Code that doesn't compile** shows in a notice on screen, and the last version that did keeps running. The notice goes when the next save compiles. Before the first successful build there is no shell to show it, so the error is in the console.
+- **A TOML or XAML file with an error** shows in the same notice, and what came from it before stays in use. Without `winshell dev` it goes to the log.

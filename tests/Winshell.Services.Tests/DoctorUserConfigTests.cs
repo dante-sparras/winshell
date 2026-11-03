@@ -86,14 +86,14 @@ public sealed class DoctorUserConfigTests : IDisposable
         File.WriteAllText(projectFile, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
         var project = ConfigurationProject.Find(projectFile, null, config, out var error);
         Assert.Null(error);
-        var preferences = Path.Combine(shell, "preferences.toml");
-        var launcher = Path.Combine(shell, "launcher.toml");
+        var preferences = Path.Combine(config, "preferences.toml");
+        var launcher = Path.Combine(config, "launcher.toml");
         var tiles = Path.Combine(_dir, "local", "state", "by-shell", ShellIdentity.DefaultId(project!.Program, config), "quick-settings.toml");
         Directory.CreateDirectory(Path.GetDirectoryName(tiles)!);
         File.WriteAllText(preferences, "colorScheme =\n");
         File.WriteAllText(launcher, "pins = [\n");
         File.WriteAllText(tiles, "pinned = [\n");
-        var decoy = Path.Combine(config, "preferences.toml");
+        var decoy = Path.Combine(shell, "preferences.toml");
         File.WriteAllText(decoy, "colorScheme =\n");
 
         var problems = DoctorProbe.UserConfigProblems(projectFile, config, Path.Combine(_dir, "local"));
@@ -134,12 +134,12 @@ public sealed class DoctorUserConfigTests : IDisposable
         var elsewhere = Path.Combine(_dir, "elsewhere");
         Directory.CreateDirectory(config);
         Directory.CreateDirectory(elsewhere);
-        File.WriteAllText(Path.Combine(elsewhere, "shell.qml"), "import Winshell\nShellRoot {}\n");
+        File.WriteAllText(Path.Combine(elsewhere, "MyShell.exe"), "");
         File.WriteAllText(Path.Combine(elsewhere, "preferences.toml"), "colorScheme = \"dark\"\n");
         var preferences = Path.Combine(config, "preferences.toml");
         File.WriteAllText(preferences, "colorScheme =\n");
 
-        var problem = Assert.Single(DoctorProbe.UserConfigProblems(Path.Combine(elsewhere, "shell.qml"), config, Path.Combine(_dir, "local")));
+        var problem = Assert.Single(DoctorProbe.UserConfigProblems(Path.Combine(elsewhere, "MyShell.exe"), config, Path.Combine(_dir, "local")));
 
         Assert.StartsWith(preferences + "[", problem, StringComparison.Ordinal);
     }

@@ -1,3 +1,4 @@
+using Windows.Foundation;
 using Winshell.Native;
 
 namespace Winshell.Services.Tests;
@@ -20,8 +21,8 @@ public class DesktopSpaceTests
     [Fact]
     public void A_scaled_monitor_keeps_its_corner_and_divides_its_size()
     {
-        Assert.Equal(new QRect(0, 0, 1920, 1080), DesktopSpace.ToLogical(Primary, Primary, 1));
-        Assert.Equal(new QRect(1920, 0, 2560 / 1.5, 960), DesktopSpace.ToLogical(Scaled, Scaled, 1.5));
+        Assert.Equal(new Rect(0, 0, 1920, 1080), DesktopSpace.ToLogical(Primary, Primary, 1));
+        Assert.Equal(new Rect(1920, 0, 2560 / 1.5, 960), DesktopSpace.ToLogical(Scaled, Scaled, 1.5));
     }
 
     [Fact]
@@ -34,18 +35,18 @@ public class DesktopSpaceTests
         // A 200% monitor to the left of the primary, at negative coordinates, ends where the primary starts.
         var left = new RECT(-3840, 0, 0, 2160);
         var logical = DesktopSpace.ToLogical(left, left, 2);
-        Assert.Equal(new QRect(-3840, 0, 1920, 1080), logical);
+        Assert.Equal(new Rect(-3840, 0, 1920, 1080), logical);
         Assert.True(logical.Right <= primary.X);
     }
 
     [Fact]
     public void The_work_area_is_in_its_monitor_coordinates()
     {
-        Assert.Equal(new QRect(1920, 0, 2560 / 1.5, 928), DesktopSpace.ToLogical(ScaledWork, Scaled, 1.5));
+        Assert.Equal(new Rect(1920, 0, 2560 / 1.5, 928), DesktopSpace.ToLogical(ScaledWork, Scaled, 1.5));
 
         // A taskbar on the left of the scaled monitor moves the work area's left edge by its logical width.
         var work = new RECT(1920 + 72, 0, 4480, 1440);
-        Assert.Equal(new QRect(1920 + 48, 0, 2488 / 1.5, 960), DesktopSpace.ToLogical(work, Scaled, 1.5));
+        Assert.Equal(new Rect(1920 + 48, 0, 2488 / 1.5, 960), DesktopSpace.ToLogical(work, Scaled, 1.5));
     }
 
     [Theory]
@@ -64,7 +65,7 @@ public class DesktopSpaceTests
     {
         // The parent's client area starts at physical (2400, 1344) on the scaled monitor; the popup is 10, -200 from it.
         var parent = DesktopSpace.ToLogical(new POINT { X = 2400, Y = 1344 }, Scaled, 1.5);
-        var popup = DesktopSpace.ToPhysical(new QRect(parent.X + 10, parent.Y - 200, 300, 200), Scaled, 1.5);
+        var popup = DesktopSpace.ToPhysical(new Rect(parent.X + 10, parent.Y - 200, 300, 200), Scaled, 1.5);
         Assert.Equal(new RECT(2415, 1044, 2865, 1344), popup);
     }
 
@@ -72,16 +73,16 @@ public class DesktopSpaceTests
     public void A_logical_point_belongs_to_at_most_one_monitor()
     {
         var monitors = new[] { DesktopSpace.ToLogical(Primary, Primary, 1), DesktopSpace.ToLogical(Scaled, Scaled, 1.5) };
-        Assert.Equal(0, DesktopSpace.MonitorAt(new QPoint(100, 100), monitors));
-        Assert.Equal(1, DesktopSpace.MonitorAt(new QPoint(1920, 0), monitors));
-        Assert.Equal(1, DesktopSpace.MonitorAt(new QPoint(3600, 959), monitors));
+        Assert.Equal(0, DesktopSpace.MonitorAt(new Point(100, 100), monitors));
+        Assert.Equal(1, DesktopSpace.MonitorAt(new Point(1920, 0), monitors));
+        Assert.Equal(1, DesktopSpace.MonitorAt(new Point(3600, 959), monitors));
         // Past the scaled monitor's logical width, and below its logical height, is nothing.
-        Assert.Null(DesktopSpace.MonitorAt(new QPoint(3700, 100), monitors));
-        Assert.Null(DesktopSpace.MonitorAt(new QPoint(2000, 1000), monitors));
+        Assert.Null(DesktopSpace.MonitorAt(new Point(3700, 100), monitors));
+        Assert.Null(DesktopSpace.MonitorAt(new Point(2000, 1000), monitors));
     }
 
     private static PanelPlacement Panel(Edges anchors, double width = 0, double height = 0, double left = 0, double top = 0, double right = 0, double bottom = 0) =>
-        new(null, anchors, left, top, right, bottom, width, height, 0, 0, true, false, "");
+        new(null, anchors, left, top, right, bottom, width, height, false, 0, true, false);
 
     [Fact]
     public void A_top_bar_spans_its_area_at_the_monitor_scale()

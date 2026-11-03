@@ -7,26 +7,18 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// A real program with no windows, shell id <c>probe</c> unless a test names another, built once into <c>bin\shell</c>.
-/// Tests of instances start it, so they hold no taskbar and no screen edge. Starts share <see cref="Gate"/> so a reload
-/// can break the source and put it back without another test launching that build.
+/// Tests of instances start it, so they hold no taskbar and no screen edge. A class that starts it has the
+/// <see cref="ProbeBuild"/> fixture. Nothing changes that build once it is made: a test that edits and rebuilds a probe
+/// builds one of its own with <see cref="Build"/>.
 /// </summary>
 internal static class ProbeShell
 {
     private const string ShellIdVariable = "PROBE_SHELL_ID";
 
-    internal static readonly object Gate = new();
+    // Every probe builds the src/ projects it references, into their own obj folders, so one build runs at a time.
+    private static readonly object Gate = new();
 
-    private static string? _folder;
     private static string? _program;
-
-    internal static string Folder
-    {
-        get
-        {
-            Ensure();
-            return _folder!;
-        }
-    }
 
     internal static string Program
     {
@@ -37,50 +29,48 @@ internal static class ProbeShell
         }
     }
 
-    /// <summary>Starts the program and waits until <c>winshell list</c> shows it. A null folder is the one this process has.</summary>
-    internal static Process Start(string? config, string? local, string? shellId = null)
+    /// <summary>
+    /// Starts the program, or <paramref name="program"/>, and waits until <c>winshell list</c> shows it. The folders are
+    /// the test's own, so it never sees the user's instances.
+    /// </summary>
+    internal static Process Start(string config, string local, string? shellId = null, string? program = null)
     {
-        var process = Launch(config, local, [], shellId);
+        var process = Launch(config, local, [], shellId, program: program);
         Wait.Until(() => Listed(config, local).Contains(process.Id), $"probe {process.Id} in winshell list");
         return process;
     }
 
     /// <summary>Starts the program and returns at once. What it prints goes to <paramref name="printed"/>.</summary>
-    internal static Process Launch(string? config, string? local, string[] args, string? shellId = null, StringBuilder? printed = null)
+    internal static Process Launch(string config, string local, string[] args, string? shellId = null, StringBuilder? printed = null, string? program = null)
     {
-        lock (Gate)
+        var info = new ProcessStartInfo(program ?? Program)
         {
-            var info = new ProcessStartInfo(Program)
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var arg in args)
+            info.ArgumentList.Add(arg);
+        info.Environment["WINSHELL_CONFIG_DIR"] = config;
+        info.Environment["WINSHELL_LOCAL_DIR"] = local;
+        if (shellId is not null)
+            info.Environment[ShellIdVariable] = shellId;
+        var process = Process.Start(info)!;
+        // Read the output so the program never blocks on a full pipe.
+        void Print(object sender, DataReceivedEventArgs e)
+        {
+            if (printed is not null && e.Data is not null)
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            foreach (var arg in args)
-                info.ArgumentList.Add(arg);
-            if (config is not null)
-                info.Environment["WINSHELL_CONFIG_DIR"] = config;
-            if (local is not null)
-                info.Environment["WINSHELL_LOCAL_DIR"] = local;
-            if (shellId is not null)
-                info.Environment[ShellIdVariable] = shellId;
-            var process = Process.Start(info)!;
-            // Read the output so the program never blocks on a full pipe.
-            void Print(object sender, DataReceivedEventArgs e)
-            {
-                if (printed is not null && e.Data is not null)
-                {
-                    lock (printed)
-                        printed.AppendLine(e.Data);
-                }
+                lock (printed)
+                    printed.AppendLine(e.Data);
             }
-            process.ErrorDataReceived += Print;
-            process.OutputDataReceived += Print;
-            process.BeginErrorReadLine();
-            process.BeginOutputReadLine();
-            return process;
         }
+        process.ErrorDataReceived += Print;
+        process.OutputDataReceived += Print;
+        process.BeginErrorReadLine();
+        process.BeginOutputReadLine();
+        return process;
     }
 
     /// <summary>
@@ -89,32 +79,24 @@ internal static class ProbeShell
     /// </summary>
     internal static int Detach(string config, string local, string[] args)
     {
-        lock (Gate)
+        var info = new ProcessStartInfo(Program) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (var arg in args)
+            info.ArgumentList.Add(arg);
+        info.Environment["WINSHELL_CONFIG_DIR"] = config;
+        info.Environment["WINSHELL_LOCAL_DIR"] = local;
+        using var process = Process.Start(info)!;
+        if (!process.WaitForExit(20_000))
         {
-            var info = new ProcessStartInfo(Program) { UseShellExecute = false, CreateNoWindow = true };
-            foreach (var arg in args)
-                info.ArgumentList.Add(arg);
-            info.Environment["WINSHELL_CONFIG_DIR"] = config;
-            info.Environment["WINSHELL_LOCAL_DIR"] = local;
-            using var process = Process.Start(info)!;
-            if (!process.WaitForExit(20_000))
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit();
-                Assert.Fail("The probe did not return from -d.");
-            }
-            return process.ExitCode;
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            Assert.Fail("The probe did not return from -d.");
         }
+        return process.ExitCode;
     }
 
-    private static HashSet<int> Listed(string? config, string? local)
+    private static HashSet<int> Listed(string config, string local)
     {
-        List<(string, string)> folders = [];
-        if (config is not null)
-            folders.Add(("WINSHELL_CONFIG_DIR", config));
-        if (local is not null)
-            folders.Add(("WINSHELL_LOCAL_DIR", local));
-        var result = WinshellCli.Run(["list", "--json"], [.. folders]);
+        var result = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
         Assert.Equal(0, result.Code);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).ToHashSet();
@@ -122,47 +104,61 @@ internal static class ProbeShell
 
     internal static void Ensure()
     {
+        // Not behind the gate once built: a test reads Program, and must not wait out another class's build of its own probe.
+        if (Volatile.Read(ref _program) is { } built && File.Exists(built))
+            return;
         lock (Gate)
         {
             if (_program is not null && File.Exists(_program))
                 return;
-            var root = RepoRoot();
             // One folder per checkout. The project names this checkout's source, so two sharing a folder break each other's build.
-            var checkout = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root)))[..12];
-            _folder = Path.Combine(Path.GetTempPath(), "winshell-probe-shell-" + checkout);
-            Directory.CreateDirectory(_folder);
-            // The probe sits outside the repo. Without this, dotnet picks a newer SDK and rebuilds the shell from scratch.
-            WriteIfDifferent(Path.Combine(_folder, "global.json"), File.ReadAllText(Path.Combine(root, "global.json")));
-            var project = Path.Combine(_folder, "Probe.csproj");
-            WriteIfDifferent(project, Project(Path.Combine(root, "src", "Winshell.DefaultShell", "Winshell.DefaultShell.csproj")));
-            var source = Path.Combine(_folder, "Program.cs");
-            WriteIfDifferent(source, Source);
-            _program = Path.Combine(_folder, "bin", "shell", "Probe.exe");
-            var info = new ProcessStartInfo("dotnet")
-            {
-                WorkingDirectory = _folder,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            info.ArgumentList.Add("build");
-            info.ArgumentList.Add(project);
-            info.ArgumentList.Add("-c");
-            info.ArgumentList.Add("Release");
-            info.ArgumentList.Add("-o");
-            info.ArgumentList.Add(Path.Combine(_folder, "bin", "shell"));
-            info.ArgumentList.Add("--nologo");
-            using var process = Process.Start(info)!;
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
-            if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
-            {
-                process.Kill(entireProcessTree: true);
-                Assert.Fail("The probe shell did not build within 10 minutes.");
-            }
-            Assert.True(process.ExitCode == 0 && File.Exists(_program), output + error);
+            var checkout = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Repo.Root)))[..12];
+            Volatile.Write(ref _program, Build(Path.Combine(Path.GetTempPath(), "winshell-probe-shell-" + checkout)));
         }
+    }
+
+    /// <summary>Builds the probe in <paramref name="folder"/>, with its source in <c>Program.cs</c>, and returns the program.</summary>
+    internal static string Build(string folder)
+    {
+        lock (Gate)
+            return BuildLocked(folder);
+    }
+
+    private static string BuildLocked(string folder)
+    {
+        var root = Repo.Root;
+        Directory.CreateDirectory(folder);
+        // The probe sits outside the repo. Without this, dotnet picks a newer SDK and rebuilds the shell from scratch.
+        WriteIfDifferent(Path.Combine(folder, "global.json"), File.ReadAllText(Path.Combine(root, "global.json")));
+        var project = Path.Combine(folder, "Probe.csproj");
+        WriteIfDifferent(project, Project(Path.Combine(root, "src", "Winshell.DefaultShell", "Winshell.DefaultShell.csproj")));
+        WriteIfDifferent(Path.Combine(folder, "Program.cs"), Source);
+        var program = Path.Combine(folder, "bin", "shell", "Probe.exe");
+        var info = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = folder,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        info.ArgumentList.Add("build");
+        info.ArgumentList.Add(project);
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("Release");
+        info.ArgumentList.Add("-o");
+        info.ArgumentList.Add(Path.Combine(folder, "bin", "shell"));
+        info.ArgumentList.Add("--nologo");
+        using var process = Process.Start(info)!;
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail("The probe shell did not build within 10 minutes.");
+        }
+        Assert.True(process.ExitCode == 0 && File.Exists(program), output + error);
+        return program;
     }
 
     private static void WriteIfDifferent(string path, string text)
@@ -172,17 +168,6 @@ internal static class ProbeShell
         File.WriteAllText(path, text);
     }
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "winshell.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("The tests run outside the repository.");
-    }
 
     private static string Project(string defaultShell) =>
         $"""

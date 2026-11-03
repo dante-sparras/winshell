@@ -86,17 +86,15 @@ public sealed class CrashReportSafetyTests : IDisposable
     }
 
     [Fact]
-    public void Secrets_in_the_log_are_taken_out_and_what_scripts_printed_is_left_out()
+    public void Secrets_in_the_log_are_taken_out()
     {
         var log = Path.Combine(_root, "log.txt");
         File.WriteAllLines(log,
         [
-            "12:00:00.000  INFO: printed by a script before anything else: SENTINEL-EARLY",
-            "  continued: SENTINEL-EARLY-2",
             "12:00:01.000  INFO window: opened",
-            "12:00:02.000  WARN scene: shell.qml[3:5]: Error: fetch https://example.com/feed?apikey=SENTINEL-LOG-1 failed",
-            "12:00:03.000  INFO: console.log from the config: SENTINEL-CONSOLE-2",
-            "    a second line of that message: SENTINEL-CONSOLE-3",
+            "12:00:02.000  WARN scene: App.xaml[3:5]: Error: fetch https://example.com/feed?apikey=SENTINEL-LOG-1 failed",
+            "12:00:03.000  INFO: password = SENTINEL-NO-CATEGORY-2",
+            "    continued: token=SENTINEL-NEXT-LINE-3",
             "12:00:04.000 ERROR network: Proxy-Authorization: Basic SENTINEL-LOG-4",
             "12:00:05.000 DEBUG scene: password=SENTINEL-LOG-5",
             "12:00:06.000  INFO window: closed",
@@ -106,19 +104,38 @@ public sealed class CrashReportSafetyTests : IDisposable
         var text = File.ReadAllText(crashes.Write("a window", new InvalidOperationException("x"))!.Path);
 
         Assert.DoesNotContain("SENTINEL", text, StringComparison.Ordinal);
-        Assert.Contains("(4 lines of script output left out)", text, StringComparison.Ordinal);
         Assert.Contains("12:00:01.000  INFO window: opened", text, StringComparison.Ordinal);
         Assert.Contains("fetch https://example.com/feed?[redacted] failed", text, StringComparison.Ordinal);
         Assert.Contains("ERROR network: Proxy-Authorization: [redacted]", text, StringComparison.Ordinal);
         Assert.Contains("12:00:06.000  INFO window: closed", text, StringComparison.Ordinal);
-        Assert.Contains("last 5 lines", text, StringComparison.Ordinal);
+        Assert.Contains("last 7 lines", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Cookie: a=b; c=d", "Cookie: [redacted]")]
+    [InlineData("Set-Cookie: session=abc; Path=/; Secure", "Set-Cookie: [redacted]")]
+    [InlineData("password = correct horse battery", "password = [redacted]")]
+    [InlineData("passphrase: correct horse battery", "passphrase: [redacted]")]
+    [InlineData("password = correct horse\nnext line", "password = [redacted]\nnext line")]
+    public void A_value_with_spaces_is_masked_to_the_end_of_its_line(string line, string expected)
+    {
+        Assert.Equal(expected, CrashRedaction.Redact(line));
+    }
+
+    [Fact]
+    public void A_quoted_password_keeps_what_follows_it()
+    {
+        var redacted = CrashRedaction.Redact("password=\"hunter2\" and more");
+
+        Assert.DoesNotContain("hunter2", redacted, StringComparison.Ordinal);
+        Assert.Contains("and more", redacted, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Ordinary_text_is_left_alone()
     {
         const string text = "at Winshell.Runtime.Core.SignalSlot.Emit(Object[] args) in C:\\src\\Signals.cs:line 78\n" +
-            "Passed: 5, Author: Dante, shell id 5f4dcc3b5aa765d61d8327deb882cf99, crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-qml.txt";
+            "Passed: 5, Author: Dante, shell id 5f4dcc3b5aa765d61d8327deb882cf99, crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-xaml.txt";
 
         Assert.Equal(text, CrashRedaction.Redact(text));
     }

@@ -8,7 +8,7 @@ Winshell runs on Windows 11. [Getting started](docs/guide/getting-started.md) de
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is 72 MB before ReadyToRun. Unzip one into a folder of its own and run `winshell.exe`. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
+A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB. Unzip one into a folder of its own and run `winshellw.exe`, or `.\winshell run` from a terminal in that folder. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
 
 Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](docs/code-signing-policy.md).
 
@@ -60,13 +60,13 @@ cd winshell
 dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
 ```
 
-That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder the PowerShell installer uses. Add that folder to your `PATH` to run `winshell` from anywhere. The build uses the .NET runtime the SDK installed, and it does not update itself. [Getting started](docs/guide/getting-started.md) covers the first run.
+That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder the PowerShell installer uses. Add that folder to your `PATH` to run `winshell` from anywhere. Like a release, the build carries its own .NET runtime. Unlike one, it does not update itself. [Getting started](docs/guide/getting-started.md) covers the first run.
 
 ## Documentation
 
 Start with [Getting started](docs/guide/getting-started.md). The [docs](docs/index.md) also have a configuration guide, troubleshooting, and a reference for every namespace. To build Winshell from source, see the [development runbook](docs/development.md).
 
-A shell of your own is `dotnet new winshell -n MyShell`, or `dotnet new winshell-default -n MyShell` to start from the default shell. That is the step that needs the .NET SDK.
+A shell of your own is `dotnet new winshell -n MyShell`, or `dotnet new winshell-default -n MyShell` to start from the default shell. That is the step that needs the .NET SDK. The templates are not published yet: the [configuration guide](docs/guide/configuration.md#create-one) packs them from a clone.
 
 Something not working? Run `winshell doctor`. It checks this PC's setup and says how to fix what's wrong. It does not build. See [winshell doctor](docs/doctor.md).
 

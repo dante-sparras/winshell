@@ -17,6 +17,29 @@ indent_size = 4
 [*.cs]
 # A number or date in a file, a log or a test must not change with the user's region. Say which culture is meant.
 dotnet_diagnostic.CA1305.severity = warning
+# The threading analyzers are for async mistakes. These four are about names, and about a joinable task factory, which Winshell does not use.
+dotnet_diagnostic.VSTHRD001.severity = none
+dotnet_diagnostic.VSTHRD003.severity = none
+dotnet_diagnostic.VSTHRD103.severity = none
+dotnet_diagnostic.VSTHRD200.severity = none
+# x:Bind calls functions on the view, and a caller holds a service to read its members, so instance members stay.
+dotnet_diagnostic.CA1822.severity = none
+# A signature says what a caller may rely on, not what it happens to be today.
+dotnet_diagnostic.CA1859.severity = none
+# Views, flyouts and services live as long as the shell, and a SemaphoreSlim holds nothing until its wait handle is read.
+dotnet_diagnostic.CA1001.severity = none
+# Reserved words of other .NET languages. Winshell is written and configured in C#.
+dotnet_diagnostic.CA1716.severity = none
+
+[tests/**.cs]
+# A test's name is a sentence, with underscores for spaces.
+dotnet_diagnostic.CA1707.severity = none
+# xUnit's own word for what these classes are.
+dotnet_diagnostic.CA1711.severity = none
+# A fake throws what the real thing throws, COMException and OutOfMemoryException among them.
+dotnet_diagnostic.CA2201.severity = none
+# An array in a test is read once, next to what it checks.
+dotnet_diagnostic.CA1861.severity = none
 
 [{*.go,Makefile,*.mk}]
 indent_style = tab

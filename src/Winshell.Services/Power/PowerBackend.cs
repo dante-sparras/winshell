@@ -21,11 +21,10 @@ internal sealed record PowerDeviceInfo(
     double ChargeRate,
     double TimeToEmpty,
     double TimeToFull,
-    double HealthPercentage,
-    string IconName)
+    double HealthPercentage)
 {
     /// <summary>What a PC with no battery reports.</summary>
-    public static readonly PowerDeviceInfo NoBattery = new("", "", PowerDeviceType.Unknown, false, false, PowerDeviceState.Unknown, 0, 0, 0, 0, 0, 0, 0, "battery-missing");
+    public static readonly PowerDeviceInfo NoBattery = new("", "", PowerDeviceType.Unknown, false, false, PowerDeviceState.Unknown, 0, 0, 0, 0, 0, 0, 0);
 }
 
 internal sealed record PowerSnapshot(bool Ready, PowerDeviceInfo Display, IReadOnlyList<PowerDeviceInfo> Devices, bool OnBattery)
@@ -126,7 +125,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
                 : status.ACLineStatus == 1 ? (percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.NotCharging)
                 : PowerDeviceState.Discharging;
             var timeToEmpty = state == PowerDeviceState.Discharging && status.BatteryLifeTime != uint.MaxValue ? status.BatteryLifeTime : 0;
-            return new PowerDeviceInfo("", "", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0, timeToEmpty, 0, 0, IconName(state, percentage));
+            return new PowerDeviceInfo("", "", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0, timeToEmpty, 0, 0);
         }
         double? remainingTime = null;
         try
@@ -191,20 +190,6 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             : 0;
         var health = full is > 0 && design is > 0 ? Math.Min(100, full.Value / design.Value * 100) : 0;
         return new PowerDeviceInfo(nativePath, model, PowerDeviceType.Battery, true, true, state, percentage, remaining ?? 0, full ?? 0, rate,
-            Math.Round(timeToEmpty), Math.Round(timeToFull), health, IconName(state, percentage));
-    }
-
-    /// <summary>A shell icon name for a battery, such as <c>battery-good-charging</c>.</summary>
-    public static string IconName(PowerDeviceState state, double percentage)
-    {
-        var level = percentage < 0.10 ? "caution" : percentage < 0.30 ? "low" : percentage < 0.60 ? "good" : "full";
-        return state switch
-        {
-            PowerDeviceState.FullyCharged => "battery-full",
-            PowerDeviceState.Empty => "battery-empty",
-            PowerDeviceState.Charging => $"battery-{level}-charging",
-            PowerDeviceState.Discharging or PowerDeviceState.NotCharging => $"battery-{level}",
-            _ => "battery-missing",
-        };
+            Math.Round(timeToEmpty), Math.Round(timeToFull), health);
     }
 }

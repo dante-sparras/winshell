@@ -6,12 +6,13 @@ namespace Winshell.Tests;
 /// <summary>
 /// Package zips sort entry names with ordinal comparison. Lithuanian sorts "y" after "į"; ordinal does not.
 /// </summary>
+[Trait("Category", "Slow")]
 public class ZipEntryOrderTests
 {
     [Fact]
     public void Zip_entries_sort_by_ordinal_under_lithuanian()
     {
-        var package = Path.Combine(RepoRoot(), "scripts", "package.ps1");
+        var package = Path.Combine(Repo.Root, "scripts", "package.ps1");
         var probe = Path.Combine(Path.GetTempPath(), "winshell-zip-order-" + Guid.NewGuid().ToString("N") + ".ps1");
         File.WriteAllText(probe, """
             $ErrorActionPreference = 'Stop'
@@ -51,17 +52,5 @@ public class ZipEntryOrderTests
         {
             File.Delete(probe);
         }
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "winshell.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("The tests run outside the repository.");
     }
 }

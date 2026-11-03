@@ -373,14 +373,14 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     }
 
     internal static ConnectionFailReason? MapConnectionResult(WiFiConnectionStatus status) => status switch
-        {
-            WiFiConnectionStatus.Success => null,
-            WiFiConnectionStatus.InvalidCredential => ConnectionFailReason.InvalidPassword,
-            WiFiConnectionStatus.Timeout => ConnectionFailReason.Timeout,
-            WiFiConnectionStatus.NetworkNotAvailable => ConnectionFailReason.NetworkUnavailable,
-            WiFiConnectionStatus.UnsupportedAuthenticationProtocol => ConnectionFailReason.UnsupportedAuthentication,
-            _ => ConnectionFailReason.Unknown,
-        };
+    {
+        WiFiConnectionStatus.Success => null,
+        WiFiConnectionStatus.InvalidCredential => ConnectionFailReason.InvalidPassword,
+        WiFiConnectionStatus.Timeout => ConnectionFailReason.Timeout,
+        WiFiConnectionStatus.NetworkNotAvailable => ConnectionFailReason.NetworkUnavailable,
+        WiFiConnectionStatus.UnsupportedAuthenticationProtocol => ConnectionFailReason.UnsupportedAuthentication,
+        _ => ConnectionFailReason.Unknown,
+    };
 
     /// <summary>Disconnects a Wi-Fi device. False when Windows gave no access to it.</summary>
     public bool Disconnect(Guid device)
@@ -485,5 +485,4 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         }
     }
 
-    internal Task<NetworkSnapshot> ReadForTestAsync() => ReadAsync();
 }

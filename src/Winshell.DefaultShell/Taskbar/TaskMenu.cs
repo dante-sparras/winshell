@@ -2,8 +2,11 @@ using Winshell.Apps;
 
 namespace Winshell.DefaultShell.Taskbar;
 
-/// <summary>One row of a taskbar menu. A destination, and the row that says the jump list cannot be read, are not actions.</summary>
-public readonly record struct TaskMenuRow(string Id, string Label, string Glyph, string Icon, bool Enabled);
+/// <summary>
+/// One row of a taskbar menu. A destination, and the row that says the jump list cannot be read, are not actions. The
+/// access key is the letter that chooses the row while the menu is open, or empty.
+/// </summary>
+public readonly record struct TaskMenuRow(string Id, string Label, string Glyph, string Icon, bool Enabled, string AccessKey = "");
 
 /// <summary>
 /// The rows of the menu a task button opens, in the order Windows 11 shows them: the jump list, the app's name,

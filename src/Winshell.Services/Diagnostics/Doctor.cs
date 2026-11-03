@@ -14,7 +14,7 @@ namespace Winshell.Diagnostics;
 /// What <see cref="Doctor.Run"/> reads from this PC. Every read stays a read: the doctor never builds, and a
 /// configuration project is judged from the project file alone.
 /// </summary>
-public interface IDoctorFacts
+internal interface IDoctorFacts
 {
     int WindowsBuild();
 
@@ -68,7 +68,7 @@ public enum CheckStatus
 public sealed record DoctorCheck(string Id, string Title, CheckStatus Status, string Message, string? Fix = null);
 
 /// <summary>A running Winshell, as the instance list has it.</summary>
-public sealed record DoctorInstance(string Id, int Pid, string ConfigPath, string LogPath);
+internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, string LogPath);
 
 /// <summary>
 /// What the doctor needs from <c>winshell.exe</c>: this executable, the config that would run (or why none would),
@@ -76,9 +76,8 @@ public sealed record DoctorInstance(string Id, int Pid, string ConfigPath, strin
 /// </summary>
 /// <param name="ConfigFile">The project file that runs, or null when Winshell would run its default shell, or cannot pick one.</param>
 /// <param name="ConfigProblem">Why no config can be picked, such as several configs and no <c>-c</c>; null when one can.</param>
-/// <param name="RetiredQml">A <c>shell.qml</c> left behind with no project, or null.</param>
 /// <param name="ProjectRoot">The folder <see cref="Doctor.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
-public sealed record DoctorContext(
+internal sealed record DoctorContext(
     string ExePath,
     string ConfigRoot,
     string? ConfigFile,
@@ -86,14 +85,7 @@ public sealed record DoctorContext(
     IReadOnlyList<DoctorInstance> Instances,
     string LocalRoot,
     string CrashRoot,
-    string? RetiredQml = null,
     string? ProjectRoot = null);
-
-/// <summary>Runs the checks <c>winshell doctor</c> and Winshell Settings' About page show. All of them only read.</summary>
-public interface IDoctor
-{
-    IReadOnlyList<DoctorCheck> Run();
-}
 
 /// <summary>
 /// Checks this PC's setup for Winshell. Each check reads what it needs through <see cref="IDoctorFacts"/> and judges
@@ -104,9 +96,9 @@ public interface IDoctor
 /// </summary>
 public static class Doctor
 {
-    public const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
+    internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
-    public static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
+    internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
     {
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var search = context.ProjectRoot
@@ -127,7 +119,6 @@ public static class Doctor
             Guard("windows", "Windows", () => Windows(facts.WindowsBuild(), facts.WindowsUpdateRevision(), facts.WindowsDisplayVersion(), facts.WindowsServer(), facts.TransparencyEffectsOff(), facts.ContrastThemeOn())),
             Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, facts.SelfContained(context.ExePath))),
             .. configuration,
-            Guard("qml", "QML", () => Qml(context.RetiredQml)),
             Guard("folders", "Folders", () => Folders(
                 [("the config folder", configFolder, facts.CanWrite(configFolder)), ("its local folder", context.LocalRoot, facts.CanWrite(context.LocalRoot))],
                 context.Instances.Where(i => facts.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
@@ -207,11 +198,6 @@ public static class Doctor
         return new("dotnet", ".NET", CheckStatus.Pass, $"{description}, {how}");
     }
 
-    /// <summary>A leftover <c>shell.qml</c>. Nothing is converted: the default shell runs, and this says how to start a project.</summary>
-    internal static DoctorCheck Qml(string? file) => string.IsNullOrEmpty(file)
-        ? new("qml", "QML", CheckStatus.Pass, "No QML configuration.")
-        : new("qml", "QML", CheckStatus.Warn, $"{file} is a QML configuration, and QML configurations stopped working.", "Start a new one with dotnet new winshell.");
-
     /// <summary>User TOML that does not parse is a warning on the project check. A failure already says what to fix.</summary>
     private static DoctorCheck WithUserFiles(DoctorCheck check, IReadOnlyList<string>? userFiles)
     {
@@ -239,7 +225,6 @@ public static class Doctor
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
-        var retired = project is null ? ConfigurationProject.LeftoverQml(null, null, configRoot) : null;
         return Run(new DoctorContext(
             exe,
             configRoot,
@@ -248,7 +233,6 @@ public static class Doctor
             ListedInstances(),
             ShellLocations.LocalRoot,
             ShellLocations.CrashRoot,
-            retired,
             project?.Folder), DoctorFacts.Pc);
     }
 
@@ -271,7 +255,7 @@ public static class Doctor
     /// whether a file the build would run was downloaded, whether its program has been built, and whether a build
     /// is needed. Nothing here runs MSBuild.
     /// </summary>
-    public static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
+    internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
     {
         var found = FindProject(configRoot);
         return
@@ -329,10 +313,12 @@ public static class Doctor
     {
         if (project is null)
             return new("build", "Build", CheckStatus.Pass, "No configuration project to build.");
+        // A missing program is Built's failure, so it is not reported twice.
+        if (!File.Exists(project.Program))
+            return new("build", "Build", CheckStatus.Pass, $"Nothing to compare until {project.Name} is built.");
         if (!project.NeedsBuild())
             return new("build", "Build", CheckStatus.Pass, $"{project.Name} is up to date.");
-        var why = File.Exists(project.Program) ? $"A file in {project.Name} is newer than the program." : $"{project.Name} has not been built.";
-        return new("build", "Build", CheckStatus.Warn, why, "Run winshell run to build it. Signing in uses the last build.");
+        return new("build", "Build", CheckStatus.Warn, $"A file in {project.Name} is newer than the program.", "Run winshell run to build it. Signing in uses the last build.");
     }
 
     // Folders
@@ -355,14 +341,14 @@ public static class Doctor
     // App bars
 
     /// <summary>A screen: its name, its bounds and its work area, in physical pixels.</summary>
-    public sealed record MonitorFacts(string Name, int Left, int Top, int Right, int Bottom, int WorkLeft, int WorkTop, int WorkRight, int WorkBottom, double Scale);
+    internal sealed record MonitorFacts(string Name, int Left, int Top, int Right, int Bottom, int WorkLeft, int WorkTop, int WorkRight, int WorkBottom, double Scale);
 
     /// <summary>A visible top-level window: its class, its bounds in physical pixels, and its program.</summary>
-    public sealed record WindowFacts(string ClassName, int Left, int Top, int Right, int Bottom, string Program);
+    internal sealed record WindowFacts(string ClassName, int Left, int Top, int Right, int Bottom, string Program);
 
     internal const string TaskbarClass = "Shell_TrayWnd";
     internal const string SecondaryTaskbarClass = "Shell_SecondaryTrayWnd";
-    internal const string WinshellClass = "WinshellWindow";
+    internal const string WinshellClass = "WinshellHostWindow";
 
     /// <summary>How thick a window must be to be named as an app bar beside a Winshell panel; thinner ones are borders and edge helpers.</summary>
     private const int MinAppBar = 8;
@@ -578,10 +564,10 @@ public static class Doctor
     // Crash reports
 
     /// <summary>Crash reports in a folder, or why the folder could not be listed.</summary>
-    public readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
+    internal readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
 
     /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
-    public readonly record struct CrashPeek(string? Text, string? Unreadable);
+    internal readonly record struct CrashPeek(string? Text, string? Unreadable);
 
     internal static DoctorCheck CrashesIn(CrashFolderRead folder, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
     {
@@ -658,7 +644,7 @@ public static class Doctor
     // Output
 
     /// <summary>The checks as <c>winshell doctor</c> prints them: a line each, a fix under each problem, and a count.</summary>
-    public static string Format(IReadOnlyList<DoctorCheck> checks, string version, bool color)
+    internal static string Format(IReadOnlyList<DoctorCheck> checks, string version, bool color)
     {
         var text = new StringBuilder();
         text.AppendLine(CultureInfo.InvariantCulture, $"Winshell {version}: this PC's setup");
@@ -683,7 +669,7 @@ public static class Doctor
         return text.ToString();
     }
 
-    public static string Summary(IReadOnlyList<DoctorCheck> checks)
+    internal static string Summary(IReadOnlyList<DoctorCheck> checks)
     {
         var warns = checks.Count(c => c.Status == CheckStatus.Warn);
         var fails = checks.Count(c => c.Status == CheckStatus.Fail);
@@ -692,7 +678,7 @@ public static class Doctor
     }
 
     /// <summary>The checks as <c>winshell doctor --json</c> prints them.</summary>
-    public static string ToJson(IReadOnlyList<DoctorCheck> checks, string version)
+    internal static string ToJson(IReadOnlyList<DoctorCheck> checks, string version)
     {
         using var stream = new MemoryStream();
         // Read by people too: paths and messages are written as they are, not escaped for HTML.
