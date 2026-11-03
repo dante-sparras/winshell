@@ -179,6 +179,7 @@ internal static class Inspector
     /// <summary>What Narrator does to activate an element. A disabled control refuses it, as it refuses a click.</summary>
     private static string Click(FrameworkElement element, string name)
     {
+        ShellWindow.Of(element)?.Host?.Press();
         var peer = FrameworkElementAutomationPeer.FromElement(element) ?? FrameworkElementAutomationPeer.CreatePeerForElement(element);
         switch (peer?.GetPattern(PatternInterface.Invoke), peer?.GetPattern(PatternInterface.Toggle), peer?.GetPattern(PatternInterface.ExpandCollapse))
         {

@@ -26,6 +26,7 @@ internal sealed unsafe class HostWindow : IDisposable
 
     private readonly ShellPlatform _platform;
     private readonly WindowKind _kind;
+    private readonly Action _dismissMenu;
     private readonly Grid _root = new() { Background = null };
     private GCHandle _self;
     private IHostClient _client;
@@ -58,11 +59,12 @@ internal sealed unsafe class HostWindow : IDisposable
     private bool _placing;
     private bool _failed;
 
-    public HostWindow(ShellPlatform platform, WindowKind kind, IHostClient client)
+    public HostWindow(ShellPlatform platform, WindowKind kind, IHostClient client, Action dismissMenu)
     {
         _platform = platform;
         _kind = kind;
         _client = client;
+        _dismissMenu = dismissMenu;
         Register();
         var (style, exStyle) = Styles();
         Handle = Win32.CreateWindowExW(exStyle, ClassName, "", style, 0, 0, 1, 1, 0, 0, Win32.GetModuleHandleW(null), 0);
@@ -159,6 +161,13 @@ internal sealed unsafe class HostWindow : IDisposable
             _client.OnDismissed();
             e.Handled = true;
         }
+    }
+
+    /// <summary>A panel or popup press ends another app's native menu before its control handles the click.</summary>
+    internal void Press()
+    {
+        if (_kind is WindowKind.Panel or WindowKind.Popup)
+            _dismissMenu();
     }
 
     private (uint Style, uint ExStyle) Styles() => _kind switch
@@ -1050,6 +1059,9 @@ internal sealed unsafe class HostWindow : IDisposable
                     return 0;
                 }
             case Win32.WM_MOUSEACTIVATE:
+                // These windows may refuse activation, so Windows cannot rely on an activation change to end
+                // the app's TrackPopupMenu. Do it before the mouse message reaches the XAML island.
+                Press();
                 if (_kind == WindowKind.Panel && !_focusable)
                     return Win32.MA_NOACTIVATE;
                 if (_kind == WindowKind.Popup && _popup?.GrabFocus != true)
