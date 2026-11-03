@@ -31,7 +31,6 @@ internal sealed partial class CrashReports(string folder)
     private const string Heading = "Winshell crash report";
     private const int LogLines = 40;
     private const int LogBytes = 16 * 1024;
-    private const int ErrorFileExists = 80;
     private const int ErrorAlreadyExists = 183;
 
     /// <summary>The subfolder a report is written in before it is moved into the folder whole.</summary>
@@ -171,7 +170,7 @@ internal sealed partial class CrashReports(string folder)
                         Prune(path);
                         return new CrashReport(path, where, error, fatal) { Subject = subject, Recovery = recovery };
                     }
-                    catch (IOException e) when ((e.HResult & 0xFFFF) is ErrorFileExists or ErrorAlreadyExists && attempt < 16)
+                    catch (IOException e) when ((e.HResult & 0xFFFF) == ErrorAlreadyExists && attempt < 16)
                     {
                         ticks = NextTicks(ticks);
                     }
