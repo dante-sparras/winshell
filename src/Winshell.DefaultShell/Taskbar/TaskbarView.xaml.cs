@@ -23,6 +23,7 @@ public sealed partial class TaskbarView : UserControl
     private readonly TaskPreviewFlyout _previews;
     private readonly TaskbarReveal _reveal;
     private readonly TaskPinDrag _drag = new();
+    private readonly TaskbarStops _stops;
     private bool _barMenu;
 
     public TaskbarView(
@@ -43,6 +44,7 @@ public sealed partial class TaskbarView : UserControl
         _preferences = preferences;
         _window = window;
         InitializeComponent();
+        _stops = new TaskbarStops(this, StartButton, SearchButton, TasksHost, Corner);
         FaceHost.SizeChanged += OnFaceHostSize;
         Bar.SizeChanged += OnLaidOut;
         Corner.SizeChanged += OnLaidOut;
@@ -89,7 +91,7 @@ public sealed partial class TaskbarView : UserControl
         _window.Focusable = true;
         SyncOpen();
         _window.Focus();
-        FocusStop(TaskbarKeyboard.FirstApp(Model.Tasks.Count, StopCount()));
+        FocusStop(_stops.FirstApp);
     }
 
     /// <summary>A menu of this bar opened or closed. An auto-hiding bar reads it.</summary>
@@ -219,7 +221,7 @@ public sealed partial class TaskbarView : UserControl
             return;
         if (e.OriginalSource is not DependencyObject source || ReferenceEquals(source, this))
             return;
-        if (!IsBarStop(source))
+        if (!_stops.IsStop(source))
             return;
         _keyboard.Enter(Model.ActiveWindow);
         _window.Focusable = true;
@@ -250,14 +252,14 @@ public sealed partial class TaskbarView : UserControl
             {
                 if (button.Item is { } item && Model.Tasks.Any(task => task.Key == item.Key))
                     return;
-                FocusStop(TaskbarKeyboard.FirstApp(Model.Tasks.Count, StopCount()));
+                FocusStop(_stops.FirstApp);
                 return;
             }
             if (node is Button)
                 return;
         }
         // The app that had the keyboard is gone, and focus was not already on Start, Search, the tray or the clock.
-        FocusStop(TaskbarKeyboard.FirstApp(Model.Tasks.Count, StopCount()));
+        FocusStop(_stops.FirstApp);
     }
 
     private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -273,8 +275,8 @@ public sealed partial class TaskbarView : UserControl
         if (e.Key is not (VirtualKey.Left or VirtualKey.Right))
             return;
         e.Handled = true;
-        var count = StopCount();
-        FocusStop(TaskbarKeyboard.Move(IndexOfFocus(), e.Key == VirtualKey.Left ? -1 : 1, count));
+        var count = _stops.Count;
+        FocusStop(TaskbarKeyboard.Move(_stops.Focused(), e.Key == VirtualKey.Left ? -1 : 1, count));
     }
 
     private void OnContextRequested(UIElement sender, ContextRequestedEventArgs args)
@@ -412,12 +414,12 @@ public sealed partial class TaskbarView : UserControl
 
     private void FocusStop(int index)
     {
-        var count = StopCount();
+        var count = _stops.Count;
         if (count <= 0)
             return;
         if ((uint)index >= (uint)count)
             index = 0;
-        var stop = StopAt(index);
+        var stop = _stops.At(index);
         if (stop is not null)
         {
             stop.Focus(FocusState.Keyboard);
@@ -429,72 +431,9 @@ public sealed partial class TaskbarView : UserControl
         {
             if (!_keyboard.Active)
                 return;
-            StopAt(place)?.Focus(FocusState.Keyboard);
+            _stops.At(place)?.Focus(FocusState.Keyboard);
             RevealApp(place);
         });
-    }
-
-    /// <summary>Start, Search, the apps, then the tray and the clock that are on the bar.</summary>
-    private int StopCount() => 2 + Model.Tasks.Count + CornerStops().Count;
-
-    private Control? StopAt(int index)
-    {
-        if (index == 0)
-            return StartButton;
-        if (index == 1)
-            return SearchButton;
-        var apps = Model.Tasks.Count;
-        if (index < 2 + apps)
-            return TaskButtonAt(index - 2);
-        var corners = CornerStops();
-        var at = index - 2 - apps;
-        return (uint)at < (uint)corners.Count ? corners[at] : null;
-    }
-
-    private TaskButton? TaskButtonAt(int index)
-    {
-        if ((uint)index >= (uint)Model.Tasks.Count)
-            return null;
-        var element = TasksHost.TryGetElement(index);
-        if (element is null && IsLoaded)
-        {
-            try
-            {
-                element = TasksHost.GetOrCreateElement(index);
-            }
-            catch (InvalidOperationException)
-            {
-                return null;
-            }
-            catch (ArgumentException)
-            {
-                return null;
-            }
-        }
-        return element as TaskButton;
-    }
-
-    private int IndexOfFocus()
-    {
-        var fallback = TaskbarKeyboard.FirstApp(Model.Tasks.Count, StopCount());
-        if (XamlRoot is null || FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject focused)
-            return fallback;
-        if (Contains(StartButton, focused))
-            return 0;
-        if (Contains(SearchButton, focused))
-            return 1;
-        for (var i = 0; i < Model.Tasks.Count; i++)
-        {
-            if (TasksHost.TryGetElement(i) is DependencyObject element && Contains(element, focused))
-                return 2 + i;
-        }
-        var corners = CornerStops();
-        for (var i = 0; i < corners.Count; i++)
-        {
-            if (Contains(corners[i], focused))
-                return 2 + Model.Tasks.Count + i;
-        }
-        return fallback;
     }
 
     private bool KeysBelongToAMenu(DependencyObject? source)
@@ -507,63 +446,6 @@ public sealed partial class TaskbarView : UserControl
         for (DependencyObject? node = source; node is not null; node = VisualTreeHelper.GetParent(node))
         {
             if (node is FlyoutPresenter or MenuFlyoutPresenter)
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>A button of this bar, and not one inside a menu or the hidden-icons flyout.</summary>
-    private bool IsBarStop(DependencyObject source)
-    {
-        var inMenu = false;
-        Button? button = null;
-        for (DependencyObject? node = source; node is not null && !ReferenceEquals(node, this); node = VisualTreeHelper.GetParent(node))
-        {
-            if (node is FlyoutPresenter or MenuFlyoutPresenter or Popup)
-                inMenu = true;
-            if (button is null && node is Button found)
-                button = found;
-        }
-        if (button is null || inMenu)
-            return false;
-        if (ReferenceEquals(button, StartButton) || ReferenceEquals(button, SearchButton) || button is TaskButton)
-            return true;
-        return CornerStops().Contains(button);
-    }
-
-    /// <summary>The tray and the clock. A flyout's buttons, and a control that is collapsed, are not stops.</summary>
-    private List<Button> CornerStops()
-    {
-        var stops = new List<Button>();
-        Collect(Corner, stops);
-        return stops;
-
-        static void Collect(DependencyObject node, List<Button> stops)
-        {
-            if (node is FlyoutPresenter or Popup)
-                return;
-            var count = VisualTreeHelper.GetChildrenCount(node);
-            for (var i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(node, i);
-                if (child is UIElement { Visibility: not Visibility.Visible })
-                    continue;
-                if (child is Button button)
-                {
-                    if (button.IsTabStop)
-                        stops.Add(button);
-                    continue;
-                }
-                Collect(child, stops);
-            }
-        }
-    }
-
-    private static bool Contains(DependencyObject root, DependencyObject node)
-    {
-        for (DependencyObject? current = node; current is not null; current = VisualTreeHelper.GetParent(current))
-        {
-            if (ReferenceEquals(current, root))
                 return true;
         }
         return false;
@@ -633,19 +515,7 @@ public sealed partial class TaskbarView : UserControl
             RevealIndex(index);
     }
 
-    private void RevealFocused()
-    {
-        if (XamlRoot is null || FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject focused)
-            return;
-        for (var i = 0; i < Model.Tasks.Count; i++)
-        {
-            if (TasksHost.TryGetElement(i) is DependencyObject element && Contains(element, focused))
-            {
-                RevealIndex(i);
-                return;
-            }
-        }
-    }
+    private void RevealFocused() => RevealIndex(_stops.FocusedApp());
 
     private int IndexOf(TaskButton button)
     {
@@ -690,7 +560,7 @@ public sealed partial class TaskbarView : UserControl
             DropMark.Visibility = Visibility.Collapsed;
             return;
         }
-        var target = TaskButtonAt(_drag.DropIndex);
+        var target = _stops.App(_drag.DropIndex);
         if (target is null)
         {
             DropMark.Visibility = Visibility.Collapsed;
