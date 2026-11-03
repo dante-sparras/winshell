@@ -317,7 +317,7 @@ public sealed class TrayHostTests : IDisposable
             })
             { IsBackground = true };
             _thread.Start();
-            _started.Wait();
+            _started.Wait(TestContext.Current.CancellationToken);
             Assert.NotEqual(0, Window);
         }
 
@@ -328,7 +328,7 @@ public sealed class TrayHostTests : IDisposable
         public void Exit()
         {
             Win32.PostMessageW(Window, Quit, 0, 0);
-            _thread.Join();
+            Assert.True(_thread.Join(TimeSpan.FromMinutes(1)), "The stand-in Explorer did not exit");
         }
     }
 
@@ -501,7 +501,7 @@ public sealed class TrayHostTests : IDisposable
                     host.Dispose();
             });
             _thread.Start();
-            _started.Wait();
+            _started.Wait(TestContext.Current.CancellationToken);
             Assert.NotEqual(0, Window);
         }
 
@@ -513,7 +513,7 @@ public sealed class TrayHostTests : IDisposable
         {
             _clean = clean;
             _exit.Set();
-            _thread.Join();
+            Assert.True(_thread.Join(TimeSpan.FromMinutes(1)), "The other instance did not exit");
         }
     }
 }
