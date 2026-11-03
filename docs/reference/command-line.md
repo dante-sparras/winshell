@@ -5,21 +5,25 @@
 ```text
 winshell run [options]              start a shell
 winshell                            print this help
+winshell <command> --help           help for that command, which does not run
 winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
-winshell reload [instance options]
-winshell inspect [instance options] <command>
+winshell reload [--hard] [instance options]
+                                    reload an instance's configuration
 winshell dev [-c <name> | -p <path>]
-                                    build a configuration and replace the instance
-winshell log [-f] [-t N]            print an instance's log
+                                    run a project and apply each edit to it
+winshell log [-f] [-t N] [file]     print an instance's log
 winshell ipc show [-j]              list IPC targets
 winshell ipc call <target> <function> [args...]
 winshell ipc prop get <target> <property>
 winshell ipc wait <target> <signal>
 winshell ipc listen <target> <signal>
+winshell inspect tree | screenshot <file> | click <name> | hover <name>
+                                    look at a running shell, or act on it
 winshell doctor [config options] [-j] [--no-color]
                                     check this PC's setup for Winshell
+winshell help                       print this summary
 ```
 
 ## Run a shell
@@ -49,7 +53,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 
 ## Pick an instance
 
-`kill`, `reload`, `log` and `ipc` act on one running instance:
+`kill`, `reload`, `log`, `ipc` and `inspect` act on one running instance:
 
 | Option | Picks |
 | --- | --- |
@@ -64,7 +68,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | --- | --- |
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. The shape is under [JSON](#json). |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. `kill` is the one command a CLI and a shell of different releases still accept. |
-| `winshell reload` | Builds the configuration. On failure the running instance stays, a notice shows, and the command prints why and exits with 1. On success a new instance starts with `--after` and takes over, then the command prints `Reloaded <id>`. There is no file watcher. |
+| `winshell reload` | Builds the configuration. On failure the running instance stays, a notice shows, and the command prints why and exits with 1. On success a new instance starts with `--after` and takes over, then the command prints `Reloaded <id>`. The default shell has nothing to build, so it starts again. There is no file watcher. |
 | `winshell dev` | Runs a configuration project under `dotnet watch` and applies each edit to the running shell, until Ctrl+C. See [Develop a shell](../guide/configuration.md#develop-a-shell). Takes `-c` and `-p`. |
 | `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. `-j`, `--json` prints that list as JSON. The shape is under [JSON](#json). |
@@ -155,13 +159,14 @@ A parameter has `name` and `type`. `type` is null when the signal's parameter wa
 
 `--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
 
-An unexpected failure of `list`, `kill`, `reload`, `log`, `ipc` or `doctor` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
+An unexpected failure of any command but `run` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
 
 ## Environment variables
 
 | Variable | What it does |
 | --- | --- |
 | `WINSHELL_CONFIG_DIR` | The folder configurations load from, instead of `%APPDATA%\winshell`. |
+| `WINSHELL_LOCAL_DIR` | The folder for logs, crash reports, and each shell's data, state and cache, instead of `%LOCALAPPDATA%\winshell`. |
 | `WINLAND_PIPE` | The named pipe [`Winshell.Winland`](winshell-winland.md) connects to, instead of `winland-<session id>` and then `winland`, which it tries in that order when the variable isn't set. |
 
 ## Files
