@@ -100,6 +100,21 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
+    public void A_listed_instance_has_its_log_on_disk()
+    {
+        var log = new Log();
+        var instance = ShellInstance.Open(Program, log);
+        Assert.True(instance.TryOpenPipe());
+        log.Info("shell", "Shell ID: \"mine\"");
+
+        instance.Publish("mine");
+
+        using var reader = new StreamReader(new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+        Assert.Contains("Shell ID: \"mine\"", reader.ReadToEnd(), StringComparison.Ordinal);
+        instance.Close();
+    }
+
+    [Fact]
     public void A_start_that_is_abandoned_leaves_nothing_behind()
     {
         var instance = ShellInstance.Open(Program, new Log());

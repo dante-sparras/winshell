@@ -117,6 +117,8 @@ internal sealed class ShellInstance
     /// <summary>Writes the record, after which <c>winshell list</c> shows this process.</summary>
     public void Publish(string shellId)
     {
+        // What the startup logged lands first, so a listed shell always has a log to show.
+        _file.Flush();
         using var process = Process.GetCurrentProcess();
         Instances.Write(new InstanceInfo(
             Id,
