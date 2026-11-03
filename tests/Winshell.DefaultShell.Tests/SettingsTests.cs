@@ -89,7 +89,7 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
-    public void The_body_shows_one_page_and_Pinned_apps_takes_the_place_of_Start_until_a_search_covers_it()
+    public void Shown_is_the_page_or_its_subpage_and_clearing_a_search_goes_back_to_it()
     {
         var navigation = new SettingsNavigation();
         Assert.Equal("personalization/", navigation.Shown);

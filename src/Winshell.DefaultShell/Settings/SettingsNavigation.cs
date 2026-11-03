@@ -20,7 +20,7 @@ public sealed class SettingsNavigation
 
     /// <summary>
     /// What the body shows: "search" while searching, otherwise the page and its subpage as "page/subpage". A subpage
-    /// takes the place of its page. The window scrolls to the top when this changes.
+    /// takes the place of its page.
     /// </summary>
     public string Shown => Searching ? "search" : $"{Page}/{Subpage}";
 
