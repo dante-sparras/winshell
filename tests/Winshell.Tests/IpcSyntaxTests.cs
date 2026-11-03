@@ -25,19 +25,6 @@ public sealed class IpcSyntaxTests : IDisposable
         Assert.DoesNotContain("No running instances", text);
     }
 
-    [Fact]
-    public void Msg_prints_its_deprecation_and_keeps_the_ipc_usage_exit_code()
-    {
-        var (code, output, error) = WinshellCli.Run(["msg", "target"], ("WINSHELL_LOCAL_DIR", _root));
-
-        Assert.Equal(2, code);
-        Assert.Equal("", output);
-        Assert.Equal(
-            "winshell msg is deprecated; use winshell ipc call." + Environment.NewLine +
-            "Usage: winshell ipc call <target> <function> [args...] | prop get <target> <property> | wait|listen <target> <signal> | show" + Environment.NewLine,
-            error);
-    }
-
     public void Dispose()
     {
         try

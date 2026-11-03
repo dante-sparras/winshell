@@ -1,7 +1,7 @@
 namespace Winshell.Tests;
 
 /// <summary>
-/// Arguments of <c>ipc call</c> and <c>msg</c> belong to the function. A <c>--</c> ends options on every command.
+/// Arguments of <c>ipc call</c> belong to the function. A <c>--</c> ends options on every command.
 /// These stay inside <see cref="CliParser"/> so a live instance on this PC is never called.
 /// </summary>
 public class IpcArgumentTests
@@ -36,15 +36,6 @@ public class IpcArgumentTests
     }
 
     [Fact]
-    public void Msg_arguments_that_look_like_options_stay_arguments()
-    {
-        var parsed = CliParser.ParseOptions(["notes", "add", "-c", "nope", "-5"], "msg");
-
-        Assert.Null(parsed.Config);
-        Assert.Equal(["notes", "add", "-c", "nope", "-5"], parsed.Positional);
-    }
-
-    [Fact]
     public void Double_dash_ends_options()
     {
         var parsed = CliParser.ParseOptions(["-j", "--", "-j", "--force"], "list");
@@ -59,7 +50,6 @@ public class IpcArgumentTests
     [InlineData("ipc --help", true)]
     [InlineData("--help", true)]
     [InlineData("ipc call target func --help", false)]
-    [InlineData("msg target func --help", false)]
     [InlineData("ipc call target --help func", true)]
     public void Help_is_an_option_until_call_arguments_begin(string line, bool help)
     {

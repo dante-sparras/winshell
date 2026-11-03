@@ -60,8 +60,6 @@ internal static class Cli
                     return await InspectCommand.RunAsync(options);
                 case "dev":
                     return await DevCommand.RunAsync(options);
-                case "msg":
-                    return await MsgCommand.RunAsync(options);
                 case "help":
                     return HelpCommand.Run();
                 default:

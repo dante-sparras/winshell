@@ -84,7 +84,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 
 In `winshell inspect`, a `[window]` is the type of a window's content, such as `TaskbarView`, or its `window` number in `tree`, and the default is the first. A `<name>` is an `x:Name`, an automation id or an automation name, in a window or in its open popups. The first match wins, so a window narrows it down when two taskbars both have a `StartButton`.
 
-`winshell msg` is the old name of `winshell ipc call`; it still works and says so. `winshell ipc call notice dismiss` closes Winshell's own notice for a build error or a failure. That notice is not a target the configuration registered, so `ipc show` does not list it. It takes no arguments. `winshell msg notice dismiss` is the same call.
+`winshell ipc call notice dismiss` closes Winshell's own notice for a build error or a failure. That notice is not a target the configuration registered, so `ipc show` does not list it. It takes no arguments.
 
 The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
 
@@ -92,7 +92,7 @@ A CLI and a shell whose releases differ, in major.minor.patch, refuse each other
 
 An IPC request longer than 256 KiB is refused, which no command line can reach. `winshell ipc listen` keeps the latest signals when the client falls behind, and the shell releases that subscription when the client disconnects, even if the signal never fires.
 
-A `--` ends options. Words after it are arguments, so `winshell log -- -f` prints the file `-f`. `ipc call` and `msg` do the same after the function name, with no `--`: `winshell ipc call notes add -v` passes `-v` to `add`. `--after <pid>` is removed while options are still being read. A reload and an update's restart put it there, so the new process waits until that process has exited. After `--`, and after an `ipc call` or `msg` function name, those words stay arguments.
+A `--` ends options. Words after it are arguments, so `winshell log -- -f` prints the file `-f`. `ipc call` does the same after the function name, with no `--`: `winshell ipc call notes add -v` passes `-v` to `add`. `--after <pid>` is removed while options are still being read. A reload and an update's restart put it there, so the new process waits until that process has exited. After `--`, and after an `ipc call` function name, those words stay arguments.
 
 Output sent to a pipe or a file is UTF-8 without a byte order mark. In a console window it follows the console's code page. To read it in PowerShell, set `[Console]::OutputEncoding = [Text.UTF8Encoding]::new()` first, or PowerShell decodes it with the console's code page.
 
