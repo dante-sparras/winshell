@@ -20,7 +20,7 @@ public partial class CommandOptionTests
     [InlineData("doctor --pid 5", "winshell doctor does not take \"--pid\".")]
     [InlineData("run -j", "winshell run does not take \"-j\".")]
     [InlineData("help -j", "winshell help does not take \"-j\".")]
-    public void An_option_the_command_does_not_take_exits_2_and_names_it(string line, string message)
+    public void An_option_the_command_does_not_take_is_named(string line, string message)
     {
         var e = Assert.Throws<ArgumentException>(() => CliParser.Parse(line.Split(' ')));
 
