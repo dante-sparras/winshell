@@ -13,7 +13,7 @@ namespace Winshell.DefaultShell;
 /// </summary>
 internal sealed class TaskbarStops(TaskbarView bar, Button start, Button search, ItemsRepeater apps, Panel corner)
 {
-    public int Count => 2 + bar.Model.Tasks.Count + Corner().Count;
+    public int Count => 2 + bar.Model.Tasks.Count + CornerStops().Count;
 
     /// <summary>Where Win+T lands.</summary>
     public int FirstApp => TaskbarKeyboard.FirstApp(bar.Model.Tasks.Count, Count);
@@ -27,7 +27,7 @@ internal sealed class TaskbarStops(TaskbarView bar, Button start, Button search,
         var count = bar.Model.Tasks.Count;
         if (index < 2 + count)
             return App(index - 2);
-        var corners = Corner();
+        var corners = CornerStops();
         var at = index - 2 - count;
         return (uint)at < (uint)corners.Count ? corners[at] : null;
     }
@@ -69,7 +69,7 @@ internal sealed class TaskbarStops(TaskbarView bar, Button start, Button search,
         var app = AppOf(focused);
         if (app >= 0)
             return 2 + app;
-        var corners = Corner();
+        var corners = CornerStops();
         for (var i = 0; i < corners.Count; i++)
         {
             if (Contains(corners[i], focused))
@@ -97,7 +97,7 @@ internal sealed class TaskbarStops(TaskbarView bar, Button start, Button search,
             return false;
         if (ReferenceEquals(button, start) || ReferenceEquals(button, search) || button is TaskButton)
             return true;
-        return Corner().Contains(button);
+        return CornerStops().Contains(button);
     }
 
     private DependencyObject? FocusedElement() =>
@@ -114,7 +114,7 @@ internal sealed class TaskbarStops(TaskbarView bar, Button start, Button search,
     }
 
     /// <summary>The tray and the clock. A flyout's buttons, and a control that is collapsed, are not stops.</summary>
-    private List<Button> Corner()
+    private List<Button> CornerStops()
     {
         var stops = new List<Button>();
         Collect(corner, stops);
