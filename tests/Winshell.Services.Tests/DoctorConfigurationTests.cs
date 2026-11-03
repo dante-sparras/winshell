@@ -44,7 +44,7 @@ public sealed class DoctorConfigurationTests : IDisposable
     }
 
     [Fact]
-    public void A_project_names_itself_and_a_missing_program_asks_for_one_run()
+    public void A_project_names_itself_and_a_missing_program_fails_once_and_asks_for_one_run()
     {
         var file = Project("Mine.csproj");
         var before = Entries();
@@ -58,9 +58,9 @@ public sealed class DoctorConfigurationTests : IDisposable
         Assert.Equal(CheckStatus.Fail, checks[2].Status);
         Assert.Equal("Mine has not been built.", checks[2].Message);
         Assert.Equal("Run winshell run once to build it.", checks[2].Fix);
-        Assert.Equal(CheckStatus.Warn, checks[3].Status);
-        Assert.Equal("Mine has not been built.", checks[3].Message);
-        Assert.Contains("winshell run", checks[3].Fix, StringComparison.Ordinal);
+        Assert.Equal(CheckStatus.Pass, checks[3].Status);
+        Assert.Equal("Nothing to compare until Mine is built.", checks[3].Message);
+        Assert.Null(checks[3].Fix);
         Assert.Equal(before, Entries());
     }
 
