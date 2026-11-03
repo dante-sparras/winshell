@@ -51,8 +51,6 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private bool _hasRadio;
     private bool _disposed;
 
-    public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
-
     public async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
     {
         await _readGate.WaitAsync(cancellation).ConfigureAwait(false);

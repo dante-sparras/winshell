@@ -2,10 +2,8 @@ namespace Winshell.Bluetooth;
 
 internal interface IBluetoothBackend : IDisposable
 {
-    Task<BluetoothSnapshot> ReadAsync();
+    Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation);
 
-    /// <summary>The same read, stopping when <paramref name="cancellation"/> is cancelled. The default ignores the token.</summary>
-    Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation) => ReadAsync();
     void StartDiscovery();
     void StopDiscovery();
     Task<string?> PairAsync(string id, CancellationToken cancellation);

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 
 namespace Winshell.Bluetooth;
 
@@ -320,8 +321,9 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private int _readAgain;
     private int _monitoring;
     private int _monitorHolders;
-    private int _radioSet;
-    private int _visibilitySet;
+    // One radio change and one visibility change run at a time.
+    private readonly StrongBox<int> _radioSet = new();
+    private readonly StrongBox<int> _visibilitySet = new();
     private long _revision;
     private volatile bool _disposed;
 
@@ -564,34 +566,11 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     {
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.ReportsOn == enabled)
             return;
-        if (Interlocked.CompareExchange(ref _radioSet, 1, 0) != 0)
-            return;
-        var error = "";
-        var report = false;
-        try
+        await ChangeAdapterAsync(adapter, _radioSet, async () =>
         {
-            Invalidate();
-            error = await Backend.SetRadioEnabledAsync(enabled).ConfigureAwait(false) ?? "";
-            report = true;
-            if (error.Length == 0)
-                await RefreshAsync().ConfigureAwait(false);
-        }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
-        {
-            error = e.Message;
-            report = true;
-        }
-        finally
-        {
-            var message = error;
-            var shouldReport = report;
-            Post(() =>
-            {
-                Volatile.Write(ref _radioSet, 0);
-                if (shouldReport && ReferenceEquals(adapter, _adapter))
-                    adapter.Report(message);
-            });
-        }
+            var error = await Backend.SetRadioEnabledAsync(enabled).ConfigureAwait(false);
+            return (error, error is null);
+        }).ConfigureAwait(false);
     }
 
     // Windows accepts discovery only while incoming connections are on, and turning those off
@@ -601,7 +580,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.Discoverable == discoverable)
             return;
         var openConnections = discoverable && !adapter.Pairable;
-        await RunVisibilityAsync(adapter, async () =>
+        await ChangeAdapterAsync(adapter, _visibilitySet, async () =>
         {
             var changed = false;
             if (openConnections)
@@ -621,7 +600,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.Pairable == pairable)
             return;
         var closeDiscovery = !pairable && adapter.Discoverable;
-        await RunVisibilityAsync(adapter, async () =>
+        await ChangeAdapterAsync(adapter, _visibilitySet, async () =>
         {
             var changed = false;
             if (closeDiscovery)
@@ -636,9 +615,9 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         }).ConfigureAwait(false);
     }
 
-    private async Task RunVisibilityAsync(BluetoothAdapter adapter, Func<Task<(string? Error, bool Changed)>> attempt)
+    private async Task ChangeAdapterAsync(BluetoothAdapter adapter, StrongBox<int> busy, Func<Task<(string? Error, bool Changed)>> attempt)
     {
-        if (Interlocked.CompareExchange(ref _visibilitySet, 1, 0) != 0)
+        if (Interlocked.CompareExchange(ref busy.Value, 1, 0) != 0)
             return;
         var error = "";
         var report = false;
@@ -662,7 +641,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             var shouldReport = report;
             Post(() =>
             {
-                Volatile.Write(ref _visibilitySet, 0);
+                Volatile.Write(ref busy.Value, 0);
                 if (shouldReport && ReferenceEquals(adapter, _adapter))
                     adapter.Report(message);
             });
