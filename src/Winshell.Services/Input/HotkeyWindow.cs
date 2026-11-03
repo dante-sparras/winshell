@@ -88,7 +88,11 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
         }
     }
 
-    /// <summary>Unregisters each chord <paramref name="inUse"/> no longer wants. With none left, the window goes.</summary>
+    /// <summary>
+    /// Unregisters each chord <paramref name="inUse"/> no longer wants. With none left, the window goes.
+    /// <paramref name="inUse"/> runs under this window's lock: it may take the book's lock, and must not call back into
+    /// this window, so the order is always this lock, then the book's.
+    /// </summary>
     public void UnregisterUnused(Func<OsChord, bool> inUse)
     {
         List<int> ids = [];
