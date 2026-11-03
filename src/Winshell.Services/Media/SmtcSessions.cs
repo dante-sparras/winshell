@@ -18,7 +18,13 @@ internal sealed class SmtcSessions : IMediaSessions
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
     /// <summary>A request still pending after this long is cancelled and replaced, so a broker that stopped answering and recovered is asked again.</summary>
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan FirstRequestTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Cancelling a hung request does not free the native thread it holds, so each timeout doubles the next wait, up to
+    /// this. A broker that never answers then costs a thread an hour, not one every half minute.
+    /// </summary>
+    private static readonly TimeSpan LongestRequestTimeout = TimeSpan.FromHours(1);
 
     private static SmtcSessions? _instance;
 
@@ -29,6 +35,7 @@ internal sealed class SmtcSessions : IMediaSessions
     private IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>? _pending;
     private IDisposable? _refresh;
     private IDisposable? _timeout;
+    private TimeSpan _requestTimeout = FirstRequestTimeout;
     private bool _refreshRequested;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
@@ -67,8 +74,9 @@ internal sealed class SmtcSessions : IMediaSessions
     internal void Post(Action action) => _loop.Post(action);
 
     /// <summary>
-    /// Asks Windows on the UI thread. A broker that stops answering must not accumulate pending requests and native
-    /// threads: one request waits for completion or its timeout. Changes during that read share one follow-up read.
+    /// Asks Windows for a manager and reads it on the UI thread: a manager requested on another thread can keep
+    /// returning an empty list. Each pending request holds a native thread, so only one is out at a time, until it
+    /// completes or times out. Changes while it is out share one follow-up read.
     /// </summary>
     private void Sync()
     {
@@ -83,7 +91,7 @@ internal sealed class SmtcSessions : IMediaSessions
         {
             var operation = _request();
             _pending = operation;
-            _timeout = _loop.Schedule(RequestTimeout, () => CancelExpired(operation));
+            _timeout = _loop.Schedule(_requestTimeout, () => CancelExpired(operation));
             operation.Completed = (_, status) => Post(() => Complete(operation, status));
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
@@ -107,6 +115,7 @@ internal sealed class SmtcSessions : IMediaSessions
         {
             _warning.Failed(e);
         }
+        _requestTimeout = _requestTimeout * 2 < LongestRequestTimeout ? _requestTimeout * 2 : LongestRequestTimeout;
         // A hung broker may never deliver Completed after Cancel, so retire the request here; its late callback is ignored.
         Complete(operation, AsyncStatus.Canceled);
     }
@@ -117,6 +126,9 @@ internal sealed class SmtcSessions : IMediaSessions
             return;
         _timeout?.Dispose();
         _timeout = null;
+        // Only a timeout cancels a request, so any other status means the broker answered.
+        if (status != AsyncStatus.Canceled)
+            _requestTimeout = FirstRequestTimeout;
         try
         {
             if (status == AsyncStatus.Completed)

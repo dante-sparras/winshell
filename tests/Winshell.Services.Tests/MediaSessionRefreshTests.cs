@@ -52,7 +52,33 @@ public sealed class MediaSessionRefreshTests
         Assert.Equal(1, pending.CloseCount);
         Assert.Equal(0, next.CancelCount);
         Assert.False(next.Closed);
-        Assert.Equal(TimeSpan.FromSeconds(62), loop.NextDue);
+        Assert.Equal(TimeSpan.FromSeconds(92), loop.NextDue);
+    }
+
+    [Fact]
+    public void Each_timeout_doubles_the_next_wait_up_to_an_hour_until_Windows_answers()
+    {
+        var loop = new ManualEventLoop();
+        var starts = new List<TimeSpan>();
+        Discovery? last = null;
+        _ = new SmtcSessions(loop, new Log(), () =>
+        {
+            starts.Add(loop.Now);
+            return last = new Discovery { CompletesOnCancel = false };
+        });
+        loop.Process();
+
+        loop.Advance(TimeSpan.FromSeconds(11030));
+
+        // Each gap is a wait for the request, then the two seconds before the next one.
+        Assert.Equal<int[]>([32, 62, 122, 242, 482, 962, 1922, 3602, 3602],
+            [.. starts.Zip(starts.Skip(1), (a, b) => (int)(b - a).TotalSeconds)]);
+
+        var answered = loop.Now;
+        last!.Finish(AsyncStatus.Error); // The factory has run, so last is the pending request.
+        loop.Advance(TimeSpan.FromSeconds(34));
+
+        Assert.Equal([answered + TimeSpan.FromSeconds(2), answered + TimeSpan.FromSeconds(34)], starts[^2..]);
     }
 
     [Theory]
