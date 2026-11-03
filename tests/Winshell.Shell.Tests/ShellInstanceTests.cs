@@ -117,8 +117,16 @@ public sealed class ShellInstanceTests
 
         await Wait.UntilAsync(
             () => Directory.Exists(ShellLocations.CrashRoot)
-                && Directory.GetFiles(ShellLocations.CrashRoot).Any(f => File.ReadAllText(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
+                && Directory.GetFiles(ShellLocations.CrashRoot).Any(f => ReadWhileWritten(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
             "a crash report for the posted failure");
         Assert.True(await ShellFixture.On(_ => true));
+    }
+
+    /// <summary>The report's text so far. The shell holds it open for writing until the report is done, so a plain read can fail.</summary>
+    private static string ReadWhileWritten(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }
