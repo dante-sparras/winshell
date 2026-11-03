@@ -23,14 +23,18 @@ internal sealed record CrashReport(string Path, string Where, Exception Error, b
 /// Writes crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent anywhere.
 /// A report says where the runtime failed, the exception with its stack, and the end of the instance's log, with
 /// the secrets <see cref="CrashRedaction"/> recognizes taken out. Several instances
-/// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted.
+/// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted. A
+/// report shows up in the folder only once it is whole and closed.
 /// </summary>
 internal sealed partial class CrashReports(string folder)
 {
     private const string Heading = "Winshell crash report";
     private const int LogLines = 40;
     private const int LogBytes = 16 * 1024;
-    private const int ErrorFileExists = 80;
+    private const int ErrorAlreadyExists = 183;
+
+    /// <summary>The subfolder a report is written in before it is moved into the folder whole.</summary>
+    private const string WritingFolder = "writing";
     private static readonly object TimeGate = new();
     private static long _lastTicks;
     private readonly object _lock = new();
@@ -141,24 +145,46 @@ internal sealed partial class CrashReports(string folder)
         {
             var now = Time.GetLocalNow();
             var text = Format(now, where, error, fatal, recovery);
-            Directory.CreateDirectory(Folder);
-            var ticks = NextTicks(now.UtcTicks);
-            // The name is unique to this process and instant; another instance writing into the folder at the same
-            // time cannot take it over, since each file is created only if it is not there yet.
-            for (var attempt = 0; ; attempt++)
+            // A report is written whole in a subfolder, then moved in, so whoever reads the folder never finds one
+            // half written or still open.
+            var writing = Path.Combine(Folder, WritingFolder);
+            Directory.CreateDirectory(writing);
+            var temp = Path.Combine(writing, $"{Environment.ProcessId}-{Guid.NewGuid():N}.txt");
+            try
             {
-                var path = Path.Combine(Folder, FileName(ticks, where));
+                using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    using (var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true))
+                        writer.Write(text);
+                    stream.Flush(flushToDisk: true);
+                }
+                var ticks = NextTicks(now.UtcTicks);
+                // The name is unique to this process and instant; another instance writing into the folder at the same
+                // time cannot take it over, since a report is moved only to a name that is not there yet.
+                for (var attempt = 0; ; attempt++)
+                {
+                    var path = Path.Combine(Folder, FileName(ticks, where));
+                    try
+                    {
+                        File.Move(temp, path, overwrite: false);
+                        Prune(path);
+                        return new CrashReport(path, where, error, fatal) { Subject = subject, Recovery = recovery };
+                    }
+                    catch (IOException e) when ((e.HResult & 0xFFFF) == ErrorAlreadyExists && attempt < 16)
+                    {
+                        ticks = NextTicks(ticks);
+                    }
+                }
+            }
+            finally
+            {
+                // Already gone once moved; this deletes what a failed write or move left.
                 try
                 {
-                    using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
-                    using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
-                        writer.Write(text);
-                    Prune(path);
-                    return new CrashReport(path, where, error, fatal) { Subject = subject, Recovery = recovery };
+                    File.Delete(temp);
                 }
-                catch (IOException e) when ((e.HResult & 0xFFFF) == ErrorFileExists && attempt < 16)
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
-                    ticks = NextTicks(ticks);
                 }
             }
         }
