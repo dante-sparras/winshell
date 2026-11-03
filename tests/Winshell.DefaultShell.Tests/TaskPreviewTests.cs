@@ -368,7 +368,7 @@ public sealed class TaskPreviewTests
     }
 
     [Fact]
-    public void Keys_reach_the_preview_only_while_it_is_open_and_Shift_Tab_goes_back()
+    public void Each_key_does_its_preview_action_and_Escape_passes_through_while_closed()
     {
         using var cards = new Bar();
         var first = new Win { Id = 1, Title = "One" };
@@ -407,9 +407,14 @@ public sealed class TaskPreviewTests
         Assert.True(list.Preview.Listed);
         Assert.False(list.Preview.Press(VirtualKey.Right, shift: false));
         Assert.True(list.Preview.Press(VirtualKey.Down, shift: false));
+        Assert.Equal(1, list.Preview.FocusIndex);
         Assert.True(list.Preview.Press(VirtualKey.Down, shift: false));
+        Assert.Equal(2, list.Preview.FocusIndex);
         Assert.True(list.Preview.Press(VirtualKey.Up, shift: false));
         Assert.Equal(1, list.Preview.FocusIndex);
+        Assert.True(list.Preview.Press(VirtualKey.Tab, shift: false));
+        Assert.Equal(1, list.Preview.FocusIndex);
+        Assert.True(list.Preview.FocusClose);
     }
 
     [Fact]

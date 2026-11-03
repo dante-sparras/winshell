@@ -377,10 +377,7 @@ public sealed class TaskPreview : ObservableObject, IDisposable
         return true;
     }
 
-    /// <summary>
-    /// A key pressed in the preview. True when the preview used it: Escape while it is open, the arrows, Tab (Shift+Tab
-    /// goes back), Enter and Delete, each as its own method says.
-    /// </summary>
+    /// <summary>A key pressed in the preview. True when the preview used it. Escape passes through while it is closed.</summary>
     internal bool Press(VirtualKey key, bool shift)
     {
         if (key == VirtualKey.Escape)

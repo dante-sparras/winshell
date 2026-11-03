@@ -352,7 +352,7 @@ public sealed partial class TaskPreviewView : UserControl
         _model.PointerInside(false);
     }
 
-    /// <summary>An exit bubbled up from a child. The pointer left the element only when it is outside its bounds.</summary>
+    /// <summary>True when an exit bubbled up from a child and the pointer is still within the element's bounds.</summary>
     private static bool StillInside(PointerRoutedEventArgs e, FrameworkElement element)
     {
         var point = e.GetCurrentPoint(element).Position;
