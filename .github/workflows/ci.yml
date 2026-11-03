@@ -2,9 +2,12 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - main
+  # A merge queue runs every check on its merge group, as on a push to main.
+  merge_group:
 
 permissions:
   contents: read
@@ -43,7 +46,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.number }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
+          # A draft leaves ci and slow to ready_for_review. A draft can't merge, so their skipped checks pass nothing.
+          if [ "$DRAFT" = true ]; then
+            echo 'fast=false' >> "$GITHUB_OUTPUT"
+            echo 'code=false' >> "$GITHUB_OUTPUT"
+          fi
           # A rename lists the path it left too: moving a file out of src/ can break what used it.
           files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
           # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
@@ -90,32 +99,6 @@ jobs:
         env:
           TESTS: ${{ needs.changes.outputs.tests }}
         run: ./scripts/repeat-tests.ps1 -Tests $env:TESTS -Tier Fast -Times 20
-      # Only main writes the caches, so a pull request can't change what another one starts from.
-      - name: Note which files this build saw
-        if: github.ref == 'refs/heads/main'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path .build-cache | Out-Null
-          git -c core.quotePath=false ls-files --stage | Set-Content -LiteralPath .build-cache/tracked.txt
-      - name: Save this build
-        if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            src/*/bin
-            src/*/obj
-            tests/*/bin
-            tests/*/obj
-            templates/bin
-            templates/obj
-            .build-cache
-          key: build-${{ github.sha }}
-      - name: Save NuGet packages
-        if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ hashFiles('Directory.Packages.props') }}
   stop:
     # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
     # which runs the code under test, gets no token that can cancel a run.
@@ -210,6 +193,31 @@ jobs:
           # at the same time.
           advanced-security: true
           annotations: false
+
+  trim-caches:
+    # CodeQL's default setup saves a database per language on each push to main and reads only the newest, which fills
+    # the 10 GB GitHub keeps. It is a separate job so that the job that runs the code under test gets no token that can
+    # delete caches.
+    name: trim-caches
+    needs: ci
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # deletes cache entries
+    steps:
+      - name: Delete all but the newest databases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        # Two per language and CodeQL version, which the key names before the commit: this push's may still be saving
+        # while the last push's is the one read. Two pushes can race to delete the same entry, and nothing needs this
+        # step to pass.
+        continue-on-error: true
+        run: |
+          gh api --paginate "repos/$GH_REPO/actions/caches?key=codeql-overlay-base-database-&sort=created_at&direction=desc&per_page=100" \
+            --jq '.actions_caches[] | "\(.id) \(.key)"' | sed -E 's/-[0-9a-f]{40}-.*//' | awk 'seen[$2]++ >= 2 { print $1 }' |
+            xargs -r -I{} gh api --method DELETE "repos/$GH_REPO/actions/caches/{}"
 
   installer:
     name: installer
