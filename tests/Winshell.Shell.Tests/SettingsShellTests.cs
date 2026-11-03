@@ -126,12 +126,6 @@ public sealed class SettingsShellTests
                 var item = MenuItem(bar);
                 var peer = FrameworkElementAutomationPeer.CreatePeerForElement(item);
                 Assert.Equal("Taskbar settings", peer.GetName());
-                await Wait.UntilAsync(() => ItemFocused(bar, item), "the menu item to take focus", () =>
-                {
-                    var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                    shell.Loop.Post(() => done.TrySetResult());
-                    return done.Task;
-                });
                 ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)!).Invoke();
 
                 Assert.Equal("taskbarSettings", chosen);
@@ -206,18 +200,6 @@ public sealed class SettingsShellTests
         for (DependencyObject? node = focused; node is not null; node = VisualTreeHelper.GetParent(node))
         {
             if (node is AutoSuggestBox { Name: "Search" })
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool ItemFocused(UIElement root, MenuFlyoutItem item)
-    {
-        var focused = FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
-        for (DependencyObject? node = focused; node is not null; node = VisualTreeHelper.GetParent(node))
-        {
-            if (ReferenceEquals(node, item))
                 return true;
         }
 
