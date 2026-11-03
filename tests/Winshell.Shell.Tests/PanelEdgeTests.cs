@@ -56,10 +56,10 @@ public sealed class PanelEdgeTests
             var host = panel.Host!;
 
             // Explorer tells an app bar when a fullscreen window takes its screen, and when it leaves.
-            Win32.SendMessageW(host.Handle, HostWindow.AppBarMessage, (nint)Win32.ABN_FULLSCREENAPP, 1);
+            Win32.SendMessageW(host.Handle, AppBar.Message, (nint)Win32.ABN_FULLSCREENAPP, 1);
             host.PlacePanel();
             var behind = InFront(app.Host!.Handle, host.Handle);
-            Win32.SendMessageW(host.Handle, HostWindow.AppBarMessage, (nint)Win32.ABN_FULLSCREENAPP, 0);
+            Win32.SendMessageW(host.Handle, AppBar.Message, (nint)Win32.ABN_FULLSCREENAPP, 0);
             host.PlacePanel();
 
             return (behind, InFront(host.Handle, app.Host.Handle));
