@@ -56,6 +56,26 @@ public sealed class MediaSessionRefreshTests
     }
 
     [Fact]
+    public void A_broker_that_stops_answering_is_logged_once_not_at_every_timeout()
+    {
+        var loop = new ManualEventLoop();
+        List<string> warnings = [];
+        var log = new Log { Sink = (level, category, message) => warnings.Add($"{level} {category}: {message}") };
+        _ = new SmtcSessions(loop, log, () => new Discovery { CompletesOnCancel = false });
+        loop.Process();
+
+        loop.Advance(TimeSpan.FromSeconds(29));
+        Assert.Empty(warnings);
+
+        // Three timeouts: 30 s, then 60 s, then 120 s.
+        loop.Advance(TimeSpan.FromSeconds(1 + 2 + 60 + 2 + 120));
+
+        var warning = Assert.Single(warnings);
+        Assert.StartsWith("Warn media: ", warning, StringComparison.Ordinal);
+        Assert.Contains("not answering", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Each_timeout_doubles_the_next_wait_up_to_an_hour_until_Windows_answers()
     {
         var loop = new ManualEventLoop();

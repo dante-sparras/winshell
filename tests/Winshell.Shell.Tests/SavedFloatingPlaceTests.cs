@@ -1,6 +1,6 @@
 using Winshell.Native;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.ShellTests;
 
 public sealed class SavedFloatingPlaceTests
 {
