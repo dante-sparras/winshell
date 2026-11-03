@@ -221,21 +221,34 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     }
 
     /// <summary>
-    /// Every message-only window on this desktop, each once. A window that closes while they are walked ends the walk,
-    /// which starts over, up to three times.
+    /// Every message-only window on this desktop, each once, from a list Windows copies at once. A walk from one window
+    /// to the next ends early, with no error, where a window closes, and the newest windows, where it starts, come and
+    /// go the most.
     /// </summary>
     internal static HashSet<nint> MessageOnlyWindows()
     {
-        var windows = new HashSet<nint>();
-        for (var walk = 0; walk < 3; walk++)
-        {
-            nint hwnd = 0;
-            while ((hwnd = FindWindowExW(Win32.HWND_MESSAGE, hwnd, null, null)) != 0)
-                windows.Add(hwnd);
-            if (Marshal.GetLastPInvokeError() != ERROR_INVALID_WINDOW_HANDLE)
-                break;
-        }
+        // Only a message-only window names their parent, and the newest one may close before it is asked.
+        nint parent = 0;
+        for (var attempt = 0; parent == 0 && attempt < 3; attempt++)
+            parent = Win32.GetAncestor(FindWindowExW(Win32.HWND_MESSAGE, 0, null, null), GA_PARENT);
+        _messageOnly = [];
+        if (parent != 0)
+            EnumChildWindows(parent, &CollectMessageOnly, 0);
+        var windows = _messageOnly;
+        _messageOnly = null;
+        // The list also has the child windows of message-only windows.
+        windows.RemoveWhere(hwnd => Win32.GetAncestor(hwnd, GA_PARENT) != parent);
         return windows;
+    }
+
+    [ThreadStatic]
+    private static HashSet<nint>? _messageOnly;
+
+    [UnmanagedCallersOnly]
+    private static int CollectMessageOnly(nint hwnd, nint data)
+    {
+        _messageOnly?.Add(hwnd);
+        return 1;
     }
 
     /// <summary>
@@ -406,7 +419,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     private static readonly nint HWND_BROADCAST = 0xffff;
     private const uint LwaAlpha = 0x2;
     private const uint MSGFLT_ALLOW = 1;
-    private const int ERROR_INVALID_WINDOW_HANDLE = 1400;
+    private const uint GA_PARENT = 1;
     private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -417,8 +430,12 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         public void* lpData;
     }
 
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint FindWindowExW(nint parent, nint after, string? className, string? windowName);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool EnumChildWindows(nint parent, delegate* unmanaged<nint, nint, int> callback, nint data);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
