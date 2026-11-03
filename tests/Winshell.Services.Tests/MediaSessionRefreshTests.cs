@@ -68,7 +68,7 @@ public sealed class MediaSessionRefreshTests
         });
         loop.Process();
 
-        loop.Advance(TimeSpan.FromSeconds(11030));
+        loop.Advance(TimeSpan.FromSeconds(11028));
 
         // Each gap is a wait for the request, then the two seconds before the next one.
         Assert.Equal<int[]>([32, 62, 122, 242, 482, 962, 1922, 3602, 3602],
