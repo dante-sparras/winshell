@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Windows.Foundation;
 using Windows.Media;
 using Windows.Media.Control;
 
@@ -13,32 +14,54 @@ namespace Winshell.Media;
 /// </summary>
 internal sealed class SmtcSessions : IMediaSessions
 {
-    /// <summary>SessionsChanged is not delivered for every session a later manager already lists, so the list is also read this often.</summary>
+    /// <summary>SessionsChanged can miss a session, so a completed read is followed by another after this delay.</summary>
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>A request still pending after this long is cancelled and replaced, so a broker that stopped answering and recovered is asked again.</summary>
+    private static readonly TimeSpan FirstRequestTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Cancelling a hung request does not free the native thread it holds, so each timeout doubles the next wait, up to
+    /// this. A broker that never answers then costs a thread an hour, not one every half minute.
+    /// </summary>
+    private static readonly TimeSpan LongestRequestTimeout = TimeSpan.FromHours(1);
 
     private static SmtcSessions? _instance;
 
     private readonly IEventLoop _loop;
     private readonly List<SmtcSession> _sessions = [];
     private readonly AppNames _names;
+    private readonly Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> _request;
+    private IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>? _pending;
+    private IDisposable? _refresh;
+    private IDisposable? _timeout;
+    private TimeSpan _requestTimeout = FirstRequestTimeout;
+    private bool _refreshRequested;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
     private readonly MonitorWarning _warning;
     private int _nextId = 1;
 
-    private SmtcSessions(IEventLoop loop, Log log)
+    internal SmtcSessions(IEventLoop loop, Log log,
+        Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> request)
     {
         _loop = loop;
         Log = log;
+        _request = request;
         _warning = new MonitorWarning(() => log, "media");
         _names = new AppNames(loop, log, SmtcSession.DescribeApp, Sync);
-        // Old art is older than a day, so cleaning it does not have to finish before the first read.
-        _ = Task.Run(ArtCache.CleanOld);
-        Post(Begin);
+        Post(Sync);
     }
 
     /// <summary>The session list, made on first use. Call on the UI thread.</summary>
-    public static SmtcSessions Get(IEventLoop loop, Log log) => _instance ??= new SmtcSessions(loop, log);
+    public static SmtcSessions Get(IEventLoop loop, Log log)
+    {
+        if (_instance is not null)
+            return _instance;
+        // Old art is older than a day, so cleaning it does not have to finish before the first read.
+        _ = Task.Run(ArtCache.CleanOld);
+        return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync);
+    }
 
     public IReadOnlyList<SmtcSession> Sessions => _sessions;
 
@@ -50,48 +73,100 @@ internal sealed class SmtcSessions : IMediaSessions
 
     internal void Post(Action action) => _loop.Post(action);
 
-    private void Begin()
-    {
-        Sync();
-        _loop.Schedule(RefreshInterval, Begin);
-    }
-
     /// <summary>
     /// Asks Windows for a manager and reads it on the UI thread: a manager requested on another thread can keep
-    /// returning an empty list. A request that never completes holds nothing up, because the next one does not wait for it.
+    /// returning an empty list. Each pending request holds a native thread, so only one is out at a time, until it
+    /// completes or times out. Changes while it is out share one follow-up read.
     /// </summary>
     private void Sync()
     {
+        if (_pending is not null)
+        {
+            _refreshRequested = true;
+            return;
+        }
+        _refresh?.Dispose();
+        _refresh = null;
         try
         {
-            GlobalSystemMediaTransportControlsSessionManager.RequestAsync().Completed = (operation, status) =>
-            {
-                if (status == global::Windows.Foundation.AsyncStatus.Completed)
-                    Post(() => Apply(operation));
-                else if (status == global::Windows.Foundation.AsyncStatus.Error)
-                    Post(() => _warning.Failed(operation.ErrorCode));
-            };
+            var operation = _request();
+            _pending = operation;
+            _timeout = _loop.Schedule(_requestTimeout, () => CancelExpired(operation));
+            operation.Completed = (_, status) => Post(() => Complete(operation, status));
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
             _warning.Failed(e);
+            // A request that started is retired by its timeout.
+            if (_pending is null)
+                ScheduleRefresh();
         }
     }
 
-    private void Apply(global::Windows.Foundation.IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
+    private void CancelExpired(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
     {
+        if (!ReferenceEquals(_pending, operation))
+            return;
         try
         {
-            var manager = operation.GetResults();
-            Subscribe(manager);
-            Read(manager.GetSessions());
-            _warning.Succeeded();
+            operation.Cancel();
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
         {
             _warning.Failed(e);
         }
+        _requestTimeout = _requestTimeout * 2 < LongestRequestTimeout ? _requestTimeout * 2 : LongestRequestTimeout;
+        // A hung broker may never deliver Completed after Cancel, so retire the request here; its late callback is ignored.
+        Complete(operation, AsyncStatus.Canceled);
     }
+
+    private void Complete(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation, AsyncStatus status)
+    {
+        if (!ReferenceEquals(_pending, operation))
+            return;
+        _timeout?.Dispose();
+        _timeout = null;
+        // Only a timeout cancels a request, so any other status means the broker answered.
+        if (status != AsyncStatus.Canceled)
+            _requestTimeout = FirstRequestTimeout;
+        try
+        {
+            if (status == AsyncStatus.Completed)
+            {
+                var manager = operation.GetResults();
+                Subscribe(manager);
+                Read(manager.GetSessions());
+                _warning.Succeeded();
+            }
+            else if (status == AsyncStatus.Error)
+                _warning.Failed(operation.ErrorCode);
+        }
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _warning.Failed(e);
+        }
+        finally
+        {
+            try
+            {
+                operation.Close();
+            }
+            catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                _warning.Failed(e);
+            }
+            _pending = null;
+            if (_refreshRequested)
+            {
+                _refreshRequested = false;
+                Post(Sync);
+            }
+            else
+                ScheduleRefresh();
+        }
+    }
+
+    private void ScheduleRefresh() => _refresh = _loop.Schedule(RefreshInterval, Sync);
 
     /// <summary>The projection does not root the delegate. A collected handler never hears a later session.</summary>
     private void Subscribe(GlobalSystemMediaTransportControlsSessionManager manager)
