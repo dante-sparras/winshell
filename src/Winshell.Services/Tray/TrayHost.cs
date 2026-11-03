@@ -212,7 +212,31 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     }
 
     /// <summary>Asks every app to register its icons with whichever taskbar window is first.</summary>
-    public static void BroadcastTaskbarCreated() => Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
+    public static void BroadcastTaskbarCreated()
+    {
+        Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
+        // A broadcast reaches only top-level windows, and some apps, such as Hex, keep their icons on a message-only window.
+        foreach (var window in MessageOnlyWindows())
+            Win32.PostMessageW(window, TaskbarCreated, 0, 0);
+    }
+
+    /// <summary>
+    /// Every message-only window on this desktop, each once. A window that closes while they are walked ends the walk,
+    /// which starts over, up to three times.
+    /// </summary>
+    internal static HashSet<nint> MessageOnlyWindows()
+    {
+        var windows = new HashSet<nint>();
+        for (var walk = 0; walk < 3; walk++)
+        {
+            nint hwnd = 0;
+            while ((hwnd = FindWindowExW(Win32.HWND_MESSAGE, hwnd, null, null)) != 0)
+                windows.Add(hwnd);
+            if (Marshal.GetLastPInvokeError() != ERROR_INVALID_WINDOW_HANDLE)
+                break;
+        }
+        return windows;
+    }
 
     /// <summary>
     /// Drops icons of apps that ended without removing them, and checks the taskbar order as a fallback for a
@@ -356,17 +380,19 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
 
     private nint OnCopyData(nint sender, COPYDATASTRUCT* data)
     {
+        var answer = 1;
         if (data->dwData == TrayProtocol.NotifyIconData && TrayProtocol.Read(new ReadOnlySpan<byte>(data->lpData, (int)data->cbData)) is { } call)
-            _icons.Apply(call);
-        // Explorer keeps its own tray, app bars and icon positions: it gets every message, and its answer is the answer.
+            answer = _icons.Apply(call) ? 1 : 0;
+        // Explorer keeps its own tray, app bars and icon positions: it gets every message. Its answer is the answer to an
+        // app bar message; an icon is answered by this host, which may not have an icon Explorer has.
         var explorer = ExplorerTray();
         if (explorer == 0)
-            return 1;
+            return answer;
         // An icon is answered here, and apps animate theirs several times a second, so a busy Explorer holds the shell
         // up only briefly for one. An app bar needs Explorer's answer.
         var icon = data->dwData == TrayProtocol.NotifyIconData;
         Win32.SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, Win32.SMTO_ABORTIFHUNG, icon ? 200u : 2000u, out var result);
-        return icon ? 1 : result;
+        return icon ? answer : result;
     }
 
     private static (int ProcessId, string ProgramPath) OwnerOf(nint window)
@@ -380,6 +406,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     private static readonly nint HWND_BROADCAST = 0xffff;
     private const uint LwaAlpha = 0x2;
     private const uint MSGFLT_ALLOW = 1;
+    private const int ERROR_INVALID_WINDOW_HANDLE = 1400;
     private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -390,8 +417,8 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         public void* lpData;
     }
 
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindWindowExW(nint parent, nint after, string className, string? windowName);
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint FindWindowExW(nint parent, nint after, string? className, string? windowName);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

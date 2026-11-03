@@ -27,7 +27,11 @@ internal sealed class TrayIcons(
     /// <summary>The app asked for a balloon notification: its title, its text, and its <c>NIIF_</c> flags.</summary>
     public event Action<TrayIcon, string, string, uint>? Balloon;
 
-    public void Apply(NotifyIconCall call)
+    /// <summary>
+    /// Applies a call. A change to an icon this table does not have fails, as in Explorer, so an app that changes its icon
+    /// when asked to add it again, as Windows Security does, adds it. Every other call succeeds.
+    /// </summary>
+    public bool Apply(NotifyIconCall call)
     {
         var hasGuid = call.Guid != Guid.Empty;
         var window = call.Window;
@@ -40,7 +44,7 @@ internal sealed class TrayIcons(
             case TrayProtocol.Modify:
                 {
                     if (icon is null && call.Message == TrayProtocol.Modify)
-                        return;
+                        return false;
                     icon ??= new TrayIcon { Key = key };
                     Unindex(icon);
                     if (window != 0)
@@ -89,6 +93,7 @@ internal sealed class TrayIcons(
                     icon.Version = call.TimeoutOrVersion;
                 break;
         }
+        return true;
     }
 
     /// <summary>Takes Windows' choices for which icons the taskbar shows, and updates the icons they changed.</summary>
