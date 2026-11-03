@@ -29,7 +29,7 @@
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
-                Visibility="{x:Bind Shown(Popup.Settings.HasMedia), Mode=OneWay}">
+                Visibility="{x:Bind Shown(Popup.Settings.Media.HasSession), Mode=OneWay}">
                 <Grid ColumnSpacing="12" RowSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -44,18 +44,18 @@
                             TextTrimming="CharacterEllipsis"
                             Style="{ThemeResource CaptionTextBlockStyle}"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="{x:Bind Popup.Settings.MediaApp, Mode=OneWay}" />
+                            Text="{x:Bind Popup.Settings.Media.App, Mode=OneWay}" />
                         <TextBlock
                             Margin="0,4,0,0"
                             TextTrimming="CharacterEllipsis"
                             Style="{ThemeResource BodyStrongTextBlockStyle}"
                             Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                            Text="{x:Bind Popup.Settings.MediaTitle, Mode=OneWay}" />
+                            Text="{x:Bind Popup.Settings.Media.Title, Mode=OneWay}" />
                         <TextBlock
                             TextTrimming="CharacterEllipsis"
                             Style="{ThemeResource CaptionTextBlockStyle}"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="{x:Bind Popup.Settings.MediaArtist, Mode=OneWay}" />
+                            Text="{x:Bind Popup.Settings.Media.Artist, Mode=OneWay}" />
                     </StackPanel>
                     <Image
                         Grid.Column="1"
@@ -65,8 +65,8 @@
                         VerticalAlignment="Top"
                         Stretch="UniformToFill"
                         AutomationProperties.AccessibilityView="Raw"
-                        Source="{x:Bind MediaImage(Popup.Settings.MediaArt), Mode=OneWay}"
-                        Visibility="{x:Bind Shown(Popup.Settings.HasMediaArt), Mode=OneWay}" />
+                        Source="{x:Bind MediaImage(Popup.Settings.Media.Art), Mode=OneWay}"
+                        Visibility="{x:Bind Shown(Popup.Settings.Media.HasArt), Mode=OneWay}" />
                     <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
                         <Button
                             Width="40"
@@ -78,8 +78,8 @@
                             Background="Transparent"
                             AutomationProperties.Name="Previous"
                             ToolTipService.ToolTip="Previous"
-                            IsEnabled="{x:Bind Popup.Settings.CanMediaPrevious, Mode=OneWay}"
-                            Click="{x:Bind Popup.Settings.MediaPrevious}">
+                            IsEnabled="{x:Bind Popup.Settings.Media.CanPrevious, Mode=OneWay}"
+                            Click="{x:Bind Popup.Settings.Media.Previous}">
                             <FontIcon Glyph="&#xE892;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </Button>
                         <Button
@@ -90,11 +90,11 @@
                             Padding="0"
                             BorderThickness="0"
                             Background="Transparent"
-                            AutomationProperties.Name="{x:Bind Popup.Settings.MediaPlayLabel, Mode=OneWay}"
-                            ToolTipService.ToolTip="{x:Bind Popup.Settings.MediaPlayLabel, Mode=OneWay}"
-                            IsEnabled="{x:Bind Popup.Settings.CanMediaToggle, Mode=OneWay}"
-                            Click="{x:Bind Popup.Settings.MediaToggle}">
-                            <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Glyph="{x:Bind Popup.Settings.MediaPlayGlyph, Mode=OneWay}" />
+                            AutomationProperties.Name="{x:Bind Popup.Settings.Media.PlayLabel, Mode=OneWay}"
+                            ToolTipService.ToolTip="{x:Bind Popup.Settings.Media.PlayLabel, Mode=OneWay}"
+                            IsEnabled="{x:Bind Popup.Settings.Media.CanToggle, Mode=OneWay}"
+                            Click="{x:Bind Popup.Settings.Media.Toggle}">
+                            <FontIcon FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Glyph="{x:Bind Popup.Settings.Media.PlayGlyph, Mode=OneWay}" />
                         </Button>
                         <Button
                             Width="40"
@@ -106,15 +106,15 @@
                             Background="Transparent"
                             AutomationProperties.Name="Next"
                             ToolTipService.ToolTip="Next"
-                            IsEnabled="{x:Bind Popup.Settings.CanMediaNext, Mode=OneWay}"
-                            Click="{x:Bind Popup.Settings.MediaNext}">
+                            IsEnabled="{x:Bind Popup.Settings.Media.CanNext, Mode=OneWay}"
+                            Click="{x:Bind Popup.Settings.Media.Next}">
                             <FontIcon Glyph="&#xE893;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                         </Button>
                     </StackPanel>
                 </Grid>
             </Border>
             <!-- Not an ItemsRepeater: it realizes only what fits the window's first height, and is not told when that grows. -->
-            <ItemsControl x:Name="Tiles" ItemsSource="{x:Bind Popup.Settings.Shown, Mode=OneWay}" IsTabStop="False">
+            <ItemsControl x:Name="Tiles" ItemsSource="{x:Bind Popup.Settings.Pins.Shown, Mode=OneWay}" IsTabStop="False">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <VariableSizedWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="3" ItemWidth="108" ItemHeight="82" />
@@ -130,17 +130,17 @@
                 <local:SliderRow
                     x:Name="VolumeRow"
                     Glyph="{x:Bind Popup.Settings.Status.VolumeGlyph, Mode=OneWay}"
-                    GlyphLabel="{x:Bind Popup.Settings.MuteLabel, Mode=OneWay}"
+                    GlyphLabel="{x:Bind Popup.Settings.Sound.MuteLabel, Mode=OneWay}"
                     Label="Volume"
                     PageLabel="Select a sound output"
-                    Value="{x:Bind Popup.Settings.Volume, Mode=OneWay}"
-                    IsEnabled="{x:Bind Popup.Settings.HasOutput, Mode=OneWay}" />
+                    Value="{x:Bind Popup.Settings.Sound.Volume, Mode=OneWay}"
+                    IsEnabled="{x:Bind Popup.Settings.Sound.HasOutput, Mode=OneWay}" />
                 <local:SliderRow
                     x:Name="BrightnessRow"
                     Glyph="&#xE706;"
                     Label="Brightness"
-                    Value="{x:Bind Popup.Settings.Brightness, Mode=OneWay}"
-                    Visibility="{x:Bind Shown(Popup.Settings.HasBrightness), Mode=OneWay}" />
+                    Value="{x:Bind Popup.Settings.Brightness.Level, Mode=OneWay}"
+                    Visibility="{x:Bind Shown(Popup.Settings.Brightness.HasPanel), Mode=OneWay}" />
             </StackPanel>
         </StackPanel>
         <!-- The pages sit where the tiles are, at their height. The view sets it, as ActualHeight cannot be bound. -->
@@ -170,7 +170,7 @@
                     </Button>
                     <TextBlock Text="Power mode" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" />
                 </StackPanel>
-                <ItemsRepeater Grid.Row="1" ItemsSource="{x:Bind Popup.Settings.Modes, Mode=OneWay}">
+                <ItemsRepeater Grid.Row="1" ItemsSource="{x:Bind Popup.Settings.PowerMode.Choices, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <StackLayout Orientation="Vertical" />
                     </ItemsRepeater.Layout>
@@ -226,7 +226,7 @@
                     VerticalScrollMode="Auto"
                     VerticalScrollBarVisibility="Auto"
                     ZoomMode="Disabled">
-                    <ItemsRepeater ItemsSource="{x:Bind Popup.Settings.Outputs, Mode=OneWay}">
+                    <ItemsRepeater ItemsSource="{x:Bind Popup.Settings.Sound.Outputs, Mode=OneWay}">
                         <ItemsRepeater.Layout>
                             <StackLayout Orientation="Vertical" />
                         </ItemsRepeater.Layout>
@@ -282,7 +282,7 @@
                     VerticalScrollMode="Auto"
                     VerticalScrollBarVisibility="Auto"
                     ZoomMode="Disabled">
-                    <ItemsRepeater Margin="12,0,12,0" ItemsSource="{x:Bind Popup.Settings.Sessions, Mode=OneWay}">
+                    <ItemsRepeater Margin="12,0,12,0" ItemsSource="{x:Bind Popup.Settings.Sound.Sessions, Mode=OneWay}">
                         <ItemsRepeater.Layout>
                             <StackLayout Orientation="Vertical" Spacing="4" />
                         </ItemsRepeater.Layout>
@@ -337,7 +337,7 @@
                     <TextBlock Text="Add" VerticalAlignment="Center" Style="{ThemeResource BodyStrongTextBlockStyle}" />
                 </StackPanel>
                 <!-- A short list, so every row is realized. An ItemsRepeater would stop at the window's first height. -->
-                <ItemsControl Grid.Row="1" ItemsSource="{x:Bind Popup.Settings.Unpinned, Mode=OneWay}" IsTabStop="False">
+                <ItemsControl Grid.Row="1" ItemsSource="{x:Bind Popup.Settings.Pins.Unpinned, Mode=OneWay}" IsTabStop="False">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel />
@@ -383,7 +383,7 @@
                     VerticalAlignment="Center"
                     BorderThickness="0"
                     Background="Transparent"
-                    AutomationProperties.Name="{x:Bind Popup.Settings.BatteryText, Mode=OneWay}"
+                    AutomationProperties.Name="{x:Bind Popup.Settings.Battery.Text, Mode=OneWay}"
                     Visibility="{x:Bind BatteryShown(Popup.Settings.Status.HasBattery, Popup.Browsing), Mode=OneWay}"
                     Click="{x:Bind Popup.OpenBattery}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -396,7 +396,7 @@
                             VerticalAlignment="Center"
                             Style="{ThemeResource CaptionTextBlockStyle}"
                             Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                            Text="{x:Bind Popup.Settings.BatteryPercent, Mode=OneWay}" />
+                            Text="{x:Bind Popup.Settings.Battery.Percent, Mode=OneWay}" />
                     </StackPanel>
                 </Button>
                 <StackPanel
@@ -445,7 +445,7 @@
                         Padding="12,5"
                         VerticalAlignment="Center"
                         AutomationProperties.Name="Add"
-                        IsEnabled="{x:Bind CanAdd(Popup.Settings.HasUnpinned, Popup.ShowingAdd), Mode=OneWay}"
+                        IsEnabled="{x:Bind CanAdd(Popup.Settings.Pins.HasUnpinned, Popup.ShowingAdd), Mode=OneWay}"
                         Click="{x:Bind Popup.ShowAdd}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE710;" FontSize="12" FontFamily="Segoe Fluent Icons" />

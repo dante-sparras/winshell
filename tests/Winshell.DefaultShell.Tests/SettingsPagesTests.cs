@@ -68,12 +68,12 @@ public sealed class SettingsPagesTests : IDisposable
                 "nightLight|Night light|\uF08C",
                 "accessibility|Accessibility|\uE776",
             ],
-            QuickSettings.Kinds.Select(kind => $"{kind.Key}|{kind.Title}|{kind.Glyph}"));
+            QuickSettingsKind.All.Select(kind => $"{kind.Key}|{kind.Title}|{kind.Glyph}"));
 
         var loop = new ManualEventLoop();
         using var missing = new QuickSettingsLayout(Path.Combine(_folder, "missing.toml"), loop, Quiet());
         Assert.Null(missing.Pinned);
-        Assert.Equal(QuickSettings.Kinds.Select(kind => kind.Key), SettingsTiles.Keys(null));
+        Assert.Equal(QuickSettingsKind.All.Select(kind => kind.Key), SettingsTiles.Keys(null));
 
         File.WriteAllText(Path.Combine(_folder, "empty.toml"), "pinned = []\n");
         using var empty = new QuickSettingsLayout(Path.Combine(_folder, "empty.toml"), loop, Quiet());
