@@ -381,13 +381,22 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
-    public void What_a_program_prints_arrives_with_its_exit_on_a_busy_pool()
+    public async Task What_a_program_prints_arrives_with_its_exit_on_a_busy_pool()
     {
-        var results = new CommandResult[200];
-        Parallel.For(0, results.Length, new ParallelOptions { MaxDegreeOfParallelism = 32 }, i =>
-            results[i] = ConfigurationProject.Run("cmd", ["/c", "echo built"], _root));
-
-        Assert.All(results, result => Assert.Equal((0, "built"), ToTuple(result)));
+        // Hold every thread the pool has, and more than it can add meanwhile. Starting processes until it runs out takes
+        // a burst so large that Windows refuses some of them.
+        using var busy = new ManualResetEventSlim();
+        var held = Enumerable.Range(0, ThreadPool.ThreadCount + (Environment.ProcessorCount * 2)).Select(_ => Task.Run(busy.Wait)).ToArray();
+        try
+        {
+            for (var i = 0; i < 8; i++)
+                Assert.Equal((0, "built"), ToTuple(ConfigurationProject.Run("cmd", ["/c", "echo built"], _root)));
+        }
+        finally
+        {
+            busy.Set();
+            await Task.WhenAll(held);
+        }
     }
 
     [Fact]
