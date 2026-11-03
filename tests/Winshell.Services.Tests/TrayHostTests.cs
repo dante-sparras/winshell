@@ -7,7 +7,7 @@ namespace Winshell.Services.Tests;
 /// <summary>
 /// Runs notification area hosts under private window classes and a private owner name, so the real taskbar and the
 /// apps in the session never see them. An "Explorer" here is another host, which records what it is passed.
-/// Nothing an app in the session listens for is broadcast to it.
+/// Nothing is broadcast or posted to the session's windows.
 /// </summary>
 public sealed class TrayHostTests : IDisposable
 {
@@ -69,22 +69,22 @@ public sealed class TrayHostTests : IDisposable
     }
 
     [Fact]
-    public void A_message_only_window_hears_the_broadcast()
+    public void The_broadcast_reaches_message_only_windows()
     {
-        // Hex keeps its icon on a message-only window, which a broadcast to every window does not reach. This message
-        // is the test's own, so no app in the session acts on it, and one fixed name holds one atom for the session.
-        var message = Win32.RegisterWindowMessageW("WinshellTestTaskbarCreated");
+        // Hex keeps its icon on a message-only window, which a broadcast to every window does not reach, so the shell
+        // also posts to each one it finds. Nothing is posted here: other tests and apps own message-only windows too.
         var window = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
         Assert.NotEqual(0, window);
         try
         {
-            TrayHost.Broadcast(message);
-            Assert.True(Win32.PeekMessageW(out _, window, message, message, Win32.PM_REMOVE));
+            Assert.Contains(window, TrayHost.MessageOnlyWindows());
+            Assert.Contains(_app, TrayHost.MessageOnlyWindows());
         }
         finally
         {
             Win32.DestroyWindow(window);
         }
+        Assert.DoesNotContain(window, TrayHost.MessageOnlyWindows());
     }
 
     [Fact]

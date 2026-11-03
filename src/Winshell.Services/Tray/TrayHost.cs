@@ -212,29 +212,30 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     }
 
     /// <summary>Asks every app to register its icons with whichever taskbar window is first.</summary>
-    public static void BroadcastTaskbarCreated() => Broadcast(TaskbarCreated);
+    public static void BroadcastTaskbarCreated()
+    {
+        Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
+        // A broadcast reaches only top-level windows, and some apps, such as Hex, keep their icons on a message-only window.
+        foreach (var window in MessageOnlyWindows())
+            Win32.PostMessageW(window, TaskbarCreated, 0, 0);
+    }
 
     /// <summary>
-    /// Posts a message to every top-level window and every message-only window. A broadcast reaches only the first,
-    /// and some apps, such as Hex, keep their icons on a message-only window.
+    /// Every message-only window on this desktop, each once. A window that closes while they are walked ends the walk,
+    /// which starts over, up to three times.
     /// </summary>
-    internal static void Broadcast(uint message)
+    internal static HashSet<nint> MessageOnlyWindows()
     {
-        Win32.PostMessageW(HWND_BROADCAST, message, 0, 0);
-        // A window that closes while they are walked ends the walk. It starts over, up to three times, and skips the
-        // windows already asked.
-        var asked = new HashSet<nint>();
+        var windows = new HashSet<nint>();
         for (var walk = 0; walk < 3; walk++)
         {
             nint hwnd = 0;
             while ((hwnd = FindWindowExW(Win32.HWND_MESSAGE, hwnd, null, null)) != 0)
-            {
-                if (asked.Add(hwnd))
-                    Win32.PostMessageW(hwnd, message, 0, 0);
-            }
+                windows.Add(hwnd);
             if (Marshal.GetLastPInvokeError() != ERROR_INVALID_WINDOW_HANDLE)
-                return;
+                break;
         }
+        return windows;
     }
 
     /// <summary>
