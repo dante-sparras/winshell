@@ -53,6 +53,16 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 └── GLOSSARY.md                      # The words this repo uses
 ```
 
+## Parallel work
+
+Many agents work on this repo at once.
+
+- One task is one issue, one worktree, one branch and one PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
+- Name the branch `agent/<tool>/<issue#>-<slug>`, such as `agent/claude/123-tray-overflow`, and put `Fixes #<issue#>` in the PR body.
+- Run tasks side by side only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
+- One PR at a time changes a shared file: a `Directory.*.props` such as `Directory.Packages.props`, `global.json`, `nuget.config`, `.editorconfig`, `winshell.slnx`, `src/BannedSymbols.txt`, `tests/TestSupport/`, a lockfile, or a type more than one module uses.
+- Work that builds on another open PR is a stack of small PRs made with `gh stack` (`gh extension install github/gh-stack`), not one big PR.
+
 ## Before you finish
 
 - Writing, refactoring or reviewing C#? Follow [docs/agents/csharp-practices.md](docs/agents/csharp-practices.md).
@@ -62,7 +72,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 - CI runs the rest, so leave full `check.ps1`, `package.ps1` and arm64 to it. The required `ci` job checks the links between Markdown files offline with lychee. It runs the build and the fast tests on a PR, and all of `pwsh scripts/check.ps1 -Tier Fast` on a push to `main` and on the release PR. The required `slow` job runs the slow tests. `slow` skips a PR that only changes docs or Markdown. The ruleset also requires the `installer` job, `actionlint`, `pr-title` and `pr-rules`.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
-- Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
+- Title the PR and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
 - Say what you couldn't verify.
 - Changed a public member of `Winshell.Shell` or `Winshell.Services`? Update its `///` comment, run `dotnet run scripts/generate-reference.cs`, and commit the pages it writes.
 - Added or changed a command, prerequisite, environment variable, or top-level folder? Update [docs/development.md](docs/development.md) or Project Structure.
@@ -132,3 +142,7 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
 
 Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to honor the dev's intent in both a minimal and realistic fashion.
+
+## Lessons
+
+When an agent makes a mistake that a rule would have prevented, add that rule here as one line.

@@ -26,6 +26,8 @@ Nothing retries a test and nothing sets one aside. A test that fails sometimes i
 
 `<type>/<short-description>`, lowercase, using a type from the table below. For example, `fix/duplicate-orders` or `feat/csv-export`.
 
+An AI agent names its branch `agent/<tool>/<issue#>-<slug>` instead, such as `agent/claude/123-tray-overflow`, as [AGENTS.md](AGENTS.md#parallel-work) describes.
+
 ### PR title
 
 A [Conventional Commit](https://www.conventionalcommits.org) in plain language: `<type>(<optional scope>): <what changed>`, starting lowercase. For example, `fix(api): retries no longer duplicate orders`.
