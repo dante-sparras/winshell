@@ -14,7 +14,7 @@ public sealed class RecentDocuments
 
     private readonly string _folder;
 
-    public RecentDocuments()
+    internal RecentDocuments()
         : this(Environment.GetFolderPath(Environment.SpecialFolder.Recent))
     {
     }

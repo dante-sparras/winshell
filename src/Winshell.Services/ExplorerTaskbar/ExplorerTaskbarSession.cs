@@ -5,7 +5,7 @@ namespace Winshell.ExplorerTaskbar;
 /// never looks at Explorer's windows. <see cref="Restore"/> is safe to call again, including after a crash handler
 /// and the process exit have both run.
 /// </summary>
-public sealed class ExplorerTaskbarSession : IDisposable
+internal sealed class ExplorerTaskbarSession : IDisposable
 {
     private readonly Func<IExplorerTaskbar> _create;
     private readonly object _gate = new();

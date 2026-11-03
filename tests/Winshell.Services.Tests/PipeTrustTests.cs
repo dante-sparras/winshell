@@ -140,7 +140,7 @@ public class PipeTrustTests
     {
         public bool Killed { get; private set; }
 
-        public IIpcTargets Ipc { get; } = new ShellIpc(Log.Default);
+        public ShellIpc Ipc { get; } = new ShellIpc(Log.Default);
 
         public string? Reload(string? program) => null;
 
