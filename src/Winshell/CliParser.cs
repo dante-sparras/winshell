@@ -8,11 +8,11 @@ internal static class CliParser
     {
         args = WithoutAfter(args, out var after);
         var command = FirstCommand(args);
-        // Help wins over validation and execution. Arguments after -- or an IPC function are data.
-        if (HelpRequested(args))
-            return new CliOptions { Command = command, ShowHelp = true };
         if (command is not null && !Commands.Contains(command))
             throw UnknownCommand(command);
+        // Help wins over the rest of validation and execution. Arguments after -- or an IPC function are data.
+        if (HelpRequested(args))
+            return new CliOptions { Command = command, ShowHelp = true };
 
         var rest = command is null ? args : WithoutToken(args, command);
         var options = ParseOptions(rest, command);
@@ -30,7 +30,7 @@ internal static class CliParser
                 return new CliOptions { Command = topic, ShowHelp = true };
             case "log":
                 break;
-            // ipc and inspect check the rest of their words themselves.
+            // ipc and inspect check the words after their first themselves.
             case "ipc" or "inspect":
                 if (positional.Length > 0 && !Subcommands(command).Contains(positional[0]))
                     throw new ArgumentException($"Unknown {command} command \"{positional[0]}\". Run winshell {command} --help.");
@@ -50,8 +50,10 @@ internal static class CliParser
         };
     }
 
+    /// <summary>The cases <see cref="Cli.RunAsync"/> runs.</summary>
     private static readonly string[] Commands = ["run", "list", "kill", "reload", "log", "ipc", "inspect", "dev", "doctor", "help"];
 
+    /// <summary>The first words <see cref="Winshell.Commands.IpcCommand"/> and <see cref="Winshell.Commands.InspectCommand"/> take.</summary>
     private static string[] Subcommands(string command) => command switch
     {
         "ipc" => ["show", "call", "prop", "wait", "listen"],

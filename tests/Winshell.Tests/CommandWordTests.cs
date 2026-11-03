@@ -10,7 +10,7 @@ public class CommandWordTests
     [InlineData("foo bar", "foo")]
     [InlineData("-v foo bar", "foo")]
     [InlineData("msg notes add", "msg")]
-    [InlineData("help foo", "foo")]
+    [InlineData("foo --help", "foo")]
     public void An_unknown_command_is_named_even_with_words_after_it(string line, string word)
     {
         var e = Assert.Throws<ArgumentException>(() => CliParser.Parse(line.Split(' ')));
@@ -32,8 +32,7 @@ public class CommandWordTests
     [Theory]
     [InlineData("help kill", "kill")]
     [InlineData("help ipc", "ipc")]
-    [InlineData("help", null)]
-    public void Help_with_a_command_is_that_command_s_help(string line, string? command)
+    public void Help_with_a_command_is_that_command_s_help(string line, string command)
     {
         var options = CliParser.Parse(line.Split(' '));
 
@@ -42,10 +41,18 @@ public class CommandWordTests
     }
 
     [Fact]
-    public void Help_takes_one_command()
+    public void Help_alone_is_help()
     {
-        var e = Assert.Throws<ArgumentException>(() => CliParser.Parse(["help", "kill", "log"]));
+        Assert.True(CliParser.Parse(["help"]).ShowHelp);
+    }
 
-        Assert.Equal("Unexpected argument \"log\".", e.Message);
+    [Theory]
+    [InlineData("help foo", "Unknown command \"foo\". Run winshell --help.")]
+    [InlineData("help kill log", "Unexpected argument \"log\".")]
+    public void Help_takes_one_command_it_knows(string line, string message)
+    {
+        var e = Assert.Throws<ArgumentException>(() => CliParser.Parse(line.Split(' ')));
+
+        Assert.Equal(message, e.Message);
     }
 }

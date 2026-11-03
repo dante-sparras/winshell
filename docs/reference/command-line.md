@@ -1,6 +1,6 @@
 # Command line
 
-`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command, and so does `winshell help <command>`. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
+`winshell` talks to the instances that are running and checks this PC's setup. `winshell run` starts a shell. `winshell` with no arguments prints this summary, and so does `winshell --help`. `winshell <command> --help`, `-h` or `/?` prints that command's usage and does not run the command, and so does `winshell help <command>`. A word that is not a command prints `Unknown command "<name>". Run winshell --help.`, whatever follows it, and a first word after `ipc` or `inspect` that is not one of theirs prints `Unknown ipc command "<name>". Run winshell ipc --help.`, or the same for `inspect`. Both exit with code 2. `winshellw`, and `winshell` with only the options under [Run a shell](#run-a-shell), still start a shell. That is how the Start tile and the sign-in entry launch it.
 
 ```text
 winshell run [options]              start a shell
@@ -49,7 +49,7 @@ A failure before that log exists, such as no project and no default shell to run
 
 A build that fails prints why and does not start a program. `Building a configuration needs the .NET SDK, from https://dot.net/download.` is the message when the SDK is missing. A downloaded `.csproj`, or a `.props` or `.targets` beside it, is refused before the build: the file name, then `was downloaded from the internet. It runs as you.`
 
-Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2. So is a command winshell does not have, whatever follows it: `Unknown command "<name>". Run winshell --help.` A first word after `ipc` or `inspect` that is not one of theirs prints `Unknown ipc command "<name>". Run winshell ipc --help.`, or the same for `inspect`.
+Any other option is an error. The command prints `Unknown option "<name>".` and exits with code 2.
 
 ## Pick an instance
 
