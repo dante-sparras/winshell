@@ -36,7 +36,7 @@ public sealed partial class SettingsView : UserControl
     private readonly SettingsPinsPage _pins;
     private bool _applying;
     private string _crumbs = "";
-    private string _shown = "";
+    private SettingsBody? _shown;
 
     public SettingsView(Preferences preferences, Shell shell, Start start, QuickSettingsLayout layout, Hotkey startHotkey, Hotkey settingsHotkey)
     {
@@ -195,25 +195,23 @@ public sealed partial class SettingsView : UserControl
 
     private void Sync(bool scroll)
     {
-        var searching = _navigation.Searching;
-        var pins = !searching && _navigation.Page == "start" && _navigation.Subpage == "pins";
+        var shown = _navigation.Shown;
         foreach (var (key, page) in _pages)
-            page.Visibility = !searching && !pins && key == _navigation.Page ? Visibility.Visible : Visibility.Collapsed;
-        _pins.Visibility = pins ? Visibility.Visible : Visibility.Collapsed;
+            page.Visibility = shown == new SettingsBody(key, "") ? Visibility.Visible : Visibility.Collapsed;
+        _pins.Visibility = shown == new SettingsBody("start", "pins") ? Visibility.Visible : Visibility.Collapsed;
 
         _applying = true;
         if (Search.Text != _navigation.Query)
             Search.Text = _navigation.Query;
-        Nav.SelectedItem = searching ? null : _items.Find(item => item.Tag as string == _navigation.Page);
+        Nav.SelectedItem = _navigation.Searching ? null : _items.Find(item => item.Tag as string == _navigation.Page);
         _applying = false;
 
         RebuildCrumbs();
         RebuildResults();
 
-        var token = searching ? "search" : $"{_navigation.Page}/{_navigation.Subpage}";
-        var changed = token != _shown;
-        _shown = token;
-        if (changed && token == "startup/")
+        var changed = shown != _shown;
+        _shown = shown;
+        if (changed && shown == new SettingsBody("startup", ""))
             _startup.RefreshFromWindows();
         if (scroll && changed)
             Scroll.ChangeView(null, 0, null, true);

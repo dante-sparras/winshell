@@ -18,6 +18,9 @@ public sealed class SettingsNavigation
 
     public bool Searching => Query.Trim().Length > 0;
 
+    /// <summary>The page the body shows, or its subpage in place of it. Null while the search results show.</summary>
+    public SettingsBody? Shown => Searching ? null : new SettingsBody(Page, Subpage);
+
     public IReadOnlyList<SettingsCrumb> Crumbs
     {
         get
@@ -69,3 +72,6 @@ public sealed class SettingsNavigation
         FocusKey = null;
     }
 }
+
+/// <summary>A page of Winshell Settings, and its subpage when one is open. An empty subpage is the page itself.</summary>
+public sealed record SettingsBody(string Page, string Subpage);

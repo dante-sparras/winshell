@@ -89,6 +89,25 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void Shown_is_the_page_or_its_subpage_and_clearing_a_search_goes_back_to_it()
+    {
+        var navigation = new SettingsNavigation();
+        Assert.Equal(new SettingsBody("personalization", ""), navigation.Shown);
+
+        navigation.Show("start", "pins");
+        Assert.Equal(new SettingsBody("start", "pins"), navigation.Shown);
+
+        navigation.Search("mica");
+        Assert.Null(navigation.Shown);
+
+        navigation.Search("");
+        Assert.Equal(new SettingsBody("start", "pins"), navigation.Shown);
+
+        Assert.True(navigation.Open("runAtSignIn"));
+        Assert.Equal(new SettingsBody("startup", ""), navigation.Shown);
+    }
+
+    [Fact]
     public void A_wrong_scheme_or_accent_shows_the_Windows_choice_and_stays_in_the_file()
     {
         var path = Path.Combine(_folder, "preferences.toml");
