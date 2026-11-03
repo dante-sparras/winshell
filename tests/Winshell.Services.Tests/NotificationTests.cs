@@ -503,7 +503,7 @@ public sealed class NotificationTests
         public Task<NotificationAccessStatus> RequestAccessAsync() =>
             AccessError is { } error ? Task.FromException<NotificationAccessStatus>(error) : Task.FromResult(NotificationAccessStatus.Allowed);
 
-        public Task<NotificationSnapshot> ReadAsync() => Next?.Task ?? Task.FromResult(Current);
+        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation) => Next?.Task ?? Task.FromResult(Current);
 
         public void Dismiss(uint id)
         {
