@@ -124,7 +124,7 @@ public class Network : ObservableObject
     /// <summary>Deletes the saved Wi-Fi profile whose name is this SSID.</summary>
     public void Forget() => _ = ForgetAsync();
 
-    // Windows answers these two before it returns, so they wait off the calling thread.
+    // These two block until Windows answers, so they run off the calling thread.
     internal Task DisconnectAsync() => RunAsync(() => Task.Run(() =>
     {
         if (Device.Type != DeviceType.Wifi || !Device.Backend.Disconnect(Device.NativeId))

@@ -502,6 +502,7 @@ public sealed class NetworkingServiceTests
             var cancellation = TestContext.Current.CancellationToken;
             await Task.Run(() => { running = action == "disconnect" ? network.DisconnectAsync() : network.ForgetAsync(); }, cancellation)
                 .WaitAsync(TimeSpan.FromSeconds(5), cancellation);
+            Assert.False(running!.IsCompleted); // Set by the call that just returned.
             Assert.True(network.Busy);
         }
         finally
@@ -509,7 +510,7 @@ public sealed class NetworkingServiceTests
             windows.Set();
         }
 
-        await running!; // Set by the call that just returned.
+        await running;
         session.Loop.Process();
         Assert.False(network.Busy);
         Assert.Equal("", network.Error);
