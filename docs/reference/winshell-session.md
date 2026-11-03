@@ -25,4 +25,3 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `RunAtSignIn` | bool | Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry, and setting it when the entry starts another `winshell.exe` points the entry here. |
 | `TurnedOffInWindows` | bool, read-only | True when the entry is there but Windows' Startup apps page turned it off. Only that page can turn it back on. |
 | `Refresh()` | void | Reads the entry again, after the user may have changed it in Windows. |
-

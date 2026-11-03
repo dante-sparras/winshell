@@ -18,8 +18,13 @@ public sealed record CaptureTarget(nint Window, string MonitorId)
         return new(window.Hwnd, "") { Source = window };
     }
 
+    /// <summary>
+    /// Lets an <see cref="AppWindow"/> be assigned where a target is expected, as <see cref="ForWindow(AppWindow)"/>
+    /// does.
+    /// </summary>
     public static implicit operator CaptureTarget(AppWindow window) => ForWindow(window);
 
+    /// <summary>A whole screen, by its <see cref="ScreenInfo.Id"/>.</summary>
     public static CaptureTarget ForScreen(ScreenInfo screen) => new(0, screen.Id);
 }
 

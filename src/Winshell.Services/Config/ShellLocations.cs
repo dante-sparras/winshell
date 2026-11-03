@@ -32,6 +32,4 @@ internal static class ShellLocations
 
     /// <summary>Crash reports, one text file each. They stay on this PC.</summary>
     public static string CrashRoot => Path.Combine(LocalRoot, "crashes");
-
-    /// <summary>The shell written out when the user has no configuration yet.</summary>
 }

@@ -39,6 +39,9 @@ internal sealed class ShellNotices : IDisposable
     private IDisposable? _window;
     private bool _disposed;
 
+    /// <param name="loop">The shell's loop. Notices show and close on it, whatever thread wrote the report.</param>
+    /// <param name="log">Where each notice, and a notice that could not be shown, is written.</param>
+    /// <param name="crashes">The crash reports. One the shell survives shows a notice.</param>
     /// <param name="show">Shows a notice, given what its button does and what closing it does. Disposing takes it away.</param>
     /// <param name="open">Opens a file: the project that did not build, or a crash report.</param>
     public ShellNotices(IEventLoop loop, Log log, CrashReports crashes, Func<Notice, Action, Action, IDisposable> show, Action<string> open)

@@ -10,10 +10,10 @@ The icon a balloon notification asked for, from its `NIIF_` flags.
 
 | Value | Number | Description |
 | --- | --- | --- |
-| `None` | 0 |  |
-| `Info` | 1 |  |
-| `Warning` | 2 |  |
-| `Error` | 3 |  |
+| `None` | 0 | No icon. |
+| `Info` | 1 | The information icon. |
+| `Warning` | 2 | The warning icon. |
+| `Error` | 3 | The error icon. |
 | `App` | 4 | The app's own icon. |
 
 ## SystemTray
@@ -24,7 +24,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Items` | ObservableCollection of [SystemTrayItem](#systemtrayitem), read-only |  |
+| `Items` | ObservableCollection of [SystemTrayItem](#systemtrayitem), read-only | The icons apps show, in the order they were added. Empty while another instance has the tray. |
 | `Dispose()` | void | Gives the notification area up. Call on the loop's thread. |
 
 ## SystemTrayItem
@@ -39,18 +39,18 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Executable` | string, read-only | The full path of the program that added the icon. |
 | `Icon` | [PixelImage](winshell.md#pixelimage)?, read-only | The icon as the app set it, at the size it chose. It changes when the app changes the icon. |
 | `Id` | string, read-only | The program's file name without its extension. |
-| `Menu` | [SystemTrayMenu](#systemtraymenu), read-only |  |
+| `Menu` | [SystemTrayMenu](#systemtraymenu), read-only | The icon's menu, which the app draws itself. |
 | `Overflow` | bool, read-only | Windows shows this icon in the hidden icons flyout, not in the taskbar. Users choose in Settings. |
 | `ProcessId` | int, read-only | The process that added the icon, the owner of the window its clicks go to. |
 | `Tooltip` | string, read-only | The icon's tooltip, which may run over several lines. |
-| `Balloon` | Action of string, string, [BalloonIcon](#balloonicon) |  |
-| `Ready` | Action |  |
+| `Balloon` | Action of string, string, [BalloonIcon](#balloonicon) | The app showed a balloon notification: its title, its text and its icon. Explorer still shows it as a toast. |
+| `Ready` | Action | Raised once, just after the icon is added to SystemTray.Items. |
 | `Click()` | void | A left click at the cursor, which most apps answer by showing their window. |
 | `Display()` | void | A right click, which asks the app to open its menu at the cursor. |
 | `Display(int x, int y)` | void | A right click, which asks the app to open its menu at a point on the virtual desktop, in physical pixels. |
 | `DoubleClick()` | void | A double click at the cursor, which many older apps need before they show their window. |
 | `IconAt(int size)` | [PixelImage](winshell.md#pixelimage)? | The icon at a size in pixels, for the screen's scale. An icon loaded from a resource is drawn again at that size. Any other is the app's own bitmap, at the size it chose. |
-| `MiddleClick()` | void |  |
+| `MiddleClick()` | void | A middle click at the cursor. What it does is up to the app. |
 
 ## SystemTrayMenu
 
@@ -60,4 +60,3 @@ An app's tray menu. The app draws it; Display asks the app to open it.
 | --- | --- | --- |
 | `Display()` | void | Opens the menu at the cursor. |
 | `Display(int x, int y)` | void | Opens the menu at a point on the virtual desktop, in physical pixels. |
-

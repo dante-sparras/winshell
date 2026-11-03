@@ -10,23 +10,31 @@ public sealed class NetworkProfile : ObservableObject
 
     internal NetworkProfile(NetworkProfileInfo info) => _info = info;
 
+    /// <summary>The adapter's ID and the profile's name, joined by a colon.</summary>
     public string Id => _info.Id;
 
+    /// <summary>The profile's name, as Windows shows the connection. For Wi-Fi it is usually the SSID.</summary>
     public string Name => _info.Name;
 
+    /// <summary>The <see cref="NetworkDevice.Id"/> of the adapter the profile is on.</summary>
     public string AdapterId => _info.AdapterId.ToString();
 
+    /// <summary>What this connection can reach.</summary>
     public NetworkConnectivity Connectivity => _info.Connectivity;
 
+    /// <summary>How this connection's data is charged.</summary>
     public NetworkCost Cost => _info.Cost;
 
     /// <summary>True for a fixed or variable cost, roaming, or an exceeded data limit.</summary>
     public bool Metered => IsMetered(_info);
 
+    /// <summary>Whether the connection is roaming, outside its provider's own network.</summary>
     public bool Roaming => _info.Roaming;
 
+    /// <summary>Whether the connection has used more data than its plan's limit.</summary>
     public bool OverDataLimit => _info.OverDataLimit;
 
+    /// <summary>Whether Windows reports a signal for this connection. False for a wired one.</summary>
     public bool SignalAvailable => _info.SignalStrength.HasValue;
 
     /// <summary>The signal strength, from 0 to 1. 0 when <see cref="SignalAvailable"/> is false.</summary>
@@ -74,20 +82,31 @@ public class Network : ObservableObject
     /// <summary>The SSID of a Wi-Fi network. For a wired network, the connection profile's name, or the adapter's.</summary>
     public string Name => _info.Name;
 
+    /// <summary>The adapter this network is on.</summary>
     public NetworkDevice Device { get; }
 
+    /// <summary>Whether the adapter is connected to this network.</summary>
     public bool Connected => _info.State == ConnectionState.Connected;
 
     /// <summary>A saved profile matches this network. True for a wired network.</summary>
     public bool Saved => _info.Known;
 
+    /// <summary>
+    /// The adapter's connection state on this network. <see cref="ConnectionState.Disconnected"/> for every Wi-Fi
+    /// network the adapter is not on.
+    /// </summary>
     public ConnectionState State => _info.State;
 
     /// <summary>An action is running. Other calls are ignored until it ends.</summary>
     public bool Busy => _busy;
 
+    /// <summary>Why the last action failed. Empty while an action runs and after one succeeds.</summary>
     public string Error => _error;
 
+    /// <summary>
+    /// The saved Wi-Fi profiles for this network: those whose SSID is its name, and those that can't be read whose
+    /// profile name is. Empty for a wired network.
+    /// </summary>
     public ObservableCollection<WifiProfile> SavedProfiles { get; } = [];
 
     /// <summary>Connects to this Wi-Fi network with saved credentials. Fails for a wired network.</summary>
@@ -96,6 +115,10 @@ public class Network : ObservableObject
     /// <summary>Connects with a saved profile of this network. The next snapshot reports whether the adapter associated.</summary>
     public void ConnectWithProfile(WifiProfile? profile) => _ = ConnectProfileAsync(profile);
 
+    /// <summary>
+    /// Disconnects this network's Wi-Fi adapter. Fails for a wired network, and until
+    /// <see cref="NetworkingService.RequestAccess"/> is allowed.
+    /// </summary>
     public void Disconnect() => _ = RunAsync(() =>
     {
         if (Device.Type != DeviceType.Wifi || !Device.Backend.Disconnect(Device.NativeId))
@@ -190,6 +213,7 @@ public sealed class WifiNetwork : Network
     /// <summary>The signal strength, from 0 to 1.</summary>
     public double SignalStrength => Info.SignalStrength;
 
+    /// <summary>How the network is secured.</summary>
     public WifiSecurityType Security => Info.Security;
 
     /// <summary>Connects with a password, for a secured network that isn't saved. The password is not kept.</summary>
@@ -227,10 +251,13 @@ public sealed class WifiProfile : ObservableObject
 
     internal bool Removed { get; private set; }
 
+    /// <summary>The adapter's ID and the profile's name, joined by a colon.</summary>
     public string Id => _info.Id;
 
+    /// <summary>The profile's name in Windows. Usually the SSID, but it can differ.</summary>
     public string Name => _info.Name;
 
+    /// <summary>The SSID the profile connects to. Empty when <see cref="Loaded"/> is false.</summary>
     public string Ssid => _info.Ssid;
 
     /// <summary>
@@ -248,13 +275,21 @@ public sealed class WifiProfile : ObservableObject
         }
     }
 
+    /// <summary>
+    /// How the profile's network is secured. <see cref="WifiSecurityType.Unknown"/> when <see cref="Loaded"/> is
+    /// false.
+    /// </summary>
     public WifiSecurityType Security => _info.Security;
 
     /// <summary>Whether the profile has a key element. The key text is not read.</summary>
     public bool HasPassword => _info.HasPassword;
 
+    /// <summary>
+    /// Whether the profile could be read. When false, only <see cref="Id"/> and <see cref="Name"/> are set.
+    /// </summary>
     public bool Loaded => _info.Loaded;
 
+    /// <summary>Why the last change failed, or else why the profile can't be read. Empty when neither did.</summary>
     public string Error => ShownError;
 
     private string ShownError => _actionError.Length > 0 ? _actionError : _info.Error;
@@ -362,19 +397,28 @@ public abstract class NetworkDevice : ObservableObject
 
     internal bool Removed { get; private set; }
 
+    /// <summary>The adapter's interface GUID. <see cref="NetworkProfile.AdapterId"/> matches it.</summary>
     public string Id => _info.Id.ToString();
 
+    /// <summary>Whether the adapter is Wi-Fi or wired.</summary>
     public DeviceType Type => _info.Type;
 
+    /// <summary>The adapter's connection name, such as <c>Wi-Fi</c> or <c>Ethernet 2</c>.</summary>
     public string Name => _info.Name;
 
     /// <summary>For Wi-Fi, the networks of the last scan and the connected network, connected first, then strongest first.</summary>
     public ObservableCollection<Network> Networks { get; } = [];
 
+    /// <summary>The MAC address, as six uppercase hex pairs joined by colons.</summary>
     public string Address => _info.Address;
 
+    /// <summary>Whether the adapter is connected.</summary>
     public bool Connected => _info.State == ConnectionState.Connected;
 
+    /// <summary>
+    /// The adapter's connection state. A wired adapter is only <see cref="ConnectionState.Connected"/> or
+    /// <see cref="ConnectionState.Disconnected"/>.
+    /// </summary>
     public ConnectionState State => _info.State;
 
     internal virtual void Update(NetworkDeviceInfo info)
@@ -411,10 +455,13 @@ public sealed class WifiDevice : NetworkDevice
     /// <summary>A scan failed.</summary>
     public event Action<string>? OperationFailed;
 
+    /// <summary>The adapter's 802.11 mode.</summary>
     public WifiDeviceMode Mode => Info.Mode;
 
+    /// <summary>Whether a scan is running. <see cref="Scan"/> does nothing until it ends.</summary>
     public bool Scanning => _scanning;
 
+    /// <summary>Why the last scan failed. Empty while a scan runs and after one succeeds.</summary>
     public string Error => _error;
 
     /// <summary>Scans once and updates <see cref="NetworkDevice.Networks"/>. Needs <see cref="NetworkingService.RequestAccess"/> first.</summary>
@@ -465,6 +512,7 @@ public sealed class WiredDevice : NetworkDevice
     /// <summary>The link speed in Mbps. 0 without a link.</summary>
     public int LinkSpeed => (int)Math.Min(int.MaxValue, Info.LinkSpeed);
 
+    /// <summary>Whether the adapter has a link, such as a plugged-in cable.</summary>
     public bool HasLink => Info.HasLink;
 
     internal override void Update(NetworkDeviceInfo info)
@@ -503,10 +551,15 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     /// <summary>An access request or a radio change failed.</summary>
     public event Action<string>? OperationFailed;
 
+    /// <summary>The PC's Wi-Fi and Ethernet adapters. Virtual adapters, VPNs and Bluetooth are left out.</summary>
     public ObservableCollection<NetworkDevice> Devices { get; } = [];
 
+    /// <summary>The Windows connection profiles that are on an adapter now.</summary>
     public ObservableCollection<NetworkProfile> Profiles { get; } = [];
 
+    /// <summary>
+    /// Whether the first read has finished. False again while the last read failed, and <see cref="Error"/> says why.
+    /// </summary>
     public bool Ready => _snapshot.Ready;
 
     /// <summary>
@@ -519,21 +572,36 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         set => _ = SetWifiEnabledAsync(value);
     }
 
+    /// <summary>The state of the Wi-Fi radios, taken together.</summary>
     public WifiRadioState WifiState => _snapshot.WifiState;
 
+    /// <summary>Whether at least one Wi-Fi radio is on or off, not disabled, so software can turn it on.</summary>
     public bool WifiHardwareEnabled => _snapshot.WifiHardwareEnabled;
 
+    /// <summary>
+    /// Whether Windows lets Winshell scan and connect Wi-Fi. <see cref="NetworkAccessStatus.Unspecified"/> until
+    /// <see cref="RequestAccess"/> has an answer.
+    /// </summary>
     public NetworkAccessStatus AccessStatus => _snapshot.Access;
 
     /// <summary>Airplane mode, read from the registry on a best-effort basis.</summary>
     public AirplaneModeState AirplaneMode => _snapshot.AirplaneMode;
 
+    /// <summary>
+    /// What the connection Windows uses for the internet can reach. <see cref="NetworkConnectivity.None"/> without
+    /// such a connection.
+    /// </summary>
     public NetworkConnectivity Connectivity => _snapshot.Connectivity;
 
+    /// <summary>Why the last read, access request or Wi-Fi radio change failed. Empty when none did.</summary>
     public string Error => _error;
 
+    /// <summary>
+    /// Whether an access request is waiting for Windows. <see cref="RequestAccess"/> does nothing until it ends.
+    /// </summary>
     public bool RequestingAccess => _requesting;
 
+    /// <summary>Reads the adapters, profiles, radios and connectivity again soon.</summary>
     public void Refresh() => _backend.Refresh();
 
     /// <summary>Asks Windows for Wi-Fi access, which may show consent UI. Call it from a user action.</summary>
@@ -625,6 +693,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     private NetworkDevice CreateDevice(NetworkDeviceInfo info) =>
         info.Type == DeviceType.Wifi ? new WifiDevice(info, _loop, _backend) : new WiredDevice(info, _loop, _backend);
 
+    /// <summary>Stops following network changes. Its devices, networks and profiles then ignore actions.</summary>
     public void Dispose()
     {
         _disposed = true;

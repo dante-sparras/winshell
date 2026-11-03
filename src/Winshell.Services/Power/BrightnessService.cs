@@ -19,16 +19,28 @@ public sealed class BrightnessMonitor : ObservableObject
         _log = log;
     }
 
+    /// <summary>
+    /// The name Windows knows the monitor by: a WMI instance name for a built-in panel, a display name like
+    /// <c>\\.\DISPLAY1</c> for an external monitor.
+    /// </summary>
     public string DeviceName => _info.DeviceName;
 
+    /// <summary>The monitor's model name, or its Windows device name when the monitor reports no model.</summary>
     public string Name => _info.Name;
 
+    /// <summary>Whether the monitor is a built-in panel or an external monitor.</summary>
     public BrightnessConnection Connection => _info.Connection;
 
+    /// <summary>The lowest brightness the monitor accepts.</summary>
     public int Minimum => _info.Minimum;
 
+    /// <summary>The highest brightness the monitor accepts, often 100.</summary>
     public int Maximum => _info.Maximum;
 
+    /// <summary>
+    /// The brightness, from <see cref="Minimum"/> to <see cref="Maximum"/>. A value set outside that range is clamped
+    /// to it. A write Windows refuses is logged, and the next read shows the brightness the monitor has.
+    /// </summary>
     public int Brightness
     {
         get => _requested ?? _info.Current;
@@ -79,8 +91,10 @@ public sealed class BrightnessService : ObservableObject, IDisposable
         _subscription = source.Subscribe(s => loop.Post(() => Apply(s)));
     }
 
+    /// <summary>The connected monitors whose brightness Windows can read. Empty until <see cref="Ready"/>.</summary>
     public ObservableCollection<BrightnessMonitor> Monitors { get; } = [];
 
+    /// <summary>Whether the first read of the monitors has finished.</summary>
     public bool Ready => _ready;
 
     private void Apply(BrightnessSnapshot snapshot)
@@ -91,6 +105,7 @@ public sealed class BrightnessService : ObservableObject, IDisposable
         Set(ref _ready, snapshot.Ready, nameof(Ready));
     }
 
+    /// <summary>Stops following brightness changes.</summary>
     public void Dispose()
     {
         _disposed = true;

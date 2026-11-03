@@ -15,6 +15,7 @@ public sealed class KeepAwake : ObservableObject, IDisposable
     private bool _enabled;
     private nint _request;
 
+    /// <summary>Creates a keep-awake that is off until <see cref="Enabled"/> is set.</summary>
     public KeepAwake()
         : this(Log.Default)
     {
@@ -22,6 +23,7 @@ public sealed class KeepAwake : ObservableObject, IDisposable
 
     internal KeepAwake(Log log) => _log = log;
 
+    /// <summary>Whether this keep-awake holds the screen on and the PC awake. False by default.</summary>
     public bool Enabled
     {
         get => _enabled;
@@ -79,5 +81,6 @@ public sealed class KeepAwake : ObservableObject, IDisposable
     private void Fail(string step) =>
         _log.Warn("power", $"Cannot {step} the power request: Windows error {Marshal.GetLastPInvokeError()}");
 
+    /// <summary>Turns this keep-awake off, so it no longer holds the PC awake.</summary>
     public void Dispose() => Enabled = false;
 }

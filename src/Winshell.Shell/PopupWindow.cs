@@ -8,6 +8,10 @@ public sealed class PopupWindow : ShellWindow
     private Rect _rect = new(0, 0, 100, 100);
     private bool _grabFocus;
 
+    /// <summary>
+    /// A hidden popup of the running shell, 100 by 100 at the virtual desktop's origin until
+    /// <see cref="PopupWindow.Rect"/> is set.
+    /// </summary>
     public PopupWindow()
         : this(Shell.Current)
     {

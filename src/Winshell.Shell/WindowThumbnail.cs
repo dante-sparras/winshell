@@ -42,6 +42,9 @@ public sealed class WindowThumbnail : FrameworkElement
     private ThumbnailPaint _applied;
     private bool _watching;
 
+    /// <summary>
+    /// A thumbnail with no window, which shows nothing. It takes no clicks, and screen readers skip it.
+    /// </summary>
     public WindowThumbnail()
     {
         IsHitTestVisible = false;
@@ -51,12 +54,17 @@ public sealed class WindowThumbnail : FrameworkElement
         SizeChanged += (_, _) => UpdateThumbnail();
     }
 
+    /// <summary>The app window to preview, from <see cref="WindowListService.Windows"/>. Null shows nothing.</summary>
     public AppWindow? Window
     {
         get => (AppWindow?)GetValue(WindowProperty);
         set => SetValue(WindowProperty, value);
     }
 
+    /// <summary>
+    /// While true, Windows shows <see cref="Window"/> at full size and hides the others. It stays off when the user
+    /// turned peek off, and it ends when this element unloads or the window goes.
+    /// </summary>
     public bool Peek
     {
         get => (bool)GetValue(PeekProperty);

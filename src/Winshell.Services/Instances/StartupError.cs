@@ -16,7 +16,10 @@ internal static partial class StartupError
     private const uint FileTypePipe = 3;
     private const uint FileTypeRemote = 0x8000;
 
-    /// <summary>Shows the message, and offers to open <paramref name="folder"/> when it is set. Tests replace this.</summary>
+    /// <summary>
+    /// Shows the message, the first argument, and offers to open the folder, the second, when it is set. Tests replace
+    /// this.
+    /// </summary>
     internal static Action<string, string?> Show = Dialog;
 
     /// <summary>Reads this process's console and reports <paramref name="message"/>.</summary>

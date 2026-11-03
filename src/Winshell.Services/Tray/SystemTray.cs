@@ -6,9 +6,13 @@ namespace Winshell.Tray;
 /// <summary>The icon a balloon notification asked for, from its <c>NIIF_</c> flags.</summary>
 public enum BalloonIcon
 {
+    /// <summary>No icon.</summary>
     None = 0,
+    /// <summary>The information icon.</summary>
     Info = 1,
+    /// <summary>The warning icon.</summary>
     Warning = 2,
+    /// <summary>The error icon.</summary>
     Error = 3,
     /// <summary>The app's own icon.</summary>
     App = 4,
@@ -43,6 +47,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
             loop.Post(StartHost);
     }
 
+    /// <summary>The icons apps show, in the order they were added. Empty while another instance has the tray.</summary>
     public ObservableCollection<SystemTrayItem> Items { get; } = [];
 
     private void StartHost()
@@ -165,6 +170,7 @@ public sealed class SystemTrayItem : ObservableObject
     /// <summary>Windows shows this icon in the hidden icons flyout, not in the taskbar. Users choose in Settings.</summary>
     public bool Overflow => _overflow;
 
+    /// <summary>The icon's menu, which the app draws itself.</summary>
     public SystemTrayMenu Menu { get; }
 
     /// <summary>
@@ -184,6 +190,7 @@ public sealed class SystemTrayItem : ObservableObject
     /// <summary>A double click at the cursor, which many older apps need before they show their window.</summary>
     public void DoubleClick() => _host.Click(_icon, TrayClick.Double, null);
 
+    /// <summary>A middle click at the cursor. What it does is up to the app.</summary>
     public void MiddleClick() => _host.Click(_icon, TrayClick.Middle, null);
 
     /// <summary>A right click, which asks the app to open its menu at the cursor.</summary>

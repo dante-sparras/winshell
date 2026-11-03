@@ -41,6 +41,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
 
     internal Shell Shell => _shell;
 
+    /// <summary>What the window shows: any <see cref="UIElement"/>, or null for nothing.</summary>
     public UIElement? Content
     {
         get => _content;
@@ -53,6 +54,10 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the window is shown. A new window is hidden until this is set. It turns false when the user closes the
+    /// window.
+    /// </summary>
     public bool Visible
     {
         get => _visible;
@@ -95,8 +100,10 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         }
     }
 
+    /// <summary>The width the window has now, in logical pixels. 0 before it is first shown.</summary>
     public double ActualWidth => _actualWidth;
 
+    /// <summary>The height the window has now, in logical pixels. 0 before it is first shown.</summary>
     public double ActualHeight => _actualHeight;
 
     /// <summary>How many physical pixels this window draws for one logical pixel.</summary>
@@ -127,6 +134,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         }
     }
 
+    /// <summary>The Windows 11 material behind the content. <see cref="WindowBackdrop.None"/> by default.</summary>
     public WindowBackdrop Backdrop
     {
         get => _backdrop;
@@ -137,6 +145,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         }
     }
 
+    /// <summary>How the window's corners are drawn. <see cref="WindowCorners.Default"/> by default.</summary>
     public WindowCorners Corners
     {
         get => _corners;
@@ -188,10 +197,19 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     /// <summary>Takes the keyboard, if this kind of window may.</summary>
     public void Focus() => _host?.SetKeyboardFocus(true);
 
+    /// <summary>Puts the window above the others at its level, without focusing it.</summary>
     public void Raise() => _host?.Raise();
 
+    /// <summary>
+    /// Lets the user move the window by dragging, as a title bar does. Call it when a pointer button goes down.
+    /// </summary>
     public void StartSystemMove() => _host?.StartSystemMove();
 
+    /// <summary>
+    /// Lets the user resize the window by dragging an edge or a corner, as its border does. Call it when a pointer
+    /// button goes down. Two adjacent edges, such as <c>Edges.Top | Edges.Left</c>, name a corner. Any other
+    /// combination resizes from the bottom-right corner.
+    /// </summary>
     public void StartSystemResize(Edges edges) => _host?.StartSystemResize(edges);
 
     /// <summary>A point in logical window coordinates, in physical pixels on the virtual desktop.</summary>
@@ -288,6 +306,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         }
     }
 
+    /// <summary>Closes the window for good and releases its native window. It can't be shown again.</summary>
     public void Dispose()
     {
         if (_disposed)

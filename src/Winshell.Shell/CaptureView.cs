@@ -31,6 +31,7 @@ public sealed class CaptureView : Panel
     private ShellWindow? _shell;
     private bool _watchingShell;
 
+    /// <summary>A view with no session, which shows nothing.</summary>
     public CaptureView()
     {
         Children.Add(_image);
@@ -38,12 +39,17 @@ public sealed class CaptureView : Panel
         Unloaded += (_, _) => OnUnloaded();
     }
 
+    /// <summary>The capture to show. Null shows nothing.</summary>
     public CaptureSession? Session
     {
         get => (CaptureSession?)GetValue(SessionProperty);
         set => SetValue(SessionProperty, value);
     }
 
+    /// <summary>
+    /// Asks for the frame's natural size, scaled down to fit <paramref name="availableSize"/> with its aspect ratio
+    /// kept. Zero without a frame.
+    /// </summary>
     protected override Size MeasureOverride(Size availableSize)
     {
         var size = Fit(Natural(), availableSize);
@@ -51,6 +57,7 @@ public sealed class CaptureView : Panel
         return size;
     }
 
+    /// <summary>Gives the frame all of <paramref name="finalSize"/>; the frame is fitted and centered in it.</summary>
     protected override Size ArrangeOverride(Size finalSize)
     {
         _image.Arrange(new Rect(0, 0, finalSize.Width, finalSize.Height));

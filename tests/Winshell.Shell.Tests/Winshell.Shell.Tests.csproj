@@ -9,6 +9,15 @@
     <SelfContained>true</SelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <!-- DocsTests compiles the reference generator as a library: the feature lets its #: lines through, and the
+       constant leaves out its top-level statements. -->
+  <PropertyGroup>
+    <Features>$(Features);FileBasedProgram</Features>
+    <DefineConstants>$(DefineConstants);REFERENCE_PAGES_LIBRARY</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\scripts\generate-reference.cs" Link="ReferencePages.cs" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Winshell.Shell\Winshell.Shell.csproj" />
     <ProjectReference Include="..\..\src\Winshell.DefaultShell\Winshell.DefaultShell.csproj" />

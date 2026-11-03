@@ -22,6 +22,9 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     private string _error = "";
     private bool _disposed;
 
+    /// <summary>
+    /// A stopped session with no target, which reads frames and raises its events on the loop's thread.
+    /// </summary>
     public CaptureSession(IEventLoop loop)
         : this(loop, () => new WindowsCaptureBackend())
     {
@@ -55,11 +58,13 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Whether a capture is in progress, from a successful <see cref="Start"/> until it stops.</summary>
     public bool Running => _backend is not null;
 
     /// <summary>The latest frame, in physical pixels, or null before one arrives and after a stop.</summary>
     public PixelImage? Frame => _frame;
 
+    /// <summary>Whether <see cref="Frame"/> holds a frame.</summary>
     public bool HasFrame => _frame is not null;
 
     /// <summary>Why the last start or export failed, or why a running capture failed. Empty after a successful start or export.</summary>
@@ -247,6 +252,10 @@ public sealed class CaptureSession : ObservableObject, IDisposable
             Target = null;
     }
 
+    /// <summary>
+    /// Stops capturing, drops the current frame, and stops watching the target window. <see cref="Start"/> returns
+    /// false after this.
+    /// </summary>
     public void Dispose()
     {
         _disposed = true;

@@ -36,6 +36,9 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     private IDisposable? _answer;
     private readonly List<nint> _eventHooks = [];
 
+    /// <param name="loop">The loop the host's events are raised on.</param>
+    /// <param name="log">Where the host writes its warnings.</param>
+    /// <param name="names">The window class, the taskbar class and the owner name; tests pass their own.</param>
     /// <param name="broadcast">Asks every app to add its icons again; <see cref="BroadcastTaskbarCreated"/> in a shell.</param>
     public TrayHost(IEventLoop loop, Log log, TrayNames names, Action broadcast)
     {

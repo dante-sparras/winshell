@@ -57,10 +57,14 @@ internal interface IDoctorFacts
     Doctor.CrashPeek PeekCrash(string path);
 }
 
+/// <summary>How a <see cref="DoctorCheck"/> came out.</summary>
 public enum CheckStatus
 {
+    /// <summary>Nothing is wrong.</summary>
     Pass,
+    /// <summary>Winshell runs, but something may not work as expected.</summary>
     Warn,
+    /// <summary>Something stops Winshell from working. <c>winshell doctor</c> exits with 1.</summary>
     Fail,
 }
 
@@ -74,8 +78,13 @@ internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, str
 /// What the doctor needs from <c>winshell.exe</c>: this executable, the config that would run (or why none would),
 /// the running instances and Winshell's folders.
 /// </summary>
+/// <param name="ExePath">The path of the running <c>winshell.exe</c>.</param>
+/// <param name="ConfigRoot">The config root: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> if set.</param>
 /// <param name="ConfigFile">The project file that runs, or null when Winshell would run its default shell, or cannot pick one.</param>
 /// <param name="ConfigProblem">Why no config can be picked, such as several configs and no <c>-c</c>; null when one can.</param>
+/// <param name="Instances">The running Winshell instances.</param>
+/// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
+/// <param name="CrashRoot">The folder of crash reports, under <paramref name="LocalRoot"/>.</param>
 /// <param name="ProjectRoot">The folder <see cref="Doctor.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
 internal sealed record DoctorContext(
     string ExePath,
@@ -88,14 +97,14 @@ internal sealed record DoctorContext(
     string? ProjectRoot = null);
 
 /// <summary>
-/// Checks this PC's setup for Winshell. Each check reads what it needs through <see cref="IDoctorFacts"/> and judges
-/// it here, so the judging is tested without the PC. Nothing is changed: no prompt, no registry or settings write,
-/// no instance started or stopped, and no build. Telling whether a folder can be written makes and removes one empty
-/// file. The user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so
-/// what it prints can go into a bug report without the Windows user name.
+/// Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance
+/// started or stopped, and no build. Telling whether a folder can be written makes and removes one empty file. The
+/// user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so what it
+/// prints can go into a bug report without the Windows user name.
 /// </summary>
 public static class Doctor
 {
+    // Each check reads what it needs through IDoctorFacts and judges it here, so the judging is tested without the PC.
     internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
@@ -168,6 +177,10 @@ public static class Doctor
 
     // Windows
 
+    /// <param name="build">The Windows build number, such as 26100.</param>
+    /// <param name="revision">The update revision, the number after the build's dot.</param>
+    /// <param name="displayVersion">The version name, such as <c>24H2</c>; null or empty leaves it out.</param>
+    /// <param name="server">Whether this is Windows Server.</param>
     /// <param name="transparencyOff">Whether Windows transparency effects are off. The message says so. The result does not change.</param>
     /// <param name="contrastTheme">Whether a contrast theme is on. The message says so. The result does not change.</param>
     internal static DoctorCheck Windows(int build, int revision, string? displayVersion, bool server = false, bool transparencyOff = false, bool contrastTheme = false)
@@ -323,6 +336,8 @@ public static class Doctor
 
     // Folders
 
+    /// <param name="folders">Each folder to write: its name in the message, its path, whether it is writable.</param>
+    /// <param name="elevatedInstances">The ids of the running instances that run as administrator.</param>
     /// <param name="asAdministrator">Whether the doctor itself runs as administrator, and so says what an administrator can write.</param>
     internal static DoctorCheck Folders(IReadOnlyList<(string Name, string Path, bool Writable)> folders, IReadOnlyList<string> elevatedInstances, bool asAdministrator = false)
     {
@@ -505,6 +520,10 @@ public static class Doctor
         }
     }
 
+    /// <param name="command">The command line of the sign-in entry, or null when there is none.</param>
+    /// <param name="turnedOff">Whether Startup apps in Windows turned the entry off.</param>
+    /// <param name="thisExe">The path of the running <c>winshell.exe</c>.</param>
+    /// <param name="exists">Whether a file exists.</param>
     /// <param name="resolve">The file a path names in the end, past links: a winget install starts through one.</param>
     internal static DoctorCheck SignIn(string? command, bool turnedOff, string thisExe, Func<string, bool> exists, Func<string, string>? resolve = null)
     {
@@ -711,6 +730,7 @@ public static class Doctor
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>The status as <c>winshell doctor</c> writes it: <c>pass</c>, <c>warn</c> or <c>fail</c>.</summary>
     public static string StatusName(CheckStatus status) => status switch
     {
         CheckStatus.Pass => "pass",

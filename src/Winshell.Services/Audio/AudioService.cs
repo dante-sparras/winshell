@@ -68,6 +68,7 @@ public sealed class AudioNode : ObservableObject
     /// </summary>
     public IReadOnlyDictionary<string, string> Properties => _node.Properties;
 
+    /// <summary>Whether the device or session is muted. Setting it mutes or unmutes it in Windows.</summary>
     public bool Muted
     {
         get => _muted;
@@ -216,6 +217,7 @@ public sealed class AudioService : ObservableObject, IDisposable
         Set(ref _defaultRecording, Find(_graph.DefaultRecording), nameof(DefaultRecordingDevice));
     }
 
+    /// <summary>Stops following Windows audio changes. Peak monitors on its nodes stop reading.</summary>
     public void Dispose()
     {
         _graph.NodeAdded -= OnNodeChanged;

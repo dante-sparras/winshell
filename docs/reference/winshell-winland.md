@@ -11,8 +11,8 @@ One line of the event stream.
 | Member | Type | Description |
 | --- | --- | --- |
 | `WinlandEvent(string Name, string Data)` | constructor |  |
-| `Data` | string, init |  |
-| `Name` | string, init |  |
+| `Data` | string, init | The text after `>>`. |
+| `Name` | string, init | The event's name, before `>>`, such as `workspacev2`. |
 | `Parse(int argumentCount)` | IReadOnlyList of string | Splits Data at commas into that many strings. The last keeps any further commas, and missing ones are empty. |
 
 ## WinlandMonitor
@@ -24,16 +24,16 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | Member | Type | Description |
 | --- | --- | --- |
 | `ActiveWorkspace` | [WinlandWorkspace](#winlandworkspace)?, read-only | The Workspace shown on the Monitor, or null. |
-| `Description` | string, read-only |  |
-| `Focused` | bool, read-only | Whether this is FocusedMonitor. |
-| `Height` | int, read-only |  |
+| `Description` | string, read-only | The Monitor's make, model and serial number, joined by spaces, or its friendly name when it reports no model or serial. A `desc:` rule in Winland's config matches this. |
+| `Focused` | bool, read-only | Whether this is WinlandService.FocusedMonitor. |
+| `Height` | int, read-only | The height in physical pixels. |
 | `Id` | int, read-only | Winland's number for the Monitor. -1 until Winland reports it. |
 | `LastIpcObject` | JsonElement?, read-only | The Monitor's entry from Winland's last monitor list. Null before the first one. |
 | `Name` | string, read-only | The Windows display name, such as `\\.\DISPLAY1`, which is the screen's id. |
-| `Scale` | double, read-only |  |
-| `Width` | int, read-only |  |
-| `X` | int, read-only |  |
-| `Y` | int, read-only |  |
+| `Scale` | double, read-only | The Monitor's DPI divided by 96, such as 1.5 at 150%. |
+| `Width` | int, read-only | The width in physical pixels. |
+| `X` | int, read-only | The left edge on the virtual screen, in physical pixels. |
+| `Y` | int, read-only | The top edge on the virtual screen, in physical pixels. |
 
 ## WinlandService
 
@@ -43,24 +43,24 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ActiveWindow` | [WinlandWindow](#winlandwindow)?, read-only |  |
+| `ActiveWindow` | [WinlandWindow](#winlandwindow)?, read-only | The window that has the focus in Winland, or null when none does. |
 | `ConfigPath` | string?, read-only | The full path of the config Winland read, as its `files` request reports it. Null while no Winland answers, and for a Winland too old to answer `files`. |
-| `FocusedMonitor` | [WinlandMonitor](#winlandmonitor)?, read-only |  |
-| `FocusedWorkspace` | [WinlandWorkspace](#winlandworkspace)?, read-only |  |
+| `FocusedMonitor` | [WinlandMonitor](#winlandmonitor)?, read-only | The Monitor that has the focus, or null while Winland is not running or has not said. |
+| `FocusedWorkspace` | [WinlandWorkspace](#winlandworkspace)?, read-only | The Workspace shown on FocusedMonitor, or null. |
 | `LogPath` | string?, read-only | The full path of the log Winland writes now, as its `files` request reports it. Null while it writes none: `debug:disable_logs` is true, or it runs elevated. |
 | `Monitors` | ObservableCollection of [WinlandMonitor](#winlandmonitor), read-only | The Monitors, by id. |
 | `PipePath` | string, read-only | Winland's pipe. It takes requests and, after an `events` request, streams events. |
 | `ProcessId` | int, read-only | The process that answers on the pipe, or 0 while none does. |
 | `Windows` | ObservableCollection of [WinlandWindow](#winlandwindow), read-only | The windows Winland manages, in the order they were first reported. |
 | `Workspaces` | ObservableCollection of [WinlandWorkspace](#winlandworkspace), read-only | The Workspaces, by id, then by Monitor where two have the same number. |
-| `RawEvent` | Action of [WinlandEvent](#winlandevent) |  |
+| `RawEvent` | Action of [WinlandEvent](#winlandevent) | Emitted for every line of the event stream, after the objects are updated. |
 | `Dispatch(string request)` | void | Sends `dispatch` and the request to Winland. A failure is logged. |
-| `Dispose()` | void |  |
+| `Dispose()` | void | Stops following Winland and closes the connection to its pipe. |
 | `MonitorFor([ScreenInfo](winshell.md#screeninfo)? screen)` | [WinlandMonitor](#winlandmonitor)? | The Monitor of a screen, matched by its `\\.\DISPLAYn` name. Before Winland's first Monitor list arrives, it adds a Monitor for the screen that the list fills in later; after it, null when Winland reports no such Monitor. |
-| `Reload()` | void | Asks Winland to read its config again, as `winland reload` does. A failure is logged. |
 | `RefreshMonitors()` | void | Asks Winland for its Monitors again. Updates the listed ones and removes those it no longer reports. |
 | `RefreshWindows()` | void | Asks Winland for its windows again, adding new ones and updating titles and Workspaces. |
 | `RefreshWorkspaces()` | void | Asks Winland for its Workspaces again and updates the listed ones. |
+| `Reload()` | void | Asks Winland to read its config again, as `winland reload` does. A failure is logged. |
 
 ## WinlandWindow
 
@@ -70,15 +70,15 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Activated` | bool, read-only | Whether this is ActiveWindow. |
+| `Activated` | bool, read-only | Whether this is WinlandService.ActiveWindow. |
 | `Address` | string, read-only | The window handle in hexadecimal, without `0x`. |
 | `Handle` | IntPtr, read-only | The window handle, which names the same window in `Winshell.Windows`. |
 | `LastIpcObject` | JsonElement?, read-only | The window's entry from Winland's last window list. Null before the first one. |
 | `Monitor` | [WinlandMonitor](#winlandmonitor)?, read-only | The Monitor of the window's Workspace, or null. |
-| `Title` | string, read-only |  |
+| `Title` | string, read-only | The window's title, as Winland last reported it. |
 | `Urgent` | bool, read-only | Whether Winland marked the window urgent. It clears when the window is activated or its Workspace is focused. |
 | `Window` | [AppWindow](winshell-windows.md#appwindow)?, read-only | The same window in WindowListService, or null when that list is not in use or has no such window. |
-| `Workspace` | [WinlandWorkspace](#winlandworkspace)?, read-only |  |
+| `Workspace` | [WinlandWorkspace](#winlandworkspace)?, read-only | The Workspace the window is on, or null when Winland has not said. |
 
 ## WinlandWorkspace
 
@@ -90,13 +90,12 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | --- | --- | --- |
 | `Active` | bool, read-only | Whether the Workspace is shown on its Monitor. |
 | `Address` | string, read-only | The same as Name. |
-| `Focused` | bool, read-only | Whether this is FocusedWorkspace. |
-| `HasFullscreen` | bool, read-only |  |
+| `Focused` | bool, read-only | Whether this is WinlandService.FocusedWorkspace. |
+| `HasFullscreen` | bool, read-only | Whether a window on the Workspace is fullscreen. |
 | `Id` | int, read-only | The Workspace number. A named Workspace gets a negative id, and `special:special` gets -99. |
 | `LastIpcObject` | JsonElement?, read-only | The Workspace's entry from Winland's last workspace list. Null before the first one. |
-| `Monitor` | [WinlandMonitor](#winlandmonitor)?, read-only |  |
+| `Monitor` | [WinlandMonitor](#winlandmonitor)?, read-only | The Monitor the Workspace belongs to, or null when Winland has not said. |
 | `Name` | string, read-only | The Workspace's name: its number, a name, or `special:` and a name. |
-| `Windows` | ObservableCollection of [WinlandWindow](#winlandwindow), read-only |  |
 | `Urgent` | bool, read-only | Whether a window on it is urgent while the Workspace is not focused. |
+| `Windows` | ObservableCollection of [WinlandWindow](#winlandwindow), read-only | The windows on the Workspace, in the order they arrived there. |
 | `Activate()` | void | Shows the Workspace. A Workspace number means that number on the focused Monitor in Winland, so the Workspace's own Monitor is focused first when it is another one. |
-

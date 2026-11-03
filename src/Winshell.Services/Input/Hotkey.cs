@@ -46,6 +46,10 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
         _down = down ?? (static virtualKey => Win32.GetAsyncKeyState(virtualKey) < 0);
     }
 
+    /// <summary>
+    /// The keys, such as <c>Win+Ctrl+K</c>, or several chords separated by commas, such as <c>Win+Ctrl+K, C</c>.
+    /// Empty claims nothing. Setting it claims the new keys from Windows.
+    /// </summary>
     public string Sequence
     {
         get => _sequence;
@@ -56,6 +60,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
         }
     }
 
+    /// <summary>Whether the hotkey claims its keys. False gives them back. True by default.</summary>
     public bool Enabled
     {
         get => _enabled;
@@ -66,13 +71,19 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
         }
     }
 
+    /// <summary>Whether the keys are claimed and a press raises <see cref="Pressed"/>.</summary>
     public bool Active => _active;
 
+    /// <summary>Whether Windows or another app already holds the keys, so this hotkey could not claim them.</summary>
     public bool Taken => _taken;
 
     /// <summary>True from the press until the keys of the last chord are up.</summary>
     public bool IsPressed => _pressed;
 
+    /// <summary>
+    /// Why the hotkey is not active, such as a sequence that does not parse or keys that are taken. Empty when it is
+    /// active, disabled, or has no sequence.
+    /// </summary>
     public string Error => _error;
 
     /// <summary>The last chord of the sequence went down.</summary>
@@ -183,6 +194,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
         return true;
     }
 
+    /// <summary>Gives the keys back to Windows. No event is raised after this.</summary>
     public void Dispose()
     {
         if (_disposed)

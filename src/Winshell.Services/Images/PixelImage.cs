@@ -11,6 +11,12 @@ public sealed class PixelImage
 {
     private readonly byte[] _bgra;
 
+    /// <summary>A picture of the given size that keeps <paramref name="bgra"/> as its pixels.</summary>
+    /// <param name="width">The width in pixels. Must be above 0.</param>
+    /// <param name="height">The height in pixels. Must be above 0.</param>
+    /// <param name="bgra">
+    /// The pixels: exactly <paramref name="width"/> times <paramref name="height"/> times 4 bytes.
+    /// </param>
     /// <param name="premultiplied">Whether the color channels are already multiplied by alpha.</param>
     public PixelImage(int width, int height, byte[] bgra, bool premultiplied = false)
     {
@@ -25,12 +31,16 @@ public sealed class PixelImage
         _bgra = bgra;
     }
 
+    /// <summary>The width in pixels.</summary>
     public int Width { get; }
 
+    /// <summary>The height in pixels.</summary>
     public int Height { get; }
 
+    /// <summary>Whether the color channels are already multiplied by alpha.</summary>
     public bool Premultiplied { get; }
 
+    /// <summary>The pixels: BGRA, four bytes a pixel, top row first. Read-only.</summary>
     public ReadOnlySpan<byte> Bgra => _bgra;
 
     /// <summary>The picture as a PNG file. Blocks while Windows encodes it.</summary>

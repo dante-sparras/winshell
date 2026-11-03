@@ -36,16 +36,25 @@ public sealed class WinlandMonitor : ObservableObject
     /// <summary>The Windows display name, such as <c>\\.\DISPLAY1</c>, which is the screen's id.</summary>
     public string Name => _name;
 
+    /// <summary>
+    /// The Monitor's make, model and serial number, joined by spaces, or its friendly name when it reports no model or
+    /// serial. A <c>desc:</c> rule in Winland's config matches this.
+    /// </summary>
     public string Description => _description;
 
+    /// <summary>The left edge on the virtual screen, in physical pixels.</summary>
     public int X => _x;
 
+    /// <summary>The top edge on the virtual screen, in physical pixels.</summary>
     public int Y => _y;
 
+    /// <summary>The width in physical pixels.</summary>
     public int Width => _width;
 
+    /// <summary>The height in physical pixels.</summary>
     public int Height => _height;
 
+    /// <summary>The Monitor's DPI divided by 96, such as 1.5 at 150%.</summary>
     public double Scale => _scale;
 
     /// <summary>Whether this is <see cref="WinlandService.FocusedMonitor"/>.</summary>
@@ -110,6 +119,7 @@ public sealed class WinlandWorkspace : ObservableObject
     /// <summary>The same as <see cref="Name"/>.</summary>
     public string Address => _address;
 
+    /// <summary>The Monitor the Workspace belongs to, or null when Winland has not said.</summary>
     public WinlandMonitor? Monitor => _monitor;
 
     /// <summary>Whether the Workspace is shown on its Monitor.</summary>
@@ -121,8 +131,10 @@ public sealed class WinlandWorkspace : ObservableObject
     /// <summary>Whether a window on it is urgent while the Workspace is not focused.</summary>
     public bool Urgent => _urgent;
 
+    /// <summary>Whether a window on the Workspace is fullscreen.</summary>
     public bool HasFullscreen => _hasFullscreen;
 
+    /// <summary>The windows on the Workspace, in the order they arrived there.</summary>
     public ObservableCollection<WinlandWindow> Windows { get; } = [];
 
     /// <summary>The Workspace's entry from Winland's last workspace list. Null before the first one.</summary>
@@ -201,8 +213,10 @@ public sealed class WinlandWindow : ObservableObject
     /// <summary>The same window in <see cref="WindowListService"/>, or null when that list is not in use or has no such window.</summary>
     public AppWindow? Window => _service.FindWindow(Handle);
 
+    /// <summary>The window's title, as Winland last reported it.</summary>
     public string Title => _title;
 
+    /// <summary>The Workspace the window is on, or null when Winland has not said.</summary>
     public WinlandWorkspace? Workspace => _workspace;
 
     /// <summary>The Monitor of the window's Workspace, or null.</summary>

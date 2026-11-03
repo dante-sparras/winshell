@@ -104,6 +104,7 @@ public sealed class AppsService : ObservableObject, IDisposable
         return usage;
     }
 
+    /// <summary>Stops following changes to the Start menu and the installed apps.</summary>
     public void Dispose()
     {
         _disposed = true;
@@ -133,6 +134,9 @@ public sealed class AppEntry : ObservableObject
     /// <summary>A shortcut's path under Programs, such as <c>Accessories/Notepad</c>, or a packaged app's AppUserModelID.</summary>
     public string Id { get; }
 
+    /// <summary>
+    /// The name Start shows: the shortcut's file name without <c>.lnk</c>, or the packaged app's display name.
+    /// </summary>
     public string Name => _entry.Name;
 
     /// <summary>The shortcut's comment, or the packaged app's description. May be empty.</summary>
@@ -206,5 +210,6 @@ public sealed class AppEntry : ObservableObject
         Changed(oldUsage.LastUsedUnixMilliseconds != usage.LastUsedUnixMilliseconds, nameof(LastUsed));
     }
 
+    /// <summary>The entry's id, as <c>AppEntry(&lt;id&gt;)</c>, for logs.</summary>
     public override string ToString() => $"AppEntry({Id})";
 }

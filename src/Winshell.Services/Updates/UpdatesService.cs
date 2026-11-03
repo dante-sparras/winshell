@@ -56,6 +56,7 @@ public sealed class UpdatesService : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Where the update is: checking, up to date, downloading, ready, or failed.</summary>
     public UpdateStatus Status => _state.Status;
 
     /// <summary>The release found: the newest one when up to date, the one downloading or ready. Empty before a check.</summary>
@@ -98,6 +99,7 @@ public sealed class UpdatesService : ObservableObject, IDisposable
         Changed(old.Error != state.Error, nameof(Error));
     }
 
+    /// <summary>Stops following the updater. A check or download in progress goes on.</summary>
     public void Dispose()
     {
         _disposed = true;
