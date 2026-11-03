@@ -28,8 +28,10 @@ public sealed class WindowListService : ObservableObject, IDisposable
         Apply();
     }
 
+    /// <summary>The windows, in the order they opened.</summary>
     public ObservableCollection<AppWindow> Windows { get; } = [];
 
+    /// <summary>The listed window that has the focus, or owns the window that has it. Null when none does.</summary>
     public AppWindow? ActiveWindow => _activeWindow;
 
     /// <summary>The window with this handle, or null when it is not listed.</summary>
@@ -85,6 +87,7 @@ public sealed class WindowListService : ObservableObject, IDisposable
             window.NotifyDesktop();
     }
 
+    /// <summary>Stops following the windows. The list stays as it was.</summary>
     public void Dispose()
     {
         _disposed = true;
@@ -113,6 +116,7 @@ public sealed class AppWindow : ObservableObject
 
     internal nint Hwnd => _info.Hwnd;
 
+    /// <summary>The window's title, as its title bar shows it. May be empty.</summary>
     public string Title => _info.Title;
 
     /// <summary>The AppUserModelID the window carries, or its process package's, or its program's name in lower case.</summary>
@@ -130,6 +134,7 @@ public sealed class AppWindow : ObservableObject
     /// <summary>The desktop in <see cref="VirtualDesktopsService.Desktops"/> whose id is <see cref="DesktopId"/>, when that list is loaded.</summary>
     public VirtualDesktop? Desktop => _desktops?.Find(DesktopId);
 
+    /// <summary>Whether this is <see cref="WindowListService.ActiveWindow"/>.</summary>
     public bool Activated => _activated;
 
     /// <summary>
@@ -138,17 +143,20 @@ public sealed class AppWindow : ObservableObject
     /// </summary>
     public bool Attention => _attention;
 
+    /// <summary>The listed window that owns this one, as a main window owns its dialog, or null.</summary>
     public AppWindow? Parent => _parent;
 
     /// <summary>The screen the window is on: the one Windows says it is nearest.</summary>
     public IReadOnlyList<ScreenInfo> Screens => _source.Screen(_info.Monitor) is { } screen ? [screen] : [];
 
+    /// <summary>Whether the window is maximized. Setting it maximizes the window, or restores it.</summary>
     public bool Maximized
     {
         get => _info.Maximized;
         set => _source.SetMaximized(Hwnd, value);
     }
 
+    /// <summary>Whether the window is minimized. Setting it minimizes the window, or restores it.</summary>
     public bool Minimized
     {
         get => _info.Minimized;
@@ -161,8 +169,10 @@ public sealed class AppWindow : ObservableObject
     /// <summary>The window closed. This comes after it has left <see cref="WindowListService.Windows"/>.</summary>
     public event EventHandler? Closed;
 
+    /// <summary>Brings the window to the front and focuses it, restoring it first when it is minimized.</summary>
     public void Activate() => _source.Activate(Hwnd);
 
+    /// <summary>Asks the window to close, as its close button does. The program can still keep it open.</summary>
     public void Close() => _source.Close(Hwnd);
 
     /// <summary>Moves the window onto a monitor. Its logical size stays, and a maximized window is maximized again there.</summary>
@@ -205,5 +215,6 @@ public sealed class AppWindow : ObservableObject
 
     internal void SetAttention(bool attention) => Set(ref _attention, attention, nameof(Attention));
 
+    /// <summary>The window's app id and title, as <c>AppWindow(&lt;app id&gt;: &lt;title&gt;)</c>, for logs.</summary>
     public override string ToString() => $"AppWindow({_info.AppId}: {_info.Title})";
 }

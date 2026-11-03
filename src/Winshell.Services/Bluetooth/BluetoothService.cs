@@ -21,32 +21,52 @@ public sealed class BluetoothAdapter : ObservableObject
     /// <summary>A radio, discoverable or incoming-connection change failed, with the same text as <see cref="Error"/>.</summary>
     public event Action<string>? OperationFailed;
 
+    /// <summary>The adapter's Windows device id.</summary>
     public string Id => _info.Id;
 
+    /// <summary>The adapter's name as Windows gives it, or <c>Bluetooth</c> when it gives none.</summary>
     public string Name => _info.Name;
 
+    /// <summary>The adapter's Bluetooth address, such as <c>00:1A:7D:DA:71:13</c>.</summary>
     public string Address => _info.Address;
 
+    /// <summary>The state of the adapter's radio.</summary>
     public BluetoothAdapterState State => _info.State;
 
+    /// <summary>
+    /// Whether the radio is on: <see cref="State"/> is <see cref="BluetoothAdapterState.On"/>. Setting it asks
+    /// Windows to turn the radio on or off; the value changes when a later read sees the radio did.
+    /// </summary>
     public bool Enabled
     {
         get => ReportsOn;
         set => _ = _service.SetAdapterEnabledAsync(this, value);
     }
 
+    /// <summary>
+    /// Whether other devices can find this PC. Setting it to true also turns on <see cref="Pairable"/>. The value
+    /// changes when a later read sees Windows did.
+    /// </summary>
     public bool Discoverable
     {
         get => _info.Discoverable;
         set => _ = _service.SetDiscoverableAsync(this, value);
     }
 
+    /// <summary>
+    /// Whether Windows accepts incoming connections. Setting it to false also turns off <see cref="Discoverable"/>. The
+    /// value changes when a later read sees Windows did.
+    /// </summary>
     public bool Pairable
     {
         get => _info.Pairable;
         set => _ = _service.SetPairableAsync(this, value);
     }
 
+    /// <summary>
+    /// Why the last radio, discoverable or incoming-connection change failed. Empty after one succeeds, and when the
+    /// adapter's state changes.
+    /// </summary>
     public string Error => _error;
 
     internal bool ReportsOn => _info.State == BluetoothAdapterState.On;
@@ -96,44 +116,61 @@ public sealed class BluetoothDevice : ObservableObject
 
     internal string Key => _info.Key;
 
+    /// <summary>The Windows id of the device's endpoint, a paired one when there is one.</summary>
     public string Id => _info.Id;
 
+    /// <summary>The adapter that found the device.</summary>
     public BluetoothAdapter Adapter { get; }
 
+    /// <summary>The device's Bluetooth address, in capital letters. Empty when Windows gives none.</summary>
     public string Address => _info.Address;
 
+    /// <summary>The device's name, or its <see cref="Address"/> when Windows gives no name.</summary>
     public string Name => _info.Name;
 
     /// <summary>A device-type name, such as <c>audio-headset</c> or <c>input-keyboard</c>. Empty when Windows reports no class, or a class that has no name.</summary>
     public string Icon => _info.Icon;
 
+    /// <summary>Whether the device is paired with this PC.</summary>
     public bool Paired => _info.Paired;
 
+    /// <summary>Whether Windows sees the device now. A paired device that is off or out of range is not.</summary>
     public bool Present => _info.Present;
 
+    /// <summary>Whether the device is not paired and Windows says it can be, so <see cref="Pair"/> can work.</summary>
     public bool CanPair => !_info.Paired && _info.CanPair;
 
+    /// <summary>Whether the device is connected.</summary>
     public bool Connected => _info.Connected;
 
+    /// <summary><see cref="Connected"/>, as a state.</summary>
     public BluetoothDeviceState State => _info.Connected ? BluetoothDeviceState.Connected : BluetoothDeviceState.Disconnected;
 
+    /// <summary>Whether Windows reports the device's battery level. Only a connected device can have one.</summary>
     public bool BatteryAvailable => _info.Battery.HasValue;
 
     /// <summary>The battery level, from 0 to 1. 0 when <see cref="BatteryAvailable"/> is false.</summary>
     public double Battery => _info.Battery ?? 0;
 
+    /// <summary>The action running on the device, or <see cref="BluetoothOperation.None"/>.</summary>
     public BluetoothOperation Operation => _operation;
 
     /// <summary>An action is running. Other actions are ignored until it ends.</summary>
     public bool Busy => _operation != BluetoothOperation.None;
 
+    /// <summary>Whether <see cref="Pair"/> is running. <see cref="CancelPairing"/> stops it.</summary>
     public bool Pairing => _operation == BluetoothOperation.Pairing;
 
+    /// <summary>
+    /// Why the last action failed, or <c>Cancelled</c> after <see cref="CancelPairing"/>. Empty while an action runs
+    /// and after one succeeds.
+    /// </summary>
     public string Error => _error;
 
     /// <summary>Asks Windows to connect a paired audio device. Fails for other device types, which reconnect through Windows.</summary>
     public void Connect() => _ = SetConnectionAsync(true);
 
+    /// <summary>Asks Windows to disconnect a paired audio device. Fails for other device types.</summary>
     public void Disconnect() => _ = SetConnectionAsync(false);
 
     /// <summary>Pairs the device with basic Windows pairing, which may show consent or PIN UI.</summary>
@@ -305,10 +342,16 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     /// <summary>The default adapter Windows returns, or null when there is none.</summary>
     public BluetoothAdapter? DefaultAdapter => _adapter;
 
+    /// <summary>Only the <see cref="DefaultAdapter"/>, or empty when there is none.</summary>
     public ObservableCollection<BluetoothAdapter> Adapters { get; } = [];
 
+    /// <summary>
+    /// The paired devices and the nearby ones found during discovery: connected first, then paired, then by name.
+    /// Empty when there is no adapter.
+    /// </summary>
     public ObservableCollection<BluetoothDevice> Devices { get; } = [];
 
+    /// <summary>The paired devices, in the order of <see cref="Devices"/>.</summary>
     public ObservableCollection<BluetoothDevice> PairedDevices { get; } = [];
 
     /// <summary>The present unpaired devices found during discovery.</summary>
@@ -317,8 +360,10 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     /// <summary>A read has completed. A completed read can have no adapter.</summary>
     public bool Ready => _snapshot.Ready;
 
+    /// <summary>Whether Windows is looking for nearby devices, after <see cref="StartDiscovery"/>.</summary>
     public bool Discovering => _snapshot.Discovering;
 
+    /// <summary>Why the last read, or starting or stopping discovery, failed. Empty when it succeeded.</summary>
     public string Error => _error;
 
     /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>. Nothing is read before this.</summary>
@@ -675,6 +720,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         return true;
     }
 
+    /// <summary>Stops monitoring and discovery, and cancels a running pairing.</summary>
     public void Dispose()
     {
         if (_disposed)

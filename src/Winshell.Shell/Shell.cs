@@ -47,7 +47,10 @@ public abstract class ShellConfiguration
     public abstract void Start(Shell shell);
 }
 
-/// <summary>The running shell: its screens and services. There is one in a process.</summary>
+/// <summary>
+/// The running shell: its screens and services. There is one in a process. Each service is made the first time it is
+/// read, so a service a configuration does not use costs nothing and asks Windows for nothing.
+/// </summary>
 public sealed partial class Shell : IDisposable
 {
     private static Shell? _current;
@@ -77,10 +80,13 @@ public sealed partial class Shell : IDisposable
     /// <summary>The shell of this process. Reading it before <see cref="Run{T}"/> has started it throws.</summary>
     public static Shell Current => _current ?? throw new InvalidOperationException("The shell has not started. Call Shell.Run first.");
 
+    /// <summary>The shell's thread. Post work from other threads to it before touching windows or services.</summary>
     public IEventLoop Loop { get; }
 
+    /// <summary>This instance's log, which <c>winshell log</c> shows.</summary>
     public Log Log { get; }
 
+    /// <summary>The options the configuration passed to <see cref="Run{T}"/>.</summary>
     public ShellOptions Options { get; }
 
     internal ShellPlatform Platform { get; }
@@ -166,7 +172,8 @@ public sealed partial class Shell : IDisposable
     /// <c>kill</c>, <c>reload</c> and <c>ipc</c> reach it. Call it from <c>Main</c>, marked <c>[STAThread]</c>. The program
     /// takes <c>--no-duplicate</c> and <c>-d</c> on its command line. <c>--no-duplicate</c> exits at once when its shell
     /// id is already running. <c>-d</c> starts this program again and returns, so the caller does not wait, and that
-    /// start keeps <c>--after</c>.
+    /// start keeps <c>--after</c>. <typeparamref name="T"/> is a <see cref="ShellConfiguration"/> with a public
+    /// parameterless constructor.
     /// </summary>
     public static void Run<T>(ShellOptions? options = null)
         where T : ShellConfiguration, new() =>
@@ -353,6 +360,10 @@ public sealed partial class Shell : IDisposable
         Application.Current.Exit();
     }
 
+    /// <summary>
+    /// Closes Winshell's notices, stops the services, and closes every window. <see cref="Quit"/> does this and also
+    /// ends the shell.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

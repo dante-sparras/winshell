@@ -130,6 +130,12 @@ internal sealed class IpcServer : IDisposable
     private int _clients;
     private bool _disposed;
 
+    /// <param name="first">
+    /// The pipe instance <see cref="OpenFirst"/> or <see cref="OpenAvailable"/> opened, which the server now owns.
+    /// </param>
+    /// <param name="pipe">The pipe's name, for the instances opened after the first.</param>
+    /// <param name="loop">The UI thread's loop, which requests run on.</param>
+    /// <param name="control">What requests do to the shell.</param>
     /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
     /// <param name="dismissNotice">
     /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it, including when the configuration did not

@@ -14,6 +14,12 @@ public sealed class FileWatch : IDisposable
     private int _generation;
     private bool _disposed;
 
+    /// <summary>
+    /// Starts watching <paramref name="path"/>, calling <paramref name="changed"/> on <paramref name="loop"/>.
+    /// </summary>
+    /// <param name="path">The file to follow. A symbolic link is followed to its target.</param>
+    /// <param name="loop">The loop <paramref name="changed"/> is called on.</param>
+    /// <param name="changed">Called when the file may have changed. Read the file again to see whether it did.</param>
     public FileWatch(string path, IEventLoop loop, Action changed)
     {
         _path = path;
@@ -67,6 +73,7 @@ public sealed class FileWatch : IDisposable
             _changed();
     }
 
+    /// <summary>Stops watching the file.</summary>
     public void Dispose()
     {
         _disposed = true;

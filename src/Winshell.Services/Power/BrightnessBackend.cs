@@ -5,9 +5,12 @@ using Winshell.Native;
 
 namespace Winshell.Power;
 
+/// <summary>How Winshell reaches a monitor to read and set its brightness.</summary>
 public enum BrightnessConnection
 {
+    /// <summary>A built-in panel, such as a laptop screen, set through WMI.</summary>
     Internal = 0,
+    /// <summary>An external monitor, set over DDC/CI.</summary>
     External = 1,
 }
 

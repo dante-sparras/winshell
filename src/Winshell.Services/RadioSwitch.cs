@@ -20,7 +20,9 @@ internal interface IRadioSource
     Task<RadioAccessStatus> RequestAccessAsync();
 }
 
-/// <summary><see cref="Windows.Devices.Radios.Radio"/> for Wi-Fi and Bluetooth. The only production caller of <see cref="Radio.SetStateAsync"/>.</summary>
+/// <summary>
+/// <see cref="Radio"/> for Wi-Fi and Bluetooth. The only production caller of <see cref="Radio.SetStateAsync"/>.
+/// </summary>
 internal sealed class WindowsRadioSource : IRadioSource
 {
     public static readonly WindowsRadioSource Instance = new();

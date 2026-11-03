@@ -14,6 +14,9 @@ public sealed class FloatingWindow : ShellWindow
     private bool _stateRequested;
     private FloatingWindow? _owner;
 
+    /// <summary>
+    /// A hidden window of the running shell, 640 by 480 unless <c>Width</c> and <c>Height</c> say otherwise.
+    /// </summary>
     public FloatingWindow()
         : this(Shell.Current)
     {
@@ -26,6 +29,7 @@ public sealed class FloatingWindow : ShellWindow
 
     private protected override WindowKind Kind => WindowKind.Floating;
 
+    /// <summary>The text in the title bar and on the taskbar.</summary>
     public string Title
     {
         get => _title;
@@ -36,6 +40,9 @@ public sealed class FloatingWindow : ShellWindow
         }
     }
 
+    /// <summary>
+    /// The smallest size the user can drag the window to, in logical pixels. A width or height of 0 sets no limit.
+    /// </summary>
     public Size MinimumSize
     {
         get => _minimumSize;
@@ -46,6 +53,9 @@ public sealed class FloatingWindow : ShellWindow
         }
     }
 
+    /// <summary>
+    /// The largest size the user can drag the window to, in logical pixels. A width or height of 0 sets no limit.
+    /// </summary>
     public Size MaximumSize
     {
         get => _maximumSize;
@@ -56,6 +66,10 @@ public sealed class FloatingWindow : ShellWindow
         }
     }
 
+    /// <summary>
+    /// Whether the window is maximized. It follows the user's own maximize and restore. Setting it true leaves
+    /// <see cref="Fullscreen"/>.
+    /// </summary>
     public bool Maximized
     {
         get => _maximized;
@@ -75,6 +89,7 @@ public sealed class FloatingWindow : ShellWindow
         }
     }
 
+    /// <summary>Whether the window is minimized. It follows the user's own minimize and restore.</summary>
     public bool Minimized
     {
         get => _minimized;

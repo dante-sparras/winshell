@@ -2,6 +2,8 @@
 
 Installed apps, search, jump lists and recent documents. Reach them from `Shell.Current.Apps`, `Shell.Current.JumpLists` and `Shell.Current.RecentDocuments`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## AppEntry
 
 One app of the Start menu.
@@ -19,7 +21,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Icon` | string, read-only | A path an icon is read from: the shortcut, or `shell:AppsFolder\<id>` for a packaged app. |
 | `Id` | string, read-only | A shortcut's path under Programs, such as `Accessories/Notepad`, or a packaged app's AppUserModelID. |
 | `LastUsed` | long, read-only | When the app was last used, in Unix milliseconds, or 0 when Windows has no record. |
-| `Name` | string, read-only |  |
+| `Name` | string, read-only | The name Start shows: the shortcut's file name without `.lnk`, or the packaged app's display name. |
 | `Packaged` | bool, read-only | True when the app came from PackageManager. |
 | `RunCount` | int, read-only | How many times Windows, or Launch, has run the app. |
 | `StartIn` | string, read-only | The shortcut's Start in folder. |
@@ -49,7 +51,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Frequent` | ObservableCollection of [AppEntry](#appentry), read-only | Visible apps with a use count, most used first. |
 | `Recent` | ObservableCollection of [AppEntry](#appentry), read-only | Visible apps Windows has a last-used time for, newest first. |
 | `ById(string id)` | [AppEntry](#appentry)? | An entry by its id: a shortcut's path under Programs, or a packaged app's AppUserModelID. Includes hidden entries. |
-| `Dispose()` | void |  |
+| `Dispose()` | void | Stops following changes to the Start menu and the installed apps. |
 | `Find(string name)` | [AppEntry](#appentry)? | Finds an app by id, then by the app id a window carries, then by display name. Includes hidden entries. |
 | `Search(string query)` | IReadOnlyList of [AppEntry](#appentry) | Visible apps the query matches, best first. A blank query matches nothing. |
 
@@ -68,8 +70,8 @@ A shortcut in the Recent folder: its name without `.lnk`, and its path.
 | Member | Type | Description |
 | --- | --- | --- |
 | `RecentDocument(string Name, string Path)` | constructor |  |
-| `Name` | string, init |  |
-| `Path` | string, init |  |
+| `Name` | string, init | The shortcut's file name without `.lnk`, usually the document's name. |
+| `Path` | string, init | The full path of the shortcut, which opens the document. |
 
 ## RecentDocuments
 
@@ -77,5 +79,4 @@ Recent documents Windows already keeps as shortcuts in the Recent folder. This r
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Search(string query)` | IReadOnlyList of [RecentDocument](#recentdocument) | Shortcuts whose name contains every word of query, newest first, at most Limit. A blank query matches nothing and does not read a folder. The path is not searched. |
-
+| `Search(string query)` | IReadOnlyList of [RecentDocument](#recentdocument) | Shortcuts whose name contains every word of query, newest first, at most 20. A blank query matches nothing and does not read a folder. The path is not searched. |

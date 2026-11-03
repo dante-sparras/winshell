@@ -29,6 +29,9 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
         _heldAwake = heldAwake;
     }
 
+    /// <summary>
+    /// Whether the monitor watches for idle. While false, <see cref="IsIdle"/> is false. True by default.
+    /// </summary>
     public bool Enabled
     {
         get => _enabled;
@@ -57,6 +60,9 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
         set => Set(ref _respectKeepAwake, value);
     }
 
+    /// <summary>
+    /// Whether there has been no input for <see cref="Timeout"/> seconds. False while <see cref="Timeout"/> is 0.
+    /// </summary>
     public bool IsIdle => _isIdle;
 
     private static double IdleSeconds()
@@ -103,6 +109,7 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
     internal static TimeSpan NextCheck(bool idle, double remaining) =>
         !idle && remaining > 0 ? TimeSpan.FromSeconds(Math.Clamp(remaining, 0.25, 5)) : TimeSpan.FromSeconds(1);
 
+    /// <summary>Stops checking for idle.</summary>
     public void Dispose()
     {
         _disposed = true;

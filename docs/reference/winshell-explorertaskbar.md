@@ -2,6 +2,8 @@
 
 Explorer's taskbar: whether it is hidden while this shell runs. Reach it from `Shell.Current.ExplorerTaskbar`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## ExplorerTaskbarService
 
 Hides Explorer's taskbar for a shell that draws its own. The session belongs to the program, which restores the taskbar when it exits, however it exits.

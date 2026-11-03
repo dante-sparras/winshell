@@ -12,6 +12,7 @@ public sealed class PanelWindow : ShellWindow
     private bool _aboveWindows = true;
     private bool _focusable;
 
+    /// <summary>A hidden panel of the running shell, anchored to no edge until <see cref="Anchors"/> is set.</summary>
     public PanelWindow()
         : this(Shell.Current)
     {
@@ -35,6 +36,9 @@ public sealed class PanelWindow : ShellWindow
         }
     }
 
+    /// <summary>
+    /// The gap, in logical pixels, between the panel and each edge it is anchored to. Other edges' margins are unused.
+    /// </summary>
     public Thickness Margins
     {
         get => _margins;

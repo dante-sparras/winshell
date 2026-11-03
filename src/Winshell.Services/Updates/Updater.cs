@@ -7,16 +7,20 @@ using System.Text.Json;
 
 namespace Winshell.Updates;
 
-/// <summary>Where an update is: the <c>UpdateStatus</c> enum of <c>Updates.status</c>.</summary>
+/// <summary>Where an update is, as <see cref="UpdatesService.Status"/> reports it.</summary>
 public enum UpdateStatus
 {
     /// <summary>Not checked yet in this run.</summary>
     Idle,
+    /// <summary>Asking GitHub Releases for the newest release.</summary>
     Checking,
+    /// <summary>No release is newer than the one running.</summary>
     UpToDate,
+    /// <summary>A newer release is downloading.</summary>
     Downloading,
     /// <summary>Downloaded, its hash checked and unzipped. It applies when Winshell next starts.</summary>
     Ready,
+    /// <summary>The last check, download or install failed. <see cref="UpdatesService.Error"/> says why.</summary>
     Failed,
 }
 

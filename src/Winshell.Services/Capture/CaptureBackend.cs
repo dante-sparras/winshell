@@ -3,6 +3,8 @@ using Winshell.Windows;
 namespace Winshell.Capture;
 
 /// <summary>A source in physical pixels. Monitor ids are Windows display device names.</summary>
+/// <param name="Window">The handle of the window to capture, or 0 for a screen.</param>
+/// <param name="MonitorId">The <see cref="ScreenInfo.Id"/> of the screen to capture, or empty for a window.</param>
 public sealed record CaptureTarget(nint Window, string MonitorId)
 {
     /// <summary>The app window this was made from, or null for a handle or a screen.</summary>
@@ -18,8 +20,13 @@ public sealed record CaptureTarget(nint Window, string MonitorId)
         return new(window.Hwnd, "") { Source = window };
     }
 
+    /// <summary>
+    /// Lets an <see cref="AppWindow"/> be assigned where a target is expected, as <see cref="ForWindow(AppWindow)"/>
+    /// does.
+    /// </summary>
     public static implicit operator CaptureTarget(AppWindow window) => ForWindow(window);
 
+    /// <summary>A whole screen, by its <see cref="ScreenInfo.Id"/>.</summary>
     public static CaptureTarget ForScreen(ScreenInfo screen) => new(0, screen.Id);
 }
 

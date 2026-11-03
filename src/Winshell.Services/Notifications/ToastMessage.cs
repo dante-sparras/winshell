@@ -19,6 +19,7 @@ public sealed class ToastMessage : ObservableObject
     private bool _silent;
     private string _error = "";
 
+    /// <summary>Creates an empty toast whose <see cref="Failed"/> event is raised on the given event loop.</summary>
     public ToastMessage(IEventLoop loop)
         : this(loop, SendNative)
     {

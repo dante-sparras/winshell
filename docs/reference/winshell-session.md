@@ -2,6 +2,8 @@
 
 Locking the Windows session, and running at sign-in. Reach them from `Shell.Current.Session` and `Shell.Current.Startup`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## SessionService
 
 The signed-in Windows session the shell runs in. Lock asks Windows to lock it, and Windows' own lock screen takes over. Winshell never draws a lock screen or asks for the Windows password (ADR-0008).
@@ -23,4 +25,3 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `RunAtSignIn` | bool | Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry, and setting it when the entry starts another `winshell.exe` points the entry here. |
 | `TurnedOffInWindows` | bool, read-only | True when the entry is there but Windows' Startup apps page turned it off. Only that page can turn it back on. |
 | `Refresh()` | void | Reads the entry again, after the user may have changed it in Windows. |
-

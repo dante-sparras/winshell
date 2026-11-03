@@ -9,6 +9,7 @@ namespace Winshell;
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class TomlCommentAttribute(string text) : Attribute
 {
+    /// <summary>The comment's text, without the leading <c>#</c>.</summary>
     public string Text { get; } = text;
 }
 

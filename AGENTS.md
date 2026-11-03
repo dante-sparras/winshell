@@ -64,6 +64,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 - Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
 - Say what you couldn't verify.
+- Changed a public member of `Winshell.Shell` or `Winshell.Services`? Update its `///` comment, run `dotnet run scripts/generate-reference.cs`, and commit the pages it writes.
 - Added or changed a command, prerequisite, environment variable, or top-level folder? Update [docs/development.md](docs/development.md) or Project Structure.
 - Don't edit `.agents/skills/` or `.claude/skills/`; the `skills` CLI overwrites them.
 - Never commit `.env` files or credentials.

@@ -48,6 +48,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     /// <summary>The notifications in one group per app, newest first.</summary>
     public ObservableCollection<NotificationGroup> Groups { get; } = [];
 
+    /// <summary>Whether the shell may read the notifications. Ask with <see cref="RequestAccess"/>.</summary>
     public NotificationAccessStatus AccessStatus => _accessStatus;
 
     /// <summary>Whether a Focus session is on.</summary>
@@ -281,6 +282,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             action();
     });
 
+    /// <summary>Stops watching Notification Center and releases the app logos it read.</summary>
     public void Dispose()
     {
         if (_disposed)
@@ -318,15 +320,19 @@ public sealed class Notification : ObservableObject
     /// <summary>The AppUserModelID of the app that sent it. Can be empty.</summary>
     public string AppId => _toast.AppId;
 
+    /// <summary>The display name of the app that sent it. Can be empty.</summary>
     public string AppName => _toast.AppName;
 
     /// <summary>A <c>file:///</c> url of the sending app's logo. Empty until the read finishes, and when Windows gives none.</summary>
     public string AppIcon => _appIcon;
 
+    /// <summary>The first line of text. Can be empty.</summary>
     public string Title => _toast.Title;
 
+    /// <summary>The lines of text after the title, joined by line breaks. Can be empty.</summary>
     public string Body => _toast.Body;
 
+    /// <summary>When the notification was created.</summary>
     public DateTimeOffset CreatedAt => _toast.CreatedAt;
 
     /// <summary>When it expires, or null when Windows supplied no expiry.</summary>
@@ -430,8 +436,10 @@ public sealed class NotificationGroup : ObservableObject
 
     internal string Key { get; }
 
+    /// <summary>The AppUserModelID of the app that sent the notifications. Empty when the app has none.</summary>
     public string AppId => _appId;
 
+    /// <summary>The display name of the app that sent the notifications. Can be empty.</summary>
     public string AppName => _appName;
 
     /// <summary>The app's notifications, newest first.</summary>

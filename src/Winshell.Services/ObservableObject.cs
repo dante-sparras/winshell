@@ -9,6 +9,7 @@ namespace Winshell;
 /// </summary>
 public abstract class ObservableObject : INotifyPropertyChanged
 {
+    /// <summary>Raised when a property's value changes, with the property's name.</summary>
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>Sets a field and reports the change when the value differs.</summary>
@@ -21,6 +22,7 @@ public abstract class ObservableObject : INotifyPropertyChanged
         return true;
     }
 
+    /// <summary>Reports a change of <paramref name="property"/>, by default the calling property.</summary>
     protected void Changed([CallerMemberName] string property = "") =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
 

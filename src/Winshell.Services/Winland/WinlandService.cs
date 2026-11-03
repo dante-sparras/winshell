@@ -55,10 +55,13 @@ public sealed class WinlandService : ObservableObject, IDisposable
     /// <summary>The windows Winland manages, in the order they were first reported.</summary>
     public ObservableCollection<WinlandWindow> Windows { get; } = [];
 
+    /// <summary>The Monitor that has the focus, or null while Winland is not running or has not said.</summary>
     public WinlandMonitor? FocusedMonitor => _focusedMonitor;
 
+    /// <summary>The Workspace shown on <see cref="FocusedMonitor"/>, or null.</summary>
     public WinlandWorkspace? FocusedWorkspace => _focusedWorkspace;
 
+    /// <summary>The window that has the focus in Winland, or null when none does.</summary>
     public WinlandWindow? ActiveWindow => _activeWindow;
 
     /// <summary>Winland's pipe. It takes requests and, after an <c>events</c> request, streams events.</summary>
@@ -637,6 +640,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     private void SetActiveWindow(WinlandWindow? window) => Set(ref _activeWindow, window, nameof(ActiveWindow));
 
+    /// <summary>Stops following Winland and closes the connection to its pipe.</summary>
     public void Dispose()
     {
         if (_disposed)
