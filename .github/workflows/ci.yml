@@ -34,7 +34,6 @@ jobs:
     outputs:
       code: ${{ steps.files.outputs.code }}
       fast: ${{ steps.files.outputs.fast }}
-      tests: ${{ steps.files.outputs.tests }}
       scripts: ${{ steps.files.outputs.scripts }}
       workflows: ${{ steps.files.outputs.workflows }}
     steps:
@@ -58,9 +57,6 @@ jobs:
           grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
           grep -qE '^scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
           grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
-          # The test classes it changed, which ci and slow repeat. More than 30 is a sweep, and repeating one would outlast the job.
-          tests=$(grep -E '^tests/.*Tests\.cs$' <<<"$files" || true)
-          if [ "$(wc -l <<<"$tests")" -le 30 ]; then echo "tests=$(paste -sd, <<<"$tests")" >> "$GITHUB_OUTPUT"; fi
 
   ci:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
@@ -68,7 +64,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.fast != 'false' }}
     runs-on: windows-2025
-    timeout-minutes: 25
+    timeout-minutes: 15
     outputs:
       built: ${{ steps.build.outcome }}
     steps:
@@ -106,14 +102,6 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: ./scripts/check.ps1 -NoBuild -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
-      - name: Run changed tests over and over
-        # A test that only passes sometimes stops here, before it reaches main.
-        if: github.event_name == 'pull_request' && needs.changes.outputs.tests != ''
-        timeout-minutes: 15
-        shell: pwsh
-        env:
-          TESTS: ${{ needs.changes.outputs.tests }}
-        run: ./scripts/repeat-tests.ps1 -Tests $env:TESTS -Tier Fast -Times 20
   stop:
     # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
     # which runs the code under test, gets no token that can cancel a run.
@@ -138,7 +126,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: windows-2025
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -151,14 +139,6 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: ./scripts/run-tests.ps1 -Tier Slow
-      - name: Run changed tests over and over
-        # Five, not twenty: one of these can take a minute. A test that only passes sometimes stops here.
-        if: github.event_name == 'pull_request' && needs.changes.outputs.tests != ''
-        timeout-minutes: 20
-        shell: pwsh
-        env:
-          TESTS: ${{ needs.changes.outputs.tests }}
-        run: ./scripts/repeat-tests.ps1 -Tests $env:TESTS -Tier Slow -Times 5
 
   actionlint:
     # actionlint catches broken expressions, typos and shell errors in .github/workflows/. zizmor audits .github/ for

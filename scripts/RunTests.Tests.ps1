@@ -1,6 +1,5 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot 'run-tests.ps1')
-    . (Join-Path $PSScriptRoot 'repeat-tests.ps1')
 
     # Writes a results file like dotnet test does. Rows are "Class.Method=Outcome".
     function Write-Trx {
@@ -37,6 +36,26 @@ Describe 'Choosing tests' {
         Get-MainTestFilter | Should -Be 'Category!=Package'
         Get-MainTestFilter -Tier Fast | Should -Be 'Category!=Package&Category!=Slow'
         Get-MainTestFilter -Tier Slow | Should -Be 'Category!=Package&Category=Slow'
+    }
+
+    It 'gives dotnet test the tier it was asked for, the seed and twice the threads' {
+        $stub = Join-Path $TestDrive 'stub'
+        New-Item -ItemType Directory -Path $stub | Out-Null
+        Set-Content -LiteralPath (Join-Path $stub 'dotnet.ps1') -Value '$args -join " " | Add-Content -LiteralPath $env:WINSHELL_STUB_LOG; exit 0'
+        $path = $env:PATH
+        $env:PATH = "$stub;$path"
+        $env:WINSHELL_STUB_LOG = Join-Path $TestDrive 'dotnet.log'
+        try {
+            pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-tests.ps1') -Tier Slow -Seed 7 | Out-Null
+        }
+        finally {
+            $env:PATH = $path
+            $logged = Get-Content -Raw -LiteralPath $env:WINSHELL_STUB_LOG
+            Remove-Item Env:WINSHELL_STUB_LOG
+        }
+        $logged | Should -Match 'Category=Slow'
+        $logged | Should -Match 'xUnit\.Seed=7'
+        $logged | Should -Match 'xUnit\.MaxParallelThreads=2x'
     }
 }
 
@@ -153,103 +172,5 @@ Describe 'Watching a test program start' {
         $text | Should -Match 'It used [\d.]+ s of CPU\. Threads: \d+ '
         $text | Should -Match 'the runtime (started|did not start), and the Windows App SDK (loaded|did not load)'
         $text | Should -Match '\d+% CPU busy, \d+ MB of memory free, disks \d+% idle'
-    }
-}
-
-Describe 'Repeating changed tests' {
-    It 'finds the classes of changed test files, by project, in the tier asked for' {
-        $targets = @(Get-RepeatTarget -Tier Fast -Tests 'tests/Winshell.Services.Tests/TomlFileTests.cs,tests/Winshell.Tests/CliHelpTests.cs,tests/Winshell.Services.Tests/UpdatesTests.cs')
-        $targets.Count | Should -Be 2
-        $targets[0].Project | Should -Be 'Winshell.Services.Tests'
-        $targets[0].Filter | Should -Be '(FullyQualifiedName~.TomlFileTests.|FullyQualifiedName~.UpdatesTests.)&Category!=Package&Category!=Slow'
-        $targets[1].Filter | Should -Be '(FullyQualifiedName~.CliHelpTests.)&Category!=Package&Category!=Slow'
-    }
-
-    It 'leaves out what is not a test class, and the package tests' {
-        @(Get-RepeatTarget -Tests 'tests/TestSupport/Wait.cs,tests/Winshell.Tests/WinshellCli.cs,tests/Winshell.Package.Tests/PackedTemplateTests.cs,src/Winshell/Program.cs').Count | Should -Be 0
-        @(Get-RepeatTarget -Tests '').Count | Should -Be 0
-    }
-
-    It 'takes a path as Windows writes it' {
-        @(Get-RepeatTarget -Tests 'tests\Winshell.Tests\CliHelpTests.cs,.\tests\Winshell.Services.Tests\UpdatesTests.cs').Count | Should -Be 2
-    }
-
-    It 'agrees when every run passed the same tests, in whatever order' {
-        $one = [pscustomobject]@{ Failed = @(); Passed = @('A', 'B'); Results = 2; Complete = $true }
-        $two = [pscustomobject]@{ Failed = @(); Passed = @('B', 'A'); Results = 2; Complete = $true }
-        Compare-Repeat -Runs @($one, $two) | Should -BeNullOrEmpty
-    }
-
-    It 'does not agree when one run failed a test' {
-        $good = [pscustomobject]@{ Failed = @(); Passed = @('A'); Results = 1; Complete = $true }
-        $bad = [pscustomobject]@{ Failed = @('A'); Passed = @(); Results = 1; Complete = $true }
-        Compare-Repeat -Runs @($good, $bad) | Should -Match 'Failed in at least one run: A'
-    }
-
-    It 'does not agree when a run lost a test' {
-        $all = [pscustomobject]@{ Failed = @(); Passed = @('A', 'B'); Results = 2; Complete = $true }
-        $less = [pscustomobject]@{ Failed = @(); Passed = @('A'); Results = 1; Complete = $true }
-        Compare-Repeat -Runs @($all, $less) | Should -Match 'same tests'
-    }
-
-    It 'does not agree when a run crashed' {
-        $good = [pscustomobject]@{ Failed = @(); Passed = @('A'); Results = 1; Complete = $true }
-        $crashed = [pscustomobject]@{ Failed = @(); Passed = @('A'); Results = 1; Complete = $false }
-        Compare-Repeat -Runs @($good, $crashed) | Should -Match 'did not finish'
-    }
-
-    It 'does not agree when a theory lost a row' {
-        $all = [pscustomobject]@{ Failed = @(); Passed = @('A'); Results = 3; Complete = $true }
-        $less = [pscustomobject]@{ Failed = @(); Passed = @('A'); Results = 2; Complete = $true }
-        Compare-Repeat -Runs @($all, $less) | Should -Match 'same tests'
-    }
-
-    It 'runs a tier with nothing in it once, and agrees' {
-        Mock Invoke-DotnetTest {
-            Write-Trx -Directory $ResultsDirectory -Rows @()
-            0
-        }
-        Invoke-Repeat -Target ([pscustomobject]@{ Project = 'P'; Filter = 'x' }) -Times 20 | Should -BeNullOrEmpty
-        Should -Invoke Invoke-DotnetTest -Times 1 -Exactly
-    }
-
-    It 'stops at the first run that fails, and names its test' {
-        $script:Run = 0
-        Mock Invoke-DotnetTest {
-            $script:Run++
-            $failed = $script:Run -eq 2
-            Write-Trx -Directory $ResultsDirectory -Rows @(if ($failed) { 'Ns.Class.Bad=Failed' } else { 'Ns.Class.Bad=Passed' })
-            [int] $failed
-        }
-        Invoke-Repeat -Target ([pscustomobject]@{ Project = 'P'; Filter = 'x' }) -Times 20 | Should -Match 'Run 2 of 20 failed: Ns\.Class\.Bad'
-        Should -Invoke Invoke-DotnetTest -Times 2 -Exactly
-    }
-
-    It 'says when a run stopped with no failed test' {
-        Mock Invoke-DotnetTest {
-            Write-Trx -Directory $ResultsDirectory -Rows @() -Crashed
-            1
-        }
-        Invoke-Repeat -Target ([pscustomobject]@{ Project = 'P'; Filter = 'x' }) -Times 20 | Should -Match 'Run 1 of 20 failed: it did not finish'
-    }
-
-    It 'gives dotnet test the tier it was asked for, a seed and twice the threads' {
-        $stub = Join-Path $TestDrive 'stub'
-        New-Item -ItemType Directory -Path $stub | Out-Null
-        Set-Content -LiteralPath (Join-Path $stub 'dotnet.ps1') -Value '$args -join " " | Add-Content -LiteralPath $env:WINSHELL_STUB_LOG; exit 0'
-        $path = $env:PATH
-        $env:PATH = "$stub;$path"
-        $env:WINSHELL_STUB_LOG = Join-Path $TestDrive 'dotnet.log'
-        try {
-            pwsh -NoProfile -File (Join-Path $PSScriptRoot 'repeat-tests.ps1') -Tests 'tests/Winshell.Tests/CliHelpTests.cs' -Tier Slow -Times 1 | Out-Null
-        }
-        finally {
-            $env:PATH = $path
-            $logged = Get-Content -Raw -LiteralPath $env:WINSHELL_STUB_LOG
-            Remove-Item Env:WINSHELL_STUB_LOG
-        }
-        $logged | Should -Match 'Category=Slow'
-        $logged | Should -Match 'xUnit\.Seed=\d+'
-        $logged | Should -Match 'xUnit\.MaxParallelThreads=2x'
     }
 }
