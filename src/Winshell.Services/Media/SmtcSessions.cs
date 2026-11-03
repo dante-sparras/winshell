@@ -26,6 +26,13 @@ internal sealed class SmtcSessions : IMediaSessions
     /// </summary>
     private static readonly TimeSpan LongestRequestTimeout = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// Logged once when a request times out, so a broker that stopped answering does not look like nothing playing. The
+    /// broker is Windows' Now Playing Session Manager service; every app's request hangs while it is stuck.
+    /// </summary>
+    private const string NotAnswering =
+        "Windows' media session service (Now Playing Session Manager) is not answering, so no media session can be listed. Signing out, or restarting that service, brings it back.";
+
     private static SmtcSessions? _instance;
 
     private readonly IEventLoop _loop;
@@ -107,6 +114,7 @@ internal sealed class SmtcSessions : IMediaSessions
     {
         if (!ReferenceEquals(_pending, operation))
             return;
+        _warning.Failed(new TimeoutException(NotAnswering));
         try
         {
             operation.Cancel();

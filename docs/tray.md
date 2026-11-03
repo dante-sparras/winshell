@@ -4,7 +4,7 @@
 
 ## How the shell sees the icons
 
-Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that uses `SystemTray` makes one, keeps it in front of Explorer's taskbar, and passes every message on to Explorer. Explorer's own tray, app bars and toasts keep working. On start, the shell broadcasts `TaskbarCreated` so that running apps add their icons again.
+Apps send their icons to the first window of class `Shell_TrayWnd`. A shell that uses `SystemTray` makes one, keeps it in front of Explorer's taskbar, and passes every message on to Explorer. Explorer's own tray, app bars and toasts keep working. On start, the shell broadcasts `TaskbarCreated` so that running apps add their icons again, and posts it to every message-only window, which a broadcast does not reach. A change to an icon the shell does not have fails, as it does in Explorer, so an app that answers `TaskbarCreated` by changing its icon, as Windows Security does, then adds it.
 
 Foreground and desktop window-order events keep the host in front. Every thirty seconds it also checks the order and removes icons whose windows have gone. A waiting instance still checks the owner every half second.
 
@@ -52,12 +52,13 @@ The shell lets the app take the foreground (`AllowSetForegroundWindow`) and acti
 ## Limits
 
 - Icons that Explorer draws itself, such as volume, network and battery on Windows 11, are not `Shell_NotifyIcon` icons. Use `Winshell.Audio`, `Winshell.Network` and `Winshell.Power`.
+- An app that adds its icon only when it starts, and does not add it again on `TaskbarCreated`, such as NVIDIA's display container (NVIDIA Settings), shows no icon until it starts again while the shell runs. Explorer, which had the icon first, still shows it.
 - The order of `Items` is the order apps added their icons. It is not the order the user arranged in the taskbar.
 - An app that finds the taskbar with `FindWindow("Shell_TrayWnd")` finds the shell's window. Menu commands (`WM_COMMAND` with no control window) and `WM_SYSCOMMAND` are posted on to Explorer's taskbar, but a command sent for an answer gets 0. Private `WM_USER` messages are not forwarded because their data layout is unknown. The window has none of the children of Explorer's, such as `TrayNotifyWnd` or `ReBarWindow32`, so an app that looks for those finds nothing.
 
 ## Checks only a live session can do
 
-Automated tests run hosts under private window classes and never broadcast to the session. These need a person at the PC:
+Automated tests run hosts under private window classes and broadcast no message the session's apps listen for. These need a person at the PC:
 
 1. Run a shell that lists `SystemTray.Items`. Restart Explorer from Task Manager, and confirm the log shows that Explorer made a new taskbar and that every icon is still listed.
 2. Run two instances, then `winshell kill` the first. Within a second, the second lists the icons.
