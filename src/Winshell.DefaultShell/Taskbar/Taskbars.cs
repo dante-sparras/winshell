@@ -34,7 +34,7 @@ internal sealed class Taskbars
             shell.SystemTray,
             new SystemStatus(shell.Networking, shell.Audio, shell.Power, shell.PowerMode),
             shell.Updates,
-            new WinlandMenu(shell.Winland, File.Exists, path => WinlandMenu.Open(path, shell.Log)));
+            new WinlandMenu(() => shell.Winland, File.Exists, path => WinlandMenu.Open(path, shell.Log)));
         // One center for every bar. Reading the listener never asks Windows for access.
         _notifications = new NotificationCenter(shell.Notifications, preferences, TimeProvider.System);
         // One quick settings for every bar, and the same layout for Winshell Settings. Bluetooth is read only while a flyout is open.

@@ -27,7 +27,10 @@ public sealed class TrayArea : ObservableObject
         _updates = updates;
         tray.Items.CollectionChanged += OnItems;
         foreach (var item in tray.Items)
+        {
             item.PropertyChanged += OnItem;
+            winland?.Notice(item);
+        }
         updates.PropertyChanged += OnUpdates;
         Place();
         PublishUpdate();
@@ -95,7 +98,10 @@ public sealed class TrayArea : ObservableObject
     private void OnItems(object? sender, NotifyCollectionChangedEventArgs e)
     {
         foreach (var item in e.NewItems?.OfType<SystemTrayItem>() ?? [])
+        {
             item.PropertyChanged += OnItem;
+            Winland?.Notice(item);
+        }
         foreach (var item in e.OldItems?.OfType<SystemTrayItem>() ?? [])
             item.PropertyChanged -= OnItem;
         Place();

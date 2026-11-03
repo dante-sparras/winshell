@@ -14,11 +14,16 @@ public sealed class WinlandMenuTests : IDisposable
     private readonly WinlandService _winland;
     private readonly List<string> _opened = [];
     private bool _logExists;
+    private int _services;
 
     public WinlandMenuTests()
     {
         _winland = new WinlandService(_loop, new Log { Sink = static (_, _, _) => { } }, _link);
-        Menu = new WinlandMenu(_winland, path => path == _winland.LogPath && _logExists, _opened.Add);
+        Menu = new WinlandMenu(() =>
+        {
+            _services++;
+            return _winland;
+        }, path => path == _winland.LogPath && _logExists, _opened.Add);
     }
 
     private WinlandMenu Menu { get; }
@@ -73,6 +78,29 @@ public sealed class WinlandMenuTests : IDisposable
         _link.Executable = "";
         Assert.False(Menu.Owns(winland));
         Assert.False(Menu.Owns(unknown));
+    }
+
+    [Fact]
+    public void Winlands_pipe_is_followed_only_once_an_icon_of_winland_exe_appears()
+    {
+        var host = new FakeTrayHost();
+        using var tray = new SystemTray(_loop, new Log { Sink = static (_, _, _) => { } }, host);
+        host.Add(new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe" });
+        host.Add(new TrayIcon { Key = "unknown" });
+
+        foreach (var item in tray.Items)
+        {
+            Menu.Notice(item);
+            Assert.False(Menu.Owns(item));
+        }
+        Assert.Equal(0, _services);
+
+        host.Add(new TrayIcon { Key = "winland", ProgramPath = Winland });
+        Menu.Notice(tray.Items[2]);
+        Menu.Notice(tray.Items[2]);
+
+        Assert.Equal(1, _services);
+        Assert.True(Menu.Owns(tray.Items[2]));
     }
 
     public void Dispose() => _winland.Dispose();
