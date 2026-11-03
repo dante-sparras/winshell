@@ -58,7 +58,6 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `IdleMonitor([IEventLoop](winshell.md#ieventloop) loop)` | constructor |  |
 | `Enabled` | bool |  |
 | `IsIdle` | bool, read-only |  |
 | `RespectKeepAwake` | bool | When a KeepAwake is on, this monitor does not report idle. |

@@ -11,7 +11,7 @@ namespace Winshell;
 /// <see cref="double"/>, <see cref="float"/> and <see cref="Color"/> cross the pipe. The
 /// CLI's text is parsed into those types and nothing is ever evaluated. Use this on the shell's thread.
 /// </summary>
-public sealed class ShellIpc(Log log) : IIpcTargets
+public sealed class ShellIpc
 {
     private static readonly Dictionary<Type, string> Declared = new()
     {
@@ -24,7 +24,11 @@ public sealed class ShellIpc(Log log) : IIpcTargets
         [typeof(void)] = "void",
     };
 
+    private readonly Log _log;
+
     private readonly SortedDictionary<string, Target> _targets = new(StringComparer.Ordinal);
+
+    internal ShellIpc(Log log) => _log = log;
 
     /// <summary>
     /// Lets <c>winshell ipc call</c> run <paramref name="handler"/>, such as <c>(string page) => Open(page)</c>.
@@ -67,15 +71,15 @@ public sealed class ShellIpc(Log log) : IIpcTargets
         return made;
     }
 
-    /// <inheritdoc/>
-    public IReadOnlyList<IpcTargetView> Describe() => _targets.Select(pair => new IpcTargetView(
+    /// <summary>Every target with the functions, properties and signals <c>ipc show</c> lists.</summary>
+    internal IReadOnlyList<IpcTargetView> Describe() => _targets.Select(pair => new IpcTargetView(
         pair.Key,
         pair.Value.Functions.Select(f => new IpcFunctionView(f.Name, f.Names.Zip(f.Types, (name, type) => new IpcParameterView(name, Declared[type])).ToList(), Declared[f.Returns])).ToList(),
         pair.Value.Properties.Select(p => new IpcPropertyView(p.Name, Declared[p.Type])).ToList(),
         pair.Value.Signals.Select(s => new IpcSignalView(s.Name, [])).ToList())).ToList();
 
-    /// <inheritdoc/>
-    public string Call(string target, string function, IReadOnlyList<string> args)
+    /// <summary>Calls a function. Returns its result as text, or throws <see cref="IpcException"/> with a message for the CLI.</summary>
+    internal string Call(string target, string function, IReadOnlyList<string> args)
     {
         var found = Find(target).Functions.Find(f => f.Name == function) ?? throw new IpcException($"Function not found: {target}.{function}");
         if (args.Count != found.Types.Length)
@@ -94,15 +98,14 @@ public sealed class ShellIpc(Log log) : IIpcTargets
         }
     }
 
-    /// <inheritdoc/>
-    public string GetProperty(string target, string property)
+    internal string GetProperty(string target, string property)
     {
         var found = Find(target).Properties.Find(p => p.Name == property) ?? throw new IpcException($"Property not found: {target}.{property}");
         return Format(found.Read());
     }
 
-    /// <inheritdoc/>
-    public IDisposable Listen(string target, string signal, Action<string> onSignal)
+    /// <summary>Calls back with a signal's argument as text each time it fires, until disposed.</summary>
+    internal IDisposable Listen(string target, string signal, Action<string> onSignal)
     {
         var found = Find(target).Signals.Find(s => s.Name == signal) ?? throw new IpcException($"Signal not found: {target}.{signal}");
         return found.Connect(onSignal);
@@ -120,7 +123,7 @@ public sealed class ShellIpc(Log log) : IIpcTargets
         var index = members.FindIndex(m => m.Name == name);
         if (index >= 0)
         {
-            log.Warn("ipc", $"Duplicate IPC name \"{target}.{name}\"; the later one wins.");
+            _log.Warn("ipc", $"Duplicate IPC name \"{target}.{name}\"; the later one wins.");
             members[index] = member;
         }
         else

@@ -73,7 +73,7 @@ internal static class IpcProtocol
 internal interface IInstanceControl
 {
     /// <summary>The shell's IPC targets now. A reload can replace them.</summary>
-    IIpcTargets Ipc { get; }
+    ShellIpc Ipc { get; }
 
     /// <summary>
     /// Reloads the shell. <paramref name="program"/> is the build to start when the running one kept its folder, and
