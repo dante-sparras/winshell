@@ -42,8 +42,11 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | Member | Type | Description |
 | --- | --- | --- |
 | `ActiveWindow` | [WinlandWindow](#winlandwindow)?, read-only |  |
+| `ConfigPath` | string, read-only | The config Winland reads when it is started without `--config`, `winland.conf` in `.winland` under the user profile. Winland's pipe does not say which config it read. |
+| `Executable` | string, read-only | The full path of the Winland that answers on the pipe, or empty while none does. |
 | `FocusedMonitor` | [WinlandMonitor](#winlandmonitor)?, read-only |  |
 | `FocusedWorkspace` | [WinlandWorkspace](#winlandworkspace)?, read-only |  |
+| `LogPath` | string, read-only | `winland.log` beside Winland's state file, in `.winland` under the user profile or the folder of the file `WINLAND_STATE` names. Winland writes it only while `debug:disable_logs` is false and it is not elevated. |
 | `Monitors` | ObservableCollection of [WinlandMonitor](#winlandmonitor), read-only | The Monitors, by id. |
 | `PipePath` | string, read-only | Winland's pipe. It takes requests and, after an `events` request, streams events. |
 | `Windows` | ObservableCollection of [WinlandWindow](#winlandwindow), read-only | The windows Winland manages, in the order they were first reported. |
@@ -52,6 +55,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Dispatch(string request)` | void | Sends `dispatch` and the request to Winland. A failure is logged. |
 | `Dispose()` | void |  |
 | `MonitorFor([ScreenInfo](winshell.md#screeninfo)? screen)` | [WinlandMonitor](#winlandmonitor)? | The Monitor of a screen, matched by its `\\.\DISPLAYn` name. Before Winland's first Monitor list arrives, it adds a Monitor for the screen that the list fills in later; after it, null when Winland reports no such Monitor. |
+| `Reload()` | void | Asks Winland to read its config again, as `winland reload` does. A failure is logged. |
 | `RefreshMonitors()` | void | Asks Winland for its Monitors again. Updates the listed ones and removes those it no longer reports. |
 | `RefreshWindows()` | void | Asks Winland for its windows again, adding new ones and updating titles and Workspaces. |
 | `RefreshWorkspaces()` | void | Asks Winland for its Workspaces again and updates the listed ones. |

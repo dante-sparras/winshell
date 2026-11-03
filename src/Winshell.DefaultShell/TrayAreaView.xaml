@@ -29,7 +29,7 @@
                             <Setter Property="AutomationProperties.Name" Value="Hidden icons" />
                         </Style>
                     </Flyout.FlyoutPresenterStyle>
-                    <ItemsRepeater ItemsSource="{x:Bind Area.Hidden, Mode=OneWay}">
+                    <ItemsRepeater ItemsSource="{x:Bind Area.Hidden, Mode=OneWay}" ElementPrepared="OnIconPrepared">
                         <ItemsRepeater.Layout>
                             <UniformGridLayout Orientation="Horizontal" MaximumRowsOrColumns="5" />
                         </ItemsRepeater.Layout>
@@ -42,7 +42,7 @@
                 </Flyout>
             </Button.Flyout>
         </Button>
-        <ItemsRepeater ItemsSource="{x:Bind Area.OnBar, Mode=OneWay}" VerticalAlignment="Center">
+        <ItemsRepeater ItemsSource="{x:Bind Area.OnBar, Mode=OneWay}" VerticalAlignment="Center" ElementPrepared="OnIconPrepared">
             <ItemsRepeater.Layout>
                 <StackLayout Orientation="Horizontal" Spacing="0" />
             </ItemsRepeater.Layout>

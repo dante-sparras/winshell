@@ -7,6 +7,9 @@ internal interface IWinlandLink : IDisposable
 
     string PipePath { get; }
 
+    /// <summary>The full path of the program that answers on the pipe, or empty while none does.</summary>
+    string Executable { get; }
+
     event Action<bool>? ConnectionChanged;
 
     event Action<string>? EventReceived;
@@ -22,6 +25,8 @@ internal sealed class WinlandPipe(Log log) : IWinlandLink
     public bool IsConnected => WinlandConnection.IsConnected;
 
     public string PipePath => WinlandConnection.PipePath;
+
+    public string Executable => WinlandConnection.Executable;
 
     public event Action<bool>? ConnectionChanged
     {

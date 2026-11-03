@@ -34,6 +34,9 @@ public sealed class WinlandService : ObservableObject, IDisposable
     {
         _loop = loop;
         _log = log;
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        ConfigPath = WinlandFiles.Config(profile);
+        LogPath = WinlandFiles.Log(profile, Environment.GetEnvironmentVariable(WinlandFiles.StateVariable));
         _link = link ?? new WinlandPipe(log);
         _link.ConnectionChanged += OnConnectionChanged;
         _link.EventReceived += OnEventReceived;
@@ -63,6 +66,21 @@ public sealed class WinlandService : ObservableObject, IDisposable
     /// <summary>Winland's pipe. It takes requests and, after an <c>events</c> request, streams events.</summary>
     public string PipePath => _link.PipePath;
 
+    /// <summary>The full path of the Winland that answers on the pipe, or empty while none does.</summary>
+    public string Executable => _link.Executable;
+
+    /// <summary>
+    /// The config Winland reads when it is started without <c>--config</c>, <c>winland.conf</c> in <c>.winland</c>
+    /// under the user profile. Winland's pipe does not say which config it read.
+    /// </summary>
+    public string ConfigPath { get; }
+
+    /// <summary>
+    /// <c>winland.log</c> beside Winland's state file, in <c>.winland</c> under the user profile or the folder of the file
+    /// <c>WINLAND_STATE</c> names. Winland writes it only while <c>debug:disable_logs</c> is false and it is not elevated.
+    /// </summary>
+    public string LogPath { get; }
+
     /// <summary>The shell's window list, when one is in use. <see cref="WinlandWindow.Window"/> is resolved from it.</summary>
     internal WindowListService? WindowList => _windows;
 
@@ -90,6 +108,9 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     /// <summary>Sends <c>dispatch</c> and the request to Winland. A failure is logged.</summary>
     public void Dispatch(string request) => Send("dispatch " + request);
+
+    /// <summary>Asks Winland to read its config again, as <c>winland reload</c> does. A failure is logged.</summary>
+    public void Reload() => Send("reload");
 
     /// <summary>Asks Winland for its Monitors again. Updates the listed ones and removes those it no longer reports.</summary>
     public void RefreshMonitors() => RefreshMonitors(false);
@@ -159,6 +180,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
         else
             Reset();
         Changed(nameof(PipePath));
+        Changed(nameof(Executable));
     });
 
     private void OnEventReceived(string line) => _loop.Post(() =>

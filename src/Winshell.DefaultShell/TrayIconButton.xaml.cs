@@ -11,24 +11,38 @@ namespace Winshell.DefaultShell;
 
 /// <summary>
 /// One notification-area icon. A left click, a middle click and a double click reach the app. A right click asks the
-/// app for its menu at the pointer.
+/// app for its menu at the pointer. Winland's icon opens <see cref="WinlandMenu"/> on a click or a right click, which
+/// the shell draws itself.
 /// </summary>
 public sealed partial class TrayIconButton : Button
 {
     private SystemTrayItem? _item;
     private PixelImage? _image;
     private int _pixels;
+    private MenuFlyout? _menu;
 
     public TrayIconButton()
     {
         InitializeComponent();
-        Click += (_, _) => Item?.Click();
-        DoubleTapped += (_, _) => Item?.DoubleClick();
+        Click += (_, _) =>
+        {
+            if (!ShowWinlandMenu())
+                Item?.Click();
+        };
+        // Winland takes the second click of a double click for one that opens its menu.
+        DoubleTapped += (_, _) =>
+        {
+            if (Winland() is null)
+                Item?.DoubleClick();
+        };
         PointerReleased += OnPointerReleased;
         ContextRequested += OnContextRequested;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
+
+    /// <summary>The tray area this icon sits in. It sets this as it shows the icon.</summary>
+    internal TrayAreaView? Tray { get; set; }
 
     public SystemTrayItem? Item
     {
@@ -55,6 +69,7 @@ public sealed partial class TrayIconButton : Button
         if (XamlRoot is not null)
             XamlRoot.Changed -= OnRootChanged;
         Follow(false);
+        _menu?.Hide();
     }
 
     private void OnRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => Show();
@@ -72,7 +87,30 @@ public sealed partial class TrayIconButton : Button
         if (Item is not { } item)
             return;
         args.Handled = true;
-        item.Display();
+        if (!ShowWinlandMenu())
+            item.Display();
+    }
+
+    /// <summary>The menu, when this icon is Winland's and the tray draws Winland's menu.</summary>
+    private WinlandMenu? Winland() =>
+        Item is { } item && Tray?.Area.Winland is { } menu && menu.Owns(item) ? menu : null;
+
+    private bool ShowWinlandMenu()
+    {
+        if (Winland() is not { } model || Tray is not { } tray)
+            return false;
+        // The rows are read as the menu opens, so Open log follows the log file.
+        var menu = TaskMenuFlyout.Create(WinlandMenu.Name, model.Rows(), model.Choose, ShellIcon.Pixels(XamlRoot, 16));
+        menu.Opened += (_, _) => tray.SetMenuOpen(true);
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_menu, menu))
+                _menu = null;
+            tray.SetMenuOpen(false);
+        };
+        _menu = menu;
+        menu.ShowAt(this);
+        return true;
     }
 
     private void Follow(bool on)

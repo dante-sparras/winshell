@@ -394,6 +394,26 @@ public sealed class WinlandServiceTests
     }
 
     [Fact]
+    public void The_program_on_the_pipe_is_announced_as_Winland_comes_and_goes()
+    {
+        using var service = new WinlandService(_loop, Log.Default, _link);
+        var changes = Watch(service);
+
+        _link.Executable = @"C:\Program Files\Winland\winland.exe";
+        _link.RaiseConnection(true);
+        _loop.Process();
+        Assert.Equal(@"C:\Program Files\Winland\winland.exe", service.Executable);
+        Assert.Contains(nameof(WinlandService.Executable), changes);
+
+        changes.Clear();
+        _link.Executable = "";
+        _link.RaiseConnection(false);
+        _loop.Process();
+        Assert.Equal("", service.Executable);
+        Assert.Contains(nameof(WinlandService.Executable), changes);
+    }
+
+    [Fact]
     public void A_disposed_service_stops_following_the_stream()
     {
         var service = Connected();
@@ -478,6 +498,8 @@ public sealed class WinlandServiceTests
         public bool IsConnected => Connected;
 
         public string PipePath => @"\\.\pipe\winland-test";
+
+        public string Executable { get; set; } = "";
 
         public event Action<bool>? ConnectionChanged;
 

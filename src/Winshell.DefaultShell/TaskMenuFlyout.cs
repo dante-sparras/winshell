@@ -24,7 +24,7 @@ internal static class TaskMenuFlyout
         };
         foreach (var row in rows)
         {
-            var item = new MenuFlyoutItem { Text = row.Label, IsEnabled = row.Enabled, Icon = Icon(row, iconSize) };
+            var item = new MenuFlyoutItem { Text = row.Label, IsEnabled = row.Enabled, Icon = Icon(row, iconSize), AccessKey = row.AccessKey };
             item.Click += (_, _) => choose(row.Id);
             menu.Items.Add(item);
         }

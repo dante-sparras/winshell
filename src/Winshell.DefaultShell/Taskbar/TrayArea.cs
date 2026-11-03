@@ -19,10 +19,11 @@ public sealed class TrayArea : ObservableObject
     private bool _updateReady;
     private string _updateLabel = "";
 
-    public TrayArea(SystemTray tray, SystemStatus status, UpdatesService updates)
+    public TrayArea(SystemTray tray, SystemStatus status, UpdatesService updates, WinlandMenu? winland = null)
     {
         _tray = tray;
         Status = status;
+        Winland = winland;
         _updates = updates;
         tray.Items.CollectionChanged += OnItems;
         foreach (var item in tray.Items)
@@ -33,6 +34,9 @@ public sealed class TrayArea : ObservableObject
     }
 
     public SystemStatus Status { get; }
+
+    /// <summary>The menu Winland's icon opens here, or null when a click on it goes to Winland.</summary>
+    public WinlandMenu? Winland { get; }
 
     /// <summary>Icons Settings shows on the taskbar, in the order the apps added them.</summary>
     public ObservableCollection<SystemTrayItem> OnBar { get; } = [];
