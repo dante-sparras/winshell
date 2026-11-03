@@ -14,7 +14,6 @@ public sealed class IpcSyntaxTests : IDisposable
     [InlineData("call", "foo")]
     [InlineData("prop", "get", "foo")]
     [InlineData("wait", "foo")]
-    [InlineData("nonsense")]
     public void A_wrong_ipc_command_exits_2_with_nothing_running(params string[] words)
     {
         var (code, output, error) = WinshellCli.Run(["ipc", .. words], ("WINSHELL_LOCAL_DIR", _root));

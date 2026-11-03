@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Winshell.Commands;
 
@@ -60,11 +61,9 @@ internal static class Cli
                     return await InspectCommand.RunAsync(options);
                 case "dev":
                     return await DevCommand.RunAsync(options);
-                case "help":
-                    return HelpCommand.Run();
                 default:
-                    Console.Error.WriteLine($"Unknown command \"{command}\". Run winshell --help.");
-                    return 2;
+                    // CliParser refuses a command it does not know.
+                    throw new UnreachableException($"No command \"{command}\".");
             }
         }
         catch (Exception e) when (e is not OutOfMemoryException && command is not (null or "run"))

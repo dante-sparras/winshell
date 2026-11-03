@@ -2,6 +2,8 @@ namespace Winshell;
 
 internal static class InstanceSelection
 {
+    internal const string NoneRunning = "No running instances";
+
     internal static InstanceChoice Select(CliOptions options, bool includeDead = false)
     {
         var instances = Instances.List(includeDead).Select(i => i.Info).ToList();
@@ -45,7 +47,7 @@ internal static class InstanceSelection
             var listed = string.Join(", ", instances.Select(i => $"{i.Id} ({i.ConfigPath})"));
             return InstanceChoice.Wrong($"Several instances are running; pick one with -i: {listed}");
         }
-        return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss("No running instances");
+        return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss(NoneRunning);
     }
 
     /// <summary><c>winshell.exe</c> and <c>winshellw.exe</c> are the default shell. A project built into <c>bin\shell</c> is not.</summary>

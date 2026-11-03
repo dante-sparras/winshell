@@ -11,18 +11,34 @@ internal static class CliParser
         // Help wins over validation and execution. Arguments after -- or an IPC function are data.
         if (HelpRequested(args))
             return new CliOptions { Command = command, ShowHelp = true };
+        if (command is not null && !Commands.Contains(command))
+            throw UnknownCommand(command);
 
         var rest = command is null ? args : WithoutToken(args, command);
         var options = ParseOptions(rest, command);
-        // log takes one file; IPC and inspect validate their own positional arguments.
-        if (command is "log")
+        var positional = options.Positional;
+        switch (command)
         {
-            if (options.Positional.Length > 1)
-                throw new ArgumentException($"Unexpected argument \"{options.Positional[1]}\".");
-        }
-        else if (command is not ("ipc" or "inspect") && options.Positional.Length > 0)
-        {
-            throw new ArgumentException($"Unexpected argument \"{options.Positional[0]}\".");
+            // help takes a command and log takes one file.
+            case "help" or "log" when positional.Length > 1:
+                throw Unexpected(positional[1]);
+            // help <command> is <command> --help.
+            case "help":
+                var topic = positional.FirstOrDefault();
+                if (topic is not null && !Commands.Contains(topic))
+                    throw UnknownCommand(topic);
+                return new CliOptions { Command = topic, ShowHelp = true };
+            case "log":
+                break;
+            // ipc and inspect check the rest of their words themselves.
+            case "ipc" or "inspect":
+                if (positional.Length > 0 && !Subcommands(command).Contains(positional[0]))
+                    throw new ArgumentException($"Unknown {command} command \"{positional[0]}\". Run winshell {command} --help.");
+                break;
+            default:
+                if (positional.Length > 0)
+                    throw Unexpected(positional[0]);
+                break;
         }
         return options with
         {
@@ -33,6 +49,20 @@ internal static class CliParser
             ShellStartAllowed = OnlyShellStartOptions(args),
         };
     }
+
+    private static readonly string[] Commands = ["run", "list", "kill", "reload", "log", "ipc", "inspect", "dev", "doctor", "help"];
+
+    private static string[] Subcommands(string command) => command switch
+    {
+        "ipc" => ["show", "call", "prop", "wait", "listen"],
+        "inspect" => ["tree", "screenshot", "click", "hover"],
+        _ => [],
+    };
+
+    private static ArgumentException UnknownCommand(string command) =>
+        new($"Unknown command \"{command}\". Run winshell --help.");
+
+    private static ArgumentException Unexpected(string argument) => new($"Unexpected argument \"{argument}\".");
 
     /// <summary>The first word that is not an option. Options may come before it, so <c>-c work kill</c> is kill.</summary>
     internal static string? FirstCommand(string[] args)

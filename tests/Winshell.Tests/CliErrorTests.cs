@@ -30,6 +30,17 @@ public class CliErrorTests
         Assert.Contains("   at ", error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void List_and_kill_say_the_same_when_nothing_runs()
+    {
+        var local = ("WINSHELL_LOCAL_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-error-absent-local"));
+        var list = WinshellCli.Run(["list"], local);
+        var kill = WinshellCli.Run(["kill"], local);
+
+        Assert.Equal((0, "No running instances" + Environment.NewLine, ""), list);
+        Assert.Equal((1, "", "No running instances" + Environment.NewLine), kill);
+    }
+
     private static (int Code, string Output, string Error) Run(params string[] args) =>
         WinshellCli.Run(
             args,
