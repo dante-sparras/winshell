@@ -103,7 +103,7 @@ internal sealed record DoctorContext(
 /// Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance
 /// started or stopped, and no build. Telling whether a folder can be written makes and removes one empty file. The
 /// user's own folders are written as <c>%LOCALAPPDATA%</c>, <c>%APPDATA%</c> and <c>%USERPROFILE%</c>, so what it
-/// prints can go into a bug report without the Windows user name.
+/// reports can go into a bug report without the Windows user name.
 /// </summary>
 public static class Doctor
 {
