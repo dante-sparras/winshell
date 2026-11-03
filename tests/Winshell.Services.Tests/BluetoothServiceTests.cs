@@ -601,8 +601,6 @@ public sealed class BluetoothServiceTests
     {
         public bool Disposed { get; private set; }
 
-        public Task<BluetoothSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
-
         public abstract Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation);
 
         public void StartDiscovery()
@@ -748,7 +746,7 @@ public sealed class BluetoothServiceTests
 
         public TaskCompletionSource FirstRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<BluetoothSnapshot> ReadAsync()
+        public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
             Interlocked.Increment(ref _reads);
             FirstRead.TrySetResult();

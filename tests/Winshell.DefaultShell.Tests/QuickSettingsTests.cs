@@ -967,7 +967,7 @@ internal sealed class SnapshotBluetooth : IBluetoothBackend
 {
     public BluetoothSnapshot Snapshot { get; set; } = BluetoothSnapshot.Initial;
 
-    public Task<BluetoothSnapshot> ReadAsync() => Task.FromResult(Snapshot);
+    public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation) => Task.FromResult(Snapshot);
 
     public void StartDiscovery() => throw new NotSupportedException();
 
