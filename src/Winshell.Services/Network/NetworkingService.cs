@@ -175,15 +175,18 @@ public class Network : ObservableObject
         {
             error = e.Message;
         }
-        Device.Loop.Post(() =>
+        finally
         {
-            if (Removed)
-                return;
-            Set(ref _busy, false, nameof(Busy));
-            Set(ref _error, error, nameof(Error));
-            if (error.Length > 0)
-                OperationFailed?.Invoke(error);
-        });
+            Device.Loop.Post(() =>
+            {
+                if (Removed)
+                    return;
+                Set(ref _busy, false, nameof(Busy));
+                Set(ref _error, error, nameof(Error));
+                if (error.Length > 0)
+                    OperationFailed?.Invoke(error);
+            });
+        }
     }
 
     internal virtual void Update(NetworkInfo info)
@@ -365,16 +368,19 @@ public sealed class WifiProfile : ObservableObject
         {
             error = e.Message;
         }
-        var message = error;
-        _network.Device.Loop.Post(() =>
+        finally
         {
-            _writing = false;
-            if (Removed)
-                return;
-            SetActionError(message);
-            if (message.Length > 0)
-                OperationFailed?.Invoke(message);
-        });
+            var message = error;
+            _network.Device.Loop.Post(() =>
+            {
+                _writing = false;
+                if (Removed)
+                    return;
+                SetActionError(message);
+                if (message.Length > 0)
+                    OperationFailed?.Invoke(message);
+            });
+        }
     }
 }
 
@@ -485,15 +491,18 @@ public sealed class WifiDevice : NetworkDevice
         {
             error = e.Message;
         }
-        Loop.Post(() =>
+        finally
         {
-            if (Removed)
-                return;
-            Set(ref _scanning, false, nameof(Scanning));
-            Set(ref _error, error, nameof(Error));
-            if (error.Length > 0)
-                OperationFailed?.Invoke(error);
-        });
+            Loop.Post(() =>
+            {
+                if (Removed)
+                    return;
+                Set(ref _scanning, false, nameof(Scanning));
+                Set(ref _error, error, nameof(Error));
+                if (error.Length > 0)
+                    OperationFailed?.Invoke(error);
+            });
+        }
     }
 
     internal override void Update(NetworkDeviceInfo info)
@@ -624,17 +633,20 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         {
             error = e.Message;
         }
-        _loop.Post(() =>
+        finally
         {
-            if (_disposed)
-                return;
-            _radioError = "";
-            Set(ref _requesting, false, nameof(RequestingAccess));
-            Apply(_backend.Current);
-            Set(ref _error, error, nameof(Error));
-            if (error.Length > 0)
-                OperationFailed?.Invoke(error);
-        });
+            _loop.Post(() =>
+            {
+                if (_disposed)
+                    return;
+                _radioError = "";
+                Set(ref _requesting, false, nameof(RequestingAccess));
+                Apply(_backend.Current);
+                Set(ref _error, error, nameof(Error));
+                if (error.Length > 0)
+                    OperationFailed?.Invoke(error);
+            });
+        }
     }
 
     // Returns before Windows answers. The property changes only when a snapshot reports the radios did.

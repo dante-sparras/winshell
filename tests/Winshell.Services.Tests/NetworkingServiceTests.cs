@@ -331,6 +331,32 @@ public sealed class NetworkingServiceTests
     }
 
     [Fact]
+    public async Task An_unexpected_failure_ends_the_action_and_still_fails_its_task()
+    {
+        using var session = new Session(Snapshot(Wifi(profiles: Described())));
+        var network = session.Network;
+        var device = session.Device;
+        var profile = session.Profile;
+        // A bug, not a failure Windows reports. The shell reports the task that failed; the action still ends.
+        var bug = new NullReferenceException("A bug");
+        session.Backend.Failure = bug;
+        session.Backend.AutoException = bug;
+
+        Assert.Same(bug, await Assert.ThrowsAsync<NullReferenceException>(() => network.ConnectAsync(null)));
+        Assert.Same(bug, await Assert.ThrowsAsync<NullReferenceException>(device.ScanAsync));
+        Assert.Same(bug, await Assert.ThrowsAsync<NullReferenceException>(session.Service.RequestAccessAsync));
+        Assert.Same(bug, await Assert.ThrowsAsync<NullReferenceException>(() => profile.SetAutoConnectAsync(true)));
+        session.Loop.Process();
+
+        Assert.False(network.Busy);
+        Assert.False(device.Scanning);
+        Assert.False(session.Service.RequestingAccess);
+        session.Backend.AutoException = null;
+        await profile.SetAutoConnectAsync(false);
+        Assert.Equal([true, false], session.Backend.Autos.Select(a => a.Auto));
+    }
+
+    [Fact]
     public void A_saved_profile_keeps_its_object_and_a_failed_read_raises_nothing()
     {
         var failedRead = new WifiProfileInfo(WifiProfiles.Id(AdapterId, "Office"), "Office", "", false, WifiSecurityType.Unknown, false, false, false, WifiProfileXml.Unreadable);

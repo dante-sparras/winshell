@@ -236,7 +236,7 @@ public sealed class BluetoothDevice : ObservableObject
         SetOperation(operation);
         Set(ref _error, "", nameof(Error));
         _service.Invalidate();
-        string? error;
+        string? error = null;
         try
         {
             error = await action(_info).ConfigureAwait(false);
@@ -249,18 +249,21 @@ public sealed class BluetoothDevice : ObservableObject
         {
             error = e.Message;
         }
-        _service.Post(() =>
+        finally
         {
-            _service.Invalidate();
-            if (!_removed)
+            _service.Post(() =>
             {
-                SetOperation(BluetoothOperation.None);
-                Set(ref _error, error ?? "", nameof(Error));
-                if (error is not null)
-                    OperationFailed?.Invoke(error);
-            }
-            _service.Refresh();
-        });
+                _service.Invalidate();
+                if (!_removed)
+                {
+                    SetOperation(BluetoothOperation.None);
+                    Set(ref _error, error ?? "", nameof(Error));
+                    if (error is not null)
+                        OperationFailed?.Invoke(error);
+                }
+                _service.Refresh();
+            });
+        }
     }
 
     private void SetOperation(BluetoothOperation operation)
