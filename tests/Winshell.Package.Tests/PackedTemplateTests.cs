@@ -8,6 +8,7 @@ using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Microsoft.Win32;
 
 namespace Winshell.Package.Tests;
 
@@ -38,6 +39,13 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
         // The project's own name, not the built-in default shell's id, whose folders and mutex it would share.
         Run("PackedShell", templates.DefaultProject);
+    }
+
+    [Fact(Timeout = PatienceMs)]
+    public void Packing_and_creating_the_templates_leaves_the_user_PATH_as_it_was()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        Assert.Equal(templates.UserPathBefore, PackedTemplates.UserPath());
     }
 
     private void Run(string shellId, string projectFile)
@@ -177,6 +185,7 @@ public sealed class PackedTemplates : IDisposable
 
     public PackedTemplates()
     {
+        UserPathBefore = UserPath();
         var root = Repo();
         // A version of its own each run. NuGet keeps a package by its version, so a repeated one would build what an
         // earlier run packed, and the test would pass on code it never packed.
@@ -190,12 +199,13 @@ public sealed class PackedTemplates : IDisposable
         var templates = Path.Combine(packages, $"Winshell.Templates.{Version}.nupkg");
         Assert.True(File.Exists(templates), $"No template package at {templates}");
 
-        var cliHome = Path.Combine(_work, "cli");
-        Directory.CreateDirectory(cliHome);
-        var install = Dotnet(cliHome, "new", "install", templates);
+        // A hive of the run's own keeps the templates out of the developer's. A DOTNET_CLI_HOME of its own would too, but
+        // the SDK's first run in a new home appends that home's tools folder to the user PATH.
+        var hive = Path.Combine(_work, "hive");
+        var install = DotnetNew(hive, "install", templates);
         Assert.True(install.ExitCode == 0, install.Output);
-        SmallProject = Instantiate(cliHome, packages, "winshell");
-        DefaultProject = Instantiate(cliHome, packages, "winshell-default");
+        SmallProject = Instantiate(hive, packages, "winshell");
+        DefaultProject = Instantiate(hive, packages, "winshell-default");
     }
 
     public string Version { get; }
@@ -203,6 +213,18 @@ public sealed class PackedTemplates : IDisposable
     public string SmallProject { get; }
 
     public string DefaultProject { get; }
+
+    /// <summary>The developer's own PATH, read before anything was packed or created.</summary>
+    public (RegistryValueKind Kind, string? Value) UserPathBefore { get; }
+
+    /// <summary>HKCU\Environment\Path as stored, so <c>%USERPROFILE%</c> stays unexpanded.</summary>
+    public static (RegistryValueKind Kind, string? Value) UserPath()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey("Environment");
+        if (key?.GetValue("Path", null, RegistryValueOptions.DoNotExpandEnvironmentNames) is not string value)
+            return (RegistryValueKind.None, null);
+        return (key.GetValueKind("Path"), value);
+    }
 
     public void Dispose()
     {
@@ -221,10 +243,10 @@ public sealed class PackedTemplates : IDisposable
         }
     }
 
-    private string Instantiate(string cliHome, string packages, string template)
+    private string Instantiate(string hive, string packages, string template)
     {
         var folder = Path.Combine(_work, template);
-        var created = Dotnet(cliHome, "new", template, "-n", "PackedShell", "-o", folder);
+        var created = DotnetNew(hive, template, "-n", "PackedShell", "-o", folder);
         Assert.True(created.ExitCode == 0, created.Output);
         var project = Assert.Single(Directory.GetFiles(folder, "*.csproj"));
         File.WriteAllText(Path.Combine(folder, "nuget.config"), $"""
@@ -240,7 +262,7 @@ public sealed class PackedTemplates : IDisposable
         return project;
     }
 
-    private static CommandResult Dotnet(string cliHome, params string[] args)
+    private static CommandResult DotnetNew(string hive, params string[] args)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -249,11 +271,11 @@ public sealed class PackedTemplates : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        start.ArgumentList.Add("new");
         foreach (var arg in args)
             start.ArgumentList.Add(arg);
-        start.Environment["DOTNET_CLI_HOME"] = cliHome;
-        start.Environment["DOTNET_NOLOGO"] = "1";
-        start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+        start.ArgumentList.Add("--debug:custom-hive");
+        start.ArgumentList.Add(hive);
         using var process = Process.Start(start)!;
         var output = "";
         var error = "";
