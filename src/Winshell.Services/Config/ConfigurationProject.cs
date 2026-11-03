@@ -9,7 +9,7 @@ namespace Winshell;
 internal sealed record CommandResult(int ExitCode, string Output);
 
 /// <summary>Runs a program in a folder and waits for it. Tests replace this, so most of them build nothing.</summary>
-internal delegate CommandResult RunCommand(string file, IReadOnlyList<string> arguments, string folder);
+internal delegate CommandResult RunProcess(string file, IReadOnlyList<string> arguments, string folder);
 
 /// <summary>
 /// A configuration on disk: the .NET project that defines a shell, and the program it builds into. Nothing here runs
@@ -127,7 +127,7 @@ internal sealed class ConfigurationProject
     /// Gets the program ready to start, and says why it isn't, or null when it is. <paramref name="noBuild"/> runs what the
     /// last build left, even if a source is newer, so signing in never depends on the SDK or on a broken edit.
     /// </summary>
-    public string? Prepare(bool noBuild, RunCommand run)
+    public string? Prepare(bool noBuild, RunProcess run)
     {
         if (Downloaded() is { } file)
             return $"{file}: {ZoneIdentifier.Blocked(file)}";
@@ -205,7 +205,7 @@ internal sealed class ConfigurationProject
         }
     }
 
-    private string? Build(RunCommand run)
+    private string? Build(RunProcess run)
     {
         // A running program keeps its files open. Windows will not replace those, and a build then waits on them
         // until it gives up. Renaming the folder lets the build write the new program. A WinUI program also keeps the
