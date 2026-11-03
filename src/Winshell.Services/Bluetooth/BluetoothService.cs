@@ -311,6 +311,9 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private readonly object _monitorGate = new();
     // Ends with the service. Stopping the monitor leaves this alone, so Refresh still reads.
     private readonly CancellationTokenSource _reading = new();
+    // One radio change and one visibility change run at a time. Boxed, so ChangeAdapterAsync can hold either flag.
+    private readonly StrongBox<int> _radioSet = new();
+    private readonly StrongBox<int> _visibilitySet = new();
     private CancellationTokenSource _stop = new();
     private Task? _monitorTask;
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
@@ -321,9 +324,6 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private int _readAgain;
     private int _monitoring;
     private int _monitorHolders;
-    // One radio change and one visibility change run at a time.
-    private readonly StrongBox<int> _radioSet = new();
-    private readonly StrongBox<int> _visibilitySet = new();
     private long _revision;
     private volatile bool _disposed;
 
