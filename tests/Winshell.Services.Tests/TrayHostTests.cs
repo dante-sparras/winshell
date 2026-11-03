@@ -7,7 +7,7 @@ namespace Winshell.Services.Tests;
 /// <summary>
 /// Runs notification area hosts under private window classes and a private owner name, so the real taskbar and the
 /// apps in the session never see them. An "Explorer" here is another host, which records what it is passed.
-/// Nothing is broadcast to the session.
+/// Nothing an app in the session listens for is broadcast to it.
 /// </summary>
 public sealed class TrayHostTests : IDisposable
 {
@@ -48,6 +48,40 @@ public sealed class TrayHostTests : IDisposable
         Send(host.Window, TrayCall.Build(TrayProtocol.Delete, (int)_app, 1, 0));
         Assert.Empty(host.Icons);
         Assert.Empty(explorer.Icons);
+    }
+
+    [Fact]
+    public void An_app_that_changes_an_icon_the_host_does_not_have_is_told_so_and_adds_it()
+    {
+        var host = Start(HostNames, out _);
+        // Windows Security, asked to add its icon again, changes it, and adds it only when that fails.
+        var guid = Guid.NewGuid();
+        var flags = TrayProtocol.NIF_TIP | TrayProtocol.NIF_GUID;
+        Assert.Equal(0, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Empty(host.Icons);
+
+        Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Secure", guid: guid)));
+        Assert.Equal("Secure", Assert.Single(host.Icons).Tip);
+    }
+
+    [Fact]
+    public void A_message_only_window_hears_the_broadcast()
+    {
+        // Hex keeps its icon on a message-only window, which a broadcast to every window does not reach. This message
+        // is the test's own, so no app in the session acts on it.
+        var message = Win32.RegisterWindowMessageW($"WinshellTestTaskbarCreated-{_id}");
+        var window = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
+        Assert.NotEqual(0, window);
+        try
+        {
+            TrayHost.Broadcast(message);
+            Assert.True(Win32.PeekMessageW(out _, window, message, message, Win32.PM_REMOVE));
+        }
+        finally
+        {
+            Win32.DestroyWindow(window);
+        }
     }
 
     [Fact]
