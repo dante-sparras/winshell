@@ -161,18 +161,12 @@ public sealed class SystemTrayTests
     [Fact]
     public void An_image_is_drawn_from_a_local_module_with_straight_alpha()
     {
-        var image = TrayHost.ResourceImage(new IconResource(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 3, ""), 32);
+        var image = IconImage.FromResource(new IconResource(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 3, ""), 32);
 
         Assert.NotNull(image);
         Assert.Equal(32, image.Width);
         Assert.Equal(32 * 32 * 4, image.Bgra.Length);
         Assert.False(image.Premultiplied);
-    }
-
-    private static TrayNames Names()
-    {
-        var id = Guid.NewGuid().ToString("N");
-        return new TrayNames($"WinshellTestTray-{id}", $"WinshellTestNone-{id}", $@"Local\winshell-test-tray-{id}");
     }
 
     private sealed class FakeHost : ITrayHost
