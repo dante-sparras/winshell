@@ -39,10 +39,10 @@ internal static class ProbeShell
     }
 
     /// <summary>
-    /// Starts the program, or <paramref name="program"/>, and waits until <c>winshell list</c> shows it. A null folder is
-    /// the one this process has.
+    /// Starts the program, or <paramref name="program"/>, and waits until <c>winshell list</c> shows it. The folders are
+    /// the test's own, so it never sees the user's instances.
     /// </summary>
-    internal static Process Start(string? config, string? local, string? shellId = null, string? program = null)
+    internal static Process Start(string config, string local, string? shellId = null, string? program = null)
     {
         var process = Launch(config, local, [], shellId, program: program);
         Wait.Until(() => Listed(config, local).Contains(process.Id), $"probe {process.Id} in winshell list");
@@ -50,7 +50,7 @@ internal static class ProbeShell
     }
 
     /// <summary>Starts the program and returns at once. What it prints goes to <paramref name="printed"/>.</summary>
-    internal static Process Launch(string? config, string? local, string[] args, string? shellId = null, StringBuilder? printed = null, string? program = null)
+    internal static Process Launch(string config, string local, string[] args, string? shellId = null, StringBuilder? printed = null, string? program = null)
     {
         var info = new ProcessStartInfo(program ?? Program)
         {
@@ -61,10 +61,8 @@ internal static class ProbeShell
         };
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
-        if (config is not null)
-            info.Environment["WINSHELL_CONFIG_DIR"] = config;
-        if (local is not null)
-            info.Environment["WINSHELL_LOCAL_DIR"] = local;
+        info.Environment["WINSHELL_CONFIG_DIR"] = config;
+        info.Environment["WINSHELL_LOCAL_DIR"] = local;
         if (shellId is not null)
             info.Environment[ShellIdVariable] = shellId;
         var process = Process.Start(info)!;
@@ -105,14 +103,9 @@ internal static class ProbeShell
         return process.ExitCode;
     }
 
-    private static HashSet<int> Listed(string? config, string? local)
+    private static HashSet<int> Listed(string config, string local)
     {
-        List<(string, string)> folders = [];
-        if (config is not null)
-            folders.Add(("WINSHELL_CONFIG_DIR", config));
-        if (local is not null)
-            folders.Add(("WINSHELL_LOCAL_DIR", local));
-        var result = WinshellCli.Run(["list", "--json"], [.. folders]);
+        var result = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
         Assert.Equal(0, result.Code);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).ToHashSet();
