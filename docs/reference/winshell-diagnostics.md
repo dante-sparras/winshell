@@ -16,7 +16,7 @@ How a DoctorCheck came out.
 
 ## Doctor
 
-Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance started or stopped, and no build. Telling whether a folder can be written makes and removes one empty file. The user's own folders are written as `%LOCALAPPDATA%`, `%APPDATA%` and `%USERPROFILE%`, so what it prints can go into a bug report without the Windows user name.
+Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance started or stopped, and no build. Telling whether a folder can be written makes and removes one empty file. The user's own folders are written as `%LOCALAPPDATA%`, `%APPDATA%` and `%USERPROFILE%`, so what it reports can go into a bug report without the Windows user name.
 
 | Member | Type | Description |
 | --- | --- | --- |
