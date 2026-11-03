@@ -5,8 +5,8 @@ using System.Runtime.CompilerServices;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// What a crash report must not do: keep a secret, hide a different crash, lose a report to another writer, keep
-/// the wrong ones, or delete a file that is not a report. And windows that fail while they are first made or placed.
+/// What a crash report must not do: keep a secret, hide a different crash, lose a report to another writer, show up
+/// half written, keep the wrong ones, or delete a file that is not a report. And windows that fail while they are first made or placed.
 /// Every file is under a temp folder this class creates.
 /// </summary>
 public sealed class CrashReportSafetyTests : IDisposable
@@ -322,7 +322,8 @@ public sealed class CrashReportSafetyTests : IDisposable
                     }
                 }
             }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         reader.Start();
 
         var paths = Enumerable.Range(0, 5).Select(i => crashes.Write($"report {i}", new InvalidOperationException(message))!.Path).ToList();
