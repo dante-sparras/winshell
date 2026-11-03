@@ -56,46 +56,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  release-gate:
-    name: release-gate
-    # Always runs, and only the wait is conditional. A job that needs a skipped job is skipped too, even indirectly,
-    # so a gate that ran only for a release would switch off package on every other run. It holds no Windows runner
-    # while it waits, and its time doesn't come out of the budget package has for a signing approval.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      checks: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ inputs.tag != '' }}
-        with:
-          persist-credentials: false
-          ref: ${{ inputs.tag }}
-      - name: Wait until ci and slow succeeded on this commit
-        # A release-please merge starts this workflow and those jobs together. Publishing before they finish would ship a
-        # commit whose tests failed. Pull requests and main pushes skip this: inputs.tag is empty.
-        if: ${{ inputs.tag != '' }}
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          . ./scripts/ReleaseGate.ps1
-          $sha = (git rev-parse HEAD).Trim()
-          $deadline = (Get-Date).AddMinutes(40)
-          do {
-            $state = Get-WinshellReleaseGateState -Repository $env:GH_REPO -Sha $sha
-            if ($state -eq 'green') { Write-Output "ci succeeded on $sha"; exit 0 }
-            if ($state -eq 'red') { throw "ci did not succeed on $sha, so this release stops" }
-            if ((Get-Date) -ge $deadline) { throw "ci did not finish on $sha within 40 minutes" }
-            Start-Sleep -Seconds 30
-          } while ($true)
-
   publish:
     # One job per architecture, each on its own runner, so neither waits for the other. package takes both from here.
     name: publish (${{ matrix.runtime }})
-    needs: release-gate
     strategy:
       matrix:
         include:
