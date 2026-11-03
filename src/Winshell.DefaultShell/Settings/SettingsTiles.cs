@@ -12,8 +12,8 @@ public static class SettingsTiles
     {
         if (pinned is null)
         {
-            var defaults = new List<string>(QuickSettings.Kinds.Count);
-            foreach (var kind in QuickSettings.Kinds)
+            var defaults = new List<string>(QuickSettingsKind.All.Count);
+            foreach (var kind in QuickSettingsKind.All)
                 defaults.Add(kind.Key);
             return defaults;
         }
@@ -31,7 +31,7 @@ public static class SettingsTiles
         var shown = new List<QuickSettingsKind>();
         foreach (var key in keys)
         {
-            foreach (var kind in QuickSettings.Kinds)
+            foreach (var kind in QuickSettingsKind.All)
             {
                 if (kind.Key == key)
                 {
@@ -46,7 +46,7 @@ public static class SettingsTiles
     public static IReadOnlyList<QuickSettingsKind> Unpinned(IReadOnlyList<string> keys)
     {
         var list = new List<QuickSettingsKind>();
-        foreach (var kind in QuickSettings.Kinds)
+        foreach (var kind in QuickSettingsKind.All)
         {
             if (!Contains(keys, kind.Key))
                 list.Add(kind);

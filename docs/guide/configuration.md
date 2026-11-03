@@ -89,7 +89,7 @@ Reading does not ask for permission and does not change anything. Wi-Fi scanning
         shell.Ipc.Handle("notes", "hello", (string name) => "hi " + name);
 ```
 
-`winshell ipc call notes hello Ada` prints `hi Ada`. `Property`, `Signal`, `GetProperty` and `Listen` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
+`winshell ipc call notes hello Ada` prints `hi Ada`. `Property` and `Signal` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
 
 `winshell ipc call notice dismiss` closes Winshell's own notice. That call is not a target you register, so `ipc show` does not list it.
 

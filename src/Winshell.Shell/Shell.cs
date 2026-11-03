@@ -366,7 +366,7 @@ public sealed partial class Shell : IDisposable
     /// <summary>The control pipe's way into this shell. A reload ends the process, so that waits for the client's answer.</summary>
     private sealed class Control(Shell shell) : IInstanceControl
     {
-        public IIpcTargets Ipc => shell.Ipc;
+        public ShellIpc Ipc => shell.Ipc;
 
         public string? Reload(string? program) => shell.StartNext(program);
 
