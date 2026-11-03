@@ -2,6 +2,8 @@
 
 A still or a live capture of a window or a screen. `CaptureView` in [Winshell](winshell.md#captureview) shows a session. `WindowThumbnail` is a DWM preview and does not capture.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## CaptureSession
 
 An explicitly started Windows capture. Stop and Dispose release all captured pixels.

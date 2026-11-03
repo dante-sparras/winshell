@@ -2,6 +2,8 @@
 
 Notification Center, Focus, and toasts. Reach them from `Shell.Current.Notifications`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## Notification
 
 A notification in Notification Center. The object stays the same while its content changes. It stays usable after it leaves the center, so a UI can finish an exit transition, but its logo is gone by then.

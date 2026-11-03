@@ -2,6 +2,8 @@
 
 The Bluetooth adapter, paired and nearby devices, pairing and connecting. Reach them from `Shell.Current.Bluetooth`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## BluetoothAdapter
 
 The default Windows Bluetooth adapter. Setting Enabled asks Windows to change its radio. Setting Discoverable or Pairable asks Windows to change discovery or incoming connections.

@@ -2,6 +2,8 @@
 
 Playback and recording devices, sessions, volume, mute and levels. Reach them from `Shell.Current.Audio`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## AudioChannel
 
 A speaker position, in the order of the Windows speaker mask. Without a mask, one channel is Mono, two are the front pair, and more are Unknown.

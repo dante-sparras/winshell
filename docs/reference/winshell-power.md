@@ -2,6 +2,8 @@
 
 The battery, the power mode, monitor brightness, idle time and keeping the PC awake. Reach them from `Shell.Current.Power`, `Shell.Current.PowerMode` and `Shell.Current.Brightness`. An idle watch is `Shell.NewIdleMonitor()`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## BrightnessConnection
 
 | Value | Number | Description |

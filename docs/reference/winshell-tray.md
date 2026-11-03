@@ -2,6 +2,8 @@
 
 The icons apps add to the notification area. Reach them from `Shell.Current.SystemTray`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## BalloonIcon
 
 The icon a balloon notification asked for, from its `NIIF_` flags.

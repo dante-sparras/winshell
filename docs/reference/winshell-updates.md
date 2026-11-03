@@ -2,6 +2,8 @@
 
 A portable Winshell checking GitHub Releases and installing a download. Reach it from `Shell.Current.Updates`. A configuration's own program does not use the updater `winshell.exe` passes in.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## UpdateStatus
 
 Where an update is: the `UpdateStatus` enum of `Updates.status`.

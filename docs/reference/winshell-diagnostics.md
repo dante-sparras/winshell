@@ -2,6 +2,8 @@
 
 The checks `winshell doctor` prints and Winshell Settings' About page shows.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## CheckStatus
 
 | Value | Number | Description |

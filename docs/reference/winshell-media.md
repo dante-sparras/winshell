@@ -2,6 +2,8 @@
 
 What is playing, and play, pause, skip and seek. Per-app volume stays on the audio session. Reach media from `Shell.Current.Media`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## MediaLoopState
 
 | Value | Number | Description |

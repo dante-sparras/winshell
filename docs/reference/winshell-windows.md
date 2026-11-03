@@ -2,6 +2,8 @@
 
 App windows and virtual desktops. Reach them from `Shell.Current.WindowList` and `Shell.Current.VirtualDesktops`. A preview of one window is `WindowThumbnail` in [Winshell](winshell.md#windowthumbnail).
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## AppWindow
 
 A top-level window of another program.

@@ -2,6 +2,8 @@
 
 Adapters, Wi-Fi networks, connection profiles and connectivity. Reach them from `Shell.Current.Networking`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## AirplaneModeState
 
 | Value | Number | Description |

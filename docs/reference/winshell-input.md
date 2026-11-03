@@ -2,6 +2,8 @@
 
 A hotkey that works anywhere in Windows. Make one with `Shell.NewHotkey()`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## Hotkey
 
 A hotkey that works anywhere in Windows. Sequence uses Windows names: `Win`, `Ctrl`, `Alt` and `Shift`. Dispose it to give the keys back.

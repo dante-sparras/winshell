@@ -2,6 +2,8 @@
 
 Installed apps, search, jump lists and recent documents. Reach them from `Shell.Current.Apps`, `Shell.Current.JumpLists` and `Shell.Current.RecentDocuments`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## AppEntry
 
 One app of the Start menu.

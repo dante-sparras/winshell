@@ -2,6 +2,8 @@
 
 Monitors, workspaces and windows from Winland, over its named pipe. Reach them from `Shell.Current.Winland`.
 
+<!-- generated below: dotnet run scripts/generate-reference.cs -->
+
 ## WinlandEvent
 
 One line of the event stream.
