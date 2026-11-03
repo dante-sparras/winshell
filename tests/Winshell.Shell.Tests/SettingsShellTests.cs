@@ -120,7 +120,8 @@ public sealed class SettingsShellTests
                 var menu = TaskMenuFlyout.Create(TaskMenu.BarName, [TaskMenu.Settings], id => chosen = id, 16);
                 var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 menu.Opened += (_, _) => shown.TrySetResult();
-                menu.ShowAt(bar, new FlyoutShowOptions { Position = new global::Windows.Foundation.Point(200, 24), Placement = FlyoutPlacementMode.Top });
+                // Transient takes no focus. A menu that does closes when another program's window opens, even before Opened.
+                menu.ShowAt(bar, new FlyoutShowOptions { Position = new global::Windows.Foundation.Point(200, 24), Placement = FlyoutPlacementMode.Top, ShowMode = FlyoutShowMode.Transient });
                 await shown.Task;
 
                 var item = MenuItem(bar);
