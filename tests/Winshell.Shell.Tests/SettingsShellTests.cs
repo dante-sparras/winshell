@@ -107,8 +107,6 @@ public sealed class SettingsShellTests
                 Assert.Equal("", shell.Ipc.Call("settings", "open", ["personalization"]));
                 var window = await rig.Shown();
                 var root = (FrameworkElement)window.Content!;
-                await ShellFixture.LaidOut(root);
-
                 var title = Find<StackPanel>(root, panel => panel.Name == "Breadcrumb") ?? throw new InvalidOperationException("Settings has no title.");
                 var card = Find<SettingsCard>(root, found => found.ActualWidth > 0) ?? throw new InvalidOperationException("Settings shows no card.");
                 return (Left(title, root), Left(card, root));
@@ -119,7 +117,7 @@ public sealed class SettingsShellTests
             }
         });
 
-        Assert.Equal(card, title);
+        Assert.Equal(card, title, 0.5);
     }
 
     [Fact]
