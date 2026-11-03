@@ -274,7 +274,7 @@ public sealed class AppIndexTests
         }
     }
 
-        [Fact(Timeout = 30_000)]
+    [Fact(Timeout = 30_000)]
     public async Task Packaged_launch_returns_before_activation_and_falls_back_on_the_loop()
     {
         using var activating = new ManualResetEventSlim(false);
@@ -314,8 +314,8 @@ public sealed class AppIndexTests
         Assert.Equal(1, started);
     }
 
-        private static IReadOnlyList<string> Names(string query, IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage>? usage = null) =>
-        AppIndex.Search(apps, query, usage ?? (_ => default), Now).Select(app => app.Name).ToList();
+    private static IReadOnlyList<string> Names(string query, IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage>? usage = null) =>
+    AppIndex.Search(apps, query, usage ?? (_ => default), Now).Select(app => app.Name).ToList();
 
     private static AppRecord Entry(string name, string? id = null, string appId = "", string description = "", string target = "", string folders = "", bool hidden = false, bool packaged = false)
     {

@@ -265,110 +265,110 @@ public sealed class WinlandService : ObservableObject, IDisposable
                 RefreshAll();
                 break;
             case "monitoraddedv2":
-            {
-                var args = ParseArgs(data, 3);
-                var monitor = FindMonitor(args[1], create: true)!;
-                monitor.UpdateInitial(ParseInt(args[0]), args[1], args[2]);
-                RefreshMonitors(false);
-                break;
-            }
+                {
+                    var args = ParseArgs(data, 3);
+                    var monitor = FindMonitor(args[1], create: true)!;
+                    monitor.UpdateInitial(ParseInt(args[0]), args[1], args[2]);
+                    RefreshMonitors(false);
+                    break;
+                }
             case "monitorremoved":
                 if (FindMonitor(data, create: false) is { } removed)
                     RemoveMonitor(removed);
                 break;
             case "createworkspacev2":
-            {
-                // id,name,monitor
-                var args = ParseArgs(data, 3);
-                var existed = FindWorkspace(args[1], args[2], create: false) is not null;
-                var workspace = FindWorkspace(args[1], args[2], create: true, ParseId(args[0], args[1]))!;
-                workspace.SetId(ParseId(args[0], args[1]));
-                if (!existed)
-                    RefreshWorkspaces(false);
-                break;
-            }
+                {
+                    // id,name,monitor
+                    var args = ParseArgs(data, 3);
+                    var existed = FindWorkspace(args[1], args[2], create: false) is not null;
+                    var workspace = FindWorkspace(args[1], args[2], create: true, ParseId(args[0], args[1]))!;
+                    workspace.SetId(ParseId(args[0], args[1]));
+                    if (!existed)
+                        RefreshWorkspaces(false);
+                    break;
+                }
             case "destroyworkspacev2":
-            {
-                var args = ParseArgs(data, 3);
-                if (FindWorkspace(args[1], args[2], create: false) is { } workspace)
-                    RemoveWorkspace(workspace);
-                if (_monitorList.Any(m => m.ActiveWorkspace is null))
-                    RefreshMonitors(false);
-                break;
-            }
+                {
+                    var args = ParseArgs(data, 3);
+                    if (FindWorkspace(args[1], args[2], create: false) is { } workspace)
+                        RemoveWorkspace(workspace);
+                    if (_monitorList.Any(m => m.ActiveWorkspace is null))
+                        RefreshMonitors(false);
+                    break;
+                }
             case "focusedmon":
-            {
-                // monitor,workspace name
-                var args = ParseArgs(data, 2);
-                var monitor = FindMonitor(args[0], create: true)!;
-                var workspace = args[1] == "?" ? null : FindWorkspace(args[1], args[0], create: false);
-                SetFocusedMonitor(monitor);
-                monitor.SetActiveWorkspace(workspace);
-                break;
-            }
+                {
+                    // monitor,workspace name
+                    var args = ParseArgs(data, 2);
+                    var monitor = FindMonitor(args[0], create: true)!;
+                    var workspace = args[1] == "?" ? null : FindWorkspace(args[1], args[0], create: false);
+                    SetFocusedMonitor(monitor);
+                    monitor.SetActiveWorkspace(workspace);
+                    break;
+                }
             case "workspacev2":
-            {
-                // id,name,monitor: Winland names the Monitor whose shown Workspace changed.
-                var args = ParseArgs(data, 3);
-                var monitor = args[2].Length > 0 ? FindMonitor(args[2], create: true) : _focusedMonitor;
-                if (monitor is not null)
-                    monitor.SetActiveWorkspace(FindWorkspace(args[1], monitor.Name, create: true, ParseId(args[0], args[1])));
-                break;
-            }
+                {
+                    // id,name,monitor: Winland names the Monitor whose shown Workspace changed.
+                    var args = ParseArgs(data, 3);
+                    var monitor = args[2].Length > 0 ? FindMonitor(args[2], create: true) : _focusedMonitor;
+                    if (monitor is not null)
+                        monitor.SetActiveWorkspace(FindWorkspace(args[1], monitor.Name, create: true, ParseId(args[0], args[1])));
+                    break;
+                }
             case "moveworkspacev2":
-            {
-                // id,name,monitor it moved to
-                var args = ParseArgs(data, 3);
-                var monitor = FindMonitor(args[2], create: true)!;
-                var workspace = FindWorkspace(args[1], args[2], create: false)
-                    ?? _workspaceList.FirstOrDefault(w => w.Name == args[1] && w.Monitor != monitor)
-                    ?? FindWorkspace(args[1], args[2], create: true, ParseId(args[0], args[1]))!;
-                workspace.SetMonitor(monitor);
-                // The Workspace's number can change on its new Monitor, and the Monitors' shown Workspaces with it.
-                RefreshWorkspaces(false);
-                RefreshMonitors(false);
-                break;
-            }
+                {
+                    // id,name,monitor it moved to
+                    var args = ParseArgs(data, 3);
+                    var monitor = FindMonitor(args[2], create: true)!;
+                    var workspace = FindWorkspace(args[1], args[2], create: false)
+                        ?? _workspaceList.FirstOrDefault(w => w.Name == args[1] && w.Monitor != monitor)
+                        ?? FindWorkspace(args[1], args[2], create: true, ParseId(args[0], args[1]))!;
+                    workspace.SetMonitor(monitor);
+                    // The Workspace's number can change on its new Monitor, and the Monitors' shown Workspaces with it.
+                    RefreshWorkspaces(false);
+                    RefreshMonitors(false);
+                    break;
+                }
             case "fullscreen":
                 _focusedWorkspace?.SetHasFullscreen(data == "1");
                 RefreshWorkspaces(false);
                 break;
             case "openwindow":
-            {
-                // address,workspace,monitor,class,title
-                var args = ParseArgs(data, 5);
-                var address = ParseAddress(args[0]);
-                if (address == 0)
-                    return;
-                if (FindWorkspace(args[1], args[2], create: false) is not { } workspace)
                 {
-                    _log.Debug("winland", $"openwindow for workspace {args[1]} which was not previously tracked");
-                    return;
+                    // address,workspace,monitor,class,title
+                    var args = ParseArgs(data, 5);
+                    var address = ParseAddress(args[0]);
+                    if (address == 0)
+                        return;
+                    if (FindWorkspace(args[1], args[2], create: false) is not { } workspace)
+                    {
+                        _log.Debug("winland", $"openwindow for workspace {args[1]} which was not previously tracked");
+                        return;
+                    }
+                    var window = FindWindow(address, create: true)!;
+                    window.SetTitle(args[4]);
+                    MoveWindow(window, workspace);
+                    break;
                 }
-                var window = FindWindow(address, create: true)!;
-                window.SetTitle(args[4]);
-                MoveWindow(window, workspace);
-                break;
-            }
             case "closewindow":
                 if (FindWindow(ParseAddress(data), create: false) is { } closed)
                     RemoveWindow(closed);
                 break;
             case "movewindowv2":
-            {
-                // address,id,name,monitor
-                var args = ParseArgs(data, 4);
-                if (FindWindow(ParseAddress(args[0]), create: false) is { } window
-                    && FindWorkspace(args[2], args[3], create: false) is { } workspace)
-                    MoveWindow(window, workspace);
-                break;
-            }
+                {
+                    // address,id,name,monitor
+                    var args = ParseArgs(data, 4);
+                    if (FindWindow(ParseAddress(args[0]), create: false) is { } window
+                        && FindWorkspace(args[2], args[3], create: false) is { } workspace)
+                        MoveWindow(window, workspace);
+                    break;
+                }
             case "windowtitlev2":
-            {
-                var args = ParseArgs(data, 2);
-                FindWindow(ParseAddress(args[0]), create: true)?.SetTitle(args[1]);
-                break;
-            }
+                {
+                    var args = ParseArgs(data, 2);
+                    FindWindow(ParseAddress(args[0]), create: true)?.SetTitle(args[1]);
+                    break;
+                }
             case "activewindowv2":
                 SetActiveWindow(FindWindow(ParseAddress(data), create: true));
                 break;

@@ -912,7 +912,7 @@ internal static class ArtCache
     }
 
     private static bool IsBitmap(byte[] data) =>
-        ImageHeader.ReadSize(data) is (> 0 and var width, > 0 and var height) && (ulong)width * height <= MaxPixels;
+        ImageHeader.ReadSize(data) is ( > 0 and var width, > 0 and var height) && (ulong)width * height <= MaxPixels;
 
     /// <summary>Writes the art and returns its url. Each url returned must be released once.</summary>
     public static string Store(byte[] data, string? contentType)

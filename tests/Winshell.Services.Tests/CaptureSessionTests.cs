@@ -80,7 +80,8 @@ public sealed class CaptureSessionTests
             var backend = new FakeCapture();
             backends.Add(backend);
             return backend;
-        }) { Target = Screen };
+        })
+        { Target = Screen };
         Assert.True(session.Start());
         var stale = backends[0].Closed!;
 
@@ -279,7 +280,8 @@ public sealed class CaptureSessionTests
             if (refuse is not null)
                 throw refuse;
             copied.Add((image, owner));
-        }) { Target = Screen };
+        })
+        { Target = Screen };
 
         Assert.False(session.CopyToClipboard(7));
         Assert.True(session.Start());

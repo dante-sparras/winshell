@@ -131,56 +131,56 @@ namespace Winshell
             // and exit 1. RunShell reports a crash itself, so it is not caught here.
             try
             {
-            switch (command)
-            {
-                case null:
-                    if (VersionRequested(args))
-                    {
-                        Console.WriteLine($"winshell {Version}");
-                        return 0;
-                    }
-                    // A console with no command prints help. winshellw, and a console that only passes the options
-                    // a shell start uses, still starts: that is the Start tile, the sign-in entry, and the tests.
-                    if (args.Length == 0 && !IsWindowlessHost())
-                    {
+                switch (command)
+                {
+                    case null:
+                        if (VersionRequested(args))
+                        {
+                            Console.WriteLine($"winshell {Version}");
+                            return 0;
+                        }
+                        // A console with no command prints help. winshellw, and a console that only passes the options
+                        // a shell start uses, still starts: that is the Start tile, the sign-in entry, and the tests.
+                        if (args.Length == 0 && !IsWindowlessHost())
+                        {
+                            PrintHelp(null);
+                            return 0;
+                        }
+                        if (!IsWindowlessHost() && !OnlyShellStartOptions(args))
+                        {
+                            Console.Error.WriteLine("No command. Use winshell run to start a shell.");
+                            return 2;
+                        }
+                        return RunShell(options, args);
+                    case "run":
+                        return RunShell(options, args);
+                    case "list":
+                        return List(options);
+                    case "kill":
+                        return await Kill(options);
+                    case "reload":
+                        return await Reload(options);
+                    case "log":
+                        return await PrintLog(options);
+                    case "ipc":
+                        return await Ipc(options);
+                    case "doctor":
+                        return Doctor(options);
+                    case "inspect":
+                        return await Inspect(options);
+                    case "dev":
+                        return await Dev(options);
+                    case "msg":
+                        Console.Error.WriteLine("winshell msg is deprecated; use winshell ipc call.");
+                        options.Positional.Insert(0, "call");
+                        return await Ipc(options);
+                    case "help":
                         PrintHelp(null);
                         return 0;
-                    }
-                    if (!IsWindowlessHost() && !OnlyShellStartOptions(args))
-                    {
-                        Console.Error.WriteLine("No command. Use winshell run to start a shell.");
+                    default:
+                        Console.Error.WriteLine($"Unknown command \"{command}\". Run winshell --help.");
                         return 2;
-                    }
-                    return RunShell(options, args);
-                case "run":
-                    return RunShell(options, args);
-                case "list":
-                    return List(options);
-                case "kill":
-                    return await Kill(options);
-                case "reload":
-                    return await Reload(options);
-                case "log":
-                    return await PrintLog(options);
-                case "ipc":
-                    return await Ipc(options);
-                case "doctor":
-                    return Doctor(options);
-                case "inspect":
-                    return await Inspect(options);
-                case "dev":
-                    return await Dev(options);
-                case "msg":
-                    Console.Error.WriteLine("winshell msg is deprecated; use winshell ipc call.");
-                    options.Positional.Insert(0, "call");
-                    return await Ipc(options);
-                case "help":
-                    PrintHelp(null);
-                    return 0;
-                default:
-                    Console.Error.WriteLine($"Unknown command \"{command}\". Run winshell --help.");
-                    return 2;
-            }
+                }
             }
             catch (Exception e) when (e is not OutOfMemoryException && command is not (null or "run"))
             {
@@ -606,9 +606,9 @@ namespace Winshell
             if (project is null)
             {
                 if (o.Path is null)
-                // -d starts this program again. That child runs the shell, so this process must not also detach.
-                if (o.Daemonize)
-                    return DetachDefault(originalArgs);
+                    // -d starts this program again. That child runs the shell, so this process must not also detach.
+                    if (o.Daemonize)
+                        return DetachDefault(originalArgs);
                 return RunDefault(o, update);
             }
             var reason = project.Prepare(o.NoBuild, ConfigurationProject.Run);

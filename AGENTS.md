@@ -58,7 +58,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 ## Before you finish
 
 - Writing, changing or reviewing a test? It must pass the gate in [docs/agents/test-audit/SKILL.md](docs/agents/test-audit/SKILL.md).
-- Before every push, `pwsh scripts/quick-check.ps1` must pass: the build with 0 warnings and the fast tests, in under two minutes, with no window opened.
+- Before every push, `pwsh scripts/quick-check.ps1` must pass: the build with 0 warnings, the formatting and the fast tests, in under two minutes, with no window opened.
 - Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/run-tests.ps1 -Tier Slow`, under "Live UI with Winland running". `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out.
 - CI runs the rest, so leave full `check.ps1`, `package.ps1` and arm64 to it. The required `ci` job runs the build and the fast tests on a PR, and all of `pwsh scripts/check.ps1 -Tier Fast` on a push to `main` and on the release PR. The required `slow` job runs the slow tests. `slow` skips a PR that only changes docs or Markdown, and `ci` skips one that only changes Markdown outside `docs/` and the README. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, and the docs `build` job.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
