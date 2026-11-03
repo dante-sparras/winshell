@@ -117,7 +117,7 @@
             <ItemsControl x:Name="Tiles" ItemsSource="{x:Bind Popup.Settings.Pins.Shown, Mode=OneWay}" IsTabStop="False">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <VariableSizedWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="3" ItemWidth="108" ItemHeight="82" />
+                        <VariableSizedWrapGrid Orientation="Horizontal" Loaded="OnTileGridLoaded" ItemWidth="108" ItemHeight="82" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>

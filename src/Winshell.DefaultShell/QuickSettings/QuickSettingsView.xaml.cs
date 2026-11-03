@@ -53,6 +53,9 @@ public sealed partial class QuickSettingsView : UserControl
 
     private ImageSource? MediaImage(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? new BitmapImage(uri) : null;
 
+    private void OnTileGridLoaded(object sender, RoutedEventArgs e) =>
+        ((VariableSizedWrapGrid)sender).MaximumRowsOrColumns = QuickSettings.TileColumns;
+
     private void OnAddTile(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: string key })

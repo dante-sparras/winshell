@@ -454,8 +454,9 @@ public sealed class QuickSettingsTests
         rig.Popup.Edit();
 
         rig.Popup.BeginDrag(Tile(rig.Quick, "wifi"));
-        // The airplane tile's button, 80 across and 24 down. Column 2 starts at 216.
-        rig.Popup.DragTo(216 + 80, 24, 70);
+        // The airplane tile is the first tile of the second row, whose cell starts at y = 82.
+        rig.Popup.DragTo(80, 82 + 24, 70);
+        Assert.Equal(2, rig.Popup.DropIndex);
         Assert.Equal(0.5, rig.Popup.DragOpacity(0));
         Assert.Equal(1, rig.Popup.DropSide(2));
         Assert.Equal(0, rig.Popup.DropSide(0));
@@ -484,28 +485,28 @@ public sealed class QuickSettingsTests
         rig.Popup.Show();
         rig.Popup.Edit();
 
+        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
+        Assert.Equal(["bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal("wifi", rig.Popup.FocusKey);
+
+        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Right));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "wifi", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal("wifi", rig.Popup.FocusKey);
+
         Assert.Equal(1, QuickSettingsTileView.KeyOffset(alt: true, shift: true, VirtualKey.Right));
         Assert.Equal(-1, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Left));
-        Assert.Equal(-3, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Up));
-        Assert.Equal(3, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
+        Assert.Equal(-2, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Up));
+        Assert.Equal(2, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(alt: false, shift: false, VirtualKey.Right));
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(alt: true, shift: false, VirtualKey.Right));
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Delete));
 
-        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Right));
-        Assert.Equal(["bluetooth", "wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
-        Assert.Equal("wifi", rig.Popup.FocusKey);
-
-        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Keys(rig.Quick));
-        Assert.Equal("wifi", rig.Popup.FocusKey);
-
         // Without both modifiers an arrow key is not a move, so the order stays.
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(false, false, VirtualKey.Right));
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "wifi", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
 
         rig.Popup.Unpin("nightLight", fromKeyboard: true);
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "accessibility"], Saved(rig));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "wifi", "powerMode", "accessibility"], Saved(rig));
         Assert.Equal("accessibility", rig.Popup.FocusKey);
 
         Assert.True(rig.Popup.Escape());
