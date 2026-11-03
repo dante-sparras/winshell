@@ -62,6 +62,7 @@ internal sealed class DirectoryWatch : IDisposable
         }
         var watch = new DirectoryWatch(handle, filter, subtree, changed, lost);
         watch._thread.Start();
+        // A handoff, not a stall: the new thread only makes the first read, which returns at once.
         watch._started.Wait();
         if (!watch._reading)
         {
