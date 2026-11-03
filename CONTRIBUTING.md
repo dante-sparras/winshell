@@ -19,7 +19,7 @@ The [development runbook](docs/development.md#first-checkout) covers the prerequ
 
 **Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
 
-**Check your change** before you open the PR. Run `pwsh scripts/quick-check.ps1`, then the focused tests for what you changed. The [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title`, and the docs `build` job.
+**Check your change** before you open the PR. Run `pwsh scripts/quick-check.ps1`, then the focused tests for what you changed. The [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title`, `pr-rules`, and the docs `build` job.
 
 ## Write tests that don't flake
 
@@ -78,14 +78,19 @@ CI checks the PR title. It also checks the branch name, but only as a reminder; 
 Fill in the PR template:
 
 - **Summary**: the issue it comes from, if any, and the smallest diagram, diff sketch, or tree that shows the change.
-- **Evidence**: a before and after, from the tests or manual steps you ran. "Tests pass" on its own isn't enough. Add **Not verified** for anything you couldn't check. Don't commit evidence to the repo.
+- **Evidence**: a before and after, from the tests or manual steps you ran. "Tests pass" on its own isn't enough. Add **Not verified** for anything you couldn't check. Don't commit evidence to `main`.
+- **Proof for the type of change**: the `pr-rules` check reads these from your title, body and files.
+  - `fix` adds a test that failed before the fix, and says how under **Before:** and **After:**. If it can't have a test, say why on a `**No test:**` line. A fix to docs alone doesn't need one.
+  - `perf` gives a number under **Before:** and under **After:**, or in a table with those headings.
+  - A `feat`, `fix` or `perf` change to XAML in `src/` shows a `winshell inspect` screenshot. `pwsh scripts/pr-screenshot.ps1 <png>` publishes one and prints the Markdown to paste. If nothing visible changed, say why on a `**Not visual:**` line.
+  - Other types carry no extra proof.
 - **Merge Danger**: whether this is a one-way or two-way **Door**, and its **Blast Radius**, the one word for what it can affect.
 
 If an AI agent did the work, end the description with the model and the tool you used, such as "Claude Opus 5.5 in Claude Code".
 
 ## Review and merge
 
-- Every change reaches `main` through a PR, and the required checks (`ci`, `slow`, `installer`, `actionlint`, the docs `build` job, and the PR title) must pass first.
+- Every change reaches `main` through a PR, and the required checks (`ci`, `slow`, `installer`, `actionlint`, `pr-rules`, the docs `build` job, and the PR title) must pass first.
 - PRs are squash-merged. Your PR title becomes the commit message on `main`, so make it readable on its own.
 - Releases are cut from those commits, so your PR title is also your line in the changelog.
 - A PR that doesn't follow this guide may be closed with a note saying what's missing. Fix it and ask for another look, or open a new PR.
