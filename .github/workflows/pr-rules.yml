@@ -1,0 +1,38 @@
+name: PR Rules
+
+on:
+  # pull_request_target runs from the base branch, so a pull request can't change the rules it is held to, and it runs on
+  # fork PRs without a maintainer's approval. The job checks out the base branch and never checks out PR code.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read # checkout
+  pull-requests: read # the changed files
+
+concurrency:
+  group: pr-rules-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-rules:
+    # The ruleset requires this job by name. Rename it there too if you rename it here.
+    name: pr-rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: What this kind of change must carry
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          $files = Join-Path $env:RUNNER_TEMP 'files.txt'
+          gh api --paginate "repos/$env:REPO/pulls/$env:PR/files" --jq '.[].filename' > $files
+          ./scripts/pr-rules.ps1 -Title $env:TITLE -Body $env:BODY -Path $files

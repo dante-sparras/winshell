@@ -9,8 +9,8 @@ on:
 permissions:
   contents: read
 
-# Every check of a pull request is in this file, except pr-title, which needs its own trigger. changes decides which of
-# them a pull request needs, so a docs change holds one runner and not a dozen.
+# Every check of a pull request is in this file, except pr-title and pr-rules, which need their own trigger. changes
+# decides which of them a pull request needs, so a docs change holds one runner and not a dozen.
 #
 # A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
 # a shared one would drop the ci run of a commit in a burst of merges, and a release commit would wait for a check that
@@ -305,6 +305,8 @@ jobs:
           Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/RunTests.Tests.ps1 -CI
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Invoke-Pester -Path scripts/PrRules.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/ReleaseGate.Tests.ps1 -CI
           exit $LASTEXITCODE
