@@ -394,23 +394,53 @@ public sealed class WinlandServiceTests
     }
 
     [Fact]
-    public void The_program_on_the_pipe_is_announced_as_Winland_comes_and_goes()
+    public void The_process_on_the_pipe_is_announced_as_Winland_comes_and_goes()
     {
         using var service = new WinlandService(_loop, Log.Default, _link);
         var changes = Watch(service);
 
-        _link.Executable = @"C:\Program Files\Winland\winland.exe";
+        _link.ProcessId = 4321;
         _link.RaiseConnection(true);
         _loop.Process();
-        Assert.Equal(@"C:\Program Files\Winland\winland.exe", service.Executable);
-        Assert.Contains(nameof(WinlandService.Executable), changes);
+        Assert.Equal(4321, service.ProcessId);
+        Assert.Contains(nameof(WinlandService.ProcessId), changes);
 
         changes.Clear();
-        _link.Executable = "";
+        _link.ProcessId = 0;
         _link.RaiseConnection(false);
         _loop.Process();
-        Assert.Equal("", service.Executable);
-        Assert.Contains(nameof(WinlandService.Executable), changes);
+        Assert.Equal(0, service.ProcessId);
+        Assert.Contains(nameof(WinlandService.ProcessId), changes);
+    }
+
+    [Fact]
+    public void The_files_Winland_reports_are_read_as_it_connects_and_on_reload_and_dropped_as_it_goes()
+    {
+        _link.Replies["j/files"] = """{"config":"D:\\work.conf","log":null}""";
+        using var service = Connected();
+        Assert.Equal(@"D:\work.conf", service.ConfigPath);
+        Assert.Null(service.LogPath);
+
+        // A reload with debug:disable_logs false starts the log.
+        _link.Replies["j/files"] = """{"config":"D:\\work.conf","log":"D:\\state\\winland.log"}""";
+        Raise("configreloaded>>");
+        Assert.Equal(@"D:\state\winland.log", service.LogPath);
+
+        _link.RaiseConnection(false);
+        _loop.Process();
+        Assert.Null(service.ConfigPath);
+        Assert.Null(service.LogPath);
+    }
+
+    [Fact]
+    public void A_Winland_that_does_not_answer_files_reports_none()
+    {
+        _link.Replies["j/files"] = "error: unknown request";
+        using var service = Connected();
+
+        Assert.Null(service.ConfigPath);
+        Assert.Null(service.LogPath);
+        Assert.Single(_link.Sent, "j/files");
     }
 
     [Fact]
@@ -499,7 +529,7 @@ public sealed class WinlandServiceTests
 
         public string PipePath => @"\\.\pipe\winland-test";
 
-        public string Executable { get; set; } = "";
+        public int ProcessId { get; set; }
 
         public event Action<bool>? ConnectionChanged;
 

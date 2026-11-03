@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
-using Winshell.Native;
 
 namespace Winshell.Winland;
 
@@ -22,7 +21,7 @@ internal static partial class WinlandConnection
     private static readonly List<Log> Logs = [];
     private static int _started;
     private static volatile string? _pipeName;
-    private static volatile string _executable = "";
+    private static volatile int _processId;
     private static volatile bool _connected;
 
     /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
@@ -53,8 +52,8 @@ internal static partial class WinlandConnection
 
     public static bool IsConnected => _connected;
 
-    /// <summary>The full path of the program that answers the event stream, or empty while none does.</summary>
-    public static string Executable => _executable;
+    /// <summary>The process that answers the event stream, or 0 while none does.</summary>
+    public static int ProcessId => _processId;
 
     /// <summary>The pipe Winland answers on, or the one it would use when it is not running.</summary>
     public static string PipePath => @"\\.\pipe\" + (_pipeName ?? Candidates[0]);
@@ -77,7 +76,7 @@ internal static partial class WinlandConnection
                 if (pipe is null)
                     continue;
                 _pipeName = name;
-                _executable = ServerProcess(pipe) is { } pid ? ProcessImage.TryRead(pid) ?? "" : "";
+                _processId = ServerProcess(pipe) is { } pid ? (int)pid : 0;
                 try
                 {
                     await pipe.WriteAsync(Encoding.UTF8.GetBytes("events\n")).ConfigureAwait(false);
@@ -97,7 +96,7 @@ internal static partial class WinlandConnection
                 finally
                 {
                     await pipe.DisposeAsync().ConfigureAwait(false);
-                    _executable = "";
+                    _processId = 0;
                     if (_connected)
                     {
                         _connected = false;

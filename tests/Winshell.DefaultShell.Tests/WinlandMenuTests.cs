@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Winshell.DefaultShell.Taskbar;
 using Winshell.Tray;
 using Winshell.Winland;
@@ -8,32 +9,54 @@ namespace Winshell.DefaultShell.Tests;
 public sealed class WinlandMenuTests : IDisposable
 {
     private const string Winland = @"C:\Program Files\Winland\winland.exe";
+    private const int WinlandProcess = 4100;
+    private const string Config = @"D:\work\work.conf";
+    private const string LogFile = @"D:\work\state\winland.log";
 
     private readonly ManualEventLoop _loop = new();
-    private readonly FakeWinlandLink _link = new() { Executable = Winland };
-    private readonly WinlandService _winland;
+    private readonly FakeWinlandLink _link = new() { ProcessId = WinlandProcess };
+    private readonly FakeTrayHost _host = new();
+    private readonly HashSet<string> _existing = [];
     private readonly List<string> _opened = [];
-    private bool _logExists;
+    private WinlandService? _winland;
     private int _services;
 
-    public WinlandMenuTests()
-    {
-        _winland = new WinlandService(_loop, new Log { Sink = static (_, _, _) => { } }, _link);
+    public WinlandMenuTests() =>
         Menu = new WinlandMenu(() =>
         {
             _services++;
+            _winland = new WinlandService(_loop, new Log { Sink = static (_, _, _) => { } }, _link);
+            _loop.Process();
             return _winland;
-        }, path => path == _winland.LogPath && _logExists, _opened.Add);
-    }
+        }, _existing.Contains, _opened.Add);
 
     private WinlandMenu Menu { get; }
 
-    [Theory]
-    [InlineData(false, new[] { "Reload R", "Edit config E", "Quit Q" })]
-    [InlineData(true, new[] { "Reload R", "Edit config E", "Open log L", "Quit Q" })]
-    public void The_rows_are_Winlands_and_Open_log_is_there_only_while_the_log_exists(bool logExists, string[] rows)
+    /// <summary>A tray whose icons are noticed as the shell's tray area notices them, so the menu follows the pipe.</summary>
+    private SystemTray Tray(params TrayIcon[] icons)
     {
-        _logExists = logExists;
+        var tray = new SystemTray(_loop, new Log { Sink = static (_, _, _) => { } }, _host);
+        foreach (var icon in icons)
+            _host.Add(icon);
+        foreach (var item in tray.Items)
+            Menu.Notice(item);
+        return tray;
+    }
+
+    private static TrayIcon WinlandIcon(string key = "winland", int process = WinlandProcess) =>
+        new() { Key = key, ProgramPath = Winland, ProcessId = process };
+
+    [Theory]
+    [InlineData(LogFile, true, new[] { "Reload R", "Edit config E", "Open log L", "Quit Q" })]
+    [InlineData(LogFile, false, new[] { "Reload R", "Edit config E", "Quit Q" })]
+    // Winland writes no log, elevated or with debug:disable_logs: an old winland.log there is not offered.
+    [InlineData(null, true, new[] { "Reload R", "Edit config E", "Quit Q" })]
+    public void The_rows_are_Winlands_and_Open_log_is_there_only_while_Winland_writes_a_log_that_exists(string? log, bool exists, string[] rows)
+    {
+        _link.Log = log;
+        if (exists)
+            _existing.Add(LogFile);
+        using var tray = Tray(WinlandIcon());
 
         Assert.Equal(rows, Menu.Rows().Select(row => $"{row.Label} {row.AccessKey}"));
         Assert.All(Menu.Rows(), row => Assert.True(row.Enabled));
@@ -42,6 +65,8 @@ public sealed class WinlandMenuTests : IDisposable
     [Fact]
     public void Reload_and_Quit_go_through_the_pipe()
     {
+        using var tray = Tray(WinlandIcon());
+
         Menu.Choose("reload");
         Menu.Choose("quit");
         _loop.Process();
@@ -51,51 +76,56 @@ public sealed class WinlandMenuTests : IDisposable
     }
 
     [Fact]
-    public void Edit_config_and_Open_log_open_Winlands_files()
+    public void Edit_config_and_Open_log_open_the_files_Winland_reports()
     {
+        _link.Log = LogFile;
+        using var tray = Tray(WinlandIcon());
+
         Menu.Choose("editConfig");
         Menu.Choose("openLog");
 
-        Assert.Equal([_winland.ConfigPath, _winland.LogPath], _opened);
+        Assert.Equal([Config, LogFile], _opened);
         Assert.Empty(_link.Commands);
     }
 
     [Fact]
-    public void Only_the_icon_of_the_program_on_Winlands_pipe_is_Winlands()
+    public void Only_the_icon_of_the_process_on_Winlands_pipe_is_Winlands()
     {
-        var host = new FakeTrayHost();
-        using var tray = new SystemTray(_loop, new Log { Sink = static (_, _, _) => { } }, host);
-        host.Add(new TrayIcon { Key = "winland", ProgramPath = Winland.ToUpperInvariant() });
-        host.Add(new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe" });
-        host.Add(new TrayIcon { Key = "unknown" });
-        var (winland, other, unknown) = (tray.Items[0], tray.Items[1], tray.Items[2]);
+        // Two Winlands from one program, each on its own pipe: only the one this shell follows is drawn here.
+        using var tray = Tray(
+            WinlandIcon(),
+            WinlandIcon("second", WinlandProcess + 1),
+            new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe", ProcessId = 900 },
+            new TrayIcon { Key = "unknown" });
 
-        Assert.True(Menu.Owns(winland));
-        Assert.False(Menu.Owns(other));
-        Assert.False(Menu.Owns(unknown));
+        Assert.Equal([true, false, false, false], tray.Items.Select(Menu.Owns));
 
-        // No Winland answers: the click goes to the app, even for an icon whose program could not be read.
-        _link.Executable = "";
-        Assert.False(Menu.Owns(winland));
-        Assert.False(Menu.Owns(unknown));
+        // No Winland answers: the click goes to the app, even for an icon whose process could not be read.
+        _link.ProcessId = 0;
+        Assert.All(tray.Items, item => Assert.False(Menu.Owns(item)));
+    }
+
+    [Fact]
+    public void A_Winland_that_does_not_answer_files_draws_its_own_menu()
+    {
+        _link.AnswersFiles = false;
+        using var tray = Tray(WinlandIcon());
+
+        Assert.Contains("j/files", _link.Sent);
+        Assert.False(Menu.Owns(tray.Items[0]));
     }
 
     [Fact]
     public void Winlands_pipe_is_followed_only_once_an_icon_of_winland_exe_appears()
     {
-        var host = new FakeTrayHost();
-        using var tray = new SystemTray(_loop, new Log { Sink = static (_, _, _) => { } }, host);
-        host.Add(new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe" });
-        host.Add(new TrayIcon { Key = "unknown" });
+        using var tray = Tray(
+            new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe", ProcessId = WinlandProcess },
+            new TrayIcon { Key = "unknown" });
 
-        foreach (var item in tray.Items)
-        {
-            Menu.Notice(item);
-            Assert.False(Menu.Owns(item));
-        }
+        Assert.All(tray.Items, item => Assert.False(Menu.Owns(item)));
         Assert.Equal(0, _services);
 
-        host.Add(new TrayIcon { Key = "winland", ProgramPath = Winland });
+        _host.Add(WinlandIcon());
         Menu.Notice(tray.Items[2]);
         Menu.Notice(tray.Items[2]);
 
@@ -103,18 +133,24 @@ public sealed class WinlandMenuTests : IDisposable
         Assert.True(Menu.Owns(tray.Items[2]));
     }
 
-    public void Dispose() => _winland.Dispose();
+    public void Dispose() => _winland?.Dispose();
 
     private sealed class FakeWinlandLink : IWinlandLink
     {
-        public string Executable { get; set; } = "";
+        public int ProcessId { get; set; }
+
+        /// <summary>The log Winland reports writing, or null when it writes none.</summary>
+        public string? Log { get; set; }
+
+        /// <summary>False for a Winland from before <c>files</c>, which answers it as an unknown request.</summary>
+        public bool AnswersFiles { get; set; } = true;
 
         public List<string> Sent { get; } = [];
 
         /// <summary>What was sent other than the queries the service makes as it connects.</summary>
         public IEnumerable<string> Commands => Sent.Where(command => !command.StartsWith("j/", StringComparison.Ordinal));
 
-        public bool IsConnected => Executable.Length > 0;
+        public bool IsConnected => ProcessId > 0;
 
         public string PipePath => @"\\.\pipe\winland-test";
 
@@ -131,7 +167,13 @@ public sealed class WinlandMenuTests : IDisposable
         public Task<string?> RequestAsync(string command)
         {
             Sent.Add(command);
-            return Task.FromResult<string?>(command.StartsWith("j/", StringComparison.Ordinal) ? null : "ok");
+            return Task.FromResult<string?>(command switch
+            {
+                "j/files" when AnswersFiles => new JsonObject { ["config"] = Config, ["log"] = Log }.ToJsonString(),
+                "j/files" => "error: unknown request",
+                _ when command.StartsWith("j/", StringComparison.Ordinal) => "[]",
+                _ => "ok",
+            });
         }
 
         public void Dispose()

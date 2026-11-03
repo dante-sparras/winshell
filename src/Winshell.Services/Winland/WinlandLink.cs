@@ -7,8 +7,8 @@ internal interface IWinlandLink : IDisposable
 
     string PipePath { get; }
 
-    /// <summary>The full path of the program that answers on the pipe, or empty while none does.</summary>
-    string Executable { get; }
+    /// <summary>The process that answers on the pipe, or 0 while none does.</summary>
+    int ProcessId { get; }
 
     event Action<bool>? ConnectionChanged;
 
@@ -26,7 +26,7 @@ internal sealed class WinlandPipe(Log log) : IWinlandLink
 
     public string PipePath => WinlandConnection.PipePath;
 
-    public string Executable => WinlandConnection.Executable;
+    public int ProcessId => WinlandConnection.ProcessId;
 
     public event Action<bool>? ConnectionChanged
     {
