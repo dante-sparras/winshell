@@ -4,14 +4,11 @@ using System.Runtime.InteropServices;
 namespace Winshell.Audio;
 
 /// <summary>
-/// The Windows playback and recording devices, and each app's audio session on a device. One graph serves the
-/// whole process, so a reload does not enumerate devices again. It lives on the UI thread; Windows' callbacks
-/// are posted to it.
+/// The Windows playback and recording devices, and each app's audio session on a device. It lives on the UI thread;
+/// Windows' callbacks are posted to it.
 /// </summary>
-internal sealed class AudioGraph : IAudioGraph
+internal sealed class AudioGraph : IAudioGraph, IDisposable
 {
-    private static AudioGraph? _instance;
-
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly IMMDeviceEnumerator? _enumerator;
@@ -20,11 +17,13 @@ internal sealed class AudioGraph : IAudioGraph
     private readonly Dictionary<string, EndpointNode> _endpoints = new(StringComparer.OrdinalIgnoreCase);
     private int _syncPending;
     private int _nextId = 1;
+    private bool _disposed;
 
     /// <summary>The event context Winshell's own volume changes carry.</summary>
     public static readonly Guid Context = Guid.NewGuid();
 
-    private AudioGraph(IEventLoop loop, Log log)
+    /// <summary>Reads the devices and starts hearing about changes to them. Call on the UI thread.</summary>
+    public AudioGraph(IEventLoop loop, Log log)
     {
         _loop = loop;
         _log = log;
@@ -42,9 +41,6 @@ internal sealed class AudioGraph : IAudioGraph
             _log.Warn("audio", $"Windows audio is not available: {e.Message}");
         }
     }
-
-    /// <summary>The graph, made on first use. Call on the UI thread.</summary>
-    public static AudioGraph Get(IEventLoop loop, Log log) => _instance ??= new AudioGraph(loop, log);
 
     public IReadOnlyList<AudioGraphNode> Nodes => _nodes;
 
@@ -70,6 +66,8 @@ internal sealed class AudioGraph : IAudioGraph
 
     internal void Post(Action action) => _loop.Post(() =>
     {
+        if (_disposed)
+            return;
         try
         {
             action();
@@ -96,6 +94,23 @@ internal sealed class AudioGraph : IAudioGraph
     }
 
     void IAudioGraph.SetDefault(AudioGraphNode node) => SetDefault((EndpointNode)node);
+
+    /// <summary>Stops hearing from Windows and releases every device and session. Call on the UI thread.</summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        if (_notifications is not null)
+            _enumerator?.UnregisterEndpointNotificationCallback(_notifications);
+        foreach (var endpoint in _endpoints.Values)
+        {
+            foreach (var session in endpoint.Sessions)
+                session.Release();
+            endpoint.Release();
+        }
+        CoreAudio.Release(_enumerator);
+    }
 
     // Devices
 

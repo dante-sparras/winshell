@@ -708,7 +708,7 @@ internal sealed class QuickSettingsRig : IDisposable
         Graph.Add(speakers);
         Graph.Use(speakers);
         Networking = new NetworkingService(Loop, Network);
-        Audio = new AudioService(Loop, Log, Graph);
+        Audio = new AudioService(Graph, Log);
         PowerService = new PowerService(Loop, Power);
         PowerMode = new PowerModeService(Loop, Log, Modes, SetMode);
         Brightness = new BrightnessService(Loop, Log, BrightnessSource, Writer);

@@ -365,7 +365,7 @@ public sealed class OnScreenDisplayTests
             Graph = new FakeAudioGraph();
             BrightnessSource = new FakeSource<BrightnessSnapshot>(new BrightnessSnapshot(true, []));
             Sessions = new SessionList();
-            Audio = new AudioService(Loop, log, Graph);
+            Audio = new AudioService(Graph, log);
             Brightness = new BrightnessService(Loop, log, BrightnessSource, new BrightnessWriter(static (_, _) => 0u));
             Media = new MediaService(Loop, log, Sessions);
             Screens.Add(Primary());
