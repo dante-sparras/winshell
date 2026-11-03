@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Windows.Foundation;
+using Windows.System;
 using Winshell;
 using Winshell.DefaultShell.Taskbar;
 
@@ -365,6 +366,56 @@ public sealed class TaskPreviewTests
         bar.Preview.Escape();
         Assert.False(bar.Preview.IsOpen);
         Assert.Equal(1, bar.Dismissed);
+    }
+
+    [Fact]
+    public void Each_key_does_its_preview_action_and_Escape_passes_through_while_closed()
+    {
+        using var cards = new Bar();
+        var first = new Win { Id = 1, Title = "One" };
+        cards.Set(Task("notes", "Notes", first, new Win { Id = 2, Title = "Two" }));
+        Assert.False(cards.Preview.Press(VirtualKey.Escape, shift: false));
+        Assert.False(cards.Preview.Press(VirtualKey.Right, shift: false));
+
+        cards.Preview.OpenFromKeyboard("notes");
+        Assert.True(cards.Preview.Press(VirtualKey.Right, shift: false));
+        Assert.True(cards.Preview.Press(VirtualKey.Tab, shift: false));
+        Assert.Equal(1, cards.Preview.FocusIndex);
+        Assert.False(cards.Preview.FocusClose);
+        Assert.True(cards.Preview.Press(VirtualKey.Tab, shift: true));
+        Assert.Equal(0, cards.Preview.FocusIndex);
+        Assert.True(cards.Preview.FocusClose);
+        Assert.True(cards.Preview.Press(VirtualKey.Left, shift: false));
+        Assert.False(cards.Preview.FocusClose);
+        Assert.False(cards.Preview.Press(VirtualKey.Down, shift: false));
+        Assert.False(cards.Preview.Press(VirtualKey.A, shift: false));
+        Assert.True(cards.Preview.Press(VirtualKey.Delete, shift: false));
+        Assert.Equal(1, first.Closes);
+        Assert.True(cards.Preview.Press(VirtualKey.Enter, shift: false));
+        Assert.Equal(1, first.Activations);
+        Assert.False(cards.Preview.IsOpen);
+        Assert.Equal(0, cards.Dismissed);
+
+        cards.Preview.OpenFromKeyboard("notes");
+        Assert.True(cards.Preview.Press(VirtualKey.Escape, shift: false));
+        Assert.False(cards.Preview.IsOpen);
+        Assert.Equal(1, cards.Dismissed);
+
+        using var list = new Bar();
+        list.Set(Task("notes", "Notes", More(1, 9)));
+        list.Preview.SetWorkArea(1280, 1032);
+        list.Preview.OpenFromKeyboard("notes");
+        Assert.True(list.Preview.Listed);
+        Assert.False(list.Preview.Press(VirtualKey.Right, shift: false));
+        Assert.True(list.Preview.Press(VirtualKey.Down, shift: false));
+        Assert.Equal(1, list.Preview.FocusIndex);
+        Assert.True(list.Preview.Press(VirtualKey.Down, shift: false));
+        Assert.Equal(2, list.Preview.FocusIndex);
+        Assert.True(list.Preview.Press(VirtualKey.Up, shift: false));
+        Assert.Equal(1, list.Preview.FocusIndex);
+        Assert.True(list.Preview.Press(VirtualKey.Tab, shift: false));
+        Assert.Equal(1, list.Preview.FocusIndex);
+        Assert.True(list.Preview.FocusClose);
     }
 
     [Fact]

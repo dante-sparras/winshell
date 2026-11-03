@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Windows.Foundation;
+using Windows.System;
 
 namespace Winshell.DefaultShell.Taskbar;
 
@@ -324,6 +325,29 @@ public sealed class TaskPreview : ObservableObject, IDisposable
             return false;
         Move(CurrentFocus.Step(forward ? 1 : -1, _windows.Count));
         return true;
+    }
+
+    /// <summary>A key pressed in the preview. True when the preview used it. Escape passes through while it is closed.</summary>
+    internal bool Press(VirtualKey key, bool shift)
+    {
+        if (key == VirtualKey.Escape)
+        {
+            if (!_isOpen)
+                return false;
+            Escape();
+            return true;
+        }
+        return key switch
+        {
+            VirtualKey.Left => MoveHorizontal(-1),
+            VirtualKey.Right => MoveHorizontal(1),
+            VirtualKey.Up => MoveVertical(-1),
+            VirtualKey.Down => MoveVertical(1),
+            VirtualKey.Tab => Tab(!shift),
+            VirtualKey.Enter => ActivateFocused(),
+            VirtualKey.Delete => PressDelete(),
+            _ => false,
+        };
     }
 
     /// <summary>Escape closes a preview the keyboard opened and sends the keyboard back to its button.</summary>
