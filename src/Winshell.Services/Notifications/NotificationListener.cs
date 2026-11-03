@@ -142,7 +142,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 try
                 {
                     await changed.WaitAsync(wait, cancellation).ConfigureAwait(false);
-                    while (changed.Wait(0)) { }
+                    while (changed.Wait(0, cancellation)) { }
                 }
                 catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
             }

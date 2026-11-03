@@ -503,7 +503,7 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
         }
         finally
         {
-            Win32.WindowsDeleteString(name);
+            _ = Win32.WindowsDeleteString(name);
         }
     }
 

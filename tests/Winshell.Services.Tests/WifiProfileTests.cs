@@ -412,7 +412,7 @@ public sealed class WifiProfileTests
         var builder = new StringBuilder("<WLANProfile><name>Office</name>");
         for (var i = 0; i < levels; i++)
             builder.Append("<e>");
-        builder.Append("x");
+        builder.Append('x');
         for (var i = 0; i < levels; i++)
             builder.Append("</e>");
         builder.Append("</WLANProfile>");

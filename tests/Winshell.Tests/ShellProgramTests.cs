@@ -146,7 +146,7 @@ public sealed partial class ShellProgramTests : IDisposable
             Assert.Equal(0, parent.ExitCode);
         }
 
-        Wait.Until(() => Listed().Any(), "the background shell");
+        Wait.Until(() => Listed().Count > 0, "the background shell");
         var child = Assert.Single(Listed());
         Assert.Equal("winshell-default", child.GetProperty("shellId").GetString());
 

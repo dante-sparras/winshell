@@ -277,7 +277,7 @@ internal static unsafe partial class CaptureInterop
         {
             if (item != 0) Marshal.Release(item);
             if (factory != 0) Marshal.Release(factory);
-            Win32.WindowsDeleteString(name);
+            _ = Win32.WindowsDeleteString(name);
         }
     }
 

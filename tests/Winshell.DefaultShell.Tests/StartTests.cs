@@ -311,7 +311,7 @@ public sealed class StartTests : IDisposable
         Assert.Empty(start.PinIds);
         Assert.Equal("Pin to Start", popup.PinLabel);
         Assert.Equal(0, launched);
-        Assert.False(popup.BeginMenu(popup.Results.FirstOrDefault()));
+        Assert.False(popup.BeginMenu(popup.Results.Count == 0 ? null : popup.Results[0]));
     }
 
     [Fact]
