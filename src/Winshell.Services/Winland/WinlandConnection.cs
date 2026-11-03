@@ -21,6 +21,7 @@ internal static partial class WinlandConnection
     private static readonly List<Log> Logs = [];
     private static int _started;
     private static volatile string? _pipeName;
+    private static volatile int _processId;
     private static volatile bool _connected;
 
     /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
@@ -51,6 +52,9 @@ internal static partial class WinlandConnection
 
     public static bool IsConnected => _connected;
 
+    /// <summary>The process that answers the event stream, or 0 while none does.</summary>
+    public static int ProcessId => _processId;
+
     /// <summary>The pipe Winland answers on, or the one it would use when it is not running.</summary>
     public static string PipePath => @"\\.\pipe\" + (_pipeName ?? Candidates[0]);
 
@@ -72,6 +76,7 @@ internal static partial class WinlandConnection
                 if (pipe is null)
                     continue;
                 _pipeName = name;
+                _processId = ServerProcess(pipe) is { } pid ? (int)pid : 0;
                 try
                 {
                     await pipe.WriteAsync(Encoding.UTF8.GetBytes("events\n")).ConfigureAwait(false);
@@ -91,6 +96,7 @@ internal static partial class WinlandConnection
                 finally
                 {
                     await pipe.DisposeAsync().ConfigureAwait(false);
+                    _processId = 0;
                     if (_connected)
                     {
                         _connected = false;
@@ -141,8 +147,7 @@ internal static partial class WinlandConnection
         {
             await pipe.ConnectAsync(timeoutMs).ConfigureAwait(false);
             // Only a Winland in this session is ours to talk to, as Winland's own CLI checks.
-            if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid)
-                || !ProcessIdToSessionId(pid, out var session) || session != SessionId)
+            if (ServerProcess(pipe) is not { } pid || !ProcessIdToSessionId(pid, out var session) || session != SessionId)
             {
                 await pipe.DisposeAsync().ConfigureAwait(false);
                 return null;
@@ -155,6 +160,9 @@ internal static partial class WinlandConnection
             return null;
         }
     }
+
+    private static uint? ServerProcess(NamedPipeClientStream pipe) =>
+        GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
 
     private static void Raise<T>(Action<T>? handlers, T value)
     {
