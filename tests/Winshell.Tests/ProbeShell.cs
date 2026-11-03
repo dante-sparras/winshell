@@ -6,15 +6,6 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary>
-/// Builds <see cref="ProbeShell"/> as a class fixture, before the class's first test. The build takes minutes on a busy
-/// machine. Inside a test it would spend that test's deadline, and the deadline of every test waiting for it.
-/// </summary>
-public sealed class ProbeBuild
-{
-    public ProbeBuild() => ProbeShell.Ensure();
-}
-
-/// <summary>
 /// A real program with no windows, shell id <c>probe</c> unless a test names another, built once into <c>bin\shell</c>.
 /// Tests of instances start it, so they hold no taskbar and no screen edge. A class that starts it has the
 /// <see cref="ProbeBuild"/> fixture. Nothing changes that build once it is made: a test that edits and rebuilds a probe
