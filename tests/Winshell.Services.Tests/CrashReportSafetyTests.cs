@@ -297,8 +297,9 @@ public sealed class CrashReportSafetyTests : IDisposable
     [Fact]
     public void A_reader_of_the_folder_only_ever_finds_whole_reports()
     {
-        // As a test, winshell doctor or a person would: read every file in the folder while reports go in. A long
-        // message keeps each write busy long enough for the reader to land in the middle of it.
+        // Read every file in the folder while reports go in, refusing to share with a writer, so a report still being
+        // written fails the open. Delete is shared: a file just renamed into a folder is still open to the rename for
+        // an instant. A long message keeps each write busy long enough for the reader to land in the middle of it.
         var folder = Folder();
         Directory.CreateDirectory(folder);
         var crashes = new CrashReports(folder);
@@ -314,7 +315,8 @@ public sealed class CrashReportSafetyTests : IDisposable
                 {
                     try
                     {
-                        lengths.GetOrAdd(file, _ => new()).Enqueue(File.ReadAllText(file).Length);
+                        using var report = new StreamReader(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete));
+                        lengths.GetOrAdd(file, _ => new()).Enqueue(report.ReadToEnd().Length);
                     }
                     catch (Exception e)
                     {

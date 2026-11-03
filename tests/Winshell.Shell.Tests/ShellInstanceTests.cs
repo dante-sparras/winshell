@@ -117,16 +117,19 @@ public sealed class ShellInstanceTests
 
         await Wait.UntilAsync(
             () => Directory.Exists(ShellLocations.CrashRoot)
-                && Directory.GetFiles(ShellLocations.CrashRoot).Any(f => ReadWhileWritten(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
+                && Directory.GetFiles(ShellLocations.CrashRoot).Any(f => ReadClosed(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
             "a crash report for the posted failure");
         Assert.True(await ShellFixture.On(_ => true));
     }
 
-    /// <summary>The report's text so far. The shell holds it open for writing until the report is done, so a plain read can fail.</summary>
-    private static string ReadWhileWritten(string path)
+    /// <summary>
+    /// A file's text, refusing to share with a writer as <see cref="File.ReadAllText(string)"/> does, so a report still
+    /// being written fails. Delete is shared: a report just renamed into the folder is still open to the rename for an
+    /// instant.
+    /// </summary>
+    private static string ReadClosed(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var reader = new StreamReader(stream);
+        using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete));
         return reader.ReadToEnd();
     }
 }
