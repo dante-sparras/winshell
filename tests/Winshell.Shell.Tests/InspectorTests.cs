@@ -249,6 +249,43 @@ public sealed class InspectorTests : IDisposable
     }
 
     [Fact]
+    public async Task An_open_menu_is_in_the_tree_takes_a_click_and_has_a_screenshot()
+    {
+        var file = Path.Combine(_dir, "menu.png");
+
+        var (tree, shot) = await ShellFixture.On(async shell =>
+        {
+            var anchor = new Button { Name = "Anchor", Content = "Menu" };
+            var page = new Page();
+            page.Children.Add(anchor);
+            using var panel = Panel(page);
+            await ShellFixture.LaidOut(anchor);
+            var item = new MenuFlyoutItem { Text = "Reload" };
+            AutomationProperties.SetAutomationId(item, "reload");
+            var clicked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            item.Click += (_, _) => clicked.TrySetResult();
+            var menu = new MenuFlyout();
+            menu.Items.Add(item);
+            menu.ShowAt(anchor);
+            await ShellFixture.LaidOut(item);
+
+            var tree = await Inspector.Run(shell, "tree", []);
+            var shot = await Inspector.Run(shell, "screenshot", [file, "MenuFlyoutPresenter"]);
+            // The item's own Click runs, as a pointer's would.
+            await Inspector.Run(shell, "click", ["reload"]);
+            await clicked.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            return (tree, shot);
+        });
+
+        var popup = Assert.Single(OpenWindow(tree, nameof(Page)).GetProperty("popups").EnumerateArray());
+        Assert.Equal("MenuFlyoutPresenter", popup.GetProperty("type").GetString());
+        Assert.Contains("\"automationId\": \"reload\"", popup.GetRawText(), StringComparison.Ordinal);
+        Assert.EndsWith(file, shot, StringComparison.Ordinal);
+        var (width, height, _) = await Decoded(File.ReadAllBytes(file));
+        Assert.True(width > 0 && height > 0);
+    }
+
+    [Fact]
     public void A_screenshot_goes_on_a_solid_color_so_text_for_a_dark_backdrop_can_be_read()
     {
         // Clear, half white as premultiplied, and solid white.

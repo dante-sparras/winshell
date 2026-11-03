@@ -57,7 +57,7 @@ public sealed partial class TaskbarView : UserControl
         _previews.Model.PropertyChanged += OnPreview;
         _quick.OpenChanged += OnSurface;
         _clock.OpenChanged += OnSurface;
-        _tray.HiddenChanged += OnSurface;
+        _tray.OpenChanged += OnSurface;
         _reveal = new TaskbarReveal(time);
         _reveal.PropertyChanged += OnReveal;
         _reveal.SetAutoHide(_preferences.TaskbarAutoHide);
@@ -190,7 +190,7 @@ public sealed partial class TaskbarView : UserControl
         _previews.Model.PropertyChanged -= OnPreview;
         _quick.OpenChanged -= OnSurface;
         _clock.OpenChanged -= OnSurface;
-        _tray.HiddenChanged -= OnSurface;
+        _tray.OpenChanged -= OnSurface;
         _reveal.PropertyChanged -= OnReveal;
         _reveal.Dispose();
         _start.Release();
@@ -362,7 +362,7 @@ public sealed partial class TaskbarView : UserControl
         _clock.IsOpen,
         _previews.Model.IsOpen,
         TaskMenuOpen(),
-        _tray.HiddenOpen,
+        _tray.Open,
         _barMenu,
         _keyboard.Active));
 

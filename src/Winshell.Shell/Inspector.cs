@@ -29,7 +29,7 @@ internal static class Inspector
         return command switch
         {
             "tree" => Tree(shell),
-            "screenshot" when args.Count > 0 => await Screenshot(Window(shell, window), args[0], shell.IsDark),
+            "screenshot" when args.Count > 0 => await Screenshot(Shown(shell, window), args[0], shell.IsDark),
             "click" when args.Count > 0 => Click(Find(shell, args[0], window), args[0]),
             "hover" when args.Count > 0 => Hover(Find(shell, args[0], window), args[0]),
             _ => throw new IpcException($"Unknown inspect command {command}"),
@@ -74,6 +74,13 @@ internal static class Inspector
                 {
                     json.WritePropertyName("content");
                     Write(json, content, content);
+                    if (Popups(content) is { Count: > 0 } popups)
+                    {
+                        json.WriteStartArray("popups");
+                        foreach (var popup in popups)
+                            Write(json, popup, popup);
+                        json.WriteEndArray();
+                    }
                 }
                 json.WriteEndObject();
             }
@@ -159,8 +166,22 @@ internal static class Inspector
     private static FrameworkElement Find(Shell shell, string name, IReadOnlyList<string> window)
     {
         var windows = window.Count > 0 ? [Window(shell, window)] : Windows(shell);
-        return windows.Select(open => open.Content).OfType<DependencyObject>().Select(root => Find(root, name)).FirstOrDefault(found => found is not null)
+        return windows.Select(open => open.Content).OfType<UIElement>().SelectMany(content => (UIElement[])[content, .. Popups(content)])
+            .Select(root => Find(root, name)).FirstOrDefault(found => found is not null)
             ?? throw new IpcException($"No element is named {name}. winshell inspect tree lists them.");
+    }
+
+    /// <summary>What the open popups of a window show, such as a flyout or a menu, which its content's tree does not hold.</summary>
+    private static List<UIElement> Popups(UIElement content) =>
+        content.XamlRoot is { } root ? [.. VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Select(popup => popup.Child).OfType<UIElement>()] : [];
+
+    /// <summary>A window's content, or what an open popup shows when its type is the one named, such as <c>MenuFlyoutPresenter</c>.</summary>
+    private static UIElement Shown(Shell shell, IReadOnlyList<string> named)
+    {
+        if (named is [var name, ..] && Windows(shell).Select(open => open.Content).OfType<UIElement>().SelectMany(Popups)
+            .FirstOrDefault(popup => popup.GetType().Name == name) is { } shown)
+            return shown;
+        return Window(shell, named).Content ?? throw new IpcException("That window is empty.");
     }
 
     private static FrameworkElement? Find(DependencyObject element, string name)
@@ -210,13 +231,12 @@ internal static class Inspector
     }
 
     /// <summary>
-    /// A window's content as a PNG. The system draws a backdrop, so a capture has none, and text made for a dark one would
-    /// be white on nothing. So it goes on the plain color of the theme, which is what makes the picture readable.
+    /// A window's content, or an open popup's, as a PNG. The system draws a backdrop, so a capture has none, and text
+    /// made for a dark one would be white on nothing. So it goes on the plain color of the theme, which is what makes
+    /// the picture readable.
     /// </summary>
-    private static async Task<string> Screenshot(ShellWindow window, string file, bool dark)
+    private static async Task<string> Screenshot(UIElement content, string file, bool dark)
     {
-        if (window.Content is not { } content)
-            throw new IpcException("That window is empty.");
         var bitmap = new RenderTargetBitmap();
         await bitmap.RenderAsync(content);
         var pixels = await bitmap.GetPixelsAsync();

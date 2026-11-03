@@ -57,6 +57,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 
 ## Before you finish
 
+- Writing, refactoring or reviewing C#? Follow [docs/agents/csharp-practices.md](docs/agents/csharp-practices.md).
 - Writing, changing or reviewing a test? It must pass the gate in [docs/agents/test-audit/SKILL.md](docs/agents/test-audit/SKILL.md).
 - Before every push, `pwsh scripts/quick-check.ps1` must pass: the build with 0 warnings, the formatting and the fast tests, in under two minutes, with no window opened.
 - Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/run-tests.ps1 -Tier Slow`, under "Live UI with Winland running". `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out.
