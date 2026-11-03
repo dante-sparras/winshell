@@ -8,7 +8,7 @@ The portable zip and the PowerShell command install the same self-contained buil
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB, and it needs no .NET install. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or [run it from a terminal](#first-run).
+A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB, and it needs no .NET install. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or [run it from a terminal](#first-run).
 
 The portable build updates itself from GitHub Releases, as [Winshell updates](../updates.md) explains. The default shell updates with Winshell. A shell you built yourself does not.
 
@@ -21,7 +21,7 @@ No administrator account. This downloads the portable build for the current user
 It needs `install.ps1` and the zip on that release.
 
 ```powershell
-irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
+irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1 | iex
 ```
 
 `iex` cannot take parameters. Set these first, or run the downloaded script as a script block:
@@ -29,17 +29,17 @@ irm https://github.com/dante-sparras/winshell/releases/latest/download/install.p
 ```powershell
 $env:WINSHELL_VERSION = 'x.y.z'  # optional. Omit it for the latest release.
 $env:WINSHELL_AUTOSTART = '1'    # optional. Run Winshell at sign-in.
-irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
+irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1 | iex
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
+& ([scriptblock]::Create((irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 ```
 
 Remove that install with:
 
 ```powershell
-irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
+irm https://github.com/enpaze/winshell/releases/latest/download/uninstall.ps1 | iex
 ```
 
 That removes the install folder, the PATH entry, the shortcut, the sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves your configuration in `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
@@ -57,7 +57,7 @@ The Store package is built for Partner Center and is not published. Publishing w
 You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
 
 ```powershell
-git clone https://github.com/dante-sparras/winshell.git
+git clone https://github.com/enpaze/winshell.git
 cd winshell
 dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
 ```

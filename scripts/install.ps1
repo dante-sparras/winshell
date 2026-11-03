@@ -22,8 +22,8 @@
     iex cannot pass parameters. WINSHELL_VERSION (x.y.z) and WINSHELL_AUTOSTART (1, true, or yes)
     are the same choices as -Version and -AutoStart.
 
-        irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
-        & ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
+        irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1 | iex
+        & ([scriptblock]::Create((irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 
     This file is a release asset. It does not dot-source a neighbor, and it does not run downloaded text.
 #>
@@ -125,14 +125,14 @@ function Resolve-WinshellAutoStart {
 }
 
 function Get-WinshellReleaseBase {
-    $official = 'https://github.com/dante-sparras/winshell/releases'
+    $official = 'https://github.com/enpaze/winshell/releases'
     $base = $official
     if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_RELEASE_BASE)) {
         $base = $env:WINSHELL_RELEASE_BASE.Trim().TrimEnd('/')
     }
     if ($base -eq $official) { return $base }
     if ($base -match '^http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$') { return $base }
-    throw 'WINSHELL_RELEASE_BASE must be https://github.com/dante-sparras/winshell/releases or an http://127.0.0.1 test server.'
+    throw 'WINSHELL_RELEASE_BASE must be https://github.com/enpaze/winshell/releases or an http://127.0.0.1 test server.'
 }
 
 function Get-WinshellDownloadUrl([string] $Base, [string] $Version, [string] $File) {
@@ -715,7 +715,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     # including the one that reports an error below.
     $languageMode = $ExecutionContext.SessionState.LanguageMode
     if ($languageMode -ne 'FullLanguage') {
-        Write-Error -ErrorAction Continue "install.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $languageMode. Download the portable zip from https://github.com/dante-sparras/winshell/releases instead."
+        Write-Error -ErrorAction Continue "install.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $languageMode. Download the portable zip from https://github.com/enpaze/winshell/releases instead."
         if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
         exit 1
     }

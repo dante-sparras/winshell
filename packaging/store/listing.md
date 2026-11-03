@@ -46,15 +46,15 @@ Copyright (c) Dante Sparrås. MIT License.
 
 ## Privacy policy URL
 
-https://github.com/dante-sparras/winshell/blob/main/docs/privacy.md
+https://github.com/enpaze/winshell/blob/main/docs/privacy.md
 
 ## Website
 
-https://github.com/dante-sparras/winshell
+https://github.com/enpaze/winshell
 
 ## Support contact info
 
-https://github.com/dante-sparras/winshell/issues
+https://github.com/enpaze/winshell/issues
 
 ## Restricted capabilities: why Winshell needs them
 

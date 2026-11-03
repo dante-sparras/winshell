@@ -96,7 +96,7 @@ internal sealed record DoctorContext(
 /// </summary>
 public static class Doctor
 {
-    internal const string BugReports = "https://github.com/dante-sparras/winshell/issues/new/choose";
+    internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
     {

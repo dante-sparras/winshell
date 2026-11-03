@@ -14,4 +14,4 @@ The one connection Winshell makes on its own is the update check of a portable W
 
 A shell you write is a full-trust program. It can do more than this, such as make network requests, and building it runs its code. What it does is up to its author.
 
-Questions: [open an issue](https://github.com/dante-sparras/winshell/issues).
+Questions: [open an issue](https://github.com/enpaze/winshell/issues).

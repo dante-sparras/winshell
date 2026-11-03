@@ -1,13 +1,13 @@
 # Configuration guide
 
-A configuration is a .NET project that references the Winshell package and builds into one program. This guide builds one up from a single panel. The [reference](../reference/index.md) lists every type and member. The C# on this page is copied from [tests/Winshell.Shell.Tests/GuideSamples.cs](https://github.com/dante-sparras/winshell/blob/main/tests/Winshell.Shell.Tests/GuideSamples.cs), which the solution builds. Nothing in that file runs. Call `Shell.Run` from `Main`, marked `[STAThread]`.
+A configuration is a .NET project that references the Winshell package and builds into one program. This guide builds one up from a single panel. The [reference](../reference/index.md) lists every type and member. The C# on this page is copied from [tests/Winshell.Shell.Tests/GuideSamples.cs](https://github.com/enpaze/winshell/blob/main/tests/Winshell.Shell.Tests/GuideSamples.cs), which the solution builds. Nothing in that file runs. Call `Shell.Run` from `Main`, marked `[STAThread]`.
 
 ## Create one
 
 You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](getting-started.md#build-from-source), so the two are the same release.
 
 ```powershell
-git clone https://github.com/dante-sparras/winshell.git
+git clone https://github.com/enpaze/winshell.git
 cd winshell
 pwsh scripts/pack.ps1
 dotnet new install .\artifacts\packages\Winshell.Templates.<version>.nupkg

@@ -119,7 +119,7 @@ Describe 'architecture' {
 
 Describe 'release URL' {
     It 'defaults to the GitHub releases URL' {
-        Get-WinshellReleaseBase | Should -Be 'https://github.com/dante-sparras/winshell/releases'
+        Get-WinshellReleaseBase | Should -Be 'https://github.com/enpaze/winshell/releases'
     }
 
     It 'allows a loopback test server and rejects anything else' {
@@ -134,7 +134,7 @@ Describe 'release URL' {
     }
 
     It 'builds the latest and versioned download URLs' {
-        $base = 'https://github.com/dante-sparras/winshell/releases'
+        $base = 'https://github.com/enpaze/winshell/releases'
         Get-WinshellDownloadUrl $base $null 'SHA256SUMS.txt' | Should -Be "$base/latest/download/SHA256SUMS.txt"
         Get-WinshellDownloadUrl $base '0.6.0' 'winshell-0.6.0-win-x64.zip' |
             Should -Be "$base/download/v0.6.0/winshell-0.6.0-win-x64.zip"
@@ -301,8 +301,8 @@ Describe 'install' {
         $auto | Should -Match '--headless'
         $auto | Should -Match '--no-duplicate'
         $auto | Should -Match ([regex]::Escape((Join-Path $bin 'winshell.exe')))
-        $urls | Should -Contain "https://github.com/dante-sparras/winshell/releases/download/v0.6.0/SHA256SUMS.txt"
-        $urls | Should -Contain "https://github.com/dante-sparras/winshell/releases/download/v0.6.0/$name"
+        $urls | Should -Contain "https://github.com/enpaze/winshell/releases/download/v0.6.0/SHA256SUMS.txt"
+        $urls | Should -Contain "https://github.com/enpaze/winshell/releases/download/v0.6.0/$name"
         Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile
         @((Read-WinshellTestPath).Split(';') | Where-Object { $_ -eq $bin }).Count | Should -Be 1
         { Install-Winshell -Version '0.6.0' -DownloadText $downloadText -DownloadFile $downloadFile -ProcessesUnder { 4242 } } |
@@ -357,7 +357,7 @@ Describe 'install' {
             Copy-Item -LiteralPath $zip -Destination $Destination
         }.GetNewClosure()
         Install-Winshell -DownloadText $downloadText -DownloadFile $downloadFile
-        $base = 'https://github.com/dante-sparras/winshell/releases'
+        $base = 'https://github.com/enpaze/winshell/releases'
         $urls | Should -Contain "$base/latest/download/SHA256SUMS.txt"
         $urls | Should -Contain "$base/download/v0.6.0/$name"
         $urls | Should -Not -Contain "$base/latest/download/$name"

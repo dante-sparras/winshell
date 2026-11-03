@@ -6,7 +6,7 @@
     <Title>Winshell templates</Title>
     <Description>dotnet new templates for a Winshell shell and the default shell.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/dante-sparras/winshell</RepositoryUrl>
+    <RepositoryUrl>https://github.com/enpaze/winshell</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeContentInPack>true</IncludeContentInPack>

@@ -30,7 +30,7 @@ param(
     # A release tag, such as v1.2.3: the script stops unless the checked-out version is that release.
     [string] $Tag,
     # The GitHub repository the release, and so the winget installer URLs, belong to.
-    [string] $Repository = 'dante-sparras/winshell',
+    [string] $Repository = 'enpaze/winshell',
     # The package identity Partner Center reserved for the Store. Empty is a test identity.
     [string] $IdentityName,
     [string] $Publisher,
@@ -283,7 +283,7 @@ PackageIdentifier: $id
 PackageVersion: $Version
 PackageLocale: en-US
 Publisher: Dante Sparrås
-PublisherUrl: https://github.com/dante-sparras
+PublisherUrl: https://github.com/enpaze
 PublisherSupportUrl: https://github.com/$Repository/issues
 PackageName: Winshell
 PackageUrl: https://github.com/$Repository

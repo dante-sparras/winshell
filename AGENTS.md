@@ -114,7 +114,7 @@ Look at the screenshot, and check values in the tree rather than trusting that t
 
 ### Issue tracker
 
-Issues live in GitHub Issues for dante-sparras/winshell, used through `gh`. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for enpaze/winshell, used through `gh`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

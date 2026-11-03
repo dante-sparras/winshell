@@ -222,7 +222,7 @@ public sealed class SessionServiceTests
     private Updater NewUpdater()
     {
         var folder = Path.Combine(Path.GetTempPath(), "winshell-updates-service-tests", Guid.NewGuid().ToString("N"));
-        return new Updater("dante-sparras/winshell", folder, folder, "0.5.0", "win-x64", _log);
+        return new Updater("enpaze/winshell", folder, folder, "0.5.0", "win-x64", _log);
     }
 
     private sealed class FakeLock(bool accepts) : IWorkstationLock

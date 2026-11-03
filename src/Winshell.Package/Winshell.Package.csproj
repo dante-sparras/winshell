@@ -7,7 +7,7 @@
     <PackageId>Winshell</PackageId>
     <Description>The library a Winshell configuration references: services and WinUI windows.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/dante-sparras/winshell</RepositoryUrl>
+    <RepositoryUrl>https://github.com/enpaze/winshell</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Copyright>Copyright (c) 2026 Dante Sparrås</Copyright>
     <!-- The project's own assembly is a marker. The package carries the two libraries below. -->

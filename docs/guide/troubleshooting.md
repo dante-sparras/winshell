@@ -113,11 +113,11 @@ A crash is a bug in Winshell. Please report it.
 
 ## Report a bug
 
-[Open a bug report](https://github.com/dante-sparras/winshell/issues/new/choose) with:
+[Open a bug report](https://github.com/enpaze/winshell/issues/new/choose) with:
 
 - What you did, what you expected, and what happened.
 - `winshell --version`, and the Windows version from `winver`.
 - The log (`winshell log > log.txt`) and the crash report, if there is one. Look through them first: they have file paths and the names of the apps you run.
 - The smallest configuration that shows the problem, or say that it's the default shell.
 
-For a security problem, don't open an issue; follow the [security policy](https://github.com/dante-sparras/winshell/blob/main/.github/SECURITY.md).
+For a security problem, don't open an issue; follow the [security policy](https://github.com/enpaze/winshell/blob/main/.github/SECURITY.md).

@@ -4,7 +4,7 @@ Winshell is a desktop shell toolkit for Windows 11. A configuration is a .NET pr
 
 Winshell ships with a default shell that looks like Windows 11: a taskbar on every screen, Start, quick settings, a notification center with a calendar, an on-screen display for volume and brightness, and Winshell Settings. It runs next to Explorer. It doesn't hide or replace Explorer's taskbar unless `hideExplorerTaskbar` is set in `preferences.toml`, and that key is off until then. Running the default shell needs no .NET SDK. Writing a shell does.
 
-Until 1.0 is tagged, a release can still break a configuration. The [changelog](https://github.com/dante-sparras/winshell/blob/main/CHANGELOG.md) lists every change. The [release page](https://github.com/dante-sparras/winshell/releases) has the current build.
+Until 1.0 is tagged, a release can still break a configuration. The [changelog](https://github.com/enpaze/winshell/blob/main/CHANGELOG.md) lists every change. The [release page](https://github.com/enpaze/winshell/releases) has the current build.
 
 ## Where to go next
 
@@ -17,4 +17,4 @@ Until 1.0 is tagged, a release can still break a configuration. The [changelog](
 - **[A configuration is a WinUI 3 program](adr/0010-a-configuration-is-a-winui-program.md)**: why a shell is its own program. The [other decisions](adr/toc.yml) are the history.
 - **[Development](development.md)**: build Winshell from source and run its checks.
 
-Found a bug, or have an idea? [Open an issue](https://github.com/dante-sparras/winshell/issues/new/choose).
+Found a bug, or have an idea? [Open an issue](https://github.com/enpaze/winshell/issues/new/choose).
