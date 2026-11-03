@@ -92,19 +92,19 @@ public sealed class SettingsTests : IDisposable
     public void Shown_is_the_page_or_its_subpage_and_clearing_a_search_goes_back_to_it()
     {
         var navigation = new SettingsNavigation();
-        Assert.Equal("personalization/", navigation.Shown);
+        Assert.Equal(new SettingsBody("personalization", ""), navigation.Shown);
 
         navigation.Show("start", "pins");
-        Assert.Equal("start/pins", navigation.Shown);
+        Assert.Equal(new SettingsBody("start", "pins"), navigation.Shown);
 
         navigation.Search("mica");
-        Assert.Equal("search", navigation.Shown);
+        Assert.Null(navigation.Shown);
 
         navigation.Search("");
-        Assert.Equal("start/pins", navigation.Shown);
+        Assert.Equal(new SettingsBody("start", "pins"), navigation.Shown);
 
         Assert.True(navigation.Open("runAtSignIn"));
-        Assert.Equal("startup/", navigation.Shown);
+        Assert.Equal(new SettingsBody("startup", ""), navigation.Shown);
     }
 
     [Fact]

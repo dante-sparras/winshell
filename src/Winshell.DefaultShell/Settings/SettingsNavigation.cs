@@ -18,11 +18,8 @@ public sealed class SettingsNavigation
 
     public bool Searching => Query.Trim().Length > 0;
 
-    /// <summary>
-    /// What the body shows: "search" while searching, otherwise the page and its subpage as "page/subpage". A subpage
-    /// takes the place of its page.
-    /// </summary>
-    public string Shown => Searching ? "search" : $"{Page}/{Subpage}";
+    /// <summary>The page the body shows, or its subpage in place of it. Null while the search results show.</summary>
+    public SettingsBody? Shown => Searching ? null : new SettingsBody(Page, Subpage);
 
     public IReadOnlyList<SettingsCrumb> Crumbs
     {
@@ -75,3 +72,6 @@ public sealed class SettingsNavigation
         FocusKey = null;
     }
 }
+
+/// <summary>A page of Winshell Settings, and its subpage when one is open. An empty subpage is the page itself.</summary>
+public sealed record SettingsBody(string Page, string Subpage);

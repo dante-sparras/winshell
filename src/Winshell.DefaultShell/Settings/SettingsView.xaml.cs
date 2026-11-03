@@ -36,7 +36,7 @@ public sealed partial class SettingsView : UserControl
     private readonly SettingsPinsPage _pins;
     private bool _applying;
     private string _crumbs = "";
-    private string _shown = "";
+    private SettingsBody? _shown;
 
     public SettingsView(Preferences preferences, Shell shell, Start start, QuickSettingsLayout layout, Hotkey startHotkey, Hotkey settingsHotkey)
     {
@@ -197,8 +197,8 @@ public sealed partial class SettingsView : UserControl
     {
         var shown = _navigation.Shown;
         foreach (var (key, page) in _pages)
-            page.Visibility = shown == key + "/" ? Visibility.Visible : Visibility.Collapsed;
-        _pins.Visibility = shown == "start/pins" ? Visibility.Visible : Visibility.Collapsed;
+            page.Visibility = shown == new SettingsBody(key, "") ? Visibility.Visible : Visibility.Collapsed;
+        _pins.Visibility = shown == new SettingsBody("start", "pins") ? Visibility.Visible : Visibility.Collapsed;
 
         _applying = true;
         if (Search.Text != _navigation.Query)
@@ -211,7 +211,7 @@ public sealed partial class SettingsView : UserControl
 
         var changed = shown != _shown;
         _shown = shown;
-        if (changed && shown == "startup/")
+        if (changed && shown == new SettingsBody("startup", ""))
             _startup.RefreshFromWindows();
         if (scroll && changed)
             Scroll.ChangeView(null, 0, null, true);
