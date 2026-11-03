@@ -297,5 +297,6 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         _host?.Dispose();
         _host = null;
         Set(ref _visible, false, nameof(Visible));
+        GC.SuppressFinalize(this);
     }
 }

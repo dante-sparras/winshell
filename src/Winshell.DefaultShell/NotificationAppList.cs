@@ -42,7 +42,9 @@ public static class NotificationAppList
         }
         list.Sort(static (a, b) =>
         {
+#pragma warning disable CA1309 // App names sort the way the user reads them.
             var byName = string.Compare(a.Name, b.Name, StringComparison.CurrentCulture);
+#pragma warning restore CA1309
             return byName != 0 ? byName : string.Compare(a.Id, b.Id, StringComparison.Ordinal);
         });
         return list;

@@ -856,7 +856,7 @@ internal sealed unsafe class HostWindow : IDisposable
         foreach (var r in rects)
         {
             var part = Win32.CreateRectRgn((int)Math.Floor(r.X * _scale), (int)Math.Floor(r.Y * _scale), (int)Math.Ceiling(r.Right * _scale), (int)Math.Ceiling(r.Bottom * _scale));
-            Win32.CombineRgn(region, region, part, Win32.RGN_OR);
+            _ = Win32.CombineRgn(region, region, part, Win32.RGN_OR);
             Win32.DeleteObject(part);
         }
         // The window owns the region once it is set.

@@ -40,7 +40,7 @@ internal sealed record ShellIdentity(string ShellId, string DataDir, string Stat
             if (string.Equals(Path.GetDirectoryName(dir), root, StringComparison.OrdinalIgnoreCase))
                 return Path.GetFileName(dir).ToLowerInvariant();
         }
-        return Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(rootFile.ToLowerInvariant())));
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(rootFile.ToLowerInvariant())))[..32];
     }
 
     /// <summary>

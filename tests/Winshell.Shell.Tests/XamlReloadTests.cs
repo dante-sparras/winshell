@@ -7,7 +7,9 @@ namespace Winshell.ShellTests;
 /// <summary>A control as the XAML compiler leaves it, with fields for its names and a handler to connect.</summary>
 public sealed class LivePanel : UserControl
 {
+#pragma warning disable CA1805 // Only a reload assigns it, which the compiler can't see and would otherwise reject.
     internal TextBlock? Label = null;
+#pragma warning restore CA1805
 
     public int Remembered { get; set; }
 

@@ -48,7 +48,7 @@ internal static partial class UpdateSignature
             finally
             {
                 data.StateAction = StateActionClose;
-                WinVerifyTrust(-1, &action, &data);
+                _ = WinVerifyTrust(-1, &action, &data);
             }
         }
     }
