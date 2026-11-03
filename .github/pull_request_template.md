@@ -1,12 +1,14 @@
 <!--
 Read CONTRIBUTING.md before opening a PR. Solve one underlying problem.
 Title: a conventional commit in plain language, such as "fix(api): retries no longer duplicate orders".
-Branch: <type>/<short-description>, such as "fix/duplicate-orders".
+Branch: <type>/<short-description>, such as "fix/duplicate-orders", or agent/<tool>/<issue#>-<slug> for an AI agent.
 -->
 
 ## Summary
 
-<!-- What changed and why. Link the issue it fixes, if there is one.
+Fixes #
+
+<!-- The issue it fixes after "Fixes #", or delete that line if there is none. What changed and why.
 
 Show the smallest view that makes the point: a diagram, a diff sketch, or a tree. Keep prose brief. -->
 

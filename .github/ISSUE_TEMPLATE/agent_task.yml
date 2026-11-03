@@ -1,0 +1,62 @@
+name: Agent task
+description: One task an agent can finish in one pull request.
+labels:
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One task is one issue, one branch and one pull request. Keep it small enough that it touches no other open task's files.
+        Label the issue with the `area:` label of each area you pick.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be true when this is done, and why? Describe the behavior, not the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checks a reviewer can confirm, each one a test, a command, or a winshell inspect screenshot.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files it may touch
+      description: |
+        Paths or globs, tests included. Name a shared file, such as a Directory.*.props, global.json or winshell.slnx, only if the task
+        must change it; one pull request at a time changes those.
+      placeholder: |
+        src/Winshell.DefaultShell/Taskbar/**
+        tests/Winshell.DefaultShell.Tests/Taskbar*Tests.cs
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Each area is an `area:` label. A test or a doc page belongs to the area it covers.
+      multiple: true
+      options:
+        - cli (src/Winshell)
+        - services (src/Winshell.Services)
+        - shell (src/Winshell.Shell)
+        - default-shell (src/Winshell.DefaultShell root files, DesktopChords)
+        - taskbar (default shell Taskbar, TaskPreview, Tray)
+        - start (default shell Start)
+        - quick-settings (default shell QuickSettings, NotificationCenter, OnScreenDisplay)
+        - winshell-settings (default shell Settings, preferences)
+        - build (scripts/, .github/, packaging/, templates/, src/Winshell.Package, tests/TestSupport, shared build files)
+        - docs (docs/ and root Markdown alone)
+    validations:
+      required: true

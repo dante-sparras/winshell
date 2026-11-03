@@ -41,7 +41,7 @@ jobs:
           fi
           # Branches created by Dependabot, release-please, GitHub's Revert button, and coding agents.
           if [[ "$BRANCH" == dependabot/* || "$BRANCH" == release-please--* || "$BRANCH" =~ ^revert-[0-9]+- \
-            || "$BRANCH" =~ ^(claude|codex|copilot|cursor|grok)/ ]]; then
+            || "$BRANCH" =~ ^(agent|claude|codex|copilot|cursor|grok)/ ]]; then
             echo "Branch \"$BRANCH\" is created by automation."
             exit 0
           fi
