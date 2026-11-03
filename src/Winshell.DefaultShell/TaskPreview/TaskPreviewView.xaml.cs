@@ -294,8 +294,7 @@ public sealed partial class TaskPreviewView : UserControl
         };
         root.PointerExited += (_, e) =>
         {
-            var point = e.GetCurrentPoint(root).Position;
-            if (point.X >= 0 && point.Y >= 0 && point.X < root.ActualWidth && point.Y < root.ActualHeight)
+            if (StillInside(e, root))
                 return;
             _model.PointerOn(null);
         };
@@ -348,39 +347,25 @@ public sealed partial class TaskPreviewView : UserControl
 
     private void OnRootExited(object sender, PointerRoutedEventArgs e)
     {
-        var point = e.GetCurrentPoint(Root).Position;
-        if (point.X >= 0 && point.Y >= 0 && point.X < Root.ActualWidth && point.Y < Root.ActualHeight)
+        if (StillInside(e, Root))
             return;
         _model.PointerInside(false);
     }
 
+    /// <summary>An exit bubbled up from a child. The pointer left the element only when it is outside its bounds.</summary>
+    private static bool StillInside(PointerRoutedEventArgs e, FrameworkElement element)
+    {
+        var point = e.GetCurrentPoint(element).Position;
+        return point.X >= 0 && point.Y >= 0 && point.X < element.ActualWidth && point.Y < element.ActualHeight;
+    }
+
     private void OnPreviewKey(object sender, KeyRoutedEventArgs e)
     {
-        var handled = e.Key switch
-        {
-            VirtualKey.Escape => Escape(),
-            VirtualKey.Left => _model.MoveHorizontal(-1),
-            VirtualKey.Right => _model.MoveHorizontal(1),
-            VirtualKey.Up => _model.MoveVertical(-1),
-            VirtualKey.Down => _model.MoveVertical(1),
-            VirtualKey.Tab => _model.Tab(!Shift()),
-            VirtualKey.Enter => _model.ActivateFocused(),
-            VirtualKey.Delete => _model.PressDelete(),
-            _ => false,
-        };
-        if (!handled)
+        if (!_model.Press(e.Key, Shift()))
             return;
         e.Handled = true;
         if (_model.IsOpen)
             ApplyFocus();
-    }
-
-    private bool Escape()
-    {
-        if (!_model.IsOpen)
-            return false;
-        _model.Escape();
-        return true;
     }
 
     private static bool Shift() =>

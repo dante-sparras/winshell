@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Windows.Foundation;
+using Windows.System;
 
 namespace Winshell.DefaultShell.Taskbar;
 
@@ -374,6 +375,32 @@ public sealed class TaskPreview : ObservableObject, IDisposable
         Set(ref _focusClose, true, nameof(FocusClose));
         Reveal();
         return true;
+    }
+
+    /// <summary>
+    /// A key pressed in the preview. True when the preview used it: Escape while it is open, the arrows, Tab (Shift+Tab
+    /// goes back), Enter and Delete, each as its own method says.
+    /// </summary>
+    internal bool Press(VirtualKey key, bool shift)
+    {
+        if (key == VirtualKey.Escape)
+        {
+            if (!_isOpen)
+                return false;
+            Escape();
+            return true;
+        }
+        return key switch
+        {
+            VirtualKey.Left => MoveHorizontal(-1),
+            VirtualKey.Right => MoveHorizontal(1),
+            VirtualKey.Up => MoveVertical(-1),
+            VirtualKey.Down => MoveVertical(1),
+            VirtualKey.Tab => Tab(!shift),
+            VirtualKey.Enter => ActivateFocused(),
+            VirtualKey.Delete => PressDelete(),
+            _ => false,
+        };
     }
 
     /// <summary>Escape closes a preview the keyboard opened and sends the keyboard back to its button.</summary>
