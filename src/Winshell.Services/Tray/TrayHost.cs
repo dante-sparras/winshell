@@ -47,7 +47,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         _names = names;
         _broadcast = broadcast;
         _owner = new Mutex(false, names.Owner);
-        _clicker = new TrayClicker(loop);
+        _clicker = new TrayClicker(loop, TrayClicker.LetAppTakeForeground);
     }
 
     /// <summary>The notification area window, or 0 while another host owns the tray.</summary>

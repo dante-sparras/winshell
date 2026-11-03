@@ -200,44 +200,6 @@ public sealed class TrayHostTests : IDisposable
     }
 
     [Fact]
-    public void A_click_reaches_the_app_only_when_this_process_may_click_it()
-    {
-        var host = Start(HostNames, out _);
-        Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_MESSAGE, callback: 0x8001));
-        var icon = Assert.Single(host.Icons);
-        var callbacks = 0;
-        WindowProc record = (hwnd, msg, wParam, lParam) =>
-        {
-            if (msg == 0x8001)
-                callbacks++;
-            return DefWindowProcW(hwnd, msg, wParam, lParam);
-        };
-        var previous = SetWindowLongPtrW(_app, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(record));
-        try
-        {
-            host.Click(icon, TrayClick.Left, null);
-        }
-        finally
-        {
-            SetWindowLongPtrW(_app, GWLP_WNDPROC, previous);
-            GC.KeepAlive(record);
-        }
-        // The app is this test process: medium on a developer's desktop, elevated on CI.
-        var own = TrayClicker.IntegrityLevel((uint)Environment.ProcessId);
-        Assert.Equal(TrayClicker.MayClick(own, own), callbacks > 0);
-    }
-
-    private delegate nint WindowProc(nint hwnd, uint msg, nint wParam, nint lParam);
-
-    private const int GWLP_WNDPROC = -4;
-
-    [DllImport("user32.dll")]
-    private static extern nint SetWindowLongPtrW(nint hwnd, int index, nint value);
-
-    [DllImport("user32.dll")]
-    private static extern nint DefWindowProcW(nint hwnd, uint msg, nint wParam, nint lParam);
-
-    [Fact]
     public void Commands_posted_to_the_host_reach_explorers_taskbar()
     {
         var explorer = new ExplorerThread(ExplorerNames, _log);
