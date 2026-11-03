@@ -35,8 +35,8 @@ A source in physical pixels. Monitor ids are Windows display device names.
 | Member | Type | Description |
 | --- | --- | --- |
 | `CaptureTarget(IntPtr Window, string MonitorId)` | constructor |  |
-| `MonitorId` | string, init |  |
-| `Window` | IntPtr, init |  |
+| `MonitorId` | string, init | The ScreenInfo.Id of the screen to capture, or empty for a window. |
+| `Window` | IntPtr, init | The handle of the window to capture, or 0 for a screen. |
 | `ForScreen([ScreenInfo](winshell.md#screeninfo) screen)` | [CaptureTarget](#capturetarget), static | A whole screen, by its ScreenInfo.Id. |
 | `ForWindow(IntPtr window)` | [CaptureTarget](#capturetarget), static | A top-level window, by its handle. |
 | `ForWindow([AppWindow](winshell-windows.md#appwindow) window)` | [CaptureTarget](#capturetarget), static | An AppWindow from WindowListService. The caller does not need its handle. |

@@ -15,10 +15,7 @@ using Winshell.Winland;
 
 namespace Winshell;
 
-/// <summary>
-/// Each service is made the first time it is read, so a service a configuration does not use costs nothing and asks
-/// Windows for nothing.
-/// </summary>
+// The shell's services. Shell's summary is in Shell.cs.
 public sealed partial class Shell
 {
     private readonly List<IDisposable> _services = [];

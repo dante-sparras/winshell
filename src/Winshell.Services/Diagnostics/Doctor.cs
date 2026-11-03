@@ -69,6 +69,11 @@ public enum CheckStatus
 }
 
 /// <summary>One thing <c>winshell doctor</c> checked: what it found and, when something is wrong, how to fix it.</summary>
+/// <param name="Id">A stable name for the check, such as <c>dotnet</c>.</param>
+/// <param name="Title">The check's name as <c>winshell doctor</c> prints it.</param>
+/// <param name="Status">How the check came out.</param>
+/// <param name="Message">What the check found.</param>
+/// <param name="Fix">How to fix what is wrong, or null when nothing is or there is nothing to do.</param>
 public sealed record DoctorCheck(string Id, string Title, CheckStatus Status, string Message, string? Fix = null);
 
 /// <summary>A running Winshell, as the instance list has it.</summary>

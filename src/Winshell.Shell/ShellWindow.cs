@@ -207,8 +207,8 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
 
     /// <summary>
     /// Lets the user resize the window by dragging an edge or a corner, as its border does. Call it when a pointer
-    /// button goes down. Two adjacent edges, such as <c>Edges.Top | Edges.Left</c>, name a corner. Any other
-    /// combination resizes from the bottom-right corner.
+    /// button goes down. Two adjacent edges, such as top and left, name a corner. Any other combination resizes from
+    /// the bottom-right corner.
     /// </summary>
     public void StartSystemResize(Edges edges) => _host?.StartSystemResize(edges);
 

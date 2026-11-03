@@ -30,8 +30,8 @@ One thing `winshell doctor` checked: what it found and, when something is wrong,
 | Member | Type | Description |
 | --- | --- | --- |
 | `DoctorCheck(string Id, string Title, [CheckStatus](#checkstatus) Status, string Message, string? Fix = null)` | constructor |  |
-| `Fix` | string?, init |  |
-| `Id` | string, init |  |
-| `Message` | string, init |  |
-| `Status` | [CheckStatus](#checkstatus), init |  |
-| `Title` | string, init |  |
+| `Fix` | string?, init | How to fix what is wrong, or null when nothing is or there is nothing to do. |
+| `Id` | string, init | A stable name for the check, such as `dotnet`. |
+| `Message` | string, init | What the check found. |
+| `Status` | [CheckStatus](#checkstatus), init | How the check came out. |
+| `Title` | string, init | The check's name as `winshell doctor` prints it. |

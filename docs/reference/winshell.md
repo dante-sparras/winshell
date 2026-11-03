@@ -176,24 +176,22 @@ A monitor, as the platform reports it. Coordinates are logical pixels on the vir
 | Member | Type | Description |
 | --- | --- | --- |
 | `ScreenInfo(string Id, string Name, string Model, string Manufacturer, string SerialNumber, Rect Geometry, Rect WorkArea, double DevicePixelRatio, double PhysicalWidthMm, double PhysicalHeightMm, int RefreshRate, bool IsPrimary)` | constructor |  |
-| `DevicePixelRatio` | double, init |  |
-| `Geometry` | Rect, init |  |
-| `Id` | string, init |  |
-| `IsPrimary` | bool, init |  |
-| `Manufacturer` | string, init |  |
-| `Model` | string, init |  |
-| `Name` | string, init |  |
-| `PhysicalHeightMm` | double, init |  |
-| `PhysicalWidthMm` | double, init |  |
-| `RefreshRate` | int, init |  |
-| `SerialNumber` | string, init |  |
-| `WorkArea` | Rect, init |  |
+| `DevicePixelRatio` | double, init | The monitor's scale: physical pixels per logical pixel, such as 1.5 at 150%. |
+| `Geometry` | Rect, init | The whole monitor. |
+| `Id` | string, init | The Windows display device name, such as `\\.\DISPLAY1`. |
+| `IsPrimary` | bool, init | Whether this is the primary monitor, which Windows puts at the origin. |
+| `Manufacturer` | string, init | The three-letter PnP code of the monitor's maker, such as `GSM`. Can be empty. |
+| `Model` | string, init | The monitor's name as Windows lists it, such as `Generic PnP Monitor`. Can be empty. |
+| `Name` | string, init | The display device name without its `\\.\` prefix, such as `DISPLAY1`. |
+| `PhysicalHeightMm` | double, init | The height of the picture, in millimeters, as the monitor reports it. 0 when unknown. |
+| `PhysicalWidthMm` | double, init | The width of the picture, in millimeters, as the monitor reports it. 0 when unknown. |
+| `RefreshRate` | int, init | The refresh rate in hertz, or 60 when Windows does not say. |
+| `SerialNumber` | string, init | The instance part of the monitor's Windows device id, which tells two monitors of one model apart. Can be empty. |
+| `WorkArea` | Rect, init | The monitor without the taskbar and the edges panels reserve. |
 
 ## Shell
 
-The running shell: its screens and services. There is one in a process.
-
-Each service is made the first time it is read, so a service a configuration does not use costs nothing and asks Windows for nothing.
+The running shell: its screens and services. There is one in a process. Each service is made the first time it is read, so a service a configuration does not use costs nothing and asks Windows for nothing.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -259,8 +257,8 @@ What `winshell ipc` reaches in a C# configuration: functions, properties and sig
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Handle(string target, string function, Delegate handler)` | IDisposable | Lets `winshell ipc call` run handler, such as `(string page) => Open(page)`. Dispose the result to take it away. A later handler for the same function replaces this one. Throws ArgumentException: The handler takes or returns a type IPC can't pass. |
-| `Property<T>(string target, string property, Func of T read)` | IDisposable | Lets `winshell ipc prop get` read a value. Dispose the result to take it away. Throws ArgumentException: T is a type IPC can't pass. |
+| `Handle(string target, string function, Delegate handler)` | IDisposable | Lets `winshell ipc call` run handler, such as `(string page) => Open(page)`. Dispose the result to take it away. A later handler for the same function replaces this one. Throws ArgumentException when the handler takes or returns a type IPC can't pass. |
+| `Property<T>(string target, string property, Func of T read)` | IDisposable | Lets `winshell ipc prop get` read a value. Dispose the result to take it away. Throws ArgumentException when T is a type IPC can't pass. |
 | `Signal(string target, string signal)` | [IpcSignal](#ipcsignal) | A signal `winshell ipc wait` and `listen` can follow. |
 
 ## ShellOptions
@@ -305,7 +303,7 @@ Has the members of [ObservableObject](#observableobject).
 | `MapToScreen(double x, double y)` | (int, int) | A point in logical window coordinates, in physical pixels on the virtual desktop. |
 | `Raise()` | void | Puts the window above the others at its level, without focusing it. |
 | `StartSystemMove()` | void | Lets the user move the window by dragging, as a title bar does. Call it when a pointer button goes down. |
-| `StartSystemResize([Edges](#edges) edges)` | void | Lets the user resize the window by dragging an edge or a corner, as its border does. Call it when a pointer button goes down. Two adjacent edges, such as `Edges.Top \| Edges.Left`, name a corner. Any other combination resizes from the bottom-right corner. |
+| `StartSystemResize([Edges](#edges) edges)` | void | Lets the user resize the window by dragging an edge or a corner, as its border does. Call it when a pointer button goes down. Two adjacent edges, such as top and left, name a corner. Any other combination resizes from the bottom-right corner. |
 
 ## TomlCommentAttribute
 
@@ -364,5 +362,5 @@ A WinUI FrameworkElement. The members here are the ones Winshell adds.
 | `WindowThumbnail()` | constructor | A thumbnail with no window, which shows nothing. It takes no clicks, and screen readers skip it. |
 | `Peek` | bool | While true, Windows shows Window at full size and hides the others. It stays off when the user turned peek off, and it ends when this element unloads or the window goes. |
 | `Window` | [AppWindow](winshell-windows.md#appwindow)? | The app window to preview, from WindowListService.Windows. Null shows nothing. |
-| `PeekProperty` | DependencyProperty, static | While true, Windows shows this window at full size and hides the others. It stays off when the user turned peek off, and it ends when this element unloads or the window goes. |
+| `PeekProperty` | DependencyProperty, static | While true, Windows shows Window at full size and hides the others. It stays off when the user turned peek off, and it ends when this element unloads or the window goes. |
 | `WindowProperty` | DependencyProperty, static | The app window to preview, from WindowListService.Windows. Null shows nothing. |

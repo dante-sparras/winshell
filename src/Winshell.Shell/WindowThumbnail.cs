@@ -25,8 +25,8 @@ public sealed class WindowThumbnail : FrameworkElement
         new PropertyMetadata(null, (sender, args) => ((WindowThumbnail)sender).OnWindowChanged((AppWindow?)args.OldValue, (AppWindow?)args.NewValue)));
 
     /// <summary>
-    /// While true, Windows shows this window at full size and hides the others. It stays off when the user turned
-    /// peek off, and it ends when this element unloads or the window goes.
+    /// While true, Windows shows <see cref="Window"/> at full size and hides the others. It stays off when the user
+    /// turned peek off, and it ends when this element unloads or the window goes.
     /// </summary>
     public static readonly DependencyProperty PeekProperty = DependencyProperty.Register(
         nameof(Peek),

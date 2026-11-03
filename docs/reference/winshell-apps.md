@@ -70,8 +70,8 @@ A shortcut in the Recent folder: its name without `.lnk`, and its path.
 | Member | Type | Description |
 | --- | --- | --- |
 | `RecentDocument(string Name, string Path)` | constructor |  |
-| `Name` | string, init |  |
-| `Path` | string, init |  |
+| `Name` | string, init | The shortcut's file name without `.lnk`, usually the document's name. |
+| `Path` | string, init | The full path of the shortcut, which opens the document. |
 
 ## RecentDocuments
 
@@ -79,4 +79,4 @@ Recent documents Windows already keeps as shortcuts in the Recent folder. This r
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Search(string query)` | IReadOnlyList of [RecentDocument](#recentdocument) | Shortcuts whose name contains every word of query, newest first, at most Limit. A blank query matches nothing and does not read a folder. The path is not searched. |
+| `Search(string query)` | IReadOnlyList of [RecentDocument](#recentdocument) | Shortcuts whose name contains every word of query, newest first, at most 20. A blank query matches nothing and does not read a folder. The path is not searched. |

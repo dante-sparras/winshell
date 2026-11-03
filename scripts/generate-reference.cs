@@ -55,6 +55,7 @@ namespace Winshell.Docs
             var docs = Docs(shell).Concat(Docs(services)).DistinctBy(pair => pair.Key).ToDictionary(StringComparer.Ordinal);
             var included = Included(shell, services);
             var pages = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            // Every included type is in a namespace: the seeds are, and so is every public type of the two assemblies.
             foreach (var group in included.GroupBy(type => type.Namespace!))
             {
                 var file = FileName(group.Key);
@@ -99,7 +100,7 @@ namespace Winshell.Docs
         {
             var path = Path.ChangeExtension(assembly.Location, ".xml");
             foreach (var member in XDocument.Load(path).Descendants("member"))
-                yield return new(member.Attribute("name")!.Value, member);
+                yield return new((string?)member.Attribute("name") ?? "", member);
         }
 
         /// <summary>One namespace's page: links to included types, and the /// comments of every member.</summary>
@@ -133,7 +134,8 @@ namespace Winshell.Docs
                 var said = Doc("T:" + Id(type), type);
                 foreach (var (cell, kind, id) in rows)
                 {
-                    var doc = Doc(id, type);
+                    // A constructor the compiler adds has no comment.
+                    var doc = Doc(id, type, optional: cell == type.Name + "()");
                     text.Append(CultureInfo.InvariantCulture, $"| `{cell}` | {kind} | {(doc == said ? "" : doc)} |\n");
                 }
                 return text.ToString();
@@ -161,19 +163,21 @@ namespace Winshell.Docs
                     yield return ($"{type.Name}({Parameters(ctor)})", "constructor", Id(ctor));
                 foreach (var property in type.GetProperties(Declared).Where(member => !Skip(member)).OrderBy(member => member.Name, StringComparer.Ordinal))
                 {
+                    // A property has a getter or a setter.
                     var accessor = property.GetMethod ?? property.SetMethod!;
                     var kind = Name(property.PropertyType, nullability.Create(property).ReadState) + (accessor.IsStatic ? ", static" : "");
                     if (property.SetMethod is not { IsPublic: true } setter)
                         kind += ", read-only";
                     else if (setter.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(IsExternalInit)))
                         kind += ", init";
-                    yield return (property.Name, kind, "P:" + Id(type) + "." + property.Name);
+                    yield return (property.Name, kind, "P:" + Id(type) + "." + property.Name + Id(property.GetIndexParameters()));
                 }
                 foreach (var field in type.GetFields(Declared).Where(member => !Skip(member)).OrderBy(member => member.Name, StringComparer.Ordinal))
                 {
                     var kind = Name(field.FieldType, nullability.Create(field).ReadState) + (field.IsStatic ? ", static" : "");
                     yield return (field.Name, kind, "F:" + Id(type) + "." + field.Name);
                 }
+                // An event has a handler type.
                 foreach (var evt in type.GetEvents(Declared).Where(member => !Skip(member)).OrderBy(member => member.Name, StringComparer.Ordinal))
                     yield return (evt.Name, Name(evt.EventHandlerType!), "E:" + Id(type) + "." + evt.Name);
                 var methods = type.GetMethods(Declared)
@@ -201,41 +205,44 @@ namespace Winshell.Docs
                 string text => $"\"{text}\"",
                 bool value => value ? "true" : "false",
                 Enum value => $"{value.GetType().Name}.{value}",
-                var value => Convert.ToString(value, CultureInfo.InvariantCulture)!,
+                var value => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "",
             };
 
             /// <summary>A type as a reader names it: <c>IReadOnlyList of string</c>, and a link for an included type.</summary>
             private string Name(Type type, NullabilityState state = NullabilityState.Unknown)
             {
-                var name = Nullable.GetUnderlyingType(type) is { } inner ? Name(inner) + "?"
-                    : type.IsByRef ? Name(type.GetElementType()!)
-                    : type.IsArray ? Name(type.GetElementType()!) + "[]"
-                    : type.IsGenericParameter ? type.Name
-                    : type.IsGenericType && type.FullName?.StartsWith("System.ValueTuple`", StringComparison.Ordinal) == true
-                        ? "(" + string.Join(", ", type.GetGenericArguments().Select(t => Name(t))) + ")"
-                    : type.IsGenericType ? Bare(type.Name) + " of " + string.Join(", ", type.GetGenericArguments().Select(t => Name(t)))
-                    : Aliases.TryGetValue(type, out var alias) ? alias
-                    : included.Contains(type) ? Link(type)
-                    : type.Name;
+                var name = type switch
+                {
+                    _ when Nullable.GetUnderlyingType(type) is { } inner => Name(inner) + "?",
+                    { IsByRef: true } when type.GetElementType() is { } element => Name(element),
+                    { IsArray: true } when type.GetElementType() is { } element => Name(element) + "[]",
+                    { IsGenericParameter: true } => type.Name,
+                    { IsGenericType: true } when type.FullName?.StartsWith("System.ValueTuple`", StringComparison.Ordinal) == true =>
+                        "(" + string.Join(", ", type.GetGenericArguments().Select(t => Name(t))) + ")",
+                    { IsGenericType: true } => Bare(type.Name) + " of " + string.Join(", ", type.GetGenericArguments().Select(t => Name(t))),
+                    _ when Aliases.TryGetValue(type, out var alias) => alias,
+                    _ when included.Contains(type) => Link(type),
+                    _ => type.Name,
+                };
                 return state == NullabilityState.Nullable && !type.IsValueType ? name + "?" : name;
             }
 
             private string Link(Type type) =>
-                type.Namespace == ns ? $"[{type.Name}](#{type.Name.ToLowerInvariant()})" : $"[{type.Name}]({FileName(type.Namespace!)}#{type.Name.ToLowerInvariant()})";
+                type.Namespace == ns || type.Namespace is null
+                    ? $"[{type.Name}](#{type.Name.ToLowerInvariant()})"
+                    : $"[{type.Name}]({FileName(type.Namespace)}#{type.Name.ToLowerInvariant()})";
 
             /// <summary>
-            /// A member's /// comment as Markdown: its summary, its value or what it returns, and what it throws. A
-            /// table cell is one line; a type's section keeps its paragraphs.
+            /// A member's /// comment as Markdown: its summary, its value or what it returns, and what it throws. Its
+            /// params and remarks stay in the code. A table cell is one line; a type's section keeps its paragraphs.
             /// </summary>
-            private string Doc(string id, Type within, bool paragraphs = false)
+            private string Doc(string id, Type within, bool paragraphs = false, bool optional = false)
             {
                 if (!docs.TryGetValue(id, out var member))
-                    return "";
+                    return optional ? "" : throw new InvalidOperationException($"{id} has no /// comment");
                 var parts = member.Elements()
                     .Where(element => element.Name.LocalName is "summary" or "value" or "returns" or "exception")
-                    .Select(element => element.Name.LocalName == "exception"
-                        ? $"Throws {Cref(element.Attribute("cref")!.Value, Id(within))}: {Markdown(element, Id(within))}"
-                        : Markdown(element, Id(within)));
+                    .Select(element => element.Name.LocalName == "exception" ? Throws(element, Id(within)) : Markdown(element, Id(within)));
                 var text = string.Join("\n\n", parts.Where(part => part.Length > 0));
                 var blocks = text.Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select(block => Spaces().Replace(block, " "));
@@ -253,9 +260,18 @@ namespace Winshell.Docs
                 XElement { Name.LocalName: "see" or "seealso" } see when see.Attribute("langword") is { } word => word.Value,
                 XElement { Name.LocalName: "see" or "seealso" } see when see.Attribute("href") is { } href =>
                     $"[{(see.Value.Length > 0 ? see.Value : href.Value)}]({href.Value})",
-                XElement other => Markdown(other, within),
+                XElement other => throw new NotSupportedException($"<{other.Name}> in a /// comment has no Markdown here"),
                 _ => "",
             }));
+
+            /// <summary>An exception as a sentence: "The handler is null." reads "Throws X when the handler is null."</summary>
+            private static string Throws(XElement exception, string within)
+            {
+                var text = Markdown(exception, within).Trim();
+                if (text.Length > 1 && char.IsUpper(text[0]) && char.IsLower(text[1]))
+                    text = char.ToLowerInvariant(text[0]) + text[1..];
+                return (string?)exception.Attribute("cref") is { } cref ? $"Throws {Cref(cref, within)} when {text}" : text;
+            }
 
             /// <summary>A cref as its name: a type alone, and a member with its type unless it is the one documented.</summary>
             private static string Cref(string cref, string within)
@@ -264,7 +280,7 @@ namespace Winshell.Docs
                 var paren = name.IndexOf('(', StringComparison.Ordinal);
                 if (paren >= 0)
                     name = name[..paren];
-                name = Regex.Replace(name, "`+[0-9]+", "");
+                name = Arity().Replace(name, "");
                 if (cref.StartsWith("T:", StringComparison.Ordinal) && Type.GetType(name) is { } type && Aliases.TryGetValue(type, out var alias))
                     return alias;
                 if (cref.StartsWith("T:", StringComparison.Ordinal) || cref.StartsWith("N:", StringComparison.Ordinal))
@@ -278,6 +294,9 @@ namespace Winshell.Docs
 
         [GeneratedRegex(@"\s+")]
         private static partial Regex Spaces();
+
+        [GeneratedRegex("`+[0-9]+")]
+        private static partial Regex Arity();
 
         private static readonly Dictionary<Type, string> Aliases = new()
         {
@@ -311,10 +330,12 @@ namespace Winshell.Docs
             var name = method.IsConstructor ? "#ctor" : method.Name;
             if (method.IsGenericMethod)
                 name += "``" + method.GetGenericArguments().Length;
-            var parameters = method.GetParameters();
-            var list = parameters.Length == 0 ? "" : "(" + string.Join(",", parameters.Select(parameter => Id(parameter.ParameterType))) + ")";
-            return "M:" + Id(method.DeclaringType!) + "." + name + list;
+            // Every method here is a member of a type.
+            return "M:" + Id(method.DeclaringType!) + "." + name + Id(method.GetParameters());
         }
+
+        private static string Id(ParameterInfo[] parameters) =>
+            parameters.Length == 0 ? "" : "(" + string.Join(",", parameters.Select(parameter => Id(parameter.ParameterType))) + ")";
 
         /// <summary>A type as an XML doc id writes it, without the <c>T:</c>.</summary>
         private static string Id(Type? type) => type switch
@@ -323,9 +344,9 @@ namespace Winshell.Docs
             { IsGenericParameter: true } => (type.DeclaringMethod is null ? "`" : "``") + type.GenericParameterPosition,
             { IsByRef: true } => Id(type.GetElementType()) + "@",
             { IsArray: true } => Id(type.GetElementType()) + "[]",
-            { IsGenericType: true } => Bare(type.GetGenericTypeDefinition().FullName!).Replace('+', '.')
+            { IsConstructedGenericType: true } => Bare(Id(type.GetGenericTypeDefinition()))
                 + "{" + string.Join(",", type.GetGenericArguments().Select(Id)) + "}",
-            _ => type.FullName!.Replace('+', '.'),
+            _ => (type.FullName ?? type.Name).Replace('+', '.'),
         };
 
         private static bool Skip(MemberInfo member)
@@ -380,7 +401,7 @@ namespace Winshell.Docs
                 yield return baseType;
             var types = type.GetProperties(Declared).Select(property => property.PropertyType)
                 .Concat(type.GetFields(Declared).Select(field => field.FieldType))
-                .Concat(type.GetEvents(Declared).Select(evt => evt.EventHandlerType!))
+                .Concat(type.GetEvents(Declared).Select(evt => evt.EventHandlerType).OfType<Type>())
                 .Concat(type.GetMethods(Declared).Select(method => method.ReturnType))
                 .Concat(type.GetMethods(Declared).Concat<MethodBase>(type.GetConstructors(Declared))
                     .SelectMany(method => method.GetParameters()).Select(parameter => parameter.ParameterType));
@@ -391,8 +412,8 @@ namespace Winshell.Docs
         /// <summary>The types a type is made of: the element of an array or reference, and the arguments of a generic.</summary>
         private static IEnumerable<Type> Atoms(Type type)
         {
-            if (type.IsByRef || type.IsPointer || type.IsArray)
-                return Atoms(type.GetElementType()!);
+            if (type.GetElementType() is { } element)
+                return Atoms(element);
             if (type.IsGenericType)
                 return type.GetGenericArguments().SelectMany(Atoms);
             return [type];

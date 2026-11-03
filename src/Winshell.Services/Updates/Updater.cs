@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Winshell.Updates;
 
-/// <summary>Where an update is: the <c>UpdateStatus</c> enum of <c>Updates.status</c>.</summary>
+/// <summary>Where an update is, as <see cref="UpdatesService.Status"/> reports it.</summary>
 public enum UpdateStatus
 {
     /// <summary>Not checked yet in this run.</summary>

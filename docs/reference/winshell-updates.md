@@ -6,7 +6,7 @@ A portable Winshell checking GitHub Releases and installing a download. Reach it
 
 ## UpdateStatus
 
-Where an update is: the `UpdateStatus` enum of `Updates.status`.
+Where an update is, as UpdatesService.Status reports it.
 
 | Value | Number | Description |
 | --- | --- | --- |

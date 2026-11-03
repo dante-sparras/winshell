@@ -47,7 +47,10 @@ public abstract class ShellConfiguration
     public abstract void Start(Shell shell);
 }
 
-/// <summary>The running shell: its screens and services. There is one in a process.</summary>
+/// <summary>
+/// The running shell: its screens and services. There is one in a process. Each service is made the first time it is
+/// read, so a service a configuration does not use costs nothing and asks Windows for nothing.
+/// </summary>
 public sealed partial class Shell : IDisposable
 {
     private static Shell? _current;

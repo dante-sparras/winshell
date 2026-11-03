@@ -3,6 +3,8 @@ using Winshell.Windows;
 namespace Winshell.Capture;
 
 /// <summary>A source in physical pixels. Monitor ids are Windows display device names.</summary>
+/// <param name="Window">The handle of the window to capture, or 0 for a screen.</param>
+/// <param name="MonitorId">The <see cref="ScreenInfo.Id"/> of the screen to capture, or empty for a window.</param>
 public sealed record CaptureTarget(nint Window, string MonitorId)
 {
     /// <summary>The app window this was made from, or null for a handle or a screen.</summary>
