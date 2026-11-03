@@ -97,6 +97,32 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task A_page_title_starts_where_its_cards_do()
+    {
+        var (title, card) = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                Assert.Equal("", shell.Ipc.Call("settings", "open", ["personalization"]));
+                var window = await rig.Shown();
+                var root = (FrameworkElement)window.Content!;
+                await ShellFixture.LaidOut(root);
+
+                var title = Find<StackPanel>(root, panel => panel.Name == "Breadcrumb") ?? throw new InvalidOperationException("Settings has no title.");
+                var card = Find<SettingsCard>(root, found => found.ActualWidth > 0) ?? throw new InvalidOperationException("Settings shows no card.");
+                return (Left(title, root), Left(card, root));
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Equal(card, title);
+    }
+
+    [Fact]
     public async Task The_taskbar_menu_offers_Taskbar_settings_and_closes_when_it_is_chosen()
     {
         var opened = await ShellFixture.On(async shell =>
@@ -194,6 +220,9 @@ public sealed class SettingsShellTests
         var nav = Find<NavigationView>((DependencyObject)window.Content!) ?? throw new InvalidOperationException("Settings has no navigation view.");
         return (nav.SelectedItem as NavigationViewItem)?.Tag as string ?? "";
     }
+
+    private static double Left(UIElement element, UIElement root) =>
+        element.TransformToVisual(root).TransformPoint(default).X;
 
     private static bool SearchFocused(FloatingWindow window)
     {
