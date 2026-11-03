@@ -119,6 +119,43 @@ Describe 'Running the main stage' {
     }
 }
 
+Describe 'Watching a test program start' {
+    BeforeAll {
+        # Programs that sit as xUnit starts them, "<program> @@ <file>", with a line to each argument in the file.
+        $program = (Get-Process -Id $PID).Path
+        $script:Folder = Split-Path $program
+        Set-Content -LiteralPath "$TestDrive\wait.ps1" -Value 'Start-Sleep -Seconds 300'
+        Set-Content -LiteralPath "$TestDrive\info.txt" -Value '-assemblyInfo'
+        Set-Content -LiteralPath "$TestDrive\list.txt" -Value '-automated', '-list', 'Discovery'
+        $script:Info = Start-Process $program -ArgumentList '-NoProfile', '-File', "`"$TestDrive\wait.ps1`"", '@@', "`"$TestDrive\info.txt`"" -WindowStyle Hidden -PassThru
+        $script:List = Start-Process $program -ArgumentList '-NoProfile', '-File', "`"$TestDrive\wait.ps1`"", '@@', "`"$TestDrive\list.txt`"" -WindowStyle Hidden -PassThru
+    }
+
+    AfterAll {
+        Stop-Process -Id $script:Info.Id, $script:List.Id -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'finds a program asked only for its assembly info, under the checkout' {
+        $found = @(Get-StalledStart -Root $script:Folder -After 0 | ForEach-Object ProcessId)
+        $found | Should -Contain $script:Info.Id
+        $found | Should -Not -Contain $script:List.Id
+        @(Get-StalledStart -Root (Join-Path $TestDrive 'elsewhere') -After 0) | Should -HaveCount 0
+    }
+
+    It 'leaves a program alone until it has run for a while' {
+        @(Get-StalledStart -Root $script:Folder -After 3600) | Should -HaveCount 0
+    }
+
+    It 'says what the program is doing and how busy the machine is' {
+        $process = Get-StalledStart -Root $script:Folder -After 0 | Where-Object ProcessId -EQ $script:Info.Id
+        $text = (Format-StalledStart -Process $process) -join "`n"
+        $text | Should -Match "$($script:Info.Id) was asked for its assembly info \d+ s ago and has not exited"
+        $text | Should -Match 'It used [\d.]+ s of CPU\. Threads: \d+ '
+        $text | Should -Match 'the runtime (started|did not start), and the Windows App SDK (loaded|did not load)'
+        $text | Should -Match '\d+% CPU busy, \d+ MB of memory free, disks \d+% idle'
+    }
+}
+
 Describe 'Repeating changed tests' {
     It 'finds the classes of changed test files, by project, in the tier asked for' {
         $targets = @(Get-RepeatTarget -Tier Fast -Tests 'tests/Winshell.Services.Tests/TomlFileTests.cs,tests/Winshell.Tests/CliHelpTests.cs,tests/Winshell.Services.Tests/UpdatesTests.cs')

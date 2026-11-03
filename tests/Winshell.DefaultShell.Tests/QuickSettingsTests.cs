@@ -73,7 +73,7 @@ public sealed class QuickSettingsTests
         await rig.Load();
         Assert.Equal(["airplaneMode", "energySaver", "nightLight", "accessibility"], Keys(rig.Quick));
         Assert.False(rig.Status.HasBattery);
-        Assert.False(rig.Quick.HasBrightness);
+        Assert.False(rig.Quick.Brightness.HasPanel);
 
         rig.BluetoothBackend.Snapshot = QuickSettingsRig.LaptopBluetooth();
         await rig.Bluetooth.RefreshAsync();
@@ -115,16 +115,16 @@ public sealed class QuickSettingsTests
         Assert.Empty(rig.Urls);
         Assert.True(rig.Popup.ShowingPowerMode);
         Assert.False(rig.Popup.ShowingTiles);
-        Assert.True(rig.Quick.Modes[1].Chosen);
+        Assert.True(rig.Quick.PowerMode.Choices[1].Chosen);
 
-        rig.Quick.Modes[2].Choose();
+        rig.Quick.PowerMode.Choices[2].Choose();
         Assert.Equal(PowerModeLevel.BestPerformance, rig.PowerMode.Mode);
-        Assert.True(rig.Quick.Modes[2].Chosen);
+        Assert.True(rig.Quick.PowerMode.Choices[2].Chosen);
 
         rig.Modes.Push(new PowerModeSnapshot(true, PowerModeLevel.BestEfficiency, EffectivePowerMode.Balanced, true));
         rig.Loop.Process();
-        Assert.True(rig.Quick.Modes[0].Chosen);
-        Assert.False(rig.Quick.Modes[2].Chosen);
+        Assert.True(rig.Quick.PowerMode.Choices[0].Chosen);
+        Assert.False(rig.Quick.PowerMode.Choices[2].Chosen);
 
         rig.Popup.Back();
         Assert.True(rig.Popup.ShowingTiles);
@@ -180,30 +180,30 @@ public sealed class QuickSettingsTests
     {
         using var rig = QuickSettingsRig.Create(laptop: true);
         await rig.Load();
-        Assert.Equal(0.3, rig.Quick.Volume, 3);
-        Assert.Equal("Mute", rig.Quick.MuteLabel);
+        Assert.Equal(0.3, rig.Quick.Sound.Volume, 3);
+        Assert.Equal("Mute", rig.Quick.Sound.MuteLabel);
         Assert.Equal(StatusGlyphs.VolumeGlyph(false, rig.Speakers.Volume), rig.Status.VolumeGlyph);
 
-        rig.Quick.SetVolume(0.8);
+        rig.Quick.Sound.SetVolume(0.8);
         Assert.Equal(0.8, rig.Speakers.Volume, 3);
-        Assert.Equal(0.8, rig.Quick.Volume, 3);
+        Assert.Equal(0.8, rig.Quick.Sound.Volume, 3);
 
         rig.Speakers.Volume = 0.5;
-        Assert.Equal(0.5, rig.Quick.Volume, 3);
+        Assert.Equal(0.5, rig.Quick.Sound.Volume, 3);
 
-        rig.Quick.ToggleMute();
+        rig.Quick.Sound.ToggleMute();
         Assert.True(rig.Speakers.Muted);
         Assert.Equal(0.5, rig.Speakers.Volume, 3);
-        Assert.Equal("Unmute", rig.Quick.MuteLabel);
+        Assert.Equal("Unmute", rig.Quick.Sound.MuteLabel);
         Assert.Equal("\uE74F", rig.Status.VolumeGlyph);
 
         rig.Graph.Use(null);
-        Assert.False(rig.Quick.HasOutput);
-        Assert.Equal(0, rig.Quick.Volume);
-        Assert.Equal("Unmute", rig.Quick.MuteLabel);
-        rig.Quick.SetVolume(0.4);
-        rig.Quick.ToggleMute();
-        Assert.Equal(0, rig.Quick.Volume);
+        Assert.False(rig.Quick.Sound.HasOutput);
+        Assert.Equal(0, rig.Quick.Sound.Volume);
+        Assert.Equal("Unmute", rig.Quick.Sound.MuteLabel);
+        rig.Quick.Sound.SetVolume(0.4);
+        rig.Quick.Sound.ToggleMute();
+        Assert.Equal(0, rig.Quick.Sound.Volume);
     }
 
     [Fact]
@@ -213,10 +213,10 @@ public sealed class QuickSettingsTests
         await rig.Load();
         var panel = Assert.Single(rig.Brightness.Monitors, monitor => monitor.Connection == BrightnessConnection.Internal);
         var external = Assert.Single(rig.Brightness.Monitors, monitor => monitor.Connection == BrightnessConnection.External);
-        Assert.Equal(0.4, rig.Quick.Brightness, 3);
-        Assert.True(rig.Quick.HasBrightness);
+        Assert.Equal(0.4, rig.Quick.Brightness.Level, 3);
+        Assert.True(rig.Quick.Brightness.HasPanel);
 
-        rig.Quick.SetBrightness(0.8);
+        rig.Quick.Brightness.SetLevel(0.8);
         Assert.Equal(80, panel.Brightness);
         Assert.Equal(70, external.Brightness);
         await Wait.UntilAsync(() => !rig.Writer.IsWriting(panel.DeviceName), "the brightness write");
@@ -228,13 +228,13 @@ public sealed class QuickSettingsTests
         using var rig = QuickSettingsRig.Create(laptop: true);
         await rig.Load();
         Assert.True(rig.Status.HasBattery);
-        Assert.Equal("85%", rig.Quick.BatteryPercent);
-        Assert.Equal("Battery 85%", rig.Quick.BatteryText);
+        Assert.Equal("85%", rig.Quick.Battery.Percent);
+        Assert.Equal("Battery 85%", rig.Quick.Battery.Text);
 
         rig.Power.Push(QuickSettingsRig.Battery(0.85, PowerDeviceState.Charging));
         rig.Loop.Process();
-        Assert.Equal("Battery 85%, charging", rig.Quick.BatteryText);
-        Assert.Equal("85%", rig.Quick.BatteryPercent);
+        Assert.Equal("Battery 85%, charging", rig.Quick.Battery.Text);
+        Assert.Equal("85%", rig.Quick.Battery.Percent);
 
         rig.Popup.Show();
         rig.Popup.OpenAllSettings();
@@ -255,18 +255,18 @@ public sealed class QuickSettingsTests
         rig.Popup.Show();
         rig.Popup.ShowOutput();
         Assert.False(rig.Popup.ShowingTiles);
-        Assert.Equal(["Speakers", "Headset"], rig.Quick.Outputs.Select(choice => choice.Text));
-        Assert.DoesNotContain(rig.Quick.Outputs, choice => ReferenceEquals(choice.Node, microphone) || ReferenceEquals(choice.Node, music));
-        Assert.True(rig.Quick.Outputs[0].Chosen);
+        Assert.Equal(["Speakers", "Headset"], rig.Quick.Sound.Outputs.Select(choice => choice.Text));
+        Assert.DoesNotContain(rig.Quick.Sound.Outputs, choice => ReferenceEquals(choice.Node, microphone) || ReferenceEquals(choice.Node, music));
+        Assert.True(rig.Quick.Sound.Outputs[0].Chosen);
 
-        rig.Quick.Outputs[1].Choose();
+        rig.Quick.Sound.Outputs[1].Choose();
         Assert.Same(headset, rig.Audio.DefaultPlaybackDevice);
-        Assert.False(rig.Quick.Outputs[0].Chosen);
-        Assert.True(rig.Quick.Outputs[1].Chosen);
+        Assert.False(rig.Quick.Sound.Outputs[0].Chosen);
+        Assert.True(rig.Quick.Sound.Outputs[1].Chosen);
 
         rig.Graph.Use(rig.Speakers.Node);
-        Assert.True(rig.Quick.Outputs[0].Chosen);
-        Assert.False(rig.Quick.Outputs[1].Chosen);
+        Assert.True(rig.Quick.Sound.Outputs[0].Chosen);
+        Assert.False(rig.Quick.Sound.Outputs[1].Chosen);
 
         rig.Popup.OpenVolumeSettings();
         Assert.Equal(["ms-settings:apps-volume"], rig.Urls);
@@ -281,9 +281,9 @@ public sealed class QuickSettingsTests
         for (var i = 0; i < 20; i++)
             rig.Add($"Monitor {i}", AudioNodeType.PlaybackDevice);
         rig.Popup.ShowOutput();
-        Assert.Equal(21, rig.Quick.Outputs.Count);
-        Assert.Equal("Speakers", rig.Quick.Outputs[0].Text);
-        Assert.Equal("Monitor 19", rig.Quick.Outputs[20].Text);
+        Assert.Equal(21, rig.Quick.Sound.Outputs.Count);
+        Assert.Equal("Speakers", rig.Quick.Sound.Outputs[0].Text);
+        Assert.Equal("Monitor 19", rig.Quick.Sound.Outputs[20].Text);
     }
 
     [Fact]
@@ -298,32 +298,32 @@ public sealed class QuickSettingsTests
         Assert.False(rig.Popup.ShowingVolume);
         rig.Popup.Show();
         rig.Popup.ShowOutput();
-        Assert.Equal(["Speakers"], rig.Quick.Outputs.Select(choice => choice.Text));
+        Assert.Equal(["Speakers"], rig.Quick.Sound.Outputs.Select(choice => choice.Text));
         Assert.False(rig.Popup.ShowingVolume);
 
         rig.Popup.ShowVolume();
         Assert.False(rig.Popup.ShowingTiles);
         Assert.False(rig.Popup.ShowingOutput);
         Assert.True(rig.Popup.ShowingVolume);
-        Assert.Equal(["Music", "Call"], rig.Quick.Sessions.Select(session => session.Label));
-        Assert.DoesNotContain(rig.Quick.Sessions, session => ReferenceEquals(session.Node, microphone));
-        Assert.Equal(0.4, rig.Quick.Sessions[0].Volume, 3);
-        Assert.Equal(0.2, rig.Quick.Sessions[1].Volume, 3);
+        Assert.Equal(["Music", "Call"], rig.Quick.Sound.Sessions.Select(session => session.Label));
+        Assert.DoesNotContain(rig.Quick.Sound.Sessions, session => ReferenceEquals(session.Node, microphone));
+        Assert.Equal(0.4, rig.Quick.Sound.Sessions[0].Volume, 3);
+        Assert.Equal(0.2, rig.Quick.Sound.Sessions[1].Volume, 3);
 
-        rig.Quick.Sessions[0].SetVolume(0.8);
+        rig.Quick.Sound.Sessions[0].SetVolume(0.8);
         Assert.Equal(0.8, music.Volume, 3);
         Assert.Equal(0.2, call.Volume, 3);
         Assert.Equal(0.3, rig.Speakers.Volume, 3);
 
-        rig.Quick.Sessions[0].ToggleMute();
+        rig.Quick.Sound.Sessions[0].ToggleMute();
         Assert.True(music.Muted);
         Assert.False(call.Muted);
         Assert.Equal(0.8, music.Volume, 3);
-        Assert.Equal("Unmute", rig.Quick.Sessions[0].MuteLabel);
-        Assert.Equal("Mute", rig.Quick.Sessions[1].MuteLabel);
+        Assert.Equal("Unmute", rig.Quick.Sound.Sessions[0].MuteLabel);
+        Assert.Equal("Mute", rig.Quick.Sound.Sessions[1].MuteLabel);
 
         music.Volume = 0.5;
-        Assert.Equal(0.5, rig.Quick.Sessions[0].Volume, 3);
+        Assert.Equal(0.5, rig.Quick.Sound.Sessions[0].Volume, 3);
 
         rig.Popup.Back();
         Assert.True(rig.Popup.ShowingTiles);
@@ -342,7 +342,7 @@ public sealed class QuickSettingsTests
         using var rig = QuickSettingsRig.Create(laptop: true);
         await rig.Load();
         var music = rig.Add("Music", AudioNodeType.PlaybackSession, 0f);
-        var session = Assert.Single(rig.Quick.Sessions);
+        var session = Assert.Single(rig.Quick.Sound.Sessions);
         Assert.Equal("\uE992", session.Glyph);
 
         music.Volume = 0.2;
@@ -364,35 +364,35 @@ public sealed class QuickSettingsTests
         var paused = rig.Sessions.Add("Spotify", "Paused song", "Someone", playing: false);
         var playing = rig.Sessions.Add("Firefox", "A video", "A channel", playing: true, next: true);
 
-        Assert.True(rig.Quick.HasMedia);
-        Assert.Equal("Firefox", rig.Quick.MediaApp);
-        Assert.Equal("A video", rig.Quick.MediaTitle);
-        Assert.Equal("A channel", rig.Quick.MediaArtist);
-        Assert.False(rig.Quick.HasMediaArt);
-        Assert.False(rig.Quick.CanMediaPrevious);
-        Assert.True(rig.Quick.CanMediaNext);
-        Assert.True(rig.Quick.CanMediaToggle);
-        Assert.True(rig.Quick.MediaPlaying);
-        Assert.Equal("Pause", rig.Quick.MediaPlayLabel);
-        Assert.Equal("\uE769", rig.Quick.MediaPlayGlyph);
+        Assert.True(rig.Quick.Media.HasSession);
+        Assert.Equal("Firefox", rig.Quick.Media.App);
+        Assert.Equal("A video", rig.Quick.Media.Title);
+        Assert.Equal("A channel", rig.Quick.Media.Artist);
+        Assert.False(rig.Quick.Media.HasArt);
+        Assert.False(rig.Quick.Media.CanPrevious);
+        Assert.True(rig.Quick.Media.CanNext);
+        Assert.True(rig.Quick.Media.CanToggle);
+        Assert.True(rig.Quick.Media.Playing);
+        Assert.Equal("Pause", rig.Quick.Media.PlayLabel);
+        Assert.Equal("\uE769", rig.Quick.Media.PlayGlyph);
 
-        rig.Quick.MediaNext();
-        rig.Quick.MediaToggle();
+        rig.Quick.Media.Next();
+        rig.Quick.Media.Toggle();
         Assert.Equal(["next", "pause"], playing.Sent);
         Assert.Empty(paused.Sent!);
 
         // The service records the command. The card follows the session once it reports that it stopped.
         playing.ApplyPlayback(new SmtcPlayback(GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused) { CanPlay = true, CanGoNext = true });
-        Assert.Equal("Paused song", rig.Quick.MediaTitle);
-        Assert.Equal("Someone", rig.Quick.MediaArtist);
-        Assert.False(rig.Quick.MediaPlaying);
-        Assert.Equal("Play", rig.Quick.MediaPlayLabel);
-        Assert.Equal("\uE768", rig.Quick.MediaPlayGlyph);
+        Assert.Equal("Paused song", rig.Quick.Media.Title);
+        Assert.Equal("Someone", rig.Quick.Media.Artist);
+        Assert.False(rig.Quick.Media.Playing);
+        Assert.Equal("Play", rig.Quick.Media.PlayLabel);
+        Assert.Equal("\uE768", rig.Quick.Media.PlayGlyph);
 
         rig.Sessions.Remove(playing);
         rig.Sessions.Remove(paused);
-        Assert.False(rig.Quick.HasMedia);
-        Assert.Equal("", rig.Quick.MediaTitle);
+        Assert.False(rig.Quick.Media.HasSession);
+        Assert.Equal("", rig.Quick.Media.Title);
     }
 
     [Fact]
@@ -404,7 +404,7 @@ public sealed class QuickSettingsTests
         rig.Popup.Edit();
         Assert.True(rig.Popup.Editing);
         Assert.False(rig.Popup.Browsing);
-        Assert.Empty(rig.Quick.Unpinned);
+        Assert.Empty(rig.Quick.Pins.Unpinned);
         Assert.Equal("Wi-Fi", Tile(rig.Quick, "wifi").Title);
         Assert.Equal("Home", Tile(rig.Quick, "wifi").Label);
 
@@ -415,8 +415,8 @@ public sealed class QuickSettingsTests
         rig.Popup.Unpin("bluetooth", fromKeyboard: false);
         Assert.Equal(["wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
         Assert.Equal(Keys(rig.Quick), Saved(rig));
-        Assert.Equal(["bluetooth"], rig.Quick.Unpinned.Select(tile => tile.Key));
-        Assert.Equal("Bluetooth", Assert.Single(rig.Quick.Unpinned).Title);
+        Assert.Equal(["bluetooth"], rig.Quick.Pins.Unpinned.Select(tile => tile.Key));
+        Assert.Equal("Bluetooth", Assert.Single(rig.Quick.Pins.Unpinned).Title);
 
         rig.Popup.ShowAdd();
         Assert.True(rig.Popup.ShowingAdd);
@@ -426,7 +426,7 @@ public sealed class QuickSettingsTests
         Assert.False(rig.Popup.ShowingAdd);
         Assert.Equal(["wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility", "bluetooth"], Keys(rig.Quick));
         Assert.Equal(Keys(rig.Quick), Saved(rig));
-        Assert.Empty(rig.Quick.Unpinned);
+        Assert.Empty(rig.Quick.Pins.Unpinned);
 
         rig.Popup.Done();
         Assert.False(rig.Popup.Editing);
@@ -454,15 +454,16 @@ public sealed class QuickSettingsTests
         rig.Popup.Edit();
 
         rig.Popup.BeginDrag(Tile(rig.Quick, "wifi"));
-        // The airplane tile's button, 80 across and 24 down. Column 2 starts at 216.
-        rig.Popup.DragTo(216 + 80, 24, 70);
+        // The airplane tile is the first tile of the second row, whose cell starts at y = 82.
+        rig.Popup.DragTo(80, 82 + 24, 70);
+        Assert.Equal(2, rig.Popup.DropIndex);
         Assert.Equal(0.5, rig.Popup.DragOpacity(0));
         Assert.Equal(1, rig.Popup.DropSide(2));
         Assert.Equal(0, rig.Popup.DropSide(0));
         rig.Popup.EndDrag();
         Assert.Equal(["bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
         Assert.Equal(Keys(rig.Quick), Saved(rig));
-        Assert.All(Enumerable.Range(0, rig.Quick.Shown.Count), index => Assert.Equal(0, rig.Popup.DropSide(index)));
+        Assert.All(Enumerable.Range(0, rig.Quick.Pins.Shown.Count), index => Assert.Equal(0, rig.Popup.DropSide(index)));
 
         rig.Popup.BeginDrag(Tile(rig.Quick, "nightLight"));
         rig.Popup.DragTo(10, 24, 70);
@@ -484,28 +485,28 @@ public sealed class QuickSettingsTests
         rig.Popup.Show();
         rig.Popup.Edit();
 
+        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
+        Assert.Equal(["bluetooth", "airplaneMode", "wifi", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal("wifi", rig.Popup.FocusKey);
+
+        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Right));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "wifi", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal("wifi", rig.Popup.FocusKey);
+
         Assert.Equal(1, QuickSettingsTileView.KeyOffset(alt: true, shift: true, VirtualKey.Right));
         Assert.Equal(-1, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Left));
-        Assert.Equal(-3, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Up));
-        Assert.Equal(3, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
+        Assert.Equal(-2, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Up));
+        Assert.Equal(2, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(alt: false, shift: false, VirtualKey.Right));
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(alt: true, shift: false, VirtualKey.Right));
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Delete));
 
-        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Right));
-        Assert.Equal(["bluetooth", "wifi", "airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
-        Assert.Equal("wifi", rig.Popup.FocusKey);
-
-        rig.Popup.MoveBy("wifi", QuickSettingsTileView.KeyOffset(true, true, VirtualKey.Down));
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Keys(rig.Quick));
-        Assert.Equal("wifi", rig.Popup.FocusKey);
-
         // Without both modifiers an arrow key is not a move, so the order stays.
         Assert.Equal(0, QuickSettingsTileView.KeyOffset(false, false, VirtualKey.Right));
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "nightLight", "accessibility"], Keys(rig.Quick));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "wifi", "powerMode", "nightLight", "accessibility"], Keys(rig.Quick));
 
         rig.Popup.Unpin("nightLight", fromKeyboard: true);
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "wifi", "accessibility"], Saved(rig));
+        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "wifi", "powerMode", "accessibility"], Saved(rig));
         Assert.Equal("accessibility", rig.Popup.FocusKey);
 
         Assert.True(rig.Popup.Escape());
@@ -591,7 +592,7 @@ public sealed class QuickSettingsTests
     {
         using var rig = QuickSettingsRig.Create(laptop: true, file: "pinned = []");
         await rig.Load();
-        Assert.Empty(rig.Quick.Shown);
+        Assert.Empty(rig.Quick.Pins.Shown);
         Assert.Empty(rig.Messages);
     }
 
@@ -659,9 +660,9 @@ public sealed class QuickSettingsTests
         Assert.False(SliderRow.IsEcho(0.5, 0.505, 0.01));
     }
 
-    private static string[] Keys(QuickSettings quick) => [.. quick.Shown.Select(tile => tile.Key)];
+    private static string[] Keys(QuickSettings quick) => [.. quick.Pins.Shown.Select(tile => tile.Key)];
 
-    private static QuickSettingsTile Tile(QuickSettings quick, string key) => Assert.Single(quick.Shown, tile => tile.Key == key);
+    private static QuickSettingsTile Tile(QuickSettings quick, string key) => Assert.Single(quick.Pins.Shown, tile => tile.Key == key);
 
     /// <summary>The order written to the layout file, read back by a second watcher.</summary>
     private static List<string> Saved(QuickSettingsRig rig)

@@ -19,10 +19,10 @@ public sealed partial class QuickSettingsView : UserControl
         Popup = popup;
         InitializeComponent();
         Main.SizeChanged += (_, e) => Pages.Height = e.NewSize.Height;
-        VolumeRow.Moved += (_, value) => Popup.Settings.SetVolume(value);
-        VolumeRow.GlyphActivated += (_, _) => Popup.Settings.ToggleMute();
+        VolumeRow.Moved += (_, value) => Popup.Settings.Sound.SetVolume(value);
+        VolumeRow.GlyphActivated += (_, _) => Popup.Settings.Sound.ToggleMute();
         VolumeRow.PageActivated += (_, _) => Popup.ShowOutput();
-        BrightnessRow.Moved += (_, value) => Popup.Settings.SetBrightness(value);
+        BrightnessRow.Moved += (_, value) => Popup.Settings.Brightness.SetLevel(value);
     }
 
     public QuickSettingsPopup Popup { get; }
@@ -52,6 +52,9 @@ public sealed partial class QuickSettingsView : UserControl
     private bool CanAdd(bool hasUnpinned, bool showingAdd) => hasUnpinned && !showingAdd;
 
     private ImageSource? MediaImage(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? new BitmapImage(uri) : null;
+
+    private void OnTileGridLoaded(object sender, RoutedEventArgs e) =>
+        ((VariableSizedWrapGrid)sender).MaximumRowsOrColumns = QuickSettings.TileColumns;
 
     private void OnAddTile(object sender, RoutedEventArgs e)
     {

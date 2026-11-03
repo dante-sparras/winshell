@@ -100,7 +100,7 @@ public sealed partial class QuickSettingsTileView : UserControl
     private void ShowEdit()
     {
         var editing = _popup?.Editing == true;
-        var index = _tile is null || _popup is null ? -1 : _popup.Settings.Shown.IndexOf(_tile);
+        var index = _tile is null || _popup is null ? -1 : _popup.Settings.Pins.Shown.IndexOf(_tile);
         var side = index < 0 || _popup is null ? 0 : _popup.DropSide(index);
         var help = editing
             ? "Alt+Shift+arrow keys move it, Delete unpins it"
@@ -151,8 +151,8 @@ public sealed partial class QuickSettingsTileView : UserControl
         {
             VirtualKey.Left => -1,
             VirtualKey.Right => 1,
-            VirtualKey.Up => -3,
-            VirtualKey.Down => 3,
+            VirtualKey.Up => -QuickSettings.TileColumns,
+            VirtualKey.Down => QuickSettings.TileColumns,
             _ => 0,
         };
     }
