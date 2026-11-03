@@ -304,13 +304,7 @@ public sealed class TaskPreview : ObservableObject, IDisposable
     {
         if (!_isOpen || !_running || _listed || direction == 0)
             return false;
-        var count = _windows.Count * 2;
-        var slot = _focusIndex * 2 + (_focusClose ? 1 : 0);
-        var next = slot + (direction > 0 ? 1 : -1);
-        if ((uint)next >= (uint)count)
-            return true;
-        Set(ref _focusIndex, next / 2, nameof(FocusIndex));
-        Set(ref _focusClose, next % 2 == 1, nameof(FocusClose));
+        Move(CurrentFocus.Step(direction, _windows.Count));
         return true;
     }
 
@@ -319,60 +313,16 @@ public sealed class TaskPreview : ObservableObject, IDisposable
     {
         if (!_isOpen || !_running || !_listed || direction == 0)
             return false;
-        var step = direction > 0 ? 1 : -1;
-        if (_focusClose)
-        {
-            if (step < 0)
-            {
-                Set(ref _focusClose, false, nameof(FocusClose));
-                return true;
-            }
-            if (_focusIndex + 1 >= _windows.Count)
-                return true;
-            Set(ref _focusIndex, _focusIndex + 1, nameof(FocusIndex));
-            Set(ref _focusClose, false, nameof(FocusClose));
-            Reveal();
-            return true;
-        }
-        var next = _focusIndex + step;
-        if (next < 0 || next >= _windows.Count)
-            return true;
-        Set(ref _focusIndex, next, nameof(FocusIndex));
-        Reveal();
+        Move(CurrentFocus.Vertical(direction, _windows.Count));
         return true;
     }
 
-    /// <summary>Tab reaches a row's close button, then the next row. On cards it moves the same way as Left and Right.</summary>
+    /// <summary>Tab reaches a window's close button, then the next window, on cards as in a list.</summary>
     public bool Tab(bool forward)
     {
         if (!_isOpen || !_running)
             return false;
-        if (!_listed)
-            return MoveHorizontal(forward ? 1 : -1);
-        if (!_focusClose && forward)
-        {
-            Set(ref _focusClose, true, nameof(FocusClose));
-            return true;
-        }
-        if (_focusClose && !forward)
-        {
-            Set(ref _focusClose, false, nameof(FocusClose));
-            return true;
-        }
-        if (_focusClose && forward)
-        {
-            if (_focusIndex + 1 >= _windows.Count)
-                return true;
-            Set(ref _focusIndex, _focusIndex + 1, nameof(FocusIndex));
-            Set(ref _focusClose, false, nameof(FocusClose));
-            Reveal();
-            return true;
-        }
-        if (_focusIndex == 0)
-            return true;
-        Set(ref _focusIndex, _focusIndex - 1, nameof(FocusIndex));
-        Set(ref _focusClose, true, nameof(FocusClose));
-        Reveal();
+        Move(CurrentFocus.Step(forward ? 1 : -1, _windows.Count));
         return true;
     }
 
@@ -497,19 +447,10 @@ public sealed class TaskPreview : ObservableObject, IDisposable
             Set(ref _scroll, 0, nameof(ScrollY));
             return;
         }
-        var index = 0;
-        var same = false;
-        if (!focusFirst && previous is not null)
-        {
-            var found = IndexOf(windows, previous);
-            if (found >= 0)
-            {
-                index = found;
-                same = true;
-            }
-        }
-        Set(ref _focusIndex, index, nameof(FocusIndex));
-        Set(ref _focusClose, same && keepClose && wasListed == _listed, nameof(FocusClose));
+        var found = focusFirst || previous is null ? -1 : IndexOf(windows, previous);
+        var focus = PreviewFocus.Restore(found, keepClose, layoutChanged: wasListed != _listed);
+        Set(ref _focusIndex, focus.Index, nameof(FocusIndex));
+        Set(ref _focusClose, focus.Close, nameof(FocusClose));
         Reveal();
     }
 
@@ -534,21 +475,20 @@ public sealed class TaskPreview : ObservableObject, IDisposable
         Set(ref _viewport, layout.ViewportHeight, nameof(ViewportHeight));
     }
 
-    private void Reveal()
+    private PreviewFocus CurrentFocus => new(_focusIndex, _focusClose);
+
+    /// <summary>The keyboard moved. A move onto another window scrolls it into view.</summary>
+    private void Move(PreviewFocus next)
     {
-        if (!_listed)
-        {
-            Set(ref _scroll, 0, nameof(ScrollY));
-            return;
-        }
-        var top = _focusIndex * (double)RowHeight;
-        var scroll = _scroll;
-        if (top < scroll)
-            scroll = top;
-        else if (top + RowHeight > scroll + _viewport)
-            scroll = top + RowHeight - _viewport;
-        Set(ref _scroll, scroll, nameof(ScrollY));
+        var moved = next.Index != _focusIndex;
+        Set(ref _focusIndex, next.Index, nameof(FocusIndex));
+        Set(ref _focusClose, next.Close, nameof(FocusClose));
+        if (moved)
+            Reveal();
     }
+
+    private void Reveal() =>
+        Set(ref _scroll, _listed ? PreviewFocus.Reveal(_focusIndex, _scroll, _viewport) : 0, nameof(ScrollY));
 
     private void ReplaceWindows(IReadOnlyList<ITaskWindow> next)
     {
