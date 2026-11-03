@@ -291,7 +291,8 @@ public sealed class TrayHostTests : IDisposable
                     Win32.DispatchMessageW(msg);
                 }
                 host.Dispose();
-            }) { IsBackground = true };
+            })
+            { IsBackground = true };
             _thread.Start();
             _started.Wait();
             Assert.NotEqual(0, Window);

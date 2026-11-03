@@ -1,11 +1,11 @@
-# Builds winshell.slnx with warnings as errors, and the docs site, where a broken link or anchor between pages is an
-# error. Then runs the tests on that build.
+# Builds winshell.slnx with warnings as errors, checks its formatting, and builds the docs site, where a broken link or
+# anchor between pages is an error. Then runs the tests on that build.
 # run-tests.ps1 runs the main stage.
 # A push to main runs all of this in the ci job, and a pull request runs -Quick, both with -Tier Fast: the slow job runs
 # the rest. When Pester 5.6.1 is installed the full check also runs the Pester suites.
 # See docs/development.md.
 param(
-    # The build and the main test stage: what a pull request waits for.
+    # The build, the formatting and the main test stage: what a pull request waits for.
     [switch] $Quick,
     # Skips the build, for a caller that has just built.
     [switch] $NoBuild,
@@ -23,6 +23,9 @@ try {
         dotnet build .\winshell.slnx -warnaserror --nologo
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
+    # Whitespace alone, in a quarter of the time: the build already fails on style and analyzers.
+    dotnet format whitespace .\winshell.slnx --verify-no-changes --no-restore
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     if (-not $Quick) {
         dotnet tool restore
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -436,51 +436,51 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         {
             case TrayProtocol.Add:
             case TrayProtocol.Modify:
-            {
-                if (icon is null && call.Message == TrayProtocol.Modify)
-                    return;
-                icon ??= new TrayIcon { Key = key };
-                Unindex(icon);
-                if (window != 0)
                 {
-                    icon.Window = window;
-                    icon.Id = call.Id;
+                    if (icon is null && call.Message == TrayProtocol.Modify)
+                        return;
+                    icon ??= new TrayIcon { Key = key };
+                    Unindex(icon);
+                    if (window != 0)
+                    {
+                        icon.Window = window;
+                        icon.Id = call.Id;
+                    }
+                    if (hasGuid)
+                        icon.Guid = call.Guid;
+                    // A system message such as WM_CLOSE is no app's callback, and is never sent.
+                    if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
+                        icon.CallbackMessage = call.CallbackMessage >= WM_USER ? call.CallbackMessage : 0;
+                    if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
+                        icon.Tip = call.Tip;
+                    if ((call.Flags & TrayProtocol.NIF_STATE) != 0 && (call.StateMask & TrayProtocol.NIS_HIDDEN) != 0)
+                        icon.Hidden = (call.State & TrayProtocol.NIS_HIDDEN) != 0;
+                    if ((call.Flags & TrayProtocol.NIF_ICON) != 0)
+                    {
+                        // The app may destroy the icon once this returns, so it is read now.
+                        icon.Image = IconImage(call.Icon);
+                        icon.Resource = ResourceOf(call.Icon);
+                        icon.ImageGeneration++;
+                    }
+                    Index(icon);
+                    var added = !_icons.ContainsKey(icon.Key);
+                    if (added)
+                    {
+                        Win32.GetWindowThreadProcessId(icon.Window, out var pid);
+                        icon.ProcessId = (int)pid;
+                        icon.ProgramPath = ProgramPath(pid);
+                        _icons[icon.Key] = icon;
+                    }
+                    icon.Overflow = TrayIconSettings.InOverflow(_settings, icon.Guid, icon.ProgramPath, icon.Id);
+                    if (added)
+                        Added?.Invoke(icon);
+                    else
+                        Changed?.Invoke(icon);
+                    // An empty text takes a balloon down; Explorer does that itself.
+                    if ((call.Flags & TrayProtocol.NIF_INFO) != 0 && call.Info.Length > 0)
+                        Balloon?.Invoke(icon, call.InfoTitle, call.Info, call.InfoFlags);
+                    break;
                 }
-                if (hasGuid)
-                    icon.Guid = call.Guid;
-                // A system message such as WM_CLOSE is no app's callback, and is never sent.
-                if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
-                    icon.CallbackMessage = call.CallbackMessage >= WM_USER ? call.CallbackMessage : 0;
-                if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
-                    icon.Tip = call.Tip;
-                if ((call.Flags & TrayProtocol.NIF_STATE) != 0 && (call.StateMask & TrayProtocol.NIS_HIDDEN) != 0)
-                    icon.Hidden = (call.State & TrayProtocol.NIS_HIDDEN) != 0;
-                if ((call.Flags & TrayProtocol.NIF_ICON) != 0)
-                {
-                    // The app may destroy the icon once this returns, so it is read now.
-                    icon.Image = IconImage(call.Icon);
-                    icon.Resource = ResourceOf(call.Icon);
-                    icon.ImageGeneration++;
-                }
-                Index(icon);
-                var added = !_icons.ContainsKey(icon.Key);
-                if (added)
-                {
-                    Win32.GetWindowThreadProcessId(icon.Window, out var pid);
-                    icon.ProcessId = (int)pid;
-                    icon.ProgramPath = ProgramPath(pid);
-                    _icons[icon.Key] = icon;
-                }
-                icon.Overflow = TrayIconSettings.InOverflow(_settings, icon.Guid, icon.ProgramPath, icon.Id);
-                if (added)
-                    Added?.Invoke(icon);
-                else
-                    Changed?.Invoke(icon);
-                // An empty text takes a balloon down; Explorer does that itself.
-                if ((call.Flags & TrayProtocol.NIF_INFO) != 0 && call.Info.Length > 0)
-                    Balloon?.Invoke(icon, call.InfoTitle, call.Info, call.InfoFlags);
-                break;
-            }
             case TrayProtocol.Delete:
                 if (icon is not null)
                     Remove(icon.Key);

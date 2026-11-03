@@ -335,4 +335,4 @@ public sealed class FloatingWindowFullscreenTests
         return rect;
     }
 
-    }
+}
