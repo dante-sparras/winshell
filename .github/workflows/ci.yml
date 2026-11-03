@@ -31,6 +31,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.files.outputs.code }}
+      fast: ${{ steps.files.outputs.fast }}
       docs: ${{ steps.files.outputs.docs }}
       scripts: ${{ steps.files.outputs.scripts }}
       workflows: ${{ steps.files.outputs.workflows }}
@@ -42,9 +43,13 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.number }}
         run: |
-          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
-          [ -n "$files" ] || exit 0
+          # A rename lists the path it left too: moving a file out of src/ can break what used it.
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
+          if [ -z "$files" ] || [ "$(wc -l <<<"$files")" -ge 3000 ]; then exit 0; fi
           grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
+          # DocsTests reads every page and the README, against the public API, so only other Markdown skips ci.
+          grep -qvE '\.md$' <<<"$files" || grep -qE '^docs/|^README\.md$' <<<"$files" || echo 'fast=false' >> "$GITHUB_OUTPUT"
           grep -qE '^docs/|\.md$|^dotnet-tools\.json$|^global\.json$|^\.github/workflows/ci\.yml$' <<<"$files" || echo 'docs=false' >> "$GITHUB_OUTPUT"
           grep -qE '^scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
           grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
@@ -53,7 +58,7 @@ jobs:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.fast != 'false' }}
     runs-on: windows-2025
     timeout-minutes: 15
     outputs:
