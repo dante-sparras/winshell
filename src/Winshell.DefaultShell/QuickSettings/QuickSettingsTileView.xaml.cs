@@ -151,8 +151,8 @@ public sealed partial class QuickSettingsTileView : UserControl
         {
             VirtualKey.Left => -1,
             VirtualKey.Right => 1,
-            VirtualKey.Up => -3,
-            VirtualKey.Down => 3,
+            VirtualKey.Up => -QuickSettings.TileColumns,
+            VirtualKey.Down => QuickSettings.TileColumns,
             _ => 0,
         };
     }

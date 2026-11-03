@@ -183,16 +183,16 @@ public sealed class QuickSettingsPopup : ObservableObject
             _settings.Pins.Move(key, target);
     }
 
-    /// <summary>Where a point in the tile grid lands. The grid is three tiles across, with 12 between them.</summary>
+    /// <summary>Where a point in the tile grid lands, with 12 between the tile buttons.</summary>
     public static int IndexAt(double x, double y, int count, double tileHeight)
     {
         if (count <= 0)
             return -1;
         const double tileWidth = 96;
         const double spacing = 12;
-        var column = Math.Clamp((int)Math.Floor((x + spacing / 2) / (tileWidth + spacing)), 0, 2);
+        var column = Math.Clamp((int)Math.Floor((x + spacing / 2) / (tileWidth + spacing)), 0, QuickSettings.TileColumns - 1);
         var row = Math.Max(0, (int)Math.Floor((y + spacing / 2) / (tileHeight + spacing)));
-        return Math.Min(count - 1, row * 3 + column);
+        return Math.Min(count - 1, row * QuickSettings.TileColumns + column);
     }
 
     /// <summary>How dim a tile is while another drag holds it. The one being dragged is half shown.</summary>

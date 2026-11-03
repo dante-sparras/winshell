@@ -12,6 +12,9 @@ namespace Winshell.DefaultShell.Taskbar;
 /// </summary>
 public sealed class QuickSettings
 {
+    /// <summary>The tile grid's columns: two 108-pixel cells fit its fixed 312-pixel content width.</summary>
+    public const int TileColumns = 2;
+
     private readonly BluetoothService _bluetooth;
     private int _openFlyouts;
 
