@@ -48,12 +48,12 @@ on:
 permissions:
   contents: read
 
-# One run per release tag, for the whole workflow. Two calls for the same tag queue, so they do not
-# both build and both ask SignPath to sign. A push or a pull request has no tag, so it uses its own
-# run id and does not wait behind another run. A queued run is not cancelled.
+# One run per release tag, for the whole workflow. Two calls for the same tag queue, so they do not both build and both
+# ask SignPath to sign. A pull request cancels its older run. A push to main uses its own run id, because a group holds
+# only one pending run: a shared one would drop a push in a burst of merges, and nothing on main is cancelled.
 concurrency:
-  group: package-${{ inputs.tag || github.run_id }}
-  cancel-in-progress: false
+  group: package-${{ inputs.tag || (github.event_name == 'pull_request' && github.ref) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   release-gate:
