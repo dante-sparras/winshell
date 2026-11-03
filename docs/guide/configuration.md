@@ -1,6 +1,6 @@
 # Configuration guide
 
-A configuration is a .NET project that references the Winshell package and builds into one program. This guide builds one up from a single panel. The [reference](../reference/index.md) lists every type and member. The C# on this page is copied from [tests/Winshell.Shell.Tests/GuideSamples.cs](https://github.com/dante-sparras/winshell/blob/main/tests/Winshell.Shell.Tests/GuideSamples.cs), which the solution builds. Nothing in that file runs. Call `Shell.Run` from `Main`, marked `[STAThread]`.
+A configuration is a .NET project that references the Winshell package and builds into one program. This guide builds one up from a single panel. The [reference](../reference/index.md) lists every type and member. The C# on this page is copied from [tests/Winshell.Shell.Tests/GuideSamples.cs](https://github.com/enpaze/winshell/blob/main/tests/Winshell.Shell.Tests/GuideSamples.cs), which the solution builds. Nothing in that file runs. Call `Shell.Run` from `Main`, marked `[STAThread]`.
 
 ## Create one
 

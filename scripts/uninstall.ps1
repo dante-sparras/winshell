@@ -13,7 +13,7 @@
     Stops without changing anything while that Winshell is running. Safe to run when Winshell is
     already gone.
 
-        irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
+        irm https://github.com/enpaze/winshell/releases/latest/download/uninstall.ps1 | iex
 
     This file is a release asset. It does not dot-source a neighbor, and it does not run downloaded text.
 #>

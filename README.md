@@ -8,7 +8,7 @@ Winshell runs on Windows 11. [Getting started](docs/guide/getting-started.md) de
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/dante-sparras/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is 72 MB before ReadyToRun. Unzip one into a folder of its own and run `winshell.exe`. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
+A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is 72 MB before ReadyToRun. Unzip one into a folder of its own and run `winshell.exe`. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
 
 Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](docs/code-signing-policy.md).
 
@@ -17,7 +17,7 @@ Releases will be signed through SignPath Foundation once its project for Winshel
 No administrator account. This downloads the portable build for the current user. It needs `install.ps1` and the zip on that release.
 
 ```powershell
-irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
+irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1 | iex
 ```
 
 `iex` cannot take parameters. Set these first, or run the downloaded script as a script block:
@@ -25,11 +25,11 @@ irm https://github.com/dante-sparras/winshell/releases/latest/download/install.p
 ```powershell
 $env:WINSHELL_VERSION = 'x.y.z'  # optional. Omit it for the latest release.
 $env:WINSHELL_AUTOSTART = '1'    # optional. Run Winshell at sign-in.
-irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1 | iex
+irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1 | iex
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/dante-sparras/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
+& ([scriptblock]::Create((irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 ```
 
 The installer checks the zip against `SHA256SUMS.txt` on the release and stops if the hash does not match. It installs into `%LOCALAPPDATA%\Programs\winshell`, adds the `bin` folder to your user PATH, and creates a Start menu shortcut. It will not replace an existing install while that Winshell is running. A later install removes a leftover `bin.old-*` folder once nothing from that install is running. If a Microsoft Store copy is also installed, the installer says so and still finishes. The Store's WindowsApps alias usually comes first on PATH, so `winshell` may start that copy. The files are the portable build, so Winshell updates itself the same way. From `irm | iex`, run `winshell` in that same window. A window that only launched the script, such as `pwsh scripts/install.ps1`, needs a new terminal.
@@ -37,7 +37,7 @@ The installer checks the zip against `SHA256SUMS.txt` on the release and stops i
 Remove that install with:
 
 ```powershell
-irm https://github.com/dante-sparras/winshell/releases/latest/download/uninstall.ps1 | iex
+irm https://github.com/enpaze/winshell/releases/latest/download/uninstall.ps1 | iex
 ```
 
 That removes the install folder, the PATH entry, the shortcut, the sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves your configuration in `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. From `irm | iex`, that same window drops the `bin` folder and keeps every other PATH entry.
@@ -55,7 +55,7 @@ The Store package is built for Partner Center and is not published. Publishing w
 You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
 
 ```powershell
-git clone https://github.com/dante-sparras/winshell.git
+git clone https://github.com/enpaze/winshell.git
 cd winshell
 dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
 ```

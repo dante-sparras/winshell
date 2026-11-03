@@ -19,7 +19,7 @@ public static class SettingsAbout
     public const string DiagnosticsRunning = "Checking…";
 
     /// <summary>The same address <c>winshell doctor</c> prints when a check cannot run.</summary>
-    public const string BugReports = "https://github.com/dante-sparras/winshell/issues/new/choose";
+    public const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     public static string CopyText(string version) => "Winshell " + version;
 

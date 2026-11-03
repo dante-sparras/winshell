@@ -3,7 +3,7 @@
 Security fixes go into the latest release, or into `main` when the project doesn't publish releases.
 
 Report security vulnerabilities in Winshell through GitHub's
-[private vulnerability reporting](https://github.com/dante-sparras/winshell/security/advisories/new).
+[private vulnerability reporting](https://github.com/enpaze/winshell/security/advisories/new).
 Do not open a public issue, and do not disclose the vulnerability publicly until we have had a
 reasonable opportunity to investigate and fix it.
 

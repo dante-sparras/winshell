@@ -104,7 +104,7 @@ public interface IDoctor
 /// </summary>
 public static class Doctor
 {
-    public const string BugReports = "https://github.com/dante-sparras/winshell/issues/new/choose";
+    public const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     public static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
     {

@@ -41,7 +41,7 @@ public sealed class UpdatesTests : IDisposable
         Assert.Equal(new UpdateState(UpdateStatus.Ready, "0.6.0", ""), updater.State);
         Assert.Equal("new dll", File.ReadAllText(Path.Combine(UpdatesDir, "0.6.0", "sub", "winshell.dll")));
         // Only this architecture's zip, and nothing half-done left behind.
-        Assert.Equal(["/repos/dante-sparras/winshell/releases/latest", "/download/winshell-0.6.0-win-x64.zip"], github.Requests);
+        Assert.Equal(["/repos/enpaze/winshell/releases/latest", "/download/winshell-0.6.0-win-x64.zip"], github.Requests);
         Assert.Equal(["0.6.0"], Directory.EnumerateFileSystemEntries(UpdatesDir).Select(Path.GetFileName));
         Assert.Empty(_warnings);
 
@@ -490,7 +490,7 @@ public sealed class UpdatesTests : IDisposable
         File.Exists(path) && File.ReadAllText(path) is var text && text.StartsWith("signed by ", StringComparison.Ordinal) ? text["signed by ".Length..] : null;
 
     private Updater Create(FakeGitHub github) =>
-        new("dante-sparras/winshell", InstallDir, UpdatesDir, "0.5.0+test", "win-x64", _log, github);
+        new("enpaze/winshell", InstallDir, UpdatesDir, "0.5.0+test", "win-x64", _log, github);
 
     private string Stage(string version, params (string Name, string Text)[] files)
     {
