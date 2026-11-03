@@ -19,7 +19,6 @@ Nothing retries a test and nothing sets one aside. A test that fails sometimes i
 - **Each test owns what it uses.** It has its own temp folder and leaves no global state behind. A test that needs something one at a time, such as the keyboard hook, joins an xUnit collection with the others that do.
 - **Order and timing are shaken on every run.** Test assemblies run side by side, classes run in parallel on twice as many threads as cores, and the order changes each time. Coupling between tests fails at once. The run prints its seed, and `pwsh scripts/run-tests.ps1 -Tier <tier> -Seed <seed>` plays each assembly's order back.
 - **A time limit only catches a hang.** A test claims nothing about how fast something is on this machine today, so set a limit far above what the work takes under load: only the defect it guards can miss it.
-- **A changed test proves itself.** On a PR, each changed test class runs 20 times, or 5 times for slow tests, each in another order. A failure in any run, or runs that didn't all run the same tests, fails the PR. A PR that changes more than 30 test classes is a sweep, and skips this. `pwsh scripts/repeat-tests.ps1 -Tests <paths>` does the same here for fast tests, given paths separated by commas.
 
 ## Open a PR
 

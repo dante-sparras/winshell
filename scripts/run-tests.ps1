@@ -33,7 +33,6 @@ function Read-TestResult {
     $failed = [Collections.Generic.HashSet[string]]::new()
     $passed = [Collections.Generic.HashSet[string]]::new()
     $complete = $files.Count -eq $ProjectCount
-    $count = 0
     foreach ($file in $files) {
         $xml = [xml]::new()
         $xml.Load($file.FullName)
@@ -50,7 +49,6 @@ function Read-TestResult {
             $tests[$test.GetAttribute('id')] = $method.GetAttribute('className') + '.' + $method.GetAttribute('name')
         }
         foreach ($result in $xml.SelectNodes('//t:UnitTestResult', $names)) {
-            $count++
             $name = $tests[$result.GetAttribute('testId')]
             switch ($result.GetAttribute('outcome')) {
                 'Passed' { [void] $passed.Add($name) }
@@ -59,7 +57,7 @@ function Read-TestResult {
         }
     }
     # A theory has one result per row, so a name can be in both sets.
-    [pscustomobject]@{ Failed = @($failed); Passed = @($passed | Where-Object { -not $failed.Contains($_) }); Results = $count; Complete = $complete }
+    [pscustomobject]@{ Failed = @($failed); Passed = @($passed | Where-Object { -not $failed.Contains($_) }); Complete = $complete }
 }
 
 # Test programs under $Root that have been asked only for their assembly info for $After seconds or more. That takes a
@@ -102,7 +100,6 @@ function Invoke-DotnetTest {
     param(
         [Parameter(Mandatory)][string] $Filter,
         [Parameter(Mandatory)][string] $ResultsDirectory,
-        [string] $Target = (Join-Path $script:Root 'winshell.slnx'),
         [int] $Seed = 1
     )
     # Says what a stalled test program is doing while it still runs: xUnit ends it once it gives up, so this looks at
@@ -126,7 +123,7 @@ function Invoke-DotnetTest {
     try {
         # The hang timeout ends the run and names the test, which the ci step's own time limit can't do.
         # More threads than cores, so tests that need the same thing to themselves meet here and not on a slower machine.
-        dotnet test $Target --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
+        dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
         $LASTEXITCODE
     }
     finally {
