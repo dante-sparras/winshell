@@ -138,9 +138,9 @@ public sealed class NetworkingServiceTests
         session.Loop.Process();
         Assert.Equal((AdapterId, "Cafe", "secret"), session.Backend.Connection);
         Assert.Equal("", network.Error);
-        network.Disconnect();
+        await network.DisconnectAsync();
         session.Loop.Process();
-        network.Forget();
+        await network.ForgetAsync();
         session.Loop.Process();
         await session.Device.ScanAsync();
         session.Loop.Process();
@@ -480,10 +480,40 @@ public sealed class NetworkingServiceTests
         session.Loop.Process();
         Assert.Equal("Windows manages wired connections automatically.", network.Error);
 
-        network.Forget();
+        await network.ForgetAsync();
         session.Loop.Process();
         Assert.Equal("Only saved Wi-Fi profiles can be forgotten.", network.Error);
         Assert.Empty(session.Backend.Calls);
+    }
+
+    [Theory]
+    [InlineData("disconnect")]
+    [InlineData("forget")]
+    public async Task Disconnecting_and_forgetting_return_before_windows_answers(string action)
+    {
+        using var session = new Session(Snapshot(Wifi()));
+        var network = session.Network;
+        using var windows = new ManualResetEventSlim();
+        session.Backend.Answer = windows;
+        Task? running = null;
+        try
+        {
+            // The shell calls these on its UI thread, which must not wait for Windows.
+            var cancellation = TestContext.Current.CancellationToken;
+            await Task.Run(() => { running = action == "disconnect" ? network.DisconnectAsync() : network.ForgetAsync(); }, cancellation)
+                .WaitAsync(TimeSpan.FromSeconds(5), cancellation);
+            Assert.True(network.Busy);
+        }
+        finally
+        {
+            windows.Set();
+        }
+
+        await running!; // Set by the call that just returned.
+        session.Loop.Process();
+        Assert.False(network.Busy);
+        Assert.Equal("", network.Error);
+        Assert.Equal([action], session.Backend.Calls);
     }
 
     private sealed class Session : IDisposable
@@ -614,8 +644,12 @@ public sealed class NetworkingServiceTests
             return Failure is { } e ? Task.FromException<ConnectionFailReason?>(e) : ConnectTask ?? Task.FromResult(ConnectResult);
         }
 
+        /// <summary>Holds Disconnect and Forget until it is set, as Windows does until it answers.</summary>
+        public ManualResetEventSlim? Answer { get; set; }
+
         public bool Disconnect(Guid device)
         {
+            Answer?.Wait(TestContext.Current.CancellationToken);
             Calls.Add("disconnect");
             Assert.Equal(AdapterId, device);
             return true;
@@ -623,6 +657,7 @@ public sealed class NetworkingServiceTests
 
         public uint Forget(Guid device, string profileName)
         {
+            Answer?.Wait(TestContext.Current.CancellationToken);
             Calls.Add("forget");
             Forgets.Add((device, profileName));
             return ForgetError;
