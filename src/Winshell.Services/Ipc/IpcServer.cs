@@ -14,7 +14,6 @@ internal sealed record IpcRequest(
     [property: JsonPropertyName("name")] string? Name = null,
     [property: JsonPropertyName("args")] List<string>? Args = null,
     [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false,
-    [property: JsonPropertyName("hard"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hard = false,
     [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0,
     [property: JsonPropertyName("winshell"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] string? Winshell = null);
 
@@ -80,7 +79,7 @@ internal interface IInstanceControl
     /// Reloads the shell. <paramref name="program"/> is the build to start when the running one kept its folder, and
     /// null starts this program again. Null when it worked, or else why not, for the client.
     /// </summary>
-    string? Reload(bool hard, string? program);
+    string? Reload(string? program);
 
     /// <summary>Runs after a client has the answer to a reload that worked, which a shell that goes on to end has to wait for.</summary>
     void Reloaded()
@@ -406,7 +405,7 @@ internal sealed class IpcServer : IDisposable
     private IpcResponse Reload(IpcRequest request)
     {
         var program = request.Args is { Count: > 0 } args ? args[0] : null;
-        return _control.Reload(request.Hard, program) is { } error
+        return _control.Reload(program) is { } error
             ? new IpcResponse(false, Error: error)
             : new IpcResponse(true);
     }
