@@ -24,6 +24,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private WinlandMonitor? _focusedMonitor;
     private WinlandWorkspace? _focusedWorkspace;
     private WinlandWindow? _activeWindow;
+    private string? _configPath, _logPath;
     private bool _requestingMonitors, _requestingWorkspaces, _requestingWindows, _monitorsRequested;
     private bool _disposed;
 
@@ -63,6 +64,21 @@ public sealed class WinlandService : ObservableObject, IDisposable
     /// <summary>Winland's pipe. It takes requests and, after an <c>events</c> request, streams events.</summary>
     public string PipePath => _link.PipePath;
 
+    /// <summary>The process that answers on the pipe, or 0 while none does.</summary>
+    public int ProcessId => _link.ProcessId;
+
+    /// <summary>
+    /// The full path of the config Winland read, as its <c>files</c> request reports it. Null while no Winland answers,
+    /// and for a Winland too old to answer <c>files</c>.
+    /// </summary>
+    public string? ConfigPath => _configPath;
+
+    /// <summary>
+    /// The full path of the log Winland writes now, as its <c>files</c> request reports it. Null while it writes none:
+    /// <c>debug:disable_logs</c> is true, or it runs elevated.
+    /// </summary>
+    public string? LogPath => _logPath;
+
     /// <summary>The shell's window list, when one is in use. <see cref="WinlandWindow.Window"/> is resolved from it.</summary>
     internal WindowListService? WindowList => _windows;
 
@@ -90,6 +106,9 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     /// <summary>Sends <c>dispatch</c> and the request to Winland. A failure is logged.</summary>
     public void Dispatch(string request) => Send("dispatch " + request);
+
+    /// <summary>Asks Winland to read its config again, as <c>winland reload</c> does. A failure is logged.</summary>
+    public void Reload() => Send("reload");
 
     /// <summary>Asks Winland for its Monitors again. Updates the listed ones and removes those it no longer reports.</summary>
     public void RefreshMonitors() => RefreshMonitors(false);
@@ -159,6 +178,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
         else
             Reset();
         Changed(nameof(PipePath));
+        Changed(nameof(ProcessId));
     });
 
     private void OnEventReceived(string line) => _loop.Post(() =>
@@ -182,6 +202,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
         RefreshMonitors(true);
         RefreshWorkspaces(true);
         RefreshWindows();
+        RefreshFiles();
         // Events only name the active window when the focus moves; asking once shows it before then.
         Request("j/activewindow", reply =>
         {
@@ -202,7 +223,25 @@ public sealed class WinlandService : ObservableObject, IDisposable
             RemoveWorkspace(workspace);
         foreach (var monitor in _monitorList.ToArray())
             RemoveMonitor(monitor);
+        SetFiles(null, null);
         Recompute();
+    }
+
+    /// <summary>Asks Winland which config it read and which log it writes. An error reply, as from a Winland without <c>files</c>, leaves both null.</summary>
+    private void RefreshFiles() => Request("j/files", reply =>
+    {
+        if (ParseJson(reply) is not { ValueKind: JsonValueKind.Object } json || Str(json, "config") is not { Length: > 0 } config)
+        {
+            RetryIfConnected(reply, RefreshFiles);
+            return;
+        }
+        SetFiles(config, Str(json, "log") is { Length: > 0 } log ? log : null);
+    });
+
+    private void SetFiles(string? config, string? log)
+    {
+        Set(ref _configPath, config, nameof(ConfigPath));
+        Set(ref _logPath, log, nameof(LogPath));
     }
 
     private void Request(string command, Action<string?> onReply)

@@ -39,6 +39,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Id` | string, read-only | The program's file name without its extension. |
 | `Menu` | [SystemTrayMenu](#systemtraymenu), read-only |  |
 | `Overflow` | bool, read-only | Windows shows this icon in the hidden icons flyout, not in the taskbar. Users choose in Settings. |
+| `ProcessId` | int, read-only | The process that added the icon, the owner of the window its clicks go to. |
 | `Tooltip` | string, read-only | The icon's tooltip, which may run over several lines. |
 | `Balloon` | Action of string, string, [BalloonIcon](#balloonicon) |  |
 | `Ready` | Action |  |

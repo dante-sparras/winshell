@@ -122,6 +122,7 @@ public sealed class SystemTrayItem : ObservableObject
         _overflow = icon.Overflow;
         Menu = new SystemTrayMenu(this);
         Executable = icon.ProgramPath;
+        ProcessId = icon.ProcessId;
         Id = Executable.Length > 0 ? Path.GetFileNameWithoutExtension(Executable) : icon.Key;
         AppName = Id;
         if (Executable.Length > 0)
@@ -151,6 +152,9 @@ public sealed class SystemTrayItem : ObservableObject
 
     /// <summary>The full path of the program that added the icon.</summary>
     public string Executable { get; }
+
+    /// <summary>The process that added the icon, the owner of the window its clicks go to.</summary>
+    public int ProcessId { get; }
 
     /// <summary>The icon as the app set it, at the size it chose. It changes when the app changes the icon.</summary>
     public PixelImage? Icon => _image;

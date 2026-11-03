@@ -42,16 +42,20 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | Member | Type | Description |
 | --- | --- | --- |
 | `ActiveWindow` | [WinlandWindow](#winlandwindow)?, read-only |  |
+| `ConfigPath` | string?, read-only | The full path of the config Winland read, as its `files` request reports it. Null while no Winland answers, and for a Winland too old to answer `files`. |
 | `FocusedMonitor` | [WinlandMonitor](#winlandmonitor)?, read-only |  |
 | `FocusedWorkspace` | [WinlandWorkspace](#winlandworkspace)?, read-only |  |
+| `LogPath` | string?, read-only | The full path of the log Winland writes now, as its `files` request reports it. Null while it writes none: `debug:disable_logs` is true, or it runs elevated. |
 | `Monitors` | ObservableCollection of [WinlandMonitor](#winlandmonitor), read-only | The Monitors, by id. |
 | `PipePath` | string, read-only | Winland's pipe. It takes requests and, after an `events` request, streams events. |
+| `ProcessId` | int, read-only | The process that answers on the pipe, or 0 while none does. |
 | `Windows` | ObservableCollection of [WinlandWindow](#winlandwindow), read-only | The windows Winland manages, in the order they were first reported. |
 | `Workspaces` | ObservableCollection of [WinlandWorkspace](#winlandworkspace), read-only | The Workspaces, by id, then by Monitor where two have the same number. |
 | `RawEvent` | Action of [WinlandEvent](#winlandevent) |  |
 | `Dispatch(string request)` | void | Sends `dispatch` and the request to Winland. A failure is logged. |
 | `Dispose()` | void |  |
 | `MonitorFor([ScreenInfo](winshell.md#screeninfo)? screen)` | [WinlandMonitor](#winlandmonitor)? | The Monitor of a screen, matched by its `\\.\DISPLAYn` name. Before Winland's first Monitor list arrives, it adds a Monitor for the screen that the list fills in later; after it, null when Winland reports no such Monitor. |
+| `Reload()` | void | Asks Winland to read its config again, as `winland reload` does. A failure is logged. |
 | `RefreshMonitors()` | void | Asks Winland for its Monitors again. Updates the listed ones and removes those it no longer reports. |
 | `RefreshWindows()` | void | Asks Winland for its windows again, adding new ones and updating titles and Workspaces. |
 | `RefreshWorkspaces()` | void | Asks Winland for its Workspaces again and updates the listed ones. |
