@@ -42,13 +42,13 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | Member | Type | Description |
 | --- | --- | --- |
 | `ActiveWindow` | [WinlandWindow](#winlandwindow)?, read-only |  |
-| `ConfigPath` | string, read-only | The config Winland reads when it is started without `--config`, `winland.conf` in `.winland` under the user profile. Winland's pipe does not say which config it read. |
-| `Executable` | string, read-only | The full path of the Winland that answers on the pipe, or empty while none does. |
+| `ConfigPath` | string?, read-only | The full path of the config Winland read, as its `files` request reports it. Null while no Winland answers, and for a Winland too old to answer `files`. |
 | `FocusedMonitor` | [WinlandMonitor](#winlandmonitor)?, read-only |  |
 | `FocusedWorkspace` | [WinlandWorkspace](#winlandworkspace)?, read-only |  |
-| `LogPath` | string, read-only | `winland.log` beside Winland's state file, in `.winland` under the user profile or the folder of the file `WINLAND_STATE` names. Winland writes it only while `debug:disable_logs` is false and it is not elevated. |
+| `LogPath` | string?, read-only | The full path of the log Winland writes now, as its `files` request reports it. Null while it writes none: `debug:disable_logs` is true, or it runs elevated. |
 | `Monitors` | ObservableCollection of [WinlandMonitor](#winlandmonitor), read-only | The Monitors, by id. |
 | `PipePath` | string, read-only | Winland's pipe. It takes requests and, after an `events` request, streams events. |
+| `ProcessId` | int, read-only | The process that answers on the pipe, or 0 while none does. |
 | `Windows` | ObservableCollection of [WinlandWindow](#winlandwindow), read-only | The windows Winland manages, in the order they were first reported. |
 | `Workspaces` | ObservableCollection of [WinlandWorkspace](#winlandworkspace), read-only | The Workspaces, by id, then by Monitor where two have the same number. |
 | `RawEvent` | Action of [WinlandEvent](#winlandevent) |  |
