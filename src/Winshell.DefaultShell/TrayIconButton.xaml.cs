@@ -104,8 +104,9 @@ public sealed partial class TrayIconButton : Button
         menu.Opened += (_, _) => tray.SetMenuOpen(true);
         menu.Closed += (_, _) =>
         {
-            if (ReferenceEquals(_menu, menu))
-                _menu = null;
+            if (!ReferenceEquals(_menu, menu))
+                return;
+            _menu = null;
             tray.SetMenuOpen(false);
         };
         _menu = menu;
