@@ -14,7 +14,7 @@ A test waits on a real signal: an event, a task's completion, or a fake clock.
 - **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
 - **Test the default shell's logic without a window.** Its view models are plain C#, tested in `Winshell.DefaultShell.Tests`. A test class that opens a WinUI window or starts `winshell.exe` carries `[Trait("Category", "Slow")]`.
 
-Nothing retries a test and nothing sets one aside. A test that fails sometimes is a bug in the test or in Winshell, so find the cause and fix it, on `main` as much as in a PR.
+Nothing retries a test and nothing sets one aside. A test that fails sometimes is a bug in the test or in Winshell, so find the cause and fix it, on `main` as much as in a PR. Tests are built so that they can't flake:
 
 - **Each test owns what it uses.** It has its own temp folder and leaves no global state behind. A test that needs something one at a time, such as the keyboard hook, joins an xUnit collection with the others that do.
 - **Order and timing are shaken on every run.** Test assemblies run side by side, classes run in parallel on twice as many threads as cores, and the order changes each time. Coupling between tests fails at once. The run prints its seed, and `pwsh scripts/run-tests.ps1 -Tier <tier> -Seed <seed>` plays each assembly's order back.

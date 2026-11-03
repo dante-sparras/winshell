@@ -8,11 +8,11 @@ Until 1.0 is tagged, a release can still break a configuration. The [changelog](
 
 ## Install
 
-Winshell runs on Windows 11. The portable zip and the PowerShell command install the latest release. winget and the Microsoft Store are not available yet. Building from source is for working on Winshell. Only someone writing a shell needs the .NET SDK.
+Winshell runs on Windows 11. The portable zip and the PowerShell command install the latest release. winget and the Microsoft Store are not available yet. Building from source is for working on Winshell, and for now for writing a shell, since the templates are not published yet. Only someone writing a shell needs the .NET SDK.
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB. Unzip one into a folder of its own and run `winshellw.exe`, or `.\winshell run` from a terminal in that folder. That build updates itself from GitHub Releases. A build from source does not. See [Winshell updates](docs/updates.md).
+A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or `.\winshell run` from a terminal in that folder. That build updates itself from GitHub Releases, and the default shell updates with it. A build from source does not, and neither does a shell you built yourself. See [Winshell updates](docs/updates.md).
 
 Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](docs/code-signing-policy.md).
 
