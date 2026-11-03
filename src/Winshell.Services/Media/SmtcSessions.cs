@@ -17,6 +17,9 @@ internal sealed class SmtcSessions : IMediaSessions
     /// <summary>SessionsChanged can miss a session, so a completed read is followed by another after this delay.</summary>
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
+    /// <summary>A request still pending after this long is cancelled and replaced, so a broker that stopped answering and recovered is asked again.</summary>
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
     private static SmtcSessions? _instance;
 
     private readonly IEventLoop _loop;
@@ -25,6 +28,7 @@ internal sealed class SmtcSessions : IMediaSessions
     private readonly Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> _request;
     private IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>? _pending;
     private IDisposable? _refresh;
+    private IDisposable? _timeout;
     private bool _refreshRequested;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private global::Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
@@ -64,7 +68,7 @@ internal sealed class SmtcSessions : IMediaSessions
 
     /// <summary>
     /// Asks Windows on the UI thread. A broker that stops answering must not accumulate pending requests and native
-    /// threads: wait for completion without a timer. Changes during that read share one follow-up read.
+    /// threads: one request waits for completion or its timeout. Changes during that read share one follow-up read.
     /// </summary>
     private void Sync()
     {
@@ -77,19 +81,42 @@ internal sealed class SmtcSessions : IMediaSessions
         _refresh = null;
         try
         {
-            _pending = _request();
-            _pending.Completed = (operation, status) => Post(() => Complete(operation, status));
+            var operation = _request();
+            _pending = operation;
+            _timeout = _loop.Schedule(RequestTimeout, () => CancelExpired(operation));
+            operation.Completed = (_, status) => Post(() => Complete(operation, status));
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
-            _pending = null;
             _warning.Failed(e);
-            ScheduleRefresh();
+            // A request that started is retired by its timeout.
+            if (_pending is null)
+                ScheduleRefresh();
         }
+    }
+
+    private void CancelExpired(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
+    {
+        if (!ReferenceEquals(_pending, operation))
+            return;
+        try
+        {
+            operation.Cancel();
+        }
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _warning.Failed(e);
+        }
+        // A hung broker may never deliver Completed after Cancel, so retire the request here; its late callback is ignored.
+        Complete(operation, AsyncStatus.Canceled);
     }
 
     private void Complete(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation, AsyncStatus status)
     {
+        if (!ReferenceEquals(_pending, operation))
+            return;
+        _timeout?.Dispose();
+        _timeout = null;
         try
         {
             if (status == AsyncStatus.Completed)
@@ -108,8 +135,15 @@ internal sealed class SmtcSessions : IMediaSessions
         }
         finally
         {
+            try
+            {
+                operation.Close();
+            }
+            catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                _warning.Failed(e);
+            }
             _pending = null;
-            operation.Close();
             if (_refreshRequested)
             {
                 _refreshRequested = false;

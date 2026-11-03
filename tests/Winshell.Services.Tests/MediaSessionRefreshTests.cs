@@ -7,20 +7,52 @@ namespace Winshell.Services.Tests;
 
 public sealed class MediaSessionRefreshTests
 {
-    [Fact]
-    public void A_pending_discovery_waits_for_Windows_without_polling_or_starting_more_requests()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_hung_discovery_is_cancelled_and_closed_before_exactly_one_retry(bool completesOnCancel)
     {
         var loop = new ManualEventLoop();
         var requests = 0;
-        var pending = new Discovery();
-        _ = new SmtcSessions(loop, new Log(), () => ++requests == 1 ? pending : new Discovery());
+        var pending = new Discovery { CompletesOnCancel = completesOnCancel };
+        var next = new Discovery();
+        _ = new SmtcSessions(loop, new Log(), () =>
+        {
+            if (++requests == 1)
+                return pending;
+            Assert.True(pending.Closed);
+            return next;
+        });
 
         loop.Process();
-        loop.Advance(TimeSpan.FromHours(1));
+        loop.Advance(TimeSpan.FromMilliseconds(29999));
 
         Assert.Equal(1, requests);
-        Assert.Null(loop.NextDue);
+        Assert.Equal(0, pending.CancelCount);
         Assert.False(pending.Closed);
+
+        loop.Advance(TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal(1, requests);
+        Assert.Equal(1, pending.CancelCount);
+        Assert.Equal(1, pending.CloseCount);
+        Assert.Equal(TimeSpan.FromSeconds(32), loop.NextDue);
+
+        loop.Advance(TimeSpan.FromMilliseconds(1999));
+        Assert.Equal(1, requests);
+        loop.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.Equal(2, requests);
+        Assert.False(next.Closed);
+
+        // Windows can still answer the retired request. That must not read it, close it again, or start another request.
+        pending.NotifyCompletion(AsyncStatus.Completed);
+        loop.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(2, requests);
+        Assert.Equal(1, pending.CloseCount);
+        Assert.Equal(0, next.CancelCount);
+        Assert.False(next.Closed);
+        Assert.Equal(TimeSpan.FromSeconds(62), loop.NextDue);
     }
 
     [Theory]
@@ -45,6 +77,7 @@ public sealed class MediaSessionRefreshTests
         loop.Advance(TimeSpan.FromMilliseconds(1));
         Assert.Equal(2, requests);
         Assert.False(next.Closed);
+        Assert.Equal(TimeSpan.FromSeconds(32), loop.NextDue);
     }
 
     [Fact]
@@ -63,7 +96,7 @@ public sealed class MediaSessionRefreshTests
         loop.Advance(TimeSpan.FromMilliseconds(1));
 
         Assert.Equal(2, requests);
-        Assert.Null(loop.NextDue);
+        Assert.Equal(TimeSpan.FromSeconds(32), loop.NextDue);
     }
 
     private sealed class Discovery : IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>
@@ -87,19 +120,33 @@ public sealed class MediaSessionRefreshTests
 
         public AsyncStatus Status { get; private set; } = AsyncStatus.Started;
 
-        public bool Closed { get; private set; }
+        public bool CompletesOnCancel { get; init; } = true;
+
+        public int CancelCount { get; private set; }
+
+        public int CloseCount { get; private set; }
+
+        public bool Closed => CloseCount > 0;
 
         // A completed request can lose its broker before its result is read.
         public GlobalSystemMediaTransportControlsSessionManager GetResults() => throw ErrorCode;
 
-        public void Cancel() => Finish(AsyncStatus.Canceled);
+        public void Cancel()
+        {
+            CancelCount++;
+            Status = AsyncStatus.Canceled;
+            if (CompletesOnCancel)
+                NotifyCompletion(AsyncStatus.Canceled);
+        }
 
-        public void Close() => Closed = true;
+        public void Close() => CloseCount++;
 
         public void Finish(AsyncStatus status)
         {
             Status = status;
-            Completed(this, status);
+            NotifyCompletion(status);
         }
+
+        public void NotifyCompletion(AsyncStatus status) => Completed(this, status);
     }
 }
