@@ -4,7 +4,11 @@ using Winshell.Native;
 namespace Winshell.Tray;
 
 /// <summary>Sends an app the clicks on its notification area icon, the way Explorer sends them.</summary>
-internal sealed unsafe partial class TrayClicker(IEventLoop loop) : IDisposable
+/// <param name="loop">The loop the pointer is put back on.</param>
+/// <param name="letAppTakeForeground">
+/// Lets the app with this window and process id take the foreground; <see cref="LetAppTakeForeground"/> in a shell.
+/// </param>
+internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
 {
     internal const uint MediumIntegrity = 0x2000;
     private static readonly uint ShellIntegrity = IntegrityLevel((uint)Environment.ProcessId);
@@ -24,7 +28,7 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop) : IDisposable
         // Apps read the cursor when they open a menu, and many ignore the point in the message.
         if (at is { } target)
             _cursor.Place(target);
-        LetAppTakeForeground(icon, pid);
+        letAppTakeForeground(icon.Window, pid);
         foreach (var message in TrayProtocol.ClickMessages(click, icon.Version))
             Send(icon, message, point);
     }
@@ -41,7 +45,7 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop) : IDisposable
     /// Lets the app take the foreground for its menu or window. Nothing is activated for it, so the window the user
     /// works in keeps the keyboard when the app shows nothing.
     /// </summary>
-    private static void LetAppTakeForeground(TrayIcon icon, uint pid)
+    internal static void LetAppTakeForeground(nint window, uint pid)
     {
         // A click on a shell window is input this process just received, which lets it pass the right on.
         if (AllowSetForegroundWindow(pid))
@@ -52,7 +56,7 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop) : IDisposable
         var attached = foregroundThread != 0 && foregroundThread != thread && Win32.AttachThreadInput(foregroundThread, thread, true);
         try
         {
-            Win32.SetForegroundWindow(icon.Window);
+            Win32.SetForegroundWindow(window);
             AllowSetForegroundWindow(pid);
         }
         finally
