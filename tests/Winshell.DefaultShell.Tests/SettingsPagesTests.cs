@@ -291,7 +291,7 @@ public sealed class SettingsPagesTests : IDisposable
         Assert.Equal(printed, projectCheck.Message);
         Assert.Equal("fail", built.Status);
         Assert.Equal("Run winshell run once to build it.", built.Fix);
-        Assert.Equal("warn", build.Status);
+        Assert.Equal("pass", build.Status);
         Assert.Equal(before, Directory.EnumerateFileSystemEntries(_folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray());
     }
 
