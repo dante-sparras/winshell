@@ -34,8 +34,7 @@ internal static class ReloadCommand
         {
             await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest(
                 "reload",
-                Args: beside is null ? null : [beside],
-                Hard: options.Hard)))
+                Args: beside is null ? null : [beside])))
             {
                 if (response.Ok)
                 {

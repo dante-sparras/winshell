@@ -368,7 +368,7 @@ public sealed partial class Shell : IDisposable
     {
         public IIpcTargets Ipc => shell.Ipc;
 
-        public string? Reload(bool hard, string? program) => shell.StartNext(program);
+        public string? Reload(string? program) => shell.StartNext(program);
 
         public void Reloaded() => shell.Quit();
 
