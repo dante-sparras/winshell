@@ -3,9 +3,6 @@ using Winshell.Native;
 
 namespace Winshell.Tray;
 
-/// <summary>An icon resource in a program or library: a numeric id, or a name when the id is 0.</summary>
-internal sealed record IconResource(string Module, ushort Id, string Name);
-
 /// <summary>Draws icons into straight-alpha images: from an icon handle, or from the resource it was loaded from.</summary>
 internal static unsafe partial class IconImage
 {
