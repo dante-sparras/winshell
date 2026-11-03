@@ -31,27 +31,6 @@ public sealed class DocsTests
         Assert.True(problems.Count == 0, "C# examples that are not compiled:\n" + string.Join("\n", problems));
     }
 
-    [Fact]
-    public void Every_page_is_in_a_table_of_contents()
-    {
-        var docs = Path.Combine(Repo, "docs");
-        var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.Combine(docs, "index.md") };
-        foreach (var toc in Directory.EnumerateFiles(docs, "toc.yml", SearchOption.AllDirectories))
-        {
-            foreach (var line in File.ReadLines(toc))
-            {
-                var href = line.Trim();
-                if (!href.StartsWith("href:", StringComparison.Ordinal))
-                    continue;
-                href = href["href:".Length..].Trim();
-                if (href.EndsWith(".md", StringComparison.Ordinal))
-                    listed.Add(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(toc)!, href)));
-            }
-        }
-        var missing = Pages().Where(p => p.StartsWith(docs + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && !listed.Contains(p));
-        Assert.Empty(missing.Select(p => Path.GetRelativePath(Repo, p)));
-    }
-
     /// <summary>
     /// Each Winshell namespace has a page. A section's table lists every public constructor, property, method, event
     /// and field the type declares, and no name the type does not have. An overload is one row. Enum values are the
@@ -331,13 +310,12 @@ public sealed class DocsTests
         }
     }
 
-    /// <summary>The pages the docs site is built from, and the README.</summary>
+    /// <summary>The pages in <c>docs/</c>, outside <c>docs/agents/</c>, and the README.</summary>
     private static IEnumerable<string> Pages()
     {
-        var docs = Path.Combine(Repo, "docs");
-        var skipped = new[] { Path.Combine(docs, "agents"), Path.Combine(docs, "_site") };
-        return Directory.EnumerateFiles(docs, "*.md", SearchOption.AllDirectories)
-            .Where(file => !skipped.Any(dir => file.StartsWith(dir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+        var agents = Path.Combine(Repo, "docs", "agents") + Path.DirectorySeparatorChar;
+        return Directory.EnumerateFiles(Path.Combine(Repo, "docs"), "*.md", SearchOption.AllDirectories)
+            .Where(file => !file.StartsWith(agents, StringComparison.OrdinalIgnoreCase))
             .Append(Path.Combine(Repo, "README.md"))
             .Order(StringComparer.Ordinal);
     }

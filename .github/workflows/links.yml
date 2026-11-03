@@ -1,7 +1,7 @@
 name: Links
 
 # Links to other sites, on main and every Monday, since a site can move a page without a change here. Links between
-# pages are the docs build's. This one runs apart from pull requests, so a site that is down for a moment can't fail one.
+# pages are the ci job's. This one runs apart from pull requests, so a site that is down for a moment can't fail one.
 on:
   push:
     branches:

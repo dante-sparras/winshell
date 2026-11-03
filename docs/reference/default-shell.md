@@ -1,6 +1,6 @@
 # The default shell
 
-Winshell runs the default shell when you have no project of your own ([getting started](../guide/getting-started.md#where-a-configuration-lives)). It is built in, shell id `winshell-default`, and every surface follows the choices made in [Winshell Settings](../settings.md) as they change. `dotnet new winshell-default -n MyShell` is that shell as a project you can change. Winshell does not reference Reactor. The default shell is XAML and C#.
+Winshell runs the default shell when you have no project of your own ([where a configuration lives](../../README.md#where-a-configuration-lives)). It is built in, shell id `winshell-default`, and every surface follows the choices made in [Winshell Settings](../settings.md) as they change. `dotnet new winshell-default -n MyShell` is that shell as a project you can change. Winshell does not reference Reactor. The default shell is XAML and C#.
 
 ## Hotkeys
 

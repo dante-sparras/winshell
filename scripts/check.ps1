@@ -1,5 +1,4 @@
-# Builds winshell.slnx with warnings as errors, checks its formatting, and builds the docs site, where a broken link or
-# anchor between pages is an error. Then runs the tests on that build.
+# Builds winshell.slnx with warnings as errors and checks its formatting. Then runs the tests on that build.
 # run-tests.ps1 runs the main stage.
 # A push to main runs all of this in the ci job, and a pull request runs -Quick, both with -Tier Fast: the slow job runs
 # the rest. When Pester 5.6.1 is installed the full check also runs the Pester suites.
@@ -26,12 +25,6 @@ try {
     # Whitespace alone, in a quarter of the time: the build already fails on style and analyzers.
     dotnet format whitespace .\winshell.slnx --verify-no-changes --no-restore
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if (-not $Quick) {
-        dotnet tool restore
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet docfx .\docs\docfx.json --warningsAsErrors --logLevel warning
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    }
     & (Join-Path $PSScriptRoot 'run-tests.ps1') -Tier $Tier
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     if ($Quick) { exit 0 }

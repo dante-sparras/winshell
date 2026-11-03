@@ -44,7 +44,7 @@ A change made to that file by hand applies as it is saved, even when its folder 
 | `calendarWeekNumbers` | `false` | `true` shows week numbers beside the calendar |
 | `clockSeconds` | `false` | `true` shows seconds on the taskbar clock. It wakes the shell every second, so it is off by default. Not in Winshell Settings. |
 | `desktopChords` | `false` | `true` lets Winshell take Alt+Tab, Win+Tab, Win+D and Win+X. `false` leaves them with Windows. On the Hotkeys page. |
-| `hideExplorerTaskbar` | `false` | `true` hides Explorer's taskbar and releases the screen edge it reserved, while Winshell is running. Winshell puts the window and the edge back when it exits. Not in Winshell Settings. See [troubleshooting](guide/troubleshooting.md#explorers-taskbar-is-missing) if the taskbar is still gone after Winshell has closed. |
+| `hideExplorerTaskbar` | `false` | `true` hides Explorer's taskbar and releases the screen edge it reserved, while Winshell is running. Winshell puts the window and the edge back when it exits. Not in Winshell Settings. See [troubleshooting](troubleshooting.md#explorers-taskbar-is-missing) if the taskbar is still gone after Winshell has closed. |
 | `hiddenNotificationApps` | `[]` | `{ id = "<AppUserModelID>", name = "<app name>" }` for each app turned off |
 | `startHotkey` | `"Win"` | a sequence as [Hotkey.Sequence](reference/winshell-input.md#hotkey) takes it, or `""` |
 | `settingsHotkey` | `""` | the same |
@@ -54,7 +54,7 @@ The default shell applies `colorScheme`, `accentColor`, `autoUpdate` and `hideEx
 
 Start pins and quick settings tiles stay in the files those surfaces already keep: `launcher.toml` in the config folder, with the app ids in order as `pins = [...]`, and `quick-settings.toml` in the shell's state folder, with the tile keys in order as `pinned = [...]`. Start and quick settings follow those files as they change, and keep their comments the same way. The unpackaged sign-in entry is the `Winshell` value under the user's `Run` key. A packaged Winshell uses its startup task. See [where files live](development.md#where-files-live).
 
-A configuration you write keeps its own preferences the same way. Subclass `TomlFile`, as the [configuration guide](guide/configuration.md#preferences) shows. The sample is compiled in `tests/Winshell.Shell.Tests/GuideSamples.cs`.
+A configuration you write keeps its own preferences the same way. Subclass `TomlFile`, as the [configuration guide](configuration.md#preferences) shows. The sample is compiled in `tests/Winshell.Shell.Tests/GuideSamples.cs`.
 
 ## Checks only a live session can do
 

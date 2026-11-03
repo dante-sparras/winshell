@@ -1,25 +1,6 @@
 # Contributing
 
-## Before you start
-
-- **Found a bug?** [Open an issue](https://github.com/enpaze/winshell/issues/new/choose).
-- **Have an idea?** [Open a feature request](https://github.com/enpaze/winshell/issues/new?template=feature_request.yml).
-- **Search first.** Someone may already have reported it, or be working on it.
-- **Found a vulnerability?** Don't open an issue; follow [SECURITY.md](.github/SECURITY.md).
-
-Before you build a feature or change how something behaves, open a feature request and wait for the maintainer to agree in it. Link that issue in your PR. A small fix for an obvious bug needs no prior issue; just explain the bug in the PR.
-
-## Set up
-
-The [development runbook](docs/development.md#first-checkout) covers the prerequisites, the first checkout, environment setup, and every command.
-
-## Make your change
-
-**One problem per PR.** If you fixed two unrelated things, open two PRs. A cleanup or refactor you noticed along the way gets its own PR too, unless the fix depends on it.
-
-**Include everything that problem needs**: the code, its tests, and any docs that would otherwise be wrong.
-
-**Check your change** before you open the PR. Run `pwsh scripts/quick-check.ps1`, then the focused tests for what you changed. The [commands](docs/development.md#commands) list them. `pwsh scripts/check.ps1` runs everything. The required `ci` job runs its `-Quick` part on a pull request, and all of it on a push to `main` and on the release pull request, so a failure there holds back the release. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title`, `pr-rules`, and the docs `build` job.
+The [development runbook](docs/development.md) covers the prerequisites, the first checkout, and every command. Run `pwsh scripts/quick-check.ps1` before every push.
 
 ## Write tests that don't flake
 
@@ -31,12 +12,9 @@ A test waits on a real signal: an event, a task's completion, or a fake clock.
 - **Time comes through a `TimeProvider`.** `DateTime.Now`, `Stopwatch` and their relatives don't build in `src/`. A test passes a `FakeTimeProvider`, given a UTC time. `TimeProvider.System` is for what only real time can drive: a file's write time, a Windows object, the CLI's own process.
 - **Use the real desktop only in a `Category=Slow` test.** A fast test depends on no window, running app, device or setting of the PC it runs on. `Wait.Until` is for what really gives no signal: another process, or a window.
 - **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
-
-## No flaky tests
+- **Test the default shell's logic without a window.** Its view models are plain C#, tested in `Winshell.DefaultShell.Tests`. A test class that opens a WinUI window or starts `winshell.exe` carries `[Trait("Category", "Slow")]`.
 
 Nothing retries a test and nothing sets one aside. A test that fails sometimes is a bug in the test or in Winshell, so find the cause and fix it, on `main` as much as in a PR.
-
-Tests are built so that they can't flake:
 
 - **Each test owns what it uses.** It has its own temp folder and leaves no global state behind. A test that needs something one at a time, such as the keyboard hook, joins an xUnit collection with the others that do.
 - **Order and timing are shaken on every run.** Test assemblies run side by side, classes run in parallel on twice as many threads as cores, and the order changes each time. Coupling between tests fails at once. The run prints its seed, and `pwsh scripts/run-tests.ps1 -Tier <tier> -Seed <seed>` plays each assembly's order back.
@@ -87,10 +65,3 @@ Fill in the PR template:
 - **Merge Danger**: whether this is a one-way or two-way **Door**, and its **Blast Radius**, the one word for what it can affect.
 
 If an AI agent did the work, end the description with the model and the tool you used, such as "Claude Opus 5.5 in Claude Code".
-
-## Review and merge
-
-- Every change reaches `main` through a PR, and the required checks (`ci`, `slow`, `installer`, `actionlint`, `pr-rules`, the docs `build` job, and the PR title) must pass first.
-- PRs are squash-merged. Your PR title becomes the commit message on `main`, so make it readable on its own.
-- Releases are cut from those commits, so your PR title is also your line in the changelog.
-- A PR that doesn't follow this guide may be closed with a note saying what's missing. Fix it and ask for another look, or open a new PR.

@@ -168,4 +168,4 @@ _Avoid_: global shortcut, keybind, accelerator, bind
 
 **Module**:
 A Winshell namespace.
-_Avoid_: package, library, QML module
+_Avoid_: package, library
