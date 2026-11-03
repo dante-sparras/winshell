@@ -28,7 +28,7 @@ winshell help                       print this summary
 
 ## Run a shell
 
-`winshell run` with no project runs the default shell, which is built in. With a project it builds to `bin\shell` when a source is newer than that program, then starts the program. A failed build does not start the last program that built. Options may come before `run`. [Getting started](../guide/getting-started.md#where-a-configuration-lives) explains which project it picks. A command may also come after its options, so `winshell -c work kill` stops that config instead of starting it.
+`winshell run` with no project runs the default shell, which is built in. With a project it builds to `bin\shell` when a source is newer than that program, then starts the program. A failed build does not start the last program that built. Options may come before `run`. [Where a configuration lives](../../README.md#where-a-configuration-lives) explains which project it picks. A command may also come after its options, so `winshell -c work kill` stops that config instead of starting it.
 
 | Option | What it does |
 | --- | --- |
@@ -69,7 +69,7 @@ Any other option is an error. The command prints `Unknown option "<name>".` and 
 | `winshell list` | Lists the running instances with their id, process id, shell id, configuration, launch time and log file. `-j`, `--json` prints them as JSON. Stopped instances are not listed. The shape is under [JSON](#json). |
 | `winshell kill` | Asks an instance to exit, waits until that process has exited, and prints `Killed <id>`. `--force` ends the process when it does not exit. `kill` is the one command a CLI and a shell of different releases still accept. |
 | `winshell reload` | Builds the configuration. On failure the running instance stays, a notice shows, and the command prints why and exits with 1. On success a new instance starts with `--after` and takes over, then the command prints `Reloaded <id>`. The default shell has nothing to build, so it starts again. There is no file watcher. |
-| `winshell dev` | Runs a configuration project under `dotnet watch` and applies each edit to the running shell, until Ctrl+C. See [Develop a shell](../guide/configuration.md#develop-a-shell). Takes `-c` and `-p`. |
+| `winshell dev` | Runs a configuration project under `dotnet watch` and applies each edit to the running shell, until Ctrl+C. See [Develop a shell](../configuration.md#develop-a-shell). Takes `-c` and `-p`. |
 | `winshell log` | Prints an instance's log. `-i`, `--pid`, `-p` and `-c` can also name a stopped instance. With no selector and no instance running, it prints the log of the newest stopped one and says so on stderr. A selector that matches nothing is an error. `-t`, `--tail <n>` prints the last `n` lines; `-f`, `--follow` keeps printing new lines until you press Ctrl+C. `winshell log <file>` prints that file. |
 | `winshell ipc show` | Lists the instance's IPC targets with their functions, properties and signals. `-j`, `--json` prints that list as JSON. The shape is under [JSON](#json). |
 | `winshell ipc call <target> <function> [args...]` | Calls a function registered with [`ShellIpc.Handle`](winshell.md#shellipc) and prints what it returns. |
@@ -178,7 +178,7 @@ An unexpected failure of any command but `run` prints `winshell <command>: <mess
 | The default shell | Built in. It is not a folder Winshell writes. Its shell id is `winshell-default`. |
 | Per-shell data, state and cache | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>`, and the same under `state` and `cache`. They are `Shell.DataDir`, `Shell.StateDir` and `Shell.CacheDir`. |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that exits cleanly keeps that folder, with `exitedAt` set in `instance.json`, so `winshell log` can still print it. A later start deletes a stopped folder once it is a day old, including a folder that has no `instance.json`. |
-| Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one text file per crash. Nothing is sent anywhere. See [troubleshooting](../guide/troubleshooting.md#winshell-crashed). |
+| Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one text file per crash. Nothing is sent anywhere. See [troubleshooting](../troubleshooting.md#winshell-crashed). |
 | Run at sign-in | Unpackaged: the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, written only when a shell sets [`StartupService.RunAtSignIn`](winshell-session.md#startupservice). That entry passes `--no-build`. Packaged: the package's startup task, not that value. |
 
 The console writes `LEVEL category: message`. The log file writes that same line with `HH:mm:ss.fff` in front. `INFO` and `WARN` have a leading space, on both. The levels are `DEBUG` (with `-v`), `INFO`, `WARN`, `ERROR` and `FATAL`.

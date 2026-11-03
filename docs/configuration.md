@@ -1,10 +1,10 @@
 # Configuration guide
 
-A configuration is a .NET project that references the Winshell package and builds into one program. This guide builds one up from a single panel. The [reference](../reference/index.md) lists every type and member. The C# on this page is copied from [tests/Winshell.Shell.Tests/GuideSamples.cs](https://github.com/enpaze/winshell/blob/main/tests/Winshell.Shell.Tests/GuideSamples.cs), which the solution builds. Nothing in that file runs. Call `Shell.Run` from `Main`, marked `[STAThread]`.
+A configuration is a .NET project that references the Winshell package and builds into one program. This guide builds one up from a single panel. The [reference](reference/index.md) lists every type and member. The C# on this page is copied from [tests/Winshell.Shell.Tests/GuideSamples.cs](https://github.com/enpaze/winshell/blob/main/tests/Winshell.Shell.Tests/GuideSamples.cs), which the solution builds. Nothing in that file runs. Call `Shell.Run` from `Main`, marked `[STAThread]`.
 
 ## Create one
 
-You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](getting-started.md#build-from-source), so the two are the same release.
+You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](../README.md#build-from-source), so the two are the same release.
 
 ```powershell
 git clone https://github.com/enpaze/winshell.git
@@ -55,9 +55,9 @@ Windows stay Winshell's. The content is any `UIElement`. Sizes are logical pixel
         };
 ```
 
-- **[PanelWindow](../reference/winshell.md#panelwindow)** sits on the edges of a screen. `Anchors` chooses the edges. `ReservedSize` reserves that edge, so maximized windows stop short of it. `ExclusionMode` of `Ignore` reserves nothing. `AboveWindows` set false puts it behind other windows.
-- **[PopupWindow](../reference/winshell.md#popupwindow)** is a frameless window placed next to another. `GrabFocus` gives it the keyboard. `Dismissed` fires when it closes.
-- **[FloatingWindow](../reference/winshell.md#floatingwindow)** is a normal window with a title bar.
+- **[PanelWindow](reference/winshell.md#panelwindow)** sits on the edges of a screen. `Anchors` chooses the edges. `ReservedSize` reserves that edge, so maximized windows stop short of it. `ExclusionMode` of `Ignore` reserves nothing. `AboveWindows` set false puts it behind other windows.
+- **[PopupWindow](reference/winshell.md#popupwindow)** is a frameless window placed next to another. `GrabFocus` gives it the keyboard. `Dismissed` fires when it closes.
+- **[FloatingWindow](reference/winshell.md#floatingwindow)** is a normal window with a title bar.
 
 `Backdrop` is `WindowBackdrop.Mica`, `Acrylic`, `MicaAlt` or `None`. `Corners` rounds the window. A flyout is a WinUI `Flyout` in the window's content. Winshell closes an open flyout on a window that does not activate.
 
@@ -67,7 +67,7 @@ Reactor is the configuration's choice. Add `Microsoft.UI.Reactor` in the project
 
 ## A service
 
-Services hang off `Shell`, created when first read. `shell.Audio`, `shell.Power`, `shell.Apps`, `shell.WindowList`, `shell.Networking`, `shell.Bluetooth`, `shell.Notifications`, `shell.SystemTray`, `shell.Media` and the others are on the [Winshell](../reference/winshell.md#shell) page, and each namespace has its own page.
+Services hang off `Shell`, created when first read. `shell.Audio`, `shell.Power`, `shell.Apps`, `shell.WindowList`, `shell.Networking`, `shell.Bluetooth`, `shell.Notifications`, `shell.SystemTray`, `shell.Media` and the others are on the [Winshell](reference/winshell.md#shell) page, and each namespace has its own page.
 
 Reading does not ask for permission and does not change anything. Wi-Fi scanning, notification access and Bluetooth pairing ask Windows only when the configuration calls the method, from a user's action. `shell.Session` can ask Windows to lock. Windows' own lock screen takes over.
 
@@ -89,7 +89,7 @@ Reading does not ask for permission and does not change anything. Wi-Fi scanning
         shell.Ipc.Handle("notes", "hello", (string name) => "hi " + name);
 ```
 
-`winshell ipc call notes hello Ada` prints `hi Ada`. `Property` and `Signal` are on [ShellIpc](../reference/winshell.md#shellipc). Dispose the registration to take it away.
+`winshell ipc call notes hello Ada` prints `hi Ada`. `Property` and `Signal` are on [ShellIpc](reference/winshell.md#shellipc). Dispose the registration to take it away.
 
 `winshell ipc call notice dismiss` closes Winshell's own notice. That call is not a target you register, so `ipc show` does not list it.
 

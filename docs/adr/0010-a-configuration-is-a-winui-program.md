@@ -2,9 +2,9 @@
 
 **Status:** accepted
 
-A configuration becomes a .NET project that references a `Winshell` package and builds into one program showing real WinUI 3 controls. QML, Jint and the Skia scene go, with no release that supports both and no converter. This supersedes ADR-0001, ADR-0002 and ADR-0005, and the backdrop part of ADR-0003. The cut is done. Those ADRs no longer describe what `main` runs.
+A configuration becomes a .NET project that references a `Winshell` package and builds into one program showing real WinUI 3 controls. QML, Jint and the Skia scene go, with no release that supports both and no converter. This supersedes the QML stack's decisions: its own QML parser and Jint runtime, drawing with Skia, DirectWrite text with UI Automation, and the DWM backdrop of its DirectComposition windows. The cut is done, and those ADRs are deleted; git history has them.
 
-The reason is the controls. ADR-0005 left a real IME composition, UI Automation across the built-in controls and a token pass still to do, on top of the 25,000 lines of `Quick/` that imitate Windows 11. WinUI already is Windows 11, so that work and that code stop being ours. Startup and C# tooling are bonuses, not the reason. The cost of moving is low now: this is 0.x, a release can still break a configuration, and no external configuration has turned up.
+The reason is the controls. The QML stack's own text and UI Automation left a real IME composition, UI Automation across the built-in controls and a token pass still to do, on top of the 25,000 lines of `Quick/` that imitate Windows 11. WinUI already is Windows 11, so that work and that code stop being ours. Startup and C# tooling are bonuses, not the reason. The cost of moving is low now: this is 0.x, a release can still break a configuration, and no external configuration has turned up.
 
 ## The shape
 
@@ -23,7 +23,7 @@ A throwaway program put WinUI content in a window with the same styles as a `Win
 | Check | Result |
 | --- | --- |
 | Per-pixel transparency | The window behind showed through unchanged. |
-| Backdrop | The DWM attribute came out flat `#545454`, with or without XAML and active or not, the color ADR-0005 sampled for Mica. `DesktopAcrylicController`, told the window is active, gave live acrylic on a window that was never activated. |
+| Backdrop | The DWM attribute came out flat `#545454`, with or without XAML and active or not, the color the QML stack sampled for Mica. `DesktopAcrylicController`, told the window is active, gave live acrylic on a window that was never activated. |
 | Activation | Clicks reached a XAML button, a Reactor button and a text box, and the foreground window did not change. |
 | Keyboard | With `WS_EX_NOACTIVATE` off and the window in front, as Start does it, typed text arrived, Tab moved focus, and the foreground went back. |
 | Edge | An app bar moved the work area from 0 to 64 and back, and the content followed the window. |
@@ -34,7 +34,7 @@ A throwaway program put WinUI content in a window with the same styles as a `Win
 | Disposal | 20 islands made and disposed in one process took private memory from 97 MB to 101 MB. |
 | Two bars of a taskbar, Release, ReadyToRun | 1.37 to 1.79 s to first frame, 128 MB working set (134 MB with Reactor), under 0.1% idle CPU, over seven runs. |
 
-A one-line rebuild took 17 to 61 seconds, against 100 ms for a reload today. A self-contained publish was 288 MB and a 110 MB zip, against a 70 MB zip for v0.7.0. Not tested: screens of different DPI, a real CJK IME, MSIX, a pruned package set, and whether hosted CI runners can render WinUI. The startup figure is not comparable with ADR-0005's 2,272 ms, which was a different panel.
+A one-line rebuild took 17 to 61 seconds, against 100 ms for a reload today. A self-contained publish was 288 MB and a 110 MB zip, against a 70 MB zip for v0.7.0. Not tested: screens of different DPI, a real CJK IME, MSIX, a pruned package set, and whether hosted CI runners can render WinUI. The startup figure is not comparable with the QML stack's 2,272 ms, which was a different panel.
 
 ## Considered options
 

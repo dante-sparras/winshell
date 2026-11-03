@@ -33,7 +33,7 @@ Describe 'Get-PrProblem' {
     }
 
     It 'asks no test of a fix to docs' {
-        Get-PrProblem -Title 'fix(docs): a broken link' -Body '' -Files @('docs/guide/configuration.md', 'README.md') | Should -BeNullOrEmpty
+        Get-PrProblem -Title 'fix(docs): a broken link' -Body '' -Files @('docs/configuration.md', 'README.md') | Should -BeNullOrEmpty
     }
 
     It 'wants numbers in a perf change' {

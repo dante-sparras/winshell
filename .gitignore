@@ -1,6 +1,3 @@
-# The docs site DocFX builds from docs/.
-docs/_site/
-
 # Baseline
 # OS
 .DS_Store

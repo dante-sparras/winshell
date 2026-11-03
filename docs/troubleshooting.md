@@ -34,7 +34,7 @@ Started from Start or at sign-in, and Winshell cannot start? It shows a dialog w
 
 A notice says the configuration did not build, with the compiler's lines. **Open file** opens the project. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`.
 
-`winshell reload` leaves the running instance up when the build fails. Fix the project and reload again. [`winshell dev`](configuration.md#develop-a-shell) is the loop while you are editing. Check names against the [reference](../reference/index.md).
+`winshell reload` leaves the running instance up when the build fails. Fix the project and reload again. [`winshell dev`](configuration.md#develop-a-shell) is the loop while you are editing. Check names against the [reference](reference/index.md).
 
 ## There are two taskbars
 
@@ -69,16 +69,16 @@ Winshell Settings, or the `Hotkey`'s `Taken` and `Error`, say why:
 - **Not a hotkey.** `Sequence` uses `Win`, `Ctrl`, `Alt` and `Shift`. `Super` and `Meta` are rejected, and so are left or right `Ctrl`, `Alt` and `Shift`. A comma separates chords, so the comma key is `Comma`.
 - **The Windows key opens Windows' Start.** Winshell's Start opens on a tap of the Windows key only while a `Hotkey` with `Sequence` of `Win` is enabled. In the default shell it is the Open Start hotkey on Winshell Settings' Hotkeys page.
 
-See [hotkeys](../hotkeys.md).
+See [hotkeys](hotkeys.md).
 
 ## Notifications don't appear
 
-The notification center is empty until you allow access: click **Allow notification access**, and allow it when Windows asks. If you said no, allow it in Windows Settings > Privacy & security > Notifications. Some Windows setups don't give notification access to a program that isn't installed as a package; then the notification center says access is unavailable. [Windows notifications](../notifications.md) explains this. Toast banners are always Windows' own.
+The notification center is empty until you allow access: click **Allow notification access**, and allow it when Windows asks. If you said no, allow it in Windows Settings > Privacy & security > Notifications. Some Windows setups don't give notification access to a program that isn't installed as a package; then the notification center says access is unavailable. [Windows notifications](notifications.md) explains this. Toast banners are always Windows' own.
 
 ## Wi-Fi networks or Bluetooth devices are missing
 
-- **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.RequestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](../network.md).
-- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `BluetoothAdapter.Enabled`. The quick settings tile does not. See [Bluetooth](../bluetooth.md).
+- **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.RequestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](network.md).
+- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `BluetoothAdapter.Enabled`. The quick settings tile does not. See [Bluetooth](bluetooth.md).
 - **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings. A configuration can set `Networking.WifiEnabled` and `BluetoothAdapter.Enabled`. These tiles do not.
 
 ## Media controls show nothing
@@ -92,7 +92,7 @@ If something is playing and the media controls stay empty, look for `media: Wind
 - The volume, network and battery icons are Explorer's own, not tray icons. Winshell shows its own from `shell.Audio`, `shell.Networking` and `shell.Power`.
 - An icon Windows Settings hides is in the overflow behind the chevron. Choose which icons show in Windows Settings > Personalization > Taskbar > Other system tray icons.
 
-See [the notification area](../tray.md).
+See [the notification area](tray.md).
 
 ## Winshell doesn't start when I sign in
 

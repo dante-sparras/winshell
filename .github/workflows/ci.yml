@@ -36,7 +36,6 @@ jobs:
       code: ${{ steps.files.outputs.code }}
       fast: ${{ steps.files.outputs.fast }}
       tests: ${{ steps.files.outputs.tests }}
-      docs: ${{ steps.files.outputs.docs }}
       scripts: ${{ steps.files.outputs.scripts }}
       workflows: ${{ steps.files.outputs.workflows }}
     steps:
@@ -58,9 +57,6 @@ jobs:
           # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
           if [ -z "$files" ] || [ "$(wc -l <<<"$files")" -ge 3000 ]; then exit 0; fi
           grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
-          # DocsTests reads every page and the README, against the public API, so only other Markdown skips ci.
-          grep -qvE '\.md$' <<<"$files" || grep -qE '^docs/|^README\.md$' <<<"$files" || echo 'fast=false' >> "$GITHUB_OUTPUT"
-          grep -qE '^docs/|\.md$|^dotnet-tools\.json$|^global\.json$|^\.github/workflows/ci\.yml$' <<<"$files" || echo 'docs=false' >> "$GITHUB_OUTPUT"
           grep -qE '^scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
           grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
           # The test classes it changed, which ci and slow repeat. More than 30 is a sweep, and repeating one would outlast the job.
@@ -80,6 +76,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Offline, so only links to files in the repo and their headings: links.yml checks other sites. The lychee release
+      # archive is checked against its SHA-256 before it runs. Dependabot doesn't update this: bump the version and the
+      # digest together, here and in links.yml.
+      - name: Check links between pages
+        shell: pwsh
+        env:
+          LYCHEE_VERSION: lychee-v0.24.2
+          LYCHEE_SHA256: 32975d1493ee1a975d6bb41e4fb56fe419cb442ded628bb772ba2e614acfacad
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $archive = Join-Path $env:RUNNER_TEMP 'lychee.zip'
+          Invoke-WebRequest -Uri "https://github.com/lycheeverse/lychee/releases/download/$env:LYCHEE_VERSION/lychee-x86_64-pc-windows-msvc.zip" -OutFile $archive
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash
+          if (-not $hash.Equals($env:LYCHEE_SHA256, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "lychee $env:LYCHEE_VERSION SHA-256 is $hash, expected $env:LYCHEE_SHA256."
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:RUNNER_TEMP
+          & (Join-Path $env:RUNNER_TEMP 'lychee-x86_64-pc-windows-msvc\lychee.exe') --offline --include-fragments --no-progress '**/*.md' '.github/**/*.md'
+          exit $LASTEXITCODE
       - uses: ./.github/actions/prepare
       - name: Build
         id: build
@@ -144,25 +160,6 @@ jobs:
         env:
           TESTS: ${{ needs.changes.outputs.tests }}
         run: ./scripts/repeat-tests.ps1 -Tests $env:TESTS -Tier Slow -Times 5
-
-  build:
-    # Builds docs/ into a site with DocFX. A broken link or anchor between pages fails the build.
-    name: build
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs != 'false' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Build the site
-        run: |
-          dotnet tool restore
-          dotnet docfx docs/docfx.json --warningsAsErrors
 
   actionlint:
     # actionlint catches broken expressions, typos and shell errors in .github/workflows/. zizmor audits .github/ for

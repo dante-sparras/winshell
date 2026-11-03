@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-Winshell is never a lock screen and never looks like one. `Session.lock()` calls `LockWorkStation`, the same request Win+L makes, and Windows' own lock screen takes over. `SessionLock`, `SessionLockSurface`, `SignInContext`, `SignInResult` and `SignInError` are removed, and Winshell no longer asks for, holds, or checks a Windows password. They were ports of Quickshell's `WlSessionLock` and `PamContext`. On Wayland the compositor enforces a session lock. On Windows nothing enforces a lock that Winshell draws: it is an overlay that fails open, and the password prompt it needed is the kind of prompt Windows teaches users not to trust.
+Winshell is never a lock screen and never looks like one. `Shell.Current.Session.Lock()` calls `LockWorkStation`, the same request Win+L makes, and Windows' own lock screen takes over. `SessionLock`, `SessionLockSurface`, `SignInContext`, `SignInResult` and `SignInError` are removed, and Winshell no longer asks for, holds, or checks a Windows password. They were ports of Quickshell's `WlSessionLock` and `PamContext`. On Wayland the compositor enforces a session lock. On Windows nothing enforces a lock that Winshell draws: it is an overlay that fails open, and the password prompt it needed is the kind of prompt Windows teaches users not to trust.
 
 ## Threat model
 

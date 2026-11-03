@@ -6,10 +6,9 @@ Branch: <type>/<short-description>, such as "fix/duplicate-orders".
 
 ## Summary
 
-<!-- Link the issue that agreed on the direction and scope. For a very small, focused fix of an obvious bug,
-explain why it needs no prior issue.
+<!-- What changed and why. Link the issue it fixes, if there is one.
 
-Then show the smallest view that makes the point: a diagram, a diff sketch, or a tree. Keep prose brief. -->
+Show the smallest view that makes the point: a diagram, a diff sketch, or a tree. Keep prose brief. -->
 
 ## Evidence
 

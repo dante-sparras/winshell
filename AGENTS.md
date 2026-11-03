@@ -20,12 +20,11 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 │   ├── agents/                      # How the engineering skills use this repo
 │   │   ├── release-notes/           # Notes for a release, once that release exists
 │   │   └── test-audit/              # The gate every test passes
-│   ├── guide/                       # The docs site's guide section
 │   ├── reference/                   # A page per module
 │   ├── security/                    # The threat model
+│   ├── *.md                         # The configuration guide, troubleshooting, and a page per topic
 │   ├── development.md               # Setup, environment, and every command
-│   ├── docfx.json                   # Builds docs/ into the docs site
-│   └── index.md                     # The docs site's home page
+│   └── README.md                    # Lists every page
 ├── packaging/
 │   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs and winshell.ico
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
@@ -49,9 +48,8 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 │   ├── TestSupport/                 # Source files every test project links instead of copying
 │   └── Directory.Build.props        # What every test project shares
 ├── winshell.slnx                    # The solution the check builds
-├── dotnet-tools.json                # DocFX, pinned
 ├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
-├── CONTRIBUTING.md                  # Branches, commit and PR titles, PR rules
+├── CONTRIBUTING.md                  # Test rules, branch names, PR titles and descriptions
 └── GLOSSARY.md                      # The words this repo uses
 ```
 
@@ -61,7 +59,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 - Writing, changing or reviewing a test? It must pass the gate in [docs/agents/test-audit/SKILL.md](docs/agents/test-audit/SKILL.md).
 - Before every push, `pwsh scripts/quick-check.ps1` must pass: the build with 0 warnings, the formatting and the fast tests, in under two minutes, with no window opened.
 - Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/run-tests.ps1 -Tier Slow`, under "Live UI with Winland running". `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out.
-- CI runs the rest, so leave full `check.ps1`, `package.ps1` and arm64 to it. The required `ci` job runs the build and the fast tests on a PR, and all of `pwsh scripts/check.ps1 -Tier Fast` on a push to `main` and on the release PR. The required `slow` job runs the slow tests. `slow` skips a PR that only changes docs or Markdown, and `ci` skips one that only changes Markdown outside `docs/` and the README. The ruleset also requires the `installer` job, `actionlint`, `pr-title`, `pr-rules`, and the docs `build` job.
+- CI runs the rest, so leave full `check.ps1`, `package.ps1` and arm64 to it. The required `ci` job checks the links between Markdown files offline with lychee. It runs the build and the fast tests on a PR, and all of `pwsh scripts/check.ps1 -Tier Fast` on a push to `main` and on the release PR. The required `slow` job runs the slow tests. `slow` skips a PR that only changes docs or Markdown. The ruleset also requires the `installer` job, `actionlint`, `pr-title` and `pr-rules`.
 - If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
 - Name the branch, title the PR, and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
