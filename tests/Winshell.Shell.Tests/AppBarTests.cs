@@ -8,6 +8,9 @@ public class AppBarTests
     // A 1920×1080 monitor and a 48 px bar.
     private static readonly RECT Monitor = new(0, 0, 1920, 1080);
 
+    // A 2560×1440 monitor below and to the right of it, so an edge's coordinates are never its depth.
+    private static readonly RECT Second = new(2560, 1080, 5120, 2520);
+
     [Theory]
     [InlineData(Edges.Top | Edges.Left | Edges.Right, Edges.Top)]
     [InlineData(Edges.Bottom | Edges.Left | Edges.Right, Edges.Bottom)]
@@ -42,4 +45,22 @@ public class AppBarTests
     public void A_bar_lays_out_from_where_its_grant_starts_and_along_it(
         Edges edge, int grantLeft, int grantTop, int grantRight, int grantBottom, int left, int top, int right, int bottom) =>
         Assert.Equal(new RECT(left, top, right, bottom), AppBar.Area(edge, new RECT(grantLeft, grantTop, grantRight, grantBottom), Monitor));
+
+    [Theory]
+    [InlineData(Edges.Top, 2560, 1080, 5120, 1128)]
+    [InlineData(Edges.Bottom, 2560, 2472, 5120, 2520)]
+    [InlineData(Edges.Left, 2560, 1080, 2608, 2520)]
+    [InlineData(Edges.Right, 5072, 1080, 5120, 2520)]
+    public void A_bar_on_a_monitor_away_from_the_origin_asks_for_a_strip_of_that_monitor(Edges edge, int left, int top, int right, int bottom) =>
+        Assert.Equal(new RECT(left, top, right, bottom), AppBar.Strip(edge, 48, Second));
+
+    // Explorer grants a strip shortened along its edge by a taskbar on a neighboring edge, and the bar keeps out of it.
+    [Theory]
+    [InlineData(Edges.Top, 2608, 1080, 5120, 1128, 2608, 1080, 5120, 2520)]
+    [InlineData(Edges.Bottom, 2560, 2472, 5072, 2520, 2560, 1080, 5072, 2520)]
+    [InlineData(Edges.Left, 2560, 1080, 2608, 2472, 2560, 1080, 5120, 2472)]
+    [InlineData(Edges.Right, 5072, 1128, 5120, 2520, 2560, 1128, 5120, 2520)]
+    public void A_bar_lays_out_only_as_long_as_its_grant_along_its_edge(
+        Edges edge, int grantLeft, int grantTop, int grantRight, int grantBottom, int left, int top, int right, int bottom) =>
+        Assert.Equal(new RECT(left, top, right, bottom), AppBar.Area(edge, new RECT(grantLeft, grantTop, grantRight, grantBottom), Second));
 }

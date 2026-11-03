@@ -15,9 +15,6 @@ internal sealed unsafe class FloatingFrame(HostWindow host, ShellPlatform platfo
     private int _corners;
     private double _lastWidth = -1, _lastHeight = -1;
 
-    /// <summary>Whether the window covers its monitor without a frame.</summary>
-    public bool Fullscreen => _fullscreen;
-
     private nint Handle => host.Handle;
 
     public void Apply(FloatingPlacement placement)
