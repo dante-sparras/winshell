@@ -119,23 +119,26 @@ public class Network : ObservableObject
     /// Disconnects this network's Wi-Fi adapter. Fails for a wired network, and until
     /// <see cref="NetworkingService.RequestAccess"/> is allowed.
     /// </summary>
-    public void Disconnect() => _ = RunAsync(() =>
+    public void Disconnect() => _ = DisconnectAsync();
+
+    /// <summary>Deletes the saved Wi-Fi profile whose name is this SSID.</summary>
+    public void Forget() => _ = ForgetAsync();
+
+    // These two block until Windows answers, so they run off the calling thread.
+    internal Task DisconnectAsync() => RunAsync(() => Task.Run(() =>
     {
         if (Device.Type != DeviceType.Wifi || !Device.Backend.Disconnect(Device.NativeId))
             throw new NotSupportedException("Windows cannot disconnect this adapter through WiFiAdapter.");
-        return Task.CompletedTask;
-    });
+    }));
 
-    /// <summary>Deletes the saved Wi-Fi profile whose name is this SSID.</summary>
-    public void Forget() => _ = RunAsync(() =>
+    internal Task ForgetAsync() => RunAsync(() => Task.Run(() =>
     {
         if (Device.Type != DeviceType.Wifi)
             throw new NotSupportedException("Only saved Wi-Fi profiles can be forgotten.");
         var error = Device.Backend.Forget(Device.NativeId, Name);
         if (error != 0)
             throw new Win32Exception((int)error);
-        return Task.CompletedTask;
-    });
+    }));
 
     internal Task ConnectAsync(string? password) => RunAsync(async () =>
     {
