@@ -88,6 +88,7 @@ If something is playing and the media controls stay empty, look for `media: Wind
 ## Tray icons are missing
 
 - Only one instance in the Windows session hosts the tray icons. A second instance logs that it is waiting, and takes over within half a second when the first one exits.
+- Some apps add their icon only when they start, and never again when a new taskbar asks. NVIDIA Settings is one. Its icon stays on Explorer's taskbar and shows in Winshell once the app starts again while Winshell runs.
 - The volume, network and battery icons are Explorer's own, not tray icons. Winshell shows its own from `shell.Audio`, `shell.Networking` and `shell.Power`.
 - An icon Windows Settings hides is in the overflow behind the chevron. Choose which icons show in Windows Settings > Personalization > Taskbar > Other system tray icons.
 

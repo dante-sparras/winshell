@@ -313,10 +313,12 @@ public static class Doctor
     {
         if (project is null)
             return new("build", "Build", CheckStatus.Pass, "No configuration project to build.");
+        // A missing program is Built's failure, so it is not reported twice.
+        if (!File.Exists(project.Program))
+            return new("build", "Build", CheckStatus.Pass, $"Nothing to compare until {project.Name} is built.");
         if (!project.NeedsBuild())
             return new("build", "Build", CheckStatus.Pass, $"{project.Name} is up to date.");
-        var why = File.Exists(project.Program) ? $"A file in {project.Name} is newer than the program." : $"{project.Name} has not been built.";
-        return new("build", "Build", CheckStatus.Warn, why, "Run winshell run to build it. Signing in uses the last build.");
+        return new("build", "Build", CheckStatus.Warn, $"A file in {project.Name} is newer than the program.", "Run winshell run to build it. Signing in uses the last build.");
     }
 
     // Folders

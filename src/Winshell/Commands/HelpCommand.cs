@@ -30,10 +30,10 @@ internal static class HelpCommand
                 return;
             case "reload":
                 WriteHelp("""
-                    winshell reload [--hard] [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                    winshell reload [-i <id> | --pid <pid> | -c <name> | -p <path>]
                       Builds a configuration project and asks its instance to start again.
                       A build that fails leaves the instance running and asks it to show the error.
-                      The default shell starts again. --hard is accepted.
+                      The default shell starts again.
                       With one running instance and no selector, that instance is used.
                       With several, this exits and lists them.
                     """);
@@ -105,7 +105,7 @@ internal static class HelpCommand
                    winshell list [-j]                  list running instances
                    winshell kill [--force] [instance options]
                                                        stop an instance and wait until it exits
-                   winshell reload [--hard] [instance options]
+                   winshell reload [instance options]
                                                        reload an instance's configuration
                    winshell dev [-c <name> | -p <path>]
                                                        run a project and apply each edit to it

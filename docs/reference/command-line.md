@@ -9,7 +9,7 @@ winshell <command> --help           help for that command, which does not run
 winshell list [-j]                  list running instances
 winshell kill [--force] [instance options]
                                     stop an instance and wait until it exits
-winshell reload [--hard] [instance options]
+winshell reload [instance options]
                                     reload an instance's configuration
 winshell dev [-c <name> | -p <path>]
                                     run a project and apply each edit to it
