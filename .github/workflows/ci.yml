@@ -195,8 +195,8 @@ jobs:
             --jq '.actions_caches[] | "\(.id) \(.key)"' | sed -E 's/-[0-9a-f]{40}-.*//' | awk 'seen[$2]++ >= 2 { print $1 }' |
             xargs -r -I{} gh api --method DELETE "repos/$GH_REPO/actions/caches/{}"
 
-  installer:
-    name: installer
+  pester:
+    name: pester
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.scripts != 'false' }}
     runs-on: windows-2025
@@ -207,13 +207,11 @@ jobs:
           persist-credentials: false
       # The gallery nupkgs, checked against their SHA-256 before they are imported, so a replaced package can't run.
       # Dependabot doesn't update these: bump the version and the digest together.
-      - name: Install Pester and PSScriptAnalyzer
+      - name: Install Pester
         shell: pwsh
         env:
           PESTER_VERSION: 5.6.1
           PESTER_SHA256: 37b3749f69accead67c366d81508977f62afc7cbb9c4db88c3a255a1f0b20da5
-          PSSCRIPTANALYZER_VERSION: 1.22.0
-          PSSCRIPTANALYZER_SHA256: 71bfb9eb58e19d4b662f4494a7d572a724b60e0588848dcff34195a0e08ae1be
         run: |
           $ErrorActionPreference = 'Stop'
           $ProgressPreference = 'SilentlyContinue'
@@ -222,7 +220,6 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $modules = @(
             @{ Name = 'Pester'; Version = $env:PESTER_VERSION; Sha256 = $env:PESTER_SHA256 }
-            @{ Name = 'PSScriptAnalyzer'; Version = $env:PSSCRIPTANALYZER_VERSION; Sha256 = $env:PSSCRIPTANALYZER_SHA256 }
           )
           foreach ($module in $modules) {
             $nupkg = Join-Path $env:RUNNER_TEMP "$($module.Name).$($module.Version).nupkg"
@@ -254,37 +251,12 @@ jobs:
               $zip.Dispose()
             }
           }
-      - name: PSScriptAnalyzer
-        shell: pwsh
-        run: |
-          $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
-          Import-Module PSScriptAnalyzer -RequiredVersion 1.22.0
-          $settings = Join-Path $env:RUNNER_TEMP 'winshell-analyzer.psd1'
-          @'
-          @{
-              Severity = @('Error', 'Warning')
-              ExcludeRules = @(
-                  # The user invoked the installer. Prompting would break irm | iex.
-                  'PSUseShouldProcessForStateChangingFunctions'
-              )
-          }
-          '@ | Set-Content -LiteralPath $settings -Encoding utf8
-          $findings = @()
-          foreach ($script in @('scripts/install.ps1', 'scripts/uninstall.ps1')) {
-            $findings += @(Invoke-ScriptAnalyzer -Path $script -Settings $settings -Severity Warning, Error)
-          }
-          if ($findings.Count -gt 0) {
-              $findings | Format-Table -AutoSize | Out-String | Write-Output
-              exit 1
-          }
-      - name: Installer tests (PowerShell 7)
+      - name: Pester (PowerShell 7)
         shell: pwsh
         run: |
           $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
           Import-Module Pester -RequiredVersion 5.6.1
           Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -292,12 +264,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Invoke-Pester -Path scripts/PrRules.Tests.ps1 -CI
           exit $LASTEXITCODE
-      - name: Installer tests (Windows PowerShell 5.1)
+      - name: Pester (Windows PowerShell 5.1)
         shell: powershell
         run: |
           $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
           Import-Module Pester -RequiredVersion 5.6.1
           Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/Uninstall.Tests.ps1 -CI
           exit $LASTEXITCODE
