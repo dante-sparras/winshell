@@ -6,7 +6,7 @@ Start with the log. Winshell writes what it does, and every error, to the termin
 winshell log          # the running instance's log, or the last stopped one's
 winshell log -f       # keep printing new lines
 winshell list         # running instances and where their logs are
-winshell -v           # run with debug messages too
+winshell run -v       # run with debug messages too
 ```
 
 Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that exits keeps that folder for a day, so `winshell log` can print it after the shell has stopped. A later start then deletes the folder. Copy the log before that day is up if you need to keep it.
@@ -17,9 +17,10 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 | --- | --- |
 | `No .csproj at <path>` | `--path` names a folder without a `.csproj`, or a file that isn't there. |
 | `No config named "<name>" in <folder>` | `--config` names a folder of the config folder that has no project. |
-| `Several configs in <folder>; pick one with -c: …` | The config folder has no project of its own and several subfolders with one. Run `winshell -c <name>`. |
+| `Several configs in <folder>; pick one with -c: …` | The config folder has no project of its own and several subfolders with one. Run `winshell run -c <name>`. |
 | `Several projects in <folder>; name one with -p: …` | The folder has more than one `.csproj`. Pass the file with `-p`. |
 | `<name> did not build.` | The build failed. The last good build is not started. The notice and the log have the compiler's lines. |
+| `<name> did not build.` and `NU1101: Unable to find package Winshell` | The `Winshell` package is not published yet. Pack it and add a package source for it, as [Create one](configuration.md#create-one) shows. |
 | `<name> has not been built. Run winshell run once to build it.` | `--no-build` found no program in `bin\shell`. |
 | `Building a configuration needs the .NET SDK…` | A build needs the SDK. Running the default shell, or `--no-build` of a program that is already built, does not. |
 | A file `was downloaded from the internet` | The `.csproj`, or a `.props` or `.targets` beside it, has a `Zone.Identifier` stream. Unblock it if you trust it. Nothing is built until then. |
@@ -27,13 +28,13 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 | `This shell is Winshell … and this winshell is …` | The CLI and the shell are different releases. Use the `winshell` that matches, or build the shell with this one. `kill` still works. |
 | `Unknown command "<name>". Run winshell --help.` | The first word isn't a command. Options start with `-`. |
 
-Started from Start or at sign-in, and Winshell cannot start? It shows a dialog with the same text, because those starts have no console window. **Open config folder** opens the folder the message is about. A console, including `winshell -d` from a terminal, prints the text and shows no dialog. Nothing in the dialog and nothing on screen means the shell is already running (`--no-duplicate`) or it started and the failure is in the log.
+Started from Start or at sign-in, and Winshell cannot start? It shows a dialog with the same text, because those starts have no console window. **Open config folder** opens the folder the message is about. A console, including `winshell run -d` from a terminal, prints the text and shows no dialog. Nothing in the dialog and nothing on screen means the shell is already running (`--no-duplicate`) or it started and the failure is in the log.
 
 ## The build failed
 
 A notice says the configuration did not build, with the compiler's lines. **Open file** opens the project. **Dismiss** closes the notice, as does Escape once you have clicked it. The notice does not take the keyboard when it appears, so from the keyboard, without clicking it, run `winshell ipc call notice dismiss`.
 
-`winshell reload` leaves the running instance up when the build fails. Fix the project and reload again. `dotnet watch` is the loop while you are editing. Check names against the [reference](../reference/index.md).
+`winshell reload` leaves the running instance up when the build fails. Fix the project and reload again. [`winshell dev`](configuration.md#develop-a-shell) is the loop while you are editing. Check names against the [reference](../reference/index.md).
 
 ## There are two taskbars
 
