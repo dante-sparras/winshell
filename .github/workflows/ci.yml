@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - main
+  # A merge queue runs every check on its merge group, as on a push to main.
+  merge_group:
 
 permissions:
   contents: read

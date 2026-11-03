@@ -56,7 +56,7 @@ Every check of a pull request is in `ci.yml`, except `pr-title`, which also look
 
 The docs `build` job runs DocFX with warnings as errors, which `check.ps1` also runs and `-Quick` leaves out. `pr-title` checks the pull request title. `pr-rules` checks that each type of change carries its proof, as "PR description" in `CONTRIBUTING.md` lists. CodeQL analyzes the languages it finds.
 
-`main` requires a pull request to be up to date. Once another one merges, `gh pr update-branch <number>` brings it level and runs its checks again. GitHub offers its merge queue only to repositories owned by an organization, and this one is owned by a user.
+`main` requires a pull request to be up to date. Once another one merges, `gh pr update-branch <number>` brings it level and runs its checks again. GitHub offers its merge queue only to repositories owned by an organization, and this one is owned by a user. `ci.yml`, `pr-title.yml` and `pr-rules.yml` already run on `merge_group`, so a queue would get every required check.
 
 A push to `main` that changes only `docs/**` or Markdown does not run `package`. A release still calls that workflow. The `store-package` artifact is kept for 14 days.
 
