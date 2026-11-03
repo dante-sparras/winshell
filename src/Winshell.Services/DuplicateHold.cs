@@ -16,7 +16,6 @@ internal readonly struct DuplicateHold : IDisposable
 
     public bool Acquired => _mutex is not null;
 
-    /// <summary>The mutex for one config path. The name is a hash so a long path still fits, and the hash ignores case so Windows paths match.</summary>
     /// <summary>
     /// The mutex for a configuration's program, which is one shell by its shell id, wherever it was built. An id means
     /// that shell only in one local folder, whose instances are the ones it can see.
