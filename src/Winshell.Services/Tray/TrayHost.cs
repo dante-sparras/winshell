@@ -5,71 +5,6 @@ using WinEvents = Winshell.Windows.NativeMethods;
 
 namespace Winshell.Tray;
 
-/// <summary>One notification area icon an app added with <c>Shell_NotifyIcon</c>.</summary>
-internal sealed class TrayIcon
-{
-    public required string Key { get; init; }
-
-    public nint Window { get; set; }
-
-    public uint Id { get; set; }
-
-    public Guid Guid { get; set; }
-
-    public uint CallbackMessage { get; set; }
-
-    public uint Version { get; set; }
-
-    public string Tip { get; set; } = "";
-
-    /// <summary>The app hid the icon (<c>NIS_HIDDEN</c>); Explorer does not show it.</summary>
-    public bool Hidden { get; set; }
-
-    /// <summary>Windows shows the icon in the hidden icons flyout rather than in the taskbar.</summary>
-    public bool Overflow { get; set; } = true;
-
-    /// <summary>The icon as the app drew it, at the size it chose.</summary>
-    public PixelImage? Image { get; set; }
-
-    /// <summary>The module and resource the icon was loaded from, when Windows knows, so it can be drawn at any size.</summary>
-    public IconResource? Resource { get; set; }
-
-    public int ImageGeneration { get; set; }
-
-    public int ProcessId { get; set; }
-
-    public string ProgramPath { get; set; } = "";
-}
-
-/// <summary>An icon resource in a program or library: a numeric id, or a name when the id is 0.</summary>
-internal sealed record IconResource(string Module, ushort Id, string Name);
-
-/// <summary>What the public tray needs of the host. A test gives it a fake, and nothing touches the real tray.</summary>
-internal interface ITrayHost
-{
-    IReadOnlyCollection<TrayIcon> Icons { get; }
-
-    event Action<TrayIcon>? Added;
-
-    event Action<TrayIcon>? Changed;
-
-    event Action<TrayIcon>? Removed;
-
-    /// <summary>The app asked for a balloon notification: its title, its text, and its <c>NIIF_</c> flags.</summary>
-    event Action<TrayIcon, string, string, uint>? Balloon;
-
-    void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at);
-}
-
-/// <summary>
-/// The window class the host registers, the taskbar class it passes messages on to, and the name that makes one
-/// host in the session the owner. Tests use their own, so they never see or disturb the real notification area.
-/// </summary>
-internal sealed record TrayNames(string Window, string Explorer, string Owner)
-{
-    public static readonly TrayNames Session = new("Shell_TrayWnd", "Shell_TrayWnd", @"Local\winshell-notification-area");
-}
-
 /// <summary>
 /// Sees the notification area icons of every app, the way an alternative Windows shell does. Apps send their icons to
 /// the first <c>Shell_TrayWnd</c> window they find, so this makes one and keeps it in front of Explorer's, then
@@ -79,10 +14,7 @@ internal sealed record TrayNames(string Window, string Explorer, string Owner)
 internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
 {
     private const uint WM_COPYDATA = 0x004A;
-    private const uint WM_USER = 0x0400;
-    internal const uint MediumIntegrity = 0x2000;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
-    private static readonly uint ShellIntegrity = IntegrityLevel((uint)Environment.ProcessId);
     private static readonly ConcurrentDictionary<nint, TrayHost> Hosts = new();
     private static readonly ConcurrentDictionary<string, byte> Registered = new();
     private static readonly ConcurrentDictionary<nint, TrayHost> EventHosts = new();
@@ -94,17 +26,14 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     // Apps send their icons to one window, so one host in the session at a time is the notification area. The
     // others wait, and the first to notice takes over when it exits, even if it crashed.
     private readonly Mutex _owner;
-    private readonly Dictionary<string, TrayIcon> _icons = [];
-    private readonly Dictionary<(nint Window, uint Id), TrayIcon> _byWindow = [];
-    private readonly Dictionary<Guid, TrayIcon> _byGuid = [];
-    private IReadOnlyList<TrayIconSetting> _settings = [];
+    private readonly TrayIcons _icons = new(icon => (IconImage.FromHandle(icon), IconImage.ResourceOf(icon)), OwnerOf);
+    private readonly TrayClicker _clicker;
     private IDisposable? _settingsWatch;
     private nint _hwnd;
     private nint _answered;
     private bool _waiting;
     private IDisposable? _timer;
     private IDisposable? _answer;
-    private readonly TrayCursor _cursor;
     private readonly List<nint> _eventHooks = [];
 
     /// <param name="broadcast">Asks every app to add its icons again; <see cref="BroadcastTaskbarCreated"/> in a shell.</param>
@@ -115,24 +44,39 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         _names = names;
         _broadcast = broadcast;
         _owner = new Mutex(false, names.Owner);
-        _cursor = new TrayCursor(loop, CursorPosition, point => SetCursorPos(point.X, point.Y));
+        _clicker = new TrayClicker(loop);
     }
 
     /// <summary>The notification area window, or 0 while another host owns the tray.</summary>
     public nint Window => _hwnd;
 
-    public IReadOnlyCollection<TrayIcon> Icons => _icons.Values;
+    public IReadOnlyCollection<TrayIcon> Icons => _icons.Icons;
 
-    public event Action<TrayIcon>? Added;
+    public event Action<TrayIcon>? Added
+    {
+        add => _icons.Added += value;
+        remove => _icons.Added -= value;
+    }
 
-    public event Action<TrayIcon>? Changed;
+    public event Action<TrayIcon>? Changed
+    {
+        add => _icons.Changed += value;
+        remove => _icons.Changed -= value;
+    }
 
-    public event Action<TrayIcon>? Removed;
+    public event Action<TrayIcon>? Removed
+    {
+        add => _icons.Removed += value;
+        remove => _icons.Removed -= value;
+    }
 
-    /// <summary>The app asked for a balloon notification: its title, its text, and its <c>NIIF_</c> flags.</summary>
-    public event Action<TrayIcon, string, string, uint>? Balloon;
+    public event Action<TrayIcon, string, string, uint>? Balloon
+    {
+        add => _icons.Balloon += value;
+        remove => _icons.Balloon -= value;
+    }
 
-    public TrayIcon? Find(string key) => _icons.GetValueOrDefault(key);
+    public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at) => _clicker.Click(icon, click, at);
 
     /// <summary>Becomes the notification area, or waits for the host that has it to exit. Call on the loop's thread.</summary>
     public void Start()
@@ -178,8 +122,8 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         ChangeWindowMessageFilterEx(_hwnd, TaskbarCreated, MSGFLT_ALLOW, 0);
         ChangeWindowMessageFilterEx(_hwnd, WM_COPYDATA, MSGFLT_ALLOW, 0);
         _answered = ExplorerTray();
-        UseSettings(TrayIconSettings.Read());
-        _settingsWatch = TrayIconSettings.Watch(_loop, () => UseSettings(TrayIconSettings.Read()));
+        _icons.UseSettings(TrayIconSettings.Read());
+        _settingsWatch = TrayIconSettings.Watch(_loop, () => _icons.UseSettings(TrayIconSettings.Read()));
         foreach (var eventType in new uint[] { 0x0003 /* FOREGROUND */, 0x8004 /* REORDER */ })
         {
             var hook = WinEvents.SetWinEventHook(eventType, eventType, 0, &OnOrderChanged, 0, 0, WinEvents.WINEVENT_OUTOFCONTEXT);
@@ -204,7 +148,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     {
         _timer?.Dispose();
         _answer?.Dispose();
-        _cursor.Dispose();
+        _clicker.Dispose();
         _settingsWatch?.Dispose();
         _timer = _answer = _settingsWatch = null;
         foreach (var hook in _eventHooks)
@@ -268,7 +212,31 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     }
 
     /// <summary>Asks every app to register its icons with whichever taskbar window is first.</summary>
-    public static void BroadcastTaskbarCreated() => Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
+    public static void BroadcastTaskbarCreated()
+    {
+        Win32.PostMessageW(HWND_BROADCAST, TaskbarCreated, 0, 0);
+        // A broadcast reaches only top-level windows, and some apps, such as Hex, keep their icons on a message-only window.
+        foreach (var window in MessageOnlyWindows())
+            Win32.PostMessageW(window, TaskbarCreated, 0, 0);
+    }
+
+    /// <summary>
+    /// Every message-only window on this desktop, each once. A window that closes while they are walked ends the walk,
+    /// which starts over, up to three times.
+    /// </summary>
+    internal static HashSet<nint> MessageOnlyWindows()
+    {
+        var windows = new HashSet<nint>();
+        for (var walk = 0; walk < 3; walk++)
+        {
+            nint hwnd = 0;
+            while ((hwnd = FindWindowExW(Win32.HWND_MESSAGE, hwnd, null, null)) != 0)
+                windows.Add(hwnd);
+            if (Marshal.GetLastPInvokeError() != ERROR_INVALID_WINDOW_HANDLE)
+                break;
+        }
+        return windows;
+    }
 
     /// <summary>
     /// Drops icons of apps that ended without removing them, and checks the taskbar order as a fallback for a
@@ -279,10 +247,10 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         try
         {
             Raise();
-            foreach (var icon in _icons.Values.ToArray())
+            foreach (var icon in _icons.Icons.ToArray())
             {
                 if (!Win32.IsWindow(icon.Window))
-                    Remove(icon.Key);
+                    _icons.Remove(icon.Key);
             }
         }
         finally
@@ -412,368 +380,33 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
 
     private nint OnCopyData(nint sender, COPYDATASTRUCT* data)
     {
+        var answer = 1;
         if (data->dwData == TrayProtocol.NotifyIconData && TrayProtocol.Read(new ReadOnlySpan<byte>(data->lpData, (int)data->cbData)) is { } call)
-            OnNotifyIcon(call);
-        // Explorer keeps its own tray, app bars and icon positions: it gets every message, and its answer is the answer.
+            answer = _icons.Apply(call) ? 1 : 0;
+        // Explorer keeps its own tray, app bars and icon positions: it gets every message. Its answer is the answer to an
+        // app bar message; an icon is answered by this host, which may not have an icon Explorer has.
         var explorer = ExplorerTray();
         if (explorer == 0)
-            return 1;
+            return answer;
         // An icon is answered here, and apps animate theirs several times a second, so a busy Explorer holds the shell
         // up only briefly for one. An app bar needs Explorer's answer.
         var icon = data->dwData == TrayProtocol.NotifyIconData;
         Win32.SendMessageTimeoutW(explorer, WM_COPYDATA, sender, (nint)data, Win32.SMTO_ABORTIFHUNG, icon ? 200u : 2000u, out var result);
-        return icon ? 1 : result;
+        return icon ? answer : result;
     }
 
-    internal void OnNotifyIcon(NotifyIconCall call)
+    private static (int ProcessId, string ProgramPath) OwnerOf(nint window)
     {
-        var hasGuid = call.Guid != Guid.Empty;
-        var window = call.Window;
-        // NIM_SETVERSION often leaves the GUID flag off, so an icon added by GUID is also found by its window.
-        var icon = Lookup(window, call.Id, call.Guid);
-        var key = icon?.Key ?? (hasGuid ? call.Guid.ToString("N") : $"{(uint)window:x}-{call.Id}");
-        switch (call.Message)
-        {
-            case TrayProtocol.Add:
-            case TrayProtocol.Modify:
-                {
-                    if (icon is null && call.Message == TrayProtocol.Modify)
-                        return;
-                    icon ??= new TrayIcon { Key = key };
-                    Unindex(icon);
-                    if (window != 0)
-                    {
-                        icon.Window = window;
-                        icon.Id = call.Id;
-                    }
-                    if (hasGuid)
-                        icon.Guid = call.Guid;
-                    // A system message such as WM_CLOSE is no app's callback, and is never sent.
-                    if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
-                        icon.CallbackMessage = call.CallbackMessage >= WM_USER ? call.CallbackMessage : 0;
-                    if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
-                        icon.Tip = call.Tip;
-                    if ((call.Flags & TrayProtocol.NIF_STATE) != 0 && (call.StateMask & TrayProtocol.NIS_HIDDEN) != 0)
-                        icon.Hidden = (call.State & TrayProtocol.NIS_HIDDEN) != 0;
-                    if ((call.Flags & TrayProtocol.NIF_ICON) != 0)
-                    {
-                        // The app may destroy the icon once this returns, so it is read now.
-                        icon.Image = IconImage(call.Icon);
-                        icon.Resource = ResourceOf(call.Icon);
-                        icon.ImageGeneration++;
-                    }
-                    Index(icon);
-                    var added = !_icons.ContainsKey(icon.Key);
-                    if (added)
-                    {
-                        Win32.GetWindowThreadProcessId(icon.Window, out var pid);
-                        icon.ProcessId = (int)pid;
-                        icon.ProgramPath = ProgramPath(pid);
-                        _icons[icon.Key] = icon;
-                    }
-                    icon.Overflow = TrayIconSettings.InOverflow(_settings, icon.Guid, icon.ProgramPath, icon.Id);
-                    if (added)
-                        Added?.Invoke(icon);
-                    else
-                        Changed?.Invoke(icon);
-                    // An empty text takes a balloon down; Explorer does that itself.
-                    if ((call.Flags & TrayProtocol.NIF_INFO) != 0 && call.Info.Length > 0)
-                        Balloon?.Invoke(icon, call.InfoTitle, call.Info, call.InfoFlags);
-                    break;
-                }
-            case TrayProtocol.Delete:
-                if (icon is not null)
-                    Remove(icon.Key);
-                break;
-            case TrayProtocol.SetVersion:
-                // The only message where this field is a version; elsewhere it is a balloon timeout.
-                if (icon is not null)
-                    icon.Version = call.TimeoutOrVersion;
-                break;
-        }
-    }
-
-    /// <summary>Takes Windows' choices for which icons the taskbar shows, and updates the icons they changed.</summary>
-    internal void UseSettings(IReadOnlyList<TrayIconSetting> settings)
-    {
-        _settings = settings;
-        foreach (var icon in _icons.Values.ToArray())
-        {
-            var overflow = TrayIconSettings.InOverflow(settings, icon.Guid, icon.ProgramPath, icon.Id);
-            if (overflow == icon.Overflow)
-                continue;
-            icon.Overflow = overflow;
-            Changed?.Invoke(icon);
-        }
-    }
-
-    /// <summary>An icon added by GUID and later addressed by its window, or the other way around, is the same icon.</summary>
-    private TrayIcon? Lookup(nint window, uint id, Guid guid)
-    {
-        if (guid != Guid.Empty && _byGuid.TryGetValue(guid, out var byGuid))
-            return byGuid;
-        if (window != 0 && _byWindow.TryGetValue((window, id), out var byWindow))
-            return byWindow;
-        return null;
-    }
-
-    private void Index(TrayIcon icon)
-    {
-        if (icon.Window != 0)
-            _byWindow[(icon.Window, icon.Id)] = icon;
-        if (icon.Guid != Guid.Empty)
-            _byGuid[icon.Guid] = icon;
-    }
-
-    private void Unindex(TrayIcon icon)
-    {
-        if (icon.Window != 0 && _byWindow.TryGetValue((icon.Window, icon.Id), out var byWindow) && ReferenceEquals(byWindow, icon))
-            _byWindow.Remove((icon.Window, icon.Id));
-        if (icon.Guid != Guid.Empty && _byGuid.TryGetValue(icon.Guid, out var byGuid) && ReferenceEquals(byGuid, icon))
-            _byGuid.Remove(icon.Guid);
-    }
-
-    private void Remove(string key)
-    {
-        if (!_icons.Remove(key, out var icon))
-            return;
-        Unindex(icon);
-        Removed?.Invoke(icon);
-    }
-
-    // Clicks, sent the way Explorer sends them
-
-    public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at)
-    {
-        if (!Win32.IsWindow(icon.Window) || icon.CallbackMessage == 0)
-            return;
-        Win32.GetWindowThreadProcessId(icon.Window, out var pid);
-        if (!MayClick(ShellIntegrity, IntegrityLevel(pid)))
-            return;
-        var point = at ?? CursorPosition();
-        // Apps read the cursor when they open a menu, and many ignore the point in the message.
-        if (at is { } target)
-            _cursor.Place(target);
-        LetAppTakeForeground(icon, pid);
-        foreach (var message in TrayProtocol.ClickMessages(click, icon.Version))
-            Send(icon, message, point);
-    }
-
-    /// <summary>
-    /// Whether a click may reach an app at this integrity level. Any app may add an icon here, naming any window and
-    /// callback, and nothing says which app sent it. Explorer clicks icons with an unelevated user's rights, so
-    /// Windows keeps its clicks from an elevated app unless that app lets them in. An elevated shell would not be
-    /// kept out, so it clicks no app above medium integrity, nor one whose level it cannot read.
-    /// </summary>
-    internal static bool MayClick(uint shell, uint app) => shell <= MediumIntegrity || app <= MediumIntegrity;
-
-    /// <summary>
-    /// Lets the app take the foreground for its menu or window. Nothing is activated for it, so the window the user
-    /// works in keeps the keyboard when the app shows nothing.
-    /// </summary>
-    private static void LetAppTakeForeground(TrayIcon icon, uint pid)
-    {
-        // A click on a shell window is input this process just received, which lets it pass the right on.
-        if (AllowSetForegroundWindow(pid))
-            return;
-        // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
-        var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
-        var thread = Win32.GetCurrentThreadId();
-        var attached = foregroundThread != 0 && foregroundThread != thread && Win32.AttachThreadInput(foregroundThread, thread, true);
-        try
-        {
-            Win32.SetForegroundWindow(icon.Window);
-            AllowSetForegroundWindow(pid);
-        }
-        finally
-        {
-            if (attached)
-                Win32.AttachThreadInput(foregroundThread, thread, false);
-        }
-    }
-
-    private static void Send(TrayIcon icon, uint message, (int X, int Y) point)
-    {
-        var (wParam, lParam) = TrayProtocol.Callback(icon.Version, icon.Id, message, point.X, point.Y);
-        SendNotifyMessageW(icon.Window, icon.CallbackMessage, wParam, lParam);
-    }
-
-    private static (int X, int Y) CursorPosition()
-    {
-        Win32.GetCursorPos(out var p);
-        return (p.X, p.Y);
-    }
-
-    private static string ProgramPath(uint pid) => ProcessImage.TryRead(pid) ?? "";
-
-    /// <summary>A process's mandatory integrity level, or <see cref="uint.MaxValue"/> when it cannot be read.</summary>
-    internal static uint IntegrityLevel(uint pid)
-    {
-        var process = Win32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (process == 0)
-            return uint.MaxValue;
-        try
-        {
-            if (!Win32.OpenProcessToken(process, TOKEN_QUERY, out var token))
-                return uint.MaxValue;
-            try
-            {
-                // A TOKEN_MANDATORY_LABEL, followed by the label's SID, S-1-16-level.
-                var label = stackalloc byte[64];
-                if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
-                    return uint.MaxValue;
-                var sid = *(nint*)label;
-                return *GetSidSubAuthority(sid, (uint)(*GetSidSubAuthorityCount(sid) - 1));
-            }
-            finally
-            {
-                Win32.CloseHandle(token);
-            }
-        }
-        finally
-        {
-            Win32.CloseHandle(process);
-        }
-    }
-
-    /// <summary>Draws an icon into a straight-alpha image. Icons without alpha take it from their mask.</summary>
-    /// <summary>Where the icon was loaded from, or null for an icon the app drew or copied.</summary>
-    private static IconResource? ResourceOf(nint icon)
-    {
-        var info = new ICONINFOEXW { cbSize = (uint)sizeof(ICONINFOEXW) };
-        if (icon == 0 || !GetIconInfoExW(icon, ref info))
-            return null;
-        if (info.hbmColor != 0)
-            Win32.DeleteObject(info.hbmColor);
-        if (info.hbmMask != 0)
-            Win32.DeleteObject(info.hbmMask);
-        var module = new string(info.szModName);
-        var name = new string(info.szResName);
-        return module.Length > 0 && (info.wResID != 0 || name.Length > 0) ? new IconResource(module, info.wResID, name) : null;
-    }
-
-    /// <summary>
-    /// Draws an icon from its resource at a size in pixels, so it is sharp at any scale. Null when the module or the
-    /// resource is gone or is not on a local drive. The library is only mapped as data.
-    /// </summary>
-    public static PixelImage? ResourceImage(IconResource resource, int size)
-    {
-        if (!IsLocalPath(resource.Module))
-            return null;
-        var module = LoadLibraryExW(resource.Module, 0, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
-        if (module == 0)
-            return null;
-        try
-        {
-            // Windows picks the image in the icon group closest to the size, and scales it only if none matches.
-            var icon = resource.Id != 0
-                ? Win32.LoadImageW(module, resource.Id, IMAGE_ICON, size, size, 0)
-                : Win32.LoadImageW(module, resource.Name, IMAGE_ICON, size, size, 0);
-            if (icon == 0)
-                return null;
-            try
-            {
-                return IconImage(icon, size);
-            }
-            finally
-            {
-                DestroyIcon(icon);
-            }
-        }
-        finally
-        {
-            FreeLibrary(module);
-        }
-    }
-
-    /// <summary>
-    /// False for a network path, which would open a connection, and for device paths. Among the paths that start with
-    /// two separators only \\?\C:\ is local.
-    /// </summary>
-    internal static bool IsLocalPath(string path)
-    {
-        static bool Separator(char c) => c is '\\' or '/';
-        if (path.Length < 2 || !Separator(path[0]) || !Separator(path[1]))
-            return true;
-        return path.StartsWith(@"\\?\", StringComparison.Ordinal) && path.Length >= 7 && char.IsAsciiLetter(path[4]) && path[5] == ':' && path[6] == '\\';
-    }
-
-    /// <summary>Draws an icon into a straight-alpha image, at its own size unless one is given.</summary>
-    private static PixelImage? IconImage(nint icon, int size = 0)
-    {
-        if (icon == 0 || !GetIconInfo(icon, out var info))
-            return null;
-        try
-        {
-            if (size <= 0)
-            {
-                size = 32;
-                if (Win32.GetObjectW(info.hbmColor != 0 ? info.hbmColor : info.hbmMask, sizeof(BITMAP), out var bmp) != 0)
-                    size = Math.Clamp(bmp.bmWidth, 16, 256);
-            }
-            var header = new BITMAPINFOHEADER { biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = size, biHeight = -size, biPlanes = 1, biBitCount = 32 };
-            var dc = CreateCompatibleDC(0);
-            if (dc == 0)
-                return null;
-            nint dib = 0;
-            try
-            {
-                dib = CreateDIBSection(dc, &header, 0, out var bits, 0, 0);
-                if (dib == 0)
-                    return null;
-                var old = SelectObject(dc, dib);
-                DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_NORMAL);
-                var pixels = new Span<uint>((void*)bits, size * size);
-                var hasAlpha = false;
-                foreach (var p in pixels)
-                {
-                    if ((p & 0xff000000) != 0)
-                    {
-                        hasAlpha = true;
-                        break;
-                    }
-                }
-                if (!hasAlpha)
-                {
-                    // An old icon: draw its mask, which is black where the icon is opaque.
-                    var mask = new uint[size * size];
-                    DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_MASK);
-                    pixels.CopyTo(mask);
-                    DrawIconEx(dc, 0, 0, icon, size, size, 0, 0, DI_NORMAL);
-                    for (var i = 0; i < pixels.Length; i++)
-                        pixels[i] = (mask[i] & 0xffffff) == 0 ? pixels[i] | 0xff000000 : 0;
-                }
-                var image = new PixelImage(size, size, new Span<byte>((void*)bits, size * size * 4).ToArray());
-                SelectObject(dc, old);
-                return image;
-            }
-            finally
-            {
-                DeleteDC(dc);
-                if (dib != 0)
-                    Win32.DeleteObject(dib);
-            }
-        }
-        finally
-        {
-            if (info.hbmColor != 0)
-                Win32.DeleteObject(info.hbmColor);
-            if (info.hbmMask != 0)
-                Win32.DeleteObject(info.hbmMask);
-        }
+        Win32.GetWindowThreadProcessId(window, out var pid);
+        return ((int)pid, ProcessImage.TryRead(pid) ?? "");
     }
 
     // Native
 
     private static readonly nint HWND_BROADCAST = 0xffff;
-    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-    private const uint TOKEN_QUERY = 0x0008;
-    private const int TokenIntegrityLevel = 25;
-    private const uint DI_MASK = 0x1, DI_NORMAL = 0x3;
     private const uint LwaAlpha = 0x2;
-    private const uint LOAD_LIBRARY_AS_DATAFILE = 0x2, LOAD_LIBRARY_AS_IMAGE_RESOURCE = 0x20;
-    private const uint IMAGE_ICON = 1;
     private const uint MSGFLT_ALLOW = 1;
+    private const int ERROR_INVALID_WINDOW_HANDLE = 1400;
     private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -784,104 +417,10 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         public void* lpData;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ICONINFO
-    {
-        public int fIcon;
-        public uint xHotspot;
-        public uint yHotspot;
-        public nint hbmMask;
-        public nint hbmColor;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ICONINFOEXW
-    {
-        public uint cbSize;
-        public int fIcon;
-        public uint xHotspot;
-        public uint yHotspot;
-        public nint hbmMask;
-        public nint hbmColor;
-        public ushort wResID;
-        public fixed char szModName[260];
-        public fixed char szResName[260];
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BITMAPINFOHEADER
-    {
-        public uint biSize;
-        public int biWidth;
-        public int biHeight;
-        public ushort biPlanes;
-        public ushort biBitCount;
-        public uint biCompression;
-        public uint biSizeImage;
-        public int biXPelsPerMeter;
-        public int biYPelsPerMeter;
-        public uint biClrUsed;
-        public uint biClrImportant;
-    }
-
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindWindowExW(nint parent, nint after, string className, string? windowName);
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint FindWindowExW(nint parent, nint after, string? className, string? windowName);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool ChangeWindowMessageFilterEx(nint hwnd, uint message, uint action, nint changeFilter);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SendNotifyMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AllowSetForegroundWindow(uint processId);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetCursorPos(int x, int y);
-
-    [LibraryImport("advapi32.dll")]
-    private static partial byte* GetSidSubAuthorityCount(nint sid);
-
-    [LibraryImport("advapi32.dll")]
-    private static partial uint* GetSidSubAuthority(nint sid, uint index);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetIconInfo(nint icon, out ICONINFO info);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetIconInfoExW(nint icon, ref ICONINFOEXW info);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DestroyIcon(nint icon);
-
-    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint LoadLibraryExW(string fileName, nint file, uint flags);
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool FreeLibrary(nint module);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DrawIconEx(nint dc, int x, int y, nint icon, int width, int height, uint step, nint brush, uint flags);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial nint CreateCompatibleDC(nint dc);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial nint CreateDIBSection(nint dc, BITMAPINFOHEADER* info, uint usage, out nint bits, nint section, uint offset);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial nint SelectObject(nint dc, nint obj);
-
-    [LibraryImport("gdi32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DeleteDC(nint dc);
 }

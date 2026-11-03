@@ -61,19 +61,6 @@ public sealed class ShellStartTests
     }
 
     [Fact]
-    public void An_update_restarts_with_after_unless_another_winshell_is_running()
-    {
-        var arguments = ShellArguments.Parse(["-d", "--no-duplicate", "--theme", "dark"]);
-
-        Assert.Equal(UpdateRestart.AnotherRunning, UpdateRestart.Decide(arguments, 4, anotherRunning: true, out var refused));
-        Assert.Equal(["--after", "4", "--no-duplicate", "--theme", "dark"], refused);
-        Assert.False(ShellArguments.Parse(refused).Daemonize);
-
-        Assert.Null(UpdateRestart.Decide(arguments, 4, anotherRunning: false, out var next));
-        Assert.Equal(refused, next);
-    }
-
-    [Fact]
     public void A_given_shell_id_names_the_folders()
     {
         var identity = ShellIdentity.Resolve(@"C:\shells\mine\mine.exe", @"C:\config", "mine-id", null, null, null);

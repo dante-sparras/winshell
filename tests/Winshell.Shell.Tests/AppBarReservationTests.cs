@@ -1,6 +1,6 @@
 using Winshell.Native;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.ShellTests;
 
 /// <summary>
 /// The app bar negotiation against a stand-in for Explorer: ABM_SETPOS grants what is asked, less what another app bar

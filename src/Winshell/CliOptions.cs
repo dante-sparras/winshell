@@ -38,8 +38,6 @@ internal sealed record CliOptions
     /// <summary>End the process when the instance does not exit after it is asked.</summary>
     public bool Force { get; init; }
 
-    public bool Hard { get; init; }
-
     /// <summary>Run the program the last build left. A failed build never starts that program unless this is set.</summary>
     public bool NoBuild { get; init; }
 

@@ -18,6 +18,7 @@ public class UnknownOptionTests
     [InlineData("run -p {missing} --debug 1", "Unknown option \"--debug\".")]
     [InlineData("list -a", "Unknown option \"-a\".")]
     [InlineData("list --all", "Unknown option \"--all\".")]
+    [InlineData("reload --pid 0 --hard", "Unknown option \"--hard\".")]
     [InlineData("list extra", "Unexpected argument \"extra\".")]
     [InlineData("kill --pid 0 extra", "Unexpected argument \"extra\".")]
     [InlineData("run -p {missing} extra", "Unexpected argument \"extra\".")]
