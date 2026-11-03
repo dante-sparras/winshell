@@ -81,6 +81,10 @@ The notification center is empty until you allow access: click **Allow notificat
 - **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `BluetoothAdapter.Enabled`. The quick settings tile does not. See [Bluetooth](../bluetooth.md).
 - **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings. A configuration can set `Networking.WifiEnabled` and `BluetoothAdapter.Enabled`. These tiles do not.
 
+## Media controls show nothing
+
+If something is playing and the media controls stay empty, look for `media: Windows' media session service (Now Playing Session Manager) is not answering` in the log. Windows' own media session service has stopped answering, and no app can list media sessions until it does. Sign out and back in, or restart the per-user `NPSMSvc_*` service. Winshell keeps asking, less often the longer the service stays silent (at most an hour apart), and lists the sessions once it answers.
+
 ## Tray icons are missing
 
 - Only one instance in the Windows session hosts the tray icons. A second instance logs that it is waiting, and takes over within half a second when the first one exits.
