@@ -10,7 +10,7 @@ namespace Winshell.Tests;
 /// even when the first has not written instance.json yet. Two programs with different shell ids both stay.
 /// </summary>
 [Trait("Category", "Slow")]
-public sealed class NoDuplicateTests : IDisposable
+public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly string _local;

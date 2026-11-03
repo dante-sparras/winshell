@@ -41,9 +41,9 @@ internal static class Cli
                         Console.Error.WriteLine("No command. Use winshell run to start a shell.");
                         return 2;
                     }
-                    return Commands.RunCommand.Run(options);
+                    return RunCommand.Run(options);
                 case "run":
-                    return Commands.RunCommand.Run(options);
+                    return RunCommand.Run(options);
                 case "list":
                     return ListCommand.Run(options);
                 case "kill":
