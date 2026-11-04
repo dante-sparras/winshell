@@ -13,6 +13,7 @@
     VerticalContentAlignment="Center"
     UseSystemFocusVisuals="True"
     Click="OnClick"
+    AutomationProperties.AutomationId="ClockButton"
     AutomationProperties.HelpText="Open notification center and calendar"
     AutomationProperties.FullDescription="Open notification center and calendar">
     <TextBlock

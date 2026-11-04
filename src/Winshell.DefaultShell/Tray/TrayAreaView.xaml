@@ -63,6 +63,7 @@
             CornerRadius="{ThemeResource ControlCornerRadius}"
             UseSystemFocusVisuals="True"
             AutomationProperties.Name="{x:Bind Area.UpdateLabel, Mode=OneWay}"
+            AutomationProperties.AutomationId="UpdateButton"
             Visibility="{x:Bind Shown(Area.UpdateReady), Mode=OneWay}"
             Click="{x:Bind Area.RequestUpdates}">
             <FontIcon Glyph="&#xE777;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
