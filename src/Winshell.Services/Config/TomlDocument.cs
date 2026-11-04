@@ -16,9 +16,9 @@ namespace Winshell;
 /// A date or a time reads as a string, and its token stays while that string does. <see cref="Set"/> changes one key
 /// and leaves the rest of the text: comments, blank lines, number spellings and other keys stay. A table, an array of
 /// tables, or a dotted key already in the file is the value: only what changed in it is updated, in place. When that
-/// would write a part the file has elsewhere a second time, such as a key of a table that is under its own header, the
-/// value is written again whole instead, inline, where a key the file does not have yet goes: at the end of its
-/// top-level keys, under its comment.
+/// would write a part the file has elsewhere a second time, such as a key of a table that is under its own header, or
+/// leave a part that null takes out, the value is written again whole instead, inline, where a key the file does not
+/// have yet goes: at the end of its top-level keys, under its comment.
 /// </summary>
 internal sealed class TomlDocument
 {
@@ -69,8 +69,11 @@ internal sealed class TomlDocument
             if (Same(current, desired))
                 return;
             var before = _document.ToString();
-            var updated = UpdateOwned(owned, key, Changes(current, desired));
-            if (!updated || !TryLoad("", _document.ToString(), out _, out _, out _))
+            var changes = Changes(current, desired);
+            var updated = UpdateOwned(owned, key, changes);
+            // A null for a part under its own header or in dotted keys is not taken out in place.
+            if (!updated || !TryLoad("", _document.ToString(), out _, out var read, out _)
+                || Keeps(Plain(read.TryGetValue(key, out var after) ? after : null), changes))
             {
                 _document = SyntaxParser.Parse(before);
                 Take(FindOwned(_document, key));
@@ -121,6 +124,16 @@ internal sealed class TomlDocument
         (IReadOnlyList<object?> old, IReadOnlyList<object?> list) =>
             list.Select((item, i) => item is not null && i < old.Count ? Changes(old[i], item) : item).ToList(),
         _ => desired,
+    };
+
+    /// <summary>Whether <paramref name="read"/> still has a key that <paramref name="changes"/> takes out.</summary>
+    private static bool Keeps(object? read, object changes) => (read, changes) switch
+    {
+        (IReadOnlyDictionary<string, object?> table, IReadOnlyDictionary<string, object?> taken) =>
+            taken.Any(pair => table.TryGetValue(pair.Key, out var value) && (pair.Value is null || Keeps(value, pair.Value))),
+        (IReadOnlyList<object?> list, IReadOnlyList<object?> items) =>
+            list.Zip(items).Any(pair => pair.Second is not null && Keeps(pair.First, pair.Second)),
+        _ => false,
     };
 
     /// <summary>What an update in place makes of <paramref name="current"/>, for writing it again whole.</summary>

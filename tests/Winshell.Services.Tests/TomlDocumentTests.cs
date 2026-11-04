@@ -513,6 +513,20 @@ public sealed class TomlDocumentTests
         Assert.Equal(original.Replace("x = 1", "x = 9", StringComparison.Ordinal), document.ToString());
     }
 
+    [Theory]
+    [InlineData("[a]\nx = 1\n[a.sub]\ny = 2\n")]
+    [InlineData("[a]\nx = 1\nsub.y = 2\n")]
+    [InlineData("a.x = 1\na.sub.y = 2\n")]
+    [InlineData("a = { x = 1, sub.y = 2 }\n")]
+    public void Null_takes_out_a_sub_table_written_under_its_own_header_or_dotted_keys(string original)
+    {
+        var document = Parse(original);
+
+        document.Set("a", Row(("x", 1L), ("sub", null)));
+
+        Assert.Equal(Row(("x", 1L)), Parse(document.ToString()).Values["a"]);
+    }
+
     [Fact]
     public void A_table_is_updated_in_place_and_keeps_a_key_it_was_not_given()
     {
