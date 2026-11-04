@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Winshell.Diagnostics;
 
-/// <summary>The doctor's checks of the screens: what reserves the edges of each, and how Winshell is scaled on it.</summary>
+/// <summary>The doctor's two screen checks, App bars and DPI, judged from the facts it reads about each screen.</summary>
 internal static class DoctorScreens
 {
     // App bars

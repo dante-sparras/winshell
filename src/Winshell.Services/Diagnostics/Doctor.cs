@@ -104,7 +104,7 @@ internal sealed record DoctorContext(
 /// </summary>
 public static class Doctor
 {
-    // Each check reads what it needs through IDoctorFacts and judges it here, so the judging is tested without the PC.
+    // Each check reads what it needs through IDoctorFacts and judges it in code of its own, so the judging is tested without the PC.
     internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
