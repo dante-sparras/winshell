@@ -476,6 +476,20 @@ public sealed class TomlDocumentTests
         Assert.Equal(Parse(expected).Values["a"], Parse(document.ToString()).Values["a"]);
     }
 
+    [Theory]
+    [InlineData("[a] # head\nx = 1 # cx\n\n# about sub\n[a.sub]\ny = 2\n")]
+    [InlineData("[a]\nx = 1 # cx\nsub.y = 2 # cy\n")]
+    [InlineData("[[a]]\nx = 1 # cx\nsub.y = 2 # cy\n")]
+    public void A_table_defined_in_parts_keeps_its_text_when_one_key_changes(string original)
+    {
+        var document = Parse(original);
+        var changed = Parse(original.Replace("x = 1", "x = 9", StringComparison.Ordinal)).Values["a"];
+
+        document.Set("a", changed);
+
+        Assert.Equal(original.Replace("x = 1", "x = 9", StringComparison.Ordinal), document.ToString());
+    }
+
     [Fact]
     public void A_table_is_updated_in_place_and_keeps_a_key_it_was_not_given()
     {
