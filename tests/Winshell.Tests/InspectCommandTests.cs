@@ -97,7 +97,7 @@ public sealed class InspectCommandTests : IDisposable
     {
         var file = Path.Combine(_dir, "bar.png");
 
-        var (code, output, error) = Run("screenshot", file, "TaskbarView");
+        var (code, output, error) = Run("screenshot", file, FirstWindow(Run("tree").Output, "TaskbarView"));
 
         Assert.Equal("", error);
         Assert.Equal(0, code);

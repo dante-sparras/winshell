@@ -201,7 +201,7 @@ internal static class Inspector
         var quoted = name.Any(char.IsWhiteSpace) ? $"\"{name}\"" : name;
         // A window tells them apart only when they are in different windows.
         var hint = found.DistinctBy(match => match.Window).Count() > 1
-            ? $"Add the window, as in winshell inspect {command} {quoted} {found[0].Window}, or use a name only one of them has."
+            ? $"Name the window by its number, as in winshell inspect {command} {quoted} {found[0].Window}, or use a name only one of them has."
             : "Use a name only one of them has.";
         return string.Join('\n', [
             $"{name} names {found.Count} elements:",
