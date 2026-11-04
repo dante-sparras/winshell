@@ -34,9 +34,9 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public bool IsElevated(int pid) => DoctorProbe.IsElevated(pid);
 
-    public IReadOnlyList<Doctor.MonitorFacts> Monitors() => DoctorProbe.Monitors();
+    public IReadOnlyList<DoctorScreens.MonitorFacts> Monitors() => DoctorProbe.Monitors();
 
-    public IReadOnlyList<Doctor.WindowFacts> EdgeWindows() => DoctorProbe.EdgeWindows();
+    public IReadOnlyList<DoctorScreens.WindowFacts> EdgeWindows() => DoctorProbe.EdgeWindows();
 
     public bool PerMonitorV2() => DoctorProbe.PerMonitorV2();
 

@@ -177,8 +177,8 @@ internal static unsafe partial class DoctorProbe
         }
     }
 
-    public static IReadOnlyList<Doctor.MonitorFacts> Monitors() => Screens.Enumerate()
-        .Select(m => new Doctor.MonitorFacts(m.Info.Name, m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom, m.Work.Left, m.Work.Top, m.Work.Right, m.Work.Bottom, m.Scale))
+    public static IReadOnlyList<DoctorScreens.MonitorFacts> Monitors() => Screens.Enumerate()
+        .Select(m => new DoctorScreens.MonitorFacts(m.Info.Name, m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom, m.Work.Left, m.Work.Top, m.Work.Right, m.Work.Bottom, m.Scale))
         .ToList();
 
     [ThreadStatic]
@@ -195,13 +195,13 @@ internal static unsafe partial class DoctorProbe
     /// The visible top-level windows that are not minimized or cloaked: where an app bar would be. Explorer keeps
     /// cloaked windows along the edges for touch input, which are not drawn and reserve nothing.
     /// </summary>
-    public static IReadOnlyList<Doctor.WindowFacts> EdgeWindows()
+    public static IReadOnlyList<DoctorScreens.WindowFacts> EdgeWindows()
     {
         _windows = [];
         NativeMethods.EnumWindows(&CollectWindow, 0);
         var handles = _windows;
         _windows = null;
-        var result = new List<Doctor.WindowFacts>();
+        var result = new List<DoctorScreens.WindowFacts>();
         var name = stackalloc char[256];
         foreach (var hwnd in handles!)
         {
@@ -209,7 +209,7 @@ internal static unsafe partial class DoctorProbe
                 continue;
             var length = NativeMethods.GetClassName(hwnd, name, 256);
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
-            result.Add(new Doctor.WindowFacts(new string(name, 0, Math.Max(0, length)), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
+            result.Add(new DoctorScreens.WindowFacts(new string(name, 0, Math.Max(0, length)), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
         }
         return result;
     }

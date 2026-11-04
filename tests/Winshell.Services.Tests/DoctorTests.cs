@@ -5,6 +5,8 @@ using Winshell.Diagnostics;
 using Winshell.Session;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 using static Winshell.Diagnostics.Doctor;
+using static Winshell.Diagnostics.DoctorScreens;
+using static Winshell.Diagnostics.DoctorSignIn;
 using static Winshell.Diagnostics.DoctorReport;
 
 namespace Winshell.Services.Tests;
