@@ -16,7 +16,6 @@
                 Padding="0"
                 HorizontalAlignment="Left"
                 HorizontalContentAlignment="Stretch"
-                VerticalContentAlignment="Stretch"
                 AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
                 Click="OnClick"
                 KeyDown="OnKeyDown">
@@ -34,7 +33,6 @@
                 Padding="0"
                 HorizontalAlignment="Left"
                 HorizontalContentAlignment="Stretch"
-                VerticalContentAlignment="Stretch"
                 AutomationProperties.Name="{x:Bind Tile.Label, Mode=OneWay}"
                 Click="OnClick"
                 KeyDown="OnKeyDown">

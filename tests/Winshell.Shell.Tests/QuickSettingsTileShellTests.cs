@@ -11,6 +11,8 @@ namespace Winshell.ShellTests;
 [Trait("Category", "Slow")]
 public sealed class QuickSettingsTileShellTests
 {
+    private const string Chevron = "\uE76C";
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -18,20 +20,20 @@ public sealed class QuickSettingsTileShellTests
     {
         var (icon, chevron) = await ShellFixture.On(async shell =>
         {
-            var tile = new QuickSettingsTile("powerMode", "Power mode", "", "", toggle, "", "powerMode");
+            var tile = new QuickSettingsTile("powerMode", "Power mode", "\uEC4A", "", toggle, "", "powerMode");
             var view = new QuickSettingsTileView { Tile = tile };
             using var window = new FloatingWindow { Title = "Winshell test", Width = 200, Height = 120, Content = view };
             window.Visible = true;
             await ShellFixture.LaidOut(view);
-            var glyphs = Icons(view).ToList();
-            Assert.Equal(2, glyphs.Count);
-            return (Bounds(glyphs[0], view), Bounds(glyphs[1], view));
+            var icons = Icons(view).ToList();
+            var chevron = Assert.Single(icons, icon => icon.Glyph == Chevron);
+            return (Bounds(Assert.Single(icons, icon => icon.Glyph == tile.Glyph), view), Bounds(chevron, view));
         });
 
         Assert.True(chevron.Left >= icon.Right, $"The chevron starts at {chevron.Left}, inside the icon that ends at {icon.Right}.");
     }
 
-    /// <summary>The icons the tile shows, in tree order: the tile's own, then the chevron.</summary>
+    /// <summary>The icons the tile shows.</summary>
     private static IEnumerable<FontIcon> Icons(DependencyObject root)
     {
         if (root is UIElement { Visibility: not Visibility.Visible })
