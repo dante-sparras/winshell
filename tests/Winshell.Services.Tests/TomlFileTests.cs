@@ -83,7 +83,7 @@ public sealed class TomlFileTests
         Assert.Equal(["Contoso.Chat", "Contoso.Mail"], settings.Hidden.Select(row => row["id"]));
         Assert.Equal("Chat", settings.Hidden[0]["name"]);
         Assert.False(settings.Hidden[1].ContainsKey("name"));
-        Assert.Equal([$"TomlFile: {fixture.FilePath}[5:1]: unknown is not a key this file has, so it is ignored."], fixture.Messages);
+        Assert.Empty(fixture.Messages);
     }
 
     [Fact]
@@ -239,12 +239,7 @@ public sealed class TomlFileTests
             kept = true
 
             """, fixture.Text);
-        Assert.Equal(
-            [
-                $"TomlFile: {fixture.FilePath}[5:1]: unknown is not a key this file has, so it is ignored.",
-                $"TomlFile: {fixture.FilePath}[8:1]: other is not a key this file has, so it is ignored.",
-            ],
-            fixture.Messages);
+        Assert.Empty(fixture.Messages);
     }
 
     [Fact]
@@ -366,7 +361,7 @@ public sealed class TomlFileTests
     }
 
     [Fact]
-    public void A_key_the_file_does_not_read_is_reported_once_with_its_line_and_the_key_it_may_be()
+    public void A_key_that_looks_like_one_the_file_reads_is_reported_once_with_its_line()
     {
         using var fixture = new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\n\n[colors]\nmode = \"dark\"\n");
         using var settings = Open(fixture);
@@ -375,9 +370,8 @@ public sealed class TomlFileTests
 
         Assert.Equal(
             [
-                "TomlFile: " + fixture.FilePath + "[2:1]: Size is not a key this file has, so it is ignored. Did you mean size?",
-                "TomlFile: " + fixture.FilePath + "[3:3]: tilez is not a key this file has, so it is ignored. Did you mean tiles?",
-                "TomlFile: " + fixture.FilePath + "[5:1]: colors is not a key this file has, so it is ignored.",
+                $"TomlFile: {fixture.FilePath}[2:1]: Size was ignored; did you mean size?",
+                $"TomlFile: {fixture.FilePath}[3:3]: tilez was ignored; did you mean tiles?",
             ],
             fixture.Messages);
     }

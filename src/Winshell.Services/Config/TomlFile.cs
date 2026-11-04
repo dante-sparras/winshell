@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
+using Tomlyn.Parsing;
+using Tomlyn.Syntax;
 
 namespace Winshell;
 
@@ -28,8 +30,8 @@ public sealed class TomlCommentAttribute(string text) : Attribute
 /// </code>
 /// The file is read in the constructor, so a default belongs in the property's initializer. After that the object
 /// follows the file, and assigning a property writes it, on the loop that was passed in. Everything else in the file
-/// stays, as <see cref="TomlDocument"/> says. A key no property reads stays too, and a warning names its line and the
-/// key it may be a misspelling of. A write reads the file again and puts only assigned values into it, and the keys it
+/// stays, as <see cref="TomlDocument"/> says. A key no property reads stays too, and when it differs from one only in
+/// case or by a letter or two, a warning names its line and the key it may be a misspelling of. A write reads the file again and puts only assigned values into it, and the keys it
 /// does not have yet. When that read fails or does not parse, nothing is written and a warning is logged.
 /// </summary>
 public abstract class TomlFile : ObservableObject, IDisposable
@@ -235,16 +237,16 @@ public abstract class TomlFile : ObservableObject, IDisposable
     /// <summary>
     /// Loads the values of <paramref name="document"/> into the properties. One that does not fit its property, or is
     /// refused, is reported and left: nothing writes a key that was not assigned, so the file keeps it as it is. So is a
-    /// key no property reads, with the one it may be a misspelling of.
+    /// key no property reads that looks like a misspelling of one.
     /// </summary>
     private void Apply(TomlDocument document, string text, bool keepAssigned)
     {
+        // A key like none of these may be another reader's: a configuration can share preferences.toml.
+        DocumentSyntax? syntax = null;
         foreach (var name in document.Values.Keys)
         {
-            if (_keys.Exists(key => key.Name == name))
-                continue;
-            var guess = Nearest(name) is { } near ? $" Did you mean {near}?" : "";
-            Warn($"{TomlSyntax.KeyAt(_path, text, name)}: {name} is not a key this file has, so it is ignored.{guess}");
+            if (!_keys.Exists(key => key.Name == name) && Nearest(name) is { } near)
+                Warn($"{TomlSyntax.KeyAt(_path, syntax ??= SyntaxParser.Parse(text), name)}: {name} was ignored; did you mean {near}?");
         }
         _loading = true;
         try
@@ -274,7 +276,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
         foreach (var key in _keys)
         {
             var distance = Distance(name.ToLowerInvariant(), key.Name.ToLowerInvariant());
-            if (distance < best.Distance && distance < Math.Max(name.Length, key.Name.Length) / 2)
+            if (distance < best.Distance && (distance == 0 || distance < Math.Max(name.Length, key.Name.Length) / 2))
                 best = (key.Name, distance);
         }
         return best.Name;

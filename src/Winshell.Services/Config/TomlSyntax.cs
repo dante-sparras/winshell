@@ -21,10 +21,10 @@ internal static class TomlSyntax
         return string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {diagnostic.Message}");
     }
 
-    /// <summary><c>path[line:column]</c> of where <paramref name="text"/> first defines a top-level key, or <c>path</c>.</summary>
-    public static string KeyAt(string where, string text, string key)
+    /// <summary><c>path[line:column]</c> of where <paramref name="document"/> first defines a top-level key, or <c>path</c>.</summary>
+    public static string KeyAt(string where, DocumentSyntax document, string key)
     {
-        var owned = FindOwned(SyntaxParser.Parse(text), key);
+        var owned = FindOwned(document, key);
         SyntaxNode? first = owned.KeyValues.Count > 0 ? owned.KeyValues[0] : owned.Tables.FirstOrDefault();
         if (first?.Span.Start is not { } start)
             return where;
