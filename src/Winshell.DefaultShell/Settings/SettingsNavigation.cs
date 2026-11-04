@@ -2,7 +2,8 @@ namespace Winshell.DefaultShell;
 
 /// <summary>
 /// Which page Winshell Settings shows, and what search found. Empty opens nothing. A setting opens its page and
-/// remembers that setting for the keyboard. A page opens that page. Anything else stays where it was.
+/// remembers that setting for the keyboard. A page opens that page, and a subpage opens under its page. Anything else
+/// stays where it was.
 /// </summary>
 public sealed class SettingsNavigation
 {
@@ -34,7 +35,7 @@ public sealed class SettingsNavigation
         }
     }
 
-    /// <summary>Opens a page or the page of a setting. Returns false for an empty name, without warning.</summary>
+    /// <summary>Opens a page, a subpage or the page of a setting. Returns false for an empty name, without warning.</summary>
     public bool Open(string? key)
     {
         if (string.IsNullOrEmpty(key))
@@ -48,6 +49,11 @@ public sealed class SettingsNavigation
         if (SettingsCatalog.FindPage(key) is not null)
         {
             Show(key);
+            return true;
+        }
+        if (SettingsCatalog.FindSubpage(key) is { } subpage)
+        {
+            Show(subpage.Page, subpage.Key);
             return true;
         }
         return false;

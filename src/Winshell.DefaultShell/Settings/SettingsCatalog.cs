@@ -137,10 +137,10 @@ public static class SettingsCatalog
 
     public static SettingsEntry RequireSetting(string key) => FindSetting(key) ?? throw new InvalidOperationException($"Winshell Settings has no setting \"{key}\".");
 
-    /// <summary>Why <paramref name="key"/> is neither a page nor a setting, or null when it is one, or when it is empty.</summary>
+    /// <summary>Why <paramref name="key"/> is not a page, a subpage or a setting, or null when it is one, or when it is empty.</summary>
     public static string? Unknown(string? key)
     {
-        if (string.IsNullOrEmpty(key) || FindPage(key) is not null || FindSetting(key) is not null)
+        if (string.IsNullOrEmpty(key) || FindPage(key) is not null || FindSubpage(key) is not null || FindSetting(key) is not null)
             return null;
         return $"Winshell Settings has no page or setting named \"{key}\"";
     }

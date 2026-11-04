@@ -67,12 +67,23 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal("Pinned apps", navigation.Crumbs[1].Title);
         Assert.False(navigation.Crumbs[1].Link);
 
-        Assert.False(navigation.Open("pins"));
         Assert.False(navigation.Open("taskbr"));
         Assert.Equal("start", navigation.Page);
         Assert.Equal("pins", navigation.Subpage);
         Assert.Equal("Winshell Settings has no page or setting named \"taskbr\"", SettingsCatalog.Unknown("taskbr"));
-        Assert.Equal("Winshell Settings has no page or setting named \"pins\"", SettingsCatalog.Unknown("pins"));
+    }
+
+    [Fact]
+    public void Open_goes_to_a_subpage_by_its_key()
+    {
+        var navigation = new SettingsNavigation();
+
+        Assert.Null(SettingsCatalog.Unknown("pins"));
+        Assert.True(navigation.Open("pins"));
+
+        Assert.Equal(new SettingsBody("start", "pins"), navigation.Shown);
+        Assert.Equal(["Start", "Pinned apps"], navigation.Crumbs.Select(crumb => crumb.Title));
+        Assert.Null(navigation.FocusKey);
     }
 
     [Fact]
