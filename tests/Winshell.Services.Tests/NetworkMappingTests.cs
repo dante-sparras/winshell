@@ -75,4 +75,15 @@ public sealed class NetworkMappingTests
     [InlineData(WiFiConnectionStatus.UnspecifiedFailure, ConnectionFailReason.Unknown)]
     public void Native_connection_result_mapping(WiFiConnectionStatus value, ConnectionFailReason? expected) =>
         Assert.Equal(expected, NetworkBackend.MapConnectionResult(value));
+
+    [Fact]
+    public void Wifi_radios_and_adapters_are_reread_when_the_set_of_wifi_devices_changes()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        Assert.True(NetworkBackend.WifiDevicesChanged(null, new HashSet<Guid>()));
+        Assert.False(NetworkBackend.WifiDevicesChanged(new HashSet<Guid> { a, b }, new HashSet<Guid> { b, a }));
+        Assert.True(NetworkBackend.WifiDevicesChanged(new HashSet<Guid> { a }, new HashSet<Guid> { a, b }));
+        Assert.True(NetworkBackend.WifiDevicesChanged(new HashSet<Guid> { a, b }, new HashSet<Guid> { a }));
+    }
 }
