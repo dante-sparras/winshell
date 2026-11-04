@@ -21,6 +21,16 @@ internal static class TomlSyntax
         return string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {diagnostic.Message}");
     }
 
+    /// <summary><c>path[line:column]</c> of where <paramref name="document"/> first defines a top-level key, or <c>path</c>.</summary>
+    public static string KeyAt(string where, DocumentSyntax document, string key)
+    {
+        var owned = FindOwned(document, key);
+        SyntaxNode? first = owned.KeyValues.Count > 0 ? owned.KeyValues[0] : owned.Tables.FirstOrDefault();
+        if (first?.Span.Start is not { } start)
+            return where;
+        return string.Create(CultureInfo.InvariantCulture, $"{where}[{start.Line + 1}:{start.Column + 1}]");
+    }
+
     /// <summary>
     /// Whether <paramref name="text"/> loads. <paramref name="error"/> is <c>path[line:column]: message</c>, or
     /// <c>path: message</c> for a byte limit or for Tomlyn's depth limit, when it does not. A file past 1 MiB does not

@@ -360,6 +360,22 @@ public sealed class TomlFileTests
         Assert.Single(fixture.Messages);
     }
 
+    [Fact]
+    public void A_key_that_looks_like_one_the_file_reads_is_reported_once_with_its_line()
+    {
+        using var fixture = new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\nin = 1\n\n[colors]\nmode = \"dark\"\n");
+        using var settings = Open(fixture);
+        settings.Name = "next";
+        fixture.Loop.Process();
+
+        Assert.Equal(
+            [
+                $"TomlFile: {fixture.FilePath}[2:1]: Size was ignored; did you mean size?",
+                $"TomlFile: {fixture.FilePath}[3:3]: tilez was ignored; did you mean tiles?",
+            ],
+            fixture.Messages);
+    }
+
     [Theory]
     [InlineData("\"false\"")]
     [InlineData("[false]")]
