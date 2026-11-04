@@ -11,7 +11,7 @@ internal static class ConfigurationSelection
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            error = e.Message;
+            error = options.Path is { } path ? $"Winshell cannot read {path}: {e.Message}" : $"Winshell cannot read the config folder: {e.Message}";
             return null;
         }
     }

@@ -27,7 +27,7 @@ internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, str
 /// <param name="Instances">The running Winshell instances.</param>
 /// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
 /// <param name="CrashRoot">The folder of crash reports, under <paramref name="LocalRoot"/>.</param>
-/// <param name="ProjectRoot">The folder <see cref="DoctorProject.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
+/// <param name="ProjectRoot">The folder <see cref="DoctorProject.Configuration(string)"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
 internal sealed record DoctorContext(
     string ExePath,
     string ConfigRoot,
@@ -57,13 +57,24 @@ public static class Doctor
                 ? Path.GetDirectoryName(file) ?? context.ConfigRoot
                 : context.ConfigRoot);
         var configFolder = search;
-        var configuration = DoctorProject.Configuration(search).ToList();
+        // The CLI has picked the project already, or said why it could not, and that is what is checked. Searching a
+        // folder by the config folder's rules would find its default or a lone subfolder instead.
+        List<DoctorCheck> configuration;
+        if (context.ConfigProblem is { } problem)
+        {
+            configuration = [.. DoctorProject.Configuration(null, problem)];
+        }
+        else if (context.ConfigFile is { } picked && picked.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            var project = ConfigurationProject.Find(picked, null, context.ConfigRoot, out var missing);
+            configuration = [.. DoctorProject.Configuration(project, missing)];
+        }
+        else
+        {
+            configuration = [.. DoctorProject.Configuration(search)];
+        }
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
-        // A reason from the CLI, such as a path that is not a project, is not what searching the folder finds.
-        // A failure already found, such as a folder that cannot be read, keeps its own message.
-        if (context.ConfigProblem is not null && configuration[0].Status != CheckStatus.Fail)
-            configuration[0] = DoctorProject.Project(null, context.ConfigProblem);
-        else if (!blocked && configuration[0].Status != CheckStatus.Fail)
+        if (!blocked && configuration[0].Status != CheckStatus.Fail)
             configuration[0] = WithUserFiles(configuration[0], facts.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot));
         DoctorCheck[] checks =
         [

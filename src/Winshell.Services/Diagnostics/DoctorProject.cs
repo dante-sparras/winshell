@@ -11,14 +11,17 @@ internal static class DoctorProject
     internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
     {
         var found = FindProject(configRoot);
-        return
-        [
-            Doctor.Guard("project", "Project", () => Project(found.Project, found.Problem)),
-            Doctor.Guard("downloaded", "Downloaded", () => Downloaded(found.Project)),
-            Doctor.Guard("built", "Built", () => Built(found.Project)),
-            Doctor.Guard("build", "Build", () => BuildNeeded(found.Project)),
-        ];
+        return Configuration(found.Project, found.Problem);
     }
+
+    /// <summary>The same checks for a project the caller has found already, or for none and <paramref name="problem"/>.</summary>
+    internal static IReadOnlyList<DoctorCheck> Configuration(ConfigurationProject? project, string? problem) =>
+    [
+        Doctor.Guard("project", "Project", () => Project(project, problem)),
+        Doctor.Guard("downloaded", "Downloaded", () => Downloaded(project)),
+        Doctor.Guard("built", "Built", () => Built(project)),
+        Doctor.Guard("build", "Build", () => BuildNeeded(project)),
+    ];
 
     private readonly record struct FoundProject(ConfigurationProject? Project, string? Problem);
 
