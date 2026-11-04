@@ -114,12 +114,13 @@ public sealed class DevCommandTests : IDisposable
     private void Mark(string body) =>
         File.WriteAllText(Path.Combine(Project, "Marker.cs"), $"internal static class Marker {{ public static string Value() {body} }}");
 
-    private void Label(string text) => File.WriteAllText(Path.Combine(Project, "PanelView.xaml"), $"""
+    /// <param name="needsBuild">Marks the label x:Load, which only a build applies.</param>
+    private void Label(string text, bool needsBuild = false) => File.WriteAllText(Path.Combine(Project, "PanelView.xaml"), $"""
         <UserControl
             x:Class="Dev.PanelView"
             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-            <TextBlock x:Name="Label" Text="{text}" />
+            <TextBlock x:Name="Label" {(needsBuild ? "x:Load=\"True\" " : "")}Text="{text}" />
         </UserControl>
         """);
 
@@ -237,6 +238,26 @@ public sealed class DevCommandTests : IDisposable
 
         Assert.True(Printed("dotnet watch : "), "winshell dev printed nothing of dotnet watch's.");
         Assert.False(Printed("Ctrl+R") || Printed("Ctrl + R"), "winshell dev printed dotnet watch's Ctrl+R hint.");
+    }
+
+    // Two builds: the first start, and the one the XAML needs.
+    [Fact(Timeout = 300_000)]
+    public void Xaml_that_needs_a_build_lets_the_shell_quit_before_it_starts_again()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        StartDev();
+        Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
+        var shell = ShellProcess();
+        var id = InstanceId();
+
+        Label("two", needsBuild: true);
+        Wait.Until(() => Printed("Building, because the XAML you saved needs it."), "the build the XAML needs");
+        Wait.Until(() => Shown() == "two", "the shell to start again", BuildPatience);
+
+        Assert.NotEqual(shell, ShellProcess());
+        // The shell quit, as winshell kill asks it to: a shell that is only ended marks no exit.
+        var record = File.ReadAllText(Path.Combine(_dir, "local", "run", id, "instance.json"));
+        Assert.NotNull(JsonSerializer.Deserialize(record, InstanceJson.Default.InstanceInfo)?.ExitedAt);
     }
 
     [Fact(Timeout = 170_000)]
