@@ -116,6 +116,8 @@ internal sealed class OnScreenDisplayHost
             if (_playback is not null)
                 _playback.PropertyChanged += OnPlayback;
         }
+        // A new default device's first reading is its baseline. Known goes false first, so none of this is a change.
+        Model.VolumeKnown = false;
         if (_playback is { } playback)
         {
             Model.Volume = playback.Volume;
@@ -126,7 +128,6 @@ internal sealed class OnScreenDisplayHost
         {
             Model.Volume = 0;
             Model.PlaybackMuted = false;
-            Model.VolumeKnown = false;
         }
     }
 
@@ -151,16 +152,14 @@ internal sealed class OnScreenDisplayHost
             if (_recording is not null)
                 _recording.PropertyChanged += OnRecording;
         }
+        Model.MicrophoneKnown = false;
         if (_recording is { } recording)
         {
             Model.MicrophoneMuted = recording.Muted;
             Model.MicrophoneKnown = true;
         }
         else
-        {
             Model.MicrophoneMuted = false;
-            Model.MicrophoneKnown = false;
-        }
     }
 
     private void OnRecording(object? sender, PropertyChangedEventArgs e)
