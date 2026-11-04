@@ -61,6 +61,14 @@ Explorer builds its taskbar again. Set `hideExplorerTaskbar` to `false` before y
 
 A kill that skips the exit code is Task Manager's **End task**, `taskkill /F`, or `winshell kill --force` when the shell did not exit on its own. The same is true of a native crash that never reaches Winshell's handler, such as a stack overflow. A normal exit, `winshell kill` without `--force`, Ctrl+C, and a managed crash that still runs the exit or the unhandled-exception handler all put the taskbar back.
 
+## A change to preferences.toml does nothing
+
+Winshell keeps the values it has when it can't use what the file says, and writes why to the log, which `winshell log` shows. Only under `winshell dev` does a file that doesn't parse also show in a notice. The same goes for `launcher.toml` and `quick-settings.toml`.
+
+- **`TomlFile: failed to parse <file>[line:column]: …`** The file is not valid TOML, so none of it is read until you fix that line and save. Winshell Settings also says its changes won't be saved meanwhile, and `winshell doctor` warns with the same line and column.
+- **`<file>: <key> is the wrong type, so it was left unchanged`**, or another reason in place of "is the wrong type". The file is read, but that one value isn't used. A switch is `true` or `false`, and a word such as `"mica"` is in quotes. The [preferences table](settings.md#where-the-choices-live) lists every key and its values.
+- **Nothing in the log.** Keys are case-sensitive and start with a lowercase letter, such as `taskbarCentered`. A key Winshell doesn't read, misspelled or with a capital first letter, stays in the file and is ignored without a word.
+
 ## A hotkey doesn't work
 
 Winshell Settings, or the `Hotkey`'s `Taken` and `Error`, say why:
