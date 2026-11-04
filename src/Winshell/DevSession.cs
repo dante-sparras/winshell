@@ -10,7 +10,8 @@ namespace Winshell;
 /// Reads what <c>dotnet watch</c> prints. <see cref="Read"/> gives the text of the notice a line calls for: the compile
 /// errors so far, or empty once the code is applied. Null means the line changes nothing on screen.
 /// </summary>
-internal sealed partial class DevOutput
+/// <param name="projectFolder">The project's folder. An error in a file under it shows the file's path from there.</param>
+internal sealed partial class DevOutput(string projectFolder)
 {
     private const string Prefix = "dotnet watch : ";
     private const int MostErrors = 5;
@@ -22,6 +23,10 @@ internal sealed partial class DevOutput
         if (CompileError().IsMatch(text))
         {
             var error = ProjectSuffix().Replace(text, "");
+            // A deep folder would wrap over the notice's first lines and push the error itself down.
+            var inProject = projectFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (error.StartsWith(inProject, StringComparison.OrdinalIgnoreCase))
+                error = error[inProject.Length..];
             if (_errors.Contains(error) || _errors.Count == MostErrors)
                 return null;
             _errors.Add(error);
@@ -138,7 +143,7 @@ internal static class DevSession
         var lines = Channel.CreateUnbounded<string>();
         var pumps = Task.WhenAll(Pump(process.StandardOutput, lines.Writer), Pump(process.StandardError, lines.Writer));
         _ = pumps.ContinueWith(_ => lines.Writer.Complete(), TaskScheduler.Default);
-        var output = new DevOutput();
+        var output = new DevOutput(project.Folder);
         await foreach (var line in lines.Reader.ReadAllAsync())
         {
             Console.WriteLine(line);
