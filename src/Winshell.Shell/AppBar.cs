@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Winshell.Native;
 
 namespace Winshell;
@@ -10,6 +11,9 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
 {
     internal static readonly uint Message = Win32.WM_APP + 1;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
+
+    // Every window that holds an app bar now, for RemoveAll when a crash skips Remove.
+    private static readonly ConcurrentDictionary<nint, byte> Held = new();
 
     private readonly AppBarReservation _reservation = new();
     private bool _placePosted;
@@ -45,6 +49,7 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
                 // No app bar host, as when Explorer is not running: keep the window where the zone would be.
                 return monitor;
             }
+            Held[window] = 0;
         }
         abd.uEdge = edge switch
         {
@@ -75,8 +80,20 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
         using (ShellPlatform.ExplorerFirst())
             Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
         Registered = false;
+        Held.TryRemove(window, out _);
         _reservation.Clear();
         platform.WorkAreaMayHaveChanged();
+    }
+
+    /// <summary>Removes every app bar now held. Safe from any thread, so a crash on one can give the edges back.</summary>
+    public static void RemoveAll()
+    {
+        foreach (var window in Held.Keys)
+        {
+            var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = window };
+            Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
+        }
+        Held.Clear();
     }
 
     /// <summary>Handles Explorer's notices to the app bar. Returns null for any other message.</summary>
