@@ -103,9 +103,6 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("kernel32.dll")]
     private static partial int GetApplicationUserModelId(nint process, ref uint length, char* applicationUserModelId);
 
-    [LibraryImport("ole32.dll")]
-    public static partial int PropVariantClear(ref PROPVARIANT value);
-
     public static string WindowText(nint hwnd)
     {
         var length = GetWindowTextLength(hwnd);
@@ -133,22 +130,7 @@ internal static unsafe partial class NativeMethods
     public static bool IsCloaked(nint hwnd) => DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0;
 
     /// <summary>System.AppUserModel.ID, the id an app gives a window for taskbar grouping.</summary>
-    public static readonly PROPERTYKEY AppUserModelId = new() { fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), pid = 5 };
-
-    /// <summary>A string property of a property store, or empty.</summary>
-    public static string GetString(IPropertyStore store, in PROPERTYKEY key)
-    {
-        var value = default(PROPVARIANT);
-        try
-        {
-            // VT_LPWSTR
-            return store.GetValue(key, out value) == 0 && value.vt == 31 && value.pointer != 0 ? Marshal.PtrToStringUni(value.pointer) ?? "" : "";
-        }
-        finally
-        {
-            PropVariantClear(ref value);
-        }
-    }
+    public static readonly PROPERTYKEY AppUserModelId = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
 
     /// <summary>
     /// The application user model id of a process's package, or an explicit id that process set. Empty when the
@@ -209,7 +191,7 @@ internal static unsafe partial class NativeMethods
                 return "";
             try
             {
-                return GetString(store, AppUserModelId);
+                return PropertyStore.ReadString(store, AppUserModelId) ?? "";
             }
             finally
             {
@@ -221,45 +203,6 @@ internal static unsafe partial class NativeMethods
             return "";
         }
     }
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct PROPERTYKEY
-{
-    public Guid fmtid;
-    public uint pid;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct PROPVARIANT
-{
-    public ushort vt;
-    public ushort reserved1;
-    public ushort reserved2;
-    public ushort reserved3;
-    public nint pointer;
-    public nint extra;
-}
-
-[ComImport]
-[Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IPropertyStore
-{
-    [PreserveSig]
-    int GetCount(out uint count);
-
-    [PreserveSig]
-    int GetAt(uint index, out PROPERTYKEY key);
-
-    [PreserveSig]
-    int GetValue(in PROPERTYKEY key, out PROPVARIANT value);
-
-    [PreserveSig]
-    int SetValue(in PROPERTYKEY key, in PROPVARIANT value);
-
-    [PreserveSig]
-    int Commit();
 }
 
 [StructLayout(LayoutKind.Sequential)]

@@ -27,28 +27,6 @@ internal enum AudioSessionState
     Expired = 2,
 }
 
-[StructLayout(LayoutKind.Sequential)]
-internal struct PropertyKey(Guid format, uint id)
-{
-    public Guid Format = format;
-    public uint Id = id;
-}
-
-/// <summary>A PROPVARIANT, read for the few types the service needs: strings, numbers and blobs (64-bit layout).</summary>
-[StructLayout(LayoutKind.Explicit, Size = 24)]
-internal struct PropVariant
-{
-    [FieldOffset(0)] public ushort Type;
-    [FieldOffset(8)] public nint Pointer;
-    [FieldOffset(8)] public uint UInt;
-    [FieldOffset(8)] public uint BlobSize;
-    [FieldOffset(16)] public nint BlobData;
-
-    public const ushort VtUI4 = 19;
-    public const ushort VtLpwstr = 31;
-    public const ushort VtBlob = 65;
-}
-
 internal static partial class CoreAudio
 {
     public const uint DeviceStateActive = 1;
@@ -61,14 +39,11 @@ internal static partial class CoreAudio
     public static readonly Guid AudioSessionManager2Iid = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
     public static readonly Guid AudioClientIid = new("1CB9AD4C-DBFA-4C32-B178-C2F568A703B2");
 
-    public static readonly PropertyKey DeviceFriendlyName = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
-    public static readonly PropertyKey DeviceDescription = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 2);
-    public static readonly PropertyKey InterfaceFriendlyName = new(new Guid("026E516E-B814-414B-83CD-856D6FEF4822"), 2);
-    public static readonly PropertyKey EndpointFormFactor = new(new Guid("1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E"), 0);
-    public static readonly PropertyKey EngineDeviceFormat = new(new Guid("F19F064D-082C-4E27-BC73-6882A1BB8E4C"), 0);
-
-    [LibraryImport("ole32.dll")]
-    public static partial int PropVariantClear(ref PropVariant value);
+    public static readonly PROPERTYKEY DeviceFriendlyName = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
+    public static readonly PROPERTYKEY DeviceDescription = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 2);
+    public static readonly PROPERTYKEY InterfaceFriendlyName = new(new Guid("026E516E-B814-414B-83CD-856D6FEF4822"), 2);
+    public static readonly PROPERTYKEY EndpointFormFactor = new(new Guid("1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E"), 0);
+    public static readonly PROPERTYKEY EngineDeviceFormat = new(new Guid("F19F064D-082C-4E27-BC73-6882A1BB8E4C"), 0);
 
     [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
     public static partial int SHLoadIndirectString(string source, [Out] char[] output, int outputLength, nint reserved);
@@ -90,52 +65,6 @@ internal static partial class CoreAudio
     {
         device.Activate(ref iid, ClsctxAll, 0, out var obj);
         return (T)obj;
-    }
-
-    public static string? ReadString(IPropertyStore store, PropertyKey key)
-    {
-        if (store.GetValue(ref key, out var value) != 0)
-            return null;
-        try
-        {
-            return value.Type == PropVariant.VtLpwstr ? Marshal.PtrToStringUni(value.Pointer) : null;
-        }
-        finally
-        {
-            PropVariantClear(ref value);
-        }
-    }
-
-    public static uint? ReadUInt(IPropertyStore store, PropertyKey key)
-    {
-        if (store.GetValue(ref key, out var value) != 0)
-            return null;
-        try
-        {
-            return value.Type == PropVariant.VtUI4 ? value.UInt : null;
-        }
-        finally
-        {
-            PropVariantClear(ref value);
-        }
-    }
-
-    public static byte[]? ReadBlob(IPropertyStore store, PropertyKey key)
-    {
-        if (store.GetValue(ref key, out var value) != 0)
-            return null;
-        try
-        {
-            if (value.Type != PropVariant.VtBlob || value.BlobData == 0)
-                return null;
-            var bytes = new byte[value.BlobSize];
-            Marshal.Copy(value.BlobData, bytes, 0, bytes.Length);
-            return bytes;
-        }
-        finally
-        {
-            PropVariantClear(ref value);
-        }
     }
 
     /// <summary>Resolves a string like <c>@%SystemRoot%\System32\AudioSrv.Dll,-202</c> to its text.</summary>
@@ -194,19 +123,6 @@ internal interface IMMDevice
 }
 
 [ComImport]
-[Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IPropertyStore
-{
-    void GetCount(out uint count);
-
-    void GetAt(uint index, out PropertyKey key);
-
-    [PreserveSig]
-    int GetValue(ref PropertyKey key, out PropVariant value);
-}
-
-[ComImport]
 [Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IMMNotificationClient
@@ -219,7 +135,7 @@ internal interface IMMNotificationClient
 
     void OnDefaultDeviceChanged(EDataFlow flow, ERole role, [MarshalAs(UnmanagedType.LPWStr)] string? defaultDeviceId);
 
-    void OnPropertyValueChanged([MarshalAs(UnmanagedType.LPWStr)] string deviceId, PropertyKey key);
+    void OnPropertyValueChanged([MarshalAs(UnmanagedType.LPWStr)] string deviceId, PROPERTYKEY key);
 }
 
 [ComImport]

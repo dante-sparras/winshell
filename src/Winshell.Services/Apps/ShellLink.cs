@@ -62,7 +62,7 @@ internal static partial class ShellLink
             buffer.Clear();
             shell.GetDescription(buffer, buffer.Capacity);
             var description = buffer.ToString();
-            var aumid = link is IPropertyStore store ? NativeMethods.GetString(store, NativeMethods.AppUserModelId) : "";
+            var aumid = link is IPropertyStore store ? PropertyStore.ReadString(store, NativeMethods.AppUserModelId) ?? "" : "";
             return new ShellLinkInfo(target, arguments, workingDirectory, icon, iconIndex, description, aumid);
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException or ArgumentException or InvalidCastException)
