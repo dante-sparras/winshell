@@ -111,7 +111,12 @@ internal sealed partial class ConfigurationProject
                 error = $"No config named \"{name}\" in {root}";
             return found;
         }
-        if ((In(root, out error) ?? In(Path.Combine(root, "default"), out error)) is { } usual)
+        // Several projects in the root is a refusal, not a miss: neither default nor a lone folder may stand in for it.
+        if (In(root, out error) is { } atRoot)
+            return atRoot;
+        if (error is not null)
+            return null;
+        if (In(Path.Combine(root, "default"), out error) is { } usual)
             return usual;
         if (error is not null || !Directory.Exists(root))
             return null;

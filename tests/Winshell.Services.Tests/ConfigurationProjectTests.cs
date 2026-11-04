@@ -78,6 +78,16 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
+    public void Several_projects_in_the_config_folder_are_refused_not_passed_over()
+    {
+        Project("A.csproj");
+        Project("B.csproj");
+        Project(@"default\Default.csproj");
+
+        Assert.Equal($"Several projects in {_root}; name one with -p: A.csproj, B.csproj", Refusal());
+    }
+
+    [Fact]
     public void The_root_comes_before_default_and_default_before_a_lone_folder()
     {
         var lone = Project("lone\\Lone.csproj");
