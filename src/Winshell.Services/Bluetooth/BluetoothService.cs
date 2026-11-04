@@ -5,47 +5,45 @@ namespace Winshell.Bluetooth;
 
 /// <summary>
 /// The default adapter and the paired and nearby devices. Reading it never pairs, connects or changes a radio. While
-/// monitoring is on, state is read again every three seconds.
+/// monitoring is on, Windows' device and radio events read the state again, and so does a slow timer, because Windows
+/// announces no change to discoverable and incoming-connection state, or to a battery level.
 /// </summary>
 public sealed class BluetoothService : ObservableObject, IDisposable
 {
-    // A disposed service closes immediately when idle, or lets its in-flight read close the backend.
-    private const int Idle = 0, Reading = 1, Closing = 2, Closed = 3;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
 
     private readonly IEventLoop _loop;
-    private readonly Log _log;
-    private readonly object _monitorGate = new();
-    // Ends with the service. Stopping the monitor leaves this alone, so Refresh still reads.
-    private readonly CancellationTokenSource _reading = new();
+    private readonly TimeProvider _time;
+    private readonly MonitorWarning _warning;
+    // Guards the timer and the read flags. Nothing awaits inside it.
+    private readonly object _gate = new();
+    // Ends with the service, so a read that Windows does not cancel ends at its next check.
+    private readonly CancellationTokenSource _ended = new();
     // One radio change and one visibility change run at a time. Boxed, so ChangeAdapterAsync can hold either flag.
     private readonly StrongBox<int> _radioSet = new();
     private readonly StrongBox<int> _visibilitySet = new();
-    private CancellationTokenSource _stop = new();
-    private Task? _monitorTask;
+    private ITimer? _poll;
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
     private BluetoothAdapter? _adapter;
     private string _error = "";
-    private int _reads;
     // Someone asked for a read while one ran. What they want to see may be newer than that read.
-    private int _readAgain;
-    private int _monitoring;
-    private int _monitorHolders;
+    private bool _reading, _readAgain;
     private long _revision;
     private volatile bool _disposed;
 
-    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null)
+    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, TimeProvider? time = null)
     {
         _loop = loop;
-        _log = log;
+        _time = time ?? TimeProvider.System;
+        _warning = new MonitorWarning(() => log, "bluetooth");
         Backend = backend ?? new BluetoothBackend();
+        Backend.Changed += Refresh;
     }
 
     /// <summary>Starting or stopping discovery failed.</summary>
     public event Action<string>? OperationFailed;
 
     internal IBluetoothBackend Backend { get; }
-
-    internal Task? MonitorTask => _monitorTask;
 
     /// <summary>The default adapter Windows returns, or null when there is none.</summary>
     public BluetoothAdapter? DefaultAdapter => _adapter;
@@ -74,100 +72,36 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     /// <summary>Why the last read, or starting or stopping discovery, failed. Empty when it succeeded.</summary>
     public string Error => _error;
 
-    /// <summary>Reads adapter and device state until <see cref="StopMonitoring"/>. Nothing is read before this.</summary>
+    /// <summary>Reads adapter and device state, and again at every change Windows reports, until <see cref="StopMonitoring"/>. Nothing is read before this.</summary>
     public void StartMonitoring()
     {
         if (_disposed)
             return;
-        CancellationToken cancellation;
-        CancellationTokenSource stop;
-        lock (_monitorGate)
+        try
         {
-            if (_monitoring != 0)
-                return;
-            if (_stop.IsCancellationRequested)
-            {
-                var retired = _stop;
-                _stop = new CancellationTokenSource();
-                // The previous loop disposes its source when it exits. Dispose here only when that loop is gone.
-                if (_monitorHolders == 0)
-                    retired.Dispose();
-            }
-            _monitoring = 1;
-            _monitorHolders++;
-            stop = _stop;
-            cancellation = stop.Token;
+            Backend.StartWatching();
         }
-        // A long-running thread, not the pool. A busy pool never started the read, so the monitor had not begun.
-        _monitorTask = Task.Factory.StartNew(
-            async () =>
-            {
-                try
-                {
-                    await MonitorAsync(cancellation).ConfigureAwait(false);
-                }
-                finally
-                {
-                    lock (_monitorGate)
-                    {
-                        _monitorHolders--;
-                        if (!ReferenceEquals(_stop, stop))
-                            stop.Dispose();
-                    }
-                }
-            },
-            CancellationToken.None,
-            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach,
-            TaskScheduler.Default).Unwrap();
+        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        {
+            // Without events the timer still reads, only later.
+            _warning.Failed(e);
+        }
+        lock (_gate)
+            _poll ??= _time.CreateTimer(_ => Refresh(), null, PollInterval, PollInterval);
+        Refresh();
     }
 
-    /// <summary>Stops the three-second read. A later <see cref="StartMonitoring"/> starts it again.</summary>
+    /// <summary>Stops watching Windows. A later <see cref="StartMonitoring"/> starts again.</summary>
     public void StopMonitoring()
     {
-        CancellationTokenSource stop;
-        lock (_monitorGate)
+        ITimer? poll;
+        lock (_gate)
         {
-            if (_monitoring == 0)
-                return;
-            _monitoring = 0;
-            stop = _stop;
+            poll = _poll;
+            _poll = null;
         }
-        stop.Cancel();
-    }
-
-    private async Task MonitorAsync(CancellationToken cancellation)
-    {
-        var warning = new MonitorWarning(() => _log, "bluetooth");
-        while (!cancellation.IsCancellationRequested)
-        {
-            try
-            {
-                await RefreshAsync().ConfigureAwait(false);
-                warning.Succeeded();
-            }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (ObjectDisposedException)
-            {
-                return;
-            }
-#pragma warning disable CA1031 // One failed read must not stop the rest of the poll.
-            catch (Exception e)
-#pragma warning restore CA1031
-            {
-                warning.Failed(e);
-            }
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(3), cancellation).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-            {
-                return;
-            }
-        }
+        poll?.Dispose();
+        Backend.StopWatching();
     }
 
     internal void Post(Action action) => _loop.Post(() =>
@@ -178,59 +112,81 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     internal void Invalidate() => Interlocked.Increment(ref _revision);
 
-    /// <summary>Reads the state now, rather than at the next three-second read.</summary>
+    /// <summary>Reads the state now, rather than at the next change Windows reports.</summary>
     public void Refresh() => _ = RefreshAsync();
 
+    // One read runs at a time. A request during it reads again when it ends, so the result is never older than the request.
     internal async Task RefreshAsync()
     {
-        if (_disposed)
-            return;
-        if (Interlocked.CompareExchange(ref _reads, Reading, Idle) != Idle)
+        lock (_gate)
         {
-            Volatile.Write(ref _readAgain, 1);
-            // The read may have ended before it could see that, so try once more.
-            if (Interlocked.CompareExchange(ref _reads, Reading, Idle) != Idle)
+            if (_disposed)
                 return;
+            if (_reading)
+            {
+                _readAgain = true;
+                return;
+            }
+            _reading = true;
         }
-        Volatile.Write(ref _readAgain, 0);
-        var revision = Interlocked.Read(ref _revision);
-        try
+        bool again;
+        do
         {
-            BluetoothSnapshot snapshot;
+            lock (_gate)
+                _readAgain = false;
             try
             {
-                snapshot = await Backend.ReadAsync(_reading.Token).ConfigureAwait(false);
+                await ReadAsync().ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            finally
             {
-                return;
+                bool close;
+                lock (_gate)
+                {
+                    again = _readAgain && !_disposed;
+                    _reading = again;
+                    close = _disposed && !again;
+                }
+                if (close)
+                    CloseBackend();
             }
-            catch (ObjectDisposedException)
-            {
-                return;
-            }
-            catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
-            {
-                snapshot = BluetoothSnapshot.Initial with { Error = e.Message };
-            }
-            Post(() =>
-            {
-                if (revision == Interlocked.Read(ref _revision))
-                    Apply(snapshot);
-            });
         }
-        finally
+        while (again);
+    }
+
+    private async Task ReadAsync()
+    {
+        var revision = Interlocked.Read(ref _revision);
+        BluetoothSnapshot snapshot;
+        try
         {
-            if (Interlocked.CompareExchange(ref _reads, Idle, Reading) == Closing)
-            {
-                Volatile.Write(ref _reads, Closed);
-                CloseBackend();
-            }
-            else if (Interlocked.Exchange(ref _readAgain, 0) != 0)
-            {
-                Refresh();
-            }
+            snapshot = await Backend.ReadAsync(_ended.Token).ConfigureAwait(false);
+            _warning.Succeeded();
         }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        {
+            snapshot = BluetoothSnapshot.Initial with { Error = e.Message };
+        }
+#pragma warning disable CA1031 // Nobody awaits a refresh, and one failed read must not stop the next.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            _warning.Failed(e);
+            return;
+        }
+        Post(() =>
+        {
+            if (revision == Interlocked.Read(ref _revision))
+                Apply(snapshot);
+        });
     }
 
     /// <summary>Starts looking for nearby devices. Needs an adapter that is on.</summary>
@@ -373,6 +329,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         }
         if (snapshot.Adapter is { } adapterInfo)
             _adapter?.Update(adapterInfo);
+        // Not null when a device is built: without an adapter, incoming is empty.
         var adapter = _adapter;
         var incoming = adapter is null ? [] : snapshot.Devices;
         Devices.Sync(incoming, d => d.Key, i => i.Key, i => new BluetoothDevice(this, i, adapter!), (d, i) => d.Update(i), d => d.Remove());
@@ -408,26 +365,23 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     /// <summary>Stops monitoring and discovery, and cancels a running pairing.</summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
-        _disposed = true;
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+        }
+        Backend.Changed -= Refresh;
         StopMonitoring();
         foreach (var device in Devices)
             device.Remove();
-        _reading.Cancel();
-        while (true)
-        {
-            var reads = Volatile.Read(ref _reads);
-            if (reads == Reading && Interlocked.CompareExchange(ref _reads, Closing, Reading) == Reading)
-                return;
-            if (reads == Idle && Interlocked.CompareExchange(ref _reads, Closed, Idle) == Idle)
-            {
-                CloseBackend();
-                return;
-            }
-            if (reads is Closing or Closed)
-                return;
-        }
+        _ended.Cancel();
+        bool idle;
+        lock (_gate)
+            idle = !_reading;
+        // A read in flight closes the backend when it ends.
+        if (idle)
+            CloseBackend();
     }
 
     private void CloseBackend()
@@ -438,8 +392,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         }
         finally
         {
-            _reading.Dispose();
-            ServiceSupport.DisposeAfterMonitor(_stop, _monitorTask);
+            _ended.Dispose();
         }
     }
 }

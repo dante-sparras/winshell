@@ -46,11 +46,79 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     private readonly Dictionary<string, DeviceInformation> _pairingEndpoints = new(StringComparer.Ordinal);
     private readonly Dictionary<DeviceInformation, List<DeviceInformationUpdate>> _pairingUpdates = new(ReferenceEqualityComparer.Instance);
     private readonly List<DeviceWatcher> _watchers = [];
+    private readonly List<ChangeWatcher> _live = [];
     private readonly Dictionary<Guid, (double? Level, DateTimeOffset Read)> _batteries = [];
+    private Radio? _radio;
+    private string? _radioAdapterId;
     private string? _adapterId;
     private string _discoveryError = "";
     private bool _hasRadio;
     private bool _disposed;
+
+    public event Action? Changed;
+
+    /// <summary>
+    /// Watches the adapters, the paired devices (their connection included) and the radio. Reading stays the one way to
+    /// learn the state: a change only says that it is time to read. Discoverable and incoming-connection state and the
+    /// battery level have no event, so the service reads on a timer as well.
+    /// </summary>
+    public void StartWatching()
+    {
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_live.Count > 0) return;
+            try
+            {
+                foreach (var selector in PairedSelectors())
+                    _live.Add(new(DeviceInformation.CreateWatcher(selector, EndpointProperties, DeviceInformationKind.AssociationEndpoint), RaiseChanged));
+                _live.Add(new(DeviceInformation.CreateWatcher(WinAdapter.GetDeviceSelector()), RaiseChanged));
+            }
+            catch
+            {
+                StopWatching();
+                throw;
+            }
+        }
+    }
+
+    public void StopWatching()
+    {
+        ChangeWatcher[] watchers;
+        Radio? radio;
+        lock (_lock)
+        {
+            watchers = [.. _live];
+            _live.Clear();
+            radio = _radio;
+            _radio = null;
+            _radioAdapterId = null;
+        }
+        if (radio is not null)
+            radio.StateChanged -= OnRadioStateChanged;
+        foreach (var watcher in watchers)
+            watcher.Dispose();
+    }
+
+    private void RaiseChanged() => Changed?.Invoke();
+
+    private void OnRadioStateChanged(Radio sender, object args) => RaiseChanged();
+
+    // Radio instances are new on every read, so the one watched stays until the adapter changes or watching stops.
+    private void WatchRadio(string adapterId, Radio? radio)
+    {
+        Radio? previous;
+        lock (_lock)
+        {
+            if (_disposed || _live.Count == 0 || radio is null || (_radio is not null && _radioAdapterId == adapterId)) return;
+            previous = _radio;
+            _radio = radio;
+            _radioAdapterId = adapterId;
+            radio.StateChanged += OnRadioStateChanged;
+        }
+        if (previous is not null)
+            previous.StateChanged -= OnRadioStateChanged;
+    }
 
     public async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
     {
@@ -71,6 +139,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             try { radio = await adapter.GetRadioAsync().AsTask(cancellation).ConfigureAwait(false); }
             catch (Exception e) when (IsExpectedFailure(e)) { }
             lock (_lock) _hasRadio = radio is not null;
+            WatchRadio(adapter.DeviceId, radio);
             cancellation.ThrowIfCancellationRequested();
             // These queries can block. Their own thread keeps them off the shell's thread and off the pool.
             var visibility = await OffUi(() => (
@@ -270,6 +339,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
                 _pairingEndpoints[info.Id] = info;
                 _nearby[info.Id] = ReadEndpoint(info);
             }
+            RaiseChanged();
         };
         watcher.Updated += (_, update) =>
         {
@@ -284,6 +354,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
                     _nearby[info.Id] = ReadEndpoint(info);
                 }
             }
+            RaiseChanged();
         };
         watcher.Removed += (_, update) =>
         {
@@ -294,7 +365,10 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
                 _pairingEndpoints.Remove(update.Id);
                 _nearby.Remove(update.Id);
             }
+            RaiseChanged();
         };
+        // Discovering is true from here, and an empty neighbourhood adds nothing else to read.
+        watcher.EnumerationCompleted += (_, _) => RaiseChanged();
         watcher.Stopped += (_, _) =>
         {
             lock (_lock)
@@ -308,6 +382,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
                 if (watcher.Status == DeviceWatcherStatus.Aborted)
                     _discoveryError = "Windows aborted Bluetooth discovery. Check Bluetooth access and try again.";
             }
+            RaiseChanged();
         };
         _watchers.Add(watcher);
         watcher.Start();
@@ -437,6 +512,42 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     public void Dispose()
     {
         lock (_lock) _disposed = true;
+        StopWatching();
         StopDiscovery();
+    }
+
+    /// <summary>A watcher whose every change, after the first enumeration or not, only says it is time to read.</summary>
+    private sealed class ChangeWatcher : IDisposable
+    {
+        private readonly DeviceWatcher _watcher;
+        private readonly Action _changed;
+
+        public ChangeWatcher(DeviceWatcher watcher, Action changed)
+        {
+            _watcher = watcher;
+            _changed = changed;
+            watcher.Added += OnAdded;
+            watcher.Updated += OnUpdated;
+            watcher.Removed += OnRemoved;
+            watcher.Start();
+        }
+
+        private void OnAdded(DeviceWatcher sender, DeviceInformation args) => _changed();
+
+        private void OnUpdated(DeviceWatcher sender, DeviceInformationUpdate args) => _changed();
+
+        private void OnRemoved(DeviceWatcher sender, DeviceInformationUpdate args) => _changed();
+
+        public void Dispose()
+        {
+            _watcher.Added -= OnAdded;
+            _watcher.Updated -= OnUpdated;
+            _watcher.Removed -= OnRemoved;
+            if (_watcher.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted)
+            {
+                try { _watcher.Stop(); }
+                catch (Exception e) when (IsExpectedFailure(e)) { }
+            }
+        }
     }
 }

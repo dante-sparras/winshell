@@ -33,9 +33,9 @@ public sealed class BluetoothServiceTests
         return messages;
     }
 
-    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null)
+    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null, TimeProvider? time = null)
     {
-        var service = new BluetoothService(loop, log ?? new Log(), backend);
+        var service = new BluetoothService(loop, log ?? new Log(), backend, time);
         service.StartMonitoring();
         return service;
     }
@@ -447,82 +447,85 @@ public sealed class BluetoothServiceTests
 
         using var service = new BluetoothService(new ManualEventLoop(), new Log(), backend);
 
-        Assert.Null(service.MonitorTask);
-        Assert.False(backend.FirstRead.Task.IsCompleted);
+        Assert.Equal(0, backend.Reads);
+        Assert.False(backend.Watching);
     }
 
     [Fact]
-    public async Task The_service_starts_one_monitor_and_closes_its_backend()
+    public void Monitoring_reads_again_when_Windows_reports_a_change_and_ends_with_the_service()
     {
         var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
         var loop = new ManualEventLoop();
         var service = Monitored(backend, loop);
-        var monitor = service.MonitorTask!;
-        await backend.FirstRead.Task.WaitAsync(TestContext.Current.CancellationToken);
+        loop.Process();
+        Assert.True(backend.Watching);
+        Assert.Equal("Headphones", Assert.Single(service.Devices).Name);
 
-        service.StartMonitoring();
-        Assert.Same(monitor, service.MonitorTask);
+        backend.Snapshot = Snapshot(Device() with { Name = "Renamed" });
+        backend.RaiseChanged();
+        loop.Process();
+        Assert.Equal("Renamed", Assert.Single(service.Devices).Name);
 
         service.Dispose();
         service.Dispose();
-        await monitor.WaitAsync(TestContext.Current.CancellationToken);
+        Assert.False(backend.Watching);
         Assert.True(backend.Disposed);
-        Assert.Empty(backend.Calls);
+        backend.RaiseChanged();
+        Assert.Equal(2, backend.Reads);
     }
 
     [Fact]
-    public async Task Monitoring_can_stop_and_start_again()
+    public void A_slow_read_covers_what_Windows_does_not_announce_and_stops_with_monitoring()
     {
         var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
-        var loop = new ManualEventLoop();
-        using var service = Monitored(backend, loop);
-        await backend.FirstRead.Task.WaitAsync(TestContext.Current.CancellationToken);
-        var first = service.MonitorTask!;
+        var time = new FakeTimeProvider();
+        using var service = Monitored(backend, new ManualEventLoop(), time: time);
+        Assert.Equal(1, backend.Reads);
+
+        time.Advance(TimeSpan.FromSeconds(29));
+        Assert.Equal(1, backend.Reads);
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(2, backend.Reads);
 
         service.StopMonitoring();
-        await first.WaitAsync(TestContext.Current.CancellationToken);
-        var reads = backend.Reads;
-        service.StartMonitoring();
+        Assert.False(backend.Watching);
+        time.Advance(TimeSpan.FromMinutes(5));
+        Assert.Equal(2, backend.Reads);
 
-        await Wait.UntilAsync(() => backend.Reads != reads, "the monitor to read again");
-        Assert.False(service.MonitorTask!.IsCompleted);
+        service.StartMonitoring();
+        Assert.True(backend.Watching);
+        Assert.Equal(3, backend.Reads);
+        time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(4, backend.Reads);
     }
 
     [Fact]
-    public async Task A_throwing_read_is_logged_and_does_not_stop_the_monitor()
+    public void A_throwing_read_is_logged_and_does_not_stop_monitoring()
     {
         var backend = new FlakyBackend();
         var loop = new ManualEventLoop();
         var messages = new ConcurrentQueue<string>();
         var log = new Log { Sink = (_, category, message) => messages.Enqueue($"{category}: {message}") };
-        var service = Monitored(backend, loop, log);
-        await backend.First.Task.WaitAsync(TestContext.Current.CancellationToken);
+        using var service = Monitored(backend, loop, log);
 
-        await service.RefreshAsync();
-        // The monitor logs the failure after its read ends, and a read counts before its result is posted.
-        await Wait.UntilAsync(() =>
-        {
-            loop.Process();
-            return service.Ready && messages.Contains("bluetooth: radio broke");
-        }, "the failure and a good read");
-
-        Assert.False(service.MonitorTask!.IsCompleted);
-        service.Dispose();
-        await service.MonitorTask.WaitAsync(TestContext.Current.CancellationToken);
-        Assert.True(backend.Disposed);
-        Assert.True(service.MonitorTask.IsCompletedSuccessfully);
+        Assert.Contains("bluetooth: radio broke", messages);
+        Assert.False(service.Ready);
+        backend.RaiseChanged();
+        loop.Process();
+        Assert.True(service.Ready);
     }
 
     [Fact]
-    public async Task A_refresh_still_reads_after_the_monitor_stops()
+    public async Task A_refresh_still_reads_after_monitoring_stops()
     {
         var backend = new TokenBackend();
         using var service = Monitored(backend, new ManualEventLoop());
-        await backend.First.Task.WaitAsync(TestContext.Current.CancellationToken);
         service.StopMonitoring();
-        var before = backend.Finished;
+        Assert.Equal(1, backend.Finished);
 
-        await Wait.UntilAsync(() => backend.Finished != before, "a refresh to finish", service.RefreshAsync);
+        await service.RefreshAsync();
+
+        Assert.Equal(2, backend.Finished);
     }
 
     [Fact]
@@ -545,22 +548,6 @@ public sealed class BluetoothServiceTests
 
     [Fact]
     public async Task Disposing_does_not_wait_for_a_read_and_the_backend_closes_after_it()
-    {
-        var backend = new StubbornBackend();
-        var service = Monitored(backend, new ManualEventLoop());
-        await backend.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
-
-        service.Dispose();
-
-        Assert.False(backend.Disposed);
-        backend.Finish.TrySetResult(Snapshot());
-        await service.MonitorTask!.WaitAsync(TestContext.Current.CancellationToken);
-        Assert.True(backend.Disposed);
-        Assert.False(backend.DisposedDuringRead);
-    }
-
-    [Fact]
-    public async Task A_manual_refresh_also_finishes_before_the_backend_closes()
     {
         var backend = new StubbornBackend();
         var loop = new ManualEventLoop();
@@ -614,9 +601,21 @@ public sealed class BluetoothServiceTests
     /// <summary>A backend that does nothing but read, for the tests of the read loop.</summary>
     private abstract class ReadBackend : IBluetoothBackend
     {
+        public event Action? Changed;
+
         public bool Disposed { get; private set; }
 
         public abstract Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation);
+
+        public void RaiseChanged() => Changed?.Invoke();
+
+        public void StartWatching()
+        {
+        }
+
+        public void StopWatching()
+        {
+        }
 
         public void StartDiscovery()
         {
@@ -639,15 +638,10 @@ public sealed class BluetoothServiceTests
     {
         private int _reads;
 
-        public TaskCompletionSource First { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
         public override Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
             if (Interlocked.Increment(ref _reads) == 1)
-            {
-                First.TrySetResult();
                 return Task.FromException<BluetoothSnapshot>(new InvalidCastException("radio broke"));
-            }
             return Task.FromResult(Snapshot());
         }
     }
@@ -658,11 +652,8 @@ public sealed class BluetoothServiceTests
 
         public int Finished => Volatile.Read(ref _finished);
 
-        public TaskCompletionSource First { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
         public override Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
-            First.TrySetResult();
             cancellation.ThrowIfCancellationRequested();
             Interlocked.Increment(ref _finished);
             return Task.FromResult(Snapshot());
@@ -759,12 +750,19 @@ public sealed class BluetoothServiceTests
 
         public TaskCompletionSource<string?>? VisibilityGate { get; set; }
 
-        public TaskCompletionSource FirstRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Watching { get; private set; }
+
+        public event Action? Changed;
+
+        public void RaiseChanged() => Changed?.Invoke();
+
+        public void StartWatching() => Watching = true;
+
+        public void StopWatching() => Watching = false;
 
         public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
             Interlocked.Increment(ref _reads);
-            FirstRead.TrySetResult();
             return ReadFailure is { } e ? Task.FromException<BluetoothSnapshot>(e) : ReadTask ?? Task.FromResult(Snapshot);
         }
 
