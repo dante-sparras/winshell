@@ -13,10 +13,7 @@ namespace Winshell.Notifications;
 internal interface INotificationBackend
 {
     Task<NotificationAccessStatus> RequestAccessAsync();
-    Task<NotificationSnapshot> ReadAsync();
-
-    /// <summary>The same read, stopping when <paramref name="cancellation"/> is cancelled. The default ignores the token.</summary>
-    Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation) => ReadAsync();
+    Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation);
     void Dismiss(uint id);
     Action? WatchToasts(Action changed) => null;
 }
@@ -31,8 +28,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
 
     public async Task<NotificationAccessStatus> RequestAccessAsync() =>
         MapAccess(await UserNotificationListener.Current.RequestAccessAsync());
-
-    public Task<NotificationSnapshot> ReadAsync() => ReadAsync(CancellationToken.None);
 
     public async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
     {

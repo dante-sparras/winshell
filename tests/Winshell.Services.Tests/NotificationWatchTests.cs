@@ -45,7 +45,7 @@ public sealed class NotificationWatchTests
             };
         }
 
-        public Task<NotificationSnapshot> ReadAsync()
+        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
         {
             (Interlocked.Increment(ref _reads) == 1 ? FirstRead : SecondRead).TrySetResult();
             return Task.FromResult(new NotificationSnapshot(NotificationAccessStatus.Allowed, [], NotificationState.Off, NotificationMode.Unrestricted));

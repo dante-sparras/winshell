@@ -231,7 +231,7 @@ public sealed class NotificationCenterTests : IDisposable
             return Task.FromResult(NotificationAccessStatus.Allowed);
         }
 
-        public Task<NotificationSnapshot> ReadAsync() =>
+        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation) =>
             Task.FromResult(new NotificationSnapshot(NotificationAccessStatus.Allowed, [], NotificationState.Unknown, NotificationMode.Unknown));
 
         public void Dismiss(uint id) => Dismissed.Add(id);
