@@ -74,7 +74,7 @@ public sealed class ConfigurationProjectTests : IDisposable
         var file = Project("work\\Work.csproj");
 
         Assert.Equal(file, Found(name: "work").ProjectFile);
-        Assert.Equal($"No config named \"home\" in {_root}", Refusal(name: "home"));
+        Assert.Equal($"No config named \"home\" in {_root}.", Refusal(name: "home"));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class ConfigurationProjectTests : IDisposable
         Project("B.csproj");
         Project(@"default\Default.csproj");
 
-        Assert.Equal($"Several projects in {_root}; name one with -p: A.csproj, B.csproj", Refusal());
+        Assert.Equal($"Several projects in {_root}; name one with -p: A.csproj, B.csproj.", Refusal());
     }
 
     [Fact]

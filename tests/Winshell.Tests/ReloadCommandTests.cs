@@ -119,7 +119,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
 
         Assert.Equal(1, result.Code);
         Assert.Equal("", result.Output);
-        Assert.Equal("No instance with process id 0" + Environment.NewLine, result.Error);
+        Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
 
     private Process StartProbe()

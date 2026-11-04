@@ -31,7 +31,7 @@ internal static class LogCommand
         }
         if (!File.Exists(path))
         {
-            Console.Error.WriteLine($"No log at {path}");
+            Console.Error.WriteLine($"No log at {path}.");
             return 1;
         }
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);

@@ -31,8 +31,8 @@ public sealed class LogSelectorTests : IDisposable
     }
 
     [Theory]
-    [InlineData("--pid", "1234", "No instance with process id 1234")]
-    [InlineData("-i", "deadbeef", "No instance with id deadbeef")]
+    [InlineData("--pid", "1234", "No instance with process id 1234.")]
+    [InlineData("-i", "deadbeef", "No instance with id deadbeef.")]
     public void A_selector_that_matches_nothing_is_an_error(string option, string value, string message)
     {
         var (code, output, error) = Run(["log", option, value]);

@@ -34,7 +34,7 @@ public class CliRunCommandTests
 
         Assert.Equal(1, code);
         Assert.Equal("", output);
-        Assert.Equal("No instance with process id 0" + Environment.NewLine, error);
+        Assert.Equal("No instance with process id 0." + Environment.NewLine, error);
     }
 
     [Fact]

@@ -14,7 +14,7 @@ internal static class InstanceSelection
         if (options.Pid is { } pid)
         {
             var match = instances.FirstOrDefault(i => i.Pid == pid);
-            return match is null ? InstanceChoice.Miss($"No instance with process id {pid}") : InstanceChoice.Found(match);
+            return match is null ? InstanceChoice.Miss($"No instance with process id {pid}.") : InstanceChoice.Found(match);
         }
         if (options.Id is { } id)
         {
@@ -22,8 +22,8 @@ internal static class InstanceSelection
             return matches.Count switch
             {
                 1 => InstanceChoice.Found(matches[0]),
-                0 => InstanceChoice.Miss($"No instance with id {id}"),
-                _ => InstanceChoice.Miss($"Several instances start with {id}"),
+                0 => InstanceChoice.Miss($"No instance with id {id}."),
+                _ => InstanceChoice.Miss($"Several instances start with {id}."),
             };
         }
         if (options.Path is not null || options.Config is not null)
@@ -35,7 +35,7 @@ internal static class InstanceSelection
                 ? instances.FirstOrDefault(IsDefaultShell)
                 : instances.FirstOrDefault(i => string.Equals(i.ConfigPath, project.Program, StringComparison.OrdinalIgnoreCase));
             var label = project?.Program ?? "the default shell";
-            return match is null ? InstanceChoice.Miss($"No running instance of {label}") : InstanceChoice.Found(match);
+            return match is null ? InstanceChoice.Miss($"No running instance of {label}.") : InstanceChoice.Found(match);
         }
         return ChooseUnselected(instances);
     }
@@ -49,7 +49,7 @@ internal static class InstanceSelection
         if (instances.Count > 1)
         {
             var listed = string.Join(", ", instances.Select(i => $"{i.Id} ({i.ConfigPath})"));
-            return InstanceChoice.Wrong($"Several instances are running; pick one with -i: {listed}");
+            return InstanceChoice.Wrong($"Several instances are running; pick one with -i: {listed}.");
         }
         return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss(NoneRunning);
     }

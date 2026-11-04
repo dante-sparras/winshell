@@ -157,7 +157,7 @@ A parameter has `name` and `type`. `type` is null when the signal's parameter wa
 | 1 | No such configuration or instance, a build failed, an IPC call failed, the instance couldn't be reached or was still running, or a `winshell doctor` check failed. |
 | 2 | An unknown command or option, an option that needs a value without one, a spare argument, a `--pid` or `--tail` that is not a whole number, or an `ipc` command missing its arguments. |
 
-`--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number` and exits with code 2.
+`--pid` and `--tail` need a whole number. Anything else prints a message such as `--pid needs a whole number.` and exits with code 2.
 
 An unexpected failure of any command but `run` prints `winshell <command>: <message>` and exits with 1. `-v` adds the stack trace. Starting a shell still writes a crash report.
 

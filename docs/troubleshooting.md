@@ -15,8 +15,8 @@ Logs are in `%LOCALAPPDATA%\winshell\run\<instance id>\log.txt`. A shell that ex
 
 | It says | What to do |
 | --- | --- |
-| `No .csproj at <path>` | `--path` names a folder without a `.csproj`, or a file that isn't there. |
-| `No config named "<name>" in <folder>` | `--config` names a folder of the config folder that has no project. |
+| `No .csproj at <path>.` | `--path` names a folder without a `.csproj`, or a file that isn't there. |
+| `No config named "<name>" in <folder>.` | `--config` names a folder of the config folder that has no project. |
 | `Several configs in <folder>; pick one with -c: …` | The config folder has no project of its own and several subfolders with one. Run `winshell run -c <name>`. |
 | `Several projects in <folder>; name one with -p: …` | The folder has more than one `.csproj`. Pass the file with `-p`. |
 | `<name> did not build.` | The build failed. The last good build is not started. The notice and the log have the compiler's lines. |

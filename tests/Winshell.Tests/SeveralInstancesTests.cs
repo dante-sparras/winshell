@@ -37,7 +37,7 @@ public class SeveralInstancesTests
         Assert.Equal(2, choice.Code);
         Assert.Null(choice.Info);
         Assert.Equal(
-            @"Several instances are running; pick one with -i: aaa (C:\a\MyShell.exe), bbb (C:\b\MyShell.exe)",
+            @"Several instances are running; pick one with -i: aaa (C:\a\MyShell.exe), bbb (C:\b\MyShell.exe).",
             choice.Error);
     }
 
