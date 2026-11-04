@@ -50,7 +50,7 @@ internal static class ReloadCommand
     {
         try
         {
-            await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("build-error", Args: [error, projectFile])))
+            await foreach (var response in IpcClient.Request(info.Pipe, new IpcRequest("build-error", Args: [error, projectFile])))
             {
                 if (!response.Ok)
                     Console.Error.WriteLine($"Instance {info.Id} could not show the notice: {response.Error}");

@@ -43,7 +43,7 @@ internal static class IpcCommand
         // A listen prints each signal, and ends without a value when the shell quits.
         try
         {
-            await foreach (var response in IpcServer.Request(info.Pipe, request))
+            await foreach (var response in IpcClient.Request(info.Pipe, request))
             {
                 if (Print(response) != 0)
                     return 1;

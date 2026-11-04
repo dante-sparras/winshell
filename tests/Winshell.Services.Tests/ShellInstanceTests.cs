@@ -47,7 +47,7 @@ public sealed class ShellInstanceTests
 
     private static async Task<IpcResponse> Ask(string pipe, IpcRequest request)
     {
-        await foreach (var response in IpcServer.Request(pipe, request, TestContext.Current.CancellationToken))
+        await foreach (var response in IpcClient.Request(pipe, request, TestContext.Current.CancellationToken))
             return response;
         throw new InvalidOperationException("The server closed the pipe without answering.");
     }

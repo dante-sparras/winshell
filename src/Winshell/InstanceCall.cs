@@ -10,7 +10,7 @@ internal static class InstanceCall
     {
         try
         {
-            await foreach (var response in IpcServer.Request(info.Pipe, request, cancel))
+            await foreach (var response in IpcClient.Request(info.Pipe, request, cancel))
                 return new(response, null);
             return new(null, $"Instance {info.Id} closed the control pipe without answering.");
         }

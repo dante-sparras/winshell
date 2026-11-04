@@ -157,7 +157,7 @@ internal static class DevSession
             : new IpcRequest("call", Target: "notice", Name: "dismiss");
         try
         {
-            await foreach (var response in IpcServer.Request(shell.Pipe, request))
+            await foreach (var response in IpcClient.Request(shell.Pipe, request))
             {
                 if (!response.Ok)
                     Console.Error.WriteLine($"Could not update the notice: {response.Error}");

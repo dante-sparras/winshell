@@ -17,7 +17,7 @@ public sealed class ShellInstanceTests
     {
         var info = await Own();
         var responses = new List<IpcResponse>();
-        await foreach (var response in IpcServer.Request(info.Pipe, request, TestContext.Current.CancellationToken))
+        await foreach (var response in IpcClient.Request(info.Pipe, request, TestContext.Current.CancellationToken))
         {
             responses.Add(response);
             break;
