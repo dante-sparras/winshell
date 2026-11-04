@@ -37,7 +37,7 @@ public sealed partial class ShellProgramTests : IDisposable
         var show = Run("ipc", "--pid", pid, "show");
         Assert.Equal((0, ""), (show.Code, show.Error));
         var call = Run("ipc", "--pid", pid, "call", "nothing", "open");
-        Assert.Equal((1, "Target not found: nothing"), (call.Code, call.Error.Trim()));
+        Assert.Equal((1, "Target not found: nothing."), (call.Code, call.Error.Trim()));
 
         var killed = Run("kill", "--pid", pid);
         Assert.Equal((0, ""), (killed.Code, killed.Error));

@@ -200,7 +200,7 @@ internal sealed class IpcServer : IDisposable
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
             if (tooLong)
             {
-                await Send(writer, new IpcResponse(false, Error: "Request is too long"), _cancel.Token).ConfigureAwait(false);
+                await Send(writer, new IpcResponse(false, Error: "Request is too long."), _cancel.Token).ConfigureAwait(false);
                 return;
             }
             if (line is null)
@@ -222,7 +222,7 @@ internal sealed class IpcServer : IDisposable
             }
             if (request is null)
             {
-                await Send(writer, new IpcResponse(false, Error: "Malformed request"), _cancel.Token).ConfigureAwait(false);
+                await Send(writer, new IpcResponse(false, Error: "Malformed request."), _cancel.Token).ConfigureAwait(false);
                 return;
             }
             if (IpcProtocol.ClientRefusal(request.Protocol) is { } mismatch)
@@ -284,7 +284,7 @@ internal sealed class IpcServer : IDisposable
                 "kill" => Kill(),
                 "reload" => Reload(request),
                 "build-error" => BuildError(request),
-                _ => new IpcResponse(false, Error: $"Unknown request {request.Op}"),
+                _ => new IpcResponse(false, Error: $"Unknown request {request.Op}."),
             };
         }
         catch (IpcException e)
@@ -302,7 +302,7 @@ internal sealed class IpcServer : IDisposable
     private IpcResponse DismissNotice(List<string>? args)
     {
         if (args is { Count: > 0 })
-            return new IpcResponse(false, Error: $"Function notice.dismiss takes 0 arguments, {args.Count} given");
+            return new IpcResponse(false, Error: IpcValues.WrongCount("notice", "dismiss", 0, args.Count));
         _dismissNotice!();
         return new IpcResponse(true);
     }
@@ -325,7 +325,7 @@ internal sealed class IpcServer : IDisposable
     private IpcResponse BuildError(IpcRequest request)
     {
         if (request.Args is not { Count: 2 } args)
-            return new IpcResponse(false, Error: "build-error takes the error and the project file");
+            return new IpcResponse(false, Error: "build-error takes the error and the project file.");
         _control.ShowBuildError(args[0], args[1]);
         return new IpcResponse(true);
     }

@@ -227,7 +227,7 @@ public sealed class ShellInstanceTests
 
         Assert.True(response.Ok);
         Assert.Equal(("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"), (control.BuildError, control.BuildProject));
-        Assert.Equal((false, "build-error takes the error and the project file"), (refused.Ok, refused.Error));
+        Assert.Equal((false, "build-error takes the error and the project file."), (refused.Ok, refused.Error));
         Assert.Equal(0, control.Quits);
     }
 
