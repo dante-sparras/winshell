@@ -140,13 +140,11 @@ internal static class TomlSyntax
         if (last.Comma is null)
             LastToken(last.Value!).TrailingTrivia = null;
         else
-            item.Comma = Comma(after);
+            item.Comma = Comma([]);
         last.Comma = Comma(between);
         items.Add(item);
         SetAfter(item, after);
     }
-
-    private static SyntaxToken Comma(List<SyntaxTrivia> trailing) => new(TokenKind.Comma, ",") { TrailingTrivia = trailing };
 
     private static List<SyntaxTrivia>? After(ArrayItemSyntax item) =>
         item.Comma is { } comma ? comma.TrailingTrivia : LastToken(item.Value!).TrailingTrivia;
@@ -166,9 +164,13 @@ internal static class TomlSyntax
     private static List<SyntaxTrivia> Ended(List<SyntaxTrivia>? own, List<SyntaxTrivia>? end)
     {
         var endLine = end?.FindIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
-        if (own is not null && LastBreak(own) is var ownLine and >= 0)
-            return [.. own[..(ownLine + 1)], .. end?[(endLine + 1)..] ?? []];
-        return end?[Math.Max(endLine, 0)..] ?? [];
+        if (own is null || LastBreak(own) is var ownLine && ownLine < 0)
+            return end?[Math.Max(endLine, 0)..] ?? [];
+        var lines = own[..(ownLine + 1)];
+        if (endLine >= 0)
+            return [.. lines, .. end?[(endLine + 1)..] ?? []];
+        // The bracket was on the gone item's line, so it goes on this item's line, or under its comment.
+        return lines.Exists(t => t.Kind == TokenKind.Comment) ? lines : end ?? [];
     }
 
     private static int LastBreak(List<SyntaxTrivia>? trivia) => trivia?.FindLastIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
@@ -412,12 +414,9 @@ internal static class TomlSyntax
 
     public static SyntaxToken LastToken(SyntaxNode node) => node.Tokens(false).OfType<SyntaxToken>().Last();
 
-    public static SyntaxToken Comma()
-    {
-        var comma = new SyntaxToken(TokenKind.Comma, ",");
-        comma.TrailingTrivia = [new SyntaxTrivia(TokenKind.Whitespaces, " ")];
-        return comma;
-    }
+    public static SyntaxToken Comma() => Comma([new SyntaxTrivia(TokenKind.Whitespaces, " ")]);
+
+    private static SyntaxToken Comma(List<SyntaxTrivia> trailing) => new(TokenKind.Comma, ",") { TrailingTrivia = trailing };
 
     public static void SetString(StringValueSyntax node, string text)
     {
