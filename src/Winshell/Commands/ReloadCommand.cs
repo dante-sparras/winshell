@@ -30,27 +30,19 @@ internal static class ReloadCommand
             }
         }
         var beside = project?.RebuiltBeside;
-        try
+        var answer = await InstanceCall.AskAsync(info, new IpcRequest("reload", Args: beside is null ? null : [beside]));
+        if (answer.Response is not { } response)
         {
-            await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest(
-                "reload",
-                Args: beside is null ? null : [beside])))
-            {
-                if (response.Ok)
-                {
-                    Console.WriteLine($"Reloaded {info.Id}");
-                    return 0;
-                }
-                Console.Error.WriteLine($"Instance {info.Id} did not reload: {response.Error}");
-                return 1;
-            }
-            Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
+            Console.Error.WriteLine(answer.Failure);
+            return 1;
         }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+        if (!response.Ok)
         {
-            Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+            Console.Error.WriteLine($"Instance {info.Id} did not reload: {response.Error}");
+            return 1;
         }
-        return 1;
+        Console.WriteLine($"Reloaded {info.Id}");
+        return 0;
     }
 
     /// <summary>Asks the instance to show the build error. The instance keeps running either way.</summary>

@@ -13,19 +13,8 @@ internal static class KillCommand
             return choice.Code;
         }
         // Null once the instance has accepted the kill. No answer is a failure too.
-        string? failure = $"Instance {info.Id} closed the control pipe without answering.";
-        try
-        {
-            await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("kill")))
-            {
-                failure = response.Ok ? null : $"Instance {info.Id} refused: {response.Error}";
-                break;
-            }
-        }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            failure = $"Could not reach instance {info.Id}: {e.Message}";
-        }
+        var answer = await InstanceCall.AskAsync(info, new IpcRequest("kill"));
+        var failure = answer.Response is { Ok: false } refused ? $"Instance {info.Id} refused: {refused.Error}" : answer.Failure;
         // The quit is only posted. Wait so the next start does not overlap the AppBar, hotkeys and tray.
         if (!WaitForShellExit(info, TimeSpan.FromSeconds(5)) && !(options.Force && EndProcess(info)))
         {
