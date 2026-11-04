@@ -103,24 +103,18 @@ public sealed class TrayAreaTests
     }
 
     [Fact]
-    public void Quick_settings_and_the_update_each_raise_their_own_event()
+    public void The_update_icon_raises_its_event()
     {
         using var rig = new StatusRig();
         var host = new FakeTrayHost();
         using var tray = new SystemTray(rig.Loop, rig.Log, host);
         using var updates = new UpdatesService(rig.Loop, rig.Log, null);
         var area = new TrayArea(tray, rig.Status, updates);
-        var quick = 0;
         var update = 0;
-        area.QuickSettingsRequested += (_, _) => quick++;
         area.UpdatesRequested += (_, _) => update++;
 
-        area.RequestQuickSettings();
-        Assert.Equal(1, quick);
-        Assert.Equal(0, update);
-
         area.RequestUpdates();
-        Assert.Equal(1, quick);
+
         Assert.Equal(1, update);
     }
 

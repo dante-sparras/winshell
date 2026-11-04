@@ -8,7 +8,7 @@ namespace Winshell.DefaultShell.Taskbar;
 
 /// <summary>
 /// The icons on the right of every taskbar: the hidden-icon chevron, the icons Settings shows on the bar, a ready
-/// update, and quick settings. One instance is shared. Reading the tray makes this process the notification area,
+/// update, and the status icons that anchor quick settings. One instance is shared. Reading the tray makes this process the notification area,
 /// so a bar that opens or closes does not read it again.
 /// </summary>
 public sealed class TrayArea : ObservableObject
@@ -65,13 +65,8 @@ public sealed class TrayArea : ObservableObject
         private set => Set(ref _updateLabel, value);
     }
 
-    /// <summary>The network, volume and battery icons were clicked.</summary>
-    public event EventHandler? QuickSettingsRequested;
-
     /// <summary>The update icon was clicked. Nothing opens.</summary>
     public event EventHandler? UpdatesRequested;
-
-    public void RequestQuickSettings() => QuickSettingsRequested?.Invoke(this, EventArgs.Empty);
 
     public void RequestUpdates() => UpdatesRequested?.Invoke(this, EventArgs.Empty);
 

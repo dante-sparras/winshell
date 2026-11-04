@@ -50,11 +50,6 @@ public sealed partial class TrayAreaView : UserControl
             button.Tray = this;
     }
 
-    private void OnQuickSettings(object sender, RoutedEventArgs e)
-    {
-        Area.RequestQuickSettings();
-    }
-
     private void OnHiddenOpened(object? sender, object args)
     {
         ChevronIcon.Glyph = TrayArea.ChevronGlyph(true);
