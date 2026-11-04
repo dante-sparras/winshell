@@ -22,6 +22,14 @@ public sealed class CalendarFlyoutShellTests
     }
 
     [Fact]
+    public async Task Today_is_as_tall_as_the_month_arrows_beside_it()
+    {
+        var (today, arrow) = await Opened(view => (Button(view, "Today", button => button.Content as string == "Today").ActualHeight, Size(view, "Next month").Height));
+
+        Assert.Equal(arrow, today);
+    }
+
+    [Fact]
     public async Task It_has_one_Notifications_header_and_takes_the_keyboard_itself()
     {
         var (header, focused) = await Opened(view =>
@@ -85,18 +93,21 @@ public sealed class CalendarFlyoutShellTests
 
     private static (double Width, double Height) Size(DependencyObject root, string name)
     {
-        var button = Find(root, name) ?? throw new InvalidOperationException($"The calendar has no \"{name}\" button.");
+        var button = Button(root, name, button => AutomationProperties.GetName(button) == name);
         return (button.ActualWidth, button.ActualHeight);
     }
 
-    private static Button? Find(DependencyObject root, string name)
+    private static Button Button(DependencyObject root, string name, Func<Button, bool> match) =>
+        Find(root, match) ?? throw new InvalidOperationException($"The calendar has no \"{name}\" button.");
+
+    private static Button? Find(DependencyObject root, Func<Button, bool> match)
     {
-        if (root is Button button && AutomationProperties.GetName(button) == name)
+        if (root is Button button && match(button))
             return button;
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
         {
-            if (Find(VisualTreeHelper.GetChild(root, i), name) is { } found)
+            if (Find(VisualTreeHelper.GetChild(root, i), match) is { } found)
                 return found;
         }
 
