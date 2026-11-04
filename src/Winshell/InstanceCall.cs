@@ -6,11 +6,11 @@ internal static class InstanceCall
     /// <summary>
     /// The instance's first answer, or why there is none: it closed the pipe without one, or could not be reached.
     /// </summary>
-    internal static async Task<Answer> AskAsync(InstanceInfo info, IpcRequest request)
+    internal static async Task<Answer> AskAsync(InstanceInfo info, IpcRequest request, CancellationToken cancel = default)
     {
         try
         {
-            await foreach (var response in IpcServer.Request(info.Pipe, request))
+            await foreach (var response in IpcServer.Request(info.Pipe, request, cancel))
                 return new(response, null);
             return new(null, $"Instance {info.Id} closed the control pipe without answering.");
         }
