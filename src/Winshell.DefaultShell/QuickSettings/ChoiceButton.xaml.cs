@@ -17,6 +17,9 @@ public sealed partial class ChoiceButton : UserControl
     {
         InitializeComponent();
         Unloaded += (_, _) => Follow(null);
+        // The group unchecks this radio when another is clicked. A choice that fails leaves this one chosen, so look again
+        // once the click is done. TryEnqueue is false only during shutdown, when there is nothing left to show.
+        Radio.Unchecked += (_, _) => _ = DispatcherQueue.TryEnqueue(Show);
     }
 
     public QuickSettingsChoice? Choice
@@ -59,5 +62,10 @@ public sealed partial class ChoiceButton : UserControl
         Radio.IsChecked = _choice?.Chosen == true;
     }
 
-    private void OnClick(object sender, RoutedEventArgs e) => _choice?.Choose();
+    private void OnClick(object sender, RoutedEventArgs e)
+    {
+        // The click checked the radio. A choice that fails never changes Chosen, so nothing else would undo that.
+        Radio.IsChecked = _choice?.Chosen == true;
+        _choice?.Choose();
+    }
 }

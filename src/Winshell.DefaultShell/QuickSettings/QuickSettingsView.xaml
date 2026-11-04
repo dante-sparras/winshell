@@ -20,8 +20,7 @@
             x:Name="Main"
             Padding="24,24,24,20"
             Spacing="20"
-            Opacity="{x:Bind Fade(Popup.ShowingTiles), Mode=OneWay}"
-            IsHitTestVisible="{x:Bind Popup.ShowingTiles, Mode=OneWay}">
+            Visibility="{x:Bind Shown(Popup.ShowingTiles), Mode=OneWay}">
             <Border
                 Height="132"
                 Padding="16,12,16,8"
