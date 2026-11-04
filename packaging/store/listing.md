@@ -46,7 +46,7 @@ Copyright (c) Dante Sparrås. MIT License.
 
 ## Privacy policy URL
 
-Not configured.
+https://github.com/enpaze/winshell/blob/main/docs/privacy.md
 
 ## Website
 
