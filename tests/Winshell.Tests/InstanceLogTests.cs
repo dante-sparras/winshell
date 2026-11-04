@@ -12,7 +12,7 @@ public sealed class InstanceLogTests : IDisposable
     {
         var path = Path.Combine(_dir, "log.txt");
         var previous = Path.Combine(_dir, "log.1.txt");
-        using (var log = new InstanceLog(path, cap: 100, flushEvery: Timeout.InfiniteTimeSpan))
+        using (var log = new InstanceLog(path, cap: 100, flushAfter: Timeout.InfiniteTimeSpan))
         {
             log.Write(LogLevel.Info, "info-still-buffered");
             Assert.DoesNotContain("info-still-buffered", Read(path), StringComparison.Ordinal);
@@ -31,6 +31,19 @@ public sealed class InstanceLogTests : IDisposable
             Assert.Contains("pad-29-", kept, StringComparison.Ordinal);
             Assert.DoesNotContain("pad-0-", kept, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void An_ordinary_line_lands_a_moment_after_it_is_written()
+    {
+        var path = Path.Combine(_dir, "log.txt");
+        using var log = new InstanceLog(path, flushAfter: TimeSpan.FromMilliseconds(20));
+        log.Write(LogLevel.Info, "first");
+        Wait.Until(() => Read(path).Contains("first", StringComparison.Ordinal), "the first line on disk");
+
+        // Nothing was left to write, so the timer stopped. The next line starts it again.
+        log.Write(LogLevel.Info, "second");
+        Wait.Until(() => Read(path).Contains("second", StringComparison.Ordinal), "the second line on disk");
     }
 
     private static string Read(string path)

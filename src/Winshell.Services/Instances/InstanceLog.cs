@@ -3,8 +3,9 @@ using System.Text;
 namespace Winshell;
 
 /// <summary>
-/// The instance's log file. Ordinary lines stay in memory and land on a timer, so a binding that logs does not
-/// flush the disk on the caller. Warn and above flush at once, which is also what a crash report reads back.
+/// The instance's log file. Ordinary lines stay in memory and land a moment later, so a binding that logs does not
+/// flush the disk on the caller. The timer runs only while a line waits, so an idle shell is not woken for it. Warn
+/// and above flush at once, which is also what a crash report reads back.
 /// Once the file reaches its cap it becomes <c>log.1.txt</c> and a new <c>log.txt</c> starts, so a shell that
 /// runs for the whole session cannot fill the disk.
 /// </summary>
@@ -15,18 +16,19 @@ internal sealed class InstanceLog : IDisposable
     private readonly string _path;
     private readonly long _cap;
     private readonly object _gate = new();
+    private readonly TimeSpan _delay;
     private readonly Timer _timer;
     private StreamWriter? _writer;
     private readonly StringBuilder _pending = new();
     private bool _closed;
 
-    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushEvery = null)
+    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushAfter = null)
     {
         _path = path;
         _cap = cap;
         _writer = Open();
-        var period = flushEvery ?? TimeSpan.FromMilliseconds(500);
-        _timer = new Timer(_ => Flush(), null, period, period);
+        _delay = flushAfter ?? TimeSpan.FromMilliseconds(500);
+        _timer = new Timer(_ => Flush(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>Queues one already-stamped line. Warn and above are on disk before this returns.</summary>
@@ -36,9 +38,12 @@ internal sealed class InstanceLog : IDisposable
         {
             if (_closed)
                 return;
+            var waiting = _pending.Length > 0;
             _pending.Append(stampedLine).Append('\n');
             if (level >= LogLevel.Warn)
                 FlushLocked();
+            else if (!waiting)
+                _timer.Change(_delay, Timeout.InfiniteTimeSpan);
         }
     }
 
