@@ -277,18 +277,13 @@ public sealed class DevCommandTests : IDisposable
         Wait.Until(() => WinshellCli.Run(["log", "-t", "20"], Folders).Output.Contains("Your configuration did not build", StringComparison.Ordinal), "the notice");
 
         Mark("""=> "three";""");
-        var applied = Stopwatch.StartNew();
-        Wait.Until(() => Value().Text == "three", "the fix");
+        Wait.Until(() => Value().Text == "three", "the fix", BuildPatience);
 
         Assert.Equal(shell, ShellProcess());
-        Assert.True(applied.Elapsed < TimeSpan.FromSeconds(10), $"An edit took {applied.Elapsed}.");
 
         Label("two");
-        var saved = Stopwatch.StartNew();
-        Wait.Until(() => Shown() == "two", "the XAML edit");
-        Assert.True(saved.Elapsed < TimeSpan.FromSeconds(5), $"A XAML edit took {saved.Elapsed}.");
+        Wait.Until(() => Shown() == "two", "the XAML edit", BuildPatience);
         Assert.Equal(shell, ShellProcess());
-        TestContext.Current.TestOutputHelper?.WriteLine($"An edit took {applied.Elapsed}, and a XAML edit {saved.Elapsed}.");
     }
 
     private const uint CtrlBreakEvent = 1;

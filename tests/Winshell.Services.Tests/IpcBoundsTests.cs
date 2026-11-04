@@ -157,7 +157,7 @@ public class IpcBoundsTests
         for (var i = 0; i < IpcServer.MaxQueuedSignals + 20; i++)
             probe.Ping.Emit("queued");
 
-        var lines = await ReadLines(client, 1 + IpcServer.MaxQueuedSignals, TimeSpan.FromSeconds(30), first[0]);
+        var lines = await ReadLines(client, 1 + IpcServer.MaxQueuedSignals, first[0]);
         Assert.Equal(1 + IpcServer.MaxQueuedSignals, lines.Count);
         var values = lines.Select(line =>
         {
@@ -217,17 +217,14 @@ public class IpcBoundsTests
         return client!;
     }
 
-    private static async Task<List<string>> ReadLines(Stream stream, int count, TimeSpan timeout, byte already)
+    private static async Task<List<string>> ReadLines(Stream stream, int count, byte already)
     {
         var pending = new List<byte> { already };
         var lines = new List<string>();
         var buf = new byte[8192];
-        var until = DateTime.UtcNow + timeout;
         while (lines.Count < count)
         {
-            var remaining = until - DateTime.UtcNow;
-            Assert.True(remaining > TimeSpan.Zero, $"The listener delivered {lines.Count} lines, not {count}.");
-            var n = await stream.ReadAsync(buf).AsTask().WaitAsync(remaining);
+            var n = await stream.ReadAsync(buf, TestContext.Current.CancellationToken);
             Assert.NotEqual(0, n);
             for (var i = 0; i < n; i++)
             {

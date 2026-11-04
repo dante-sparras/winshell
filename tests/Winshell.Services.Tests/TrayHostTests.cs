@@ -241,11 +241,11 @@ public sealed class TrayHostTests : IDisposable
             var fastest = TimeSpan.MaxValue;
             for (var i = 0; i < 3; i++)
             {
-                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var started = TimeProvider.System.GetTimestamp();
                 Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, TrayProtocol.NIF_TIP, tip: "Backup")));
-                watch.Stop();
-                if (watch.Elapsed < fastest)
-                    fastest = watch.Elapsed;
+                var elapsed = TimeProvider.System.GetElapsedTime(started);
+                if (elapsed < fastest)
+                    fastest = elapsed;
             }
 
             Assert.Equal("Backup", Assert.Single(host.Icons).Tip);

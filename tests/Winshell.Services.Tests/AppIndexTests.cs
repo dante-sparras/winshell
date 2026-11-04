@@ -230,21 +230,18 @@ public sealed class AppIndexTests
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
         using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(200), false, false);
-        var changed = new ManualResetEventSlim(false);
-        catalog.Changed += () => changed.Set();
         try
         {
             catalog.Start();
             await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             var link = Path.Combine(folder, "Probe.lnk");
             WriteLink(link, Cmd(), "", "", "probe");
-            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Probe")));
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Probe"), "the new shortcut");
             File.Delete(link);
-            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "Probe")));
+            Wait.Until(() => catalog.Snapshot.Entries.All(app => app.Id != "Probe"), "the removed shortcut to go");
         }
         finally
         {
-            changed.Dispose();
             Delete(root);
         }
     }
@@ -257,8 +254,6 @@ public sealed class AppIndexTests
         Directory.CreateDirectory(folder);
         WriteLink(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
         using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500), false, false);
-        var changed = new ManualResetEventSlim(false);
-        catalog.Changed += () => changed.Set();
         try
         {
             catalog.Start();
@@ -266,13 +261,12 @@ public sealed class AppIndexTests
             Assert.Contains(catalog.Snapshot.Entries, app => app.Id == "First");
             Directory.Delete(folder, true);
             Directory.CreateDirectory(folder);
-            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "First")));
+            Wait.Until(() => catalog.Snapshot.Entries.All(app => app.Id != "First"), "the shortcut in the recreated folder to go");
             WriteLink(Path.Combine(folder, "Second.lnk"), Cmd(), "", "", "second");
-            Assert.True(Changed(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Second")));
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Second"), "the shortcut in the recreated folder");
         }
         finally
         {
-            changed.Dispose();
             Delete(root);
         }
     }
@@ -358,24 +352,6 @@ public sealed class AppIndexTests
     }
 
     private static string Cmd() => Path.Combine(Environment.SystemDirectory, "cmd.exe");
-
-    private static bool Changed(ManualResetEventSlim changed, Func<bool> ready)
-    {
-        var until = Environment.TickCount64 + 10_000;
-        while (Environment.TickCount64 < until)
-        {
-            if (ready())
-                return true;
-            changed.Reset();
-            if (ready())
-                return true;
-            var left = (int)(until - Environment.TickCount64);
-            if (left <= 0)
-                break;
-            changed.Wait(Math.Min(left, 500));
-        }
-        return ready();
-    }
 
     private static string Temp()
     {
