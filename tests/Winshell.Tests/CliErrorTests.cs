@@ -37,8 +37,8 @@ public class CliErrorTests
         var list = WinshellCli.Run(["list"], local);
         var kill = WinshellCli.Run(["kill"], local);
 
-        Assert.Equal((0, "No running instances" + Environment.NewLine, ""), list);
-        Assert.Equal((1, "", "No running instances" + Environment.NewLine), kill);
+        Assert.Equal((0, "No running instances. Start one with winshell run." + Environment.NewLine, ""), list);
+        Assert.Equal((1, "", "No running instances. Start one with winshell run." + Environment.NewLine), kill);
     }
 
     private static (int Code, string Output, string Error) Run(params string[] args) =>

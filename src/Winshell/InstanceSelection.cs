@@ -2,7 +2,7 @@ namespace Winshell;
 
 internal static class InstanceSelection
 {
-    internal const string NoneRunning = "No running instances";
+    internal const string NoneRunning = "No running instances. Start one with winshell run.";
 
     internal static InstanceChoice Select(CliOptions options, bool includeDead = false)
     {
