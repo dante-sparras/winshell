@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -18,7 +19,13 @@ public sealed partial class QuickSettingsView : UserControl
     {
         Popup = popup;
         InitializeComponent();
-        Main.SizeChanged += (_, e) => Pages.Height = e.NewSize.Height;
+        // Main is collapsed while a page shows, so Pages keeps the height it had.
+        Main.SizeChanged += (_, e) =>
+        {
+            if (Popup.ShowingTiles)
+                Pages.Height = e.NewSize.Height;
+        };
+        Popup.PropertyChanged += OnPopup;
         VolumeRow.Moved += (_, value) => Popup.Settings.Sound.SetVolume(value);
         VolumeRow.GlyphActivated += (_, _) => Popup.Settings.Sound.ToggleMute();
         VolumeRow.PageActivated += (_, _) => Popup.ShowOutput();
@@ -41,9 +48,18 @@ public sealed partial class QuickSettingsView : UserControl
     }
 
     /// <summary>Drops the bindings. The window is about to close.</summary>
-    public void Release() => Bindings.StopTracking();
+    public void Release()
+    {
+        Popup.PropertyChanged -= OnPopup;
+        Bindings.StopTracking();
+    }
 
-    private double Fade(bool shown) => shown ? 1 : 0;
+    private void OnPopup(object? sender, PropertyChangedEventArgs e)
+    {
+        // Once the bindings have shown the page, so that its Back button can take focus.
+        if (e.PropertyName == nameof(QuickSettingsPopup.Page) && !Popup.ShowingTiles)
+            DispatcherQueue.TryEnqueue(() => (FocusManager.FindFirstFocusableElement(Pages) as Control)?.Focus(FocusState.Programmatic));
+    }
 
     private Visibility Shown(bool shown) => shown ? Visibility.Visible : Visibility.Collapsed;
 
