@@ -101,9 +101,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
         private set => Set(ref _loaded, value);
     }
 
-    /// <summary>Bytes a read will take. Past this, the file is left as it is. 1 MiB.</summary>
-    internal int MaxFileBytes { get; set; } = DataLimits.MaxTextBytes;
-
     /// <summary>Tests only. Runs after the new text is ready and before it replaces the file, so a test can land a hand save.</summary>
     internal Action? BeforeReplace { get; set; }
 
@@ -385,7 +382,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
             // Share the file so a save can replace it while this read is open.
             using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             // The length is known before the bytes are. A file past the limit is not copied into a string.
-            if (DataLimits.FileBytes(stream.Length, MaxFileBytes) is { } why)
+            if (DataLimits.FileBytes(stream.Length, DataLimits.MaxTextBytes) is { } why)
                 return (null, false, why);
             Span<byte> start = stackalloc byte[3];
             var bom = stream.Read(start) == 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF;

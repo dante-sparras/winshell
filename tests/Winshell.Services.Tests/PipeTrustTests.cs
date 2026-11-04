@@ -71,7 +71,7 @@ public class PipeTrustTests
         await using var next = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
         await next.ConnectAsync(3000, TestContext.Current.CancellationToken);
         await secondWait;
-        Assert.True(PipeTrust.ClientMayUseShell(second.SafePipeHandle));
+        Assert.Null(PipeTrust.ClientRefusal(second.SafePipeHandle));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class PipeTrustTests
         await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
         await client.ConnectAsync(3000, TestContext.Current.CancellationToken);
         await waiting;
-        Assert.True(PipeTrust.ClientMayUseShell(server.SafePipeHandle));
+        Assert.Null(PipeTrust.ClientRefusal(server.SafePipeHandle));
     }
 
     [Fact]

@@ -207,9 +207,6 @@ public sealed class IpcSignal : IIpcMember
     /// <summary>The signal's name, which <c>winshell ipc wait</c> and <c>listen</c> take.</summary>
     public string Name { get; }
 
-    /// <summary>How many <c>listen</c> and <c>wait</c> clients are following this signal.</summary>
-    internal int ListenerCount => _listeners.Count;
-
     /// <summary>Tells every <c>winshell ipc wait</c> and <c>listen</c> following this signal, with <paramref name="value"/>.</summary>
     public void Emit(string value = "")
     {

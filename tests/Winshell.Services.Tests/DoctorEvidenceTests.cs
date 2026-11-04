@@ -29,7 +29,7 @@ public sealed class DoctorEvidenceTests : IDisposable
     {
         var read = new CrashFolderRead([], @"C:\locked: Access is denied");
 
-        var check = CrashesIn(read, DateTime.UtcNow);
+        var check = CrashesIn(read, DateTime.UtcNow, DoctorProbe.PeekCrash);
 
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Contains(@"Could not read the crash folder: C:\locked: Access is denied", check.Message, StringComparison.Ordinal);

@@ -63,16 +63,36 @@ public class IpcBoundsTests
     }
 
     [Fact]
-    public async Task A_disconnected_listener_is_released_without_a_later_signal()
+    public async Task A_listener_that_leaves_without_a_signal_frees_its_place()
     {
         using var probe = new Probe();
-        await using var client = await Connect(probe.Pipe);
-        await client.WriteAsync(Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n"), TestContext.Current.CancellationToken);
-        await probe.WaitUntil(() => probe.Ping.ListenerCount == 1, "The listener did not subscribe.");
+        var held = new List<NamedPipeClientStream>();
+        try
+        {
+            await Fill(probe, held, IpcServer.MaxClients);
+            await held[0].DisposeAsync();
 
-        await client.DisposeAsync();
-
-        await probe.WaitUntil(() => probe.Ping.ListenerCount == 0, "The listener stayed after the client left, with no signal.");
+            // The place is free once the server sees the client gone, with no signal to tell it. Until then a new client is closed.
+            var taken = false;
+            for (var attempt = 0; attempt < 200 && !taken; attempt++)
+            {
+                await using var next = await Connect(probe.Pipe);
+                await next.WriteAsync(ListenRequest, TestContext.Current.CancellationToken);
+                var line = ReadLine(next);
+                await probe.WaitUntil(() =>
+                {
+                    probe.Ping.Emit("sync");
+                    return line.IsCompleted;
+                }, "A client after the listener left was neither served nor closed.");
+                taken = await line is not null;
+            }
+            Assert.True(taken, "The place of the listener that left was never freed.");
+        }
+        finally
+        {
+            foreach (var client in held)
+                await client.DisposeAsync();
+        }
     }
 
     [Fact]
@@ -82,20 +102,11 @@ public class IpcBoundsTests
         var held = new List<NamedPipeClientStream>();
         try
         {
-            var request = Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n");
-            for (var i = 0; i < IpcServer.MaxClients; i++)
-            {
-                var client = await Connect(probe.Pipe);
-                held.Add(client);
-                await client.WriteAsync(request, TestContext.Current.CancellationToken);
-                var subscribed = i + 1;
-                await probe.WaitUntil(() => probe.Ping.ListenerCount == subscribed, "A listener inside the cap did not subscribe.");
-            }
+            await Fill(probe, held, IpcServer.MaxClients);
 
             await using var extra = await Connect(probe.Pipe);
             var n = await extra.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(0, n);
-            Assert.Equal(IpcServer.MaxClients, probe.Ping.ListenerCount);
         }
         finally
         {
@@ -145,8 +156,7 @@ public class IpcBoundsTests
     {
         using var probe = new Probe();
         await using var client = await Connect(probe.Pipe);
-        await client.WriteAsync(Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n"), TestContext.Current.CancellationToken);
-        await probe.WaitUntil(() => probe.Ping.ListenerCount == 1, "The listener did not subscribe.");
+        await Subscribe(probe, client);
 
         // Larger than the pipe buffer, so the server stays inside this write until the client reads it.
         var value = new string('a', 128 * 1024);
@@ -170,6 +180,63 @@ public class IpcBoundsTests
         Assert.All(values.Skip(1), queued => Assert.Equal("queued", queued));
         await Assert.ThrowsAsync<TimeoutException>(async () =>
             await client.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+    }
+
+    private static readonly byte[] ListenRequest = Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n");
+
+    /// <summary>
+    /// Listens, then returns once the server is following the signal and the stream is empty. A signal before that is
+    /// lost, so this emits until one arrives, then emits a last one and reads up to it.
+    /// </summary>
+    private static async Task Subscribe(Probe probe, Stream client)
+    {
+        await client.WriteAsync(ListenRequest, TestContext.Current.CancellationToken);
+        var line = ReadLine(client);
+        await probe.WaitUntil(() =>
+        {
+            probe.Ping.Emit("sync");
+            return line.IsCompleted;
+        }, "The listener did not subscribe.");
+        probe.Ping.Emit("done");
+        var value = await line;
+        while (value != "done")
+        {
+            Assert.NotNull(value);
+            value = await ReadLine(client);
+        }
+    }
+
+    /// <summary>Holds <paramref name="count"/> listeners, one after the other, so each is served before the next connects.</summary>
+    private static async Task Fill(Probe probe, List<NamedPipeClientStream> held, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var client = await Connect(probe.Pipe);
+            held.Add(client);
+            await Subscribe(probe, client);
+        }
+    }
+
+    /// <summary>The value of the next response line, or null when the server closed the stream.</summary>
+    private static async Task<string?> ReadLine(Stream stream)
+    {
+        var line = new List<byte>();
+        var one = new byte[1];
+        while (true)
+        {
+            var n = await stream.ReadAsync(one, TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            if (n == 0)
+                return null;
+            if (one[0] != (byte)'\n')
+            {
+                line.Add(one[0]);
+                continue;
+            }
+            var response = JsonSerializer.Deserialize(line.ToArray(), IpcJson.Default.IpcResponse);
+            Assert.NotNull(response);
+            Assert.True(response.Ok);
+            return response.Value;
+        }
     }
 
     private static string PipeName() => "winshell-test-" + Guid.NewGuid().ToString("N");

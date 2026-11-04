@@ -165,8 +165,6 @@ internal static partial class PipeTrust
         return null;
     }
 
-    internal static bool ClientMayUseShell(SafePipeHandle pipe) => ClientRefusal(pipe) is null;
-
     /// <summary>Null when the connected client may use the shell. Otherwise the reason, for the log and the client.</summary>
     internal static string? ClientRefusal(SafePipeHandle pipe)
     {
