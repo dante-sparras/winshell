@@ -134,3 +134,5 @@ winshell dev --path .
 - **An edit .NET can't apply to running code**, such as a new base class, restarts the shell. That takes as long as a build, and the state of every window goes with it.
 - **Code that doesn't compile** shows in a notice on screen, and the last version that did keeps running. The notice goes when the next save compiles. Before the first successful build there is no shell to show it, so the error is in the console.
 - **A TOML or XAML file with an error** shows in the same notice, and what came from it before stays in use. Without `winshell dev` it goes to the log.
+
+Apps you open from the shell under `winshell dev` close when `winshell dev` builds and starts the shell again, or when it ends. `dotnet watch` runs the shell in a Windows job object, and what the shell starts belongs to that job too. Run the shell with `winshell run` to keep them open.

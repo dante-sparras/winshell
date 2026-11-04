@@ -78,7 +78,7 @@ internal static class DevSession
             try
             {
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(closing ? 1 : 3));
-#pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process. Its thread runs no continuation.
+#pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process. No thread here runs a continuation it waits for.
                 _ = InstanceCall.AskAsync(shell, new IpcRequest("kill"), deadline.Token).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
             }
@@ -153,7 +153,7 @@ internal static class DevSession
                 await Show(project, notice);
             if (line.Contains(XamlReload.NeedsBuild, StringComparison.Ordinal))
             {
-                process.Kill(entireProcessTree: true);
+                StopShellAndWatch(project, process, closing: false);
                 await process.WaitForExitAsync();
                 return null;
             }
