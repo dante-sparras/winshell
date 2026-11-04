@@ -39,7 +39,7 @@ jobs:
           tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/lychee-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
       # A rate-limited link (429) is retried after a wait, and fails if it stays limited. about.signpath.io, the link
-      # SignPath Foundation asks the code signing policy to carry, redirects with a header lychee can't parse.
+      # docs/code-signing-policy.md carries as SignPath Foundation asks, redirects with a header lychee can't parse.
       - name: Check links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -55,7 +55,7 @@ Windows stay Winshell's. The content is any `UIElement`. Sizes are logical pixel
         };
 ```
 
-- **[PanelWindow](reference/winshell.md#panelwindow)** sits on the edges of a screen. `Anchors` chooses the edges. `ReservedSize` reserves that edge, so maximized windows stop short of it. `ExclusionMode` of `Ignore` reserves nothing. `AboveWindows` set false puts it behind other windows.
+- **[PanelWindow](reference/winshell.md#panelwindow)** sits on the edges of a screen. `Anchors` chooses the edges. `ReservedSize` reserves that edge, so maximized windows stop short of it. A `ReservedSize` of 0 reserves nothing. `AboveWindows` set false puts it behind other windows.
 - **[PopupWindow](reference/winshell.md#popupwindow)** is a frameless window placed next to another. `GrabFocus` gives it the keyboard. `Dismissed` fires when it closes.
 - **[FloatingWindow](reference/winshell.md#floatingwindow)** is a normal window with a title bar.
 

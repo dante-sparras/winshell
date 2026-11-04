@@ -46,7 +46,7 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 - **The media playing**, with play, pause, previous and next for that [media session](winshell-media.md).
 - **Tiles**: Wi-Fi, Bluetooth, Airplane mode, Energy saver, Power mode, Night light and Accessibility. A tile shows the setting's state where Winshell can read it. Power mode opens a page that changes the [power mode](winshell-power.md#powermodeservice). The other tiles open their page in Windows Settings. A configuration can set `NetworkingService.WifiEnabled` and `BluetoothAdapter.Enabled`. These tiles do not, and they do not change the other Windows settings. A tile for hardware the PC doesn't have is hidden.
-- **Sliders**: the volume of the default playback device, with a page to pick the output. **App volume** on that page sets the volume and mute of each audio session. The brightness slider is a monitor that reports one.
+- **Sliders**: the volume of the default playback device, with a page to pick the output. **App volume** on that page sets the volume and mute of each audio session. The brightness slider follows the PC's built-in panel, and is hidden on a PC without one.
 - **The battery**, on a PC that has one.
 
 **Edit quick settings** edits the tiles: unpin, add back and reorder them, with the mouse or the keyboard. They are kept in `quick-settings.toml` in the shell's state folder.
@@ -55,8 +55,6 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 The clock on the taskbar opens one popup window with the notifications above a month calendar. Its accessible name includes how many of those notifications are showing, and the time and date it draws stay as they are. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
 
-
-
 ## On-screen display
 
 When the volume, a monitor's brightness, the microphone mute or the media playing changes, a short panel appears above the taskbar, centered on the screen, as on Windows 11. Volume, brightness and mute stay for 3 seconds and media for 5; the pointer over it keeps it open. It only shows levels and never changes them, except that its media buttons control the session that is playing. It doesn't reserve space.
@@ -64,8 +62,6 @@ When the volume, a monitor's brightness, the microphone mute or the media playin
 ## Winshell Settings
 
 A window laid out like Windows 11 Settings, for Winshell's own choices: light or dark, the accent color, the material, the taskbar, Start, quick settings, notifications, hotkeys, running at sign-in, and Winshell's own updates. Open it from the taskbar's right-click menu, its hotkey, or `winshell ipc call settings open <page>`.
-
-
 
 ## Files
 
