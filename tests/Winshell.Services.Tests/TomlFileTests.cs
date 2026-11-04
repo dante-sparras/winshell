@@ -335,7 +335,7 @@ public sealed class TomlFileTests
         using var settings = Open(fixture);
         Assert.Equal("kept", settings.Name);
         Assert.Equal(3, settings.Size);
-        Assert.Contains(fixture.Messages, m => m.Contains("size is the wrong type, so it was left unchanged", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages, m => m.Contains("size should be a whole number, not \"x\", so it was left unchanged", StringComparison.Ordinal));
 
         settings.Name = "next";
         fixture.Loop.Process();
@@ -385,7 +385,7 @@ public sealed class TomlFileTests
         using var fixture = new TomlFixture($"on = {value}\nname = \"mine\"\n");
         using var settings = Open(fixture);
         Assert.True(settings.On);
-        Assert.Contains(fixture.Messages, m => m.Contains("on is the wrong type", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages, m => m.Contains("on should be true or false, not ", StringComparison.Ordinal));
 
         settings.Name = "next";
         fixture.Loop.Process();
@@ -441,7 +441,7 @@ public sealed class TomlFileTests
         using var settings = Open(fixture);
 
         Assert.Equal(["wifi"], settings.Tiles);
-        Assert.Contains(fixture.Messages, m => m.Contains("tiles is the wrong type", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages, m => m.Contains("tiles should be a list of strings, not ", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -473,6 +473,22 @@ public sealed class TomlFileTests
         Assert.Equal("default", settings.Name);
         Assert.Equal(4, settings.Size);
         Assert.Contains(fixture.Messages, m => m.Contains("name is not \"acrylic\" or \"mica\", so it was left unchanged", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_value_left_unchanged_is_reported_with_its_line_and_what_it_should_be()
+    {
+        using var fixture = new TomlFixture("name = \"Mica\"\nsize = \"x\"\n  on = [false]\ntiles = [1, \"wifi\"]\n");
+        using var settings = Open(fixture, BackdropCheck);
+
+        Assert.Equal(
+            [
+                $"TomlFile: {fixture.FilePath}[1:1]: name is not \"acrylic\" or \"mica\", so it was left unchanged",
+                $"TomlFile: {fixture.FilePath}[3:3]: on should be true or false, not [false], so it was left unchanged",
+                $"TomlFile: {fixture.FilePath}[2:1]: size should be a whole number, not \"x\", so it was left unchanged",
+                $"TomlFile: {fixture.FilePath}[4:1]: tiles should be a list of strings, not [1, \"wifi\"], so it was left unchanged",
+            ],
+            fixture.Messages);
     }
 
     [Fact]

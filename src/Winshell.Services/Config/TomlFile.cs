@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using Tomlyn.Parsing;
@@ -241,12 +242,13 @@ public abstract class TomlFile : ObservableObject, IDisposable
     /// </summary>
     private void Apply(TomlDocument document, string text, bool keepAssigned)
     {
-        // A key like none of these may be another reader's: a configuration can share preferences.toml.
         DocumentSyntax? syntax = null;
+        string Where(string name) => TomlSyntax.KeyAt(_path, syntax ??= SyntaxParser.Parse(text), name);
+        // A key like none of these may be another reader's: a configuration can share preferences.toml.
         foreach (var name in document.Values.Keys)
         {
             if (!_keys.Exists(key => key.Name == name) && Nearest(name) is { } near)
-                Warn($"{TomlSyntax.KeyAt(_path, syntax ??= SyntaxParser.Parse(text), name)}: {name} was ignored; did you mean {near}?");
+                Warn($"{Where(name)}: {name} was ignored; did you mean {near}?");
         }
         _loading = true;
         try
@@ -256,9 +258,9 @@ public abstract class TomlFile : ObservableObject, IDisposable
                 if ((keepAssigned && _assigned.Contains(key)) || !document.Values.TryGetValue(key.Name, out var value))
                     continue;
                 if (!TryConvert(value!, key.Property.PropertyType, out var converted))
-                    Leave(key, "is the wrong type");
+                    Leave(Where(key.Name), key, $"should be {Expected(key.Property.PropertyType, value!)}, not {Shown(value)}");
                 else if (_check?.Invoke(key.Name, converted) is { Length: > 0 } reason)
-                    Leave(key, reason);
+                    Leave(Where(key.Name), key, reason);
                 else if (!TomlDocument.Same(TomlDocument.Plain(key.Property.GetValue(this)), value))
                     key.Property.SetValue(this, converted);
             }
@@ -297,7 +299,48 @@ public abstract class TomlFile : ObservableObject, IDisposable
         return previous[b.Length];
     }
 
-    private void Leave(Key key, string reason) => Warn($"{_path}: {key.Name} {reason}, so it was left unchanged");
+    private void Leave(string where, Key key, string reason) => Warn($"{where}: {key.Name} {reason}, so it was left unchanged");
+
+    /// <summary>What a property of <paramref name="type"/> takes, said for <paramref name="value"/>, which it does not.</summary>
+    private static string Expected(Type type, object value)
+    {
+        var target = Nullable.GetUnderlyingType(type) ?? type;
+        if (target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+            return "a list of " + Plural(target.GetGenericArguments()[0]);
+        if (target == typeof(bool))
+            return "true or false";
+        if (target == typeof(int))
+            return value is long ? string.Create(CultureInfo.InvariantCulture, $"a whole number from {int.MinValue} to {int.MaxValue}") : "a whole number";
+        if (target == typeof(long))
+            return "a whole number";
+        if (target == typeof(double))
+            return "a number";
+        return target == typeof(string) ? "a string" : "a table";
+    }
+
+    private static string Plural(Type type)
+    {
+        var target = Nullable.GetUnderlyingType(type) ?? type;
+        if (target == typeof(bool))
+            return "true or false values";
+        if (target == typeof(int) || target == typeof(long))
+            return "whole numbers";
+        if (target == typeof(double))
+            return "numbers";
+        if (target == typeof(string))
+            return "strings";
+        return target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>) ? "lists" : "tables";
+    }
+
+    /// <summary>A value read from the file, as TOML, or <c>a table</c>.</summary>
+    private static string Shown(object? value) => value switch
+    {
+        string text => TomlSyntax.Quote(text),
+        bool flag => flag ? "true" : "false",
+        long or double => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "",
+        IReadOnlyList<object?> items => "[" + string.Join(", ", items.Select(Shown)) + "]",
+        _ => "a table",
+    };
 
     private void Warn(string message) => _log.Warn("io", "TomlFile: " + message);
 
