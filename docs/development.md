@@ -21,6 +21,8 @@ pwsh -NoProfile -Command "Install-Module Pester -RequiredVersion 5.6.1 -Scope Cu
 pwsh scripts/check.ps1
 ```
 
+The first build of `winshell.slnx` sets `core.hooksPath` to `.githooks`, unless the clone already sets a hooks path. The `pre-commit` hook then runs `dotnet format` over the staged C# files, so a commit fails on the formatting, code style and analyzer errors that would fail CI. It reads the files as they are in the working tree, and takes about 20 seconds. `git commit --no-verify` skips it, and `dotnet format winshell.slnx` fixes most of what it finds.
+
 ## Agent skills
 
 Install every skill `skills-lock.json` records, the project-owned test-audit skill included, for Codex and Claude Code:
@@ -78,6 +80,7 @@ Before every push, run `pwsh scripts/check.ps1`, then the focused checks for wha
 | --- | --- | --- |
 | `installer` | PRs that change `scripts/`, `tests/Scripts/` or workflows/actions, and every push to `main`. | Windows PowerShell 5.1 runs `tests/Scripts/Install.Tests.ps1` with Pester 5.6.1 against temporary profiles and releases served on loopback. PowerShell 7 tooling suites run once in `ci`. |
 | `slow` | Every pull request that changes more than docs or Markdown and is not a draft, and every push to `main`, in `ci.yml` | `pwsh scripts/check.ps1 -Tier Slow`, on an empty Winland workspace. |
+| `pr-size` | Every pull request, from `pr-size.yml` on the base branch. Not required. | Nothing to run. It labels the pull request `size:XS` to `size:XL`, as "PR description" in `CONTRIBUTING.md` says. |
 | `trim-caches` | Every push to `main`, after `ci`, in `ci.yml` | Nothing to run. It deletes all but the two newest CodeQL databases of each language from the Actions cache, which would otherwise pass the 10 GB GitHub keeps. |
 | `links` | Pushes to `main` that change docs or Markdown, and every Monday, in `links.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents` and `https://about.signpath.io`. |
 | `actionlint` | Pull requests that change a workflow, and every push to `main`, in `ci.yml` | actionlint on `.github/workflows`, then zizmor on `.github`. |
@@ -87,9 +90,9 @@ Every check of a pull request is in `ci.yml`, except `pr-title`, which also look
 
 Before it builds, `ci` runs lychee offline over the repo's Markdown, so a link to a file or a heading that isn't there fails it. `pr-title` checks the pull request title. `pr-rules` checks that each type of change carries its proof, as "PR description" in `CONTRIBUTING.md` lists. CodeQL analyzes the languages it finds.
 
-`main` merges through a merge queue: `gh pr merge <number> --squash` adds a pull request to it, and the queue runs the required checks on the commit that will land. `ci.yml`, `pr-title.yml` and `pr-rules.yml` run on `merge_group` for that.
+`main` takes squash merges of pull requests. `gh pr merge <number> --squash --auto` merges one once its required checks pass. A pull request need not be up to date with `main`, so its checks ran on its branch and not on what lands; the push to `main` runs every check again on the merged commit.
 
-The short `pr-title` and `pr-rules` workflows finish every run, including successive PR edits. They have no concurrency cancellation: a cancelled required check can hold the merge queue even after a newer passing run. The main CI workflow still cancels superseded PR runs and stops work after a failed build. To recover an already cancelled metadata check, open its Actions run and choose **Re-run all jobs**, or run `gh run rerun <run-id>`. Auto-merge waits for the queue; only **Merged** confirms the change is on `main`.
+The short `pr-title` and `pr-rules` workflows finish every run, including successive PR edits. They have no concurrency cancellation: a cancelled required check can block a pull request even after a newer passing run. The main CI workflow still cancels superseded PR runs and stops work after a failed build. To recover an already cancelled metadata check, open its Actions run and choose **Re-run all jobs**, or run `gh run rerun <run-id>`. Only **Merged** confirms the change is on `main`.
 
 A push to `main` that changes only `docs/**` or Markdown does not run `package`. A release still calls that workflow. The `store-package` artifact is kept for 14 days.
 
@@ -284,6 +287,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 
 ```text
 .
+├── .githooks/                       # The pre-commit hook; building the solution points Git at it
 ├── .github/                         # CI, issue and PR templates, Dependabot
 ├── docs/
 │   ├── agents/                      # How the engineering skills use this repo
@@ -314,6 +318,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 │   ├── TestSupport/                 # Source files every test project links instead of copying
 │   └── Directory.Build.props        # What every test project shares
 ├── winshell.slnx                    # The solution the check builds
+├── Directory.Solution.targets       # Points Git at .githooks when the solution builds
 ├── skills/                          # Project-owned skill sources; installed copies are ignored
 ├── CONTRIBUTING.md                  # Test rules, branch names, PR titles and descriptions
 └── GLOSSARY.md                      # The words this repo uses

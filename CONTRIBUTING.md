@@ -56,13 +56,16 @@ CI checks the PR title. It also checks the branch name, but only as a reminder; 
 
 Fill in the PR template:
 
-- **Summary**: the issue it comes from, if any, and the smallest diagram, diff sketch, or tree that shows the change.
-- **Evidence**: a before and after, from the tests or manual steps you ran. "Tests pass" on its own isn't enough. Add **Not verified** for anything you couldn't check. Don't commit evidence to `main`.
+- **Problem**: what goes wrong, or what is missing, in a sentence or two.
+- **Change**: how this solves it, with the smallest diagram, diff sketch, or tree that shows it.
+- **Scope and approval**: the issue it fixes, or why it needs none.
+- **Verification**: what you checked for the changed behavior, how, and what you saw: the tests or manual steps you ran and their results, with a before and after. "Tests pass" is not verification. Add **Not verified** for anything you couldn't check. Don't commit evidence to `main`.
 - **Proof for the type of change**: the `pr-rules` check reads these from your title, body and files.
   - `fix` adds a test that failed before the fix, and says how under **Before:** and **After:**. If it can't have a test, say why on a `**No test:**` line. A fix to docs alone doesn't need one.
   - `perf` gives a number under **Before:** and under **After:**, or in a table with those headings.
   - A `feat`, `fix` or `perf` change to XAML in `src/` shows a `winshell inspect` screenshot. `pwsh scripts/pr-screenshot.ps1 <png>` publishes one and prints the Markdown to paste. If nothing visible changed, say why on a `**Not visual:**` line.
   - Other types carry no extra proof.
 - **Merge Danger**: whether this is a one-way or two-way **Door**, and its **Blast Radius**, the one word for what it can affect.
+- **Agent**: if an AI agent wrote the PR, the model and the harness, such as "Claude Opus 5.5 in Claude Code".
 
-If an AI agent did the work, end the description with the model and the tool you used, such as "Claude Opus 5.5 in Claude Code".
+The `pr-size` job labels each pull request `size:XS` to `size:XL` by its changed lines: XS under 10, S under 30, M under 100, L under 500, and XL 500 or more. Lines in `tests/` count only when nothing else changed.

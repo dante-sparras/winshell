@@ -5,21 +5,17 @@ on:
   # fork PRs without a maintainer's approval. The job checks out the base branch and never checks out PR code.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, edited, synchronize, reopened]
-  # A merge queue waits for every required check on its merge group. The rules were checked on the pull request.
-  merge_group:
 
 permissions:
   contents: read # checkout
   pull-requests: read # the changed files
 
-# Let every metadata check finish. Cancelling a superseded required check can block the merge queue.
+# Let every metadata check finish. A cancelled required check can block a pull request even after a newer run passes.
 
 jobs:
   pr-rules:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: pr-rules
-    # A merge group has no title or body. A skipped job still satisfies the required check.
-    if: github.event_name != 'merge_group'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

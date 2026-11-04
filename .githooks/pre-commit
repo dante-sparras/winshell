@@ -1,0 +1,6 @@
+#!/bin/sh
+# Checks the staged C# files for formatting, code style and analyzer diagnostics, as the build in CI does. It reads the
+# files as they are in the working tree. `git commit --no-verify` skips it; `dotnet format winshell.slnx` fixes most of
+# what it finds.
+git diff --cached --name-only --diff-filter=ACMR -z -- '*.cs' |
+    xargs -0 -r dotnet format winshell.slnx --verify-no-changes --include

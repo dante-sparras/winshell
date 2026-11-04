@@ -5,21 +5,19 @@ on:
   # check reports on every PR. The job reads only the title and never checks out PR code.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, edited, synchronize, reopened]
-  # A merge queue waits for every required check on its merge group. The title was checked on the pull request.
-  merge_group:
 
 permissions:
   pull-requests: read
 
-# Let every metadata check finish. Cancelling a superseded required check can block the merge queue.
+# Let every metadata check finish. A cancelled required check can block a pull request even after a newer run passes.
 
 jobs:
   pr-title:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: pr-title
-    # GitHub's Revert button titles PRs `Revert "<original title>"` on a `revert-<n>-…` branch, and a merge group has no
-    # title. A skipped job still satisfies the required check.
-    if: ${{ github.event_name != 'merge_group' && !(startsWith(github.event.pull_request.title, 'Revert "') && startsWith(github.head_ref, 'revert-')) }}
+    # GitHub's Revert button titles PRs `Revert "<original title>"` on a `revert-<n>-…` branch. A skipped job still
+    # satisfies the required check.
+    if: ${{ !(startsWith(github.event.pull_request.title, 'Revert "') && startsWith(github.head_ref, 'revert-')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

@@ -111,7 +111,7 @@ Describe 'The check' {
     It 'fails a pull request with a problem, and says what it is' {
         $output = pwsh -NoProfile -File $script:Rules -Title 'fix: x' -Body '' -Path $script:Paths
         $LASTEXITCODE | Should -Be 1
-        $output | Should -Contain "::error title=Pull request::A fix says under Evidence how its test failed before the fix: **Before:** and **After:**."
+        $output | Should -Contain "::error title=Pull request::A fix says under Verification how its test failed before the fix: **Before:** and **After:**."
     }
 
     It 'passes one with none' {
