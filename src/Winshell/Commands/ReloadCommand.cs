@@ -29,8 +29,8 @@ internal static class ReloadCommand
                 return 1;
             }
         }
-        var beside = project?.RebuiltBeside;
-        var answer = await InstanceCall.AskAsync(info, new IpcRequest("reload", Args: beside is null ? null : [beside]));
+        // The program the build left, which is not always the one this instance runs.
+        var answer = await InstanceCall.AskAsync(info, new IpcRequest("reload", Args: project is null ? null : [project.Program]));
         if (answer.Response is not { } response)
         {
             Console.Error.WriteLine(answer.Failure);

@@ -31,11 +31,9 @@ internal static class InstanceSelection
             var project = ConfigurationSelection.FindProject(options, out var error);
             if (error is not null)
                 return InstanceChoice.Miss(error);
-            var match = project is null
-                ? instances.FirstOrDefault(IsDefaultShell)
-                : instances.FirstOrDefault(i => string.Equals(i.ConfigPath, project.Program, StringComparison.OrdinalIgnoreCase));
-            var label = project?.Program ?? "the default shell";
-            return match is null ? InstanceChoice.Miss($"No running instance of {label}.") : InstanceChoice.Found(match);
+            // With -c or -p a project is always found, or the error above says why not.
+            var match = instances.FirstOrDefault(i => RunsProject(i, project!));
+            return match is null ? InstanceChoice.Miss($"No running instance of {project!.Program}.") : InstanceChoice.Found(match);
         }
         return ChooseUnselected(instances);
     }
@@ -54,13 +52,9 @@ internal static class InstanceSelection
         return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss(NoneRunning);
     }
 
-    /// <summary><c>winshell.exe</c> and <c>winshellw.exe</c> are the default shell. A project built into <c>bin\shell</c> is not.</summary>
-    private static bool IsDefaultShell(InstanceInfo info)
-    {
-        var name = System.IO.Path.GetFileName(info.ConfigPath);
-        return (name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase) || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase))
-            && ConfigurationProject.ForProgram(info.ConfigPath) is null;
-    }
+    /// <summary>Whether <paramref name="info"/> runs <paramref name="project"/>, from <c>bin\shell</c> or from <c>bin\shell.next</c>.</summary>
+    internal static bool RunsProject(InstanceInfo info, ConfigurationProject project) =>
+        string.Equals(ConfigurationProject.ForProgram(info.ConfigPath)?.ProjectFile, project.ProjectFile, StringComparison.OrdinalIgnoreCase);
 
     internal readonly record struct InstanceChoice(InstanceInfo? Info, string? Error, int Code)
     {

@@ -48,6 +48,45 @@ public class CliRunCommandTests
         Assert.Contains("No .csproj", error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void No_duplicate_exits_quietly_before_building_when_the_project_already_runs()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            // A project that cannot build: a run that reaches the build exits 1. Its shell runs from shell.next.
+            var project = Path.Combine(root, "MyProject");
+            Directory.CreateDirectory(project);
+            File.WriteAllText(Path.Combine(project, "Bar.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+            File.WriteAllText(Path.Combine(project, "Program.cs"), "this is not C#");
+            var dir = Path.Combine(root, "run", "runningabc");
+            Directory.CreateDirectory(dir);
+            using var self = Process.GetCurrentProcess();
+            File.WriteAllText(Path.Combine(dir, "instance.json"), System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["id"] = "runningabc",
+                ["pid"] = self.Id,
+                ["shellId"] = "bar",
+                ["configPath"] = Path.Combine(project, "bin", "shell.next", "Bar.exe"),
+                ["launchTime"] = DateTime.Now,
+                ["pipe"] = "winshell-runningabc",
+                ["log"] = Path.Combine(dir, "log.txt"),
+                ["processName"] = self.ProcessName,
+                ["processStart"] = self.StartTime.ToUniversalTime().Ticks,
+            }));
+
+            var (code, output, error) = WinshellCli.Run(["run", "-n", "-p", project], ("WINSHELL_LOCAL_DIR", root));
+
+            Assert.Equal(0, code);
+            Assert.Equal("", output);
+            Assert.Equal("", error);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static (int Code, string Output, string Error) Run(string[] args) =>
         WinshellCli.Run(
             args,

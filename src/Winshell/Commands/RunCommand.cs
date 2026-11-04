@@ -43,6 +43,9 @@ internal static class RunCommand
                     return DetachDefault(originalArgs);
             return RunDefault(update);
         }
+        // Before the build: a duplicate exits quietly, so it must not wait on one or fail on a broken edit.
+        if (options.NoDuplicate && Instances.List(false).Any(i => InstanceSelection.RunsProject(i.Info, project)))
+            return 0;
         var reason = project.Prepare(options.NoBuild, ConfigurationProject.Run);
         if (reason is not null)
         {
