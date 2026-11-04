@@ -26,6 +26,9 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     /// </summary>
     private Dictionary<(uint Id, DateTimeOffset Created), IncomingToast> _read = [];
 
+    private readonly ToastChanges _changes = new(ToastChanges.DatabaseStamp, TimeProvider.System);
+    private IReadOnlyList<IncomingToast> _toasts = [];
+
     public async Task<NotificationAccessStatus> RequestAccessAsync() =>
         MapAccess(await UserNotificationListener.Current.RequestAccessAsync());
 
@@ -40,13 +43,21 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             var listener = UserNotificationListener.Current;
             var access = MapAccess(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
+            {
+                _changes.Change();
                 return new(access, [], focus, mode);
+            }
+            if (!_changes.Due(out var stamp))
+                return new(access, _toasts, focus, mode);
             var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast).AsTask(cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             // Access may be revoked while the asynchronous read is in progress.
             access = MapAccess(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
+            {
+                _changes.Change();
                 return new(access, [], focus, mode);
+            }
             var known = _read;
             Dictionary<(uint, DateTimeOffset), IncomingToast> read = [];
             List<IncomingToast> toasts = [];
@@ -67,6 +78,8 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
                 }
             }
             _read = read;
+            _toasts = toasts;
+            _changes.Read(stamp);
             return new(access, toasts, focus, mode);
         }
         catch (Exception e) when (IsExpectedFailure(e))
@@ -82,6 +95,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed)
             throw new UnauthorizedAccessException("Windows notification listener access is no longer allowed.");
         listener.RemoveNotification(id);
+        _changes.Change();
     }
 
     /// <summary>
@@ -97,7 +111,11 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             var listener = UserNotificationListener.Current;
             if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed)
                 return null;
-            TypedEventHandler<UserNotificationListener, UserNotificationChangedEventArgs> handler = (_, _) => changed();
+            TypedEventHandler<UserNotificationListener, UserNotificationChangedEventArgs> handler = (_, _) =>
+            {
+                _changes.Change();
+                changed();
+            };
             listener.NotificationChanged += handler;
             return () => listener.NotificationChanged -= handler;
         }
