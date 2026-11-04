@@ -506,7 +506,7 @@ public sealed class SettingsShellTests
                     File.WriteAllText(PreferencesPath, preferences);
                 Loop = new ManualEventLoop();
                 Preferences = new Preferences(PreferencesPath, Loop, shell.Log);
-                Start = new Start(Path.Combine(Config, "launcher.toml"), Loop, shell.Log);
+                Start = new Start(Path.Combine(Config, "launcher.toml"), Loop, shell.Log, _ => []);
                 Layout = new QuickSettingsLayout(Path.Combine(_directory, "quick-settings.toml"), Loop, shell.Log);
                 Hotkey = shell.NewHotkey();
                 Host = new SettingsHost(shell, Preferences, Start, Layout, Hotkey);

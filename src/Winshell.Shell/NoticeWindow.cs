@@ -48,9 +48,6 @@ internal sealed class NoticeWindow : IDisposable
         Hold();
     }
 
-    /// <summary>The window, so a test can read where it is.</summary>
-    internal PanelWindow Window => _window;
-
     public void Dispose()
     {
         _timer?.Dispose();

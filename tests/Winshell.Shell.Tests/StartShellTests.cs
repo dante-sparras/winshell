@@ -19,7 +19,7 @@ public sealed class StartShellTests
         {
             var (text, magnifier) = await ShellFixture.On(async shell =>
             {
-                using var start = new Start(Path.Combine(directory, "launcher.toml"), new ManualEventLoop(), shell.Log);
+                using var start = new Start(Path.Combine(directory, "launcher.toml"), new ManualEventLoop(), shell.Log, _ => []);
                 var view = new StartView(new StartPopup(start));
                 using var window = new FloatingWindow { Title = "Winshell test", Width = 640, Height = 720, Content = view };
                 window.Visible = true;

@@ -16,7 +16,6 @@ public static class SettingsAbout
     public const string AutomaticUnavailable = "Only a Winshell that updates itself downloads updates";
     public const string NoFolder = "This shell has no config folder";
     public const string NoLog = "This instance writes no log";
-    public const string DiagnosticsUnavailable = "Only a shell started by winshell.exe can check its setup";
     public const string DiagnosticsRunning = "Checking…";
 
     /// <summary>The same address <c>winshell doctor</c> prints when a check cannot run.</summary>
@@ -56,10 +55,8 @@ public static class SettingsAbout
 
     public static string Log(string path) => path.Length > 0 ? path : NoLog;
 
-    public static string Diagnostics(bool available, bool running, string summary, string idle) =>
-        !available ? DiagnosticsUnavailable : running ? DiagnosticsRunning : summary.Length > 0 ? summary : idle;
-
-    public static bool DiagnosticsEnabled(bool available, bool running) => available && !running;
+    public static string Diagnostics(bool running, string summary, string idle) =>
+        running ? DiagnosticsRunning : summary.Length > 0 ? summary : idle;
 
     public static string Summary(IReadOnlyList<SettingsDiagnostic> checks)
     {
@@ -97,17 +94,15 @@ public static class SettingsAbout
 }
 
 /// <summary>
-/// A diagnostics run for the About page. Without a probe there is nothing to run. The probe runs on its own thread,
+/// A diagnostics run for the About page. The probe runs on its own thread,
 /// and the result is posted back, because a check can be slow and a pooled continuation has been dropped before.
 /// </summary>
 public sealed class SettingsDiagnosticsSession
 {
-    private readonly Func<IReadOnlyList<SettingsDiagnostic>>? _probe;
+    private readonly Func<IReadOnlyList<SettingsDiagnostic>> _probe;
     private bool _running;
 
-    public SettingsDiagnosticsSession(Func<IReadOnlyList<SettingsDiagnostic>>? probe) => _probe = probe;
-
-    public bool Available => _probe is not null;
+    public SettingsDiagnosticsSession(Func<IReadOnlyList<SettingsDiagnostic>> probe) => _probe = probe;
 
     public bool Running => _running;
 
@@ -119,7 +114,7 @@ public sealed class SettingsDiagnosticsSession
 
     public void Run(Action<Action> post)
     {
-        if (_probe is not { } probe || _running)
+        if (_running)
             return;
         _running = true;
         Updated?.Invoke(this, EventArgs.Empty);
@@ -128,7 +123,7 @@ public sealed class SettingsDiagnosticsSession
             IReadOnlyList<SettingsDiagnostic> checks;
             try
             {
-                checks = probe();
+                checks = _probe();
             }
 #pragma warning disable CA1031 // Out of memory too: this thread ending would take the shell with it, and the page reports it.
             catch (Exception e)

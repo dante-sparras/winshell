@@ -79,8 +79,7 @@
             VerticalAlignment="Center"
             CornerRadius="{ThemeResource ControlCornerRadius}"
             UseSystemFocusVisuals="True"
-            AutomationProperties.Name="Quick settings"
-            Click="OnQuickSettings">
+            AutomationProperties.Name="Quick settings">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Grid Width="16" Height="16">
                     <FontIcon

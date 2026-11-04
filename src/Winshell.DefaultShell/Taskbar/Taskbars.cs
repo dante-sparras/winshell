@@ -52,7 +52,7 @@ internal sealed class Taskbars
         _quick.SettingsRequested += uri => ProgramStart.Start(uri, shell.Log);
         // One Start catalog for every bar, so two bars do not both write the default pins.
         var apps = shell.Apps;
-        _start = new Start(Path.Combine(shell.ConfigRoot, "launcher.toml"), shell.Loop, shell.Log, query => apps.Search(query).Select(ToStartApp).ToList());
+        _start = new Start(Path.Combine(shell.ConfigRoot, "launcher.toml"), shell.Loop, shell.Log, query => apps.Search(query).Select(Start.Map).ToList());
         _start.Use(apps);
         _start.ShowRecommended = preferences.StartRecommended;
         // The Win tap is the key-up. Pressed is that tap, so Released is not wired: it would close what Pressed just opened.
@@ -68,9 +68,6 @@ internal sealed class Taskbars
         _taskbarChords = TaskbarChords.Register(() => shell.NewHotkey(), new ChordActions(this));
         SyncDesktopChords();
     }
-
-    private static StartApp ToStartApp(AppEntry app) =>
-        new(app.Id, app.Name, app.AppId, app.Icon, app.Target, app.Packaged, app.Hidden);
 
     private void OnScreens(object? sender, NotifyCollectionChangedEventArgs e) => Sync();
 

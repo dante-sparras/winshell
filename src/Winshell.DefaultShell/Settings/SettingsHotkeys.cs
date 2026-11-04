@@ -1,7 +1,7 @@
 namespace Winshell.DefaultShell;
 
 /// <summary>What a hotkey reports to its card: whether Windows took it.</summary>
-public readonly record struct SettingsHotkeyState(bool Present, string Error, bool Taken, bool Active);
+public readonly record struct SettingsHotkeyState(string Error, bool Taken, bool Active);
 
 /// <summary>
 /// What the Hotkeys page does with a sequence. Empty turns one off. A sequence that would take a typing key, or that
@@ -40,8 +40,6 @@ public static class SettingsHotkeys
             return refused;
         if (sequence.Length == 0)
             return "Off";
-        if (!hotkey.Present)
-            return "";
         if (hotkey.Error.Length > 0)
             return hotkey.Error;
         if (hotkey.Taken)
