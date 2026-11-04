@@ -166,7 +166,7 @@ public sealed class StartTests : IDisposable
     {
         var loop = new ManualEventLoop();
         using var seeded = Open("preferred", loop: loop);
-        Assert.Empty(seeded.PinIds);
+        Assert.Empty(seeded.Pinned);
         Assert.False(File.Exists(PathOf("preferred")));
         seeded.SetApps(
             [
@@ -179,7 +179,7 @@ public sealed class StartTests : IDisposable
             ],
             []);
         loop.Process();
-        Assert.Equal(["edge", "note", "calc", "clock"], seeded.PinIds);
+        Assert.Equal(["edge", "note", "calc", "clock"], PinnedIds(seeded));
         Assert.Equal(["Microsoft Edge", "Notepad", "Calculator", "Clock"], seeded.Pinned.Select(app => app.Name));
         var text = File.ReadAllText(PathOf("preferred"));
         Assert.Contains("edge", text, StringComparison.Ordinal);
@@ -188,7 +188,7 @@ public sealed class StartTests : IDisposable
 
         using var fallback = Open("fallback");
         fallback.SetApps(Enumerable.Range(0, 10).Select(i => App("a" + i, "App " + i)).ToList(), []);
-        Assert.Equal(Enumerable.Range(0, 8).Select(i => "a" + i), fallback.PinIds);
+        Assert.Equal(Enumerable.Range(0, 8).Select(i => "a" + i), PinnedIds(fallback));
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public sealed class StartTests : IDisposable
                 App("de-edge", "Microsoft Edge", appId: "MSEdge"),
             ],
             []);
-        Assert.Equal(["de-edge", "de-calc"], seeded.PinIds);
+        Assert.Equal(["de-edge", "de-calc"], PinnedIds(seeded));
     }
 
     [Fact]
@@ -215,7 +215,6 @@ public sealed class StartTests : IDisposable
         using var blank = Open("empty", loop: loop);
         blank.SetApps([App("note", "Notepad"), App("edge", "Microsoft Edge")], []);
         loop.Process();
-        Assert.Empty(blank.PinIds);
         Assert.Empty(blank.Pinned);
         Assert.Equal(emptyBytes, File.ReadAllBytes(empty));
 
@@ -223,18 +222,13 @@ public sealed class StartTests : IDisposable
         File.WriteAllText(kept, """pins = ["ghost", "note"]""");
         using var known = Open("kept", loop: loop);
         known.SetApps([App("note", "Notepad"), App("edge", "Edge")], []);
-        Assert.Equal(["ghost", "note"], known.PinIds);
         Assert.Equal(["Notepad"], known.Pinned.Select(app => app.Name));
         known.TogglePin("note");
         loop.Process();
-        Assert.Equal(["ghost"], known.PinIds);
-        var written = File.ReadAllText(kept);
-        Assert.Contains("ghost", written, StringComparison.Ordinal);
-        Assert.DoesNotContain("note", written, StringComparison.Ordinal);
+        Assert.Equal(["ghost"], StartFile.Pins(kept));
 
         using var again = Open("kept");
         again.SetApps([App("note", "Notepad")], []);
-        Assert.Equal(["ghost"], again.PinIds);
         Assert.Empty(again.Pinned);
     }
 
@@ -255,14 +249,14 @@ public sealed class StartTests : IDisposable
         };
         start.SetApps(apps, []);
         loop.Process();
-        Assert.Equal(["edge", "note", "calc", "clock"], start.PinIds);
+        Assert.Equal(["edge", "note", "calc", "clock"], PinnedIds(start));
         Assert.NotEmpty(start.Error);
         Assert.Equal(before, File.ReadAllBytes(broken));
 
         apps.Add(App("paint", "Paint"));
         start.SetApps(apps, []);
         loop.Process();
-        Assert.Equal(["edge", "note", "calc", "clock"], start.PinIds);
+        Assert.Equal(["edge", "note", "calc", "clock"], PinnedIds(start));
         Assert.Equal(before, File.ReadAllBytes(broken));
     }
 
@@ -278,7 +272,7 @@ public sealed class StartTests : IDisposable
         var text = File.ReadAllText(path);
         Assert.Contains("edge", text, StringComparison.Ordinal);
         Assert.Contains("other", text, StringComparison.Ordinal);
-        Assert.Equal(["edge", "note"], start.PinIds);
+        Assert.Equal(["edge", "note"], PinnedIds(start));
     }
 
     [Fact]
@@ -291,11 +285,11 @@ public sealed class StartTests : IDisposable
         var popup = new StartPopup(start);
         Assert.True(popup.BeginMenuForSelection());
         Assert.Equal("Unpin from Start", popup.PinLabel);
-        Assert.Equal(["explorer.exe", "/select,C:/Apps/Notepad.lnk"], popup.LocationCommand());
         StartApp? located = null;
         popup.LocationChosen += (_, app) => located = app;
         popup.OpenLocation();
         Assert.Equal(note, located);
+        Assert.Equal(["explorer.exe", "/select,C:/Apps/Notepad.lnk"], StartList.LocationCommand(located));
         Assert.Equal(["explorer.exe", "shell:AppsFolder"], StartList.LocationCommand(App("store", "Store", icon: "shell:AppsFolder", target: "shell:AppsFolder", packaged: true)));
         Assert.Equal(["explorer.exe", "shell:AppsFolder"], StartList.LocationCommand(App("x", "X")));
         Assert.Equal(["explorer.exe", "shell:AppsFolder"], StartList.LocationCommand(App("packed", "Packed", icon: "C:/Apps/Packed.lnk", target: "C:/Apps/Packed.exe", packaged: true)));
@@ -308,7 +302,7 @@ public sealed class StartTests : IDisposable
         popup.Launched += (_, _) => launched++;
         Assert.False(popup.BeginMenu(null));
         popup.ToggleMenuPin();
-        Assert.Empty(start.PinIds);
+        Assert.Empty(start.Pinned);
         Assert.Equal("Pin to Start", popup.PinLabel);
         Assert.Equal(0, launched);
         Assert.False(popup.BeginMenu(popup.Results.Count == 0 ? null : popup.Results[0]));
@@ -330,7 +324,7 @@ public sealed class StartTests : IDisposable
         popup.Move("right");
         Assert.Equal(1, popup.Selected);
         start.TogglePin("p1");
-        Assert.Equal(["p0"], start.PinIds);
+        Assert.Equal(["p0"], PinnedIds(start));
         Assert.Equal(0, popup.Selected);
         Assert.Equal("Pin 0", popup.Shown[0].Name);
     }
@@ -343,17 +337,17 @@ public sealed class StartTests : IDisposable
         File.WriteAllText(path, """pins = ["p0", "p1"]""");
         using var start = Open("follow", loop: loop);
         start.SetApps(GridApps().Take(2).ToList(), []);
-        Assert.Equal(["p0", "p1"], start.PinIds);
+        Assert.Equal(["p0", "p1"], PinnedIds(start));
 
         File.WriteAllText(path, """pins = ["p1"]""");
-        Wait.Until(() => start.PinIds.Count == 1, "Start did not follow the file.", loop.Process);
+        Wait.Until(() => start.Pinned.Count == 1, "Start did not follow the file.", loop.Process);
         Assert.Equal(["Pin 1"], start.Pinned.Select(app => app.Name));
 
         var updates = 0;
         start.Updated += (_, _) => updates++;
         File.Delete(path);
         Wait.Until(() => updates > 0, "Start did not notice the deleted file.", loop.Process);
-        Assert.Equal(["p1"], start.PinIds);
+        Assert.Equal(["p1"], PinnedIds(start));
     }
 
     [Fact]
@@ -500,7 +494,11 @@ public sealed class StartTests : IDisposable
     private string PathOf(string name) => Path.Combine(_folder, name + ".toml");
 
     private Start Open(string name, Func<string, IReadOnlyList<StartApp>>? search = null, ManualEventLoop? loop = null) =>
-        new(PathOf(name), loop ?? new ManualEventLoop(), Quiet(), search);
+        new(PathOf(name), loop ?? new ManualEventLoop(), Quiet(), search ?? NoSearch);
+
+    private static IReadOnlyList<StartApp> NoSearch(string query) => [];
+
+    private static string[] PinnedIds(Start start) => [.. start.Pinned.Select(app => app.Id)];
 
     private static Log Quiet() => new() { MinimumLevel = LogLevel.Fatal };
 

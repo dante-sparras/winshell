@@ -220,8 +220,6 @@ public sealed class StartPopup : ObservableObject
         LocationChosen?.Invoke(this, app);
     }
 
-    public IReadOnlyList<string> LocationCommand() => StartList.LocationCommand(_menu?.App);
-
     /// <summary>Stops following the shared catalog. The catalog stays.</summary>
     public void Release() => _start.Updated -= OnStart;
 

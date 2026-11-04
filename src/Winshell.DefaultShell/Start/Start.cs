@@ -22,17 +22,14 @@ public sealed class Start : ObservableObject, IDisposable
     private bool _choice;
     private bool _disposed;
 
-    public Start(string path, IEventLoop loop, Log? log = null, Func<string, IReadOnlyList<StartApp>>? search = null)
+    public Start(string path, IEventLoop loop, Log log, Func<string, IReadOnlyList<StartApp>> search)
     {
         _loop = loop;
-        _search = search ?? (_ => []);
+        _search = search;
         _pins = new StartPins(path, loop, log);
         _pins.PropertyChanged += OnFile;
         Read();
     }
-
-    /// <summary>The ids in the file, including ones no visible app has. Empty when nothing is pinned.</summary>
-    public IReadOnlyList<string> PinIds { get; private set => Set(ref field, value); } = [];
 
     public IReadOnlyList<StartApp> Pinned { get; private set => Set(ref field, value); } = [];
 
@@ -151,7 +148,7 @@ public sealed class Start : ObservableObject, IDisposable
         SetApps(apps.Apps.Select(Map).ToList(), apps.Recent.Select(Map).ToList());
     }
 
-    private static StartApp Map(AppEntry app) => new(app.Id, app.Name, app.AppId, app.Icon, app.Target, app.Packaged, app.Hidden);
+    internal static StartApp Map(AppEntry app) => new(app.Id, app.Name, app.AppId, app.Icon, app.Target, app.Packaged, app.Hidden);
 
     private void OnFile(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -226,7 +223,6 @@ public sealed class Start : ObservableObject, IDisposable
     {
         if (_disposed)
             return;
-        PinIds = _ids.ToArray();
         Pinned = StartList.Pinned(_apps, _ids);
         Recommended = ShowRecommended ? StartList.Recommended(_recent, _ids) : [];
         AllApps = StartList.Visible(_apps);

@@ -16,7 +16,7 @@ public sealed class StartSeedTests : IDisposable
     private async Task<Start> Started(AppCatalog catalog)
     {
         var apps = new AppsService(_loop, Log.Default, catalog);
-        var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default);
+        var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default, _ => []);
         start.Use(apps);
         await catalog.Ready.WaitAsync(TestContext.Current.CancellationToken);
         _loop.Process();
@@ -37,7 +37,7 @@ public sealed class StartSeedTests : IDisposable
         Assert.Single(file.Split('\n'), line => line.Contains("without this file Start pins its defaults", StringComparison.Ordinal));
 
         // A new run reads the file as a choice, so what it holds is what the user is left with.
-        using var next = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default);
+        using var next = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default, _ => []);
         next.SetApps(start.AllApps, []);
         Assert.Equal(["Settings", "Notepad"], next.Pinned.Select(app => app.Name));
     }
@@ -47,7 +47,7 @@ public sealed class StartSeedTests : IDisposable
     {
         using var catalog = new AppCatalog([_folder], () => [App("One"), App("Two"), App("Three")], () => new Dictionary<string, AppUsage>(), TimeSpan.Zero, false, false);
         var apps = new AppsService(_loop, Log.Default, catalog);
-        using var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default);
+        using var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default, _ => []);
         start.Use(apps);
         var updates = 0;
         start.Updated += (_, _) => updates++;
@@ -62,7 +62,7 @@ public sealed class StartSeedTests : IDisposable
     [Fact]
     public void A_row_is_named_for_its_app_so_a_list_item_does_not_read_as_a_type()
     {
-        using var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default);
+        using var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default, _ => []);
         start.SetApps([new StartApp("one", "One", "", "", "", false, false)], []);
         var popup = new StartPopup(start);
 
