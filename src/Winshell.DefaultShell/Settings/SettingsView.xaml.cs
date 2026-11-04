@@ -83,7 +83,7 @@ public sealed partial class SettingsView : UserControl
         Sync(scroll: false);
     }
 
-    /// <summary>Opens a page or the page of a setting. An unknown name is reported and the page stays.</summary>
+    /// <summary>Opens a page, a subpage or the page of a setting. An unknown name is reported and the page stays.</summary>
     public bool Open(string key)
     {
         if (string.IsNullOrEmpty(key))
