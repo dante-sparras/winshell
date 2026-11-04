@@ -26,9 +26,7 @@ public sealed partial class TaskButton : Button
         InitializeComponent();
         Click += OnClick;
         ContextRequested += OnContextRequested;
-        PointerPressed += OnPointerPressed;
         PointerMoved += OnPointerMoved;
-        PointerReleased += OnPointerReleased;
         PointerCanceled += OnPointerCanceled;
         PointerCaptureLost += OnPointerCaptureLost;
         Loaded += OnLoaded;
@@ -125,7 +123,15 @@ public sealed partial class TaskButton : Button
         menu.ShowAt(this);
     }
 
-    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    // Overrides, not += handlers: Button marks a left press and release handled, so += handlers never see them.
+    // Each runs before the base, which raises Click on the release, so the drag has ended by then and TakeDragClick reads it.
+    protected override void OnPointerPressed(PointerRoutedEventArgs e)
+    {
+        PressStarted(e);
+        base.OnPointerPressed(e);
+    }
+
+    private void PressStarted(PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(this);
         if (point.Properties.IsRightButtonPressed)
@@ -149,7 +155,13 @@ public sealed partial class TaskButton : Button
         bar.MovePinDrag(this, e.GetCurrentPoint(this).Position.X);
     }
 
-    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    protected override void OnPointerReleased(PointerRoutedEventArgs e)
+    {
+        PressEnded(e);
+        base.OnPointerReleased(e);
+    }
+
+    private void PressEnded(PointerRoutedEventArgs e)
     {
         var middle = e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.MiddleButtonReleased;
         _endingDrag = true;

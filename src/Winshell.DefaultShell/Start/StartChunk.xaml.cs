@@ -20,8 +20,9 @@ public sealed partial class StartChunk : UserControl
         InitializeComponent();
         Row.PointerEntered += (_, _) => { _hover = true; Paint(); };
         Row.PointerExited += (_, _) => { _hover = false; _pressed = false; Paint(); };
-        Row.PointerPressed += (_, _) => { _pressed = true; Paint(); };
-        Row.PointerReleased += (_, _) => { _pressed = false; Paint(); };
+        // Button marks a left press and release handled, so these take handled events too.
+        Row.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => { _pressed = true; Paint(); }), handledEventsToo: true);
+        Row.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => { _pressed = false; Paint(); }), handledEventsToo: true);
         Row.PointerCanceled += (_, _) => { _pressed = false; Paint(); };
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
