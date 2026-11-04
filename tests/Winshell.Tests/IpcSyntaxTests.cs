@@ -12,7 +12,7 @@ public sealed class IpcSyntaxTests : IDisposable
 
     [Theory]
     [InlineData("winshell ipc call needs a target and a function.", "call", "foo")]
-    [InlineData("winshell ipc prop needs get, then a target and a property.", "prop", "get", "foo")]
+    [InlineData("winshell ipc prop needs \"get\", a target and a property.", "prop", "get", "foo")]
     [InlineData("winshell ipc wait needs a target and a signal.", "wait", "foo")]
     public void A_wrong_ipc_command_exits_2_with_nothing_running(string message, params string[] words)
     {

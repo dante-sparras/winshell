@@ -12,9 +12,11 @@ internal static class CliParser
         var command = FirstCommand(args);
         if (command is not null && !Commands.ContainsKey(command))
             throw UnknownCommand(command);
-        // Help wins over the rest of validation and execution. Arguments after -- or an IPC function are data.
+        // Help and the version win over the rest of validation and execution. Arguments after -- or an IPC function are data.
         if (HelpRequested(args))
             return new CliOptions { Command = command, ShowHelp = true };
+        if (command is not null && VersionRequested(args))
+            return new CliOptions { Command = command, ShowVersion = true };
 
         var rest = command is null ? args : WithoutToken(args, command);
         var options = ParseOptions(rest, command);
@@ -109,7 +111,7 @@ internal static class CliParser
     private static string? Lacks(string command, ImmutableArray<string> words) => (command, words[0]) switch
     {
         ("ipc", "call") when words.Length < 3 => "a target and a function",
-        ("ipc", "prop") when words.Length < 4 || words[1] != "get" => "get, then a target and a property",
+        ("ipc", "prop") when words.Length < 4 || words[1] != "get" => "\"get\", a target and a property",
         ("ipc", "wait" or "listen") when words.Length < 3 => "a target and a signal",
         ("inspect", "screenshot") when words.Length < 2 => "a file",
         ("inspect", "click" or "hover") when words.Length < 2 => "a name",

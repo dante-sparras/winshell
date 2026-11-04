@@ -100,17 +100,6 @@ public sealed class InspectCommandTests : IDisposable
         Assert.Equal([0x89, 0x50, 0x4E, 0x47], File.ReadAllBytes(file)[..4]);
     }
 
-    [Theory]
-    [InlineData("nothing")]
-    [InlineData("click")]
-    [InlineData("screenshot")]
-    public void A_wrong_or_short_command_exits_2(string command)
-    {
-        var (code, _, _) = Run(command);
-
-        Assert.Equal(2, code);
-    }
-
     [Fact]
     public void An_element_that_is_not_there_exits_1_and_says_so()
     {

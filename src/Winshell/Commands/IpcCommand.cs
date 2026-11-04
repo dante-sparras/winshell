@@ -1,17 +1,20 @@
+using System.Diagnostics;
+
 namespace Winshell.Commands;
 
 internal static class IpcCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        // CliParser refuses any other command, and one without the words it needs.
+        // CliParser has checked that args is one of these commands, with the words it needs.
         var args = options.Positional;
         IpcRequest request = args[0] switch
         {
             "show" => new IpcRequest("show", Json: options.Json),
             "call" => new IpcRequest("call", args[1], args[2], args.Skip(3).ToList()),
             "prop" => new IpcRequest("prop", args[2], args[3]),
-            _ => new IpcRequest(args[0], args[1], args[2]),
+            "wait" or "listen" => new IpcRequest(args[0], args[1], args[2]),
+            _ => throw new UnreachableException($"No ipc command \"{args[0]}\"."),
         };
         var choice = InstanceSelection.Select(options);
         if (choice.Info is not { } info)
