@@ -48,7 +48,6 @@ public static class SettingsAbout
 
     public static bool AutomaticEnabled(bool available) => available;
 
-    /// <summary>What automatic updates do, or why the switch is off when this build does not update itself.</summary>
     public static string Automatic(bool available, string idle) => available ? idle : AutomaticUnavailable;
 
     public static bool AutomaticOn(bool available, bool autoUpdate) => available && autoUpdate;
