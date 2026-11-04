@@ -146,3 +146,5 @@ Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to ho
 ## Lessons
 
 When an agent makes a mistake that a rule would have prevented, add that rule here as one line.
+
+- A PR title's subject starts lowercase even when it would open with a type name or a key: write `fix(dev): pressing Ctrl+C stops…`, not `fix(dev): Ctrl+C stops…`.
