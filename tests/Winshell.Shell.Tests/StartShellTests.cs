@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Winshell.DefaultShell;
 using Winshell.DefaultShell.Taskbar;
@@ -26,8 +27,7 @@ public sealed class StartShellTests
                 var box = (TextBox)view.FindName("SearchBox");
                 var placeholder = Find<TextBlock>(box, found => found.Name == "PlaceholderTextContentPresenter")
                     ?? throw new InvalidOperationException("The search box shows no placeholder.");
-                var icon = Find<FontIcon>((DependencyObject)view.FindName("SearchHost"))
-                    ?? throw new InvalidOperationException("The search box has no magnifier.");
+                var icon = ((Grid)view.FindName("SearchHost")).Children.OfType<FontIcon>().Single();
                 return (LineMiddle(placeholder, view), Middle(icon, view));
             });
 
@@ -45,11 +45,11 @@ public sealed class StartShellTests
         }
     }
 
-    /// <summary>The middle of the line a text block draws, inside its padding.</summary>
+    /// <summary>The middle of the line a text block draws, from its first character.</summary>
     private static double LineMiddle(TextBlock text, UIElement root)
     {
-        var top = text.TransformToVisual(root).TransformPoint(default).Y + text.Padding.Top;
-        return top + (text.ActualHeight - text.Padding.Top - text.Padding.Bottom) / 2;
+        var line = text.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+        return text.TransformToVisual(root).TransformPoint(default).Y + line.Y + line.Height / 2;
     }
 
     private static double Middle(FrameworkElement element, UIElement root) =>
