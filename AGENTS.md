@@ -31,7 +31,8 @@ Many agents work on this repo at once.
 2. Resolve each conflict by intent: find the PR that changed the same code with `git log --oneline <your-branch>..origin/main -- <file>`, read it, and keep both behaviors. Taking "ours" or "theirs" wholesale is never a resolution.
 3. If both sides change the same behavior, run `git rebase --abort`, comment on your PR naming the other PR and the collision, and escalate to the lead thread, or to the user if there is none, instead of guessing.
 4. Run `pwsh scripts/check.ps1` again before you push, even after a clean rebase: it can still break logic.
-5. You own the PR until it merges: enable auto-merge with `gh pr merge <number> --squash --auto`, fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`.
+5. You own the PR until it merges: fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`. For a standalone PR, enable auto-merge with `gh pr merge <number> --squash --auto`.
+6. For a stack, wait until every PR meets its merge requirements, then merge the whole stack with squash as one operation to avoid intermediate rebases and repeated CI runs.
 
 ## Before you finish
 
