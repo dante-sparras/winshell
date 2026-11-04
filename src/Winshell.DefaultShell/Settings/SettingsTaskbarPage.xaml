@@ -12,13 +12,13 @@
         </local:SettingsCard>
         <local:SettingsCard x:Name="AutoHideCard">
             <local:SettingsCard.TrailContent>
-                <ToggleSwitch x:Name="AutoHide" OnContent="On" OffContent="Off" Toggled="OnAutoHideToggled" />
+                <ToggleSwitch x:Name="AutoHide" MinWidth="0" OnContent="On" OffContent="Off" Toggled="OnAutoHideToggled" />
             </local:SettingsCard.TrailContent>
         </local:SettingsCard>
         <TextBlock Text="Multiple displays" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,18,0,6" />
         <local:SettingsCard x:Name="AllScreensCard">
             <local:SettingsCard.TrailContent>
-                <ToggleSwitch x:Name="AllScreens" OnContent="On" OffContent="Off" Toggled="OnAllScreensToggled" />
+                <ToggleSwitch x:Name="AllScreens" MinWidth="0" OnContent="On" OffContent="Off" Toggled="OnAllScreensToggled" />
             </local:SettingsCard.TrailContent>
         </local:SettingsCard>
         <local:SettingsCard x:Name="AppsCard">

@@ -32,7 +32,7 @@
         </local:SettingsCard>
         <local:SettingsCard x:Name="ChordsCard">
             <local:SettingsCard.TrailContent>
-                <ToggleSwitch x:Name="Chords" OnContent="On" OffContent="Off" Toggled="OnChordsToggled" />
+                <ToggleSwitch x:Name="Chords" MinWidth="0" OnContent="On" OffContent="Off" Toggled="OnChordsToggled" />
             </local:SettingsCard.TrailContent>
         </local:SettingsCard>
     </StackPanel>

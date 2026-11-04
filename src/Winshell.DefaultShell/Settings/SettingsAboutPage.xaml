@@ -17,7 +17,7 @@
         </local:SettingsCard>
         <local:SettingsCard x:Name="AutomaticCard">
             <local:SettingsCard.TrailContent>
-                <ToggleSwitch x:Name="Automatic" OnContent="On" OffContent="Off" Toggled="OnAutomaticToggled" />
+                <ToggleSwitch x:Name="Automatic" MinWidth="0" OnContent="On" OffContent="Off" Toggled="OnAutomaticToggled" />
             </local:SettingsCard.TrailContent>
         </local:SettingsCard>
         <local:SettingsCard x:Name="FolderCard">
