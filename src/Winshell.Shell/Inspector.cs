@@ -243,16 +243,16 @@ internal static class Inspector
     {
         // A render leaves out what nothing draws at the edges, such as a margin. A clear background draws there, so the
         // picture of a window is the window's size.
-        var empty = shown is Panel { Background: null } panel ? panel : null;
+        var clear = shown is Panel { Background: null } panel ? panel : null;
         var bitmap = new RenderTargetBitmap();
         try
         {
-            empty?.Background = new SolidColorBrush(Colors.Transparent);
+            clear?.Background = new SolidColorBrush(Colors.Transparent);
             await bitmap.RenderAsync(shown);
         }
         finally
         {
-            empty?.Background = null;
+            clear?.Background = null;
         }
         var pixels = await bitmap.GetPixelsAsync();
         var image = new PixelImage(bitmap.PixelWidth, bitmap.PixelHeight, Flattened(pixels.ToArray(), dark ? DarkBack : LightBack));
