@@ -39,6 +39,25 @@ public sealed class DoctorCommandTests : IDisposable
     }
 
     [Fact]
+    public void A_path_that_is_not_there_checks_no_project_beside_it()
+    {
+        var folder = Path.Combine(_root, "beside");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "Other.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var missing = Path.Combine(folder, "missing");
+
+        var (code, output, _) = Run("doctor", "--json", "-p", missing);
+
+        Assert.Equal(1, code);
+        using var json = JsonDocument.Parse(output);
+        var messages = json.RootElement.GetProperty("checks").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("id").GetString()!, c => c.GetProperty("message").GetString());
+        Assert.StartsWith("No .csproj at ", messages["project"], StringComparison.Ordinal);
+        Assert.EndsWith(@"\beside\missing", messages["project"], StringComparison.Ordinal);
+        Assert.Equal("No configuration project to build.", messages["built"]);
+    }
+
+    [Fact]
     public void Text_has_a_line_a_check_and_no_color_when_redirected()
     {
         var empty = Path.Combine(_root, "empty");
