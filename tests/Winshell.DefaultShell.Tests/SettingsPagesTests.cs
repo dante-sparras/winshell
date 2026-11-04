@@ -30,7 +30,7 @@ public sealed class SettingsPagesTests : IDisposable
             pins = ["edge", "gone", "explorer", "notepad"]
 
             """);
-        using var start = new Start(path, loop, Quiet());
+        using var start = new Start(path, loop, Quiet(), _ => []);
         start.SetApps(
             [
                 new("edge", "Microsoft Edge", "", "", "", false),
@@ -42,17 +42,19 @@ public sealed class SettingsPagesTests : IDisposable
         Assert.False(start.MoveShown("edge", -1));
 
         Assert.True(start.MoveShown("edge", 1));
-        Assert.Equal(["gone", "explorer", "edge", "notepad"], start.PinIds);
+        loop.Process();
+        Assert.Equal(["gone", "explorer", "edge", "notepad"], StartFile.Pins(path));
         var shown = start.Pinned.Select(app => app.Id).ToArray();
         var index = Array.IndexOf(shown, "explorer");
         start.UnpinShown("explorer");
-        Assert.Equal(["gone", "edge", "notepad"], start.PinIds);
+        loop.Process();
+        Assert.Equal(["gone", "edge", "notepad"], StartFile.Pins(path));
         Assert.Equal(["Microsoft Edge", "Notepad"], start.Pinned.Select(app => app.Name));
         Assert.Equal("edge", SettingsOrder.FocusIndex(start.Pinned.Select(app => app.Id).ToArray(), index));
 
-        loop.Process();
-        using var again = new Start(path, new ManualEventLoop(), Quiet());
-        Assert.Equal(["gone", "edge", "notepad"], again.PinIds);
+        using var again = new Start(path, new ManualEventLoop(), Quiet(), _ => []);
+        again.SetApps([new("edge", "Microsoft Edge", "", "", "", false), new("notepad", "Notepad", "", "", "", false)], []);
+        Assert.Equal(["Microsoft Edge", "Notepad"], again.Pinned.Select(app => app.Name));
     }
 
     [Fact]
@@ -128,22 +130,21 @@ public sealed class SettingsPagesTests : IDisposable
         var next = SettingsHotkeys.Commit("Win+Shift+S", "Ctrl+Alt+S", "Open Start", "Win");
         Assert.Equal("Win+Shift+S", next!.Value.Sequence);
         Assert.Equal("", next.Value.Refused);
-        Assert.NotEqual(reason, SettingsHotkeys.Description(next.Value.Refused, next.Value.Sequence, new(true, "", false, true)));
+        Assert.NotEqual(reason, SettingsHotkeys.Description(next.Value.Refused, next.Value.Sequence, new("", false, true)));
     }
 
     [Fact]
     public void A_hotkey_says_when_it_is_off_on_or_taken()
     {
         Assert.True(SettingsHotkeys.Same("Win + S", "win+s"));
-        Assert.Equal("Off", SettingsHotkeys.Description("", "", new(true, "", false, true)));
-        Assert.Equal("", SettingsHotkeys.Description("", "Win", new(false, "", false, false)));
-        Assert.Equal("no such key", SettingsHotkeys.Description("", "Win", new(true, "no such key", true, false)));
-        Assert.Equal("Windows or another app is using Ctrl+Alt+S", SettingsHotkeys.Description("", "Ctrl+Alt+S", new(true, "", true, false)));
-        Assert.Equal("On", SettingsHotkeys.Description("", "Win", new(true, "", false, true)));
-        Assert.Equal("", SettingsHotkeys.Description("", "Win", new(true, "", false, false)));
+        Assert.Equal("Off", SettingsHotkeys.Description("", "", new("", false, true)));
+        Assert.Equal("no such key", SettingsHotkeys.Description("", "Win", new("no such key", true, false)));
+        Assert.Equal("Windows or another app is using Ctrl+Alt+S", SettingsHotkeys.Description("", "Ctrl+Alt+S", new("", true, false)));
+        Assert.Equal("On", SettingsHotkeys.Description("", "Win", new("", false, true)));
+        Assert.Equal("", SettingsHotkeys.Description("", "Win", new("", false, false)));
         var off = SettingsHotkeys.Commit("   ", "Ctrl+Alt+S", "Open Start", "Win");
         Assert.Equal("", off!.Value.Sequence);
-        Assert.Equal("Off", SettingsHotkeys.Description("", off.Value.Sequence, new(true, "", false, false)));
+        Assert.Equal("Off", SettingsHotkeys.Description("", off.Value.Sequence, new("", false, false)));
     }
 
     [Fact]
@@ -195,7 +196,7 @@ public sealed class SettingsPagesTests : IDisposable
         Action? posted = null;
         session.Run(action => posted = action);
         Assert.True(session.Running);
-        Assert.Equal(SettingsAbout.DiagnosticsRunning, SettingsAbout.Diagnostics(session.Available, session.Running, session.Summary, "idle"));
+        Assert.Equal(SettingsAbout.DiagnosticsRunning, SettingsAbout.Diagnostics(session.Running, session.Summary, "idle"));
         Wait.Until(() => posted is not null, "the diagnostics run to post its result");
         Assert.NotEqual(caller, probe);
         posted!();
@@ -214,13 +215,6 @@ public sealed class SettingsPagesTests : IDisposable
         var check = Assert.Single(broken.Checks);
         Assert.Equal("Could not run: InvalidOperationException: the registry is gone", check.Message);
         Assert.Equal($"Report it at {SettingsAbout.BugReports}.", check.Fix);
-
-        var none = new SettingsDiagnosticsSession(null);
-        Assert.False(none.Available);
-        Assert.Equal(SettingsAbout.DiagnosticsUnavailable, SettingsAbout.Diagnostics(false, false, "", "Check how this PC is set up for Winshell, as winshell doctor does"));
-        Assert.False(SettingsAbout.DiagnosticsEnabled(false, false));
-        none.Run(static _ => throw new InvalidOperationException("a shell with no doctor posted a run"));
-        Assert.False(none.Running);
     }
 
     [Fact]

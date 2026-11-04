@@ -138,8 +138,8 @@ public sealed partial class SettingsAboutPage : UserControl
         OpenFolder.IsEnabled = _shell.ConfigRoot.Length > 0;
         LogCard.Description = SettingsAbout.Log(_shell.LogPath);
         OpenLog.IsEnabled = _shell.LogPath.Length > 0;
-        DiagnosticsCard.Description = SettingsAbout.Diagnostics(_diagnostics.Available, _diagnostics.Running, _diagnostics.Summary, _diagnosticsIdle);
-        RunDiagnostics.IsEnabled = SettingsAbout.DiagnosticsEnabled(_diagnostics.Available, _diagnostics.Running);
+        DiagnosticsCard.Description = SettingsAbout.Diagnostics(_diagnostics.Running, _diagnostics.Summary, _diagnosticsIdle);
+        RunDiagnostics.IsEnabled = !_diagnostics.Running;
         _applying = true;
         Automatic.IsOn = SettingsAbout.AutomaticOn(updates.Available, _preferences.AutoUpdate);
         _applying = false;

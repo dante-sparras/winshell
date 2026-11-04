@@ -153,5 +153,5 @@ public sealed partial class SettingsHotkeysPage : UserControl
             _preferences.SettingsHotkey = sequence;
     }
 
-    private static SettingsHotkeyState State(Hotkey hotkey) => new(true, hotkey.Error, hotkey.Taken, hotkey.Active);
+    private static SettingsHotkeyState State(Hotkey hotkey) => new(hotkey.Error, hotkey.Taken, hotkey.Active);
 }
