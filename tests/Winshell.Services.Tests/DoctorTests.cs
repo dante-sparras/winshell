@@ -335,8 +335,9 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(@"abc (process 42) runs C:\c\MyShell.exe, log C:\l\log.txt", Instances([new DoctorInstance("abc", 42, @"C:\c\MyShell.exe", @"C:\l\log.txt")]).Message);
 
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
-        Assert.Equal(CheckStatus.Pass, Crashes([(@"C:\r\old.txt", now.AddDays(-8))], now).Status);
-        var recent = Crashes([(@"C:\r\old.txt", now.AddDays(-8)), (@"C:\r\a.txt", now.AddDays(-2)), (@"C:\r\b.txt", now.AddHours(-1))], now);
+        CrashPeek Report(string _) => new("Winshell crash report\n", null);
+        Assert.Equal(CheckStatus.Pass, Crashes([(@"C:\r\old.txt", now.AddDays(-8))], now, Report).Status);
+        var recent = Crashes([(@"C:\r\old.txt", now.AddDays(-8)), (@"C:\r\a.txt", now.AddDays(-2)), (@"C:\r\b.txt", now.AddHours(-1))], now, Report);
         Assert.Equal(CheckStatus.Warn, recent.Status);
         Assert.Equal(@"2 crash reports in the last 7 days. The newest is C:\r\b.txt.", recent.Message);
     }

@@ -9,24 +9,16 @@ internal static class DoctorCrashes
     /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
     internal readonly record struct CrashPeek(string? Text, string? Unreadable);
 
-    internal static DoctorCheck CrashesIn(CrashFolderRead folder, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
+    internal static DoctorCheck CrashesIn(CrashFolderRead folder, DateTime nowUtc, Func<string, CrashPeek> peek)
     {
         if (folder.Unreadable is not null)
             return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read the crash folder: {folder.Unreadable}", "Make sure your account can read that folder, then run winshell doctor again.");
         return Crashes(folder.Reports, nowUtc, peek);
     }
 
-    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
+    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, CrashPeek> peek)
     {
         var recent = reports.Where(r => nowUtc - r.WrittenUtc <= TimeSpan.FromDays(7)).OrderByDescending(r => r.WrittenUtc).ToList();
-        if (peek is null)
-        {
-            if (recent.Count == 0)
-                return new("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
-            var count = recent.Count == 1 ? "1 crash report" : $"{recent.Count} crash reports";
-            return new("crashes", "Crashes", CheckStatus.Warn, $"{count} in the last 7 days. The newest is {recent[0].Path}.", $"Read it, then attach it to a bug report at {Doctor.BugReports}.");
-        }
-
         var opened = new List<(string Path, string Text)>();
         string? unreadable = null;
         foreach (var report in recent)
