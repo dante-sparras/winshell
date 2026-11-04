@@ -112,7 +112,7 @@ winland reload
 ```powershell
 winshell inspect tree                                # every open window's elements, sizes and values, as JSON
 winshell inspect screenshot out.png TaskbarView      # a window as a PNG, which you can then read
-winshell inspect click StartButton                   # activate an element through its automation peer
+winshell inspect click StartButton TaskbarView       # activate an element in a window through its automation peer
 ```
 
 Look at the screenshot, and check values in the tree rather than trusting that the code ran. Open what a test or run needs under "Live UI with Winland running". For a shell of your own, run it with private `WINSHELL_CONFIG_DIR` and `WINSHELL_LOCAL_DIR`, and pass `--pid`.
