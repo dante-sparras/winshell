@@ -137,7 +137,7 @@ internal static class ProbeShell
         // The probe sits outside the repo. Without this, dotnet picks a newer SDK and rebuilds the shell from scratch.
         WriteIfDifferent(Path.Combine(folder, "global.json"), File.ReadAllText(Path.Combine(root, "global.json")));
         var project = Path.Combine(folder, "Probe.csproj");
-        WriteIfDifferent(project, Project(Path.Combine(root, "src", "Winshell.DefaultShell", "Winshell.DefaultShell.csproj")));
+        WriteIfDifferent(project, Project(Path.Combine(root, "src", "Winshell.Shell", "Winshell.Shell.csproj")));
         WriteIfDifferent(Path.Combine(folder, "Program.cs"), Source);
         var program = Path.Combine(folder, "bin", "shell", "Probe.exe");
         var info = new ProcessStartInfo("dotnet")
@@ -175,7 +175,7 @@ internal static class ProbeShell
     }
 
 
-    private static string Project(string defaultShell) =>
+    private static string Project(string shellProject) =>
         $"""
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
@@ -193,7 +193,7 @@ internal static class ProbeShell
             <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
           </PropertyGroup>
           <ItemGroup>
-            <ProjectReference Include="{defaultShell}" />
+            <ProjectReference Include="{shellProject}" />
           </ItemGroup>
         </Project>
         """;
