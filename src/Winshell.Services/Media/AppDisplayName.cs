@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Winshell.Native;
 
 namespace Winshell.Media;
 
@@ -43,19 +44,6 @@ internal static class AppDisplayName
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHCreateItemFromParsingName(string path, nint bindContext, ref Guid iid, out IShellItem item);
-
-    [ComImport]
-    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellItem
-    {
-        void BindToHandler();
-
-        void GetParent();
-
-        [PreserveSig]
-        int GetDisplayName(int sigdn, [MarshalAs(UnmanagedType.LPWStr)] out string name);
-    }
 
     private static string? ProgramDescription(string processName)
     {

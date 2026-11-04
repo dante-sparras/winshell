@@ -21,7 +21,7 @@ internal static class CrashFollowUp
             FileInfo? newest = null;
             foreach (var file in new DirectoryInfo(crashFolder).EnumerateFiles("crash-*.txt"))
             {
-                if (!StartsWithHeading(file.FullName))
+                if (!CrashReports.StartsWithHeading(file.FullName))
                     continue;
                 if (newest is null || file.LastWriteTimeUtc > newest.LastWriteTimeUtc)
                     newest = file;
@@ -66,7 +66,7 @@ internal static class CrashFollowUp
         var afterException = false;
         for (var i = 0; i < 40 && reader.ReadLine() is { } line; i++)
         {
-            if (i == 0 && line != "Winshell crash report")
+            if (i == 0 && !CrashReports.IsHeading(line))
                 return null;
             if (line == "Winshell closed: yes")
                 closed = true;
@@ -75,20 +75,6 @@ internal static class CrashFollowUp
             afterException = line == "Exception";
         }
         return closed ? new Pending(path, exception ?? "") : null;
-    }
-
-    private static bool StartsWithHeading(string path)
-    {
-        try
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream);
-            return reader.ReadLine() == "Winshell crash report";
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
     }
 
     private static State Read(string stateFile)

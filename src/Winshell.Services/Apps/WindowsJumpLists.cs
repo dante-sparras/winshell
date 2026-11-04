@@ -63,8 +63,8 @@ internal sealed class WindowsJumpListReader : IJumpListReader
             if (array.GetCount(out var count) < 0)
                 return null;
             var names = new List<string>();
-            var itemId = typeof(IShellItemName).GUID;
-            var linkId = typeof(IShellLinkName).GUID;
+            var itemId = typeof(IShellItem).GUID;
+            var linkId = typeof(IShellLinkW).GUID;
             for (uint i = 0; i < count && names.Count < JumpListRead.PerCategory; i++)
             {
                 var name = NameAt(array, i, itemId, linkId);
@@ -86,7 +86,7 @@ internal sealed class WindowsJumpListReader : IJumpListReader
         {
             try
             {
-                if (item is IShellItemName shell && shell.GetDisplayName(0, out var name) >= 0 && !string.IsNullOrWhiteSpace(name))
+                if (item is IShellItem shell && shell.GetDisplayName(0, out var name) >= 0 && !string.IsNullOrWhiteSpace(name))
                     return name;
             }
             finally
@@ -98,15 +98,16 @@ internal sealed class WindowsJumpListReader : IJumpListReader
         {
             try
             {
-                if (link is IShellLinkName shellLink)
+                if (link is IShellLinkW shellLink)
                 {
                     var buffer = new StringBuilder(1024);
-                    if (shellLink.GetPath(buffer, buffer.Capacity, 0, 0) >= 0)
-                    {
-                        var file = Path.GetFileName(buffer.ToString());
-                        return string.IsNullOrWhiteSpace(file) ? null : file;
-                    }
+                    shellLink.GetPath(buffer, buffer.Capacity, 0, 0);
+                    var file = Path.GetFileName(buffer.ToString());
+                    return string.IsNullOrWhiteSpace(file) ? null : file;
                 }
+            }
+            catch (COMException)
+            {
             }
             finally
             {
@@ -136,28 +137,5 @@ internal sealed class WindowsJumpListReader : IJumpListReader
         [PreserveSig] int GetCount(out uint count);
 
         [PreserveSig] int GetAt(uint index, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object? item);
-    }
-
-    // The two methods before GetDisplayName keep that call on its vtable slot. They are not used.
-    [ComImport]
-    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellItemName
-    {
-        void BindToHandler();
-
-        void GetParent();
-
-        [PreserveSig]
-        int GetDisplayName(int sigdn, [MarshalAs(UnmanagedType.LPWStr)] out string name);
-    }
-
-    [ComImport]
-    [Guid("000214F9-0000-0000-C000-000000000046")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellLinkName
-    {
-        [PreserveSig]
-        int GetPath([MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int capacity, nint findData, uint flags);
     }
 }

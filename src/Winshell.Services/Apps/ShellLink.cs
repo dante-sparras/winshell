@@ -13,30 +13,6 @@ internal static partial class ShellLink
 {
     private static readonly Guid ClsidShellLink = new("00021401-0000-0000-C000-000000000046");
 
-    public static void Write(string path, string target, string arguments, string workingDirectory, string description)
-    {
-        object? link = null;
-        try
-        {
-            link = Activator.CreateInstance(Type.GetTypeFromCLSID(ClsidShellLink)!);
-            if (link is not IShellLinkW shell || link is not IPersistFile file)
-                throw new InvalidOperationException("The shell link object is not available.");
-            var directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-            shell.SetPath(target);
-            shell.SetArguments(arguments);
-            shell.SetWorkingDirectory(workingDirectory);
-            shell.SetDescription(description);
-            file.Save(Path.GetFullPath(path), true);
-        }
-        finally
-        {
-            if (link is not null && Marshal.IsComObject(link))
-                Marshal.ReleaseComObject(link);
-        }
-    }
-
     public static ShellLinkInfo? Read(string path)
     {
         object? link = null;
@@ -89,47 +65,5 @@ internal static partial class ShellLink
         void Load([MarshalAs(UnmanagedType.LPWStr)] string fileName, int mode);
 
         void Save([MarshalAs(UnmanagedType.LPWStr)] string? fileName, [MarshalAs(UnmanagedType.Bool)] bool remember);
-    }
-
-    [ComImport]
-    [Guid("000214F9-0000-0000-C000-000000000046")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellLinkW
-    {
-        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int max, nint findData, uint flags);
-
-        void GetIDList(out nint idList);
-
-        void SetIDList(nint idList);
-
-        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int max);
-
-        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
-
-        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int max);
-
-        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
-
-        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int max);
-
-        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
-
-        void GetHotkey(out short hotkey);
-
-        void SetHotkey(short hotkey);
-
-        void GetShowCmd(out int showCmd);
-
-        void SetShowCmd(int showCmd);
-
-        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder iconPath, int max, out int icon);
-
-        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int icon);
-
-        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
-
-        void Resolve(nint hwnd, uint flags);
-
-        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
     }
 }
