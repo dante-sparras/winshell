@@ -56,7 +56,7 @@ function Publish-WinshellRelease {
         }
     }
     if ($env:SIGNPATH_ORGANIZATION_ID -and $uploaded.body -notmatch 'Code signing policy') {
-        $notes = "$($uploaded.body)`n`n[Code signing policy](https://github.com/$Repository/blob/main/docs/code-signing-policy.md)"
+        $notes = "$($uploaded.body)`n`n[Code signing policy](https://github.com/$Repository/blob/main/docs/development.md#releasing)"
         gh release edit $Tag --repo $Repository --notes $notes
         if ($LASTEXITCODE -ne 0) { throw "Could not update the draft's signing notes. $Tag remains a draft." }
     }

@@ -12,9 +12,9 @@ Winshell runs on Windows 11. The portable zip and the PowerShell command install
 
 ### Portable zip
 
-A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or `.\winshell run` from a terminal in that folder. That build updates itself from GitHub Releases, and the default shell updates with it. A build from source does not, and neither does a shell you built yourself. See [Winshell updates](docs/updates.md).
+A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or `.\winshell run` from a terminal in that folder. That build updates itself from GitHub Releases, and the default shell updates with it. A build from source does not, and neither does a shell you built yourself.
 
-Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [Code signing policy](docs/code-signing-policy.md).
+Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned.
 
 ### Install with PowerShell
 
@@ -78,9 +78,9 @@ winshell run
 
 In Winshell's own folder, PowerShell needs the path: `.\winshell run`. `winshell` with no command prints the list of commands and starts nothing.
 
-With no project of your own, Winshell runs its default shell: a Windows 11 [taskbar](docs/taskbar.md) on every screen, with Start, quick settings, the notification center and calendar, the on-screen display, and [Winshell Settings](docs/settings.md). It writes the log to the terminal and to a file. The default shell is built in. It is not a folder of files Winshell writes out.
+With no project of your own, Winshell runs its default shell: a Windows 11 taskbar on every screen, with Start, quick settings, the notification center and calendar, the on-screen display, and Winshell Settings. It writes the log to the terminal and to a file. The default shell is built in. It is not a folder of files Winshell writes out.
 
-By default Winshell leaves Explorer's taskbar in place. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. To hide Explorer's taskbar and release its edge while Winshell is running, set `hideExplorerTaskbar = true` in [preferences.toml](docs/settings.md#where-the-choices-live). That key stays off until the file sets it, and there is no switch for it in Winshell Settings. Winshell puts the window and the edge back when it exits. If you would rather leave Explorer's taskbar visible, turn on **Automatically hide the taskbar** for it in Windows Settings > Personalization > Taskbar. See [Explorer's taskbar is missing](docs/troubleshooting.md#explorers-taskbar-is-missing) if a killed Winshell leaves it hidden.
+By default Winshell leaves Explorer's taskbar in place. Both reserve the bottom of the screen, so the two taskbars stack, and maximized windows stop above both. To hide Explorer's taskbar and release its edge while Winshell is running, set `hideExplorerTaskbar = true` in `preferences.toml`. That key stays off until the file sets it, and there is no switch for it in Winshell Settings. Winshell puts the window and the edge back when it exits. If you would rather leave Explorer's taskbar visible, turn on **Automatically hide the taskbar** for it in Windows Settings > Personalization > Taskbar. See [Explorer's taskbar is missing](docs/troubleshooting.md#explorers-taskbar-is-missing) if a killed Winshell leaves it hidden.
 
 - **Run it without a terminal:** `winshell run -d` starts it in the background and returns. From a terminal, a failure before it starts is printed there. The Start tile and the sign-in entry have no console, so that same failure is a dialog.
 - **Stop it:** press Ctrl+C in its terminal, or run `winshell kill`.
@@ -119,9 +119,9 @@ Read the log with `winshell log`, or `winshell log -f` to follow it.
 
 ## Documentation
 
-[docs/](docs/README.md) lists every page: the configuration guide, troubleshooting, the topic pages, and a reference for every namespace. To work on Winshell itself, see the [development runbook](docs/development.md).
+See the [configuration guide](docs/configuration.md), [troubleshooting](docs/troubleshooting.md), and [API reference](docs/reference/index.md). To work on Winshell itself, see the [development runbook](docs/development.md).
 
-Something not working? Run `winshell doctor`. It checks this PC's setup and says how to fix what's wrong. It does not build. See [winshell doctor](docs/doctor.md).
+Something not working? Run `winshell doctor`. It checks this PC's setup and says how to fix what's wrong. It does not build.
 
 ## Contributing
 
@@ -129,7 +129,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ## Privacy
 
-Winshell collects nothing. See [Privacy](docs/privacy.md).
+Winshell collects nothing.
 
 ## License
 

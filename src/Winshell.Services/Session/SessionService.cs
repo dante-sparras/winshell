@@ -4,7 +4,7 @@ namespace Winshell.Session;
 
 /// <summary>
 /// The signed-in Windows session the shell runs in. <see cref="Lock"/> asks Windows to lock it, and Windows' own lock
-/// screen takes over. Winshell never draws a lock screen or asks for the Windows password (ADR-0008).
+/// screen takes over. Winshell never draws a lock screen or asks for the Windows password.
 /// </summary>
 public sealed class SessionService
 {

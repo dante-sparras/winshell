@@ -29,7 +29,7 @@ function Get-PrProblem {
     $changed = @($Files | Where-Object { $_ })
     $type = ($Title -split '[(:!]', 2)[0]
     $code = @($changed | Where-Object { $_ -notmatch '^docs/|\.md$' })
-    $tests = @($changed | Where-Object { $_ -match '^tests/.*\.cs$|^scripts/.*\.Tests\.ps1$' })
+    $tests = @($changed | Where-Object { $_ -match '^tests/.*\.cs$|^tests/Scripts/.*\.Tests\.ps1$' })
     if ($type -eq 'fix' -and $code.Count -gt 0 -and $Body -notmatch '\*\*No test:\*\*[ \t]*\S') {
         if ($tests.Count -eq 0) {
             'A fix needs a test that failed before it, or a **No test:** line that says why it can''t have one.'

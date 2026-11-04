@@ -16,15 +16,10 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 .
 ├── .github/                         # CI, issue and PR templates, Dependabot
 ├── docs/
-│   ├── adr/                         # Decisions already made
 │   ├── agents/                      # How the engineering skills use this repo
-│   │   ├── release-notes/           # Notes for a release, once that release exists
-│   │   └── test-audit/              # The gate every test passes
 │   ├── reference/                   # A page per module
-│   ├── security/                    # The threat model
 │   ├── *.md                         # The configuration guide, troubleshooting, and a page per topic
-│   ├── development.md               # Setup, environment, and every command
-│   └── README.md                    # Lists every page
+│   └── development.md               # Setup, environment, and every command
 ├── packaging/
 │   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs and winshell.ico
 │   ├── msix/                        # The Microsoft Store package's manifest and assets
@@ -45,10 +40,11 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 │   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
 │   ├── Winshell.Package.Tests/      # Packs the templates and runs each shell; Category=Package, left out of the main run
+│   ├── Scripts/                     # PowerShell tooling tests and their fixtures
 │   ├── TestSupport/                 # Source files every test project links instead of copying
 │   └── Directory.Build.props        # What every test project shares
 ├── winshell.slnx                    # The solution the check builds
-├── .agents/skills/                  # Agent skills; a copy in .claude/skills/
+├── skills/                          # Project-owned skill sources; installed copies are ignored
 ├── CONTRIBUTING.md                  # Test rules, branch names, PR titles and descriptions
 └── GLOSSARY.md                      # The words this repo uses
 ```
@@ -66,11 +62,11 @@ Many agents work on this repo at once.
 ## Before you finish
 
 - Writing, refactoring or reviewing C#? Follow [docs/agents/csharp-practices.md](docs/agents/csharp-practices.md).
-- Writing, changing or reviewing a test? It must pass the gate in [docs/agents/test-audit/SKILL.md](docs/agents/test-audit/SKILL.md).
-- Before every push, `pwsh scripts/quick-check.ps1` must pass: the build with 0 warnings, the formatting and the fast tests, in under two minutes, with no window opened.
-- Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/run-tests.ps1 -Tier Slow`, under "Live UI with Winland running". `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out.
-- CI runs the rest, so leave full `check.ps1`, `package.ps1` and arm64 to it. The required `ci` job checks the links between Markdown files offline with lychee. It runs the build and the fast tests on a PR, and all of `pwsh scripts/check.ps1 -Tier Fast` on a push to `main` and on the release PR. The required `slow` job runs the slow tests. `slow` skips a PR that only changes docs or Markdown. The ruleset also requires the `installer` job, `actionlint`, `pr-title` and `pr-rules`.
-- If you touched `scripts/*.ps1` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
+- Writing, changing or reviewing a test? It must pass the gate in [skills/test-audit/SKILL.md](skills/test-audit/SKILL.md).
+- Before every push, `pwsh scripts/check.ps1` must pass: the build with 0 warnings, formatting, fast .NET tests and PowerShell tooling tests, targeting under two minutes with no window opened.
+- Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/check.ps1 -Tier Slow`, under "Live UI with Winland running". `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out.
+- CI runs the remaining checks, so leave `package.ps1` and arm64 to it. The required `ci` job checks Markdown links offline with lychee and runs `pwsh scripts/check.ps1` on PRs and pushes to `main`. The required `slow` job runs the slow tests and skips docs-only PRs. The ruleset also requires `installer`, `actionlint`, `pr-title` and `pr-rules`.
+- If you touched `scripts/`, `tests/Scripts/` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
 - Title the PR and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
 - Say what you couldn't verify.
@@ -121,6 +117,8 @@ Look at the screenshot, and check values in the tree rather than trusting that t
 
 ## Agent skills
 
+Install the project skills as described in [Development](docs/development.md#agent-skills). Installed copies in `.agents/skills/` and `.claude/skills/` are ignored; edit project-owned sources in `skills/`.
+
 ### Issue tracker
 
 Issues live in GitHub Issues for enpaze/winshell, used through `gh`. See `docs/agents/issue-tracker.md`.
@@ -131,11 +129,11 @@ The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 
 ### Test audit
 
-Audits and sweeps of `tests/` follow `docs/agents/test-audit/SKILL.md`. It is this repo's own, adapted from OpenClaw's skill, so it lives outside `.agents/skills/`.
+Audits and sweeps of `tests/` follow `skills/test-audit/SKILL.md`. It is this repo's own, adapted from OpenClaw's skill.
 
 ### Domain docs
 
-Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+One `GLOSSARY.md` at the repo root. See `docs/agents/domain.md`.
 
 ## Notes
 

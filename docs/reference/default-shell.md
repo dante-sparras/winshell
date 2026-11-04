@@ -1,6 +1,6 @@
 # The default shell
 
-Winshell runs the default shell when you have no project of your own ([where a configuration lives](../../README.md#where-a-configuration-lives)). It is built in, shell id `winshell-default`, and every surface follows the choices made in [Winshell Settings](../settings.md) as they change. `dotnet new winshell-default -n MyShell` is that shell as a project you can change. Winshell does not reference Reactor. The default shell is XAML and C#.
+Winshell runs the default shell when you have no project of your own ([where a configuration lives](../../README.md#where-a-configuration-lives)). It is built in, shell id `winshell-default`, and every surface follows the choices made in Winshell Settings as they change. `dotnet new winshell-default -n MyShell` is that shell as a project you can change. Winshell does not reference Reactor. The default shell is XAML and C#.
 
 ## Hotkeys
 
@@ -18,7 +18,7 @@ Winshell runs the default shell when you have no project of your own ([where a c
 | `Win+D` | Off until `desktopChords` is true. Shows the desktop, then restores those windows. While Explorer runs, Windows may still keep the chord and it is `Taken`. |
 | `Win+X` | Off until `desktopChords` is true. Opens the power-user menu. While Explorer runs, Windows may still keep the chord and it is `Taken`. |
 
-`desktopChords` is on the Hotkeys page. `Win+S` is registered on its own, whether or not `desktopChords` is on. `Win+Alt+number` stays with Windows. A hotkey another app or Windows already holds isn't taken from it; Winshell Settings shows that it is taken. See [hotkeys](../hotkeys.md).
+`desktopChords` is on the Hotkeys page. `Win+S` is registered on its own, whether or not `desktopChords` is on. `Win+Alt+number` stays with Windows. A hotkey another app or Windows already holds isn't taken from it; Winshell Settings shows that it is taken. See [hotkeys](winshell-input.md).
 
 ## Window switcher
 
@@ -28,9 +28,9 @@ With `desktopChords` on, Alt+Tab opens a popup over the main taskbar. It lists t
 
 A Windows 11 taskbar along the bottom of each screen, or of the main screen only: Start, Search and the apps in the middle or on the left, then the hidden icons chevron, the tray icons, the network, volume and battery icons, and the clock. It reserves the bottom edge, so maximized windows stop above it, unless it hides itself. Explorer's taskbar stays, and the two stack, unless `hideExplorerTaskbar` is true. That key is false until `preferences.toml` sets it. Winshell Settings has no switch for it. Winshell puts Explorer's taskbar and its edge back when it exits.
 
-[The taskbar](../taskbar.md) explains its settings (`taskbarCentered`, `taskbarAutoHide`, `taskbarAppsOn`), pinned apps, previews, the keyboard and Narrator. Pins are in `taskbar.json` in the shell's data folder.
+Pins are in `taskbar.json` in the shell's data folder.
 
-Right-click an empty part of the taskbar for **Taskbar settings**. Search opens Start and focuses its search box. While a Winshell update is ready to install, an icon in the notification area opens the updates card in Winshell Settings; see [Winshell updates](../updates.md).
+Right-click an empty part of the taskbar for **Taskbar settings**. Search opens Start and focuses its search box. While a Winshell update is ready to install, an icon in the notification area opens the updates card in Winshell Settings.
 
 A click or a right-click on a tray icon reaches its app, which draws its own menu. Winland's icon is the exception: when the Winland that added it is the one answering on its pipe, the taskbar draws Winland's menu itself, with Winland's rows and access keys: **Reload**, **Edit config**, **Open log** and **Quit**. Reload and Quit go through the pipe ([`WinlandService.Reload`](winshell-winland.md#winlandservice) and `Dispatch("exit")`). Edit config and Open log open the files Winland reports with its `files` request, [`ConfigPath`](winshell-winland.md#winlandservice) and `LogPath`, so a Winland started with `--config` opens its own config. Open log is there only while Winland writes a log and the file exists. They open in the program Windows opens that file's type with, or in Notepad when the type has none, as Winland does. The icon is Winland's when its process is the one serving the pipe, so a second Winland on another pipe keeps its own menu. While no Winland answers, or one too old to answer `files` does, a click on its icon goes to Winland, which draws its Win32 menu.
 
@@ -55,7 +55,7 @@ The popup window the network, volume and battery icons open, as on Windows 11. I
 
 The clock on the taskbar opens one popup window with the notifications above a month calendar. Its accessible name includes how many of those notifications are showing, and the time and date it draws stay as they are. Notifications are grouped by app. Each shows the time it came in, in the regional short time format the taskbar clock uses; one from another day has the abbreviated weekday in front, such as `Tue 14:05`. Dismiss, Clear and Clear all remove them from Windows. Winshell reads notifications only after you allow access with **Allow notification access**. Toast banners stay Windows' own.
 
-[Windows notifications](../notifications.md#the-default-shell) explains access, grouping and the calendar's regional formats.
+
 
 ## On-screen display
 
@@ -65,7 +65,7 @@ When the volume, a monitor's brightness, the microphone mute or the media playin
 
 A window laid out like Windows 11 Settings, for Winshell's own choices: light or dark, the accent color, the material, the taskbar, Start, quick settings, notifications, hotkeys, running at sign-in, and Winshell's own updates. Open it from the taskbar's right-click menu, its hotkey, or `winshell ipc call settings open <page>`.
 
-[Winshell Settings](../settings.md) lists its pages and the keys of `preferences.toml`.
+
 
 ## Files
 

@@ -1,6 +1,6 @@
 # Contributing
 
-The [development runbook](docs/development.md) covers the prerequisites, the first checkout, and every command. Run `pwsh scripts/quick-check.ps1` before every push.
+The [development runbook](docs/development.md) covers the prerequisites, the first checkout, and every command. Run `pwsh scripts/check.ps1` before every push.
 
 ## Write tests that don't flake
 
@@ -17,7 +17,7 @@ A test waits on a real signal: an event, a task's completion, or a fake clock.
 Nothing retries a test and nothing sets one aside. A test that fails sometimes is a bug in the test or in Winshell, so find the cause and fix it, on `main` as much as in a PR. Tests are built so that they can't flake:
 
 - **Each test owns what it uses.** It has its own temp folder and leaves no global state behind. A test that needs something one at a time, such as the keyboard hook, joins an xUnit collection with the others that do.
-- **Order and timing are shaken on every run.** Test assemblies run side by side, classes run in parallel on twice as many threads as cores, and the order changes each time. Coupling between tests fails at once. The run prints its seed, and `pwsh scripts/run-tests.ps1 -Tier <tier> -Seed <seed>` plays each assembly's order back.
+- **Order and timing are shaken on every run.** Test assemblies run side by side, classes run in parallel on twice as many threads as cores, and the order changes each time. Coupling between tests fails at once. The run prints its seed, and `pwsh scripts/check.ps1 -Tier <tier> -Seed <seed>` plays each assembly's order back.
 - **A time limit only catches a hang.** A test claims nothing about how fast something is on this machine today, so set a limit far above what the work takes under load: only the defect it guards can miss it.
 
 ## Open a PR
