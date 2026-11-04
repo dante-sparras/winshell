@@ -164,14 +164,7 @@ internal static unsafe class WindowTracker
         }
     }
 
-    private static void Flush() => FlushPending(duringDescribe: null);
-
-    /// <summary>Hwnds waiting for the next flush. Tests use this to see a mark that arrived mid-pass.</summary>
-    internal static int PendingCount => Dirty.Count;
-
-    internal static void MarkDirty(nint hwnd) => Dirty.Add(hwnd);
-
-    internal static void FlushPending(Action? duringDescribe)
+    private static void Flush()
     {
         _flushPosted = false;
         // Describe can pump once the UI thread is STA. Drop only the hwnds this pass already saw,
@@ -182,7 +175,6 @@ internal static unsafe class WindowTracker
         var changed = false;
         foreach (var hwnd in pending)
         {
-            duringDescribe?.Invoke();
             Tracked.TryGetValue(hwnd, out var old);
             var info = IsTaskbarWindow(hwnd) ? Describe(hwnd) : null;
             if (info is null)
