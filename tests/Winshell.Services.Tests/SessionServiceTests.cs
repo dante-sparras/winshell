@@ -172,6 +172,21 @@ public sealed class SessionServiceTests
     }
 
     [Fact]
+    public void Changes_that_reach_the_loop_out_of_order_leave_the_updaters_latest_state()
+    {
+        var loop = new OutOfOrderLoop();
+        using var updater = NewUpdater();
+        using var updates = new UpdatesService(loop, _log, updater);
+
+        updater.ReportApplyFailure("1.2.3", "first");
+        updater.ReportApplyFailure("1.2.4", "second");
+        loop.RunNewestFirst();
+
+        Assert.Equal("1.2.4", updates.Version);
+        Assert.Contains("second", updates.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Automatic_checks_follow_the_updater()
     {
         using var updater = NewUpdater();
@@ -223,6 +238,27 @@ public sealed class SessionServiceTests
     {
         var folder = Path.Combine(Path.GetTempPath(), "winshell-updates-service-tests", Guid.NewGuid().ToString("N"));
         return new Updater("enpaze/winshell", folder, folder, "0.5.0", "win-x64", _log);
+    }
+
+    /// <summary>A loop that holds what is posted until the test runs it, last post first.</summary>
+    private sealed class OutOfOrderLoop : IEventLoop
+    {
+        private readonly List<Action> _posted = [];
+
+        public TimeSpan Now => TimeSpan.Zero;
+
+        public void Post(Action action) => _posted.Add(action);
+
+        public void RunNewestFirst()
+        {
+            foreach (var action in Enumerable.Reverse(_posted))
+                action();
+            _posted.Clear();
+        }
+
+        public IDisposable Schedule(TimeSpan delay, Action action) => throw new NotSupportedException();
+
+        public void RequestFrame(Action action) => throw new NotSupportedException();
     }
 
     private sealed class FakeLock(bool accepts) : IWorkstationLock
