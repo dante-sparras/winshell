@@ -11,7 +11,6 @@ namespace Winshell;
 /// </summary>
 internal static partial class StartupError
 {
-    private const int StandardError = -12;
     private const uint FileTypeDisk = 1;
     private const uint FileTypePipe = 3;
     private const uint FileTypeRemote = 0x8000;
@@ -76,7 +75,7 @@ internal static partial class StartupError
 
     private static uint StderrType()
     {
-        var handle = GetStdHandle(StandardError);
+        var handle = StandardHandles.Error;
         return handle == 0 || handle == -1 ? 0 : GetFileType(handle);
     }
 
@@ -186,9 +185,6 @@ internal static partial class StartupError
 
     [LibraryImport("kernel32.dll")]
     private static partial nint GetConsoleWindow();
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint GetStdHandle(int nStdHandle);
 
     [LibraryImport("kernel32.dll")]
     private static partial uint GetFileType(nint handle);

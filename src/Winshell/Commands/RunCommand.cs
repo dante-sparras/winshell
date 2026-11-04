@@ -113,7 +113,8 @@ internal static class RunCommand
             psi.ArgumentList.Add(a);
         try
         {
-            // With -d the program starts the shell again and returns, and that shell must not hold this one's output.
+            // With -d the program starts the shell again and returns, and that shell must not hold this one's output. The
+            // program's own -d can't do it: a console program's standard handles are then a new console, not these.
             if (daemonize)
                 StandardHandles.KeepFromChildren();
             // UseShellExecute=false starts a process, so Start cannot return null for an opened document.

@@ -73,21 +73,30 @@ internal static class ProbeShell
         return process;
     }
 
-    /// <summary>A <c>-d</c> start, to the end of the process that returns.</summary>
+    /// <summary>
+    /// A <c>-d</c> start, to the end of the process that returns, with its output read to the end as a script would: the
+    /// shell it leaves behind must not hold that output open.
+    /// </summary>
     internal static int Detach(string config, string local, string[] args)
     {
-        var info = new ProcessStartInfo(Program) { UseShellExecute = false, CreateNoWindow = true };
+        var info = new ProcessStartInfo(Program) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
         info.Environment["WINSHELL_CONFIG_DIR"] = config;
         info.Environment["WINSHELL_LOCAL_DIR"] = local;
         using var process = Process.Start(info)!;
+        // Threads of their own, as WinshellCli reads: a busy pool would leave a pipe unread.
+        var readOutput = new Thread(() => process.StandardOutput.ReadToEnd()) { IsBackground = true };
+        var readError = new Thread(() => process.StandardError.ReadToEnd()) { IsBackground = true };
+        readOutput.Start();
+        readError.Start();
         if (!process.WaitForExit(20_000))
         {
             process.Kill(entireProcessTree: true);
             process.WaitForExit();
             Assert.Fail("The probe did not return from -d.");
         }
+        Assert.True(readOutput.Join(20_000) && readError.Join(20_000), "The probe's -d start left its output open.");
         return process.ExitCode;
     }
 
