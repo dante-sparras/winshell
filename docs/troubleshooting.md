@@ -67,8 +67,8 @@ Winshell keeps the values it has when it can't use what the file says, and write
 
 - **`TomlFile: failed to parse <file>[line:column]: …`** The file is not valid TOML, so none of it is read until you fix that line and save. Winshell Settings also says its changes won't be saved meanwhile, and `winshell doctor` warns with the same line and column.
 - **`<file>: <key> is the wrong type, so it was left unchanged`**, or another reason in place of "is the wrong type". The file is read, but that one value isn't used. A switch is `true` or `false`, and a word such as `"mica"` is in quotes. The [preferences table](settings.md#where-the-choices-live) lists every key and its values.
-- **`<file>[line:column]: <key> was ignored; did you mean <key>?`** Keys are case-sensitive and start with a lowercase letter, such as `taskbarCentered`. A key that differs from one Winshell reads only in case or by a letter or two is named this way, and stays in the file.
-- **Nothing in the log.** A key unlike any Winshell reads stays in the file and is ignored without a word, since another shell may read it. A `colorScheme`, `accentColor` or `taskbarAppsOn` that isn't one of its values is used as its default, also without a word.
+- **`<file>[line:column]: <key> was ignored; did you mean <key>?`** Keys are case-sensitive and start with a lowercase letter, such as `taskbarCentered`. A key that differs from one Winshell reads only in case, by a letter, or by two in a longer key is named this way, and stays in the file.
+- **Nothing in the log.** A key unlike any Winshell reads stays in the file and is ignored without a word, since your own configuration may read it. A `colorScheme`, `accentColor` or `taskbarAppsOn` that isn't one of its values leaves the default in use, also without a word.
 
 ## A hotkey doesn't work
 

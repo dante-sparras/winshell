@@ -31,8 +31,8 @@ public sealed class TomlCommentAttribute(string text) : Attribute
 /// The file is read in the constructor, so a default belongs in the property's initializer. After that the object
 /// follows the file, and assigning a property writes it, on the loop that was passed in. Everything else in the file
 /// stays, as <see cref="TomlDocument"/> says. A key no property reads stays too, and when it differs from one only in
-/// case or by a letter or two, a warning names its line and the key it may be a misspelling of. A write reads the file again and puts only assigned values into it, and the keys it
-/// does not have yet. When that read fails or does not parse, nothing is written and a warning is logged.
+/// case, by a letter, or by two in a longer key, a warning names its line and the key it may be a misspelling of. A
+/// write reads the file again and puts only assigned values into it, and the keys it does not have yet. When that read fails or does not parse, nothing is written and a warning is logged.
 /// </summary>
 public abstract class TomlFile : ObservableObject, IDisposable
 {

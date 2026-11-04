@@ -363,7 +363,7 @@ public sealed class TomlFileTests
     [Fact]
     public void A_key_that_looks_like_one_the_file_reads_is_reported_once_with_its_line()
     {
-        using var fixture = new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\n\n[colors]\nmode = \"dark\"\n");
+        using var fixture = new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\nin = 1\n\n[colors]\nmode = \"dark\"\n");
         using var settings = Open(fixture);
         settings.Name = "next";
         fixture.Loop.Process();
