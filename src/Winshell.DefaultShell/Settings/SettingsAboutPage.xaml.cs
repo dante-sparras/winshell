@@ -17,6 +17,7 @@ public sealed partial class SettingsAboutPage : UserControl
     private readonly Preferences _preferences;
     private readonly Shell _shell;
     private readonly SettingsDiagnosticsSession _diagnostics;
+    private readonly string _automaticIdle;
     private readonly string _diagnosticsIdle;
     private bool _applying;
 
@@ -32,6 +33,7 @@ public sealed partial class SettingsAboutPage : UserControl
         var folder = SettingsCatalog.RequireSetting("configFolder");
         var log = SettingsCatalog.RequireSetting("log");
         var diagnostics = SettingsCatalog.RequireSetting("diagnostics");
+        _automaticIdle = automatic.Description;
         _diagnosticsIdle = diagnostics.Description;
         VersionCard.Apply(version);
         UpdatesCard.Apply(updates);
@@ -131,6 +133,7 @@ public sealed partial class SettingsAboutPage : UserControl
         Update.IsEnabled = !SettingsAbout.UpdatesBusy(updates.Status);
         AutomationProperties.SetName(Update, SettingsAbout.UpdateButtonName(updates.Status));
         Automatic.IsEnabled = SettingsAbout.AutomaticEnabled(updates.Available);
+        AutomaticCard.Description = SettingsAbout.Automatic(updates.Available, _automaticIdle);
         FolderCard.Description = SettingsAbout.Folder(_shell.ConfigRoot);
         OpenFolder.IsEnabled = _shell.ConfigRoot.Length > 0;
         LogCard.Description = SettingsAbout.Log(_shell.LogPath);
