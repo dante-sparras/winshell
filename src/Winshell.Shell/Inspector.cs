@@ -151,24 +151,34 @@ internal static class Inspector
             json.WriteBoolean("enabled", false);
     }
 
+    /// <summary>The windows a <c>[window]</c> names: one by its number in <see cref="Tree"/>, or each one that shows that type.</summary>
+    private static List<ShellWindow> Named(List<ShellWindow> windows, string name)
+    {
+        if (int.TryParse(name, out var index) && index >= 0 && index < windows.Count)
+            return [windows[index]];
+        var shown = windows.Where(window => window.Content?.GetType().Name == name).ToList();
+        return shown.Count > 0 ? shown : throw new IpcException($"No open window shows {name}.");
+    }
+
+    /// <summary>The one window a screenshot takes: the first, or the one named.</summary>
     private static ShellWindow Window(Shell shell, IReadOnlyList<string> named)
     {
         var windows = Windows(shell);
-        if (windows.Count == 0)
-            throw new IpcException("No window is open.");
         if (named is not [var name, ..])
-            return windows[0];
-        if (int.TryParse(name, out var index) && index >= 0 && index < windows.Count)
-            return windows[index];
-        return windows.FirstOrDefault(window => window.Content?.GetType().Name == name)
-            ?? throw new IpcException($"No open window shows {name}.");
+            return windows.Count > 0 ? windows[0] : throw new IpcException("No window is open.");
+        return Named(windows, name) switch
+        {
+            [var only] => only,
+            var several => throw new IpcException(
+                $"{several.Count} windows show {name}: {string.Join(", ", several.Select(window => windows.IndexOf(window)))}. Name one by its number, as in winshell inspect screenshot <file> {windows.IndexOf(several[0])}."),
+        };
     }
 
     /// <summary>The one element <paramref name="name"/> names. When it names more, acting on the first would act on a guess.</summary>
     private static FrameworkElement Find(Shell shell, string command, string name, IReadOnlyList<string> window)
     {
         var windows = Windows(shell);
-        var searched = window.Count > 0 ? [Window(shell, window)] : windows;
+        var searched = window is [var named, ..] ? Named(windows, named) : windows;
         var found = new List<(int Window, FrameworkElement Element)>();
         foreach (var open in searched)
         {

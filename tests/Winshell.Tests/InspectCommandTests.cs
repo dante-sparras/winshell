@@ -63,6 +63,11 @@ public sealed class InspectCommandTests : IDisposable
     private static int Count(string tree, string type) =>
         JsonDocument.Parse(tree).RootElement.EnumerateArray().Count(window => window.GetProperty("content").GetProperty("type").GetString() == type);
 
+    private static string FirstWindow(string tree, string type) =>
+        JsonDocument.Parse(tree).RootElement.EnumerateArray()
+            .First(window => window.GetProperty("content").GetProperty("type").GetString() == type)
+            .GetProperty("window").GetInt32().ToString(CultureInfo.InvariantCulture);
+
     [Fact]
     public void The_tree_is_json_and_names_the_taskbar_and_its_start_button()
     {
@@ -79,8 +84,8 @@ public sealed class InspectCommandTests : IDisposable
     {
         Assert.Equal(0, Count(Run("tree").Output, "StartView"));
 
-        // Each display can have a taskbar, so the window says which StartButton.
-        var (code, output, error) = Run("click", "StartButton", "TaskbarView");
+        // Each display can have a taskbar, so the window's number says which StartButton.
+        var (code, output, error) = Run("click", "StartButton", FirstWindow(Run("tree").Output, "TaskbarView"));
 
         Assert.Equal("", error);
         Assert.Equal((0, "Clicked StartButton"), (code, output.Trim()));

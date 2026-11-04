@@ -204,6 +204,39 @@ public sealed class InspectorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_type_names_every_window_that_shows_it_and_a_screenshot_needs_one()
+    {
+        var (clicks, message) = await ShellFixture.On(async shell =>
+        {
+            var button = new Button { Name = "Solo", Content = "Go" };
+            var count = 0;
+            button.Click += (_, _) => count++;
+            var holder = new Page();
+            holder.Children.Add(button);
+            using var emptyPanel = Panel(new Page());
+            using var holderPanel = Panel(holder);
+            await ShellFixture.LaidOut(button);
+
+            // Only the second window of the type holds Solo, so the type is enough to find it.
+            await Inspector.Run(shell, "click", ["Solo", nameof(Page)]);
+            await ShellFixture.LaidOut(button);
+            var message = "";
+            try
+            {
+                await Inspector.Run(shell, "screenshot", [Path.Combine(_dir, "two.png"), nameof(Page)]);
+            }
+            catch (IpcException e)
+            {
+                message = e.Message;
+            }
+            return (count, message);
+        });
+
+        Assert.Equal(1, clicks);
+        Assert.Matches(@"^2 windows show Page: \d+, \d+\. Name one by its number", message);
+    }
+
+    [Fact]
     public async Task A_disabled_button_refuses_a_click_as_it_refuses_a_pointer()
     {
         var (clicks, refused) = await ShellFixture.On(async shell =>
