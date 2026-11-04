@@ -194,6 +194,7 @@ public sealed class TomlDocumentTests
     [InlineData("x = 1\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "x = 1\n\n# Other settings.\n[other]\nk = 1\n")]
     [InlineData("[other]\nk = 1\n[a]\nk = 1\n# The end.\n", "[other]\nk = 1\n# The end.\n")]
     [InlineData("[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "# Other settings.\n[other]\nk = 1\n")]
+    [InlineData("[p]\nk = 1\n\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "[p]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n")]
     public void The_comments_after_a_table_stay_when_the_table_goes(string original, string expected)
     {
         var document = Parse(original);

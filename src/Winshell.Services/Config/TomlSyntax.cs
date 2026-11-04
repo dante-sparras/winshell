@@ -295,18 +295,16 @@ internal static class TomlSyntax
     /// </summary>
     public static void RemoveTable(DocumentSyntax document, TableSyntaxBase table)
     {
-        var after = LastToken(table).TrailingTrivia ?? [];
-        List<SyntaxTrivia> kept = [.. table.LeadingTrivia ?? [], .. after.Exists(t => t.Kind == TokenKind.Comment) ? after : []];
         var index = 0;
         while (document.Tables.GetChild(index) != table)
             index++;
+        var after = LastToken(table).TrailingTrivia ?? [];
+        var comment = after.FindIndex(t => t.Kind == TokenKind.Comment);
+        // The blank line between the table and the comments goes when one is above the table already, or nothing is.
+        if (comment >= 0 && EndsBlank(table.LeadingTrivia ?? Above(document, index)))
+            after = after[(after.FindLastIndex(comment, t => t.Kind == TokenKind.NewLine) + 1)..];
+        List<SyntaxTrivia> kept = [.. table.LeadingTrivia ?? [], .. comment >= 0 ? after : []];
         document.Tables.RemoveChild(table);
-        // With nothing above them, they start the file without a blank line.
-        if (index == 0 && document.KeyValues.ChildrenCount == 0)
-        {
-            var first = kept.FindIndex(t => t.Kind is not (TokenKind.NewLine or TokenKind.Whitespaces));
-            kept = first >= 0 ? kept[first..] : [];
-        }
         if (kept.Count == 0)
             return;
         if (index < document.Tables.ChildrenCount)
@@ -327,6 +325,25 @@ internal static class TomlSyntax
         }
         else
             document.TrailingTrivia = [.. kept, .. document.TrailingTrivia ?? []];
+    }
+
+    /// <summary>The trivia after the line above the table at <paramref name="index"/>, or null when nothing is above it.</summary>
+    private static List<SyntaxTrivia>? Above(DocumentSyntax document, int index)
+    {
+        if (index > 0)
+            return LastToken(document.Tables.GetChild(index - 1)!).TrailingTrivia ?? [];
+        if (document.KeyValues.ChildrenCount > 0)
+            return LastToken(document.KeyValues.GetChild(document.KeyValues.ChildrenCount - 1)!).TrailingTrivia ?? [];
+        return null;
+    }
+
+    /// <summary>Whether trivia after a line ends in a blank line. Nothing, the start of the file, counts as one.</summary>
+    private static bool EndsBlank(List<SyntaxTrivia>? trivia)
+    {
+        if (trivia is null)
+            return true;
+        var kinds = trivia.Where(t => t.Kind != TokenKind.Whitespaces).Select(t => t.Kind).ToList();
+        return kinds.Count > 0 && kinds[^1] == TokenKind.NewLine && (kinds.Count == 1 || kinds[^2] == TokenKind.NewLine);
     }
 
     public static void InsertAfter(DocumentSyntax document, TableSyntaxBase after, TableSyntaxBase table)
