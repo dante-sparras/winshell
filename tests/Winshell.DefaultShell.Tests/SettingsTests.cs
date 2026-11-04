@@ -17,6 +17,12 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void Each_key_names_one_page_or_setting()
+    {
+        Assert.Distinct(SettingsCatalog.Pages.Select(page => page.Key).Concat(Keys(SettingsCatalog.Settings)), StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void Search_finds_settings_by_their_words_and_ranks_a_title_first()
     {
         Assert.Equal(["taskbarAutoHide"], Keys(SettingsCatalog.Search("hide")));
