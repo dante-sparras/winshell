@@ -35,11 +35,11 @@ function Get-PrProblem {
             'A fix needs a test that failed before it, or a **No test:** line that says why it can''t have one.'
         }
         if (-not (Test-BeforeAfter -Body $Body -Value '[^\s|]')) {
-            'A fix says under Evidence how its test failed before the fix: **Before:** and **After:**.'
+            'A fix says under Verification how its test failed before the fix: **Before:** and **After:**.'
         }
     }
     if ($type -eq 'perf' -and -not (Test-BeforeAfter -Body $Body -Value '\d')) {
-        'A perf change gives numbers under Evidence: **Before:** and **After:**, each with a number, or a table with those headings.'
+        'A perf change gives numbers under Verification: **Before:** and **After:**, each with a number, or a table with those headings.'
     }
     if ($type -in 'feat', 'fix', 'perf' -and @($changed | Where-Object { $_ -match '^src/.*\.xaml$' }).Count -gt 0 -and $Body -notmatch '!\[[^\]]*\]\(\S+\)|<img\s|\*\*Not visual:\*\*[ \t]*\S') {
         'A change to XAML shows a winshell inspect screenshot in the PR, or says why not on a **Not visual:** line.'

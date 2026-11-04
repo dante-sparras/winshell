@@ -1,0 +1,45 @@
+name: PR Size
+
+on:
+  # pull_request_target can label a fork's pull request. The job reads the changed files from the API and never checks
+  # out PR code.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  issues: read # the pull request's labels
+  pull-requests: write # the size label
+
+# Only the newest push's size matters.
+concurrency:
+  group: pr-size-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-size:
+    name: pr-size
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Label the pull request with its size
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+        run: |
+          # Lines added plus lines deleted. Files in tests/ count only when the pull request changes nothing else.
+          counts=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | "\(.filename)\t\(.additions + .deletions)"')
+          lines=$(awk -F'\t' '$1 !~ /^tests\// { n += $2 } END { print n + 0 }' <<<"$counts")
+          if [ "$lines" -eq 0 ]; then lines=$(awk -F'\t' '{ n += $2 } END { print n + 0 }' <<<"$counts"); fi
+          # The size:* labels' descriptions give these bounds. Change both together.
+          if [ "$lines" -lt 10 ]; then size=size:XS
+          elif [ "$lines" -lt 30 ]; then size=size:S
+          elif [ "$lines" -lt 100 ]; then size=size:M
+          elif [ "$lines" -lt 500 ]; then size=size:L
+          else size=size:XL
+          fi
+          for label in $(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name | select(startswith("size:"))'); do
+            if [ "$label" != "$size" ]; then gh api -X DELETE "repos/$REPO/issues/$PR/labels/$label" --silent; fi
+          done
+          gh api "repos/$REPO/issues/$PR/labels" -f "labels[]=$size" --silent
+          echo "$lines changed lines: $size"

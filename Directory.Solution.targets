@@ -1,0 +1,12 @@
+<Project>
+  <!-- Building the solution points Git at .githooks, so a commit runs the checks CI would fail. A hooks path the clone
+       already sets is left alone. -->
+  <Target Name="_WinshellUseGitHooks" BeforeTargets="Build" Condition="Exists('$(MSBuildThisFileDirectory).git')">
+    <Exec Command="git config --local core.hooksPath" WorkingDirectory="$(MSBuildThisFileDirectory)" EchoOff="true"
+          IgnoreExitCode="true" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_WinshellHooksPath" />
+    </Exec>
+    <Exec Condition="'$(_WinshellHooksPath)' == ''" Command="git config --local core.hooksPath .githooks"
+          WorkingDirectory="$(MSBuildThisFileDirectory)" EchoOff="true" IgnoreExitCode="true" />
+  </Target>
+</Project>
