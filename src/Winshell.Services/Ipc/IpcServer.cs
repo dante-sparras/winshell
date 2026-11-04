@@ -2,105 +2,10 @@ using System.Buffers;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Microsoft.Win32.SafeHandles;
 
 namespace Winshell;
-
-internal sealed record IpcRequest(
-    [property: JsonPropertyName("op")] string Op,
-    [property: JsonPropertyName("target")] string? Target = null,
-    [property: JsonPropertyName("name")] string? Name = null,
-    [property: JsonPropertyName("args")] List<string>? Args = null,
-    [property: JsonPropertyName("json"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Json = false,
-    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0,
-    [property: JsonPropertyName("winshell"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] string? Winshell = null);
-
-internal sealed record IpcResponse(
-    [property: JsonPropertyName("ok")] bool Ok,
-    [property: JsonPropertyName("value")] string? Value = null,
-    [property: JsonPropertyName("error")] string? Error = null,
-    [property: JsonPropertyName("protocol"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Protocol = 0,
-    [property: JsonPropertyName("winshell"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] string? Winshell = null);
-
-[JsonSerializable(typeof(IpcRequest))]
-[JsonSerializable(typeof(IpcResponse))]
-internal sealed partial class IpcJson : JsonSerializerContext;
-
-/// <summary>
-/// The version of the lines the control pipe carries. A shell can outlive an update of the CLI, so each side names its
-/// protocol on every line. A side with no number sent no <c>protocol</c> field, and reads past one, which makes the
-/// field safe for both: a refusal is an ordinary failed response, and every client since the first prints those.
-/// </summary>
-internal static class IpcProtocol
-{
-    /// <summary>What this build speaks. Raise it when a side from before could not read a line.</summary>
-    public const int Current = 1;
-
-    /// <summary>The oldest this build still speaks. 0 is a side with no number, whose lines are the same as 1.</summary>
-    public const int Oldest = 0;
-
-    /// <summary>Why a shell speaking <paramref name="current"/> refuses a client speaking <paramref name="client"/>, or null.</summary>
-    public static string? ClientRefusal(int client, int current = Current, int oldest = Oldest) =>
-        client >= oldest && client <= current ? null : Mismatch(current, client);
-
-    /// <summary>Why a client speaking <paramref name="current"/> refuses a shell speaking <paramref name="shell"/>, or null. A newer shell decides for itself.</summary>
-    public static string? ShellRefusal(int shell, int current = Current, int oldest = Oldest) =>
-        shell >= oldest ? null : Mismatch(shell, current);
-
-    /// <summary>
-    /// Why a shell of release <paramref name="shell"/> refuses a winshell of release <paramref name="client"/>, or null.
-    /// A side that names no release is allowed, so a peer from before this check still answers. The release is
-    /// major.minor.patch: a prerelease and a build id do not refuse.
-    /// </summary>
-    public static string? ReleaseRefusal(string? shell, string? client)
-    {
-        if (string.IsNullOrEmpty(shell) || string.IsNullOrEmpty(client))
-            return null;
-        var left = ProductVersion.Parse(shell);
-        var right = ProductVersion.Parse(client);
-        if (left.Major == right.Major && left.Minor == right.Minor && left.Patch == right.Patch)
-            return null;
-        return $"This shell is Winshell {shell} and this winshell is {client}. Use the winshell that matches, or build the shell with this one.";
-    }
-
-    private static string Mismatch(int shell, int client) =>
-        $"This shell speaks control protocol {shell} and this winshell speaks {client}. Use the winshell that matches, or build the shell with this one.";
-}
-
-/// <summary>What the control pipe does to the shell it serves. Every member runs on the shell's thread.</summary>
-internal interface IInstanceControl
-{
-    /// <summary>The shell's IPC targets now. A reload can replace them.</summary>
-    ShellIpc Ipc { get; }
-
-    /// <summary>
-    /// Reloads the shell. <paramref name="program"/> is the build to start when the running one kept its folder, and
-    /// null starts this program again. Null when it worked, or else why not, for the client.
-    /// </summary>
-    string? Reload(string? program);
-
-    /// <summary>Runs after a client has the answer to a reload that worked, which a shell that goes on to end has to wait for.</summary>
-    void Reloaded()
-    {
-    }
-
-    /// <summary>Ends the shell.</summary>
-    void Quit();
-
-    /// <summary>Shows the notice for a configuration that did not build. The shell keeps running.</summary>
-    void ShowBuildError(string error, string projectFile)
-    {
-    }
-
-    /// <summary>What <c>winshell inspect</c> asked of the shell, and the text it prints. <see cref="IpcException"/> is a failed request.</summary>
-    Task<string> Inspect(string command, IReadOnlyList<string> args) =>
-        throw new IpcException("This shell can't be inspected.");
-
-    /// <summary>A failed request as the client reads it.</summary>
-    string Describe(Exception e) => $"ipc: {e.GetType().Name}: {e.Message}";
-}
 
 /// <summary>Takes CLI requests on a named pipe and runs them on the UI thread.</summary>
 internal sealed class IpcServer : IDisposable
