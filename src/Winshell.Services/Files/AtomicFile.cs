@@ -10,7 +10,7 @@ namespace Winshell;
 /// How a text file is saved. A temporary file goes down beside it and is flushed to disk, then replaces it, so a crash
 /// leaves the old file or the new one. A symbolic link stays a link, and a hard link is written in place.
 /// </summary>
-internal static class AtomicFile
+internal static partial class AtomicFile
 {
     private const uint FileAttributeReparsePoint = 0x400;
     private static readonly IntPtr InvalidFindHandle = new(-1);
@@ -228,11 +228,12 @@ internal static class AtomicFile
         }
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr FindFirstFileW(string fileName, out Win32FindData data);
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint FindFirstFileW(string fileName, out Win32FindData data);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool FindClose(IntPtr handle);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FindClose(nint handle);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct FileTime
@@ -241,8 +242,8 @@ internal static class AtomicFile
         public uint High;
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct Win32FindData
+    [StructLayout(LayoutKind.Sequential)]
+    private unsafe struct Win32FindData
     {
         public uint FileAttributes;
         public FileTime CreationTime;
@@ -252,14 +253,13 @@ internal static class AtomicFile
         public uint FileSizeLow;
         public uint Reserved0;
         public uint Reserved1;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string FileName;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
-        public string AlternateFileName;
+        public fixed char FileName[260];
+        public fixed char AlternateFileName[14];
     }
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetFileInformationByHandle(SafeFileHandle hFile, out ByHandleFileInformation lpFileInformation);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetFileInformationByHandle(SafeFileHandle hFile, out ByHandleFileInformation lpFileInformation);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct ByHandleFileInformation
