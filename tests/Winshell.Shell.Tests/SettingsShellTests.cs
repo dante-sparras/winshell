@@ -263,6 +263,38 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task No_heading_repeats_the_title_of_a_card_on_its_page()
+    {
+        var repeated = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                var settings = SettingsCatalog.Settings.Select(setting => setting.Title).ToHashSet(StringComparer.Ordinal);
+                var found = new List<string>();
+                foreach (var page in SettingsCatalog.Pages)
+                {
+                    Assert.Equal("", shell.Ipc.Call("settings", "open", [page.Key]));
+                    var root = (FrameworkElement)(await rig.Shown()).Content!;
+                    root.UpdateLayout();
+                    var pages = Find<Grid>(root, grid => grid.Name == "Pages") ?? throw new InvalidOperationException("Settings has no pages.");
+                    // The settings themselves. A notifications card is titled with an app's name from this PC.
+                    var titles = Cards(pages).Select(card => card.Title).Where(settings.Contains).ToHashSet(StringComparer.Ordinal);
+                    found.AddRange(Headings(pages).Where(titles.Contains).Select(heading => $"{page.Key}: {heading}"));
+                }
+
+                return found;
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(repeated);
+    }
+
+    [Fact]
     public async Task Settings_is_built_on_its_first_open_and_closing_it_keeps_it_where_it_was()
     {
         var kept = await ShellFixture.On(async shell =>
@@ -343,6 +375,21 @@ public sealed class SettingsShellTests
         for (var i = 0; i < count; i++)
         {
             foreach (var found in Cards(VisualTreeHelper.GetChild(root, i)))
+                yield return found;
+        }
+    }
+
+    /// <summary>The text the page that shows has outside its cards: its headings and its notes.</summary>
+    private static IEnumerable<string> Headings(DependencyObject root)
+    {
+        if (root is UIElement { Visibility: Visibility.Collapsed } or SettingsCard)
+            yield break;
+        if (root is TextBlock { Text.Length: > 0 } text)
+            yield return text.Text;
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            foreach (var found in Headings(VisualTreeHelper.GetChild(root, i)))
                 yield return found;
         }
     }
