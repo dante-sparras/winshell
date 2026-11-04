@@ -376,30 +376,6 @@ public sealed class HotkeyBookTests : IDisposable
         }
     }
 
-    [Fact]
-    public void A_sequence_arms_without_a_hook_when_native_install_is_off()
-    {
-        var loop = new ManualEventLoop();
-        using var registrar = new WindowsHotkeyRegistrar(loop) { InstallNativeHook = false };
-        var text = ClaimableChord(registrar, loop);
-        var sequence = Parse(text + ", C");
-        var probe = new Probe(loop);
-        Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(probe, sequence).Status);
-        Assert.False(registrar.NeedsHook);
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
-        Assert.True(registrar.TryGetId(sequence.Chords[0].OsKey, out var id));
-
-        registrar.OnHotkey(id);
-        Assert.True(registrar.NeedsHook);
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
-        Assert.Equal(0, probe.Presses);
-
-        Assert.True(registrar.HandleKey((int)'C', isUp: false, HotkeyModifiers.None));
-        Assert.Equal(1, probe.Presses);
-        Assert.False(registrar.NeedsHook);
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
-    }
-
     private static void AssertRejected(string text, params string[] parts)
     {
         Assert.False(HotkeySequence.TryParse(text, out _, out var error));

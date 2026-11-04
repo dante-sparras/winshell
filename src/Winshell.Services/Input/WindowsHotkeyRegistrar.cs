@@ -31,9 +31,6 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
     /// <summary>The registrar the hotkeys on a loop share. With nothing claimed, it holds no window and no hook.</summary>
     public static WindowsHotkeyRegistrar For(IEventLoop loop) => PerLoop.GetValue(loop, static l => new WindowsHotkeyRegistrar(l));
 
-    /// <summary>When false, a sequence can arm without installing a hook. Tests use this so a hook is never left behind.</summary>
-    internal bool InstallNativeHook { get; set; } = true;
-
     internal int RegistrationCount => _window.Count;
 
     internal nint Window => _window.Handle;
@@ -76,7 +73,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
         lock (_bookLock)
             _book.Add(listener, sequence);
         SyncHook();
-        if (first.IsWinOnly && InstallNativeHook && !_hook.IsAttached)
+        if (first.IsWinOnly && !_hook.IsAttached)
         {
             lock (_bookLock)
                 _book.Remove(listener);
@@ -132,23 +129,6 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
         Deliver(result);
         if (changed)
             SyncHook();
-    }
-
-    /// <summary>Feeds one key into the book. Tests use this instead of injecting a keystroke.</summary>
-    internal bool HandleKey(int virtualKey, bool isUp, HotkeyModifiers modifiers)
-    {
-        BookResult result;
-        var changed = false;
-        lock (_bookLock)
-        {
-            var before = _book.NeedsHook;
-            result = _book.Hook(virtualKey, isUp, modifiers, NowMs());
-            changed = before != _book.NeedsHook;
-        }
-        Deliver(result);
-        if (changed)
-            SyncHook();
-        return result.Swallow;
     }
 
     /// <summary>
@@ -234,7 +214,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
     {
         if (_disposed)
             return;
-        if (NeedsHook && InstallNativeHook)
+        if (NeedsHook)
             _hook.Attach();
         else
             _hook.Detach();
