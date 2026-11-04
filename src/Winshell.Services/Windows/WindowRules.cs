@@ -126,6 +126,11 @@ internal static class WindowRules
         return eventType == Win32.EVENT_OBJECT_DESTROY ? tracked : isRoot;
     }
 
+    /// <summary>Whether a window with this style and rectangle is fullscreen on a monitor: no title bar, and covering all of it.</summary>
+    public static bool CoversMonitor(long style, RECT window, RECT monitor) =>
+        (style & Win32.WS_CAPTION) != Win32.WS_CAPTION
+        && window.Left <= monitor.Left && window.Top <= monitor.Top && window.Right >= monitor.Right && window.Bottom >= monitor.Bottom;
+
     /// <summary>Whether a WinEvent can move the foreground from one window to another.</summary>
     public static bool MarksForeground(uint eventType) =>
         eventType is Win32.EVENT_SYSTEM_FOREGROUND

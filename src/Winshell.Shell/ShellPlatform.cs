@@ -8,6 +8,7 @@ using Microsoft.Win32;
 using Windows.UI;
 using Windows.UI.ViewManagement;
 using Winshell.Native;
+using Winshell.Windows;
 
 namespace Winshell;
 
@@ -20,6 +21,8 @@ internal sealed unsafe class ShellPlatform : IDisposable
     private readonly HashSet<HostWindow> _grabbing = [];
     private readonly SystemChanges _systemChanges = new();
     private readonly List<ScreenInfo> _screens;
+    private readonly List<nint> _foregroundWatches = [];
+    private HashSet<string> _fullscreenScreens = [];
     private HookThread? _mouseThread;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
@@ -42,6 +45,10 @@ internal sealed unsafe class ShellPlatform : IDisposable
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         Flyouts = new FlyoutDismissal(this);
+        // Explorer tells only the app bars that reserve an edge about a fullscreen app, so this reads it from the foreground window.
+        foreach (var evt in new[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_LOCATIONCHANGE })
+            _foregroundWatches.Add(Win32.SetWinEventHook(evt, evt, 0, &OnForegroundEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT));
+        ReadFullscreen();
     }
 
     public IEventLoop Loop { get; }
@@ -213,6 +220,53 @@ internal sealed unsafe class ShellPlatform : IDisposable
         });
     }
 
+    // Fullscreen apps
+
+    /// <summary>Whether another app is fullscreen on a screen, so panels there step back as the taskbar does.</summary>
+    internal bool FullscreenOn(string screenId) => _fullscreenScreens.Contains(screenId);
+
+    [UnmanagedCallersOnly]
+    private static void OnForegroundEvent(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        // A window's move or resize sends this for every window, so only the foreground one can change the answer.
+        if (_current is not { } self || hwnd == 0 || !WindowRules.IsWindowObject(idObject, idChild)
+            || (evt == Win32.EVENT_OBJECT_LOCATIONCHANGE && hwnd != Win32.GetForegroundWindow()))
+            return;
+        NativeCallback.Guard(self.Log, "shell", () => self.Loop.Post(self.ReadFullscreen));
+    }
+
+    private void ReadFullscreen()
+    {
+        HashSet<string> next = [];
+        var hwnd = Win32.GetForegroundWindow();
+        if (hwnd != 0 && Win32.IsWindowVisible(hwnd) && !IsShellWindow(hwnd) && Win32.GetWindowRect(hwnd, out var rect))
+        {
+            var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
+            foreach (var monitor in Winshell.Screens.Enumerate())
+            {
+                if (WindowRules.CoversMonitor(style, rect, monitor.Bounds))
+                    next.Add(monitor.Info.Id);
+            }
+        }
+        if (next.SetEquals(_fullscreenScreens))
+            return;
+        _fullscreenScreens = next;
+        WorkAreaMayHaveChanged();
+    }
+
+    /// <summary>The desktop, and a panel or popup of this process, which are never a fullscreen app.</summary>
+    private static bool IsShellWindow(nint hwnd)
+    {
+        if (((uint)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0)
+            return true;
+        Span<char> name = stackalloc char[16];
+        fixed (char* chars = name)
+        {
+            var length = Win32.GetClassNameW(hwnd, chars, name.Length);
+            return name[..length].SequenceEqual("Progman") || name[..length].SequenceEqual("WorkerW");
+        }
+    }
+
     // Popups that close on a click outside them
 
     internal void UpdatePopupGrab(HostWindow window, bool grabbing)
@@ -374,6 +428,8 @@ internal sealed unsafe class ShellPlatform : IDisposable
             _uiSettings = null;
         }
         Unhook();
+        foreach (var watch in _foregroundWatches)
+            Win32.UnhookWinEvent(watch);
         Flyouts.Dispose();
         foreach (var w in _windows.ToArray())
             w.Dispose();

@@ -21,9 +21,6 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
     /// <summary>Whether Explorer has the app bar, and with it the edge.</summary>
     public bool Registered { get; private set; }
 
-    /// <summary>Whether another app is fullscreen on this monitor, so the panel steps back as the taskbar does.</summary>
-    public bool FullscreenAppActive { get; private set; }
-
     /// <summary>The edge a panel with these anchors reserves: the one it spans, or none for a corner or the whole screen.</summary>
     public static Edges? EdgeFor(Edges anchors)
     {
@@ -129,10 +126,6 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
                         place();
                     });
                 }
-                break;
-            case Win32.ABN_FULLSCREENAPP:
-                FullscreenAppActive = lParam != 0;
-                platform.Loop.Post(place);
                 break;
         }
         return 0;

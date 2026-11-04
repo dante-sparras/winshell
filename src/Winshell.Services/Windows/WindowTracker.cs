@@ -265,8 +265,7 @@ internal static unsafe class WindowTracker
         {
             // No title bar and covering the whole monitor, as a game or a video player in fullscreen does.
             var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
-            var screen = mi.rcMonitor;
-            fullscreen = (style & Win32.WS_CAPTION) != Win32.WS_CAPTION && rect.Left <= screen.Left && rect.Top <= screen.Top && rect.Right >= screen.Right && rect.Bottom >= screen.Bottom;
+            fullscreen = WindowRules.CoversMonitor(style, rect, mi.rcMonitor);
         }
         Identities.TryGetValue(hwnd, out var previous);
         // The property can arrive after the window is first shown. Read it every time. The package id and the
