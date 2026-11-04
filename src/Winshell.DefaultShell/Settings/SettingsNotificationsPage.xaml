@@ -6,7 +6,6 @@
     HorizontalAlignment="Stretch">
     <StackPanel Spacing="4">
         <local:SettingsLink x:Name="Disturb" />
-        <TextBlock Text="Notifications from apps" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,18,0,6" />
         <local:SettingsCard x:Name="AppsCard" />
         <TextBlock
             x:Name="Empty"
