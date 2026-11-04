@@ -15,12 +15,14 @@ namespace Winshell;
 /// <see cref="IReadOnlyList{T}"/> of object and <see cref="IReadOnlyDictionary{TKey, TValue}"/> of string and object.
 /// A date or a time reads as a string, and its token stays while that string does. <see cref="Set"/> changes one key
 /// and leaves the rest of the text: comments, blank lines, number spellings and other keys stay. A table, an array of
-/// tables, or a dotted key already in the file is the value: it is updated in place and never written a second time.
-/// A key the file does not have yet goes at the end of its top-level keys, under its comment.
+/// tables, or a dotted key already in the file is the value: only what changed in it is updated, in place. When that
+/// would write a part the file has elsewhere a second time, such as a key of a table that is under its own header, the
+/// value is written again whole instead, inline, where a key the file does not have yet goes: at the end of its
+/// top-level keys, under its comment.
 /// </summary>
 internal sealed class TomlDocument
 {
-    private readonly DocumentSyntax _document;
+    private DocumentSyntax _document;
     private readonly string _newline;
     private IReadOnlyDictionary<string, object?>? _values;
 
@@ -50,7 +52,8 @@ internal sealed class TomlDocument
 
     /// <summary>
     /// Makes <paramref name="key"/> hold <paramref name="value"/>. Null takes the key out, because TOML has no null,
-    /// and the comments around it stay. A key the file does not have yet is written under <paramref name="comment"/>.
+    /// and the comments around it stay. A table keeps the keys it is not given. A key the file does not have yet is
+    /// written under <paramref name="comment"/>.
     /// </summary>
     public void Set(string key, object? value, string? comment = null)
     {
@@ -60,12 +63,19 @@ internal sealed class TomlDocument
             Take(owned);
         else if (!owned.Defined)
             AppendNew(key, desired, comment);
-        else if (Same(Values.GetValueOrDefault(key), desired))
-            return;
-        else if (!UpdateOwned(owned, key, desired))
+        else
         {
-            Take(owned);
-            AppendNew(key, desired, comment);
+            var current = Values.GetValueOrDefault(key);
+            if (Same(current, desired))
+                return;
+            var before = _document.ToString();
+            var updated = UpdateOwned(owned, key, Changes(current, desired));
+            if (!updated || !TryLoad("", _document.ToString(), out _, out _, out _))
+            {
+                _document = SyntaxParser.Parse(before);
+                Take(FindOwned(_document, key));
+                AppendNew(key, Merged(current, desired), comment);
+            }
         }
         _values = null;
     }
@@ -96,6 +106,44 @@ internal sealed class TomlDocument
         (double a, long b) => a == b,
         _ => Equals(left, right),
     };
+
+    /// <summary>
+    /// What <paramref name="desired"/> changes in <paramref name="current"/>: a table only with its keys that change, and
+    /// a list with each table in it the same way, by position.
+    /// </summary>
+    private static object Changes(object? current, object desired) => (current, desired) switch
+    {
+        (IReadOnlyDictionary<string, object?> old, IReadOnlyDictionary<string, object?> table) => table
+            .Where(pair => !old.TryGetValue(pair.Key, out var was) || !Same(was, pair.Value))
+            .ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value is null ? null : Changes(old.GetValueOrDefault(pair.Key), pair.Value)),
+        (IReadOnlyList<object?> old, IReadOnlyList<object?> list) =>
+            list.Select((item, i) => item is not null && i < old.Count ? Changes(old[i], item) : item).ToList(),
+        _ => desired,
+    };
+
+    /// <summary>What an update in place makes of <paramref name="current"/>, for writing it again whole.</summary>
+    private static object Merged(object? current, object desired)
+    {
+        switch (current, desired)
+        {
+            case (IReadOnlyDictionary<string, object?> old, IReadOnlyDictionary<string, object?> table):
+                var merged = old.ToDictionary();
+                foreach (var (key, value) in table)
+                {
+                    if (value is null)
+                        merged.Remove(key);
+                    else
+                        merged[key] = Merged(old.GetValueOrDefault(key), value);
+                }
+                return merged;
+            case (IReadOnlyList<object?> old, IReadOnlyList<object?> list):
+                return list.Select((item, i) => item is not null && i < old.Count ? Merged(old[i], item) : item).ToList();
+            default:
+                return desired;
+        }
+    }
 
     private static Dictionary<string, object?> PlainTable(TomlTable table) =>
         table.ToDictionary(pair => pair.Key, pair => Plain(pair.Value));
