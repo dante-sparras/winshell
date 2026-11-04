@@ -127,6 +127,18 @@ Describe 'Check command' {
     BeforeAll {
         $script:Check = (Resolve-Path (Join-Path $PSScriptRoot '../../scripts/check.ps1')).Path
         $script:ProjectCount = @(Get-ChildItem (Join-Path $PSScriptRoot '../*/*.Tests.csproj')).Count
+
+        # pwsh prepends the user module folder to an inherited PSModulePath at startup, where a developer's real Pester
+        # lives. Setting the path inside the child, after startup, leaves only the stub visible.
+        function Invoke-Check {
+            param([hashtable] $Arguments = @{})
+            pwsh -NoProfile -Command {
+                param($modulePath, $check, $arguments)
+                $env:PSModulePath = $modulePath
+                & $check @arguments
+                exit $LASTEXITCODE
+            } -args $script:ModulePath, $script:Check, $Arguments
+        }
     }
 
     BeforeEach {
@@ -171,7 +183,7 @@ function Invoke-Pester {
 '@
         New-ModuleManifest -Path (Join-Path $pester 'Pester.psd1') -RootModule Pester.psm1 -ModuleVersion 5.6.1 -FunctionsToExport Invoke-Pester
         $env:PATH = "$script:Stub;$env:PATH"
-        $env:PSModulePath = "$modules;$(Join-Path $PSHOME 'Modules')"
+        $script:ModulePath = "$modules;$(Join-Path $PSHOME 'Modules')"
     }
 
     AfterEach {
@@ -181,7 +193,7 @@ function Invoke-Pester {
     }
 
     It 'builds, formats, and runs fast .NET and tooling tests by default' {
-        pwsh -NoProfile -File $script:Check | Out-Null
+        Invoke-Check | Out-Null
         $LASTEXITCODE | Should -Be 0
         $calls = Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG
         $calls | Should -HaveCount 4
@@ -192,7 +204,7 @@ function Invoke-Pester {
     }
 
     It 'runs only slow tests on an existing build and forwards the seed and hang timeout' {
-        pwsh -NoProfile -File $script:Check -Tier Slow -NoBuild -Seed 7 | Out-Null
+        Invoke-Check @{ Tier = 'Slow'; NoBuild = $true; Seed = 7 } | Out-Null
         $LASTEXITCODE | Should -Be 0
         $calls = @(Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG)
         $calls | Should -HaveCount 1
@@ -204,7 +216,7 @@ function Invoke-Pester {
 
     It 'fails before building when the pinned Pester version is missing' {
         Remove-Item -LiteralPath (Join-Path $script:Stub 'modules/Pester/5.6.1/Pester.psd1')
-        $output = pwsh -NoProfile -File $script:Check 2>&1
+        $output = Invoke-Check 2>&1
         $LASTEXITCODE | Should -Not -Be 0
         ($output -join "`n") | Should -Match 'Pester 5.6.1 is required'
         Test-Path -LiteralPath $env:WINSHELL_CHECK_LOG | Should -BeFalse
@@ -212,7 +224,7 @@ function Invoke-Pester {
 
     It 'fails when the tooling suite fails' {
         $env:WINSHELL_CHECK_FAIL_PESTER = '1'
-        pwsh -NoProfile -File $script:Check | Out-Null
+        Invoke-Check | Out-Null
         $LASTEXITCODE | Should -Be 1
     }
 
