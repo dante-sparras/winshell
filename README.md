@@ -129,7 +129,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ## Privacy
 
-Winshell collects nothing. See [Privacy](docs/privacy.md).
+Winshell collects nothing.
 
 ## License
 

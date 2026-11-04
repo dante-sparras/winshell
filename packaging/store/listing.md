@@ -44,10 +44,6 @@ Personalization
 
 Copyright (c) Dante Sparrås. MIT License.
 
-## Privacy policy URL
-
-https://github.com/enpaze/winshell/blob/main/docs/privacy.md
-
 ## Website
 
 https://github.com/enpaze/winshell

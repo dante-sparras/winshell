@@ -242,7 +242,7 @@ The Package workflow also builds `winshell-<version>.msixbundle` (x64 and arm64)
 - The repository variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME` are the identity Partner Center shows under **Product identity**. Without them, the package is `Winshell.Test` by `CN=Winshell Test`, which the Store refuses.
 - To submit a release:
   1. Download `store-package` from the release's Package run and upload the `.msixbundle` in Partner Center.
-  2. Paste the listing from `packaging/store/listing.md`. Its privacy policy URL is `https://github.com/enpaze/winshell/blob/main/docs/privacy.md`.
+  2. Paste the listing from `packaging/store/listing.md`.
 
 Other release tasks:
 
@@ -292,7 +292,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 ├── docs/
 │   ├── agents/                      # How the engineering skills use this repo
 │   ├── reference/                   # A page per module
-│   ├── *.md                         # The configuration guide, troubleshooting, privacy and code signing policy
+│   ├── *.md                         # The configuration guide, troubleshooting and code signing policy
 │   └── development.md               # Setup, environment, and every command
 ├── packaging/
 │   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs and winshell.ico

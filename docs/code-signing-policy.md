@@ -25,4 +25,4 @@ Every team member uses multi-factor authentication for GitHub and SignPath.
 
 ## Privacy
 
-Winshell sends nothing to its developers. See [Privacy](privacy.md).
+Winshell sends nothing to its developers.

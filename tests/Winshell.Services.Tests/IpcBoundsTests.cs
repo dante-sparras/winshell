@@ -74,19 +74,25 @@ public class IpcBoundsTests
 
             // The place is free once the server sees the client gone, with no signal to tell it. Until then a new client is closed.
             var taken = false;
-            for (var attempt = 0; attempt < 200 && !taken; attempt++)
+            await Wait.UntilAsync(() => taken, "The place of the listener that left was never freed.", async () =>
             {
-                await using var next = await Connect(probe.Pipe);
-                await next.WriteAsync(ListenRequest, TestContext.Current.CancellationToken);
-                var line = ReadLine(next);
-                await probe.WaitUntil(() =>
+                try
                 {
-                    probe.Ping.Emit("sync");
-                    return line.IsCompleted;
-                }, "A client after the listener left was neither served nor closed.");
-                taken = await line is not null;
-            }
-            Assert.True(taken, "The place of the listener that left was never freed.");
+                    await using var next = await Connect(probe.Pipe);
+                    await next.WriteAsync(ListenRequest, TestContext.Current.CancellationToken);
+                    var line = ReadLine(next);
+                    await probe.WaitUntil(() =>
+                    {
+                        probe.Ping.Emit("sync");
+                        return line.IsCompleted;
+                    }, "A client after the listener left was neither served nor closed.");
+                    taken = await line is not null;
+                }
+                catch (IOException)
+                {
+                    // At the cap the server can close the pipe before this probe finishes writing or reading.
+                }
+            });
         }
         finally
         {
