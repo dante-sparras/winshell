@@ -198,14 +198,26 @@ internal static class ProbeShell
         </Project>
         """;
 
+    /// <summary>A file whose presence in the config folder makes the probe start a program and never exit.</summary>
+    internal const string HangMarker = "probe-hang";
+
     private const string Source =
         $$"""
         using Winshell;
+
+        using System.Diagnostics;
 
         internal sealed class Bare : ShellConfiguration
         {
             public override void Start(Shell shell)
             {
+                // A test that puts {{HangMarker}} in the config folder gets a shell that starts a program and then never exits.
+                var config = Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR");
+                if (config is null || !File.Exists(Path.Combine(config, "{{HangMarker}}")))
+                    return;
+                var child = Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;
+                File.WriteAllText(Path.Combine(config, "child.pid"), child.Id.ToString());
+                AppDomain.CurrentDomain.ProcessExit += (_, _) => Thread.Sleep(Timeout.Infinite);
             }
         }
 

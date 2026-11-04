@@ -35,6 +35,32 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
         Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
 
+    [Fact]
+    public void Force_ends_the_shell_and_leaves_the_programs_it_started()
+    {
+        var config = Path.Combine(_dir, "config");
+        Directory.CreateDirectory(config);
+        File.WriteAllText(Path.Combine(config, ProbeShell.HangMarker), "");
+        var process = ProbeShell.Start(config, Path.Combine(_dir, "local"), shellId: "hung");
+        _started.Add(process);
+        var pidFile = Path.Combine(config, "child.pid");
+        Wait.Until(() => File.Exists(pidFile), "the shell's program to start");
+        using var child = Process.GetProcessById(int.Parse(File.ReadAllText(pidFile), CultureInfo.InvariantCulture));
+        try
+        {
+            var result = Run("kill", "--force", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
+
+            Assert.Equal(0, result.Code);
+            Assert.True(process.HasExited);
+            Assert.False(child.HasExited);
+        }
+        finally
+        {
+            child.Kill();
+            child.WaitForExit(5000);
+        }
+    }
+
     private Process Start(string configDir)
     {
         var process = ProbeShell.Start(configDir, Path.Combine(_dir, "local"));

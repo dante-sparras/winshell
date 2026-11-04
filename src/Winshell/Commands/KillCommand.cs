@@ -53,7 +53,8 @@ internal static class KillCommand
             // A different process now owns this id. The instance we asked is already gone.
             if (process.HasExited || !Instances.IsThisInstance(info, process))
                 return true;
-            process.Kill(entireProcessTree: true);
+            // Not the tree: the apps the user opened from this shell are its children, and they are not hung.
+            process.Kill();
             return process.WaitForExit(5000);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
