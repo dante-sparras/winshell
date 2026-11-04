@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
@@ -73,13 +74,15 @@ internal static class Inspector
                 json.WriteNumber("height", window.ActualHeight);
                 if (window.Content is { } content)
                 {
+                    // The element keyboard focus is on, in this window or in a popup it opened.
+                    var focused = content.XamlRoot is { } xamlRoot ? FocusManager.GetFocusedElement(xamlRoot) : null;
                     json.WritePropertyName("content");
-                    Write(json, content, content);
+                    Write(json, content, content, focused);
                     if (Popups(content) is { Count: > 0 } popups)
                     {
                         json.WriteStartArray("popups");
                         foreach (var popup in popups)
-                            Write(json, popup, popup);
+                            Write(json, popup, popup, focused);
                         json.WriteEndArray();
                     }
                 }
@@ -90,7 +93,7 @@ internal static class Inspector
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    private static void Write(Utf8JsonWriter json, DependencyObject element, UIElement root)
+    private static void Write(Utf8JsonWriter json, DependencyObject element, UIElement root, object? focused)
     {
         json.WriteStartObject();
         json.WriteString("type", element.GetType().Name);
@@ -110,13 +113,15 @@ internal static class Inspector
             if (framed.Visibility != Visibility.Visible)
                 json.WriteBoolean("visible", false);
         }
+        if (ReferenceEquals(element, focused))
+            json.WriteBoolean("focused", true);
         Values(json, element);
         var count = VisualTreeHelper.GetChildrenCount(element);
         if (count > 0)
         {
             json.WriteStartArray("children");
             for (var i = 0; i < count; i++)
-                Write(json, VisualTreeHelper.GetChild(element, i), root);
+                Write(json, VisualTreeHelper.GetChild(element, i), root, focused);
             json.WriteEndArray();
         }
         json.WriteEndObject();
@@ -230,10 +235,13 @@ internal static class Inspector
 
     /// <summary>
     /// Each element the name names. The search does not go into one it found: a button and the card it holds, both
-    /// labelled with the setting's title, are one thing to click.
+    /// labelled with the setting's title, are one thing to click. Nor into a collapsed one, which Narrator cannot reach
+    /// either: a tile shown one way and kept collapsed the other is one thing to click.
     /// </summary>
     private static void Find(DependencyObject element, string name, Action<FrameworkElement> found)
     {
+        if (element is UIElement { Visibility: Visibility.Collapsed })
+            return;
         if (element is FrameworkElement framed
             && (framed.Name == name || AutomationProperties.GetAutomationId(framed) == name || AutomationProperties.GetName(framed) == name))
         {

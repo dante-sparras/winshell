@@ -204,6 +204,49 @@ public sealed class InspectorTests : IDisposable
     }
 
     [Fact]
+    public async Task The_tree_marks_the_element_keyboard_focus_is_on()
+    {
+        var tree = await ShellFixture.On(async shell =>
+        {
+            var page = Filled(out var button, out _);
+            using var panel = Panel(page);
+            await ShellFixture.LaidOut(button);
+            button.Focus(FocusState.Programmatic);
+            await ShellFixture.LaidOut(button);
+            return await Inspector.Run(shell, "tree", []);
+        });
+
+        var content = OpenWindow(tree, nameof(Page)).GetProperty("content");
+        Assert.True(Node(content, "Press").GetProperty("focused").GetBoolean());
+        Assert.False(Node(content, "Level").TryGetProperty("focused", out _));
+    }
+
+    [Fact]
+    public async Task A_name_a_collapsed_element_shares_clicks_the_one_shown()
+    {
+        var clicks = await ShellFixture.On(async shell =>
+        {
+            var shown = new Button { Name = "Tile", Content = "Go" };
+            var collapsed = new Button { Name = "Tile", Content = "Go", Visibility = Visibility.Collapsed };
+            var shownClicks = 0;
+            var collapsedClicks = 0;
+            shown.Click += (_, _) => shownClicks++;
+            collapsed.Click += (_, _) => collapsedClicks++;
+            var page = new Page();
+            page.Children.Add(shown);
+            page.Children.Add(collapsed);
+            using var panel = Panel(page);
+            await ShellFixture.LaidOut(shown);
+
+            await Inspector.Run(shell, "click", ["Tile"]);
+            await ShellFixture.LaidOut(shown);
+            return (shownClicks, collapsedClicks);
+        });
+
+        Assert.Equal((1, 0), clicks);
+    }
+
+    [Fact]
     public async Task A_disabled_button_refuses_a_click_as_it_refuses_a_pointer()
     {
         var (clicks, refused) = await ShellFixture.On(async shell =>
