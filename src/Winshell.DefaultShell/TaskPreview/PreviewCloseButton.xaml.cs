@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
 namespace Winshell.DefaultShell;
 
@@ -27,16 +28,17 @@ public sealed partial class PreviewCloseButton : Button
             _down = false;
             Show();
         };
-        PointerPressed += (_, _) =>
+        // Button marks a left press and release handled, so these take handled events too.
+        AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) =>
         {
             _down = true;
             Show();
-        };
-        PointerReleased += (_, _) =>
+        }), handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) =>
         {
             _down = false;
             Show();
-        };
+        }), handledEventsToo: true);
         PointerCanceled += (_, _) =>
         {
             _down = false;
