@@ -21,7 +21,7 @@ public sealed class DoctorConfigurationTests : IDisposable
     [Fact]
     public void No_project_is_the_default_shell_and_nothing_to_build()
     {
-        var checks = Doctor.Configuration(Path.Combine(_root, "missing"));
+        var checks = DoctorProject.Configuration(Path.Combine(_root, "missing"));
 
         Assert.Equal(["project", "downloaded", "built", "build"], checks.Select(c => c.Id));
         Assert.Equal(CheckStatus.Pass, checks[0].Status);
@@ -36,7 +36,7 @@ public sealed class DoctorConfigurationTests : IDisposable
         Project("a\\A.csproj");
         Project("b\\B.csproj");
 
-        var project = Assert.Single(Doctor.Configuration(_root), c => c.Id == "project");
+        var project = Assert.Single(DoctorProject.Configuration(_root), c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Fail, project.Status);
         Assert.Contains("pick one with -c: a, b", project.Message, StringComparison.Ordinal);
@@ -49,7 +49,7 @@ public sealed class DoctorConfigurationTests : IDisposable
         var file = Project("Mine.csproj");
         var before = Entries();
 
-        var checks = Doctor.Configuration(_root);
+        var checks = DoctorProject.Configuration(_root);
 
         Assert.Equal(CheckStatus.Pass, checks[0].Status);
         Assert.Equal(file, checks[0].Message);
@@ -74,7 +74,7 @@ public sealed class DoctorConfigurationTests : IDisposable
         File.WriteAllText(program, "");
         File.SetLastWriteTimeUtc(program, Long.AddMinutes(1));
 
-        var built = Doctor.Configuration(_root);
+        var built = DoctorProject.Configuration(_root);
         Assert.Equal(CheckStatus.Pass, built[2].Status);
         Assert.Equal(program, built[2].Message);
         Assert.Equal(CheckStatus.Pass, built[3].Status);
@@ -82,7 +82,7 @@ public sealed class DoctorConfigurationTests : IDisposable
 
         var source = Project("Views\\Mine.xaml");
         File.SetLastWriteTimeUtc(source, Long.AddMinutes(2));
-        var stale = Doctor.Configuration(_root);
+        var stale = DoctorProject.Configuration(_root);
         Assert.Equal(CheckStatus.Pass, stale[2].Status);
         Assert.Equal(CheckStatus.Warn, stale[3].Status);
         Assert.Equal("A file in Mine is newer than the program.", stale[3].Message);
@@ -99,7 +99,7 @@ public sealed class DoctorConfigurationTests : IDisposable
         File.WriteAllText(marked + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
         var before = Entries();
 
-        var downloaded = Assert.Single(Doctor.Configuration(_root), c => c.Id == "downloaded");
+        var downloaded = Assert.Single(DoctorProject.Configuration(_root), c => c.Id == "downloaded");
 
         Assert.Equal(CheckStatus.Fail, downloaded.Status);
         Assert.StartsWith(marked + " was downloaded from the internet", downloaded.Message, StringComparison.Ordinal);

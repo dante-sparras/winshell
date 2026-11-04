@@ -288,7 +288,7 @@ internal static unsafe partial class DoctorProbe
     }
 
     /// <summary>Lists crash reports. A missing folder has none. A folder that cannot be listed says why.</summary>
-    public static Doctor.CrashFolderRead ReadCrashReports(string folder)
+    public static DoctorCrashes.CrashFolderRead ReadCrashReports(string folder)
     {
         if (!Directory.Exists(folder))
             return new([], null);
@@ -304,7 +304,7 @@ internal static unsafe partial class DoctorProbe
     }
 
     /// <summary>The first lines of a crash report. A file that does not start with the report heading is ignored.</summary>
-    public static Doctor.CrashPeek PeekCrash(string path)
+    public static DoctorCrashes.CrashPeek PeekCrash(string path)
     {
         try
         {

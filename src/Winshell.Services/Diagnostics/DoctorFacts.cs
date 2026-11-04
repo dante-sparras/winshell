@@ -2,7 +2,7 @@ namespace Winshell.Diagnostics;
 
 /// <summary>
 /// What <see cref="Doctor.Run"/> reads on this PC. Each call only reads. A configuration project is not one of these:
-/// <see cref="Doctor.Configuration"/> reads the project file itself.
+/// <see cref="DoctorProject.Configuration"/> reads the project file itself.
 /// </summary>
 internal sealed class DoctorFacts : IDoctorFacts
 {
@@ -50,7 +50,7 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public string NotificationAccess() => DoctorProbe.NotificationAccess();
 
-    public Doctor.CrashFolderRead ReadCrashReports(string folder) => DoctorProbe.ReadCrashReports(folder);
+    public DoctorCrashes.CrashFolderRead ReadCrashReports(string folder) => DoctorProbe.ReadCrashReports(folder);
 
-    public Doctor.CrashPeek PeekCrash(string path) => DoctorProbe.PeekCrash(path);
+    public DoctorCrashes.CrashPeek PeekCrash(string path) => DoctorProbe.PeekCrash(path);
 }

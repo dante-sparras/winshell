@@ -5,64 +5,6 @@ using Winshell.Updates;
 
 namespace Winshell.Diagnostics;
 
-/// <summary>
-/// What <see cref="Doctor.Run"/> reads from this PC. Every read stays a read: the doctor never builds, and a
-/// configuration project is judged from the project file alone.
-/// </summary>
-internal interface IDoctorFacts
-{
-    int WindowsBuild();
-
-    int WindowsUpdateRevision();
-
-    string? WindowsDisplayVersion();
-
-    bool WindowsServer();
-
-    bool TransparencyEffectsOff();
-
-    bool ContrastThemeOn();
-
-    bool SelfContained(string exePath);
-
-    IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot);
-
-    bool CanWrite(string folder);
-
-    bool IsElevated(int pid);
-
-    IReadOnlyList<DoctorScreens.MonitorFacts> Monitors();
-
-    IReadOnlyList<DoctorScreens.WindowFacts> EdgeWindows();
-
-    bool PerMonitorV2();
-
-    IReadOnlyList<string> CompatibilityLayers(string exePath);
-
-    string? RunEntry();
-
-    bool RunEntryTurnedOff();
-
-    string ResolveLinks(string path);
-
-    string NotificationAccess();
-
-    Doctor.CrashFolderRead ReadCrashReports(string folder);
-
-    Doctor.CrashPeek PeekCrash(string path);
-}
-
-/// <summary>How a <see cref="DoctorCheck"/> came out.</summary>
-public enum CheckStatus
-{
-    /// <summary>Nothing is wrong.</summary>
-    Pass,
-    /// <summary>Winshell runs, but something may not work as expected.</summary>
-    Warn,
-    /// <summary>Something stops Winshell from working. <c>winshell doctor</c> exits with 1.</summary>
-    Fail,
-}
-
 /// <summary>One thing <c>winshell doctor</c> checked: what it found and, when something is wrong, how to fix it.</summary>
 /// <param name="Id">A stable name for the check, such as <c>dotnet</c>.</param>
 /// <param name="Title">The check's name as <c>winshell doctor</c> prints it.</param>
@@ -85,7 +27,7 @@ internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, str
 /// <param name="Instances">The running Winshell instances.</param>
 /// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
 /// <param name="CrashRoot">The folder of crash reports, under <paramref name="LocalRoot"/>.</param>
-/// <param name="ProjectRoot">The folder <see cref="Doctor.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
+/// <param name="ProjectRoot">The folder <see cref="DoctorProject.Configuration"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
 internal sealed record DoctorContext(
     string ExePath,
     string ConfigRoot,
@@ -115,12 +57,12 @@ public static class Doctor
                 ? Path.GetDirectoryName(file) ?? context.ConfigRoot
                 : context.ConfigRoot);
         var configFolder = search;
-        var configuration = Configuration(search).ToList();
+        var configuration = DoctorProject.Configuration(search).ToList();
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
         // A reason from the CLI, such as a path that is not a project, is not what searching the folder finds.
         // A failure already found, such as a folder that cannot be read, keeps its own message.
         if (context.ConfigProblem is not null && configuration[0].Status != CheckStatus.Fail)
-            configuration[0] = Project(null, context.ConfigProblem);
+            configuration[0] = DoctorProject.Project(null, context.ConfigProblem);
         else if (!blocked && configuration[0].Status != CheckStatus.Fail)
             configuration[0] = WithUserFiles(configuration[0], facts.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot));
         DoctorCheck[] checks =
@@ -139,7 +81,7 @@ public static class Doctor
                 : DoctorSignIn.SignIn(facts.RunEntry(), facts.RunEntryTurnedOff(), context.ExePath, File.Exists, facts.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(facts.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
-            Guard("crashes", "Crashes", () => CrashesIn(facts.ReadCrashReports(context.CrashRoot), now, facts.PeekCrash)),
+            Guard("crashes", "Crashes", () => DoctorCrashes.CrashesIn(facts.ReadCrashReports(context.CrashRoot), now, facts.PeekCrash)),
         ];
         return WithoutUserFolders(checks,
         [
@@ -261,79 +203,6 @@ public static class Doctor
         }
     }
 
-    // Configuration project. These read the project file as data. They never build.
-
-    /// <summary>
-    /// The configuration project in <paramref name="configRoot"/>, or why there is not one: whether it was found,
-    /// whether a file the build would run was downloaded, whether its program has been built, and whether a build
-    /// is needed. Nothing here runs MSBuild.
-    /// </summary>
-    internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
-    {
-        var found = FindProject(configRoot);
-        return
-        [
-            Guard("project", "Project", () => Project(found.Project, found.Problem)),
-            Guard("downloaded", "Downloaded", () => Downloaded(found.Project)),
-            Guard("built", "Built", () => Built(found.Project)),
-            Guard("build", "Build", () => BuildNeeded(found.Project)),
-        ];
-    }
-
-    private readonly record struct FoundProject(ConfigurationProject? Project, string? Problem);
-
-    private static FoundProject FindProject(string root)
-    {
-        try
-        {
-            var project = ConfigurationProject.Find(null, null, root, out var problem);
-            return new(project, problem);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new(null, $"Winshell cannot read the config folder: {e.Message}");
-        }
-    }
-
-    internal static DoctorCheck Project(ConfigurationProject? project, string? problem)
-    {
-        if (problem is not null)
-            return new("project", "Project", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
-        if (project is null)
-            return new("project", "Project", CheckStatus.Pass, "No configuration project: Winshell runs its default shell.");
-        return new("project", "Project", CheckStatus.Pass, project.ProjectFile);
-    }
-
-    internal static DoctorCheck Downloaded(ConfigurationProject? project)
-    {
-        if (project is null)
-            return new("downloaded", "Downloaded", CheckStatus.Pass, "No configuration project to check.");
-        if (project.Downloaded() is { } file)
-            return new("downloaded", "Downloaded", CheckStatus.Fail, $"{file} was downloaded from the internet, so Winshell does not build it. It would run as you.", "If you trust it, unblock it: right-click it > Properties > Unblock, or run Unblock-File. Then save it, or start Winshell again.");
-        return new("downloaded", "Downloaded", CheckStatus.Pass, "Nothing the build would run was downloaded.");
-    }
-
-    internal static DoctorCheck Built(ConfigurationProject? project)
-    {
-        if (project is null)
-            return new("built", "Built", CheckStatus.Pass, "No configuration project to build.");
-        if (!File.Exists(project.Program))
-            return new("built", "Built", CheckStatus.Fail, $"{project.Name} has not been built.", "Run winshell run once to build it.");
-        return new("built", "Built", CheckStatus.Pass, project.Program);
-    }
-
-    internal static DoctorCheck BuildNeeded(ConfigurationProject? project)
-    {
-        if (project is null)
-            return new("build", "Build", CheckStatus.Pass, "No configuration project to build.");
-        // A missing program is Built's failure, so it is not reported twice.
-        if (!File.Exists(project.Program))
-            return new("build", "Build", CheckStatus.Pass, $"Nothing to compare until {project.Name} is built.");
-        if (!project.NeedsBuild())
-            return new("build", "Build", CheckStatus.Pass, $"{project.Name} is up to date.");
-        return new("build", "Build", CheckStatus.Warn, $"A file in {project.Name} is newer than the program.", "Run winshell run to build it. Signing in uses the last build.");
-    }
-
     // Folders
 
     /// <param name="folders">Each folder to write: its name in the message, its path, whether it is writable.</param>
@@ -371,86 +240,6 @@ public static class Doctor
             return new("instances", "Running", CheckStatus.Pass, "No Winshell is running");
         var list = string.Join("; ", instances.Select(i => string.Create(CultureInfo.InvariantCulture, $"{i.Id} (process {i.Pid}) runs {i.ConfigPath}, log {i.LogPath}")));
         return new("instances", "Running", CheckStatus.Pass, list);
-    }
-
-    // Crash reports
-
-    /// <summary>Crash reports in a folder, or why the folder could not be listed.</summary>
-    internal readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
-
-    /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
-    internal readonly record struct CrashPeek(string? Text, string? Unreadable);
-
-    internal static DoctorCheck CrashesIn(CrashFolderRead folder, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
-    {
-        if (folder.Unreadable is not null)
-            return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read the crash folder: {folder.Unreadable}", "Make sure your account can read that folder, then run winshell doctor again.");
-        return Crashes(folder.Reports, nowUtc, peek);
-    }
-
-    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, CrashPeek>? peek = null)
-    {
-        var recent = reports.Where(r => nowUtc - r.WrittenUtc <= TimeSpan.FromDays(7)).OrderByDescending(r => r.WrittenUtc).ToList();
-        if (peek is null)
-        {
-            if (recent.Count == 0)
-                return new("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
-            var count = recent.Count == 1 ? "1 crash report" : $"{recent.Count} crash reports";
-            return new("crashes", "Crashes", CheckStatus.Warn, $"{count} in the last 7 days. The newest is {recent[0].Path}.", $"Read it, then attach it to a bug report at {BugReports}.");
-        }
-
-        var opened = new List<(string Path, string Text)>();
-        string? unreadable = null;
-        foreach (var report in recent)
-        {
-            var head = peek(report.Path);
-            if (head.Unreadable is not null)
-            {
-                unreadable ??= head.Unreadable;
-                continue;
-            }
-            if (head.Text is null)
-                continue;
-            opened.Add((report.Path, head.Text));
-        }
-        if (unreadable is not null && opened.Count == 0)
-            return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read a crash report: {unreadable}", $"Read the crash folder, then attach a report to a bug report at {BugReports}.");
-        if (opened.Count == 0)
-            return new("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
-
-        var countText = opened.Count == 1 ? "1 crash report" : $"{opened.Count} crash reports";
-        var message = $"{countText} in the last 7 days. The newest is {opened[0].Path}.";
-        var fatal = opened.FirstOrDefault(r => r.Text.Contains("Winshell closed: yes", StringComparison.Ordinal));
-        if (fatal.Path is not null)
-        {
-            message += " Winshell closed: yes.";
-            var line = ExceptionLine(fatal.Text);
-            if (line is not null)
-                message += " " + line;
-            if (!string.Equals(fatal.Path, opened[0].Path, StringComparison.OrdinalIgnoreCase))
-                message += $" That report is {fatal.Path}.";
-        }
-        else if (ExceptionLine(opened[0].Text) is { } line)
-        {
-            message += " " + line;
-        }
-        if (unreadable is not null)
-            message += $" Could not read a crash report: {unreadable}.";
-        return new("crashes", "Crashes", CheckStatus.Warn, message, $"Read it, then attach it to a bug report at {BugReports}.");
-    }
-
-    private static string? ExceptionLine(string head)
-    {
-        var lines = head.Split('\n');
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (!string.Equals(lines[i].TrimEnd('\r'), "Exception", StringComparison.Ordinal) || i + 1 >= lines.Length)
-                continue;
-            var line = lines[i + 1].TrimEnd('\r');
-            if (line.Length > 0)
-                return line;
-        }
-        return null;
     }
 
     /// <summary>The status as <c>winshell doctor</c> writes it: <c>pass</c>, <c>warn</c> or <c>fail</c>.</summary>
