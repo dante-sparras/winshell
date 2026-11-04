@@ -86,6 +86,15 @@ public class CommandWordTests
     }
 
     [Fact]
+    public void Help_with_a_command_and_the_version_option_is_still_help()
+    {
+        var options = CliParser.Parse(["help", "kill", "-V"]);
+
+        Assert.True(options.ShowHelp);
+        Assert.False(options.ShowVersion);
+    }
+
+    [Fact]
     public void Help_alone_is_help()
     {
         Assert.True(CliParser.Parse(["help"]).ShowHelp);

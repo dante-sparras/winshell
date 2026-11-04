@@ -15,7 +15,7 @@ internal static class CliParser
         // Help and the version win over the rest of validation and execution. Arguments after -- or an IPC function are data.
         if (HelpRequested(args))
             return new CliOptions { Command = command, ShowHelp = true };
-        if (command is not null && VersionRequested(args))
+        if (command is not (null or "help") && VersionRequested(args))
             return new CliOptions { Command = command, ShowVersion = true };
 
         var rest = command is null ? args : WithoutToken(args, command);
