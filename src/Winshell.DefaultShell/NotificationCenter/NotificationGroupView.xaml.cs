@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -59,6 +60,9 @@ public sealed partial class NotificationGroupView : UserControl
             return;
         TitleText.Text = NotificationCenter.AppName(group.AppName);
         AutomationProperties.SetName(ClearButton, NotificationCenter.ClearName(group.AppName));
+        // A group is never empty, and a notification with no app is a group of its own, so its id tells the group apart.
+        var id = group.AppId.Length > 0 ? group.AppId : group.Notifications[0].Id.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetAutomationId(ClearButton, "Clear." + id);
     }
 
     private void Follow(bool on)

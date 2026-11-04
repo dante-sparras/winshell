@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -70,6 +71,7 @@ public sealed partial class NotificationCard : UserControl
         TitleText.Text = item.Title;
         BodyText.Text = item.Body;
         AutomationProperties.SetName(DismissButton, NotificationCenter.DismissName(item.Title));
+        AutomationProperties.SetAutomationId(DismissButton, "Dismiss." + item.Id.ToString(CultureInfo.InvariantCulture));
         if (_center is not null)
             TimeText.Text = _center.NotificationTime(item.CreatedAt);
     }
