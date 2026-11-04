@@ -121,6 +121,40 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task Every_setting_title_fits_on_one_line_at_the_default_size()
+    {
+        var wrapped = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                // The settings themselves. A notifications card is titled with an app's name from this PC.
+                var settings = SettingsCatalog.Settings.Select(setting => setting.Title).ToHashSet(StringComparer.Ordinal);
+                var found = new List<string>();
+                foreach (var page in SettingsCatalog.Pages)
+                {
+                    Assert.Equal("", shell.Ipc.Call("settings", "open", [page.Key]));
+                    var root = (FrameworkElement)(await rig.Shown()).Content!;
+                    root.UpdateLayout();
+                    Assert.Equal(SettingsCatalog.WindowWidth, root.ActualWidth);
+                    // Every title has the same style, so one line is the shortest title on the page.
+                    var titles = Cards(root).Where(card => settings.Contains(card.Title)).Select(card => (card.Title, Height: TitleHeight(card))).ToList();
+                    var line = titles.Min(title => title.Height);
+                    found.AddRange(titles.Where(title => title.Height > line + 0.5).Select(title => $"{page.Key}: {title.Title}"));
+                }
+
+                return found;
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(wrapped);
+    }
+
+    [Fact]
     public async Task The_taskbar_menu_offers_Taskbar_settings_and_closes_when_it_is_chosen()
     {
         var opened = await ShellFixture.On(async shell =>
@@ -221,6 +255,27 @@ public sealed class SettingsShellTests
 
     private static double Left(UIElement element, UIElement root) =>
         element.TransformToVisual(root).TransformPoint(default).X;
+
+    private static double TitleHeight(SettingsCard card) =>
+        (Find<TextBlock>(card, text => text.Text == card.Title) ?? throw new InvalidOperationException($"The card {card.Title} has no title.")).ActualHeight;
+    /// <summary>The cards on the page that shows. A collapsed page keeps the sizes it had, so it is skipped by its visibility.</summary>
+    private static IEnumerable<SettingsCard> Cards(DependencyObject root)
+    {
+        if (root is UIElement { Visibility: Visibility.Collapsed })
+            yield break;
+        if (root is SettingsCard card)
+        {
+            yield return card;
+            yield break;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            foreach (var found in Cards(VisualTreeHelper.GetChild(root, i)))
+                yield return found;
+        }
+    }
 
     private static bool SearchFocused(FloatingWindow window)
     {

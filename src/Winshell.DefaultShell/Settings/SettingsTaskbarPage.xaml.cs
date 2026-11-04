@@ -27,6 +27,7 @@ public sealed partial class SettingsTaskbarPage : UserControl
         Tray.Apply(SettingsCatalog.RequireSetting("trayIcons"));
         Fill(Alignment, SettingsCatalog.Alignments, alignment.Title);
         Fill(Apps, SettingsCatalog.TaskbarApps, apps.Title);
+        AutomationProperties.SetHelpText(Apps, apps.Description);
         AutomationProperties.SetName(AutoHide, autoHide.Title);
         AutomationProperties.SetName(AllScreens, allScreens.Title);
         _focus[alignment.Key] = Alignment;
