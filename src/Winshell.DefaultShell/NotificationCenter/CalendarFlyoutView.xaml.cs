@@ -22,9 +22,6 @@ public sealed partial class CalendarFlyoutView : UserControl
 
     public Preferences Preferences { get; }
 
-    /// <summary>The keyboard lands on the flyout itself, as on quick settings. Tab reaches its controls, and Esc closes it.</summary>
-    public void FocusFlyout() => Focus(FocusState.Programmatic);
-
     /// <summary>The taskbar is going away. The center and the preferences stay.</summary>
     public void Release() => Bindings.StopTracking();
 

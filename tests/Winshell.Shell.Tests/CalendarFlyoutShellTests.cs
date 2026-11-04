@@ -22,11 +22,11 @@ public sealed class CalendarFlyoutShellTests
     }
 
     [Fact]
-    public async Task It_opens_on_one_Notifications_header_with_the_keyboard_on_the_flyout()
+    public async Task It_has_one_Notifications_header_and_takes_the_keyboard_itself()
     {
         var (header, focused) = await Opened(view =>
         {
-            view.FocusFlyout();
+            view.Focus(FocusState.Programmatic);
             return (FirstText(view), ReferenceEquals(FocusManager.GetFocusedElement(view.XamlRoot), view));
         });
 
@@ -66,7 +66,7 @@ public sealed class CalendarFlyoutShellTests
         }
     }
 
-    /// <summary>The first text shown, in reading order.</summary>
+    /// <summary>The first text shown, in tree order.</summary>
     private static string? FirstText(DependencyObject root)
     {
         if (root is TextBlock { Visibility: Visibility.Visible, Text.Length: > 0 } text)

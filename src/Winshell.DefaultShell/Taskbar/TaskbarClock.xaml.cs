@@ -98,7 +98,8 @@ public sealed partial class TaskbarClock : Button
         _month.Today();
         _popup.Visible = true;
         OpenChanged?.Invoke(this, EventArgs.Empty);
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, _flyout.FocusFlyout);
+        // The keyboard lands on the flyout itself, as on quick settings. Tab reaches its controls, and Esc closes the popup.
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => _flyout.Focus(FocusState.Programmatic));
     }
 
     private void OnDismissed()
