@@ -16,9 +16,9 @@ namespace Winshell;
 /// A date or a time reads as a string, and its token stays while that string does. <see cref="Set"/> changes one key
 /// and leaves the rest of the text: comments, blank lines, number spellings and other keys stay. A table, an array of
 /// tables, or a dotted key already in the file is the value: only what changed in it is updated, in place. When that
-/// would write a part the file has elsewhere a second time, such as a key of a table that is under its own header, the
-/// value is written again whole instead, inline, where a key the file does not have yet goes: at the end of its
-/// top-level keys, under its comment.
+/// would write a part the file has elsewhere a second time, such as a key of a table that is under its own header, or
+/// leave a part that null takes out, the value is written again whole instead, inline, where a key the file does not
+/// have yet goes: at the end of its top-level keys, under its comment.
 /// </summary>
 internal sealed class TomlDocument
 {
@@ -132,7 +132,7 @@ internal sealed class TomlDocument
         (IReadOnlyDictionary<string, object?> table, IReadOnlyDictionary<string, object?> taken) =>
             taken.Any(pair => table.TryGetValue(pair.Key, out var value) && (pair.Value is null || Keeps(value, pair.Value))),
         (IReadOnlyList<object?> list, IReadOnlyList<object?> items) =>
-            items.Where((item, i) => item is not null && i < list.Count && Keeps(list[i], item)).Any(),
+            list.Zip(items).Any(pair => pair.Second is not null && Keeps(pair.First, pair.Second)),
         _ => false,
     };
 
