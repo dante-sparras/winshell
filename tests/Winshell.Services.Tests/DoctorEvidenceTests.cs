@@ -1,5 +1,5 @@
 using Winshell.Diagnostics;
-using static Winshell.Diagnostics.Doctor;
+using static Winshell.Diagnostics.DoctorCrashes;
 
 namespace Winshell.Services.Tests;
 
