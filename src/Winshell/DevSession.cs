@@ -67,8 +67,8 @@ internal static class DevSession
     }
 
     /// <summary>
-    /// Asks this project's shell to quit, then ends dotnet watch and what it started. The shell quits first, so the apps
-    /// it opened are not part of the tree that ends, and its app bar and tray go as they do for <c>winshell kill</c>.
+    /// Asks this project's shell to quit, as <c>winshell kill</c> does, so its app bar and tray go and its instance is
+    /// marked exited. Then ends dotnet watch and what it started.
     /// </summary>
     /// <param name="closing">The console is closing, which leaves about five seconds for all of it.</param>
     private static void StopShellAndWatch(ConfigurationProject project, Process watch, bool closing)
@@ -78,7 +78,7 @@ internal static class DevSession
             try
             {
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(closing ? 1 : 3));
-#pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process. No thread here runs a continuation it waits for.
+#pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process, and the build loop waits for this anyway. No thread here runs a continuation it waits for.
                 _ = InstanceCall.AskAsync(shell, new IpcRequest("kill"), deadline.Token).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
             }
