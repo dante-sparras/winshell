@@ -289,28 +289,61 @@ internal static class TomlSyntax
             document.TrailingTrivia = [.. kept, .. document.TrailingTrivia ?? []];
     }
 
+    /// <summary>
+    /// Takes out a table. The comment above it stays, and so do the comments after it, which Tomlyn keeps on its last
+    /// line: above the next table, or at the end of the file.
+    /// </summary>
     public static void RemoveTable(DocumentSyntax document, TableSyntaxBase table)
     {
-        var leading = table.LeadingTrivia;
         var index = 0;
         while (document.Tables.GetChild(index) != table)
             index++;
+        var after = LastToken(table).TrailingTrivia ?? [];
+        var comment = after.FindIndex(t => t.Kind == TokenKind.Comment);
+        // The blank line between the table and the comments goes when one is above the table already, or nothing is.
+        if (comment >= 0 && EndsBlank(table.LeadingTrivia ?? Above(document, index)))
+            after = after[(after.FindLastIndex(comment, t => t.Kind == TokenKind.NewLine) + 1)..];
+        List<SyntaxTrivia> kept = [.. table.LeadingTrivia ?? [], .. comment >= 0 ? after : []];
         document.Tables.RemoveChild(table);
-        if (leading is not { Count: > 0 })
+        if (kept.Count == 0)
             return;
         if (index < document.Tables.ChildrenCount)
         {
             var next = document.Tables.GetChild(index)!;
-            next.LeadingTrivia = [.. leading, .. next.LeadingTrivia ?? []];
+            next.LeadingTrivia = [.. kept, .. next.LeadingTrivia ?? []];
+        }
+        else if (index > 0)
+        {
+            var previous = LastToken(document.Tables.GetChild(index - 1)!);
+            previous.TrailingTrivia = [.. previous.TrailingTrivia ?? [], .. kept];
         }
         else if (document.KeyValues.ChildrenCount > 0)
         {
             var last = (KeyValueSyntax)document.KeyValues.GetChild(document.KeyValues.ChildrenCount - 1)!;
             if (last.EndOfLineToken is not null)
-                last.EndOfLineToken.TrailingTrivia = [.. last.EndOfLineToken.TrailingTrivia ?? [], .. leading];
+                last.EndOfLineToken.TrailingTrivia = [.. last.EndOfLineToken.TrailingTrivia ?? [], .. kept];
         }
         else
-            document.TrailingTrivia = [.. leading, .. document.TrailingTrivia ?? []];
+            document.TrailingTrivia = [.. kept, .. document.TrailingTrivia ?? []];
+    }
+
+    /// <summary>The trivia after the line above the table at <paramref name="index"/>, or null when nothing is above it.</summary>
+    private static List<SyntaxTrivia>? Above(DocumentSyntax document, int index)
+    {
+        if (index > 0)
+            return LastToken(document.Tables.GetChild(index - 1)!).TrailingTrivia ?? [];
+        if (document.KeyValues.ChildrenCount > 0)
+            return LastToken(document.KeyValues.GetChild(document.KeyValues.ChildrenCount - 1)!).TrailingTrivia ?? [];
+        return null;
+    }
+
+    /// <summary>Whether trivia after a line ends in a blank line. Nothing, the start of the file, counts as one.</summary>
+    private static bool EndsBlank(List<SyntaxTrivia>? trivia)
+    {
+        if (trivia is null)
+            return true;
+        var kinds = trivia.Where(t => t.Kind != TokenKind.Whitespaces).Select(t => t.Kind).ToList();
+        return kinds.Count > 0 && kinds[^1] == TokenKind.NewLine && (kinds.Count == 1 || kinds[^2] == TokenKind.NewLine);
     }
 
     public static void InsertAfter(DocumentSyntax document, TableSyntaxBase after, TableSyntaxBase table)
