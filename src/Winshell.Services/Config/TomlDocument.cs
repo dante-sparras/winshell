@@ -15,12 +15,13 @@ namespace Winshell;
 /// <see cref="IReadOnlyList{T}"/> of object and <see cref="IReadOnlyDictionary{TKey, TValue}"/> of string and object.
 /// A date or a time reads as a string, and its token stays while that string does. <see cref="Set"/> changes one key
 /// and leaves the rest of the text: comments, blank lines, number spellings and other keys stay. A table, an array of
-/// tables, or a dotted key already in the file is the value: it is updated in place and never written a second time.
-/// A key the file does not have yet goes at the end of its top-level keys, under its comment.
+/// tables, or a dotted key already in the file is the value: it is updated in place. A value an update in place would
+/// not leave reading back as it should, such as a table with part of it under its own header, is written again whole
+/// instead, inline, where a key the file does not have yet goes: at the end of its top-level keys, under its comment.
 /// </summary>
 internal sealed class TomlDocument
 {
-    private readonly DocumentSyntax _document;
+    private DocumentSyntax _document;
     private readonly string _newline;
     private IReadOnlyDictionary<string, object?>? _values;
 
@@ -50,7 +51,8 @@ internal sealed class TomlDocument
 
     /// <summary>
     /// Makes <paramref name="key"/> hold <paramref name="value"/>. Null takes the key out, because TOML has no null,
-    /// and the comments around it stay. A key the file does not have yet is written under <paramref name="comment"/>.
+    /// and the comments around it stay. A table keeps the keys it is not given, and so does each table in a list. A key
+    /// the file does not have yet is written under <paramref name="comment"/>.
     /// </summary>
     public void Set(string key, object? value, string? comment = null)
     {
@@ -60,12 +62,19 @@ internal sealed class TomlDocument
             Take(owned);
         else if (!owned.Defined)
             AppendNew(key, desired, comment);
-        else if (Same(Values.GetValueOrDefault(key), desired))
-            return;
-        else if (!UpdateOwned(owned, key, desired))
+        else
         {
-            Take(owned);
-            AppendNew(key, desired, comment);
+            var current = Values.GetValueOrDefault(key);
+            var wanted = Merged(current, desired);
+            if (Same(current, wanted))
+                return;
+            var before = _document.ToString();
+            if (!UpdateOwned(owned, key, desired) || !Holds(key, wanted))
+            {
+                _document = SyntaxParser.Parse(before);
+                Take(FindOwned(_document, key));
+                AppendNew(key, wanted, comment);
+            }
         }
         _values = null;
     }
@@ -96,6 +105,27 @@ internal sealed class TomlDocument
         (double a, long b) => a == b,
         _ => Equals(left, right),
     };
+
+    /// <summary>What <paramref name="desired"/> makes of <paramref name="current"/>, as <see cref="Set"/> says.</summary>
+    private static object Merged(object? current, object desired) => (current, desired) switch
+    {
+        (IReadOnlyDictionary<string, object?> old, IReadOnlyDictionary<string, object?> table) => table
+            .Aggregate(old.ToDictionary(), (merged, pair) =>
+            {
+                if (pair.Value is null)
+                    merged.Remove(pair.Key);
+                else
+                    merged[pair.Key] = Merged(old.GetValueOrDefault(pair.Key), pair.Value);
+                return merged;
+            }),
+        (IReadOnlyList<object?> old, IReadOnlyList<object?> list) =>
+            list.Select((item, i) => item is not null && i < old.Count ? Merged(old[i], item) : item).ToList(),
+        _ => desired,
+    };
+
+    /// <summary>Whether the text loads, which a key written twice does not, with <paramref name="key"/> holding <paramref name="wanted"/>.</summary>
+    private bool Holds(string key, object wanted) =>
+        TryLoad("", _document.ToString(), out _, out var read, out _) && read.TryGetValue(key, out var value) && Same(Plain(value), wanted);
 
     private static Dictionary<string, object?> PlainTable(TomlTable table) =>
         table.ToDictionary(pair => pair.Key, pair => Plain(pair.Value));
