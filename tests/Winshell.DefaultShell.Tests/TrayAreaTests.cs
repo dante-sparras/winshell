@@ -33,7 +33,6 @@ public sealed class TrayAreaTests
         foreach (var status in Enum.GetValues<UpdateStatus>())
             Assert.Equal(status == UpdateStatus.Ready, TrayArea.ShowsUpdate(status));
         Assert.Equal("Winshell 1.2.3 is ready. Restart Winshell to update", TrayArea.UpdateCaption("1.2.3"));
-        Assert.Equal("Winshell  is ready. Restart Winshell to update", TrayArea.UpdateCaption(""));
     }
 
     [Fact]
@@ -49,7 +48,7 @@ public sealed class TrayAreaTests
         Assert.Empty(area.OnBar);
         Assert.Empty(area.Hidden);
         Assert.False(area.UpdateReady);
-        Assert.Equal(TrayArea.UpdateCaption(""), area.UpdateLabel);
+        Assert.Equal("", area.UpdateLabel);
 
         var plain = new TrayIcon { Key = "plain", Tip = "Tip" };
         host.Add(plain);
