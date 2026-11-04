@@ -236,7 +236,7 @@ public sealed class DevCommandTests : IDisposable
         Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
 
         Assert.True(Printed("dotnet watch : "), "winshell dev printed nothing of dotnet watch's.");
-        Assert.False(Printed("Ctrl+R"), "winshell dev printed dotnet watch's Ctrl+R hint.");
+        Assert.False(Printed("Ctrl+R") || Printed("Ctrl + R"), "winshell dev printed dotnet watch's Ctrl+R hint.");
     }
 
     [Fact(Timeout = 170_000)]

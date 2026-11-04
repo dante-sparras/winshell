@@ -142,7 +142,7 @@ internal static class DevSession
         await foreach (var line in lines.Reader.ReadAllAsync())
         {
             // No key reaches dotnet watch, so its Ctrl+R hint would point at a key that does nothing.
-            if (!line.EndsWith("Press Ctrl+R to restart.", StringComparison.Ordinal))
+            if (line != "dotnet watch : Press Ctrl+R to restart.")
                 Console.WriteLine(line);
             if (output.Read(line) is { } notice)
                 await Show(project, notice);
