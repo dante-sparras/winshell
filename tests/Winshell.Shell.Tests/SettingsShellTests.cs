@@ -155,6 +155,44 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task Every_switch_ends_at_the_edge_the_drop_downs_and_buttons_end_at()
+    {
+        var misaligned = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                var found = new List<string>();
+                foreach (var page in SettingsCatalog.Pages)
+                {
+                    Assert.Equal("", shell.Ipc.Call("settings", "open", [page.Key]));
+                    var root = (FrameworkElement)(await rig.Shown()).Content!;
+                    root.UpdateLayout();
+                    foreach (var card in Cards(root))
+                    {
+                        if (card.TrailContent is not ToggleSwitch { Visibility: Visibility.Visible } toggle)
+                            continue;
+                        // A drop-down or a button ends at the right edge of the card's control column.
+                        var column = card.FindName("TrailHost") as FrameworkElement ?? throw new InvalidOperationException("A card has no TrailHost.");
+                        var edge = Right(column, root);
+                        var shown = Words(toggle).Max(word => Right(word, root));
+                        if (Math.Abs(edge - shown) > 1)
+                            found.Add($"{page.Key}: {card.Title} ends at {shown}, not {edge}");
+                    }
+                }
+
+                return found;
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(misaligned);
+    }
+
+    [Fact]
     public async Task Automatic_updates_say_why_they_are_off_when_this_build_does_not_update_itself()
     {
         var (available, description) = await ShellFixture.On(async shell =>
@@ -279,6 +317,14 @@ public sealed class SettingsShellTests
 
     private static double Left(UIElement element, UIElement root) =>
         element.TransformToVisual(root).TransformPoint(default).X;
+
+    private static double Right(FrameworkElement element, UIElement root) =>
+        Left(element, root) + element.ActualWidth;
+
+    /// <summary>The "On" and the "Off" a switch draws beside its knob; it shows one of them.</summary>
+    private static IEnumerable<FrameworkElement> Words(ToggleSwitch toggle) =>
+        new[] { "OnContentPresenter", "OffContentPresenter" }.Select(name =>
+            Find<ContentPresenter>(toggle, presenter => presenter.Name == name) ?? throw new InvalidOperationException($"A switch has no {name}."));
 
     private static double TitleHeight(SettingsCard card) =>
         (Find<TextBlock>(card, text => text.Text == card.Title) ?? throw new InvalidOperationException($"The card {card.Title} has no title.")).ActualHeight;

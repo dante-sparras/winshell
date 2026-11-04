@@ -7,7 +7,7 @@
     <StackPanel Spacing="4">
         <local:SettingsCard x:Name="SignInCard">
             <local:SettingsCard.TrailContent>
-                <ToggleSwitch x:Name="SignIn" OnContent="On" OffContent="Off" Toggled="OnSignInToggled" />
+                <ToggleSwitch x:Name="SignIn" MinWidth="0" OnContent="On" OffContent="Off" Toggled="OnSignInToggled" />
             </local:SettingsCard.TrailContent>
         </local:SettingsCard>
         <TextBlock Text="Related settings" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,18,0,6" />

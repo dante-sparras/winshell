@@ -7,7 +7,7 @@
     <StackPanel Spacing="4">
         <local:SettingsCard x:Name="RecommendedCard">
             <local:SettingsCard.TrailContent>
-                <ToggleSwitch x:Name="Recommended" OnContent="On" OffContent="Off" Toggled="OnRecommendedToggled" />
+                <ToggleSwitch x:Name="Recommended" MinWidth="0" OnContent="On" OffContent="Off" Toggled="OnRecommendedToggled" />
             </local:SettingsCard.TrailContent>
         </local:SettingsCard>
         <local:SettingsCommand x:Name="Pins" Click="OnPins" />
