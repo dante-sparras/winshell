@@ -15,6 +15,7 @@ internal sealed class IpcServer : IDisposable
     private readonly IInstanceControl _control;
     private readonly Action? _dismissNotice;
     private readonly Func<SafePipeHandle, string?> _refusal;
+    private readonly TimeProvider _time;
     private readonly CancellationTokenSource _cancel = new();
 
     private const int WaitingInstances = 2;
@@ -27,6 +28,8 @@ internal sealed class IpcServer : IDisposable
     // A listener holds its client for as long as it runs, so this has to leave room for `winshell kill`.
     internal const int MaxClients = 64;
     internal const int MaxQueuedSignals = 1024;
+    // winshell sends its line as soon as it connects. A client that does not, refused or not, gives its slot back.
+    internal static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
     private readonly object _firstGate = new();
     private readonly object _limit = new();
@@ -42,12 +45,14 @@ internal sealed class IpcServer : IDisposable
     /// <param name="loop">The UI thread's loop, which requests run on.</param>
     /// <param name="control">What requests do to the shell.</param>
     /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
+    /// <param name="time">The clock for <see cref="RequestTimeout"/>. Tests replace it.</param>
     /// <param name="dismissNotice">
     /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it, including when the configuration did not
     /// build and has registered nothing to call.
     /// </param>
-    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null)
+    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null, TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _pipe = pipe;
         _first = first;
         _loop = loop;
@@ -196,7 +201,12 @@ internal sealed class IpcServer : IDisposable
             var refusal = _refusal(stream.SafePipeHandle);
             if (refusal is not null)
                 Log.Default.Warn("ipc", $"Refused a control pipe client: {refusal}");
-            var (line, tooLong) = await ReadRequest(stream, _cancel.Token).ConfigureAwait(false);
+            // Only the request line is timed: a listener holds its client for as long as it runs.
+            string? line;
+            bool tooLong;
+            using (var idle = new CancellationTokenSource(RequestTimeout, _time))
+            using (var reading = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token, idle.Token))
+                (line, tooLong) = await ReadRequest(stream, reading.Token).ConfigureAwait(false);
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
             if (tooLong)
             {
@@ -263,7 +273,7 @@ internal sealed class IpcServer : IDisposable
         }
         catch (OperationCanceledException)
         {
-            // Shutdown cancelled the pending read.
+            // Shutdown, or the request timeout, cancelled the pending read.
         }
     }
 
