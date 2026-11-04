@@ -10,7 +10,7 @@ namespace Winshell.DefaultShell.Taskbar;
 /// An icon for a task button. This asks the Windows shell for the program path or packaged app id and keeps the
 /// bitmap for WinUI.
 /// </summary>
-internal static class ShellIcon
+internal static partial class ShellIcon
 {
     private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -138,9 +138,10 @@ internal static class ShellIcon
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
     private static extern void SHCreateItemFromParsingName(string path, nint bindContext, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory item);
 
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(nint obj);
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DeleteObject(nint obj);
 
-    [DllImport("gdi32.dll")]
-    private static extern int GetObjectW(nint handle, int size, out BITMAP bitmap);
+    [LibraryImport("gdi32.dll")]
+    private static partial int GetObjectW(nint handle, int size, out BITMAP bitmap);
 }

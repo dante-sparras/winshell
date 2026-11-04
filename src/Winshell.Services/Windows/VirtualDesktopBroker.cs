@@ -23,7 +23,7 @@ internal interface IVirtualDesktopSource
 }
 
 /// <summary>The build Windows reports, from <c>RtlGetVersion</c> rather than the version a manifest can change.</summary>
-internal readonly record struct WindowsVersion(uint Build, uint Update)
+internal readonly partial record struct WindowsVersion(uint Build, uint Update)
 {
     public override string ToString() => Update == 0 ? Build.ToString(CultureInfo.InvariantCulture) : $"{Build}.{Update}";
 
@@ -57,20 +57,19 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
         }
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct OsVersionInfo
+    [StructLayout(LayoutKind.Sequential)]
+    private unsafe struct OsVersionInfo
     {
         public uint Size;
         public uint Major;
         public uint Minor;
         public uint Build;
         public uint PlatformId;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        public string ServicePack;
+        public fixed char ServicePack[128];
     }
 
-    [DllImport("ntdll.dll")]
-    private static extern int RtlGetVersion(ref OsVersionInfo info);
+    [LibraryImport("ntdll.dll")]
+    private static partial int RtlGetVersion(ref OsVersionInfo info);
 }
 
 /// <summary>

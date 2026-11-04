@@ -10,7 +10,7 @@ namespace Winshell;
 /// not missed. That thread makes every read, because Windows cancels a read when the thread that made it ends.
 /// Callbacks run on the watch thread and must not block.
 /// </summary>
-internal sealed class DirectoryWatch : IDisposable
+internal sealed partial class DirectoryWatch : IDisposable
 {
     // FILE_NOTIFY_CHANGE_FILE_NAME | SIZE | LAST_WRITE.
     public const uint FileChanges = 0x00000001 | 0x00000008 | 0x00000010;
@@ -136,14 +136,17 @@ internal sealed class DirectoryWatch : IDisposable
         Marshal.FreeHGlobal(_overlapped);
     }
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool ReadDirectoryChangesW(
-        SafeFileHandle directory, nint buffer, int bufferLength, bool watchSubtree, uint filter, nint bytesReturned,
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ReadDirectoryChangesW(
+        SafeFileHandle directory, nint buffer, int bufferLength, [MarshalAs(UnmanagedType.Bool)] bool watchSubtree, uint filter, nint bytesReturned,
         nint overlapped, nint completion);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetOverlappedResult(SafeFileHandle file, nint overlapped, out int bytes, bool wait);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetOverlappedResult(SafeFileHandle file, nint overlapped, out int bytes, [MarshalAs(UnmanagedType.Bool)] bool wait);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool CancelIoEx(SafeFileHandle file, nint overlapped);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CancelIoEx(SafeFileHandle file, nint overlapped);
 }
