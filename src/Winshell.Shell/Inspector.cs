@@ -16,8 +16,8 @@ namespace Winshell;
 
 /// <summary>
 /// <c>winshell inspect</c>: what is on screen, seen from inside the shell. It reads the live XAML tree, and acts through
-/// the same automation peers Narrator uses, so nothing here reaches Windows' input queue. A window is named by its
-/// content's type, or its place in <see cref="Tree"/>'s list.
+/// the same automation peers Narrator uses, so nothing here reaches Windows' input queue. Windows are named by their
+/// content's type, or one by its place in <see cref="Tree"/>'s list.
 /// </summary>
 internal static class Inspector
 {

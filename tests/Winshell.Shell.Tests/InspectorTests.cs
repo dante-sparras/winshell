@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -233,7 +234,9 @@ public sealed class InspectorTests : IDisposable
         });
 
         Assert.Equal(1, clicks);
-        Assert.Matches(@"^2 windows show Page: \d+, \d+\. Name one by its number", message);
+        var listed = Regex.Match(message, @"^2 windows show Page: (\d+), (\d+)\. Name one by its number");
+        Assert.True(listed.Success, message);
+        Assert.NotEqual(listed.Groups[1].Value, listed.Groups[2].Value);
     }
 
     [Fact]
