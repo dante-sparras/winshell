@@ -13,7 +13,7 @@ namespace Winshell;
 internal static partial class AtomicFile
 {
     private const uint FileAttributeReparsePoint = 0x400;
-    private static readonly IntPtr InvalidFindHandle = new(-1);
+    private static readonly nint InvalidFindHandle = -1;
 
     /// <summary>
     /// A hand save landed during this write when the destination changed after the write started and is not the
