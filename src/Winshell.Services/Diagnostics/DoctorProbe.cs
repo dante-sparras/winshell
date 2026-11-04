@@ -160,7 +160,7 @@ internal static unsafe partial class DoctorProbe
         try
         {
             if (!Win32.OpenProcessToken(process, Win32.TOKEN_QUERY, out var token))
-                return Marshal.GetLastPInvokeError() == 5 && !Environment.IsPrivilegedProcess;
+                return Marshal.GetLastPInvokeError() == Win32.ERROR_ACCESS_DENIED && !Environment.IsPrivilegedProcess;
             try
             {
                 int elevated;

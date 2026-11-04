@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Winshell.Native;
-using static Winshell.Windows.NativeMethods;
 
 namespace Winshell.Windows;
 

@@ -118,7 +118,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
             return;
         }
         Hosts[_hwnd] = this;
-        Win32.SetLayeredWindowAttributes(_hwnd, 0, 0, LwaAlpha);
+        Win32.SetLayeredWindowAttributes(_hwnd, 0, 0, Win32.LWA_ALPHA);
         // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
         // start, and an app at a lower level can still add its icon.
         ChangeWindowMessageFilterEx(_hwnd, TaskbarCreated, MSGFLT_ALLOW, 0);
@@ -281,12 +281,12 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         // Out-of-context events run on the thread that installed the hook, which owns this host.
         try
         {
-            if (idChild != 0 || !EventHosts.TryGetValue(hook, out var host) || host._hwnd == 0)
+            if (idChild != Win32.CHILDID_SELF || !EventHosts.TryGetValue(hook, out var host) || host._hwnd == 0)
                 return;
             var explorer = host.ExplorerTray();
             // Top-level z-order changes name the desktop's client object, not a child window's OBJID_WINDOW.
             var desktopOrder = eventType == Win32.EVENT_OBJECT_REORDER && idObject == Win32.OBJID_CLIENT && hwnd == GetDesktopWindow();
-            if (explorer == 0 || !desktopOrder && (hwnd != explorer || idObject != 0))
+            if (explorer == 0 || !desktopOrder && (hwnd != explorer || idObject != Win32.OBJID_WINDOW))
                 return;
             // A raise causes another reorder event. Only raise when Explorer is actually above this host.
             for (var above = Win32.GetWindow(explorer, Win32.GW_HWNDPREV); above != 0; above = Win32.GetWindow(above, Win32.GW_HWNDPREV))
@@ -415,7 +415,6 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     // Native
 
     private static readonly nint HWND_BROADCAST = 0xffff;
-    private const uint LwaAlpha = 0x2;
     private const uint MSGFLT_ALLOW = 1;
     private const uint GA_PARENT = 1;
     private const uint WM_COMMAND = 0x0111;

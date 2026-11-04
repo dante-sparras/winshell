@@ -398,6 +398,11 @@ internal static partial class Win32
     public const uint FILE_FLAG_OVERLAPPED = 0x40000000;
     public const uint CLSCTX_INPROC_SERVER = 0x1;
 
+    public const int ERROR_ACCESS_DENIED = 5;
+    public const int ERROR_INSUFFICIENT_BUFFER = 122;
+
+    public const uint LWA_ALPHA = 0x2;
+
     public const uint CF_UNICODETEXT = 13;
     public const uint GMEM_MOVEABLE = 0x0002;
 

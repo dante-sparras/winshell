@@ -69,9 +69,6 @@ internal static unsafe partial class NativeMethods
     /// <summary><c>ERROR_SUCCESS</c>.</summary>
     internal const int ErrorSuccess = 0;
 
-    /// <summary><c>ERROR_INSUFFICIENT_BUFFER</c>. The length includes the terminating null.</summary>
-    internal const int ErrorInsufficientBuffer = 122;
-
     /// <summary><c>APPMODEL_ERROR_NO_APPLICATION</c>. The process has no application identity.</summary>
     internal const int AppModelErrorNoApplication = 15703;
 
@@ -156,7 +153,7 @@ internal static unsafe partial class NativeMethods
     internal static string ReadAppUserModelId(Func<char[]?, int, AppUserModelQuery> query)
     {
         var sized = query(null, 0);
-        if (sized.Code != ErrorInsufficientBuffer || sized.Length <= 1 || sized.Length > MaxAppUserModelIdCharacters)
+        if (sized.Code != Win32.ERROR_INSUFFICIENT_BUFFER || sized.Length <= 1 || sized.Length > MaxAppUserModelIdCharacters)
             return "";
         var buffer = new char[sized.Length];
         var read = query(buffer, buffer.Length);

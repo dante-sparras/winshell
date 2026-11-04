@@ -12,8 +12,6 @@ internal static partial class ProcessImage
     /// <summary>Characters, including the terminating null, that a Win32 path can hold.</summary>
     internal const int MaxCharacters = 32_767;
 
-    internal const int InsufficientBuffer = 122;
-
     private const int FirstCapacity = 1024;
 
     internal readonly record struct QueryResult(bool Ok, int Size, int Error);
@@ -44,7 +42,7 @@ internal static partial class ProcessImage
             var result = query(buffer, capacity);
             if (result.Ok)
                 return (uint)result.Size > (uint)buffer.Length ? null : new string(buffer, 0, result.Size);
-            if (attempt == 1 || result.Error != InsufficientBuffer || result.Size <= capacity || result.Size > MaxCharacters)
+            if (attempt == 1 || result.Error != Win32.ERROR_INSUFFICIENT_BUFFER || result.Size <= capacity || result.Size > MaxCharacters)
                 return null;
             capacity = result.Size;
         }

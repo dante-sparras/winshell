@@ -1,4 +1,5 @@
 
+using Winshell.Native;
 using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
@@ -53,7 +54,7 @@ public class WindowAppIdTests
     {
         var read = NativeMethods.ReadAppUserModelId((_, _) =>
             new NativeMethods.AppUserModelQuery(
-                NativeMethods.ErrorInsufficientBuffer,
+                Win32.ERROR_INSUFFICIENT_BUFFER,
                 (uint)NativeMethods.MaxAppUserModelIdCharacters + 1));
         Assert.Equal("", read);
     }
@@ -62,7 +63,7 @@ public class WindowAppIdTests
         NativeMethods.ReadAppUserModelId((buffer, _) =>
         {
             if (buffer is null)
-                return new NativeMethods.AppUserModelQuery(NativeMethods.ErrorInsufficientBuffer, (uint)id.Length + 1);
+                return new NativeMethods.AppUserModelQuery(Win32.ERROR_INSUFFICIENT_BUFFER, (uint)id.Length + 1);
             id.CopyTo(buffer);
             return new NativeMethods.AppUserModelQuery(NativeMethods.ErrorSuccess, (uint)id.Length + 1);
         });

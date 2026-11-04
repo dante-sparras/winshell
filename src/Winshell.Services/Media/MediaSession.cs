@@ -313,7 +313,7 @@ public sealed class MediaSession : ObservableObject
         if (MainWindow() is var window and not 0)
         {
             if (Win32.IsIconic(window))
-                Win32.ShowWindow(window, 9); // SW_RESTORE
+                Win32.ShowWindow(window, Win32.SW_RESTORE);
             Win32.SetForegroundWindow(window);
         }
         else if (_session.AppId.Contains('!'))

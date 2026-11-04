@@ -20,7 +20,6 @@ internal static partial class PipeTrust
     private const uint PipeAccessDuplex = 0x3;
     private const uint FileFlagFirstPipeInstance = 0x00080000;
     private const uint PipeRejectRemoteClients = 0x8;
-    private const int ErrorAccessDenied = 5;
 
     /// <summary>
     /// True when both levels are known and <paramref name="actor"/> is not below <paramref name="floor"/>. Untrusted, 0,
@@ -41,11 +40,11 @@ internal static partial class PipeTrust
         if (labeled is not null && IsMedium(labeled))
             return labeled;
         labeled?.Dispose();
-        if (first && error == ErrorAccessDenied)
+        if (first && error == Win32.ERROR_ACCESS_DENIED)
             throw new IOException("The control pipe is already taken.");
         var handle = TryCreate(pipe, first, $"O:{sid}D:(A;;GA;;;{sid})", out error);
         if (handle is null)
-            throw new IOException(error == ErrorAccessDenied
+            throw new IOException(error == Win32.ERROR_ACCESS_DENIED
                 ? "The control pipe is already taken."
                 : $"The control pipe could not be created ({error}).");
         try
