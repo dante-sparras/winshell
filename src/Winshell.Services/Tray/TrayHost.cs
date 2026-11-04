@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Winshell.Native;
-using WinEvents = Winshell.Windows.NativeMethods;
 
 namespace Winshell.Tray;
 
@@ -129,7 +128,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         _settingsWatch = TrayIconSettings.Watch(_loop, () => _icons.UseSettings(TrayIconSettings.Read()));
         foreach (var eventType in new uint[] { 0x0003 /* FOREGROUND */, 0x8004 /* REORDER */ })
         {
-            var hook = WinEvents.SetWinEventHook(eventType, eventType, 0, &OnOrderChanged, 0, 0, WinEvents.WINEVENT_OUTOFCONTEXT);
+            var hook = Win32.SetWinEventHook(eventType, eventType, 0, &OnOrderChanged, 0, 0, Win32.WINEVENT_OUTOFCONTEXT);
             if (hook != 0)
             {
                 _eventHooks.Add(hook);
@@ -157,7 +156,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         foreach (var hook in _eventHooks)
         {
             EventHosts.TryRemove(hook, out _);
-            UnhookWinEvent(hook);
+            Win32.UnhookWinEvent(hook);
         }
         _eventHooks.Clear();
         if (_hwnd != 0)
@@ -233,7 +232,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         // Only a message-only window names their parent, and the newest one may close before it is asked.
         nint parent = 0;
         for (var attempt = 0; parent == 0 && attempt < 3; attempt++)
-            parent = Win32.GetAncestor(FindWindowExW(Win32.HWND_MESSAGE, 0, null, null), GA_PARENT);
+            parent = Win32.GetAncestor(Win32.FindWindowExW(Win32.HWND_MESSAGE, 0, null, null), GA_PARENT);
         _messageOnly = [];
         if (parent != 0)
             EnumChildWindows(parent, &CollectMessageOnly, 0);
@@ -290,7 +289,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
             if (explorer == 0 || !desktopOrder && (hwnd != explorer || idObject != 0))
                 return;
             // A raise causes another reorder event. Only raise when Explorer is actually above this host.
-            for (var above = WinEvents.GetWindow(explorer, 3 /* GW_HWNDPREV */); above != 0; above = WinEvents.GetWindow(above, 3))
+            for (var above = Win32.GetWindow(explorer, Win32.GW_HWNDPREV); above != 0; above = Win32.GetWindow(above, Win32.GW_HWNDPREV))
             {
                 if (above == host._hwnd)
                     return;
@@ -302,10 +301,6 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
             // Never let managed code escape the native callback. The thirty-second check remains a fallback.
         }
     }
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool UnhookWinEvent(nint hook);
 
     [LibraryImport("user32.dll")]
     private static partial nint GetDesktopWindow();
@@ -350,7 +345,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     private nint ExplorerTray()
     {
         nint hwnd = 0;
-        while ((hwnd = FindWindowExW(0, hwnd, _names.Explorer, null)) != 0)
+        while ((hwnd = Win32.FindWindowExW(0, hwnd, _names.Explorer, null)) != 0)
         {
             if (hwnd != _hwnd)
                 return hwnd;
@@ -432,9 +427,6 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         public uint cbData;
         public void* lpData;
     }
-
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindWindowExW(nint parent, nint after, string? className, string? windowName);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

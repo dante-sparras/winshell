@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using Winshell.Native;
 
 namespace Winshell;
 
@@ -53,8 +54,8 @@ internal sealed class DirectoryWatch : IDisposable
     /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
     public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost, bool subtree = false)
     {
-        var handle = CreateFileW(path, FileListDirectory, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
-            FileFlagBackupSemantics | FileFlagOverlapped, IntPtr.Zero);
+        var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0, (uint)FileMode.Open,
+            FileFlagBackupSemantics | FileFlagOverlapped, 0);
         if (handle.IsInvalid)
         {
             handle.Dispose();
@@ -134,10 +135,6 @@ internal sealed class DirectoryWatch : IDisposable
         Marshal.FreeHGlobal(_buffer);
         Marshal.FreeHGlobal(_overlapped);
     }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern SafeFileHandle CreateFileW(
-        string fileName, uint access, FileShare share, IntPtr security, FileMode mode, uint flags, IntPtr template);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool ReadDirectoryChangesW(

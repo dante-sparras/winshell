@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
+using Winshell.Native;
 
 namespace Winshell.Winland;
 
@@ -162,7 +163,7 @@ internal static partial class WinlandConnection
     }
 
     private static uint? ServerProcess(NamedPipeClientStream pipe) =>
-        GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
+        Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
 
     private static void Raise<T>(Action<T>? handlers, T value)
     {
@@ -188,10 +189,6 @@ internal static partial class WinlandConnection
             }
         }
     }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetNamedPipeServerProcessId(nint pipe, out uint processId);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -6,9 +6,6 @@ namespace Winshell.Windows;
 /// <summary>The Win32 calls that list, watch and drive other programs' windows.</summary>
 internal static unsafe partial class NativeMethods
 {
-    /// <summary>Whether the handle is a window. The import itself lives in <see cref="Win32"/>.</summary>
-    public static bool IsWindow(nint hwnd) => Win32.IsWindow(hwnd);
-
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint EVENT_SYSTEM_DESKTOPSWITCH = 0x0020;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
@@ -21,7 +18,6 @@ internal static unsafe partial class NativeMethods
     public const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
     public const uint EVENT_OBJECT_CLOAKED = 0x8017;
     public const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
-    public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
     public const nint HSHELL_REDRAW = 6;
     public const nint HSHELL_HIGHBIT = 0x8000;
@@ -29,48 +25,24 @@ internal static unsafe partial class NativeMethods
     public const int OBJID_WINDOW = 0;
     public const int CHILDID_SELF = 0;
 
-    public const uint GW_OWNER = 4;
     public const uint GA_ROOT = 2;
-    public const int GWL_STYLE = -16;
-    public const int GWL_EXSTYLE = -20;
     public const long WS_CHILD = 0x40000000;
-    public const long WS_CAPTION = 0x00C00000;
-    public const long WS_EX_TOOLWINDOW = 0x00000080;
-    public const long WS_EX_APPWINDOW = 0x00040000;
-    public const long WS_EX_NOACTIVATE = 0x08000000;
     public const int DWMWA_CLOAKED = 14;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const uint DWM_TNP_RECTDESTINATION = 0x1;
     public const uint DWM_TNP_RECTSOURCE = 0x2;
     public const uint DWM_TNP_OPACITY = 0x4;
     public const uint DWM_TNP_VISIBLE = 0x8;
-    public const uint MONITOR_DEFAULTTONEAREST = 2;
 
     public const int SW_MAXIMIZE = 3;
-    public const int SW_MINIMIZE = 6;
-    public const int SW_RESTORE = 9;
-    public const uint WM_SYSCOMMAND = 0x0112;
     public const nint SC_CLOSE = 0xF060;
-
-    [LibraryImport("user32.dll")]
-    public static partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool RegisterShellHookWindow(nint hwnd);
 
     [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool EnumWindows(delegate* unmanaged<nint, nint, int> callback, nint data);
-
-    [LibraryImport("user32.dll")]
-    public static partial nint GetWindow(nint hwnd, uint command);
-
-    [LibraryImport("user32.dll")]
     public static partial nint GetShellWindow();
-
-    [LibraryImport("user32.dll")]
-    public static partial nint GetForegroundWindow();
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
     public static partial int GetWindowTextLength(nint hwnd);
@@ -78,29 +50,12 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW")]
     public static partial int GetWindowText(nint hwnd, char* text, int max);
 
-    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
-    public static partial int GetClassName(nint hwnd, char* text, int max);
-
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ShowWindowAsync(nint hwnd, int command);
 
-    public const uint SWP_NOSIZE = 0x0001;
-    public const uint SWP_NOMOVE = 0x0002;
-    public const uint SWP_NOZORDER = 0x0004;
-    public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_ASYNCWINDOWPOS = 0x4000;
     public const uint WPF_ASYNCWINDOWPLACEMENT = 0x0004;
-    public const int SW_SHOWNORMAL = 1;
-    public const int SW_SHOWMINIMIZED = 2;
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool GetWindowPlacement(nint hwnd, ref WINDOWPLACEMENT placement);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool SetWindowPlacement(nint hwnd, in WINDOWPLACEMENT placement);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int attribute, out int value, int size);
@@ -164,7 +119,7 @@ internal static unsafe partial class NativeMethods
     public static string ClassName(nint hwnd)
     {
         var buffer = stackalloc char[256];
-        var got = GetClassName(hwnd, buffer, 256);
+        var got = Win32.GetClassNameW(hwnd, buffer, 256);
         return new string(buffer, 0, Math.Max(got, 0));
     }
 
@@ -266,18 +221,6 @@ internal static unsafe partial class NativeMethods
             return "";
         }
     }
-}
-
-/// <summary>The restored position of a window, in the same pixels <c>GetWindowRect</c> uses for a per-monitor aware process.</summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct WINDOWPLACEMENT
-{
-    public uint Length;
-    public uint Flags;
-    public uint ShowCmd;
-    public Native.POINT MinPosition;
-    public Native.POINT MaxPosition;
-    public Native.RECT Normal;
 }
 
 [StructLayout(LayoutKind.Sequential)]

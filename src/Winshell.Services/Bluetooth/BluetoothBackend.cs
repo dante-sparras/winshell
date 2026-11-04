@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
+using Winshell.Native;
 using WinAdapter = Windows.Devices.Bluetooth.BluetoothAdapter;
 using WinClassicDevice = Windows.Devices.Bluetooth.BluetoothDevice;
 using WinLeDevice = Windows.Devices.Bluetooth.BluetoothLEDevice;
@@ -404,7 +405,7 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
 
     private static unsafe bool KsOneShot(string path, uint property)
     {
-        using var handle = CreateFileW(path, 0xC0000000, 3, 0, 3, 0, 0);
+        using var handle = Win32.CreateFileW(path, 0xC0000000, 3, 0, 3, 0, 0);
         if (handle.IsInvalid) return false;
         var request = new KSPROPERTY { Set = new Guid("7fa06c40-b8f6-4c7e-8556-e8c33a12e54d"), Id = property, Flags = 1 };
         return DeviceIoControl(handle, 0x2F0003, &request, (uint)sizeof(KSPROPERTY), null, 0, out _, 0);
@@ -426,8 +427,6 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool BluetoothEnableIncomingConnections(nint radio, [MarshalAs(UnmanagedType.Bool)] bool enabled);
 
-    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial SafeFileHandle CreateFileW(string fileName, uint access, uint share, nint security, uint creation, uint flags, nint template);
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static unsafe partial bool DeviceIoControl(SafeFileHandle device, uint code, void* input, uint inputSize, void* output, uint outputSize, out uint returned, nint overlapped);

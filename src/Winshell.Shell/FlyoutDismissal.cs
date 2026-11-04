@@ -13,7 +13,6 @@ namespace Winshell;
 internal sealed unsafe class FlyoutDismissal : IDisposable
 {
     private const uint EventObjectShow = 0x8002;
-    private const uint WineventOutOfContext = 0;
     private const string PopupClass = "Microsoft.UI.Content.PopupWindowSiteBridge";
 
     private static FlyoutDismissal? _current;
@@ -26,7 +25,7 @@ internal sealed unsafe class FlyoutDismissal : IDisposable
     {
         _platform = platform;
         _current = this;
-        _watch = SetWinEventHook(EventObjectShow, EventObjectShow, 0, &OnWinEvent, (uint)Environment.ProcessId, 0, WineventOutOfContext);
+        _watch = Win32.SetWinEventHook(EventObjectShow, EventObjectShow, 0, &OnWinEvent, (uint)Environment.ProcessId, 0, Win32.WINEVENT_OUTOFCONTEXT);
     }
 
     /// <summary>The mouse hook is running, so a flyout is open.</summary>
@@ -45,7 +44,7 @@ internal sealed unsafe class FlyoutDismissal : IDisposable
         Span<char> name = stackalloc char[64];
         fixed (char* chars = name)
         {
-            var length = GetClassNameW(hwnd, chars, name.Length);
+            var length = Win32.GetClassNameW(hwnd, chars, name.Length);
             return length > 0 && name[..length].SequenceEqual(PopupClass);
         }
     }
@@ -102,24 +101,8 @@ internal sealed unsafe class FlyoutDismissal : IDisposable
     public void Dispose()
     {
         if (_watch != 0)
-            UnhookWinEvent(_watch);
+            Win32.UnhookWinEvent(_watch);
         StopWatching();
         _current = null;
     }
-
-    [DllImport("user32.dll")]
-    private static extern nint SetWinEventHook(
-        uint eventMin,
-        uint eventMax,
-        nint module,
-        delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback,
-        uint process,
-        uint thread,
-        uint flags);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnhookWinEvent(nint hook);
-
-    [DllImport("user32.dll")]
-    private static extern int GetClassNameW(nint hwnd, char* name, int length);
 }

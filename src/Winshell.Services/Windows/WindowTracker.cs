@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Winshell.Native;
 using Winshell.Input;
+using static Winshell.Native.Win32;
 using static Winshell.Windows.NativeMethods;
 
 namespace Winshell.Windows;

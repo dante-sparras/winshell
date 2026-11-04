@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.ExplorerTaskbar;
@@ -9,7 +8,7 @@ namespace Winshell.ExplorerTaskbar;
 /// registering it again would make it reserve an edge. This is the only type that calls Win32 on
 /// <c>Shell_TrayWnd</c> or <c>Shell_SecondaryTrayWnd</c>.
 /// </summary>
-internal sealed unsafe partial class Win32ExplorerTaskbar : IExplorerTaskbar
+internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
 {
     private readonly List<Saved> _saved = [];
     private uint _callback;
@@ -128,7 +127,7 @@ internal sealed unsafe partial class Win32ExplorerTaskbar : IExplorerTaskbar
     private static List<nint> Windows(string className)
     {
         var found = new List<nint>();
-        for (nint hwnd = 0, next; (next = FindWindowExW(0, hwnd, className, null)) != 0; hwnd = next)
+        for (nint hwnd = 0, next; (next = Win32.FindWindowExW(0, hwnd, className, null)) != 0; hwnd = next)
             found.Add(next);
         return found;
     }
@@ -139,7 +138,7 @@ internal sealed unsafe partial class Win32ExplorerTaskbar : IExplorerTaskbar
         if (!Win32.IsWindow(hwnd))
             return false;
         var buffer = stackalloc char[64];
-        var got = GetClassName(hwnd, buffer, 64);
+        var got = Win32.GetClassNameW(hwnd, buffer, 64);
         return got > 0 && new string(buffer, 0, got) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
     }
 
@@ -151,10 +150,4 @@ internal sealed unsafe partial class Win32ExplorerTaskbar : IExplorerTaskbar
         public uint Edge;
         public RECT Rect;
     }
-
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindWindowExW(nint parent, nint after, string className, string? windowName);
-
-    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
-    private static partial int GetClassName(nint hwnd, char* name, int capacity);
 }

@@ -65,7 +65,7 @@ public sealed class VirtualDesktopRulesTests
         Assert.NotEmpty(desktops);
         Assert.Contains(desktops, desktop => desktop.Id == current);
         Assert.All(desktops, desktop => Assert.NotEqual(Guid.Empty, desktop.Id));
-        var foreground = WindowDesktop.IdOf(NativeMethods.GetForegroundWindow());
+        var foreground = WindowDesktop.IdOf(Win32.GetForegroundWindow());
         if (foreground.Length > 0)
             Assert.True(Guid.TryParse(foreground, out _));
 
