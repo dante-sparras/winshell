@@ -23,6 +23,8 @@
             <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
             <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />
             <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent" />
+            <!-- The page title starts where the cards do: the body's left margin, not NavigationView's 56. -->
+            <Thickness x:Key="NavigationViewHeaderMargin">40,44,0,0</Thickness>
         </NavigationView.Resources>
         <NavigationView.PaneHeader>
             <AutoSuggestBox
