@@ -16,7 +16,7 @@ For the folder map, see [Project structure](docs/development.md#project-structur
 
 Many agents work on this repo at once.
 
-- Before editing, follow [Start a task](docs/development.md#start-a-task) to fetch `main` and check the task's base.
+- First, in every session, run `git fetch origin main` and `git rev-list --left-right --count HEAD...origin/main`. A second count above 0 means this checkout, and the `AGENTS.md` you just read, are behind `main`: update the base as [Start a task](docs/development.md#start-a-task) describes before you edit or rely on them.
 - One task is one issue, one worktree, one branch and one PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
 - Name the branch `agent/<tool>/<issue#>-<slug>`, such as `agent/claude/123-tray-overflow`, and put `Fixes #<issue#>` in the PR body.
 - Run tasks side by side only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
