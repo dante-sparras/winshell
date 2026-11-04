@@ -7,6 +7,7 @@
     xmlns:notifications="using:Winshell.Notifications"
     HorizontalAlignment="Stretch"
     VerticalAlignment="Stretch"
+    IsTabStop="True"
     AutomationProperties.Name="Notification center and calendar">
     <UserControl.Resources>
         <ResourceDictionary>
@@ -25,27 +26,11 @@
     </UserControl.Resources>
     <Grid Padding="16" RowSpacing="12" Background="{ThemeResource FlyoutFillBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="Notification center" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-            <Button
-                x:Name="CloseButton"
-                Grid.Column="1"
-                Content="Close"
-                Padding="8,4"
-                BorderThickness="0"
-                Background="Transparent"
-                Click="OnClose" />
-        </Grid>
-        <Grid Grid.Row="1" RowSpacing="8">
+        <Grid RowSpacing="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -122,10 +107,10 @@
                 </ItemsRepeater>
             </ScrollViewer>
         </Grid>
-        <Border Grid.Row="2" Height="1" Background="{ThemeResource ControlStrokeColorDefaultBrush}" />
+        <Border Grid.Row="1" Height="1" Background="{ThemeResource ControlStrokeColorDefaultBrush}" />
         <ScrollViewer
             x:Name="CalendarScroll"
-            Grid.Row="3"
+            Grid.Row="2"
             MaxHeight="360"
             HorizontalScrollMode="Disabled"
             HorizontalScrollBarVisibility="Disabled"
