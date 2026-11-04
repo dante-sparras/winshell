@@ -1,6 +1,9 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using Winshell.Apps;
+using Winshell.Native;
 
 namespace Winshell.Services.Tests;
 
@@ -28,13 +31,13 @@ public sealed class AppIndexTests
             File.WriteAllText(readme, "notes");
             var cmd = Cmd();
 
-            ShellLink.Write(Path.Combine(common, "Accessories", "Edit.lnk"), demo, "/common", program, "common editor");
-            ShellLink.Write(Path.Combine(user, "Accessories", "Edit.lnk"), demo, "/user", program, "user editor");
-            ShellLink.Write(Path.Combine(common, "Startup", "Boot.lnk"), cmd, "", "", "boot");
-            ShellLink.Write(Path.Combine(common, "Uninstall Edit.lnk"), demo, "", program, "remove");
-            ShellLink.Write(Path.Combine(common, "Readme.lnk"), readme, "", "", "notes");
+            WriteLink(Path.Combine(common, "Accessories", "Edit.lnk"), demo, "/common", program, "common editor");
+            WriteLink(Path.Combine(user, "Accessories", "Edit.lnk"), demo, "/user", program, "user editor");
+            WriteLink(Path.Combine(common, "Startup", "Boot.lnk"), cmd, "", "", "boot");
+            WriteLink(Path.Combine(common, "Uninstall Edit.lnk"), demo, "", program, "remove");
+            WriteLink(Path.Combine(common, "Readme.lnk"), readme, "", "", "notes");
             var hidden = Path.Combine(common, "Secret.lnk");
-            ShellLink.Write(hidden, cmd, "", "", "secret");
+            WriteLink(hidden, cmd, "", "", "secret");
             File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
 
             var apps = AppIndex.Shortcuts([common, user]);
@@ -234,7 +237,7 @@ public sealed class AppIndexTests
             catalog.Start();
             await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             var link = Path.Combine(folder, "Probe.lnk");
-            ShellLink.Write(link, Cmd(), "", "", "probe");
+            WriteLink(link, Cmd(), "", "", "probe");
             Assert.True(Changed(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Probe")));
             File.Delete(link);
             Assert.True(Changed(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "Probe")));
@@ -252,7 +255,7 @@ public sealed class AppIndexTests
         var root = Temp();
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
-        ShellLink.Write(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
+        WriteLink(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
         using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500), false, false);
         var changed = new ManualResetEventSlim(false);
         catalog.Changed += () => changed.Set();
@@ -264,7 +267,7 @@ public sealed class AppIndexTests
             Directory.Delete(folder, true);
             Directory.CreateDirectory(folder);
             Assert.True(Changed(changed, () => catalog.Snapshot.Entries.All(app => app.Id != "First")));
-            ShellLink.Write(Path.Combine(folder, "Second.lnk"), Cmd(), "", "", "second");
+            WriteLink(Path.Combine(folder, "Second.lnk"), Cmd(), "", "", "second");
             Assert.True(Changed(changed, () => catalog.Snapshot.Entries.Any(app => app.Id == "Second")));
         }
         finally
@@ -330,6 +333,28 @@ public sealed class AppIndexTests
         BitConverter.TryWriteBytes(data.AsSpan(4), count);
         BitConverter.TryWriteBytes(data.AsSpan(60), when.ToFileTime());
         return data;
+    }
+
+    private static void WriteLink(string path, string target, string arguments, string workingDirectory, string description)
+    {
+        object? link = null;
+        try
+        {
+            link = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"))!)!;
+            var shell = (IShellLinkW)link;
+            var file = (IPersistFile)link;
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+            shell.SetPath(target);
+            shell.SetArguments(arguments);
+            shell.SetWorkingDirectory(workingDirectory);
+            shell.SetDescription(description);
+            file.Save(Path.GetFullPath(path), true);
+        }
+        finally
+        {
+            if (link is not null)
+                Marshal.ReleaseComObject(link);
+        }
     }
 
     private static string Cmd() => Path.Combine(Environment.SystemDirectory, "cmd.exe");

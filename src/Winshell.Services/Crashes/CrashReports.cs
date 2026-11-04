@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -356,13 +357,17 @@ internal sealed partial class CrashReports(string folder)
         }
     }
 
-    private static bool StartsWithHeading(string path)
+    /// <summary>Whether a line is the heading a report starts with. The whole line must match.</summary>
+    internal static bool IsHeading([NotNullWhen(true)] string? line) => line == Heading;
+
+    /// <summary>Whether the file's first line is the report heading. A file that cannot be read is not one.</summary>
+    internal static bool StartsWithHeading(string path)
     {
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
-            return reader.ReadLine() == Heading;
+            return IsHeading(reader.ReadLine());
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

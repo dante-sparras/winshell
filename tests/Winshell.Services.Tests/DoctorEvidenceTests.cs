@@ -73,6 +73,17 @@ public sealed class DoctorEvidenceTests : IDisposable
         Assert.DoesNotContain("draw failed", check.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Winshell crash reports")]
+    [InlineData("Winshell crash report ")]
+    public void A_file_whose_first_line_is_not_exactly_the_heading_is_not_a_report(string first)
+    {
+        var path = Path.Combine(_dir, "crash-lookalike.txt");
+        File.WriteAllText(path, first + "\nWinshell closed: yes\n");
+
+        Assert.Equal(default, DoctorProbe.PeekCrash(path));
+    }
+
     [Fact]
     public void A_crash_file_that_cannot_be_opened_warns()
     {

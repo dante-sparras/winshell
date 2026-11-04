@@ -311,7 +311,7 @@ internal static unsafe partial class DoctorProbe
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
             var first = reader.ReadLine();
-            if (first is null || !first.StartsWith("Winshell crash report", StringComparison.Ordinal))
+            if (!CrashReports.IsHeading(first))
                 return default;
             var text = new StringBuilder(first.Length + 256);
             text.Append(first);
