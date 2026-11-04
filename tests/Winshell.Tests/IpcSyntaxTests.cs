@@ -11,17 +11,16 @@ public sealed class IpcSyntaxTests : IDisposable
     public IpcSyntaxTests() => Directory.CreateDirectory(_root);
 
     [Theory]
-    [InlineData("call", "foo")]
-    [InlineData("prop", "get", "foo")]
-    [InlineData("wait", "foo")]
-    public void A_wrong_ipc_command_exits_2_with_nothing_running(params string[] words)
+    [InlineData("winshell ipc call needs a target and a function.", "call", "foo")]
+    [InlineData("winshell ipc prop needs \"get\", a target and a property.", "prop", "get", "foo")]
+    [InlineData("winshell ipc wait needs a target and a signal.", "wait", "foo")]
+    public void A_wrong_ipc_command_exits_2_with_nothing_running(string message, params string[] words)
     {
         var (code, output, error) = WinshellCli.Run(["ipc", .. words], ("WINSHELL_LOCAL_DIR", _root));
-        var text = output + error;
 
         Assert.Equal(2, code);
-        Assert.Contains("Usage: winshell ipc", text);
-        Assert.DoesNotContain("No running instances", text);
+        Assert.Equal("", output);
+        Assert.Equal(message + Environment.NewLine, error);
     }
 
     public void Dispose()
