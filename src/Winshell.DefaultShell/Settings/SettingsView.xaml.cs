@@ -143,9 +143,8 @@ public sealed partial class SettingsView : UserControl
 
     private void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Down && _navigation.Searching && _resultButtons.Count > 0)
+        if (e.Key == VirtualKey.Down && MoveFocus(-1, 1))
         {
-            _resultButtons[0].Focus(FocusState.Programmatic);
             e.Handled = true;
         }
         else if (e.Key == VirtualKey.Escape && Search.Text.Length > 0)
@@ -157,24 +156,28 @@ public sealed partial class SettingsView : UserControl
 
     private void OnResultKey(object sender, KeyRoutedEventArgs e)
     {
-        if (sender is not Control current)
+        if (sender is not SettingsCommand current)
             return;
-        var index = _resultButtons.IndexOf((SettingsCommand)current);
-        if (index < 0)
+        var index = _resultButtons.IndexOf(current);
+        if (index < 0 || e.Key is not (VirtualKey.Up or VirtualKey.Down))
             return;
-        if (e.Key == VirtualKey.Up)
-        {
-            if (index == 0)
-                Search.Focus(FocusState.Programmatic);
-            else
-                _resultButtons[index - 1].Focus(FocusState.Programmatic);
+        if (MoveFocus(index, e.Key == VirtualKey.Up ? -1 : 1))
             e.Handled = true;
-        }
-        else if (e.Key == VirtualKey.Down && index + 1 < _resultButtons.Count)
-        {
-            _resultButtons[index + 1].Focus(FocusState.Programmatic);
-            e.Handled = true;
-        }
+    }
+
+    /// <summary>
+    /// Moves the keyboard as <see cref="SettingsNavigation.MoveInResults"/> says. False when it stays. Each change to the
+    /// navigation is followed by <see cref="Sync"/>, so there is one result button for each of its results.
+    /// </summary>
+    private bool MoveFocus(int from, int direction)
+    {
+        if (_navigation.MoveInResults(from, direction) is not { } next)
+            return false;
+        if (next < 0)
+            Search.Focus(FocusState.Programmatic);
+        else
+            _resultButtons[next].Focus(FocusState.Programmatic);
+        return true;
     }
 
     private void OnPreferences(object? sender, PropertyChangedEventArgs e)
