@@ -56,9 +56,9 @@ internal sealed class TrackedWindows : IWindowSource
 
     public ScreenInfo? Screen(string deviceName) => Screens.Find(deviceName)?.Info;
 
-    public string DesktopId(nint hwnd) => VirtualDesktopBroker.WindowDesktopId(hwnd);
+    public string DesktopId(nint hwnd) => WindowDesktop.IdOf(hwnd);
 
-    public bool MoveToDesktop(nint hwnd, Guid desktop) => VirtualDesktopBroker.MoveWindow(hwnd, desktop);
+    public bool MoveToDesktop(nint hwnd, Guid desktop) => WindowDesktop.Move(hwnd, desktop);
 
     public void Activate(nint hwnd) => WindowTracker.Activate(hwnd);
 
