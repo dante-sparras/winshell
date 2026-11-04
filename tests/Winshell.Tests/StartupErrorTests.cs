@@ -21,17 +21,17 @@ public class StartupErrorTests
     [Fact]
     public void No_console_asks_the_dialog_with_the_message_and_the_folder()
     {
-        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing", "C:\\configs", consoleWindow: 0, stderrType: 0));
+        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing.", "C:\\configs", consoleWindow: 0, stderrType: 0));
 
         var call = Assert.Single(seen);
-        Assert.Equal("No .csproj at C:\\missing", call.Message);
+        Assert.Equal("No .csproj at C:\\missing.", call.Message);
         Assert.Equal("C:\\configs", call.Folder);
     }
 
     [Fact]
     public void A_console_does_not_ask_the_dialog()
     {
-        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing", "C:\\configs", consoleWindow: 1, stderrType: 2));
+        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing.", "C:\\configs", consoleWindow: 1, stderrType: 2));
 
         Assert.Empty(seen);
     }
@@ -39,7 +39,7 @@ public class StartupErrorTests
     [Fact]
     public void A_redirected_error_does_not_ask_the_dialog()
     {
-        var seen = Asked(() => StartupError.Report("No config named \"work\"", "C:\\configs", consoleWindow: 0, stderrType: 3));
+        var seen = Asked(() => StartupError.Report("No config named \"work\" in C:\\configs.", "C:\\configs", consoleWindow: 0, stderrType: 3));
 
         Assert.Empty(seen);
     }

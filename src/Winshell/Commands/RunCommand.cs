@@ -175,7 +175,7 @@ internal static class RunCommand
         }
         catch (System.ComponentModel.Win32Exception e)
         {
-            StartupError.Report($"Winshell is updated, but the new winshell.exe did not start: {e.Message}. Start winshell.exe again.", null);
+            StartupError.Report($"Winshell is updated, but the new winshell.exe did not start. Start winshell.exe again. {e.Message}", null);
             return 1;
         }
         using (shell)
