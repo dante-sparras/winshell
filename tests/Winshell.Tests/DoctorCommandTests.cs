@@ -51,7 +51,7 @@ public sealed class DoctorCommandTests : IDisposable
         Assert.Equal(1, code);
         using var json = JsonDocument.Parse(output);
         var messages = json.RootElement.GetProperty("checks").EnumerateArray()
-            .ToDictionary(c => c.GetProperty("id").GetString()!, c => c.GetProperty("message").GetString());
+            .ToDictionary(c => c.GetProperty("id").GetString() ?? "", c => c.GetProperty("message").GetString());
         Assert.StartsWith("No .csproj at ", messages["project"], StringComparison.Ordinal);
         Assert.EndsWith(@"\beside\missing", messages["project"], StringComparison.Ordinal);
         Assert.Equal("No configuration project to build.", messages["built"]);

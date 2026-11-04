@@ -10,7 +10,7 @@ internal static class DoctorCommand
         var root = ConfigPaths.Root();
         var project = ConfigurationSelection.FindProject(options, out var problem);
         string? search = project?.Folder;
-        // A path that is not there is checked as it is. Its parent could be a drive, the profile or another project.
+        // A -p that names no project is searched as given, never its parent: that could be a drive, the profile or another project.
         if (search is null && options.Path is { } path)
         {
             search = System.IO.Path.GetFullPath(path);
