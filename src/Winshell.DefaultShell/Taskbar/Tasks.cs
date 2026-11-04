@@ -124,7 +124,11 @@ public static partial class Tasks
         {
             if (!shows(window))
                 continue;
-            var draft = Task(WindowKey(window, find));
+            var key = WindowKey(window, find);
+            // A window with an AppId the index lacks still belongs to its program's pin, which is all such a pin can launch by.
+            if (!byKey.ContainsKey(key) && window.Executable.Length > 0 && byKey.ContainsKey("window:" + ProgramId(window.Executable)))
+                key = "window:" + ProgramId(window.Executable);
+            var draft = Task(key);
             if (draft.Entry is null && window.AppId.Length > 0)
                 draft.Entry = find(window.AppId);
             draft.Windows.Add(window);

@@ -191,7 +191,8 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     {
         if (_disposed || _desktop.Active is not { } window)
             return;
-        _lastUsed[TaskbarTasks.WindowKey(window, _desktop.Find)] = window;
+        if (Tasks.FirstOrDefault(task => task.Windows.Contains(window)) is { } owner)
+            _lastUsed[owner.Key] = window;
     }
 
     private void DropClosed()
