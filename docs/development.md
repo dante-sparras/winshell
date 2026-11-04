@@ -23,12 +23,13 @@ pwsh scripts/check.ps1
 
 ## Agent skills
 
-From the repo root, restore the external skills recorded in `skills-lock.json`, then install the project-owned test-audit skill for Codex and Claude Code:
+Install every skill `skills-lock.json` records, the project-owned test-audit skill included, for Codex and Claude Code:
 
 ```sh
-npx -y skills@1.7.4 experimental_install -a codex claude-code -y
-npx -y skills@1.7.4 add ./skills/test-audit -a codex claude-code --copy -y
+pwsh scripts/install-skills.ps1
 ```
+
+It installs each source at the ref the lock pins, as copies. The CLI's `experimental_install` links instead, and on Windows that leaves the external skills linked to no agent.
 
 Installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git. Keep `skills-lock.json` tracked for external skills. The custom test-audit source and its license live in `skills/test-audit/`; reinstall it after changing that source. Skills become available in a new agent session.
 
@@ -66,6 +67,7 @@ For agent shell commands, use profile-free PowerShell (`pwsh -NoProfile`, or `lo
 | `Invoke-Pester -Path tests/Scripts/Package.Tests.ps1` | Tests that `package.ps1` writes a zip's entries in ordinal order under a culture that sorts differently, dated the release day. It reads `New-Zip` from the script's syntax tree and builds nothing. Requires Pester 5.6.1 and PowerShell 7. This runs in CI's main check. |
 | `Invoke-Pester -Path tests/Scripts/PublishRelease.Tests.ps1` | Tests draft publication with a mocked `gh`; makes no GitHub changes. Requires Pester 5.6.1 and PowerShell 7. This runs in CI's main check. |
 | `lychee --offline --include-fragments '**/*.md' '.github/**/*.md'` | Checks every link between the repo's Markdown files, and the headings they point at, as the `ci` job does. It needs [lychee](https://github.com/lycheeverse/lychee) 0.24.2 on PATH, and reads no network. See [Docs](#docs). |
+| `pwsh scripts/install-skills.ps1` | Installs every skill in `skills-lock.json` for Codex and Claude Code, each at its pinned ref, as copies. See [Agent skills](#agent-skills). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
 Before every push, run `pwsh scripts/check.ps1`, then the focused checks for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and templates, builds each shell and runs it; it is slow and separate. The Package workflow runs it on PRs that change `templates/`, `src/Winshell.Package/`, `Directory.Packages.props` or the release files; it is not required. The required `ci` job checks local Markdown links and runs the default check. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title` and `pr-rules`. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI enables.
