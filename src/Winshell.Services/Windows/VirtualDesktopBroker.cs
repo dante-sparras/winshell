@@ -74,24 +74,19 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
 }
 
 /// <summary>
-/// Virtual desktops through the supported <c>IVirtualDesktopManager</c> and, on a known build, the internal
-/// manager. The internal table gained <c>SwitchDesktopAndMoveForegroundView</c> in Windows 11 24H2 (build 26100);
-/// 23H2 uses the same interface id and different slots, so <see cref="DesktopContract"/> refuses every other build.
-/// A failed read never calls create, switch or remove.
+/// The virtual desktops through Explorer's internal manager, on a known build. The internal table gained
+/// <c>SwitchDesktopAndMoveForegroundView</c> in Windows 11 24H2 (build 26100); 23H2 uses the same interface id and
+/// different slots, so <see cref="DesktopContract"/> refuses every other build. A failed read never calls create,
+/// switch or remove. Which desktop a window is on is <see cref="WindowDesktop"/>'s.
 /// </summary>
 internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
 {
     public static VirtualDesktopBroker Shared { get; } = new();
 
-    private const uint ClsctxInprocServer = 1;
     private const uint ClsctxLocalServer = 4;
 
-    private static readonly Guid ManagerClass = new("AA509086-5CA9-4C25-8F95-589D3C07B48A");
     private static readonly Guid ImmersiveShellClass = new("C2F03A33-21F5-47FA-B4BB-156362A2F239");
     private static readonly Guid InternalService = new("C5E0CDCA-7B6E-41B2-9FC4-D93975CC467B");
-
-    private IVirtualDesktopManager? _documented;
-    private bool _loggedDocumented;
 
     public DesktopContract Contract
     {
@@ -103,55 +98,6 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
                 return contract;
             return new(false,
                 $"Windows {version} is outside the virtual desktop method table Winshell knows ({DesktopContract.OldestBuild} through {DesktopContract.NewestBuild}).");
-        }
-    }
-
-    public static string WindowDesktopId(nint hwnd) => Shared.ReadWindowDesktopId(hwnd);
-
-    public static bool MoveWindow(nint hwnd, Guid desktop) => Shared.MoveWindowTo(hwnd, desktop);
-
-    public string ReadWindowDesktopId(nint hwnd)
-    {
-        if (hwnd == 0)
-            return "";
-        try
-        {
-            var manager = Documented();
-            if (manager is null)
-                return "";
-            if (manager.GetWindowDesktopId(hwnd, out var id) < 0 || id == Guid.Empty)
-                return "";
-            return id.ToString("D");
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            _documented = null;
-            return "";
-        }
-    }
-
-    public bool MoveWindowTo(nint hwnd, Guid desktop)
-    {
-        if (hwnd == 0 || desktop == Guid.Empty)
-            return false;
-        try
-        {
-            var manager = Documented();
-            if (manager is null)
-                return false;
-            var hr = manager.MoveWindowToDesktop(hwnd, in desktop);
-            if (hr < 0)
-            {
-                Log.Default.Warn("desktops", $"MoveWindowToDesktop failed ({Hex(hr)}).");
-                return false;
-            }
-            return true;
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            _documented = null;
-            Log.Default.Warn("desktops", $"MoveWindowToDesktop failed ({ex.GetType().Name}).");
-            return false;
         }
     }
 
@@ -382,36 +328,6 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
         return false;
     }
 
-    private IVirtualDesktopManager? Documented()
-    {
-        if (_documented is not null)
-            return _documented;
-        var iid = typeof(IVirtualDesktopManager).GUID;
-        var hr = CoCreateInstance(in ManagerClass, 0, ClsctxInprocServer, in iid, out var pointer);
-        if (hr < 0 || pointer == 0)
-        {
-            if (!_loggedDocumented)
-            {
-                _loggedDocumented = true;
-                Log.Default.Warn("desktops", $"IVirtualDesktopManager is unavailable ({Hex(hr)}).");
-            }
-            return null;
-        }
-        try
-        {
-            _documented = (IVirtualDesktopManager)Marshal.GetObjectForIUnknown(pointer);
-            return _documented;
-        }
-        catch (InvalidCastException)
-        {
-            return null;
-        }
-        finally
-        {
-            Marshal.Release(pointer);
-        }
-    }
-
     private static bool TryInternal(out IVirtualDesktopManagerInternal? manager, out string error)
     {
         manager = null;
@@ -520,16 +436,6 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
 
     [LibraryImport("combase.dll")]
     private static partial nint WindowsGetStringRawBuffer(nint hstring, out uint length);
-}
-
-[ComImport]
-[Guid("A5CD92FF-29BE-454C-8D04-D82879FB3F1B")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IVirtualDesktopManager
-{
-    [PreserveSig] int IsWindowOnCurrentVirtualDesktop(nint hwnd, out int onCurrent);
-    [PreserveSig] int GetWindowDesktopId(nint hwnd, out Guid desktopId);
-    [PreserveSig] int MoveWindowToDesktop(nint hwnd, in Guid desktopId);
 }
 
 [ComImport]
