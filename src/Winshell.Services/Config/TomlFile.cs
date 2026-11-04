@@ -340,7 +340,9 @@ public abstract class TomlFile : ObservableObject, IDisposable
     private static string Shown(object value)
     {
         var text = TomlDocument.Format(value) ?? "";
-        return text.Length > 100 ? text[..100] + "…" : text;
+        if (text.Length <= 100)
+            return text;
+        return text[..(char.IsHighSurrogate(text[99]) ? 99 : 100)] + "…";
     }
 
     private static bool TryConvert(object value, Type type, [NotNullWhen(true)] out object? converted)
