@@ -155,6 +155,42 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task Every_card_control_ends_at_the_right_edge_of_its_card()
+    {
+        var misaligned = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                var found = new List<string>();
+                foreach (var page in SettingsCatalog.Pages)
+                {
+                    Assert.Equal("", shell.Ipc.Call("settings", "open", [page.Key]));
+                    var root = (FrameworkElement)(await rig.Shown()).Content!;
+                    root.UpdateLayout();
+                    foreach (var card in Cards(root))
+                    {
+                        if (card.TrailContent is not FrameworkElement { Visibility: Visibility.Visible } control)
+                            continue;
+                        var edge = Right((FrameworkElement)card.FindName("TrailHost"), root);
+                        var shown = Right(control is ToggleSwitch toggle ? State(toggle) : control, root);
+                        if (Math.Abs(edge - shown) > 1)
+                            found.Add($"{page.Key}: {card.Title} ends at {shown}, not {edge}");
+                    }
+                }
+
+                return found;
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Empty(misaligned);
+    }
+
+    [Fact]
     public async Task Automatic_updates_say_why_they_are_off_when_this_build_does_not_update_itself()
     {
         var (available, description) = await ShellFixture.On(async shell =>
@@ -279,6 +315,16 @@ public sealed class SettingsShellTests
 
     private static double Left(UIElement element, UIElement root) =>
         element.TransformToVisual(root).TransformPoint(default).X;
+
+    private static double Right(FrameworkElement element, UIElement root) =>
+        Left(element, root) + element.ActualWidth;
+
+    /// <summary>The "On" or "Off" a switch shows, which is the end of what it draws.</summary>
+    private static FrameworkElement State(ToggleSwitch toggle)
+    {
+        var name = toggle.IsOn ? "OnContentPresenter" : "OffContentPresenter";
+        return Find<ContentPresenter>(toggle, presenter => presenter.Name == name) ?? throw new InvalidOperationException($"A switch has no {name}.");
+    }
 
     private static double TitleHeight(SettingsCard card) =>
         (Find<TextBlock>(card, text => text.Text == card.Title) ?? throw new InvalidOperationException($"The card {card.Title} has no title.")).ActualHeight;
