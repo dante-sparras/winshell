@@ -252,17 +252,39 @@ public sealed class ConfigurationProjectTests : IDisposable
         File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), Long.AddMinutes(2));
         using (new FileStream(project.Program, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
-            string? output = null;
-            var reason = project.Prepare(noBuild: false, (_, arguments, _) =>
-            {
-                output = arguments.SkipWhile(argument => argument != "-o").Skip(1).First();
-                return new CommandResult(0, "");
-            });
+            var reason = project.Prepare(noBuild: false, BuildsInto);
             Assert.Null(reason);
-            Assert.Equal(project.OutputFolder + ".next", output);
-            Assert.Equal(Path.Combine(project.OutputFolder + ".next", "Bar.exe"), project.RebuiltBeside);
-            Assert.True(File.Exists(project.Program));
+            Assert.Equal(Path.Combine(project.OutputFolder + ".next", "Bar.exe"), project.Program);
         }
+    }
+
+    [Fact]
+    public void The_program_is_whichever_folder_was_built_last()
+    {
+        var file = Project("Bar.csproj");
+        File.SetLastWriteTimeUtc(file, Long);
+        var project = Found(path: file);
+        Built(project, Long);
+        var beside = Path.Combine(project.OutputFolder + ".next", "Bar.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(beside)!);
+        File.WriteAllText(beside, "");
+        File.SetLastWriteTimeUtc(beside, Long.AddMinutes(1));
+        Assert.Equal(beside, project.Program);
+
+        // The second reload: the old program has exited, so the build replaces bin\shell and leaves shell.next behind.
+        File.WriteAllText(Project("Program.cs"), "class Program {}");
+        File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), DateTime.UtcNow.AddMinutes(-1));
+        Assert.Null(project.Prepare(noBuild: false, BuildsInto));
+
+        Assert.Equal(Path.Combine(project.OutputFolder, "Bar.exe"), project.Program);
+    }
+
+    private CommandResult BuildsInto(string file, IReadOnlyList<string> arguments, string folder)
+    {
+        var output = arguments.SkipWhile(argument => argument != "-o").Skip(1).First();
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(output, "Bar.exe"), "");
+        return new CommandResult(0, "");
     }
 
     [Fact]

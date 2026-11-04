@@ -72,13 +72,21 @@ internal sealed partial class ConfigurationProject
         return Path.GetFileName(full).Equals(project.AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase) ? project : null;
     }
 
-    public string Program => Path.Combine(OutputFolder, AssemblyName() + ".exe");
-
     /// <summary>
-    /// The program a successful build wrote beside <see cref="Program"/>, because the running one had its folder open.
-    /// Null when the build replaced <see cref="Program"/>, or when nothing was built.
+    /// The program to run: the one in <see cref="OutputFolder"/>, or the one in <c>bin\shell.next</c> when it was built
+    /// later. A build stamps what it wrote with the time, so the newer of the two is always the last build.
     /// </summary>
-    public string? RebuiltBeside { get; private set; }
+    public string Program
+    {
+        get
+        {
+            var program = ProgramIn(OutputFolder);
+            var beside = ProgramIn(OutputFolder + ".next");
+            return File.Exists(beside) && (!File.Exists(program) || File.GetLastWriteTimeUtc(beside) > File.GetLastWriteTimeUtc(program)) ? beside : program;
+        }
+    }
+
+    private string ProgramIn(string folder) => Path.Combine(folder, AssemblyName() + ".exe");
 
     /// <summary>
     /// The project to run: <paramref name="path"/>, a project or a folder holding one; or a named folder in
@@ -229,10 +237,11 @@ internal sealed partial class ConfigurationProject
         if (result.ExitCode == 0)
         {
             QuietDelete(parked);
-            RebuiltBeside = destination == OutputFolder ? null : Path.Combine(destination, AssemblyName() + ".exe");
+            var built = ProgramIn(destination);
+            if (File.Exists(built))
+                File.SetLastWriteTimeUtc(built, TimeProvider.System.GetUtcNow().UtcDateTime);
             return null;
         }
-        RebuiltBeside = null;
         if (parked is not null)
             Restore(destination, parked);
         return $"{Name} did not build.\n{Errors(result.Output)}";

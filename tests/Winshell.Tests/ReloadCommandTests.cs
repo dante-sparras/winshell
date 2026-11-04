@@ -112,6 +112,46 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         }
     }
 
+    [Fact(Timeout = BuildTimeout)]
+    public void A_second_reload_runs_the_second_edit()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        var source = Path.Combine(_probe.Folder, "Program.cs");
+        var original = File.ReadAllText(source);
+        var process = StartProbe();
+        try
+        {
+            // The probe's shell id says which code runs. The first reload builds beside the running program, the second into bin\shell.
+            var first = ReloadTo(process, original, "first");
+            var second = ReloadTo(first, original, "second");
+
+            Assert.NotEqual(first.Id, second.Id);
+        }
+        finally
+        {
+            File.WriteAllText(source, original);
+        }
+    }
+
+    private Process ReloadTo(Process running, string original, string shellId)
+    {
+        File.WriteAllText(Path.Combine(_probe.Folder, "Program.cs"), original.Replace("?? \"probe\"", $"?? \"{shellId}\"", StringComparison.Ordinal));
+        var result = Run("reload", "--pid", running.Id.ToString(CultureInfo.InvariantCulture));
+        Assert.Equal(0, result.Code);
+        Wait.Until(() => running.HasExited, "the old process to exit");
+        var pid = 0;
+        Wait.Until(
+            () =>
+            {
+                pid = Listed().Where(row => row.GetProperty("shellId").GetString() == shellId).Select(row => row.GetProperty("pid").GetInt32()).FirstOrDefault();
+                return pid != 0;
+            },
+            $"the process that runs the {shellId} edit");
+        var next = Process.GetProcessById(pid);
+        _started.Add(next);
+        return next;
+    }
+
     [Fact]
     public void Reload_with_nothing_running_for_a_pid_is_a_miss()
     {

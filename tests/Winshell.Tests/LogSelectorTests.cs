@@ -61,6 +61,35 @@ public sealed class LogSelectorTests : IDisposable
         Assert.Contains($"Showing the log of stopped instance {StoppedId}", error);
     }
 
+    [Fact]
+    public void A_project_selector_finds_an_instance_that_runs_beside_the_build_folder()
+    {
+        var project = Path.Combine(_root, "MyProject");
+        Directory.CreateDirectory(project);
+        File.WriteAllText(Path.Combine(project, "Bar.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var dir = Path.Combine(_root, "run", "besideabc");
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "log.txt");
+        File.WriteAllText(log, "the log of the shell in shell.next\n");
+        File.WriteAllText(Path.Combine(dir, "instance.json"), JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = "besideabc",
+            ["pid"] = int.MaxValue - 2,
+            ["shellId"] = "bar",
+            ["configPath"] = Path.Combine(project, "bin", "shell.next", "Bar.exe"),
+            ["launchTime"] = DateTime.Now.AddMinutes(-5),
+            ["pipe"] = "winshell-besideabc",
+            ["log"] = log,
+            ["processStart"] = 1,
+            ["exitedAt"] = DateTime.Now.AddMinutes(-1),
+        }));
+
+        var (code, output, _) = Run(["log", "-p", project]);
+
+        Assert.Equal(0, code);
+        Assert.Contains("the log of the shell in shell.next", output);
+    }
+
     public void Dispose()
     {
         try
