@@ -25,6 +25,7 @@ public sealed class DevShellQuitTests : IDisposable
         var id = _project.InstanceId();
 
         // Ctrl+C reaches every process on the console, this test's too. Ctrl+Break can be sent to one process group.
+        // Dev is set: StartDev ran above.
         Assert.True(GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)_project.Dev!.Id), "Ctrl+Break was not sent.");
 
         Assert.True(_project.Dev.WaitForExit(TimeSpan.FromSeconds(30)), "winshell dev did not exit.");

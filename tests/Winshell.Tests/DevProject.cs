@@ -149,7 +149,7 @@ internal sealed class DevProject : IDisposable
     internal int ShellProcess()
     {
         var (_, output, _) = WinshellCli.Run(["list", "-j"], Folders);
-        using var listed = System.Text.Json.JsonDocument.Parse(output);
+        using var listed = JsonDocument.Parse(output);
         return listed.RootElement.EnumerateArray().Single().GetProperty("pid").GetInt32();
     }
 
