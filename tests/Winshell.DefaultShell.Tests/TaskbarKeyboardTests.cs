@@ -31,11 +31,9 @@ public sealed class TaskbarKeyboardTests
         keyboard.Enter(first);
         keyboard.Enter(later);
         Assert.True(keyboard.Active);
-        Assert.Same(first, keyboard.ReturnTo);
 
         Assert.Same(first, keyboard.Leave());
         Assert.False(keyboard.Active);
-        Assert.Null(keyboard.ReturnTo);
         Assert.Null(keyboard.Leave());
 
         keyboard.Enter(first);

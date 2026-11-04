@@ -9,19 +9,17 @@ public sealed class TaskbarRevealTests
     {
         using var reveal = Open(out var time);
 
-        Assert.True(reveal.Revealed);
-        Assert.False(reveal.AutoHide);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         Assert.True(reveal.ReservesEdge);
         Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
 
         reveal.SetAutoHide(true);
 
-        Assert.True(reveal.AutoHide);
-        Assert.False(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
         Assert.False(reveal.ReservesEdge);
         Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
         time.Advance(TimeSpan.FromSeconds(3));
-        Assert.False(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
     }
 
     [Fact]
@@ -31,17 +29,15 @@ public sealed class TaskbarRevealTests
         reveal.SetAutoHide(true);
 
         reveal.SetPointer(true);
-        Assert.True(reveal.Revealed);
         Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         Assert.False(reveal.ReservesEdge);
         time.Advance(TimeSpan.FromSeconds(3));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
 
         reveal.SetPointer(false);
         time.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         time.Advance(TimeSpan.FromMilliseconds(500));
-        Assert.False(reveal.Revealed);
         Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
     }
 
@@ -57,7 +53,7 @@ public sealed class TaskbarRevealTests
         reveal.SetPointer(true);
         time.Advance(TimeSpan.FromSeconds(2));
 
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
     }
 
     [Fact]
@@ -69,13 +65,13 @@ public sealed class TaskbarRevealTests
         reveal.SetOpen(new TaskbarSurfaces(Start: true));
         reveal.SetPointer(false);
         time.Advance(TimeSpan.FromSeconds(3));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
 
         reveal.SetOpen(default);
         time.Advance(TimeSpan.FromMilliseconds(999));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         time.Advance(TimeSpan.FromMilliseconds(1));
-        Assert.False(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
     }
 
     [Fact]
@@ -91,7 +87,7 @@ public sealed class TaskbarRevealTests
         reveal.SetOpen(new TaskbarSurfaces(Tray: true));
         reveal.SetOpen(new TaskbarSurfaces(BarMenu: true));
 
-        Assert.False(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
     }
 
     [Fact]
@@ -101,15 +97,15 @@ public sealed class TaskbarRevealTests
         reveal.SetAutoHide(true);
 
         reveal.SetOpen(new TaskbarSurfaces(Keyboard: true));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         time.Advance(TimeSpan.FromSeconds(3));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
 
         reveal.SetOpen(default);
         time.Advance(TimeSpan.FromMilliseconds(999));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         time.Advance(TimeSpan.FromMilliseconds(1));
-        Assert.False(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
     }
 
     [Fact]
@@ -123,11 +119,11 @@ public sealed class TaskbarRevealTests
 
         reveal.SetAutoHide(false);
 
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         Assert.True(reveal.ReservesEdge);
         Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         time.Advance(TimeSpan.FromSeconds(2));
-        Assert.True(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.ShownHeight, reveal.WindowHeight);
         Assert.True(reveal.ReservesEdge);
     }
 
@@ -139,7 +135,7 @@ public sealed class TaskbarRevealTests
 
         reveal.SetAutoHide(true);
 
-        Assert.False(reveal.Revealed);
+        Assert.Equal(TaskbarReveal.HiddenHeight, reveal.WindowHeight);
         Assert.False(reveal.ReservesEdge);
     }
 

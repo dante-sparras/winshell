@@ -7,10 +7,10 @@ namespace Winshell.DefaultShell.Taskbar;
 /// </summary>
 public sealed class TaskbarKeyboard
 {
-    public bool Active { get; private set; }
+    // The window to activate when the keyboard leaves, when there was one.
+    private IOpenWindow? _returnTo;
 
-    /// <summary>The window to activate when the keyboard leaves, when there was one.</summary>
-    public IOpenWindow? ReturnTo { get; private set; }
+    public bool Active { get; private set; }
 
     /// <summary>
     /// Where Win+T lands. Start is stop 0 and Search is stop 1, so the first app is stop 2. With no app, the next
@@ -42,7 +42,7 @@ public sealed class TaskbarKeyboard
         if (Active)
             return;
         Active = true;
-        ReturnTo = active;
+        _returnTo = active;
     }
 
     /// <summary>Turns the keyboard off and returns the window Escape activates.</summary>
@@ -50,9 +50,9 @@ public sealed class TaskbarKeyboard
     {
         if (!Active)
             return null;
-        var back = ReturnTo;
+        var back = _returnTo;
         Active = false;
-        ReturnTo = null;
+        _returnTo = null;
         return back;
     }
 
@@ -60,6 +60,6 @@ public sealed class TaskbarKeyboard
     public void Yield()
     {
         Active = false;
-        ReturnTo = null;
+        _returnTo = null;
     }
 }

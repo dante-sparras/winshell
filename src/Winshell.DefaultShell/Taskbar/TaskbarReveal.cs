@@ -31,12 +31,6 @@ public sealed class TaskbarReveal : ObservableObject, IDisposable
         _hide = time.CreateTimer(_ => OnUi(OnHide), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
-    /// <summary>The bar is showing its full height. An auto-hiding bar starts hidden.</summary>
-    public bool Revealed => _revealed;
-
-    /// <summary>Auto-hide is on. The bar reserves no edge, shown or hidden.</summary>
-    public bool AutoHide => _autoHide;
-
     /// <summary>The window's height. Hidden, it is the two-pixel line.</summary>
     public double WindowHeight => _autoHide && !_revealed ? HiddenHeight : ShownHeight;
 
@@ -50,7 +44,6 @@ public sealed class TaskbarReveal : ObservableObject, IDisposable
             return;
         _autoHide = autoHide;
         Stop();
-        Changed(nameof(AutoHide));
         Changed(nameof(ReservesEdge));
         SetRevealed(!autoHide);
         Changed(nameof(WindowHeight));
@@ -109,9 +102,7 @@ public sealed class TaskbarReveal : ObservableObject, IDisposable
 
     private void SetRevealed(bool value)
     {
-        if (!Set(ref _revealed, value, nameof(Revealed)))
-            return;
-        Changed(nameof(WindowHeight));
+        Set(ref _revealed, value, nameof(WindowHeight));
     }
 
     private void OnUi(Action action)
