@@ -158,6 +158,9 @@ internal sealed class DevProject : IDisposable
     /// </param>
     internal void StartDev(bool ownGroup = false)
     {
+        // Without it the session's first build fails, and the test would wait out BuildPatience to say so.
+        var shell = Path.Combine(Repo.Root, "src", "Winshell.Shell", "bin", "Debug", "net10.0-windows10.0.22621.0", "Winshell.Shell.dll");
+        Assert.True(File.Exists(shell), $"{shell} is missing, and this project builds against it. Build the solution first: dotnet build winshell.slnx");
         var info = WinshellCli.StartInfo(["dev", "-p", Project]);
         info.CreateNoWindow = !ownGroup;
         info.CreateNewProcessGroup = ownGroup;
