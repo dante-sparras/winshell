@@ -10,19 +10,17 @@ internal static unsafe partial class ProcessIntegrity
 {
     internal const uint Medium = 0x2000;
 
-    private const uint QueryLimitedInformation = 0x1000;
-    private const uint TokenQuery = 0x0008;
     private const int TokenIntegrityLevel = 25;
 
     /// <summary>The level, or null when the process cannot be opened or its token read.</summary>
     internal static uint? TryRead(uint processId)
     {
-        var process = Win32.OpenProcess(QueryLimitedInformation, false, processId);
+        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
         if (process == 0)
             return null;
         try
         {
-            if (!Win32.OpenProcessToken(process, TokenQuery, out var token))
+            if (!Win32.OpenProcessToken(process, Win32.TOKEN_QUERY, out var token))
                 return null;
             try
             {

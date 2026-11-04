@@ -408,7 +408,7 @@ internal sealed unsafe class HostWindow : IDisposable
         _clickThrough = on;
         SetExStyle(Win32.WS_EX_TRANSPARENT | Win32.WS_EX_LAYERED, on);
         if (on)
-            Win32.SetLayeredWindowAttributes(Handle, 0, 255, 2);
+            Win32.SetLayeredWindowAttributes(Handle, 0, 255, Win32.LWA_ALPHA);
     }
 
     /// <summary>Fades the content. The material behind it does not fade, and has no opacity of its own.</summary>

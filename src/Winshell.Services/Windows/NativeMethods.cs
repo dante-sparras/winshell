@@ -6,24 +6,8 @@ namespace Winshell.Windows;
 /// <summary>The Win32 calls that list, watch and drive other programs' windows.</summary>
 internal static unsafe partial class NativeMethods
 {
-    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
-    public const uint EVENT_SYSTEM_DESKTOPSWITCH = 0x0020;
-    public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
-    public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
-    public const uint EVENT_OBJECT_CREATE = 0x8000;
-    public const uint EVENT_OBJECT_DESTROY = 0x8001;
-    public const uint EVENT_OBJECT_SHOW = 0x8002;
-    public const uint EVENT_OBJECT_HIDE = 0x8003;
-    public const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
-    public const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
-    public const uint EVENT_OBJECT_CLOAKED = 0x8017;
-    public const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
-
     public const nint HSHELL_REDRAW = 6;
     public const nint HSHELL_HIGHBIT = 0x8000;
-
-    public const int OBJID_WINDOW = 0;
-    public const int CHILDID_SELF = 0;
 
     public const uint GA_ROOT = 2;
     public const long WS_CHILD = 0x40000000;
@@ -85,9 +69,6 @@ internal static unsafe partial class NativeMethods
     /// <summary><c>ERROR_SUCCESS</c>.</summary>
     internal const int ErrorSuccess = 0;
 
-    /// <summary><c>ERROR_INSUFFICIENT_BUFFER</c>. The length includes the terminating null.</summary>
-    internal const int ErrorInsufficientBuffer = 122;
-
     /// <summary><c>APPMODEL_ERROR_NO_APPLICATION</c>. The process has no application identity.</summary>
     internal const int AppModelErrorNoApplication = 15703;
 
@@ -140,8 +121,7 @@ internal static unsafe partial class NativeMethods
     {
         if (processId == 0)
             return "";
-        const uint queryLimitedInformation = 0x1000;
-        var process = Win32.OpenProcess(queryLimitedInformation, false, processId);
+        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
         if (process == 0)
             return "";
         try
@@ -173,7 +153,7 @@ internal static unsafe partial class NativeMethods
     internal static string ReadAppUserModelId(Func<char[]?, int, AppUserModelQuery> query)
     {
         var sized = query(null, 0);
-        if (sized.Code != ErrorInsufficientBuffer || sized.Length <= 1 || sized.Length > MaxAppUserModelIdCharacters)
+        if (sized.Code != Win32.ERROR_INSUFFICIENT_BUFFER || sized.Length <= 1 || sized.Length > MaxAppUserModelIdCharacters)
             return "";
         var buffer = new char[sized.Length];
         var read = query(buffer, buffer.Length);

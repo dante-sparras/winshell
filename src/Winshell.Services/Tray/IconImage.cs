@@ -36,8 +36,8 @@ internal static unsafe partial class IconImage
         {
             // Windows picks the image in the icon group closest to the size, and scales it only if none matches.
             var icon = resource.Id != 0
-                ? Win32.LoadImageW(module, resource.Id, IMAGE_ICON, size, size, 0)
-                : Win32.LoadImageW(module, resource.Name, IMAGE_ICON, size, size, 0);
+                ? Win32.LoadImageW(module, resource.Id, Win32.IMAGE_ICON, size, size, 0)
+                : Win32.LoadImageW(module, resource.Name, Win32.IMAGE_ICON, size, size, 0);
             if (icon == 0)
                 return null;
             try
@@ -134,7 +134,6 @@ internal static unsafe partial class IconImage
 
     private const uint DI_MASK = 0x1, DI_NORMAL = 0x3;
     private const uint LOAD_LIBRARY_AS_DATAFILE = 0x2, LOAD_LIBRARY_AS_IMAGE_RESOURCE = 0x20;
-    private const uint IMAGE_ICON = 1;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct ICONINFO

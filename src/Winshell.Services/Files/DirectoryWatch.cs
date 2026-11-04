@@ -20,7 +20,6 @@ internal sealed partial class DirectoryWatch : IDisposable
     private const int BufferSize = 16 * 1024;
     private const uint FileListDirectory = 1;
     private const uint FileFlagBackupSemantics = 0x02000000;
-    private const uint FileFlagOverlapped = 0x40000000;
 
     private readonly SafeFileHandle _handle;
     private readonly uint _filter;
@@ -55,7 +54,7 @@ internal sealed partial class DirectoryWatch : IDisposable
     public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost, bool subtree = false)
     {
         var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0, (uint)FileMode.Open,
-            FileFlagBackupSemantics | FileFlagOverlapped, 0);
+            FileFlagBackupSemantics | Win32.FILE_FLAG_OVERLAPPED, 0);
         if (handle.IsInvalid)
         {
             handle.Dispose();

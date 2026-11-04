@@ -13,7 +13,7 @@ public class ProcessImageTests
         {
             calls++;
             if (buffer.Length < path.Length)
-                return new ProcessImage.QueryResult(false, path.Length + 1, ProcessImage.InsufficientBuffer);
+                return new ProcessImage.QueryResult(false, path.Length + 1, Win32.ERROR_INSUFFICIENT_BUFFER);
             path.CopyTo(buffer);
             return new ProcessImage.QueryResult(true, path.Length, 0);
         });
@@ -31,13 +31,13 @@ public class ProcessImageTests
     [Fact]
     public void A_required_size_past_the_win32_limit_returns_nothing()
     {
-        Assert.Null(ProcessImage.Read((_, _) => new ProcessImage.QueryResult(false, ProcessImage.MaxCharacters + 1, ProcessImage.InsufficientBuffer)));
+        Assert.Null(ProcessImage.Read((_, _) => new ProcessImage.QueryResult(false, ProcessImage.MaxCharacters + 1, Win32.ERROR_INSUFFICIENT_BUFFER)));
     }
 
     [Fact]
     public void A_second_short_buffer_returns_nothing()
     {
-        Assert.Null(ProcessImage.Read((_, capacity) => new ProcessImage.QueryResult(false, capacity + 1, ProcessImage.InsufficientBuffer)));
+        Assert.Null(ProcessImage.Read((_, capacity) => new ProcessImage.QueryResult(false, capacity + 1, Win32.ERROR_INSUFFICIENT_BUFFER)));
     }
 
     [Fact]

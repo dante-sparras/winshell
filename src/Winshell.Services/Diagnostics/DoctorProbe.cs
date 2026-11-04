@@ -154,13 +154,13 @@ internal static unsafe partial class DoctorProbe
     /// </summary>
     public static bool IsElevated(int pid)
     {
-        var process = Win32.OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, (uint)pid);
+        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
         if (process == 0)
             return false;
         try
         {
-            if (!Win32.OpenProcessToken(process, 0x0008 /* TOKEN_QUERY */, out var token))
-                return Marshal.GetLastPInvokeError() == 5 && !Environment.IsPrivilegedProcess;
+            if (!Win32.OpenProcessToken(process, Win32.TOKEN_QUERY, out var token))
+                return Marshal.GetLastPInvokeError() == Win32.ERROR_ACCESS_DENIED && !Environment.IsPrivilegedProcess;
             try
             {
                 int elevated;
@@ -228,7 +228,7 @@ internal static unsafe partial class DoctorProbe
     }
 
     /// <summary>Whether this process is per-monitor DPI aware, version 2, as its manifest asks unless Windows overrides it.</summary>
-    public static bool PerMonitorV2() => AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), -4 /* DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 */);
+    public static bool PerMonitorV2() => AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     /// <summary>The compatibility settings Windows keeps for this executable, for this user and for the PC.</summary>
     public static IReadOnlyList<string> CompatibilityLayers(string exePath)

@@ -31,7 +31,7 @@ internal static partial class NativeMenu
         // Windows keeps a hidden menu window ready on every desktop, so only a visible one is open.
         var threads = new HashSet<uint>();
         nint menu = 0;
-        while ((menu = FindWindowExW(0, menu, "#32768", null)) != 0)
+        while ((menu = Win32.FindWindowExW(0, menu, "#32768", null)) != 0)
         {
             if (Win32.IsWindowVisible(menu))
                 threads.Add(Win32.GetWindowThreadProcessId(menu, out _));
@@ -51,7 +51,4 @@ internal static partial class NativeMenu
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
-
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindWindowExW(nint parent, nint childAfter, string? className, string? windowName);
 }

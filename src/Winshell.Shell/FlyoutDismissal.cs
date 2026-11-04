@@ -12,7 +12,6 @@ namespace Winshell;
 /// </summary>
 internal sealed unsafe class FlyoutDismissal : IDisposable
 {
-    private const uint EventObjectShow = 0x8002;
     private const string PopupClass = "Microsoft.UI.Content.PopupWindowSiteBridge";
 
     private static FlyoutDismissal? _current;
@@ -25,7 +24,7 @@ internal sealed unsafe class FlyoutDismissal : IDisposable
     {
         _platform = platform;
         _current = this;
-        _watch = Win32.SetWinEventHook(EventObjectShow, EventObjectShow, 0, &OnWinEvent, (uint)Environment.ProcessId, 0, Win32.WINEVENT_OUTOFCONTEXT);
+        _watch = Win32.SetWinEventHook(Win32.EVENT_OBJECT_SHOW, Win32.EVENT_OBJECT_SHOW, 0, &OnWinEvent, (uint)Environment.ProcessId, 0, Win32.WINEVENT_OUTOFCONTEXT);
     }
 
     /// <summary>The mouse hook is running, so a flyout is open.</summary>
