@@ -71,6 +71,19 @@ public sealed class SettingsNavigation
         Results = Searching ? SettingsCatalog.Search(Query) : [];
         FocusKey = null;
     }
+
+    /// <summary>
+    /// Where Up (-1) or Down (1) takes the keyboard from a search result, or from the search box at -1. Down from the box
+    /// reaches the first result and Up from the first returns to the box. Null keeps the keyboard where it is: Up in the
+    /// box, Down on the last result, and anything while no results show.
+    /// </summary>
+    public int? MoveInResults(int from, int direction)
+    {
+        if (!Searching || from < -1 || from >= Results.Count)
+            return null;
+        var next = from + direction;
+        return next >= -1 && next < Results.Count ? next : null;
+    }
 }
 
 /// <summary>A page of Winshell Settings, and its subpage when one is open. An empty subpage is the page itself.</summary>

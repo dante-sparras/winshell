@@ -95,6 +95,25 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void Up_and_Down_walk_from_the_search_box_through_the_results_and_back()
+    {
+        var navigation = new SettingsNavigation();
+        Assert.Null(navigation.MoveInResults(-1, 1));
+
+        navigation.Search("displays");
+        Assert.Equal(2, navigation.Results.Count);
+        Assert.Equal(0, navigation.MoveInResults(-1, 1));
+        Assert.Null(navigation.MoveInResults(-1, -1));
+        Assert.Equal(1, navigation.MoveInResults(0, 1));
+        Assert.Null(navigation.MoveInResults(1, 1));
+        Assert.Equal(0, navigation.MoveInResults(1, -1));
+        Assert.Equal(-1, navigation.MoveInResults(0, -1));
+
+        navigation.Search("zzz");
+        Assert.Null(navigation.MoveInResults(-1, 1));
+    }
+
+    [Fact]
     public void Shown_is_the_page_or_its_subpage_and_clearing_a_search_goes_back_to_it()
     {
         var navigation = new SettingsNavigation();
