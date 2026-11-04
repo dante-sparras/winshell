@@ -76,17 +76,18 @@ internal static class TomlSyntax
 
     // The trivia after an array item is its comment and line break, then the indentation of what follows: the next
     // item, or the closing bracket. The open bracket's trivia is the same before the first item. A document loads only
-    // without errors, so an array has its brackets and every item its value.
+    // without errors, so an array has its brackets and every item its value, and an item followed by another has a comma.
 
     /// <summary>
-    /// Takes out an array's last item, and its comment. What is left ends the array as that item did: with or without a
-    /// comma, then the comment lines and the bracket that followed it. An array left empty with no comment is <c>[]</c>.
+    /// Takes out an array's last item with its lines: the comment lines above it and its own comment. What is left ends
+    /// the array as that item did: with or without a comma, then the comment lines and the bracket that followed it. An
+    /// array left empty with no comment is <c>[]</c>.
     /// </summary>
     public static void RemoveLastItem(ArraySyntax array)
     {
         var items = array.Items;
         var last = items.GetChild(items.ChildrenCount - 1)!;
-        var end = After(last);
+        var end = After(last) ?? [];
         items.RemoveChildAt(items.ChildrenCount - 1);
         if (items.ChildrenCount == 0)
         {
@@ -95,15 +96,15 @@ internal static class TomlSyntax
             return;
         }
         var kept = items.GetChild(items.ChildrenCount - 1)!;
-        if (last.Comma is null && kept.Comma is { } comma)
+        var comma = kept.Comma!;
+        if (last.Comma is null)
         {
             var value = LastToken(kept.Value!);
-            List<SyntaxTrivia> own = [.. value.TrailingTrivia ?? [], .. comma.TrailingTrivia ?? []];
             kept.Comma = null;
-            value.TrailingTrivia = Ended(own, end);
+            value.TrailingTrivia = Ended([.. value.TrailingTrivia ?? [], .. comma.TrailingTrivia ?? []], end);
         }
         else
-            SetAfter(kept, Ended(After(kept), end));
+            comma.TrailingTrivia = Ended(comma.TrailingTrivia, end);
     }
 
     /// <summary>
@@ -116,6 +117,10 @@ internal static class TomlSyntax
         var item = new ArrayItemSyntax { Value = value };
         if (items.ChildrenCount == 0)
         {
+            // Under a comment, or on the line after the open bracket, with the bracket on the next line.
+            var open = array.OpenBracket!.TrailingTrivia;
+            if (open is not null && LastBreak(open) is var start and >= 0)
+                LastToken(value).TrailingTrivia = open[start..];
             items.Add(item);
             return;
         }
@@ -138,42 +143,37 @@ internal static class TomlSyntax
             after = end;
         }
         if (last.Comma is null)
+        {
             LastToken(last.Value!).TrailingTrivia = null;
+            LastToken(value).TrailingTrivia = after;
+        }
         else
-            item.Comma = Comma([]);
+            item.Comma = Comma(after);
         last.Comma = Comma(between);
         items.Add(item);
-        SetAfter(item, after);
     }
 
     private static List<SyntaxTrivia>? After(ArrayItemSyntax item) =>
         item.Comma is { } comma ? comma.TrailingTrivia : LastToken(item.Value!).TrailingTrivia;
 
-    private static void SetAfter(ArrayItemSyntax item, List<SyntaxTrivia> trivia)
-    {
-        if (item.Comma is { } comma)
-            comma.TrailingTrivia = trivia;
-        else
-            LastToken(item.Value!).TrailingTrivia = trivia;
-    }
-
     /// <summary>
     /// What follows an item that had <paramref name="own"/> after it once the item after it, which had
     /// <paramref name="end"/>, is gone: its own comment and line break, then what followed that item's line.
     /// </summary>
-    private static List<SyntaxTrivia> Ended(List<SyntaxTrivia>? own, List<SyntaxTrivia>? end)
+    private static List<SyntaxTrivia> Ended(List<SyntaxTrivia>? own, List<SyntaxTrivia> end)
     {
-        var endLine = end?.FindIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
-        if (own is null || LastBreak(own) is var ownLine && ownLine < 0)
-            return end?[Math.Max(endLine, 0)..] ?? [];
+        var endLine = end.FindIndex(t => t.Kind == TokenKind.NewLine);
+        var ownLine = own?.FindIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
+        if (own is null || ownLine < 0)
+            return end[Math.Max(endLine, 0)..];
         var lines = own[..(ownLine + 1)];
         if (endLine >= 0)
-            return [.. lines, .. end?[(endLine + 1)..] ?? []];
+            return [.. lines, .. end[(endLine + 1)..]];
         // The bracket was on the gone item's line, so it goes on this item's line, or under its comment.
-        return lines.Exists(t => t.Kind == TokenKind.Comment) ? lines : end ?? [];
+        return lines.Exists(t => t.Kind == TokenKind.Comment) ? lines : end;
     }
 
-    private static int LastBreak(List<SyntaxTrivia>? trivia) => trivia?.FindLastIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
+    private static int LastBreak(List<SyntaxTrivia> trivia) => trivia.FindLastIndex(t => t.Kind == TokenKind.NewLine);
 
     public static void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline, IEnumerable<string>? commentLines = null)
     {
