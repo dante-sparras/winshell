@@ -33,7 +33,7 @@ public sealed class StartTests : IDisposable
         Assert.Equal(0, popup.Selected);
         Assert.Equal("", popup.SelectionName);
 
-        popup.Move("right");
+        Assert.True(popup.Move("right"));
         Assert.Equal(1, popup.Selected);
         Assert.Equal("Pin 1", popup.SelectionName);
         Assert.True(popup.Shown[1].IsSelected);
@@ -88,9 +88,10 @@ public sealed class StartTests : IDisposable
         Assert.False(popup.ShowingHome);
         Assert.True(popup.WebNote);
         Assert.Equal(0, popup.PinnedCount);
-        popup.Move("down");
+        Assert.True(popup.Move("down"));
         Assert.Equal(1, popup.Selected);
-        popup.Move("left");
+        Assert.False(popup.Move("left"));
+        Assert.False(popup.Move("right"));
         Assert.Equal(1, popup.Selected);
         StartApp? launched = null;
         popup.Launched += (_, app) => launched = app;
@@ -132,7 +133,7 @@ public sealed class StartTests : IDisposable
         Assert.Equal(0, popup.PinnedCount);
         popup.Move("down");
         Assert.Equal(1, popup.Selected);
-        popup.Move("right");
+        Assert.False(popup.Move("right"));
         Assert.Equal(1, popup.Selected);
         for (var i = 0; i < 20; i++)
             popup.Move("down");
@@ -146,7 +147,7 @@ public sealed class StartTests : IDisposable
     }
 
     [Fact]
-    public void Narrator_hears_the_app_the_arrow_keys_select_and_a_query_does_not_rename_it()
+    public void The_selection_name_follows_the_arrow_keys_and_a_query_does_not_rename_it()
     {
         using var start = Open("narrator");
         start.SetApps(GridApps(), GridRecent());
