@@ -65,6 +65,7 @@ internal static class RunCommand
             psi.ArgumentList.Add(a);
         try
         {
+            StandardHandles.KeepFromChildren();
             using var child = Process.Start(psi);
             return 0;
         }
@@ -112,6 +113,9 @@ internal static class RunCommand
             psi.ArgumentList.Add(a);
         try
         {
+            // With -d the program starts the shell again and returns, and that shell must not hold this one's output.
+            if (daemonize)
+                StandardHandles.KeepFromChildren();
             // UseShellExecute=false starts a process, so Start cannot return null for an opened document.
             using var process = Process.Start(psi)!;
             process.WaitForExit();

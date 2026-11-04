@@ -189,6 +189,7 @@ public sealed partial class Shell : IDisposable
         {
             try
             {
+                StandardHandles.KeepFromChildren();
                 using var child = Process.Start(arguments.DetachedStart(program));
             }
             catch (Exception e) when (e is Win32Exception or InvalidOperationException)

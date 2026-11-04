@@ -73,10 +73,7 @@ internal static class ProbeShell
         return process;
     }
 
-    /// <summary>
-    /// A <c>-d</c> start, to the end of the process that returns. Not redirected: the child would inherit the pipes, and
-    /// reading them to the end waits until the shell exits.
-    /// </summary>
+    /// <summary>A <c>-d</c> start, to the end of the process that returns.</summary>
     internal static int Detach(string config, string local, string[] args)
     {
         var info = new ProcessStartInfo(Program) { UseShellExecute = false, CreateNoWindow = true };
