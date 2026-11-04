@@ -269,8 +269,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
-          # Set once releases are signed, which is when the notes link the Code signing policy.
-          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
         run: ./scripts/publish-release.ps1 -Tag $env:TAG -PackageDirectory packages -Repository $env:GH_REPO
       - name: Submit to winget
         shell: pwsh
