@@ -23,6 +23,20 @@ pwsh scripts/check.ps1
 
 The first build of `winshell.slnx` sets `core.hooksPath` to `.githooks`, unless the clone already sets a hooks path. The `pre-commit` hook then runs `dotnet format` over the staged C# files, so a commit fails on the formatting, code style and analyzer errors that would fail CI. It reads the files as they are in the working tree, and takes about 20 seconds. `git commit --no-verify` skips it, and `dotnet format winshell.slnx` fixes most of what it finds.
 
+## Build from source
+
+You need Git and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
+
+```powershell
+git clone https://github.com/enpaze/winshell.git
+cd winshell
+dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
+```
+
+That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder the PowerShell installer uses. Add that folder to your `PATH` to run `winshell` from anywhere. Like a release, the build carries its own .NET runtime. Unlike one, it does not update itself.
+
+To update a source build, close Winshell, pull the newer source and publish it over the same folder. To uninstall one, turn off **Run Winshell when I sign in** in Winshell Settings if you turned it on, close Winshell, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
+
 ## Agent skills
 
 Install every skill `skills-lock.json` records, the project-owned test-audit skill included, for Codex and Claude Code:
