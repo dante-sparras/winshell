@@ -65,14 +65,14 @@ internal static class DevSession
     /// Asks this project's shell to quit, then ends dotnet watch and what it started. The shell quits first, so the apps
     /// it opened are not part of the tree that ends, and its app bar and tray go as they do for <c>winshell kill</c>.
     /// </summary>
-    private static void StopShellAndWatch(ConfigurationProject project, Process watch)
+    /// <param name="closing">The console is closing, which leaves about five seconds for all of it.</param>
+    private static void StopShellAndWatch(ConfigurationProject project, Process watch, bool closing)
     {
-        // Closing the console leaves about five seconds, so each wait has a deadline.
         if (ShellOf(project) is { } shell)
         {
             try
             {
-                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(closing ? 1 : 3));
 #pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process. Its thread runs no continuation.
                 _ = InstanceCall.AskAsync(shell, new IpcRequest("kill"), deadline.Token).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
@@ -84,7 +84,8 @@ internal static class DevSession
             try
             {
                 using var process = Process.GetProcessById(shell.Pid);
-                if (Instances.IsThisInstance(shell, process) && !process.WaitForExit(TimeSpan.FromSeconds(2)))
+                // winshell kill waits five seconds too.
+                if (Instances.IsThisInstance(shell, process) && !process.WaitForExit(TimeSpan.FromSeconds(closing ? 2 : 5)))
                 {
                     process.Kill();
                     process.WaitForExit(TimeSpan.FromSeconds(1));
@@ -130,7 +131,7 @@ internal static class DevSession
         }
         // dotnet watch has a console of its own, which Ctrl+C, Ctrl+Break and closing this one never reach. Each of
         // those ends this process once its handler returns, so the handler stops the shell and dotnet watch first.
-        void Stop(PosixSignalContext context) => StopShellAndWatch(project, process);
+        void Stop(PosixSignalContext context) => StopShellAndWatch(project, process, context.Signal == PosixSignal.SIGHUP);
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
         using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Stop);
         using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Stop);

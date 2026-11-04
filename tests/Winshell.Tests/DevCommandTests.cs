@@ -135,7 +135,7 @@ public sealed class DevCommandTests : IDisposable
     {
         var (_, output, _) = WinshellCli.Run(["list", "-j"], Folders);
         using var listed = JsonDocument.Parse(output);
-        return listed.RootElement.EnumerateArray().Single().GetProperty("id").GetString()!;
+        return listed.RootElement.EnumerateArray().Single().GetProperty("id").GetString() ?? "";
     }
 
     private int ShellProcess()
@@ -225,7 +225,7 @@ public sealed class DevCommandTests : IDisposable
         Wait.Until(() => FromProject().Count == 0, "dotnet watch and the shell to end", TimeSpan.FromSeconds(30));
         // The shell quit, as winshell kill asks it to, before dotnet watch ended: a shell that is only ended marks no exit.
         var record = File.ReadAllText(Path.Combine(_dir, "local", "run", id, "instance.json"));
-        Assert.NotNull(JsonSerializer.Deserialize(record, InstanceJson.Default.InstanceInfo)!.ExitedAt);
+        Assert.NotNull(JsonSerializer.Deserialize(record, InstanceJson.Default.InstanceInfo)?.ExitedAt);
     }
 
     [Fact(Timeout = 170_000)]
