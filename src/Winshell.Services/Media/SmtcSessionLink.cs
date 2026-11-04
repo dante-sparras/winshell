@@ -52,17 +52,18 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
     /// <summary>Sends a command. Windows' events bring the result; a refusal is logged.</summary>
     public void Send(string what, Func<GlobalSystemMediaTransportControlsSession, IAsyncOperation<bool>> command)
     {
-        var operation = command(_session);
         _ = Await();
 
         async Task Await()
         {
             try
             {
-                if (!await operation.AsTask().ConfigureAwait(false))
+                if (!await command(_session).AsTask().ConfigureAwait(false))
                     loop.Post(() => log.Warn("media", $"{target.AppName} did not accept {what}"));
             }
-            catch (COMException e)
+#pragma warning disable CA1031 // A closed session fails with COMException or ObjectDisposedException; nobody awaits this.
+            catch (Exception e)
+#pragma warning restore CA1031
             {
                 loop.Post(() => log.Warn("media", $"Cannot {what} on {target.AppName}: {e.Message}"));
             }
@@ -104,11 +105,16 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
                 if (properties is not null)
                     loop.Post(() => ApplyMedia(properties, request));
             }
-            catch (COMException)
+#pragma warning disable CA1031 // A closed session fails with COMException or ObjectDisposedException; nobody awaits this.
+            catch (Exception e)
+#pragma warning restore CA1031
             {
                 // The session closed while it was being read. Allow a later poll to try again.
                 loop.Post(() =>
                 {
+                    // A session closing mid-read is ordinary; anything else is worth a line.
+                    if (e is not COMException)
+                        log.Warn("media", $"Cannot read {target.AppName}'s track: {e.Message}");
                     if (!_released && request == _mediaRequest)
                         _mediaApplied = request;
                 });

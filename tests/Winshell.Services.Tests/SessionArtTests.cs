@@ -44,6 +44,25 @@ public sealed class SessionArtTests
         }
     }
 
+    [Fact]
+    public void A_read_that_fails_in_a_way_nobody_expected_still_ends_the_load()
+    {
+        var loop = new ManualEventLoop();
+        var missed = new List<string>();
+        var art = new SessionArt(loop, missed.Add, () => { });
+        try
+        {
+            art.Load(new Unreadable(new ObjectDisposedException("session")));
+            Wait.Until(() => !art.Loading && missed.Count > 0, "the failed read", loop.Process);
+
+            Assert.Single(missed);
+        }
+        finally
+        {
+            art.Release();
+        }
+    }
+
     /// <summary>A PNG header with bytes of its own after it, so each one is a new file in the cache.</summary>
     private static async Task<IRandomAccessStreamReference> ThumbnailAsync()
     {
@@ -64,8 +83,8 @@ public sealed class SessionArtTests
         return RandomAccessStreamReference.CreateFromStream(stream);
     }
 
-    private sealed class Unreadable : IRandomAccessStreamReference
+    private sealed class Unreadable(Exception? error = null) : IRandomAccessStreamReference
     {
-        public IAsyncOperation<IRandomAccessStreamWithContentType> OpenReadAsync() => throw new COMException("the app is gone");
+        public IAsyncOperation<IRandomAccessStreamWithContentType> OpenReadAsync() => throw (error ?? new COMException("the app is gone"));
     }
 }

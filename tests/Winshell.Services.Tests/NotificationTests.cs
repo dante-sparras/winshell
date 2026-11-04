@@ -187,6 +187,21 @@ public sealed class NotificationTests
     }
 
     [Fact]
+    public async Task A_request_that_fails_in_a_way_nobody_expected_does_not_stop_later_reads()
+    {
+        var backend = new FakeBackend { AccessError = new FormatException("Odd") };
+        using var listener = Listener(backend, out var loop);
+
+        await listener.RequestAccessAsync();
+        loop.Process();
+        backend.Current = Snapshot(Toast(1));
+        await listener.RefreshAsync();
+        loop.Process();
+
+        Assert.Equal(1u, Assert.Single(listener.Notifications).Id);
+    }
+
+    [Fact]
     public async Task A_disposed_listener_ignores_a_read_that_comes_late()
     {
         var backend = new FakeBackend();

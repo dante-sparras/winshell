@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Windows.Storage.Streams;
 
 namespace Winshell.Media;
@@ -45,7 +44,9 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
                 else
                     loop.Post(() => Set(url, request));
             }
-            catch (Exception e) when (e is COMException or IOException or UnauthorizedAccessException)
+#pragma warning disable CA1031 // A closed session fails with COMException or ObjectDisposedException; nobody awaits this.
+            catch (Exception e)
+#pragma warning restore CA1031
             {
                 Skip(e.Message);
             }

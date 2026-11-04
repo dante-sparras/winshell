@@ -100,8 +100,12 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 SetAccess(status);
             });
         }
-        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+#pragma warning disable CA1031 // Nobody awaits this; a failure left unhandled would keep _requesting set and stop every read.
+        catch (Exception e)
+#pragma warning restore CA1031
         {
+            if (!WindowsNotificationBackend.IsExpectedFailure(e))
+                _log.Warn("notifications", $"Requesting access failed: {e}");
             Post(() =>
             {
                 _requesting = false;
