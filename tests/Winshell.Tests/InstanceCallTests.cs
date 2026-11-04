@@ -15,6 +15,18 @@ public class InstanceCallTests
         new("abc123", Environment.ProcessId, "shell", @"C:\cfg\MyShell.exe", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), _pipe, "log.txt");
 
     [Fact]
+    public async Task An_instance_that_closes_the_pipe_without_answering_says_so()
+    {
+        await using var shell = IpcServer.OpenFirst(_pipe);
+        var closing = ReadThen(shell, shell.Dispose);
+
+        var answer = await InstanceCall.AskAsync(Instance, new IpcRequest("show"));
+
+        Assert.Equal(new InstanceCall.Answer(null, "Instance abc123 closed the control pipe without answering."), answer);
+        await closing;
+    }
+
+    [Fact]
     public async Task A_call_this_winshell_refuses_names_the_instance_and_the_reason()
     {
         await using var shell = IpcServer.OpenFirst(_pipe);
