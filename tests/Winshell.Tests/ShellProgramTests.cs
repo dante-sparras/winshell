@@ -134,17 +134,8 @@ public sealed partial class ShellProgramTests : IDisposable
     [Fact]
     public void A_detached_start_leaves_the_shell_id_to_the_child()
     {
-        // Not redirected: the child would inherit the pipes, and reading them to the end waits until the shell exits.
-        var info = new ProcessStartInfo(WinshellCli.Exe) { UseShellExecute = false, CreateNoWindow = true };
-        foreach (var arg in new[] { "run", "-n", "-d" })
-            info.ArgumentList.Add(arg);
-        foreach (var (name, value) in Folders)
-            info.Environment[name] = value;
-        using (var parent = Process.Start(info)!)
-        {
-            Assert.True(parent.WaitForExit(20_000), "winshell -d did not return");
-            Assert.Equal(0, parent.ExitCode);
-        }
+        // WinshellCli reads the output to its end, so the child must not hold it open.
+        Assert.Equal(0, WinshellCli.Run(["run", "-n", "-d"], Folders).Code);
 
         Wait.Until(() => Listed().Count > 0, "the background shell");
         var child = Assert.Single(Listed());
