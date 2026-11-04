@@ -213,6 +213,7 @@ public sealed partial class Shell : IDisposable
         var log = Log.Default;
         var instance = ShellInstance.Open(program, log, arguments.Verbose);
         instance.Crashes.ShellId = identity.ShellId;
+        instance.Crashing = () => _current?.ReleaseForCrash();
         log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{program}\"");
         log.Info("shell", $"Shell ID: \"{identity.ShellId}\"");
         log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
@@ -259,6 +260,12 @@ public sealed partial class Shell : IDisposable
                             XamlReload.Watch(shell, project);
                         instance.Listen(loop, new Control(shell), notices.Hide);
                         instance.Publish(identity.ShellId);
+                        // winshell.exe is a console program: Ctrl+C would end it with no Dispose, so it quits instead.
+                        Console.CancelKeyPress += (_, e) =>
+                        {
+                            e.Cancel = true;
+                            loop.Post(shell.Quit);
+                        };
                         configuration.Start(shell);
                         ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
 #if DEBUG
@@ -278,7 +285,11 @@ public sealed partial class Shell : IDisposable
                         });
                     }
                 });
-                application.UnhandledException += (_, e) => instance.ReportFatal(e.Exception);
+                application.UnhandledException += (_, e) =>
+                {
+                    ShellInstance.Quietly(() => instance.Crashing?.Invoke());
+                    instance.ReportFatal(e.Exception);
+                };
                 GC.KeepAlive(application);
             });
         }
@@ -359,6 +370,16 @@ public sealed partial class Shell : IDisposable
     {
         Dispose();
         Application.Current.Exit();
+    }
+
+    /// <summary>
+    /// Gives back what a crash would leave held: Explorer's taskbar and every panel's app bar. A crash skips
+    /// <see cref="Dispose"/> and can be on any thread, so this uses only calls that are safe from any thread.
+    /// </summary>
+    private void ReleaseForCrash()
+    {
+        _explorerTaskbarSession?.Restore();
+        AppBar.RemoveAll();
     }
 
     /// <summary>
