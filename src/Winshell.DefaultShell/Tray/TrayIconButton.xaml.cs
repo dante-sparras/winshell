@@ -51,6 +51,8 @@ public sealed partial class TrayIconButton : Button
         {
             Follow(false);
             _item = value;
+            // The app changes its tooltip at will; the program it belongs to does not.
+            AutomationProperties.SetAutomationId(this, value is null ? "" : "TrayIcon." + value.Id);
             Follow(true);
             Show();
         }

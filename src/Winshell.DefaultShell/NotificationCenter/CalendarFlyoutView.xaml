@@ -49,6 +49,7 @@
                 <Button
                     Grid.Column="1"
                     Content="Clear all"
+                    AutomationProperties.AutomationId="ClearAllButton"
                     Padding="8,4"
                     BorderThickness="0"
                     Background="Transparent"
@@ -65,6 +66,7 @@
                 Grid.Row="2"
                 HorizontalAlignment="Left"
                 Content="{x:Bind Center.AllowText}"
+                AutomationProperties.AutomationId="AllowButton"
                 Visibility="{x:Bind Shown(Center.ShowAllow), Mode=OneWay}"
                 Click="{x:Bind Center.RequestAccess}" />
             <TextBlock
@@ -137,6 +139,7 @@
                     <Button
                         Grid.Column="1"
                         Content="Today"
+                        AutomationProperties.AutomationId="TodayButton"
                         Height="32"
                         Padding="8,4"
                         BorderThickness="0"
@@ -151,6 +154,7 @@
                         BorderThickness="0"
                         Background="Transparent"
                         AutomationProperties.Name="Previous month"
+                        AutomationProperties.AutomationId="PreviousMonthButton"
                         Click="{x:Bind Month.Previous}">
                         <FontIcon Glyph="&#xE76B;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     </Button>
@@ -163,6 +167,7 @@
                         BorderThickness="0"
                         Background="Transparent"
                         AutomationProperties.Name="Next month"
+                        AutomationProperties.AutomationId="NextMonthButton"
                         Click="{x:Bind Month.Next}">
                         <FontIcon Glyph="&#xE76C;" FontSize="16" FontFamily="Segoe Fluent Icons" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     </Button>
@@ -229,6 +234,7 @@
                 <CheckBox
                     x:Name="WeekBox"
                     Content="Week numbers"
+                    AutomationProperties.AutomationId="WeekNumbersBox"
                     IsChecked="{x:Bind Preferences.CalendarWeekNumbers, Mode=OneWay}"
                     Click="OnWeekNumbers" />
             </StackPanel>
