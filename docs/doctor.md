@@ -18,7 +18,7 @@ The **Run diagnostics** button on the About page of Winshell Settings lists the 
 | --- | --- | --- |
 | Windows | Windows 11 version 22H2 (build 22621) or later. Shows the version and build. The message also says when transparency effects are off and when a contrast theme is on; neither changes the result. | Fails before Windows 11 and warns before 22H2. |
 | .NET | .NET 10 or later. Says whether it is built into Winshell or installed on the PC. | Fails. |
-| Project | A project was found, or there is none and Winshell would run the default shell. The message is the `.csproj` path, or that there is no project. | Fails when the folder cannot be read, or when several configs exist and none is picked. |
+| Project | A project was found, or there is none and Winshell would run the default shell. The message is the `.csproj` path, or that there is no project. | Fails when the folder cannot be read, or when several configs exist and none is picked. Warns when `preferences.toml`, `launcher.toml` or `quick-settings.toml` does not parse, with the line and column. |
 | Downloaded | No `.csproj`, `.props` or `.targets` beside the project has a `Zone.Identifier` for the Internet or Restricted zone. | Fails and names the file. Unblock it if you trust it. Nothing is built. |
 | Built | `bin\shell` has the program. | Fails when it has not been built. The fix is to run `winshell run` once. |
 | Build | No source is newer than that program, or there is no program yet, which Built reports. | Warns when a file is newer. The fix is to run `winshell run`. Signing in uses the last build. |
