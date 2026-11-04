@@ -102,7 +102,11 @@ internal sealed class Updater : IDisposable
         UpdateInstall.CleanUp(installDir, UpdatesDir, current);
         if (UpdateInstall.Staged(UpdatesDir, current) is not { } staged)
             return null;
-        return new InstalledUpdate(staged.Version.ToString(3), UpdateInstall.ApplyVerified(UpdatesDir, staged.Path, installDir));
+        // The update was saved by this user at medium integrity; an elevated process must not run what that user can rewrite.
+        var error = Environment.IsPrivilegedProcess
+            ? "An elevated Winshell does not install updates. Start Winshell normally to install it."
+            : UpdateInstall.ApplyVerified(UpdatesDir, staged.Path, installDir);
+        return new InstalledUpdate(staged.Version.ToString(3), error);
     }
 
     /// <summary>Downloaded updates, each unzipped in a folder named for its version.</summary>
@@ -177,18 +181,21 @@ internal sealed class Updater : IDisposable
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var ready = State.Status == UpdateStatus.Ready ? State.Version : null;
+            var ready = ReadyVersion();
             Set(new UpdateState(UpdateStatus.Checking, ready ?? "", ""));
             Release release;
             try
             {
                 release = await LatestAsync().ConfigureAwait(false);
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException)
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or UriFormatException)
             {
                 Fail(ready, "Winshell could not check for updates: " + e.Message);
                 return;
             }
+            // A staged update newer than the latest release was pulled, or never was one: it must not install at the next start.
+            if (UpdateInstall.Staged(_updatesDir, _current) is { } pulled && pulled.Version > release.Version)
+                UpdateInstall.Discard(_updatesDir, pulled.Path);
             if (release.Version <= _current)
             {
                 Set(new UpdateState(UpdateStatus.UpToDate, release.Version.ToString(3), ""));
@@ -232,15 +239,21 @@ internal sealed class Updater : IDisposable
     /// </summary>
     internal bool RestartToUpdate()
     {
-        var state = State;
-        if (state.Status != UpdateStatus.Ready || Restart is not { } restart)
+        if (Restart is not { } restart || ReadyVersion() is null)
             return false;
         var refused = restart();
         if (refused is not null)
             _log.Warn("updates", refused);
-        Set(state with { Error = refused ?? "" });
+        Update(state => state with { Error = refused ?? "" });
         return true;
     }
+
+    /// <summary>
+    /// The version of the update that applies at the next start, or null when there is none. A re-check shows
+    /// <c>Checking</c> while the update is still staged, so the disk decides, not the state.
+    /// </summary>
+    private string? ReadyVersion() =>
+        State.Status == UpdateStatus.Ready ? State.Version : UpdateInstall.Staged(_updatesDir, _current)?.Version.ToString(3);
 
     public void Dispose()
     {
@@ -342,10 +355,14 @@ internal sealed class Updater : IDisposable
             : new UpdateState(UpdateStatus.Failed, version, message));
     }
 
-    private void Set(UpdateState state)
+    private void Set(UpdateState state) => Update(_ => state);
+
+    private void Update(Func<UpdateState, UpdateState> change)
     {
+        UpdateState state;
         lock (_lock)
         {
+            state = change(_state);
             if (_state == state)
                 return;
             _state = state;

@@ -251,6 +251,60 @@ public sealed class UpdatesTests : IDisposable
     }
 
     [Fact]
+    public async Task A_staged_update_newer_than_the_latest_release_is_deleted_when_the_latest_is_no_newer_than_this_one()
+    {
+        var staged = Stage("0.6.0", ("winshell.exe", "new"));
+        Directory.CreateDirectory(UpdateTrust.Root(UpdatesDir));
+        File.WriteAllText(UpdateTrust.ZipPath(UpdatesDir, "0.6.0"), "zip");
+        File.WriteAllText(UpdateTrust.DigestPath(UpdatesDir, "0.6.0"), "digest");
+        using var updater = Create(GitHub("v0.5.0", ("winshell-0.5.0-win-x64.zip", [1], Sha([1]))));
+
+        await updater.CheckAsync();
+
+        Assert.Equal(new UpdateState(UpdateStatus.UpToDate, "0.5.0", ""), updater.State);
+        Assert.False(Directory.Exists(staged));
+        Assert.Empty(Directory.EnumerateFiles(UpdateTrust.Root(UpdatesDir)));
+        Assert.Null(UpdateInstall.Staged(UpdatesDir, new Version(0, 5, 0)));
+    }
+
+    [Theory]
+    [InlineData("""{"assets":[]}""")]
+    [InlineData("""[]""")]
+    [InlineData("""{"tag_name":"v0.6.0","assets":[{"name":"winshell-0.6.0-win-x64.zip","browser_download_url":"","digest":"sha256:ab"}]}""")]
+    public async Task A_release_of_the_wrong_shape_is_a_failed_check_not_a_stuck_one(string json)
+    {
+        using var updater = Create(new FakeGitHub(json, []));
+
+        await updater.CheckAsync();
+
+        Assert.Equal(UpdateStatus.Failed, updater.State.Status);
+        Assert.StartsWith("Winshell could not check for updates", updater.State.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_ready_update_can_restart_while_a_check_runs()
+    {
+        Stage("0.6.0", ("winshell.exe", "new"));
+        var release = new TaskCompletionSource();
+        using var updater = Create(new BlockedGitHub(release.Task));
+        var restarts = 0;
+        updater.Restart = () =>
+        {
+            restarts++;
+            return null;
+        };
+
+        var check = updater.CheckAsync();
+        Assert.Equal(UpdateStatus.Checking, updater.State.Status);
+        Assert.True(updater.RestartToUpdate());
+        release.SetResult();
+        await check;
+
+        Assert.Equal(1, restarts);
+        Assert.Equal(new UpdateState(UpdateStatus.Ready, "0.6.0", ""), updater.State);
+    }
+
+    [Fact]
     public async Task A_checked_download_keeps_its_zip_beside_the_updates_folder()
     {
         var zip = Zip(("winshell.exe", "new"));
@@ -267,34 +321,30 @@ public sealed class UpdatesTests : IDisposable
     [Fact]
     public async Task A_swapped_staged_file_is_not_what_gets_installed()
     {
-        var zip = Zip(("winshell.exe", "from-zip"));
-        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
-        await updater.CheckAsync();
-        File.WriteAllText(Path.Combine(UpdatesDir, "0.6.0", "winshell.exe"), "swapped");
+        var staged = await Download(("winshell.exe", Exe("from-zip")));
+        File.WriteAllBytes(Path.Combine(staged, "winshell.exe"), Exe("swapped"));
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
 
-        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false));
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir));
 
-        Assert.Equal("from-zip", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
-        Assert.False(Directory.Exists(Path.Combine(UpdatesDir, "0.6.0")));
-        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+        Assert.Equal("from-zip", Text(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.False(Directory.Exists(staged));
+        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, Tag)));
     }
 
     [Fact]
     public async Task A_changed_zip_is_not_installed_and_the_staged_tree_is_deleted()
     {
-        var zip = Zip(("winshell.exe", "from-zip"));
-        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
-        await updater.CheckAsync();
-        File.WriteAllBytes(UpdateTrust.ZipPath(UpdatesDir, "0.6.0"), Zip(("winshell.exe", "changed")));
+        var staged = await Download(("winshell.exe", Exe("from-zip")));
+        File.WriteAllBytes(UpdateTrust.ZipPath(UpdatesDir, Tag), Zip(("winshell.exe", Exe("changed"))));
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, Path.Combine(UpdatesDir, "0.6.0"), InstallDir, privileged: false);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir);
 
         Assert.Contains("SHA-256", error, StringComparison.Ordinal);
         Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
-        Assert.False(Directory.Exists(Path.Combine(UpdatesDir, "0.6.0")));
-        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+        Assert.False(Directory.Exists(staged));
+        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, Tag)));
     }
 
     [Fact]
@@ -303,7 +353,7 @@ public sealed class UpdatesTests : IDisposable
         var staged = Stage("0.6.0", ("winshell.exe", "new"));
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir);
 
         Assert.Contains("digest", error, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
@@ -311,43 +361,34 @@ public sealed class UpdatesTests : IDisposable
     }
 
     [Fact]
-    public async Task An_elevated_apply_copies_nothing_and_leaves_the_update_for_a_normal_start()
-    {
-        var zip = Zip(("winshell.exe", "from-zip"));
-        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
-        await updater.CheckAsync();
-        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
-        var staged = Path.Combine(UpdatesDir, "0.6.0");
-
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: true);
-
-        Assert.Equal("An elevated Winshell does not install updates. Start Winshell normally to install it.", error);
-        Assert.Equal(["winshell.exe"], Directory.EnumerateFileSystemEntries(InstallDir).Select(Path.GetFileName));
-        Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
-        Assert.True(Directory.Exists(staged));
-        Assert.True(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
-        Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
-    }
-
-    [Fact]
     public async Task A_zip_another_process_has_open_for_writing_is_not_installed()
     {
-        var zip = Zip(("winshell.exe", "from-zip"));
-        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
-        await updater.CheckAsync();
+        var staged = await Download(("winshell.exe", Exe("from-zip")));
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
-        var staged = Path.Combine(UpdatesDir, "0.6.0");
 
         // A writer that still lets others read. Apply's handle denies writers, so it cannot open the zip while this
         // one is open, and no writer can open the zip while apply holds it between the hash and the extract.
         string? error;
-        using (new FileStream(UpdateTrust.ZipPath(UpdatesDir, "0.6.0"), FileMode.Open, FileAccess.Write, FileShare.Read))
-            error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false);
+        using (new FileStream(UpdateTrust.ZipPath(UpdatesDir, Tag), FileMode.Open, FileAccess.Write, FileShare.Read))
+            error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir);
 
         Assert.NotNull(error);
         Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
         Assert.True(Directory.Exists(staged));
         Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
+    }
+
+    [Fact]
+    public async Task A_release_whose_binary_is_another_version_than_its_tag_is_not_installed()
+    {
+        File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "old");
+        var staged = await Download("99.0.0", Zip(("winshell.exe", Exe("from-zip"))));
+
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir);
+
+        Assert.Contains("Winshell 99.0.0", error, StringComparison.Ordinal);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.False(Directory.Exists(staged));
     }
 
     [Fact]
@@ -401,43 +442,49 @@ public sealed class UpdatesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_signed_install_takes_an_update_its_own_signer_signed()
+    public async Task A_signed_install_takes_an_update_whose_files_are_all_signed()
     {
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
-        // The runtime keeps its own publisher's signature, or none, and is not checked.
-        var staged = await Download(("winshell.exe", "signed by CN=Winshell"), ("winshell.dll", "signed by CN=Winshell"), ("coreclr.dll", "unsigned"));
+        var staged = await Download(SignedRelease(
+            ("coreclr.dll", Bytes("signed by CN=Microsoft Corporation, O=Microsoft Corporation")),
+            ("readme.txt", Bytes("unsigned"))));
 
-        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner));
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, FakeSigner));
 
-        Assert.Equal("signed by CN=Winshell", File.ReadAllText(Path.Combine(InstallDir, "winshell.dll")));
-        Assert.Equal("unsigned", File.ReadAllText(Path.Combine(InstallDir, "coreclr.dll")));
+        Assert.Equal("signed by CN=Microsoft Corporation, O=Microsoft Corporation", File.ReadAllText(Path.Combine(InstallDir, "coreclr.dll")));
+        Assert.Equal("unsigned", File.ReadAllText(Path.Combine(InstallDir, "readme.txt")));
         Assert.False(Directory.Exists(staged));
     }
 
-    [Fact]
-    public async Task A_signed_install_refuses_an_unsigned_update_and_deletes_it()
+    [Theory]
+    [InlineData("hostfxr.dll", "unsigned", "is not validly signed")]
+    [InlineData("version.dll", "unsigned", "is not validly signed")]
+    [InlineData("Winshell.Shell.dll", "signed by CN=Someone Else", "is signed by CN=Someone Else")]
+    [InlineData("sub/helper.exe", "signed by CN=Someone Else", "is signed by CN=Someone Else")]
+    [InlineData("hostfxr.dll", "signed by CN=\"Evil, O=Microsoft Corporation\", O=Evil", "is signed by")]
+    public async Task A_signed_install_refuses_an_update_with_any_binary_signed_by_another_or_nobody(string name, string text, string why)
     {
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
-        var staged = await Download(("winshell.exe", "unsigned"));
+        var staged = await Download(SignedRelease((name, Bytes(text))));
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, FakeSigner);
 
-        Assert.Equal("This Winshell is signed by CN=Winshell, but the update's winshell.exe is not validly signed, so Winshell does not install it.", error);
-        Assert.Equal("signed by CN=Winshell", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.Contains($"the update's {name.Replace('/', Path.DirectorySeparatorChar)} {why}", error, StringComparison.Ordinal);
+        Assert.Equal(["winshell.exe"], Directory.EnumerateFileSystemEntries(InstallDir).Select(Path.GetFileName));
         Assert.False(Directory.Exists(staged));
-        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, "0.6.0")));
+        Assert.False(File.Exists(UpdateTrust.ZipPath(UpdatesDir, Tag)));
         Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
     }
 
     [Fact]
-    public async Task A_signed_install_refuses_an_update_another_signer_signed()
+    public async Task A_signed_install_refuses_an_update_that_leaves_out_a_signed_binary()
     {
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
-        var staged = await Download(("winshell.exe", "signed by CN=Winshell"), ("Winshell.Shell.dll", "signed by CN=Someone Else"));
+        var staged = await Download(("winshell.exe", Exe("signed by CN=Winshell")));
 
-        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner);
+        var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, FakeSigner);
 
-        Assert.Equal("This Winshell is signed by CN=Winshell, but the update's Winshell.Shell.dll is signed by CN=Someone Else, so Winshell does not install it.", error);
+        Assert.Equal("This Winshell is signed, but the update has no winshellw.exe, so Winshell does not install it.", error);
         Assert.Equal(["winshell.exe"], Directory.EnumerateFileSystemEntries(InstallDir).Select(Path.GetFileName));
         Assert.False(Directory.Exists(staged));
     }
@@ -446,11 +493,21 @@ public sealed class UpdatesTests : IDisposable
     public async Task An_unsigned_install_takes_an_unsigned_update()
     {
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "unsigned");
-        var staged = await Download(("winshell.exe", "new"));
+        var staged = await Download(("winshell.exe", Exe("new")), ("coreclr.dll", Bytes("unsigned")));
 
-        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, privileged: false, FakeSigner));
+        Assert.Null(UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, FakeSigner));
 
-        Assert.Equal("new", File.ReadAllText(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.Equal("new", Text(Path.Combine(InstallDir, "winshell.exe")));
+        Assert.Equal("unsigned", File.ReadAllText(Path.Combine(InstallDir, "coreclr.dll")));
+    }
+
+    [Fact]
+    public void Microsoft_is_the_organization_of_a_signing_subject_not_text_inside_another_name()
+    {
+        Assert.True(UpdateSignature.IsMicrosoft("CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"));
+        Assert.False(UpdateSignature.IsMicrosoft("CN=\"Evil, O=Microsoft Corporation\", O=Evil"));
+        Assert.False(UpdateSignature.IsMicrosoft("CN=Winshell"));
+        Assert.False(UpdateSignature.IsMicrosoft(null));
     }
 
     [Fact]
@@ -476,21 +533,43 @@ public sealed class UpdatesTests : IDisposable
         Assert.Contains("O=Microsoft Corporation", UpdateSignature.Signer(typeof(object).Assembly.Location), StringComparison.Ordinal);
     }
 
-    /// <summary>Downloads 0.6.0 with these files through the fake GitHub, and returns its staged folder.</summary>
-    private async Task<string> Download(params (string Name, string Text)[] files)
+    /// <summary>The release version the test assembly carries, which stands in for a release's <c>winshell.exe</c>.</summary>
+    private static readonly string Tag = Updater.ParseVersion(FileVersionInfo.GetVersionInfo(typeof(UpdatesTests).Assembly.Location).ProductVersion!)!.ToString(3);
+
+    /// <summary>A real, versioned executable with <paramref name="text"/> after its end, which <see cref="Text"/> reads back.</summary>
+    private static byte[] Exe(string text) =>
+        [.. File.ReadAllBytes(typeof(UpdatesTests).Assembly.Location), 1, .. Encoding.Latin1.GetBytes(text)];
+
+    private static byte[] Bytes(string text) => Encoding.UTF8.GetBytes(text);
+
+    /// <summary>The text of a file made with <see cref="Exe"/>, or all of a plain text file.</summary>
+    private static string Text(string path)
     {
-        var zip = Zip(files);
-        using var updater = Create(GitHub("v0.6.0", ("winshell-0.6.0-win-x64.zip", zip, Sha(zip))));
+        var text = Encoding.Latin1.GetString(File.ReadAllBytes(path));
+        return text[(text.LastIndexOf('\u0001') + 1)..];
+    }
+
+    /// <summary>A signed release's files: every binary SignPath signs, signed by CN=Winshell, and <paramref name="more"/>.</summary>
+    private static (string Name, byte[] Bytes)[] SignedRelease(params (string Name, byte[] Bytes)[] more) =>
+        [.. UpdateSignature.Signed.Where(name => more.All(m => m.Name != name)).Select(name => (name, Exe("signed by CN=Winshell"))), .. more];
+
+    /// <summary>Downloads the release <see cref="Tag"/> with these files through the fake GitHub, and returns its staged folder.</summary>
+    private Task<string> Download(params (string Name, byte[] Bytes)[] files) => Download(Tag, Zip(files));
+
+    /// <summary>Downloads the release <paramref name="version"/> with this zip, and returns its staged folder.</summary>
+    private async Task<string> Download(string version, byte[] zip)
+    {
+        using var updater = Create(GitHub("v" + version, ($"winshell-{version}-win-x64.zip", zip, Sha(zip))));
         await updater.CheckAsync();
         Assert.Equal(UpdateStatus.Ready, updater.State.Status);
-        return Path.Combine(UpdatesDir, "0.6.0");
+        return Path.Combine(UpdatesDir, version);
     }
 
     /// <summary>Signs a file by its text: "signed by &lt;subject&gt;". Anything else is unsigned.</summary>
     private static string? FakeSigner(string path) =>
-        File.Exists(path) && File.ReadAllText(path) is var text && text.StartsWith("signed by ", StringComparison.Ordinal) ? text["signed by ".Length..] : null;
+        File.Exists(path) && Text(path) is var text && text.StartsWith("signed by ", StringComparison.Ordinal) ? text["signed by ".Length..] : null;
 
-    private Updater Create(FakeGitHub github) =>
+    private Updater Create(HttpMessageHandler github) =>
         new("enpaze/winshell", InstallDir, UpdatesDir, "0.5.0+test", "win-x64", _log, github);
 
     private string Stage(string version, params (string Name, string Text)[] files)
@@ -505,15 +584,18 @@ public sealed class UpdatesTests : IDisposable
         return dir;
     }
 
-    private static byte[] Zip(params (string Name, string Text)[] files)
+    private static byte[] Zip(params (string Name, string Text)[] files) =>
+        Zip([.. files.Select(f => (f.Name, Encoding.UTF8.GetBytes(f.Text)))]);
+
+    private static byte[] Zip(params (string Name, byte[] Bytes)[] files)
     {
         using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            foreach (var (name, text) in files)
+            foreach (var (name, bytes) in files)
             {
                 using var entry = archive.CreateEntry(name).Open();
-                entry.Write(Encoding.UTF8.GetBytes(text));
+                entry.Write(bytes);
             }
         }
         return stream.ToArray();
@@ -531,6 +613,16 @@ public sealed class UpdatesTests : IDisposable
 
     /// <summary>A GitHub that cannot be reached.</summary>
     private static FakeGitHub Offline() => new(null, []);
+
+    /// <summary>A GitHub that does not answer until <paramref name="until"/> completes, then cannot be reached.</summary>
+    private sealed class BlockedGitHub(Task until) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await until;
+            throw new HttpRequestException("No such host is known.");
+        }
+    }
 
     /// <summary>Serves the latest release and its files, and records what was asked for.</summary>
     private sealed class FakeGitHub(string? release, Dictionary<string, byte[]> files) : HttpMessageHandler

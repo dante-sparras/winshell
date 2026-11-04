@@ -86,12 +86,14 @@ public sealed class UpdatesService : ObservableObject, IDisposable
             _log.Warn("updates", "No update is ready.");
     }
 
-    private void OnChanged(UpdateState state) => _loop.Post(() => Apply(state));
+    // The event's payload is not applied: posts can run out of order, and the updater's state is the latest.
+    private void OnChanged(UpdateState _) => _loop.Post(Apply);
 
-    private void Apply(UpdateState state)
+    private void Apply()
     {
-        if (_disposed)
+        if (_disposed || _updater is null)
             return;
+        var state = _updater.State;
         var old = _state;
         _state = state;
         Changed(old.Status != state.Status, nameof(Status));
