@@ -27,7 +27,7 @@ public sealed class StartSeedTests : IDisposable
     public async Task The_default_pins_come_from_the_whole_scan_and_not_its_first_app()
     {
         // The first app is one no preferred slot takes. Seeding from it pins that app, and the file then says so for good.
-        using var catalog = new AppCatalog([_folder], () => [App("A first app"), App("Notepad"), App("Settings")], () => new Dictionary<string, AppUsage>(), TimeSpan.Zero, false, false);
+        using var catalog = new AppCatalog([_folder], () => [App("A first app"), App("Notepad"), App("Settings")], () => new Dictionary<string, AppUsage>(), TimeSpan.Zero, false);
         using var start = await Started(catalog);
 
         Assert.Equal(["Settings", "Notepad"], start.Pinned.Select(app => app.Name));
@@ -45,7 +45,7 @@ public sealed class StartSeedTests : IDisposable
     [Fact]
     public async Task A_scan_reads_the_app_list_once()
     {
-        using var catalog = new AppCatalog([_folder], () => [App("One"), App("Two"), App("Three")], () => new Dictionary<string, AppUsage>(), TimeSpan.Zero, false, false);
+        using var catalog = new AppCatalog([_folder], () => [App("One"), App("Two"), App("Three")], () => new Dictionary<string, AppUsage>(), TimeSpan.Zero, false);
         var apps = new AppsService(_loop, Log.Default, catalog);
         using var start = new Start(Path.Combine(_folder, "launcher.toml"), _loop, Log.Default, _ => []);
         start.Use(apps);

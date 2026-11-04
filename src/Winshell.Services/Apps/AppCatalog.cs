@@ -55,15 +55,13 @@ internal sealed class AppCatalog : IDisposable
         PackagedApps.Read,
         AppUsageReader.Read,
         TimeSpan.FromSeconds(1),
-        watchPackages: true,
-        registerIcons: true);
+        watchPackages: true);
 
     private readonly object _gate = new();
     private readonly IReadOnlyList<string> _folders;
     private readonly Func<IReadOnlyList<AppRecord>> _packaged;
     private readonly Func<IReadOnlyDictionary<string, AppUsage>> _usage;
     private readonly bool _watchPackages;
-    private readonly bool _registerIcons;
     private readonly Log _log;
     private readonly Dictionary<string, DirectoryWatch> _watches = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _lost = new(StringComparer.OrdinalIgnoreCase);
@@ -83,14 +81,12 @@ internal sealed class AppCatalog : IDisposable
         Func<IReadOnlyDictionary<string, AppUsage>> usage,
         TimeSpan debounce,
         bool watchPackages,
-        bool registerIcons,
         Log? log = null)
     {
         _folders = folders;
         _packaged = packaged;
         _usage = usage;
         _watchPackages = watchPackages;
-        _registerIcons = registerIcons;
         _log = log ?? Log.Default;
         Debounce = debounce;
     }
@@ -112,8 +108,6 @@ internal sealed class AppCatalog : IDisposable
                 return;
             _started = true;
         }
-        if (_registerIcons)
-            IconLookupReady?.Invoke(LookupIcon);
         // The scan thread is waiting before any watch is armed, so a change cannot arrive with nobody to scan it.
         _scanThread = new Thread(ScanLoop) { IsBackground = true, Name = "App scan" };
         _scanThread.Start();
@@ -160,16 +154,6 @@ internal sealed class AppCatalog : IDisposable
         }
         _wake.Dispose();
         _ready.TrySetResult();
-    }
-
-    /// <summary>Hands a started catalog's icon lookup to whatever draws app icons.</summary>
-    internal static Action<Func<string, string?>>? IconLookupReady { get; set; }
-
-    private string? LookupIcon(string name)
-    {
-        if (name.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
-            return name;
-        return AppIndex.Find(_snapshot.Entries, name)?.Icon;
     }
 
     private void Arm(string folder)
