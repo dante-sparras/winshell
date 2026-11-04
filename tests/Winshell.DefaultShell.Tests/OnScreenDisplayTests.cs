@@ -351,7 +351,7 @@ public sealed class OnScreenDisplayTests
         using var rig = new Rig();
         rig.Bind();
         rig.Settle();
-        var session = Track(playing: false);
+        var session = Track(playing: false, out var link);
         rig.Sessions.Add(session);
         Assert.False(rig.Model.Open);
 
@@ -360,10 +360,9 @@ public sealed class OnScreenDisplayTests
         Assert.Equal("Playing Song, Artist", rig.Model.Announcement);
         Assert.Equal(80, rig.Model.PanelHeight);
         rig.Model.TogglePlayback();
-        Assert.NotNull(session.Sent);
-        Assert.Contains("pause", session.Sent);
+        Assert.Contains("pause", link.Sent);
         rig.Model.Previous();
-        Assert.DoesNotContain("previous", session.Sent);
+        Assert.DoesNotContain("previous", link.Sent);
     }
 
     private static void AssertPlaced()
@@ -391,9 +390,9 @@ public sealed class OnScreenDisplayTests
     private static BrightnessInfo Monitor(string deviceName, string name, int brightness, int minimum = 0, int maximum = 100) =>
         new(deviceName, name, BrightnessConnection.External, minimum, maximum, brightness);
 
-    private static SmtcSession Track(bool playing)
+    private static SmtcSession Track(bool playing, out RecordingSmtcLink link)
     {
-        var session = SmtcSession.CreateForTests("Player");
+        var session = RecordingSmtcLink.Session("Player", out link);
         session.ApplyTrack("Song", "Artist", "", "", 0, null, null);
         session.ApplyPlayback(Playback(playing));
         return session;

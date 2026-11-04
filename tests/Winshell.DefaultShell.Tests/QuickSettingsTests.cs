@@ -376,8 +376,8 @@ public sealed class QuickSettingsTests
 
         rig.Quick.Media.Next();
         rig.Quick.Media.Toggle();
-        Assert.Equal(["next", "pause"], playing.Sent);
-        Assert.Empty(paused.Sent!);
+        Assert.Equal(["next", "pause"], rig.Sessions.Sent(playing));
+        Assert.Empty(rig.Sessions.Sent(paused));
 
         // The service records the command. The card follows the session once it reports that it stopped.
         playing.ApplyPlayback(new SmtcPlayback(GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused) { CanPlay = true, CanGoNext = true });
@@ -921,10 +921,11 @@ internal sealed class RigNode : AudioGraphNode
     public void SetAudio(float volume, bool muted) => ApplyAudio([volume], muted);
 }
 
-/// <summary>Media sessions a test adds, in order. Commands land on <see cref="SmtcSession.Sent"/>.</summary>
+/// <summary>Media sessions a test adds, in order. Commands land on <see cref="Sent"/>.</summary>
 internal sealed class RigSessions : IMediaSessions
 {
     private readonly List<SmtcSession> _sessions = [];
+    private readonly Dictionary<SmtcSession, RecordingSmtcLink> _links = [];
 
     public IReadOnlyList<SmtcSession> Sessions => _sessions;
 
@@ -932,9 +933,13 @@ internal sealed class RigSessions : IMediaSessions
 
     public event Action<SmtcSession>? SessionRemoved;
 
+    /// <summary>The commands a session sent.</summary>
+    public List<string> Sent(SmtcSession session) => _links[session].Sent;
+
     public SmtcSession Add(string app, string title, string artist, bool playing, bool next = false)
     {
-        var session = SmtcSession.CreateForTests(app);
+        var session = RecordingSmtcLink.Session(app, out var link);
+        _links[session] = link;
         session.ApplyTrack(title, artist, "", "", 0, null, null);
         session.ApplyPlayback(new SmtcPlayback(playing
             ? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
