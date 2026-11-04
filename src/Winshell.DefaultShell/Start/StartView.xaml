@@ -179,12 +179,5 @@
             Style="{ThemeResource CaptionTextBlockStyle}"
             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
             Visibility="{x:Bind Shown(Popup.WebNote), Mode=OneWay}" />
-        <TextBlock
-            x:Name="SelectionAnnouncement"
-            IsHitTestVisible="False"
-            Width="0"
-            Height="0"
-            AutomationProperties.LiveSetting="Assertive"
-            AutomationProperties.Name="{x:Bind Popup.SelectionName, Mode=OneWay}" />
     </Grid>
 </UserControl>

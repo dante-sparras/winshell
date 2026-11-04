@@ -163,8 +163,14 @@ public sealed class StartPopup : ObservableObject
         Rebuild(resetSelection: false);
     }
 
-    public void Move(string key)
+    /// <summary>
+    /// Moves the selection. False when the key is not Start's: Left and Right belong to the search box unless the
+    /// home pins are showing.
+    /// </summary>
+    public bool Move(string key)
     {
+        if (key is "left" or "right" && !(ShowingHome && PinnedCount > 0))
+            return false;
         var next = StartList.Move(Selected, key, Shown.Count, PinnedCount);
         if (next != Selected && (uint)Selected < (uint)Shown.Count)
             Shown[Selected].IsSelected = false;
@@ -172,6 +178,7 @@ public sealed class StartPopup : ObservableObject
         if ((uint)Selected < (uint)Shown.Count)
             Shown[Selected].IsSelected = true;
         SelectionName = Current?.Name ?? "";
+        return true;
     }
 
     public void Activate(StartEntry? entry = null)

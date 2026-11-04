@@ -1,5 +1,6 @@
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
@@ -100,6 +101,13 @@ public sealed partial class StartView : UserControl
             SyncQuery();
         else if (e.PropertyName == nameof(StartPopup.Selected))
             Reveal();
+        else if (e.PropertyName == nameof(StartPopup.SelectionName) && Popup.SelectionName.Length > 0)
+        {
+            // Focus stays in the search box, so Narrator hears the selection only when the box raises it.
+            FrameworkElementAutomationPeer.CreatePeerForElement(SearchBox)?.RaiseNotificationEvent(
+                AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantMostRecent,
+                Popup.SelectionName, "WinshellStartSelection");
+        }
     }
 
     private void SyncQuery()
@@ -148,10 +156,12 @@ public sealed partial class StartView : UserControl
                 Popup.Move("down");
                 break;
             case VirtualKey.Left:
-                Popup.Move("left");
+                if (!Popup.Move("left"))
+                    return;
                 break;
             case VirtualKey.Right:
-                Popup.Move("right");
+                if (!Popup.Move("right"))
+                    return;
                 break;
             case VirtualKey.Enter:
                 Popup.Activate();
