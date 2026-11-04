@@ -1,15 +1,42 @@
 #requires -Version 7.0
-# Builds, checks formatting, and runs fast .NET and PowerShell tests. Slow tests require -Tier Slow or All.
+# Builds, formats, and tests by default. -Lint checks Markdown and workflows without building.
+[CmdletBinding(DefaultParameterSetName = 'Tests')]
 param(
+    [Parameter(ParameterSetName = 'Tests')]
     [switch] $NoBuild,
+    [Parameter(ParameterSetName = 'Tests')]
     [ValidateSet('All', 'Fast', 'Slow')]
     [string] $Tier = 'Fast',
-    [int] $Seed = 0
+    [Parameter(ParameterSetName = 'Tests')]
+    [int] $Seed = 0,
+    [Parameter(Mandatory, ParameterSetName = 'Lint')]
+    [switch] $Lint
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
+
+if ($Lint) {
+    foreach ($tool in @('lychee', 'actionlint', 'zizmor')) {
+        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+            throw "$tool is required for -Lint. Install the pinned tools listed in docs/development.md#local-lint-setup."
+        }
+    }
+    Push-Location $root
+    try {
+        lychee --offline --include-fragments --no-progress '**/*.md' '.github/**/*.md'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        actionlint
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        zizmor --offline --no-progress --format plain .github
+        exit $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 . (Join-Path $PSScriptRoot 'lib/Tests.ps1')
 
 # Check prerequisites before spending time on a build. The slow job runs only .NET tests.

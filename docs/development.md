@@ -32,6 +32,22 @@ npx -y skills@1.7.4 add ./skills/test-audit -a codex claude-code --copy -y
 
 Installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git. Keep `skills-lock.json` tracked for external skills. The custom test-audit source and its license live in `skills/test-audit/`; reinstall it after changing that source. Skills become available in a new agent session.
 
+## Start a task
+
+Fetch before creating a task's worktree. Use its issue number in the branch and folder names:
+
+```powershell
+git fetch origin main
+if ($LASTEXITCODE -ne 0) { throw 'Could not fetch main.' }
+git worktree add -b agent/codex/123-short-description ../winshell-123 origin/main
+```
+
+In an existing task worktree, fetch again and run `git rev-list --left-right --count HEAD...origin/main`. It prints commits unique to the task, then commits unique to `main`. A nonzero second count means the task is behind; update its base before editing. An intentionally stacked task starts from its predecessor instead.
+
+T3 Code's Winshell project uses worktrees and automatic pulls, with a **Check task base** script that fetches and reports divergence on creation. It stops on a stale base without resetting files. Other tools should use the commands above.
+
+For agent shell commands, use profile-free PowerShell (`pwsh -NoProfile`, or `login: false` in Codex's command tool). Search with `rg` and read the relevant file section or diff; set a bounded output limit so unrelated output does not hide failures.
+
 ## Commands
 
 | Command | What it does |
@@ -39,8 +55,9 @@ Installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git. 
 | `pwsh scripts/pr-rules.ps1 -Title <title> -Body <body> -Path <file>` | What the `pr-rules` job runs, given a file of changed paths. It prints each problem and exits 1. |
 | `pwsh scripts/pr-screenshot.ps1 <png>` | Publishes a `winshell inspect` screenshot on the `pr-screenshots` branch, which never merges, and prints the Markdown to paste into a PR. |
 | `pwsh scripts/check.ps1 [-Tier Fast\|Slow\|All] [-Seed <seed>] [-NoBuild]` | Builds with warnings as errors, verifies formatting and runs fast .NET tests plus every PowerShell 7 suite in `tests/Scripts/`. Fast is the default and opens no windows. `-Tier Slow` runs only the tests that open windows, without formatting or Pester; `All` runs both tiers and Pester. `-Seed` replays the randomized .NET test order. `-NoBuild` uses an existing build. Missing Pester 5.6.1 fails with an installation command; it is never silently skipped or downloaded. The packed shell tests (`Category=Package`) are separate. |
+| `pwsh -NoProfile scripts/check.ps1 -Lint` | Runs the existing offline Markdown link/fragment check, actionlint and offline zizmor, stopping on the first failure. Run immediately after Markdown or workflow edits. Needs the [pinned lint tools](#local-lint-setup) on PATH; does not build, run tests, require Pester, or download tools. |
 | `pwsh scripts/pack.ps1` | Packs the `Winshell` library a configuration references, and the `Winshell.Templates` package, into `artifacts/packages/`. The library carries `Winshell.Services` and `Winshell.Shell`, and depends on `Microsoft.WindowsAppSDK.WinUI` and `Microsoft.WindowsAppSDK.Foundation` 2.6.4. The template package is `dotnet new winshell` (one panel) and `dotnet new winshell-default` (the default shell, generated from `src/Winshell.DefaultShell` and `templates/winshell-default/Program.cs` when this runs). Neither package is published, and no workflow runs this. `-Out` chooses the folder and `-Version` overrides the release from `.release-please-manifest.json`. |
-| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained, trimmed, ReadyToRun `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, starts the default shell from that zip and opens Winshell Settings, so with Winland running use the procedure in `AGENTS.md`, and matches the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
+| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained, trimmed, ReadyToRun `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, starts the default shell from that zip and opens Winshell Settings, so with Winland running use the [live UI procedure](#live-ui-with-winland-running), and matches the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
 | `pwsh scripts/install.ps1` | Installs the portable build for the current user from a GitHub release into `%LOCALAPPDATA%\Programs\winshell\bin`, adds that folder to the user PATH, and creates a Start menu shortcut. `-Version x.y.z` picks a release; `-AutoStart` registers sign-in. Under `irm \| iex` those are `WINSHELL_VERSION` and `WINSHELL_AUTOSTART`. A leftover `bin.old` folder is removed on a later install once nothing from that install is running. It also deletes a staged update in `%LOCALAPPDATA%\winshell\updates`, so that copy cannot replace this install on the next start. If a Microsoft Store copy is also installed, it says so and still finishes, because that copy's WindowsApps alias usually comes first on PATH. `irm \| iex`, and running the file with the call operator, also add that folder to the current window's PATH and tell you to run `winshell`. This command starts a process that exits, so it tells you to open a new terminal. The Package workflow uploads this script next to the zip. See the [README](https://github.com/enpaze/winshell/blob/main/README.md#install-with-powershell). |
 | `pwsh scripts/uninstall.ps1` | Removes that install folder, that PATH entry, that shortcut, that sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. Under `irm \| iex` it also removes that folder from the current window's PATH and leaves every other entry. The Package workflow uploads this script next to `install.ps1`. |
 | `dotnet run scripts/render-logo.cs` | Renders `packaging/logo.svg` into the package's PNGs (the manifest sizes, their scale-125, scale-150, and scale-200 variants, and the unplated target sizes), the Store listing's PNG, and `packaging/winshell.ico`. Commit them after changing the logo. |
@@ -69,7 +86,19 @@ Before it builds, `ci` runs lychee offline over the repo's Markdown, so a link t
 
 `main` merges through a merge queue: `gh pr merge <number> --squash` adds a pull request to it, and the queue runs the required checks on the commit that will land. `ci.yml`, `pr-title.yml` and `pr-rules.yml` run on `merge_group` for that.
 
+The short `pr-title` and `pr-rules` workflows finish every run, including successive PR edits. They have no concurrency cancellation: a cancelled required check can hold the merge queue even after a newer passing run. The main CI workflow still cancels superseded PR runs and stops work after a failed build. To recover an already cancelled metadata check, open its Actions run and choose **Re-run all jobs**, or run `gh run rerun <run-id>`. Auto-merge waits for the queue; only **Merged** confirms the change is on `main`.
+
 A push to `main` that changes only `docs/**` or Markdown does not run `package`. A release still calls that workflow. The `store-package` artifact is kept for 14 days.
+
+### Local lint setup
+
+Install these versions, matching `.github/workflows/ci.yml`, and put their executables on PATH:
+
+- [lychee 0.24.2](https://github.com/lycheeverse/lychee/releases/tag/lychee-v0.24.2): extract the Windows archive and add the folder containing `lychee.exe`.
+- [actionlint 1.7.12](https://github.com/rhysd/actionlint/releases/tag/v1.7.12): extract the Windows archive and add the folder containing `actionlint.exe`.
+- [zizmor 1.31.1](https://github.com/zizmorcore/zizmor/releases/tag/v1.31.1): `uv tool install zizmor==1.31.1`, then `uv tool update-shell` if its executable folder is not on PATH. This setup command needs [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+Run `pwsh -NoProfile scripts/check.ps1 -Lint` from the repo root. T3 Code also exposes it as **Check docs and workflows**. Routine linting uses installed tools and reads no network; dependency installation is explicit.
 
 ## Run one test
 
@@ -78,6 +107,46 @@ dotnet test tests/Winshell.Services.Tests --filter FullyQualifiedName~DirectoryW
 ```
 
 `--filter` takes a class or a test name. `Winshell.Services.Tests` and `Winshell.DefaultShell.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Shell.Tests` and `Winshell.Tests` put windows and shells on your desktop.
+
+## Live UI with Winland running
+
+Winland tiles every normal window, so the windows a live run or a test opens change size and land among the user's windows. When `winland` is running, do that work on an empty workspace on a monitor the user is not using, and never swap the focused monitor's workspace:
+
+```powershell
+$monitors = winland -j monitors | ConvertFrom-Json
+$focused = $monitors | Where-Object focused | Select-Object -First 1
+$spare = $monitors | Where-Object { -not $_.focused } | Select-Object -First 1
+if (-not $spare) { throw 'One monitor: ask before swapping the workspace the user is on.' }
+$workspace = $spare.activeWorkspace.id
+winland keyword windowrule 'ignore, exe:(winshell|winshellw|Winshell\..*Tests)\.exe'
+winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace empty;dispatch focusmonitor $($focused.id)"
+```
+
+- One run at a time on a machine. The workspace and the rule are shared, so a parallel run would note another run's empty workspace as the user's, and `winland reload` would drop its rule.
+- The rule reaches windows that open after it, and a workspace dispatch acts on the focused monitor, which is why the batch moves the focus and gives it back. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
+- The workspace does not contain what the rule ignores: an ignored window opens where Windows puts it, usually on the primary monitor, and a taskbar opens on every screen. Keep what a test opens small and short.
+- `winland -j clients` must list no Winshell window, and the user's windows must be where they were when you finish.
+- Open a real window there. Winland must tile it, it must open above the shell's windows, and no shell window may draw over it. Check again after `winland dispatch fullscreen`, where the taskbar goes behind it.
+- Finish in a `finally`, so the spare monitor goes back and the rule goes:
+
+```powershell
+winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace $workspace;dispatch focusmonitor $($focused.id)"
+winland reload
+```
+
+## See what you changed
+
+`winshell inspect` is how to verify a visual change. It reads the running shell from inside, so it needs no mouse and no keyboard, and it does not move the user's pointer or focus.
+
+```powershell
+winshell inspect tree                                # every open window's elements, sizes and values, as JSON
+winshell inspect screenshot out.png TaskbarView      # a window as a PNG, which you can then read
+winshell inspect click StartButton TaskbarView       # activate an element in a window through its automation peer
+```
+
+Look at the screenshot, and check values in the tree rather than trusting that the code ran. Open what a test or run needs under "Live UI with Winland running". For a shell of your own, run it with private `WINSHELL_CONFIG_DIR` and `WINSHELL_LOCAL_DIR`, and pass `--pid`.
+
+`winshell inspect hover` shows a control's hover look only: a `PointerEntered` handler needs a real pointer, or a method of its own that a test can call.
 
 ## Run the shell from source
 
@@ -207,3 +276,42 @@ Tests may register an unused chord such as Ctrl+Alt+Shift+F24 and may install a 
 ## Checks only a live session can do
 
 Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session.
+
+## Project structure
+
+```text
+.
+├── .github/                         # CI, issue and PR templates, Dependabot
+├── docs/
+│   ├── agents/                      # How the engineering skills use this repo
+│   ├── reference/                   # A page per module
+│   ├── *.md                         # The configuration guide, troubleshooting, and a page per topic
+│   └── development.md               # Setup, environment, and every command
+├── packaging/
+│   ├── logo.svg                     # The app logo; scripts/render-logo.cs renders its PNGs and winshell.ico
+│   ├── msix/                        # The Microsoft Store package's manifest and assets
+│   ├── signpath/                    # The artifact configuration SignPath signs releases with
+│   └── store/                       # The Store listing text and its app tile
+├── scripts/                         # Check, test, pack, package, install and release scripts; docs/development.md lists them
+├── templates/                       # dotnet new winshell and winshell-default; the default shell is generated at pack time
+├── src/
+│   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
+│   ├── Winshell/                    # winshell.exe: the CLI, and the process that runs the default shell
+│   ├── Winshell.Services/           # Windows services, instances, and the control pipe
+│   ├── Winshell.Shell/              # Shell.Run and WinUI windows
+│   ├── Winshell.DefaultShell/       # The default shell, in XAML and C#
+│   └── Winshell.Package/            # Packs Winshell.Services and Winshell.Shell as the Winshell package
+├── tests/
+│   ├── Winshell.DefaultShell.Tests/ # The default shell's logic, with no window
+│   ├── Winshell.Services.Tests/     # The services, with no window
+│   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
+│   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
+│   ├── Winshell.Package.Tests/      # Packs the templates and runs each shell; Category=Package, left out of the main run
+│   ├── Scripts/                     # PowerShell tooling tests and their fixtures
+│   ├── TestSupport/                 # Source files every test project links instead of copying
+│   └── Directory.Build.props        # What every test project shares
+├── winshell.slnx                    # The solution the check builds
+├── skills/                          # Project-owned skill sources; installed copies are ignored
+├── CONTRIBUTING.md                  # Test rules, branch names, PR titles and descriptions
+└── GLOSSARY.md                      # The words this repo uses
+```

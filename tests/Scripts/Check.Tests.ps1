@@ -131,7 +131,7 @@ Describe 'Check command' {
 
     BeforeEach {
         $script:EnvironmentBefore = @{}
-        foreach ($name in @('PATH', 'PSModulePath', 'WINSHELL_CHECK_LOG', 'WINSHELL_CHECK_RESULTS', 'WINSHELL_CHECK_FAIL_PESTER')) {
+        foreach ($name in @('PATH', 'PSModulePath', 'WINSHELL_CHECK_LOG', 'WINSHELL_CHECK_RESULTS', 'WINSHELL_CHECK_FAIL_PESTER', 'WINSHELL_CHECK_FAIL_LINT')) {
             $script:EnvironmentBefore[$name] = [Environment]::GetEnvironmentVariable($name)
         }
         $script:Stub = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
@@ -141,6 +141,15 @@ Describe 'Check command' {
         $env:WINSHELL_CHECK_LOG = Join-Path $script:Stub 'calls.txt'
         $env:WINSHELL_CHECK_RESULTS = Join-Path $script:Stub 'results'
         $env:WINSHELL_CHECK_FAIL_PESTER = $null
+        $env:WINSHELL_CHECK_FAIL_LINT = $null
+        foreach ($linter in @('lychee', 'actionlint', 'zizmor')) {
+            Set-Content -LiteralPath (Join-Path $script:Stub "$linter.ps1") -Value @'
+$tool = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name)
+"$tool $($args -join ' ')" | Add-Content -LiteralPath $env:WINSHELL_CHECK_LOG
+if ($env:WINSHELL_CHECK_FAIL_LINT -eq $tool) { exit 23 }
+exit 0
+'@
+        }
         foreach ($i in 1..$script:ProjectCount) {
             Write-Trx -Directory $env:WINSHELL_CHECK_RESULTS -Rows @('Ns.Class.Fact=Passed')
         }
@@ -205,5 +214,27 @@ function Invoke-Pester {
         $env:WINSHELL_CHECK_FAIL_PESTER = '1'
         pwsh -NoProfile -File $script:Check | Out-Null
         $LASTEXITCODE | Should -Be 1
+    }
+
+    It 'lints offline without Pester, a build, or tests' {
+        Remove-Item -LiteralPath (Join-Path $script:Stub 'modules/Pester/5.6.1/Pester.psd1')
+        pwsh -NoProfile -File $script:Check -Lint | Out-Null
+        $LASTEXITCODE | Should -Be 0
+        $calls = @(Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG)
+        $calls | Should -HaveCount 3
+        $calls[0] | Should -Be 'lychee --offline --include-fragments --no-progress **/*.md .github/**/*.md'
+        $calls[1].Trim() | Should -Be 'actionlint'
+        $calls[2] | Should -Be 'zizmor --offline --no-progress --format plain .github'
+    }
+
+    It 'fails immediately when <Tool> fails' -ForEach @(
+        @{ Tool = 'lychee'; Calls = 1 }
+        @{ Tool = 'actionlint'; Calls = 2 }
+        @{ Tool = 'zizmor'; Calls = 3 }
+    ) {
+        $env:WINSHELL_CHECK_FAIL_LINT = $Tool
+        pwsh -NoProfile -File $script:Check -Lint | Out-Null
+        $LASTEXITCODE | Should -Be 23
+        @(Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG) | Should -HaveCount $Calls
     }
 }
