@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Winshell.Native;
-using static Winshell.Native.Win32;
 using static Winshell.Windows.NativeMethods;
 
 namespace Winshell.Windows;
@@ -21,7 +20,7 @@ internal static unsafe class DesktopSwitchWatch
         if (_loop is not null)
             return;
         _loop = loop;
-        if (SetWinEventHook(EVENT_SYSTEM_DESKTOPSWITCH, EVENT_SYSTEM_DESKTOPSWITCH, 0, &OnEvent, 0, 0, WINEVENT_OUTOFCONTEXT) == 0)
+        if (Win32.SetWinEventHook(EVENT_SYSTEM_DESKTOPSWITCH, EVENT_SYSTEM_DESKTOPSWITCH, 0, &OnEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT) == 0)
             log.Warn("desktops", "SetWinEventHook failed for a desktop switch; the list updates only after Winshell changes a desktop");
     }
 
