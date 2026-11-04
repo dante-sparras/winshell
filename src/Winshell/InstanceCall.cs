@@ -6,7 +6,7 @@ internal static class InstanceCall
     /// <summary>
     /// The instance's first answer, or why there is none: it closed the pipe without one, or could not be reached.
     /// </summary>
-    internal static async Task<InstanceAnswer> AskAsync(InstanceInfo info, IpcRequest request)
+    internal static async Task<Answer> AskAsync(InstanceInfo info, IpcRequest request)
     {
         try
         {
@@ -21,7 +21,7 @@ internal static class InstanceCall
     }
 
     internal static string CouldNotReach(InstanceInfo info, Exception e) => $"Could not reach instance {info.Id}: {e.Message}";
-}
 
-/// <summary>An instance's answer, or the sentence that says why there is none.</summary>
-internal readonly record struct InstanceAnswer(IpcResponse? Response, string? Failure);
+    /// <summary>An instance's answer, or the sentence that says why there is none.</summary>
+    internal readonly record struct Answer(IpcResponse? Response, string? Failure);
+}
