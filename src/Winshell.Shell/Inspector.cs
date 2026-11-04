@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Text.Json;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -175,13 +176,16 @@ internal static class Inspector
     private static List<UIElement> Popups(UIElement content) =>
         content.XamlRoot is { } root ? [.. VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Select(popup => popup.Child).OfType<UIElement>()] : [];
 
-    /// <summary>A window's content, or what an open popup shows when its type is the one named, such as <c>MenuFlyoutPresenter</c>.</summary>
+    /// <summary>
+    /// A window's root, which spans the window, or what an open popup shows when its type is the one named, such as
+    /// <c>MenuFlyoutPresenter</c>.
+    /// </summary>
     private static UIElement Shown(Shell shell, IReadOnlyList<string> named)
     {
         if (named is [var name, ..] && Windows(shell).Select(open => open.Content).OfType<UIElement>().SelectMany(Popups)
             .FirstOrDefault(popup => popup.GetType().Name == name) is { } shown)
             return shown;
-        return Window(shell, named).Content ?? throw new IpcException("That window is empty.");
+        return Window(shell, named).Content?.XamlRoot?.Content ?? throw new IpcException("That window is empty.");
     }
 
     private static FrameworkElement? Find(DependencyObject element, string name)
@@ -231,14 +235,25 @@ internal static class Inspector
     }
 
     /// <summary>
-    /// A window's content, or an open popup's, as a PNG. The system draws a backdrop, so a capture has none, and text
-    /// made for a dark one would be white on nothing. So it goes on the plain color of the theme, which is what makes
-    /// the picture readable.
+    /// A window, or an open popup, as a PNG. The system draws a backdrop, so a capture has none, and text made for a
+    /// dark one would be white on nothing. So it goes on the plain color of the theme, which is what makes the picture
+    /// readable.
     /// </summary>
-    private static async Task<string> Screenshot(UIElement content, string file, bool dark)
+    private static async Task<string> Screenshot(UIElement shown, string file, bool dark)
     {
+        // A render leaves out what nothing draws at the edges, such as a margin. A clear background draws there, so the
+        // picture of a window is the window's size.
+        var clear = shown is Panel { Background: null } panel ? panel : null;
         var bitmap = new RenderTargetBitmap();
-        await bitmap.RenderAsync(content);
+        try
+        {
+            clear?.Background = new SolidColorBrush(Colors.Transparent);
+            await bitmap.RenderAsync(shown);
+        }
+        finally
+        {
+            clear?.Background = null;
+        }
         var pixels = await bitmap.GetPixelsAsync();
         var image = new PixelImage(bitmap.PixelWidth, bitmap.PixelHeight, Flattened(pixels.ToArray(), dark ? DarkBack : LightBack));
         await File.WriteAllBytesAsync(file, image.EncodePng());

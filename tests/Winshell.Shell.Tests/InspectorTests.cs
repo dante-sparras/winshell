@@ -227,23 +227,24 @@ public sealed class InspectorTests : IDisposable
     }
 
     [Fact]
-    public async Task A_screenshot_is_a_png_of_that_window_with_what_it_draws()
+    public async Task A_screenshot_is_a_png_of_the_whole_window_with_what_it_draws()
     {
-        var file = Path.Combine(_dir, "panel.png");
+        var file = Path.Combine(_dir, "padded.png");
 
         await ShellFixture.On(async shell =>
         {
-            var page = new Page { Background = new SolidColorBrush(Colors.Red) };
-            var fill = new Grid { Width = 220, Height = 90 };
+            var fill = new Border { Height = 70, Margin = new Thickness(20, 10, 20, 10), Background = new SolidColorBrush(Colors.Red) };
+            var page = new Page();
             page.Children.Add(fill);
             using var panel = Panel(page);
             await ShellFixture.LaidOut(fill);
             return await Inspector.Run(shell, "screenshot", [file, nameof(Page)]);
         });
 
-        var png = File.ReadAllBytes(file);
-        var (width, height, pixels) = await Decoded(png);
+        var (width, height, pixels) = await Decoded(File.ReadAllBytes(file));
         Assert.Equal((220, 90), (width, height));
+        var corner = ((5 * width) + 5) * 4;
+        Assert.NotEqual(255, (int)pixels[corner + 2]);
         var middle = ((height / 2 * width) + (width / 2)) * 4;
         Assert.Equal((0, 0, 255, 255), ((int)pixels[middle], (int)pixels[middle + 1], (int)pixels[middle + 2], (int)pixels[middle + 3]));
     }
