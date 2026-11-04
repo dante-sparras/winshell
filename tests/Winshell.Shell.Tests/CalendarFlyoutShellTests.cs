@@ -24,7 +24,7 @@ public sealed class CalendarFlyoutShellTests
     [Fact]
     public async Task Today_is_as_tall_as_the_month_arrows_beside_it()
     {
-        var (today, arrow) = await Opened(view => (Button(view, "Today", button => button.Content as string == "Today").ActualHeight, Size(view, "Next month").Height));
+        var (today, arrow) = await Opened(view => (Named(view, "Today").ActualHeight, Size(view, "Next month").Height));
 
         Assert.Equal(arrow, today);
     }
@@ -93,21 +93,22 @@ public sealed class CalendarFlyoutShellTests
 
     private static (double Width, double Height) Size(DependencyObject root, string name)
     {
-        var button = Button(root, name, button => AutomationProperties.GetName(button) == name);
+        var button = Named(root, name);
         return (button.ActualWidth, button.ActualHeight);
     }
 
-    private static Button Button(DependencyObject root, string name, Func<Button, bool> match) =>
-        Find(root, match) ?? throw new InvalidOperationException($"The calendar has no \"{name}\" button.");
+    /// <summary>The button a screen reader calls <paramref name="name"/>: its automation name, or the text it shows.</summary>
+    private static Button Named(DependencyObject root, string name) =>
+        Find(root, name) ?? throw new InvalidOperationException($"The calendar has no \"{name}\" button.");
 
-    private static Button? Find(DependencyObject root, Func<Button, bool> match)
+    private static Button? Find(DependencyObject root, string name)
     {
-        if (root is Button button && match(button))
+        if (root is Button button && (AutomationProperties.GetName(button) == name || button.Content is string text && text == name))
             return button;
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
         {
-            if (Find(VisualTreeHelper.GetChild(root, i), match) is { } found)
+            if (Find(VisualTreeHelper.GetChild(root, i), name) is { } found)
                 return found;
         }
 
