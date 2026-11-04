@@ -229,6 +229,17 @@ public sealed class DevCommandTests : IDisposable
     }
 
     [Fact(Timeout = 170_000)]
+    public void The_console_shows_what_dotnet_watch_says_but_not_its_Ctrl_R_hint()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        StartDev();
+        Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
+
+        Assert.True(Printed("dotnet watch : "), "winshell dev printed nothing of dotnet watch's.");
+        Assert.False(Printed("Ctrl+R"), "winshell dev printed dotnet watch's Ctrl+R hint.");
+    }
+
+    [Fact(Timeout = 170_000)]
     public void An_edit_reaches_the_running_shell_and_a_broken_one_leaves_it_running()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();

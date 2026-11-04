@@ -141,7 +141,9 @@ internal static class DevSession
         var output = new DevOutput();
         await foreach (var line in lines.Reader.ReadAllAsync())
         {
-            Console.WriteLine(line);
+            // No key reaches dotnet watch, so its Ctrl+R hint would point at a key that does nothing.
+            if (!line.EndsWith("Press Ctrl+R to restart.", StringComparison.Ordinal))
+                Console.WriteLine(line);
             if (output.Read(line) is { } notice)
                 await Show(project, notice);
             if (line.Contains(XamlReload.NeedsBuild, StringComparison.Ordinal))
