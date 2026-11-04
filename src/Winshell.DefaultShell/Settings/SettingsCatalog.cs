@@ -67,7 +67,7 @@ public static class SettingsCatalog
         Entry("taskbarAlignment", "taskbar", "\uE8E3", "Taskbar alignment", "Where Start and the apps sit", "center centre left middle"),
         Entry("taskbarAutoHide", "taskbar", "\uE890", "Automatically hide the taskbar", "It comes back when the pointer reaches the bottom of the screen", "auto-hide autohide"),
         Entry("taskbarAllScreens", "taskbar", "\uE7F4", "Show my taskbar on all displays", "Off shows it on the main display only", "monitor screen multiple displays"),
-        Entry("taskbarAppsOn", "taskbar", "\uE7F4", "When using multiple displays, show my taskbar apps on", "", "monitor screen multiple displays apps"),
+        Entry("taskbarAppsOn", "taskbar", "\uE7F4", "Show my taskbar apps on", "When you use more than one display", "monitor screen multiple displays apps"),
         Entry("trayIcons", "taskbar", "\uE712", "Other system tray icons", "Windows chooses which icons show on the taskbar and which are hidden", "notification area tray hidden icons overflow", "ms-settings:taskbar"),
         Entry("startRecommended", "start", "\uE81C", "Show recommended apps", "Apps you used lately, under your pins", "recent recently used"),
         Entry("startPins", "start", "\uE718", "Pinned apps", "Change their order, or unpin them", "pins pin unpin order", subpage: "pins"),
