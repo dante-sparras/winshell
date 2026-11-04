@@ -89,5 +89,4 @@ internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> le
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetCursorPos(int x, int y);
-
 }

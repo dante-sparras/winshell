@@ -15,6 +15,9 @@ public sealed class TrayClickerTests
         Assert.False(TrayClicker.MayClick(high, null));
         Assert.True(TrayClicker.MayClick(high, medium));
         Assert.True(TrayClicker.MayClick(high, low));
+        // A shell that cannot read its own level is treated as elevated.
+        Assert.False(TrayClicker.MayClick(null, high));
+        Assert.True(TrayClicker.MayClick(null, medium));
         // Unelevated, Windows keeps the shell out of elevated apps itself, as it does Explorer.
         Assert.True(TrayClicker.MayClick(medium, high));
         Assert.True(TrayClicker.MayClick(medium, medium));
