@@ -71,6 +71,7 @@ public sealed class DoctorCommandTests : IDisposable
         var messages = json.RootElement.GetProperty("checks").EnumerateArray()
             .ToDictionary(c => c.GetProperty("id").GetString() ?? "", c => c.GetProperty("message").GetString());
         Assert.StartsWith("No .csproj at ", messages["project"], StringComparison.Ordinal);
+        Assert.EndsWith(@"\holder", messages["project"], StringComparison.Ordinal);
         Assert.Equal("No configuration project to build.", messages["built"]);
     }
 

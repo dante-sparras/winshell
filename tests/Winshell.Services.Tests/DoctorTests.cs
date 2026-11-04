@@ -94,6 +94,31 @@ public sealed class DoctorTests : IDisposable
     }
 
     [Fact]
+    public void A_config_folder_the_doctor_cannot_list_fails_the_project_check_in_its_own_words()
+    {
+        var unreadable = Path.Combine(_dir, "unreadable");
+        Directory.CreateDirectory(unreadable);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        var folder = new DirectoryInfo(unreadable);
+        var acl = folder.GetAccessControl();
+        acl.AddAccessRule(deny);
+        folder.SetAccessControl(acl);
+        IReadOnlyList<DoctorCheck> checks;
+        try
+        {
+            checks = DoctorProject.Configuration(unreadable);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            folder.SetAccessControl(acl);
+        }
+
+        Assert.Equal(CheckStatus.Fail, checks[0].Status);
+        Assert.StartsWith("Winshell cannot read the config folder: ", checks[0].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Telling_whether_a_folder_can_be_written_leaves_nothing_behind()
     {
         Assert.True(DoctorProbe.CanWrite(_dir));

@@ -27,7 +27,10 @@ internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, str
 /// <param name="Instances">The running Winshell instances.</param>
 /// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
 /// <param name="CrashRoot">The folder of crash reports, under <paramref name="LocalRoot"/>.</param>
-/// <param name="ProjectRoot">The folder <see cref="DoctorProject.Configuration(string)"/> searches. Null searches <paramref name="ConfigRoot"/>.</param>
+/// <param name="ProjectRoot">
+/// The folder the Folders check writes to, and the one searched for a project when the CLI picked none and gave no
+/// problem. Null is <paramref name="ConfigRoot"/>.
+/// </param>
 internal sealed record DoctorContext(
     string ExePath,
     string ConfigRoot,
@@ -66,8 +69,7 @@ public static class Doctor
         }
         else if (context.ConfigFile is { } picked && picked.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
         {
-            var project = ConfigurationProject.Find(picked, null, context.ConfigRoot, out var missing);
-            configuration = [.. DoctorProject.Configuration(project, missing)];
+            configuration = [.. DoctorProject.Picked(picked, context.ConfigRoot)];
         }
         else
         {
