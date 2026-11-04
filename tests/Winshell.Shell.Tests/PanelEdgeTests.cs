@@ -41,7 +41,7 @@ public sealed class PanelEdgeTests
             return DoctorProbe.EdgeWindows().Select(window => window.ClassName).ToList();
         });
 
-        Assert.Contains(Doctor.WinshellClass, classes);
+        Assert.Contains(DoctorScreens.WinshellClass, classes);
     }
 
     [Fact]
