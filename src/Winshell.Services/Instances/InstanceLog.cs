@@ -17,18 +17,18 @@ internal sealed class InstanceLog : IDisposable
     private readonly long _cap;
     private readonly object _gate = new();
     private readonly TimeSpan _delay;
-    private readonly Timer _timer;
+    private readonly ITimer _timer;
     private StreamWriter? _writer;
     private readonly StringBuilder _pending = new();
     private bool _closed;
 
-    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushAfter = null)
+    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushAfter = null, TimeProvider? time = null)
     {
         _path = path;
         _cap = cap;
         _writer = Open();
         _delay = flushAfter ?? TimeSpan.FromMilliseconds(500);
-        _timer = new Timer(_ => Flush(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _timer = (time ?? TimeProvider.System).CreateTimer(_ => FlushFromTimer(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>Queues one already-stamped line. Warn and above are on disk before this returns.</summary>
@@ -60,24 +60,49 @@ internal sealed class InstanceLog : IDisposable
             FlushLocked();
     }
 
+    // Nobody awaits the timer, so a failure here would end the process. The lines that could not land are dropped,
+    // which also lets the next Write start the timer again.
+    private void FlushFromTimer()
+    {
+        lock (_gate)
+        {
+            try
+            {
+                FlushLocked();
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                _pending.Clear();
+            }
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)
         {
             if (_closed)
                 return;
-            _closed = true;
-            FlushLocked();
-            _writer?.Dispose();
-            _writer = null;
+            try
+            {
+                FlushLocked();
+            }
+            finally
+            {
+                _closed = true;
+                _writer?.Dispose();
+                _writer = null;
+            }
         }
         _timer.Dispose();
     }
 
     private void FlushLocked()
     {
-        if (_writer is null || _pending.Length == 0)
+        if (_closed || _pending.Length == 0)
             return;
+        // A roll whose reopen failed left no writer; the next flush opens one again.
+        _writer ??= Open();
         if (_writer.BaseStream.Length >= _cap)
             Roll();
         _writer.Write(_pending.ToString());
@@ -88,6 +113,7 @@ internal sealed class InstanceLog : IDisposable
     private void Roll()
     {
         _writer!.Dispose();
+        _writer = null;
         var rolled = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_path))!, "log.1.txt");
         try
         {
