@@ -55,7 +55,7 @@ jobs:
           # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
           if [ -z "$files" ] || [ "$(wc -l <<<"$files")" -ge 3000 ]; then exit 0; fi
           grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
-          grep -qE '^scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
+          grep -qE '^scripts/|^tests/Scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
           grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
 
   ci:
@@ -91,17 +91,19 @@ jobs:
           Expand-Archive -LiteralPath $archive -DestinationPath $env:RUNNER_TEMP
           & (Join-Path $env:RUNNER_TEMP 'lychee-x86_64-pc-windows-msvc\lychee.exe') --offline --include-fragments --no-progress '**/*.md' '.github/**/*.md'
           exit $LASTEXITCODE
-      - uses: ./.github/actions/prepare
+      # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
+      - uses: ./.github/actions/prepare # zizmor: ignore[self-repository]
+      - uses: ./.github/actions/powershell # zizmor: ignore[self-repository]
       - name: Build
         id: build
         shell: pwsh
         run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Check
-        # A pull request waits for the build and the main tests. A push to main runs everything, and so does the release
-        # pull request: once its commit is tagged, a failure can't be fixed in that version.
         timeout-minutes: 10
         shell: pwsh
-        run: ./scripts/check.ps1 -NoBuild -Tier Fast -Quick:($env:GITHUB_EVENT_NAME -eq 'pull_request' -and $env:GITHUB_HEAD_REF -notlike 'release-please--*')
+        run: |
+          $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
+          ./scripts/check.ps1 -NoBuild
   stop:
     # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
     # which runs the code under test, gets no token that can cancel a run.
@@ -131,14 +133,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/prepare
+      # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
+      - uses: ./.github/actions/prepare # zizmor: ignore[self-repository]
       - name: Build
         shell: pwsh
         run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Slow tests
         timeout-minutes: 10
         shell: pwsh
-        run: ./scripts/run-tests.ps1 -Tier Slow
+        run: ./scripts/check.ps1 -NoBuild -Tier Slow
 
   actionlint:
     # actionlint catches broken expressions, typos and shell errors in .github/workflows/. zizmor audits .github/ for
@@ -205,69 +208,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The gallery nupkgs, checked against their SHA-256 before they are imported, so a replaced package can't run.
-      # Dependabot doesn't update these: bump the version and the digest together.
-      - name: Install Pester
-        shell: pwsh
-        env:
-          PESTER_VERSION: 5.6.1
-          PESTER_SHA256: 37b3749f69accead67c366d81508977f62afc7cbb9c4db88c3a255a1f0b20da5
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $ProgressPreference = 'SilentlyContinue'
-          $dest = Join-Path $env:RUNNER_TEMP 'psmodules'
-          New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $modules = @(
-            @{ Name = 'Pester'; Version = $env:PESTER_VERSION; Sha256 = $env:PESTER_SHA256 }
-          )
-          foreach ($module in $modules) {
-            $nupkg = Join-Path $env:RUNNER_TEMP "$($module.Name).$($module.Version).nupkg"
-            Invoke-WebRequest -Uri "https://www.powershellgallery.com/api/v2/package/$($module.Name)/$($module.Version)" -OutFile $nupkg
-            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $nupkg).Hash
-            if (-not $hash.Equals($module.Sha256, [StringComparison]::OrdinalIgnoreCase)) {
-              throw "$($module.Name) $($module.Version) SHA-256 is $hash, expected $($module.Sha256)."
-            }
-            $root = Join-Path $dest (Join-Path $module.Name $module.Version)
-            New-Item -ItemType Directory -Force -Path $root | Out-Null
-            $rootFull = [IO.Path]::GetFullPath($root)
-            if (-not $rootFull.EndsWith('\')) { $rootFull += '\' }
-            $zip = [IO.Compression.ZipFile]::OpenRead($nupkg)
-            try {
-              foreach ($entry in $zip.Entries) {
-                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
-                $name = $entry.FullName.Replace('\', '/')
-                if ($name -eq '[Content_Types].xml' -or $name.StartsWith('_rels/') -or $name.StartsWith('package/') -or $name.EndsWith('.nuspec')) { continue }
-                if ($name.Contains('..')) { throw "The nupkg path escapes the module folder: $name" }
-                $target = [IO.Path]::GetFullPath((Join-Path $root ($name.Replace('/', [IO.Path]::DirectorySeparatorChar))))
-                if (-not $target.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
-                  throw "The nupkg path escapes the module folder: $name"
-                }
-                $parent = Split-Path -Parent $target
-                if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
-                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
-              }
-            } finally {
-              $zip.Dispose()
-            }
-          }
-      - name: Pester (PowerShell 7)
-        shell: pwsh
-        run: |
-          $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
-          Import-Module Pester -RequiredVersion 5.6.1
-          Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/RunTests.Tests.ps1 -CI
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Invoke-Pester -Path scripts/PrRules.Tests.ps1 -CI
-          exit $LASTEXITCODE
+      # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
+      - uses: ./.github/actions/powershell # zizmor: ignore[self-repository]
       - name: Pester (Windows PowerShell 5.1)
         shell: powershell
         run: |
           $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
           Import-Module Pester -RequiredVersion 5.6.1
-          Invoke-Pester -Path scripts/Install.Tests.ps1 -CI
+          Invoke-Pester -Path tests/Scripts/Install.Tests.ps1 -CI
           exit $LASTEXITCODE

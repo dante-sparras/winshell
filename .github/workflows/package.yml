@@ -14,7 +14,7 @@ on:
       - "release-please-config.json"
       - "scripts/package.ps1"
       - "scripts/publish-release.ps1"
-      - "scripts/PublishRelease.Tests.ps1"
+      - "tests/Scripts/PublishRelease.Tests.ps1"
       - "packaging/**"
       - "src/Winshell/Winshell.csproj"
       - "Directory.Build.props"
@@ -110,7 +110,7 @@ jobs:
     # A release waits for a person to approve its signing request in SignPath.
     timeout-minutes: ${{ inputs.tag != '' && 150 || 30 }}
     env:
-      # A release is signed once the SignPath Foundation project is set up: see docs/code-signing-policy.md.
+      # A release is signed once the SignPath Foundation project is set up: see docs/development.md#releasing.
       SIGN: ${{ inputs.tag != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

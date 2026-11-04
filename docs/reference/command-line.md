@@ -80,13 +80,13 @@ Any other option is an error, and exits with code 2. An option winshell does not
 | `winshell inspect screenshot <file> [window]` | Saves a window as a PNG at its real size in pixels, margins included. The system draws a backdrop such as Mica, so a capture sits on the plain dark or light color of the theme instead. A `[window]` that names the type of an open popup's content, such as `MenuFlyoutPresenter`, saves that popup. |
 | `winshell inspect click <name> [window]` | Activates an element through its UI Automation peer, as Narrator does: it invokes a button, toggles a toggle and opens what expands. A disabled control refuses. Nothing goes through Windows' input. |
 | `winshell inspect hover <name> [window]` | Puts a control in its `PointerOver` look. A `PointerEntered` handler does not run, because XAML has no way to raise one from code. |
-| `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. It reads a project as data and never builds. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. See [winshell doctor](../doctor.md). |
+| `winshell doctor` | Checks this PC's setup and prints one line per check, with a fix under each warning and failure. It reads a project as data and never builds. `-c` and `-p` pick a configuration, as they do when running a shell; with neither, it checks the one Winshell would run. `-j`, `--json` prints the checks as JSON. `--no-color` turns color off, as does `NO_COLOR` or a redirected output. It exits with 1 when a check fails, and it changes nothing. |
 
 In `winshell inspect`, a `[window]` is the type of a window's content, such as `TaskbarView`, which names the first window that shows it in `tree` order, or its `window` number in `tree`, which names any one. Without one, `screenshot` takes the first window, and `click` and `hover` search every window. A `<name>` is an `x:Name`, an automation id or an automation name, in a window or in its open popups. A name that matches more than one element acts on none: the error lists each match with its window number, content type, element type, name, id and label, so a window number narrows it down when two taskbars both have a `StartButton`. A match inside another counts as the outer one, such as a button and the card in it that carry the same label.
 
 `winshell ipc call notice dismiss` closes Winshell's own notice for a build error or a failure. That notice is not a target the configuration registered, so `ipc show` does not list it. It takes no arguments.
 
-The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens [Winshell Settings](../settings.md#opening-it).
+The default shell has one IPC target, `settings`: `winshell ipc call settings open <page>` opens Winshell Settings.
 
 A CLI and a shell whose releases differ, in major.minor.patch, refuse each other. The message is `This shell is Winshell <shell> and this winshell is <client>. Use the winshell that matches, or build the shell with this one.` `kill` is exempt.
 
@@ -98,7 +98,7 @@ Output sent to a pipe or a file is UTF-8 without a byte order mark. In a console
 
 ## JSON
 
-`-j` and `--json` on `list` and `ipc show` write JSON to stdout. Characters outside ASCII are written as themselves, the same way [`winshell doctor --json`](../doctor.md) writes a path. `doctor --json` keeps the shape that page shows.
+`-j` and `--json` on `list` and `ipc show` write JSON to stdout. Characters outside ASCII are written as themselves, the same way `winshell doctor --json` writes a path.
 
 `winshell list --json` prints a JSON array, one object per running instance:
 

@@ -37,3 +37,7 @@ out/
 
 # Release builds from scripts/package.ps1
 artifacts/
+
+# Installed agent skills (sources are recorded in skills-lock.json)
+.agents/skills/
+.claude/skills/

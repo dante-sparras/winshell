@@ -6,7 +6,7 @@ Locking the Windows session, and running at sign-in. Reach them from `Shell.Curr
 
 ## SessionService
 
-The signed-in Windows session the shell runs in. Lock asks Windows to lock it, and Windows' own lock screen takes over. Winshell never draws a lock screen or asks for the Windows password (ADR-0008).
+The signed-in Windows session the shell runs in. Lock asks Windows to lock it, and Windows' own lock screen takes over. Winshell never draws a lock screen or asks for the Windows password.
 
 | Member | Type | Description |
 | --- | --- | --- |

@@ -4,30 +4,41 @@
 
 - Git
 - PowerShell 7
+- Pester 5.6.1, for the PowerShell tooling tests
 - .NET 10 SDK
-- Node.js, for `npx` when updating agent skills
+- Node.js, for `npx` when installing or updating agent skills
 - The Windows SDK, for `makeappx.exe`, only to run `scripts/package.ps1`
 - GitHub CLI (`gh`), only when publishing a draft release outside GitHub Actions
 
-Reading Windows notifications additionally requires listener permission and a package identity declaring `userNotificationListener`; native toast sending requires an installed Windows AppUserModelID. Neither is needed to build or run automated tests. The unpackaged CLI does not provision these identities; the Microsoft Store package declares the listener capability (see [Releasing](#releasing)). See [Windows notifications](notifications.md) for deployment requirements, permission behavior and platform limits.
+Reading Windows notifications additionally requires listener permission and a package identity declaring `userNotificationListener`; native toast sending requires an installed Windows AppUserModelID. Neither is needed to build or run automated tests. The unpackaged CLI does not provision these identities; the Microsoft Store package declares the listener capability (see [Releasing](#releasing)).
 
 ## First checkout
 
 ```sh
 git clone https://github.com/enpaze/winshell.git
 cd winshell
-pwsh scripts/dev.ps1
+pwsh -NoProfile -Command "Install-Module Pester -RequiredVersion 5.6.1 -Scope CurrentUser -Force -SkipPublisherCheck"
+pwsh scripts/check.ps1
 ```
+
+## Agent skills
+
+From the repo root, restore the external skills recorded in `skills-lock.json`, then install the project-owned test-audit skill for Codex and Claude Code:
+
+```sh
+npx -y skills@1.7.4 experimental_install -a codex claude-code -y
+npx -y skills@1.7.4 add ./skills/test-audit -a codex claude-code --copy -y
+```
+
+Installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git. Keep `skills-lock.json` tracked for external skills. The custom test-audit source and its license live in `skills/test-audit/`; reinstall it after changing that source. Skills become available in a new agent session.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `pwsh scripts/dev.ps1` | Checks that the .NET SDK is on PATH. |
-| `pwsh scripts/quick-check.ps1` | Run this before every push. `check.ps1 -Quick -Tier Fast`: the build, the formatting and the fast tests, with no window opened. If it says the formatting is off, `dotnet format whitespace .\winshell.slnx` fixes it. |
 | `pwsh scripts/pr-rules.ps1 -Title <title> -Body <body> -Path <file>` | What the `pr-rules` job runs, given a file of changed paths. It prints each problem and exits 1. |
 | `pwsh scripts/pr-screenshot.ps1 <png>` | Publishes a `winshell inspect` screenshot on the `pr-screenshots` branch, which never merges, and prints the Markdown to paste into a PR. |
-| `pwsh scripts/check.ps1` | Builds `winshell.slnx` with warnings as errors and checks its formatting with `dotnet format whitespace --verify-no-changes`. Then runs the main test stage with `scripts/run-tests.ps1`, which retries nothing and prints the seed of its test order. The packed shell test (`Category=Package`) isn't run here. When Pester 5.6.1 can be imported, it then runs `Install.Tests.ps1`, `PublishRelease.Tests.ps1`, `RunTests.Tests.ps1` and `PrRules.Tests.ps1`. Otherwise it prints that those four were skipped. `-Quick` builds, checks the formatting and runs only the main test stage. The required `ci` job runs that on a pull request, and the full check on a push to `main` and on the release pull request. `check.ps1` does not run the link checks, workflow audit, package build, or the Windows PowerShell 5.1 pass of the Pester tests. |
+| `pwsh scripts/check.ps1 [-Tier Fast\|Slow\|All] [-Seed <seed>] [-NoBuild]` | Builds with warnings as errors, verifies formatting and runs fast .NET tests plus every PowerShell 7 suite in `tests/Scripts/`. Fast is the default and opens no windows. `-Tier Slow` runs only the tests that open windows, without formatting or Pester; `All` runs both tiers and Pester. `-Seed` replays the randomized .NET test order. `-NoBuild` uses an existing build. Missing Pester 5.6.1 fails with an installation command; it is never silently skipped or downloaded. The packed shell tests (`Category=Package`) are separate. |
 | `pwsh scripts/pack.ps1` | Packs the `Winshell` library a configuration references, and the `Winshell.Templates` package, into `artifacts/packages/`. The library carries `Winshell.Services` and `Winshell.Shell`, and depends on `Microsoft.WindowsAppSDK.WinUI` and `Microsoft.WindowsAppSDK.Foundation` 2.6.4. The template package is `dotnet new winshell` (one panel) and `dotnet new winshell-default` (the default shell, generated from `src/Winshell.DefaultShell` and `templates/winshell-default/Program.cs` when this runs). Neither package is published, and no workflow runs this. `-Out` chooses the folder and `-Version` overrides the release from `.release-please-manifest.json`. |
 | `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained, trimmed, ReadyToRun `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, starts the default shell from that zip and opens Winshell Settings, so with Winland running use the procedure in `AGENTS.md`, and matches the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
 | `pwsh scripts/install.ps1` | Installs the portable build for the current user from a GitHub release into `%LOCALAPPDATA%\Programs\winshell\bin`, adds that folder to the user PATH, and creates a Start menu shortcut. `-Version x.y.z` picks a release; `-AutoStart` registers sign-in. Under `irm \| iex` those are `WINSHELL_VERSION` and `WINSHELL_AUTOSTART`. A leftover `bin.old` folder is removed on a later install once nothing from that install is running. It also deletes a staged update in `%LOCALAPPDATA%\winshell\updates`, so that copy cannot replace this install on the next start. If a Microsoft Store copy is also installed, it says so and still finishes, because that copy's WindowsApps alias usually comes first on PATH. `irm \| iex`, and running the file with the call operator, also add that folder to the current window's PATH and tell you to run `winshell`. This command starts a process that exits, so it tells you to open a new terminal. The Package workflow uploads this script next to the zip. See the [README](https://github.com/enpaze/winshell/blob/main/README.md#install-with-powershell). |
@@ -35,20 +46,18 @@ pwsh scripts/dev.ps1
 | `dotnet run scripts/render-logo.cs` | Renders `packaging/logo.svg` into the package's PNGs (the manifest sizes, their scale-125, scale-150, and scale-200 variants, and the unplated target sizes), the Store listing's PNG, and `packaging/winshell.ico`. Commit them after changing the logo. |
 | `dotnet run scripts/generate-reference.cs` | Builds `Winshell.Shell` and `Winshell.Services`, then writes `docs/reference/winshell*.md` from their public types and `///` comments. Each page keeps what is above its `<!-- generated below -->` line. Commit the pages after changing a public member; `DocsTests` fails when a page is not what this writes. |
 | `pwsh scripts/publish-release.ps1 -Tag v1.2.3 -PackageDirectory <packages> -Repository enpaze/winshell` | Normally called by CI: uploads the six required files to an existing draft, verifies GitHub's digests, then publishes it. Requires an authenticated `gh`. Refuses an incomplete published release, never replaces an existing asset, and leaves a failed upload/verification as a draft. Use only for an approved release. |
-| `Invoke-Pester -Path scripts/PublishRelease.Tests.ps1 -CI` | Tests draft publication with a mocked `gh`; makes no GitHub changes. Requires Pester 5.6.1 and PowerShell 7. This runs in CI's installer job. |
+| `Invoke-Pester -Path tests/Scripts/PublishRelease.Tests.ps1 -CI` | Tests draft publication with a mocked `gh`; makes no GitHub changes. Requires Pester 5.6.1 and PowerShell 7. This runs in CI's main check. |
 | `lychee --offline --include-fragments '**/*.md' '.github/**/*.md'` | Checks every link between the repo's Markdown files, and the headings they point at, as the `ci` job does. It needs [lychee](https://github.com/lycheeverse/lychee) 0.24.2 on PATH, and reads no network. See [Docs](#docs). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
-Before every push, run `pwsh scripts/quick-check.ps1`, then the focused tests for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and the templates, builds each shell, and runs it; it is slow, and the main test stage leaves it out. The required `ci` job checks the links between pages and runs `check.ps1 -Quick` on a PR. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title` and `pr-rules`. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI turns on for itself.
+Before every push, run `pwsh scripts/check.ps1`, then the focused checks for what you changed. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and templates, builds each shell and runs it; it is slow and separate. The required `ci` job checks local Markdown links and runs the default check. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title` and `pr-rules`. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI enables.
 
-To try packed templates without installing them into your own `dotnet new`, pass `--debug:custom-hive <folder>` to each `dotnet new` command, as the package tests do. Don't point `DOTNET_CLI_HOME` at a new folder: the SDK's first run there appends that folder's `.dotnet\tools` to your user `Path`, and `DOTNET_SKIP_FIRST_TIME_EXPERIENCE` no longer stops it.
-
-`check.ps1` runs the PowerShell 7 Pester suites when Pester 5.6.1 is installed. The installer job also runs the Windows PowerShell 5.1 pass, which `check.ps1` does not. Of the jobs below, `installer` and `actionlint` are required:
+`check.ps1` requires Pester 5.6.1 and runs the PowerShell 7 suites. CI installs hash-verified modules through `.github/actions/powershell`; the installer job additionally runs the combined installer/uninstaller tests on Windows PowerShell 5.1. Workflow and link checks remain separate:
 
 | Job | When it runs | How to run it locally |
 | --- | --- | --- |
-| `installer` | Pull requests that change `scripts/` or a workflow, and every push to `main`, in `ci.yml`. That job downloads the Pester 5.6.1 nupkg and checks its SHA-256 before it imports it. | `check.ps1` runs the four Pester suites when Pester 5.6.1 imports. This job also runs them, then Windows PowerShell 5.1 runs the install tests again. |
-| `slow` | Every pull request that changes more than docs or Markdown and is not a draft, and every push to `main`, in `ci.yml` | `pwsh scripts/run-tests.ps1 -Tier Slow`, on an empty Winland workspace. |
+| `installer` | PRs that change `scripts/`, `tests/Scripts/` or workflows/actions, and every push to `main`. | Windows PowerShell 5.1 runs `tests/Scripts/Install.Tests.ps1` with Pester 5.6.1 against temporary profiles and releases served on loopback. PowerShell 7 tooling suites run once in `ci`. |
+| `slow` | Every pull request that changes more than docs or Markdown and is not a draft, and every push to `main`, in `ci.yml` | `pwsh scripts/check.ps1 -Tier Slow`, on an empty Winland workspace. |
 | `trim-caches` | Every push to `main`, after `ci`, in `ci.yml` | Nothing to run. It deletes all but the two newest CodeQL databases of each language from the Actions cache, which would otherwise pass the 10 GB GitHub keeps. |
 | `links` | Pushes to `main` that change docs or Markdown, and every Monday, in `links.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents` and `https://about.signpath.io`. |
 | `actionlint` | Pull requests that change a workflow, and every push to `main`, in `ci.yml` | actionlint on `.github/workflows`, then zizmor on `.github`. |
@@ -115,9 +124,9 @@ A running shell reads these. None is needed to build or test.
 | State | `%LOCALAPPDATA%\winshell\state\by-shell\<shell id>` |
 | Per-shell data | `%LOCALAPPDATA%\winshell\data\by-shell\<shell id>` |
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
-| Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each, written in `crashes\writing` and moved in once whole. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. Reports leave out what scripts printed to the log and take out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
-| Downloaded updates | `%LOCALAPPDATA%\winshell\updates\<version>`, until the next start installs them. `install.ps1` and `uninstall.ps1` delete this folder. See [Winshell updates](updates.md) |
-| Winshell Settings choices | `preferences.toml` in the user configurations folder; see [Winshell Settings](settings.md) |
+| Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. Reports leave out what scripts printed to the log and take out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
+| Downloaded updates | `%LOCALAPPDATA%\winshell\updates\<version>`, until the next start installs them. `install.ps1` and `uninstall.ps1` delete this folder. See [Winshell updates](reference/winshell-updates.md) |
+| Winshell Settings choices | `preferences.toml` in the user configurations folder; see [the default shell](reference/default-shell.md#winshell-settings) |
 | Start pins | `launcher.toml` in the user configurations folder |
 | Quick settings tiles | `quick-settings.toml` in the default shell's state folder |
 | Run at sign-in | An unpackaged Winshell writes the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens. A failure before the shell starts shows a dialog. The entry uses the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. `winshell.exe` and `winshellw.exe` in the same folder are one install: an entry for either reads as this Winshell. An entry that starts a Winshell in another folder, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. A packaged Winshell does not write that value. It enables the package's `windows.startupTask` (task id `Winshell`, declared off) which starts `winshellw.exe --no-duplicate`. Windows owns that launch, so a Store update does not leave a path, and `registeredElsewhere` stays false. |
@@ -130,7 +139,7 @@ The release workflow then runs the Package workflow (`.github/workflows/package.
 
 With a `WINGET_TOKEN` secret, the release workflow sets `WINGET_CREATE_GITHUB_TOKEN` for a pinned `wingetcreate` and submits the manifests to [winget-pkgs](https://github.com/microsoft/winget-pkgs). That secret is not set. Before it is added, it has to be a token from a dedicated bot account whose only repository is that account's fork of winget-pkgs. A token from the maintainer account is not used: a classic `public_repo` personal access token can write every public repository that account can access, including this one. Without the secret, submit the manifests by hand: unzip `winget-manifests.zip`, set `WINGET_CREATE_GITHUB_TOKEN`, and run `wingetcreate submit <folder>`. winget's moderators review every PR, and the first one for `DanteSparras.Winshell` before any other. That submission is not done. `winget install DanteSparras.Winshell` is not available yet.
 
-A release's own binaries are signed through [SignPath Foundation](https://signpath.org) once its project is set up. That project is not set up, so published zips are unsigned. See the [Code signing policy](code-signing-policy.md). The Package workflow then uploads the published folders as the `unsigned` artifact, asks SignPath to sign them with the `parameters` version the binaries carry, waits up to 110 minutes for an approver, and packs and checks the signed files (`scripts/package.ps1 -Verify -Signed`). It needs:
+A release's own binaries are signed through [SignPath Foundation](https://signpath.org) once its project is set up. That project is not set up, so published zips are unsigned.  The Package workflow then uploads the published folders as the `unsigned` artifact, asks SignPath to sign them with the `parameters` version the binaries carry, waits up to 110 minutes for an approver, and packs and checks the signed files (`scripts/package.ps1 -Verify -Signed`). It needs:
 
 - the repository variable `SIGNPATH_ORGANIZATION_ID`, which turns signing on. Without it, releases are not signed.
 - the secret `SIGNPATH_API_TOKEN`, from a SignPath CI user that may submit to the project.
@@ -158,7 +167,7 @@ The Package workflow also builds `winshell-<version>.msixbundle` (x64 and arm64)
 - The repository variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME` are the identity Partner Center shows under **Product identity**. Without them, the package is `Winshell.Test` by `CN=Winshell Test`, which the Store refuses.
 - To submit a release:
   1. Download `store-package` from the release's Package run and upload the `.msixbundle` in Partner Center.
-  2. Paste the listing from `packaging/store/listing.md`. Its privacy policy is [docs/privacy.md](privacy.md).
+  2. Paste the listing from `packaging/store/listing.md`. A public privacy policy URL still needs to be configured.
 
 Other release tasks:
 
@@ -167,9 +176,9 @@ Other release tasks:
 
 ## Docs
 
-The docs are plain Markdown, read on GitHub or in an editor. [docs/README.md](README.md) lists the pages. `docs/agents/` is for agents working on this repo.
+The docs are plain Markdown, read on GitHub or in an editor. `docs/agents/` is for agents working on this repo.
 
-- **A new page** goes into the list in `docs/README.md`.
+- **A new reference page** goes into the list in `docs/reference/index.md`.
 - **Links between pages** are relative `.md` links, also to files outside `docs/`, such as `../CONTRIBUTING.md`. The `ci` job runs lychee offline over every Markdown file, with `--include-fragments`, and fails on a link to a file or a heading that isn't there.
 - **C# examples** in a `csharp` code block are checked by `DocsTests`: each one is text from `tests/Winshell.Shell.Tests/GuideSamples.cs`, which the test project builds.
 - **The reference** in `docs/reference/` has a page per namespace of the `Winshell` package (the public types of `Winshell.Shell` and `Winshell.Services`), `winshell.md` for `Winshell` and `winshell-<module>.md` for the others, starting with `# <namespace>` and an intro written by hand. `dotnet run scripts/generate-reference.cs` writes the rest, a `## Type` section for each public type with its members, from the `///` comments, and `DocsTests` fails when a page is not what it writes.
@@ -177,15 +186,15 @@ The docs are plain Markdown, read on GitHub or in an editor. [docs/README.md](RE
 
 ## Network permissions
 
-Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires Windows Wi-Fi/location access and an explicit `Networking.requestAccess()` call; packaged deployments also need `wiFiControl`. Setting `wifiEnabled` is a separate radio-control request, and a packaged app declares the `radios` device capability. Automated tests use a fake backend and never call `Radio.SetStateAsync` or `Radio.RequestAccessAsync`. Native smoke tests only read state. See [Windows networking](network.md).
+Reading connection profiles needs no setup. Wi-Fi scanning/connecting requires Windows Wi-Fi/location access and an explicit `Networking.requestAccess()` call; packaged deployments also need `wiFiControl`. Setting `wifiEnabled` is a separate radio-control request, and a packaged app declares the `radios` device capability. Automated tests use a fake backend and never call `Radio.SetStateAsync` or `Radio.RequestAccessAsync`. Native smoke tests only read state. See Windows networking.
 
 ## Bluetooth permissions
 
-Reading Bluetooth state uses Windows adapter and device-enumeration properties, plus `BluetoothIsDiscoverable` and `BluetoothIsConnectable`, and does not request control of radios or open remote device handles. Packaged deployments need the `bluetooth` capability. Setting `BluetoothAdapter.enabled` requests radio control, and a packaged app also needs the `radios` capability. Setting `discoverable` or `pairable` calls `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are reported on the service. Automated native validation only reads. Scanning, device actions, radio changes and these visibility changes use a fake backend and never call `Radio.SetStateAsync`, `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. See [Windows Bluetooth](bluetooth.md).
+Reading Bluetooth state uses Windows adapter and device-enumeration properties, plus `BluetoothIsDiscoverable` and `BluetoothIsConnectable`, and does not request control of radios or open remote device handles. Packaged deployments need the `bluetooth` capability. Setting `BluetoothAdapter.enabled` requests radio control, and a packaged app also needs the `radios` capability. Setting `discoverable` or `pairable` calls `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. Explicit pairing relies on Windows' pairing UI and deployment/policy support; errors are reported on the service. Automated native validation only reads. Scanning, device actions, radio changes and these visibility changes use a fake backend and never call `Radio.SetStateAsync`, `BluetoothEnableDiscovery` or `BluetoothEnableIncomingConnections`. See [Bluetooth](reference/winshell-bluetooth.md).
 
 ## Capture validation
 
-`Winshell.Capture` uses Windows.Graphics.Capture desktop interop with the system border enabled. No additional package or borderless capability is required. Windows policy, protected sources, session state and device availability can restrict capture. See [Windows capture](capture.md) for the API and limits.
+`Winshell.Capture` uses Windows.Graphics.Capture desktop interop with the system border enabled. No additional package or borderless capability is required. Windows policy, protected sources, session state and device availability can restrict capture. See [capture](reference/winshell-capture.md) for the API and limits.
 
 ## Run at sign-in
 
@@ -193,8 +202,8 @@ Reading Bluetooth state uses Windows adapter and device-enumeration properties, 
 
 ## Hotkeys
 
-Tests may register an unused chord such as Ctrl+Alt+Shift+F24 and may install a keyboard hook while a Windows-key hotkey is enabled or a key sequence is in progress. Each test removes the registration and the hook before it ends. Tests do not inject keystrokes or change keyboard settings. See [Windows hotkeys](hotkeys.md).
+Tests may register an unused chord such as Ctrl+Alt+Shift+F24 and may install a keyboard hook while a Windows-key hotkey is enabled or a key sequence is in progress. Each test removes the registration and the hook before it ends. Tests do not inject keystrokes or change keyboard settings. See [hotkeys](reference/winshell-input.md).
 
 ## Checks only a live session can do
 
-Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session. The unpackaged listener's deployment limitations remain as described in [notifications](notifications.md). The checks only a live session can do are listed in [Winshell Settings](settings.md#checks-only-a-live-session-can-do).
+Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast placement, and listener permission with a deployed package still need an interactive Windows session.

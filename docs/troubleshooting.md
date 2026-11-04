@@ -66,7 +66,7 @@ A kill that skips the exit code is Task Manager's **End task**, `taskkill /F`, o
 Winshell keeps the values it has when it can't use what the file says, and writes why to the log, which `winshell log` shows. Only under `winshell dev` does a file that doesn't parse also show in a notice. The same goes for `launcher.toml` and `quick-settings.toml`.
 
 - **`TomlFile: failed to parse <file>[line:column]: …`** The file is not valid TOML, so none of it is read until you fix that line and save. Winshell Settings also says its changes won't be saved meanwhile, and `winshell doctor` warns with the same line and column.
-- **`<file>[line:column]: <key> should be <what it takes>, not <value>, so it was left unchanged`**, or another reason in place of "should be …", such as `is not "acrylic" or "mica"`. The file is read, but that one value isn't used. A switch is `true` or `false`, and a word such as `"mica"` is in quotes. The [preferences table](settings.md#where-the-choices-live) lists every key and its values.
+- **`<file>[line:column]: <key> should be <what it takes>, not <value>, so it was left unchanged`**, or another reason in place of "should be …", such as `is not "acrylic" or "mica"`. The file is read, but that one value isn't used. A switch is `true` or `false`, and a word such as `"mica"` is in quotes.
 - **`<file>[line:column]: <key> was ignored; did you mean <key>?`** Keys are case-sensitive and start with a lowercase letter, such as `taskbarCentered`. A key that differs from one Winshell reads only in case, by a letter, or by two in a longer key is named this way, and stays in the file.
 - **Nothing in the log.** A key unlike any Winshell reads stays in the file and is ignored without a word, since your own configuration may read it. A `colorScheme`, `accentColor` or `taskbarAppsOn` that isn't one of its values leaves the default in use, also without a word.
 
@@ -78,16 +78,16 @@ Winshell Settings, or the `Hotkey`'s `Taken` and `Error`, say why:
 - **Not a hotkey.** `Sequence` uses `Win`, `Ctrl`, `Alt` and `Shift`. `Super` and `Meta` are rejected, and so are left or right `Ctrl`, `Alt` and `Shift`. A comma separates chords, so the comma key is `Comma`.
 - **The Windows key opens Windows' Start.** Winshell's Start opens on a tap of the Windows key only while a `Hotkey` with `Sequence` of `Win` is enabled. In the default shell it is the Open Start hotkey on Winshell Settings' Hotkeys page.
 
-See [hotkeys](hotkeys.md).
+See [hotkeys](reference/winshell-input.md).
 
 ## Notifications don't appear
 
-The notification center is empty until you allow access: click **Allow notification access**, and allow it when Windows asks. If you said no, allow it in Windows Settings > Privacy & security > Notifications. Some Windows setups don't give notification access to a program that isn't installed as a package; then the notification center says access is unavailable. [Windows notifications](notifications.md) explains this. Toast banners are always Windows' own.
+The notification center is empty until you allow access: click **Allow notification access**, and allow it when Windows asks. If you said no, allow it in Windows Settings > Privacy & security > Notifications. Some Windows setups don't give notification access to a program that isn't installed as a package; then the notification center says access is unavailable. Toast banners are always Windows' own.
 
 ## Wi-Fi networks or Bluetooth devices are missing
 
-- **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.RequestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](network.md).
-- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `BluetoothAdapter.Enabled`. The quick settings tile does not. See [Bluetooth](bluetooth.md).
+- **Wi-Fi:** scanning needs Windows' Wi-Fi access, which also needs location services on (Windows Settings > Privacy & security > Location). A shell asks for it with `Networking.RequestAccess()`. Without access, the adapters and connection still show, and the networks in range don't. See [networking](reference/winshell-network.md).
+- **Bluetooth:** nearby devices show only while the shell is discovering, and the radio has to be on. A configuration can set `BluetoothAdapter.Enabled`. The quick settings tile does not. See [Bluetooth](reference/winshell-bluetooth.md).
 - **Quick settings tiles** for Wi-Fi, Bluetooth and Airplane mode open their page in Windows Settings. A configuration can set `Networking.WifiEnabled` and `BluetoothAdapter.Enabled`. These tiles do not.
 
 ## Media controls show nothing
@@ -101,7 +101,7 @@ If something is playing and the media controls stay empty, look for `media: Wind
 - The volume, network and battery icons are Explorer's own, not tray icons. Winshell shows its own from `shell.Audio`, `shell.Networking` and `shell.Power`.
 - An icon Windows Settings hides is in the overflow behind the chevron. Choose which icons show in Windows Settings > Personalization > Taskbar > Other system tray icons.
 
-See [the notification area](tray.md).
+See [the notification area](reference/winshell-tray.md).
 
 ## Winshell doesn't start when I sign in
 
