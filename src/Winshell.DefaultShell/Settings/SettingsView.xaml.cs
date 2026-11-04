@@ -143,7 +143,7 @@ public sealed partial class SettingsView : UserControl
 
     private void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Down && FocusResult(-1, 1))
+        if (e.Key == VirtualKey.Down && MoveFocus(-1, 1))
         {
             e.Handled = true;
         }
@@ -161,12 +161,15 @@ public sealed partial class SettingsView : UserControl
         var index = _resultButtons.IndexOf(current);
         if (index < 0 || e.Key is not (VirtualKey.Up or VirtualKey.Down))
             return;
-        if (FocusResult(index, e.Key == VirtualKey.Up ? -1 : 1))
+        if (MoveFocus(index, e.Key == VirtualKey.Up ? -1 : 1))
             e.Handled = true;
     }
 
-    /// <summary>Moves the keyboard as <see cref="SettingsNavigation.MoveInResults"/> says. False when it stays.</summary>
-    private bool FocusResult(int from, int direction)
+    /// <summary>
+    /// Moves the keyboard as <see cref="SettingsNavigation.MoveInResults"/> says. False when it stays. Each change to the
+    /// navigation is followed by <see cref="Sync"/>, so there is one result button for each of its results.
+    /// </summary>
+    private bool MoveFocus(int from, int direction)
     {
         if (_navigation.MoveInResults(from, direction) is not { } next)
             return false;

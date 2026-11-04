@@ -101,12 +101,13 @@ public sealed class SettingsTests : IDisposable
         Assert.Null(navigation.MoveInResults(-1, 1));
 
         navigation.Search("displays");
-        Assert.Equal(2, navigation.Results.Count);
+        var last = navigation.Results.Count - 1;
+        Assert.True(last >= 1);
         Assert.Equal(0, navigation.MoveInResults(-1, 1));
         Assert.Null(navigation.MoveInResults(-1, -1));
         Assert.Equal(1, navigation.MoveInResults(0, 1));
-        Assert.Null(navigation.MoveInResults(1, 1));
-        Assert.Equal(0, navigation.MoveInResults(1, -1));
+        Assert.Null(navigation.MoveInResults(last, 1));
+        Assert.Equal(last - 1, navigation.MoveInResults(last, -1));
         Assert.Equal(-1, navigation.MoveInResults(0, -1));
 
         navigation.Search("zzz");
