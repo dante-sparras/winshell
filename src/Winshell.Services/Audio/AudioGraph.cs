@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Winshell.Native;
 
 namespace Winshell.Audio;
 
@@ -252,7 +253,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
                 graph.RequestSync();
         }
 
-        public void OnPropertyValueChanged(string deviceId, PropertyKey key)
+        public void OnPropertyValueChanged(string deviceId, PROPERTYKEY key)
         {
         }
     }
@@ -352,21 +353,21 @@ internal sealed class EndpointNode : AudioGraphNode
         DeviceId = deviceId;
         Type = render ? AudioNodeType.PlaybackDevice : AudioNodeType.RecordingDevice;
         device.OpenPropertyStore(0, out var store);
-        Description = CoreAudio.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
-        InterfaceName = CoreAudio.ReadString(store, CoreAudio.DeviceDescription) ?? "";
+        Description = PropertyStore.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
+        InterfaceName = PropertyStore.ReadString(store, CoreAudio.DeviceDescription) ?? "";
         Name = deviceId;
-        var formFactor = CoreAudio.ReadUInt(store, CoreAudio.EndpointFormFactor);
+        var formFactor = PropertyStore.ReadUInt(store, CoreAudio.EndpointFormFactor);
         Properties = new Dictionary<string, string>
         {
             ["endpointId"] = Name,
             ["friendlyName"] = Description,
             ["interfaceName"] = InterfaceName,
             ["flow"] = render ? "playback" : "recording",
-            ["adapter"] = CoreAudio.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
+            ["adapter"] = PropertyStore.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
             ["icon"] = IconName(formFactor, render),
             ["formFactor"] = FormFactorName(formFactor),
         };
-        var format = CoreAudio.ReadBlob(store, CoreAudio.EngineDeviceFormat);
+        var format = PropertyStore.ReadBlob(store, CoreAudio.EngineDeviceFormat);
 
         _volume = CoreAudio.Activate<IAudioEndpointVolume>(device, CoreAudio.AudioEndpointVolumeIid);
         _volume.GetChannelCount(out var channels);
