@@ -11,10 +11,7 @@ on:
 permissions:
   pull-requests: read
 
-concurrency:
-  # A merge group has no number, and each has its own commit.
-  group: pr-title-${{ github.event.number || github.sha }}
-  cancel-in-progress: true
+# Let every metadata check finish. Cancelling a superseded required check can block the merge queue.
 
 jobs:
   pr-title:
