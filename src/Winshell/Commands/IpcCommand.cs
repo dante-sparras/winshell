@@ -30,34 +30,42 @@ internal static class IpcCommand
             Console.Error.WriteLine(choice.Error);
             return choice.Code;
         }
-        var answered = false;
+        if (request.Op != "listen")
+        {
+            var answer = await InstanceCall.AskAsync(info, request);
+            if (answer.Response is not { } response)
+            {
+                Console.Error.WriteLine(answer.Failure);
+                return 1;
+            }
+            return Print(response);
+        }
+        // A listen prints each signal, and ends without a value when the shell quits.
         try
         {
             await foreach (var response in IpcServer.Request(info.Pipe, request))
             {
-                answered = true;
-                if (!response.Ok)
-                {
-                    Console.Error.WriteLine(response.Error);
+                if (Print(response) != 0)
                     return 1;
-                }
-                if (!string.IsNullOrEmpty(response.Value))
-                    Console.WriteLine(response.Value.TrimEnd('\n'));
-                if (request.Op != "listen")
-                    break;
             }
         }
         catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
         {
-            Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+            Console.Error.WriteLine(InstanceCall.CouldNotReach(info, e));
             return 1;
         }
-        // A listen ends without a value when the shell quits. Any other request always gets an answer.
-        if (!answered && request.Op != "listen")
+        return 0;
+    }
+
+    private static int Print(IpcResponse response)
+    {
+        if (!response.Ok)
         {
-            Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
+            Console.Error.WriteLine(response.Error);
             return 1;
         }
+        if (!string.IsNullOrEmpty(response.Value))
+            Console.WriteLine(response.Value.TrimEnd('\n'));
         return 0;
     }
 }

@@ -18,24 +18,18 @@ internal static class InspectCommand
         }
         // The shell writes the file, so a relative path must mean what it means here.
         var rest = args.Skip(1).Select((arg, i) => args[0] == "screenshot" && i == 0 ? Path.GetFullPath(arg) : arg).ToList();
-        try
+        var answer = await InstanceCall.AskAsync(info, new IpcRequest("inspect", args[0], Args: rest));
+        if (answer.Response is not { } response)
         {
-            await foreach (var response in IpcServer.Request(info.Pipe, new IpcRequest("inspect", args[0], Args: rest)))
-            {
-                if (!response.Ok)
-                {
-                    Console.Error.WriteLine(response.Error);
-                    return 1;
-                }
-                Console.WriteLine(response.Value);
-                return 0;
-            }
-            Console.Error.WriteLine($"Instance {info.Id} closed the control pipe without answering.");
+            Console.Error.WriteLine(answer.Failure);
+            return 1;
         }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+        if (!response.Ok)
         {
-            Console.Error.WriteLine($"Could not reach instance {info.Id}: {e.Message}");
+            Console.Error.WriteLine(response.Error);
+            return 1;
         }
-        return 1;
+        Console.WriteLine(response.Value);
+        return 0;
     }
 }
