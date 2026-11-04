@@ -112,7 +112,9 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
                 // The session closed while it was being read. Allow a later poll to try again.
                 loop.Post(() =>
                 {
-                    log.Warn("media", $"Cannot read {target.AppName}'s track: {e.Message}");
+                    // A session closing mid-read is ordinary; anything else is worth a line.
+                    if (e is not System.Runtime.InteropServices.COMException)
+                        log.Warn("media", $"Cannot read {target.AppName}'s track: {e.Message}");
                     if (!_released && request == _mediaRequest)
                         _mediaApplied = request;
                 });
