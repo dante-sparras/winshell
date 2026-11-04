@@ -24,10 +24,11 @@ public sealed class StartShellTests
                 using var window = new FloatingWindow { Title = "Winshell test", Width = 640, Height = 720, Content = view };
                 window.Visible = true;
                 await ShellFixture.LaidOut(view);
-                var box = (TextBox)view.FindName("SearchBox");
+                var box = view.FindName("SearchBox") as TextBox ?? throw new InvalidOperationException("Start has no search box.");
                 var placeholder = Find<TextBlock>(box, found => found.Name == "PlaceholderTextContentPresenter")
                     ?? throw new InvalidOperationException("The search box shows no placeholder.");
-                var icon = ((Grid)view.FindName("SearchHost")).Children.OfType<FontIcon>().Single();
+                var host = view.FindName("SearchHost") as Grid ?? throw new InvalidOperationException("Start has no search row.");
+                var icon = host.Children.OfType<FontIcon>().Single();
                 return (LineMiddle(placeholder, view), Middle(icon, view));
             });
 
