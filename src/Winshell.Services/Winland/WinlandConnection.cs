@@ -42,9 +42,6 @@ internal static partial class WinlandConnection
             Logs.Remove(log);
     }
 
-    /// <summary>Runs one listener the way an event does, so a test can see a thrown listener get logged.</summary>
-    internal static void RaiseForTest(Action listener) => Raise<int>(_ => listener(), 0);
-
     /// <summary>Raised when the event stream connects (true) or is lost (false).</summary>
     public static event Action<bool>? ConnectionChanged;
 
@@ -165,7 +162,8 @@ internal static partial class WinlandConnection
     private static uint? ServerProcess(NamedPipeClientStream pipe) =>
         Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
 
-    private static void Raise<T>(Action<T>? handlers, T value)
+    /// <summary>Calls each handler in turn. One that throws is logged, and the others still run.</summary>
+    internal static void Raise<T>(Action<T>? handlers, T value)
     {
         if (handlers is null)
             return;

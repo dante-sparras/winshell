@@ -2,7 +2,7 @@ using Winshell.Winland;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>A Winland listener that throws is written to the instance log, with the stack, and does not escape.</summary>
+/// <summary>A Winland listener that throws is written to the instance log, with the stack, and does not escape or stop the next one.</summary>
 public class WinlandListenerTests
 {
     [Fact]
@@ -10,16 +10,20 @@ public class WinlandListenerTests
     {
         var lines = new List<string>();
         var log = new Log { Sink = (level, category, message) => lines.Add($"{level} {category}: {message}") };
+        var later = false;
+        Action<int> handlers = _ => throw new InvalidOperationException("listener failed");
+        handlers += _ => later = true;
         WinlandConnection.RegisterLog(log);
         try
         {
-            WinlandConnection.RaiseForTest(() => throw new InvalidOperationException("listener failed"));
+            WinlandConnection.Raise(handlers, 0);
         }
         finally
         {
             WinlandConnection.UnregisterLog(log);
         }
 
+        Assert.True(later);
         Assert.Single(lines);
         Assert.StartsWith("Warn winland:", lines[0], StringComparison.Ordinal);
         Assert.Contains("InvalidOperationException", lines[0], StringComparison.Ordinal);
