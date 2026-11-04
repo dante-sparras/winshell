@@ -340,6 +340,18 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
+    public void A_failed_build_names_a_file_in_the_project_from_its_folder()
+    {
+        var file = Project("Bar.csproj");
+        var project = Found(path: file);
+        var output = $"{Path.Combine(project.Folder, "Bar.cs")}(1,1): error CS1002: ; expected [{file}::TargetFramework=net10.0-windows10.0.22621.0]";
+
+        var why = project.Prepare(noBuild: false, (_, _, _) => new CommandResult(1, output));
+
+        Assert.Equal("Bar did not build.\nBar.cs(1,1): error CS1002: ; expected", why);
+    }
+
+    [Fact]
     public void A_failure_with_no_compiler_error_keeps_its_last_lines()
     {
         var project = Found(path: Project("Bar.csproj"));

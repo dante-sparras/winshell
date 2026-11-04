@@ -18,11 +18,7 @@ internal sealed partial class DevOutput(string projectFolder)
         var text = line.StartsWith(Prefix, StringComparison.Ordinal) ? line[Prefix.Length..] : line.Trim();
         if (CompileError().IsMatch(text))
         {
-            var error = ProjectSuffix().Replace(text, "");
-            // A deep folder would wrap over the notice's first lines and push the error itself down.
-            var inProject = projectFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            if (error.StartsWith(inProject, StringComparison.OrdinalIgnoreCase))
-                error = error[inProject.Length..];
+            var error = ConfigurationProject.ErrorLine(text, projectFolder);
             if (_errors.Contains(error) || _errors.Count == MostErrors)
                 return null;
             _errors.Add(error);
@@ -38,9 +34,6 @@ internal sealed partial class DevOutput(string projectFolder)
 
     [GeneratedRegex(@"\berror [A-Z]+\d+:")]
     private static partial Regex CompileError();
-
-    [GeneratedRegex(@"\s+\[[^\]]*\.csproj(::[^\]]*)?\]$")]
-    private static partial Regex ProjectSuffix();
 
     [GeneratedRegex(@"changes applied in \d+ms|^Build succeeded")]
     private static partial Regex Applied();

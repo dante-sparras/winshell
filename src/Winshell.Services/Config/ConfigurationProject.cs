@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -16,7 +17,7 @@ internal delegate CommandResult RunProcess(string file, IReadOnlyList<string> ar
 /// MSBuild outside a build, so <c>doctor</c> and a start with <c>--no-build</c> read the project as data. Building runs
 /// the project's own code, so a downloaded project is refused first.
 /// </summary>
-internal sealed class ConfigurationProject
+internal sealed partial class ConfigurationProject
 {
     private const int MostErrors = 10;
     internal const string NeedsSdk = "Building a configuration needs the .NET SDK, from https://dot.net/download.";
@@ -279,19 +280,27 @@ internal sealed class ConfigurationProject
         }
     }
 
-    /// <summary>The compiler's own lines, once each, without the project MSBuild adds to every one. Any other failure keeps its last lines.</summary>
-    private static string Errors(string output)
+    /// <summary>The compiler's own lines, once each, as <see cref="ErrorLine"/> shows them. Any other failure keeps its last lines.</summary>
+    private string Errors(string output)
     {
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var errors = lines.Where(line => line.Contains(": error ", StringComparison.Ordinal)).Select(WithoutProject).Distinct().ToList();
+        var errors = lines.Where(line => line.Contains(": error ", StringComparison.Ordinal)).Select(line => ErrorLine(line, Folder)).Distinct().ToList();
         return string.Join('\n', errors.Count > 0 ? errors.Take(MostErrors) : lines.TakeLast(MostErrors));
     }
 
-    private static string WithoutProject(string line)
+    /// <summary>
+    /// A compiler line as a build-error notice shows it: without the project MSBuild adds to it, and with a file under
+    /// <paramref name="folder"/> named from there. A deep folder would wrap over the notice and push the error itself down.
+    /// </summary>
+    internal static string ErrorLine(string line, string folder)
     {
-        var at = line.LastIndexOf(" [", StringComparison.Ordinal);
-        return at > 0 && line.EndsWith(".csproj]", StringComparison.OrdinalIgnoreCase) ? line[..at] : line;
+        var error = ProjectSuffix().Replace(line, "");
+        var inFolder = folder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return error.StartsWith(inFolder, StringComparison.OrdinalIgnoreCase) ? error[inFolder.Length..] : error;
     }
+
+    [GeneratedRegex(@"\s+\[[^\]]*\.csproj(::[^\]]*)?\]$", RegexOptions.IgnoreCase)]
+    private static partial Regex ProjectSuffix();
 
     /// <summary>The project's <c>AssemblyName</c> when it writes one out, or else its file name. A computed one is not read: that would take MSBuild.</summary>
     private string AssemblyName()
