@@ -148,6 +148,7 @@ public sealed class TrayArea : ObservableObject
     private void PublishUpdate()
     {
         UpdateReady = ShowsUpdate(_updates.Status);
-        UpdateLabel = UpdateCaption(_updates.Version);
+        // Only a ready update has a version to name, and the button is hidden until then.
+        UpdateLabel = UpdateReady ? UpdateCaption(_updates.Version) : "";
     }
 }
