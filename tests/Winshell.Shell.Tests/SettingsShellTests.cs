@@ -217,6 +217,33 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task Settings_names_and_draws_unpin_as_quick_settings_does()
+    {
+        var (settings, quick, tip) = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                var kind = QuickSettingsKind.All[0];
+                var tile = new QuickSettingsTileView { Tile = new QuickSettingsTile(kind.Key, kind.Title, kind.Glyph, "", true, "", "") };
+                var badge = tile.FindName("Unpin") as Button ?? throw new InvalidOperationException("A tile has no unpin badge.");
+
+                Assert.Equal("", shell.Ipc.Call("settings", "open", ["quickSettings"]));
+                var root = (FrameworkElement)(await rig.Shown()).Content!;
+                var row = Find<SettingsOrderRow>(root, found => found.Key == kind.Key) ?? throw new InvalidOperationException($"Settings lists no {kind.Key} tile.");
+                return (Shows(row.RemoveButton), Shows(badge), ToolTipService.GetToolTip(row.RemoveButton) as string);
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.Equal(quick, settings);
+        Assert.StartsWith(tip + " ", quick.Name, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_taskbar_menu_offers_Taskbar_settings_and_closes_when_it_is_chosen()
     {
         var opened = await ShellFixture.On(async shell =>
@@ -369,6 +396,10 @@ public sealed class SettingsShellTests
 
         throw new InvalidOperationException("The taskbar menu has no item.");
     }
+
+    /// <summary>What a button says it does, and the icon it shows.</summary>
+    private static (string Name, string Glyph) Shows(Button button) =>
+        (AutomationProperties.GetName(button), (button.Content as FontIcon ?? throw new InvalidOperationException("The button shows no icon.")).Glyph);
 
     private static Button Button(FloatingWindow window, string name)
     {

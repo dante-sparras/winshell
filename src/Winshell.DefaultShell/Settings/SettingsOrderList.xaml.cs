@@ -4,17 +4,13 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Winshell.DefaultShell;
 
-/// <summary>Rows in an order the user picks. After a move or a remove, the keyboard stays on that button.</summary>
+/// <summary>Rows in an order the user picks. After a move or an unpin, the keyboard stays on that button.</summary>
 public sealed partial class SettingsOrderList : UserControl
 {
     private IReadOnlyList<SettingsOrderItem> _items = [];
     private readonly List<SettingsOrderRow> _rows = [];
 
     public SettingsOrderList() => InitializeComponent();
-
-    public string RemoveLabel { get; set; } = "Remove";
-
-    public string RemoveGlyph { get; set; } = "\uE738";
 
     public string EmptyText { get; set; } = "";
 
@@ -35,7 +31,7 @@ public sealed partial class SettingsOrderList : UserControl
         for (var i = 0; i < items.Count; i++)
         {
             var row = new SettingsOrderRow();
-            row.Bind(items[i], i, items.Count, RemoveLabel, RemoveGlyph);
+            row.Bind(items[i], i, items.Count);
             row.Move += OnMove;
             row.Removed += OnRemoved;
             _rows.Add(row);

@@ -17,7 +17,7 @@ Closing the window hides it. The next open brings it back on the page it was on.
 | Personalization | Light or dark, the accent color (same as Windows, or one of the Windows accent colors), and the material behind the taskbar and flyouts (Acrylic or Mica). A contrast theme still wins. |
 | Taskbar | Alignment, auto-hide, a taskbar on every display or the main one only, and where apps show with several displays. With one taskbar, every app shows on it. See [the taskbar](taskbar.md). |
 | Start | Recommended apps on or off. **Pinned apps** opens a page under it to move or unpin pins. |
-| Quick settings | The tiles in order: move, remove and add back. |
+| Quick settings | The tiles in order: move, unpin and add back. |
 | Notifications | Do not disturb as Windows reports it, and per app whether Winshell's notification center shows its notifications. **Clear all** in the notification center leaves an app that is turned off alone. Windows still decides banners and sounds. |
 | Hotkeys | Open Start (`Win` until changed), Open Winshell Settings (none until set), and desktop chords. Empty turns a hotkey off. A hotkey starts with Win, Ctrl or Alt, or is `Win` alone, so it never takes a key other apps type with. The two hotkeys cannot be the same. A chord Windows or another app holds says so and is not taken. |
 | Startup | Run Winshell when you sign in, for your account only, off until you turn it on. If Windows' Startup apps page turned it off, the switch shows off and only that page turns it back on. An unpackaged entry that starts a `winshell.exe` in another folder, or with other options, also shows off. Turning it on points it at this one. A packaged Winshell asks Windows to enable its startup task instead of writing the `Run` key. |

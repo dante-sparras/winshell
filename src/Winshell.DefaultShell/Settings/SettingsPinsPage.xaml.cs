@@ -12,8 +12,6 @@ public sealed partial class SettingsPinsPage : UserControl
     {
         _start = start;
         InitializeComponent();
-        Pins.RemoveLabel = "Unpin";
-        Pins.RemoveGlyph = "\uE77A";
         Pins.EmptyText = "Nothing pinned";
         Pins.MoveRequested += OnMove;
         Pins.RemoveRequested += OnRemove;

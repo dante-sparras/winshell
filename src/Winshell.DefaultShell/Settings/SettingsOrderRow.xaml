@@ -71,7 +71,7 @@
                 MinHeight="0"
                 Padding="0"
                 Click="OnRemove">
-                <FontIcon x:Name="RemoveIcon" Glyph="&#xE738;" FontSize="16" FontFamily="Segoe Fluent Icons" AutomationProperties.AccessibilityView="Raw" />
+                <FontIcon Glyph="&#xE77A;" FontSize="16" FontFamily="Segoe Fluent Icons" AutomationProperties.AccessibilityView="Raw" />
             </Button>
         </Grid>
     </Border>
