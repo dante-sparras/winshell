@@ -16,14 +16,12 @@ internal static partial class ProcessImage
 
     private const int FirstCapacity = 1024;
 
-    private const uint QueryLimitedInformation = 0x1000;
-
     internal readonly record struct QueryResult(bool Ok, int Size, int Error);
 
     /// <summary>The image path, or null when the process cannot be opened or the name cannot be read.</summary>
     internal static string? TryRead(uint processId)
     {
-        var process = Win32.OpenProcess(QueryLimitedInformation, false, processId);
+        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
         if (process == 0)
             return null;
         try

@@ -17,7 +17,6 @@ internal sealed class WindowsJumpListReader : IJumpListReader
     public static readonly WindowsJumpListReader Instance = new();
 
     private static readonly Guid Clsid = new("86bec222-30f2-47e0-9f25-60d11cd75c28");
-    private const uint ClsctxInprocServer = 1;
     private const uint Recent = 0;
     private const uint Frequent = 1;
 
@@ -26,7 +25,7 @@ internal sealed class WindowsJumpListReader : IJumpListReader
         if (string.IsNullOrWhiteSpace(appUserModelId))
             return JumpListRead.Missing;
         var iid = typeof(IApplicationDocumentLists).GUID;
-        var hr = Win32.CoCreateInstance(in Clsid, 0, ClsctxInprocServer, in iid, out var pointer);
+        var hr = Win32.CoCreateInstance(in Clsid, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
         if (hr < 0 || pointer == 0)
             return JumpListRead.Missing;
         IApplicationDocumentLists lists;

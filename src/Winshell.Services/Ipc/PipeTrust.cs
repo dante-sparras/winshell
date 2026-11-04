@@ -18,7 +18,6 @@ internal static partial class PipeTrust
 {
     private const uint LabelSecurityInformation = 0x10;
     private const uint PipeAccessDuplex = 0x3;
-    private const uint FileFlagOverlapped = 0x40000000;
     private const uint FileFlagFirstPipeInstance = 0x00080000;
     private const uint PipeRejectRemoteClients = 0x8;
     private const int ErrorAccessDenied = 5;
@@ -109,7 +108,7 @@ internal static partial class PipeTrust
         try
         {
             Marshal.StructureToPtr(attributes, buffer, false);
-            var mode = PipeAccessDuplex | FileFlagOverlapped;
+            var mode = PipeAccessDuplex | Win32.FILE_FLAG_OVERLAPPED;
             if (first)
                 mode |= FileFlagFirstPipeInstance;
             var handle = CreateNamedPipeW(@"\\.\pipe\" + pipe, mode, PipeRejectRemoteClients, 255, 4096, 4096, 0, buffer);

@@ -67,11 +67,11 @@ internal static unsafe class WindowTracker
         _loop = loop;
         (uint Min, uint Max)[] ranges =
         [
-            (EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND),
-            (EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND),
-            (EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE),
-            (EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_NAMECHANGE),
-            (EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED),
+            (Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND),
+            (Win32.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_SYSTEM_MINIMIZEEND),
+            (Win32.EVENT_OBJECT_CREATE, Win32.EVENT_OBJECT_HIDE),
+            (Win32.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_OBJECT_NAMECHANGE),
+            (Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED),
         ];
         foreach (var (min, max) in ranges)
         {
@@ -147,9 +147,9 @@ internal static unsafe class WindowTracker
     {
         // Windows reports no move of a window on its own, so maximizing, restoring and moving to another monitor
         // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
-        if (eventType == EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
+        if (eventType == Win32.EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
             return;
-        var isRoot = hwnd != 0 && eventType != EVENT_OBJECT_DESTROY && Win32.GetAncestor(hwnd, GA_ROOT) == hwnd;
+        var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && Win32.GetAncestor(hwnd, GA_ROOT) == hwnd;
         var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);
         if (!marksWindow && !WindowRules.MarksForeground(eventType))
             return;

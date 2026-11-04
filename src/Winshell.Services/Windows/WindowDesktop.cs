@@ -9,8 +9,6 @@ namespace Winshell.Windows;
 /// </summary>
 internal static class WindowDesktop
 {
-    private const uint ClsctxInprocServer = 1;
-
     private static readonly Guid ManagerClass = new("AA509086-5CA9-4C25-8F95-589D3C07B48A");
 
     private static IVirtualDesktopManager? _manager;
@@ -68,7 +66,7 @@ internal static class WindowDesktop
         if (_manager is not null)
             return _manager;
         var iid = typeof(IVirtualDesktopManager).GUID;
-        var hr = Win32.CoCreateInstance(in ManagerClass, 0, ClsctxInprocServer, in iid, out var pointer);
+        var hr = Win32.CoCreateInstance(in ManagerClass, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
         if (hr < 0 || pointer == 0)
         {
             if (!_loggedUnavailable)

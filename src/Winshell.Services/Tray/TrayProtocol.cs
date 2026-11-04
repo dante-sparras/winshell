@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+using Winshell.Native;
 
 namespace Winshell.Tray;
 
@@ -116,8 +117,6 @@ internal static class TrayProtocol
     }
 
     private const uint WM_CONTEXTMENU = 0x007B, NIN_SELECT = 0x0400;
-    private const uint WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_LBUTTONDBLCLK = 0x0203;
-    private const uint WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205, WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
 
     /// <summary>
     /// The messages a click sends, in order: the mouse messages a window would get, and from version 3 on,
@@ -128,12 +127,12 @@ internal static class TrayProtocol
         var current = version >= Version;
         return click switch
         {
-            TrayClick.Left => current ? [WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT] : [WM_LBUTTONDOWN, WM_LBUTTONUP],
+            TrayClick.Left => current ? [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, NIN_SELECT] : [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP],
             TrayClick.Double => current
-                ? [WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT, WM_LBUTTONDBLCLK, WM_LBUTTONUP, NIN_SELECT]
-                : [WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_LBUTTONUP],
-            TrayClick.Middle => [WM_MBUTTONDOWN, WM_MBUTTONUP],
-            _ => current ? [WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU] : [WM_RBUTTONDOWN, WM_RBUTTONUP],
+                ? [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, NIN_SELECT, Win32.WM_LBUTTONDBLCLK, Win32.WM_LBUTTONUP, NIN_SELECT]
+                : [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, Win32.WM_LBUTTONDBLCLK, Win32.WM_LBUTTONUP],
+            TrayClick.Middle => [Win32.WM_MBUTTONDOWN, Win32.WM_MBUTTONUP],
+            _ => current ? [Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP, WM_CONTEXTMENU] : [Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP],
         };
     }
 

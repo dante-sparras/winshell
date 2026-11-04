@@ -126,7 +126,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         _answered = ExplorerTray();
         _icons.UseSettings(TrayIconSettings.Read());
         _settingsWatch = TrayIconSettings.Watch(_loop, () => _icons.UseSettings(TrayIconSettings.Read()));
-        foreach (var eventType in new uint[] { 0x0003 /* FOREGROUND */, 0x8004 /* REORDER */ })
+        foreach (var eventType in new uint[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_REORDER })
         {
             var hook = Win32.SetWinEventHook(eventType, eventType, 0, &OnOrderChanged, 0, 0, Win32.WINEVENT_OUTOFCONTEXT);
             if (hook != 0)
@@ -285,7 +285,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
                 return;
             var explorer = host.ExplorerTray();
             // Top-level z-order changes name the desktop's client object, not a child window's OBJID_WINDOW.
-            var desktopOrder = eventType == 0x8004 && idObject == -4 /* OBJID_CLIENT */ && hwnd == GetDesktopWindow();
+            var desktopOrder = eventType == Win32.EVENT_OBJECT_REORDER && idObject == Win32.OBJID_CLIENT && hwnd == GetDesktopWindow();
             if (explorer == 0 || !desktopOrder && (hwnd != explorer || idObject != 0))
                 return;
             // A raise causes another reorder event. Only raise when Explorer is actually above this host.
@@ -379,7 +379,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
         }
         // Apps that post a menu command to the taskbar, such as minimizing every window, find this window first.
         // These carry no pointers. Private WM_USER messages have no shared layout and cannot be forwarded safely.
-        if (msg == WM_SYSCOMMAND || msg == WM_COMMAND && lParam == 0)
+        if (msg == Win32.WM_SYSCOMMAND || msg == WM_COMMAND && lParam == 0)
         {
             var explorer = host.ExplorerTray();
             if (explorer != 0)
@@ -418,7 +418,7 @@ internal sealed unsafe partial class TrayHost : ITrayHost, IDisposable
     private const uint LwaAlpha = 0x2;
     private const uint MSGFLT_ALLOW = 1;
     private const uint GA_PARENT = 1;
-    private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
+    private const uint WM_COMMAND = 0x0111;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct COPYDATASTRUCT

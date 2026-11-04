@@ -363,6 +363,22 @@ internal static partial class Win32
     public const uint ABS_AUTOHIDE = 1;
 
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
+    public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
+    public const uint EVENT_SYSTEM_DESKTOPSWITCH = 0x0020;
+    public const uint EVENT_OBJECT_CREATE = 0x8000;
+    public const uint EVENT_OBJECT_DESTROY = 0x8001;
+    public const uint EVENT_OBJECT_SHOW = 0x8002;
+    public const uint EVENT_OBJECT_HIDE = 0x8003;
+    public const uint EVENT_OBJECT_REORDER = 0x8004;
+    public const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
+    public const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
+    public const uint EVENT_OBJECT_CLOAKED = 0x8017;
+    public const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
+    public const int OBJID_WINDOW = 0;
+    public const int OBJID_CLIENT = -4;
+    public const int CHILDID_SELF = 0;
 
     public const int WH_KEYBOARD_LL = 13;
     public const int WH_MOUSE_LL = 14;
@@ -376,6 +392,11 @@ internal static partial class Win32
     public const int DWMWA_EXCLUDED_FROM_PEEK = 12;
     public const int DWMWA_NCRENDERING_POLICY = 2;
     public const uint DWMWA_COLOR_NONE = 0xFFFFFFFE;
+
+    public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    public const uint TOKEN_QUERY = 0x0008;
+    public const uint FILE_FLAG_OVERLAPPED = 0x40000000;
+    public const uint CLSCTX_INPROC_SERVER = 0x1;
 
     public const uint CF_UNICODETEXT = 13;
     public const uint GMEM_MOVEABLE = 0x0002;
