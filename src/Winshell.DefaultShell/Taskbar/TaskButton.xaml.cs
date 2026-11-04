@@ -280,6 +280,8 @@ public sealed partial class TaskButton : Button
         var task = Item;
         var mark = TaskbarModel.Indicator.Of(task);
         AutomationProperties.SetName(this, task is null ? "" : Tasks.AccessibleName(task));
+        // The name counts the windows; the key names the app, one button per key.
+        AutomationProperties.SetAutomationId(this, task is null ? "" : task.Key);
         ShowIcon(task);
         var showFill = !_pressed;
         FillActive.Visibility = Shown(showFill && mark.Active && !mark.Attention);
