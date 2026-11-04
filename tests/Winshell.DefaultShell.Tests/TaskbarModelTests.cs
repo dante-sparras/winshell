@@ -383,6 +383,16 @@ public sealed class TaskbarModelTests : IDisposable
         model.Choose(model.Tasks.Single(), "pin");
         Assert.Empty(pins.Ids);
         Assert.Equal(new TaskMenuRow("pin", "Pin to taskbar", "\uE718", "", true), PinRow(model));
+
+        // An app the index lacks is pinned by its program, and its window stays on that one button.
+        desk.OpenWindows.Clear();
+        desk.OpenWindows.Add(new FakeWindow { AppId = "Contoso.Mail", Executable = @"C:\Tools\mail.exe", Title = "Mail" });
+        model.Choose(model.Tasks.Single(), "pin");
+        Assert.Equal([@"C:\Tools\mail.exe"], pins.Ids);
+        Assert.Equal(new TaskMenuRow("pin", "Unpin from taskbar", "\uE77A", "", true), PinRow(model));
+
+        model.Choose(model.Tasks.Single(), "pin");
+        Assert.Empty(pins.Ids);
     }
 
     [Fact]

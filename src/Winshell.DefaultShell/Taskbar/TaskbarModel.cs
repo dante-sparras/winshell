@@ -33,8 +33,8 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
         pins.PropertyChanged += OnPins;
         preferences.PropertyChanged += OnPreferences;
         Resubscribe();
-        NoteActive();
         Rebuild();
+        NoteActive();
     }
 
     /// <summary>The buttons, pinned apps first. A button that did not change stays the same object.</summary>
@@ -191,7 +191,9 @@ public sealed class TaskbarModel : ObservableObject, IDisposable
     {
         if (_disposed || _desktop.Active is not { } window)
             return;
-        _lastUsed[TaskbarTasks.WindowKey(window, _desktop.Find)] = window;
+        // The button that holds the window, which can be its program's pin. A window newer than the buttons has its own key.
+        var key = Tasks.FirstOrDefault(task => task.Windows.Contains(window))?.Key ?? TaskbarTasks.WindowKey(window, _desktop.Find);
+        _lastUsed[key] = window;
     }
 
     private void DropClosed()
