@@ -53,17 +53,9 @@ internal static class DevSession
 {
     public static async Task<int> Run(ConfigurationProject project)
     {
-        Process? watch = null;
-        // dotnet watch has a console of its own, which Ctrl+C, Ctrl+Break and closing this one never reach. Each of
-        // those ends this process once the handler returns, so the handler stops the shell and dotnet watch first.
-        void Stop(PosixSignalContext context) => StopShellAndWatch(project, Volatile.Read(ref watch));
-        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
-        using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Stop);
-        using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Stop);
-        using var end = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Stop);
         while (true)
         {
-            if (await Watch(project, started => Volatile.Write(ref watch, started)) is { } exitCode)
+            if (await Watch(project) is { } exitCode)
                 return exitCode;
             Console.WriteLine("Building, because the XAML you saved needs it.");
         }
@@ -73,18 +65,30 @@ internal static class DevSession
     /// Asks this project's shell to quit, then ends dotnet watch and what it started. The shell quits first, so the apps
     /// it opened are not part of the tree that ends, and its app bar and tray go as they do for <c>winshell kill</c>.
     /// </summary>
-    private static void StopShellAndWatch(ConfigurationProject project, Process? watch)
+    private static void StopShellAndWatch(ConfigurationProject project, Process watch)
     {
+        // Closing the console leaves about five seconds, so each wait has a deadline.
         if (ShellOf(project) is { } shell)
         {
+            try
+            {
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(1));
 #pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process. Its thread runs no continuation.
-            _ = InstanceCall.AskAsync(shell, new IpcRequest("kill")).GetAwaiter().GetResult();
+                _ = InstanceCall.AskAsync(shell, new IpcRequest("kill"), deadline.Token).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
+            }
+            catch (OperationCanceledException)
+            {
+                // The shell did not answer in time. It is ended below.
+            }
             try
             {
                 using var process = Process.GetProcessById(shell.Pid);
-                if (Instances.IsThisInstance(shell, process) && !process.WaitForExit(TimeSpan.FromSeconds(3)))
+                if (Instances.IsThisInstance(shell, process) && !process.WaitForExit(TimeSpan.FromSeconds(2)))
+                {
                     process.Kill();
+                    process.WaitForExit(TimeSpan.FromSeconds(1));
+                }
             }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
             {
@@ -93,16 +97,16 @@ internal static class DevSession
         }
         try
         {
-            watch?.Kill(entireProcessTree: true);
+            watch.Kill(entireProcessTree: true);
         }
-        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // dotnet watch has exited already.
+            // dotnet watch has exited already, or part of what it started could not be ended.
         }
     }
 
     /// <summary>How <c>dotnet watch</c> ended, or null when a shell asked for a build, which only a new start gives it.</summary>
-    private static async Task<int?> Watch(ConfigurationProject project, Action<Process> started)
+    private static async Task<int?> Watch(ConfigurationProject project)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -124,7 +128,12 @@ internal static class DevSession
             Console.Error.WriteLine(ConfigurationProject.NeedsSdk);
             return 1;
         }
-        started(process);
+        // dotnet watch has a console of its own, which Ctrl+C, Ctrl+Break and closing this one never reach. Each of
+        // those ends this process once its handler returns, so the handler stops the shell and dotnet watch first.
+        void Stop(PosixSignalContext context) => StopShellAndWatch(project, process);
+        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
+        using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Stop);
+        using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Stop);
         var lines = Channel.CreateUnbounded<string>();
         var pumps = Task.WhenAll(Pump(process.StandardOutput, lines.Writer), Pump(process.StandardError, lines.Writer));
         _ = pumps.ContinueWith(_ => lines.Writer.Complete(), TaskScheduler.Default);
@@ -163,11 +172,16 @@ internal static class DevSession
             await lines.WriteAsync(line);
     }
 
-    /// <summary>The running shell this project built, or null before its first start.</summary>
+    /// <summary>
+    /// The running shell dotnet watch started for this project, or null before its first start. A shell <c>winshell run</c>
+    /// started runs from <c>bin\shell</c> or <c>bin\shell.next</c>, and is not this one.
+    /// </summary>
     private static InstanceInfo? ShellOf(ConfigurationProject project)
     {
         var folder = project.Folder + Path.DirectorySeparatorChar;
-        return Instances.List(false).Select(i => i.Info).FirstOrDefault(i => i.ConfigPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
+        return Instances.List(false).Select(i => i.Info).FirstOrDefault(i =>
+            i.ConfigPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+            && !i.ConfigPath.StartsWith(project.OutputFolder, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Tells the shell of this project. Before its first start there is none, and the console has the error.</summary>

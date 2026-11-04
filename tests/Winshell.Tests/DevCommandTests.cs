@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 
 namespace Winshell.Tests;
 
@@ -130,6 +131,13 @@ public sealed class DevCommandTests : IDisposable
         return (code, output.Trim());
     }
 
+    private string InstanceId()
+    {
+        var (_, output, _) = WinshellCli.Run(["list", "-j"], Folders);
+        using var listed = JsonDocument.Parse(output);
+        return listed.RootElement.EnumerateArray().Single().GetProperty("id").GetString()!;
+    }
+
     private int ShellProcess()
     {
         var (_, output, _) = WinshellCli.Run(["list", "-j"], Folders);
@@ -168,9 +176,7 @@ public sealed class DevCommandTests : IDisposable
         using var search = new ManagementObjectSearcher("SELECT ProcessId, Name, CommandLine, ExecutablePath FROM Win32_Process");
         using var found = search.Get();
         return found.Cast<ManagementObject>()
-            .Where(p => p["ProcessId"] is uint pid && pid != Environment.ProcessId
-                && (p["CommandLine"] as string ?? "").Contains(Project, StringComparison.OrdinalIgnoreCase)
-                || (p["ExecutablePath"] as string ?? "").StartsWith(Project, StringComparison.OrdinalIgnoreCase))
+            .Where(p => $"{p["CommandLine"]} {p["ExecutablePath"]}".Contains(Project, StringComparison.OrdinalIgnoreCase))
             .Select(p => $"{p["Name"]} {p["ProcessId"]}")
             .ToList();
     }
@@ -210,13 +216,16 @@ public sealed class DevCommandTests : IDisposable
         StartDev(ownGroup: true);
         Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
         Assert.Contains(FromProject(), p => p.StartsWith("Dev.exe ", StringComparison.Ordinal));
+        var id = InstanceId();
 
         // Ctrl+C reaches every process on the console, this test's too. Ctrl+Break can be sent to one process group.
         Assert.True(GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)_dev!.Id), "Ctrl+Break was not sent.");
 
         Assert.True(_dev.WaitForExit(TimeSpan.FromSeconds(30)), "winshell dev did not exit.");
         Wait.Until(() => FromProject().Count == 0, "dotnet watch and the shell to end", TimeSpan.FromSeconds(30));
-        Assert.Equal("[]", WinshellCli.Run(["list", "-j"], Folders).Output.Trim());
+        // The shell quit, as winshell kill asks it to, before dotnet watch ended: a shell that is only ended marks no exit.
+        var record = File.ReadAllText(Path.Combine(_dir, "local", "run", id, "instance.json"));
+        Assert.NotNull(JsonSerializer.Deserialize(record, InstanceJson.Default.InstanceInfo)!.ExitedAt);
     }
 
     [Fact(Timeout = 170_000)]

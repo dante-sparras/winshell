@@ -126,7 +126,7 @@ That starts this program again with `--after` and quits. It does not build. `win
 winshell dev --path .
 ```
 
-`winshell dev` builds your project, starts it, and applies each save to the running shell until you press Ctrl+C. Ctrl+C, or closing the terminal, closes that shell and stops `dotnet watch`. It needs the .NET SDK, and it runs a Debug build.
+`winshell dev` builds your project, starts it, and applies each save to the running shell until you press Ctrl+C, which closes that shell and stops `dotnet watch`, as closing the terminal does. It needs the .NET SDK, and it runs a Debug build.
 
 - **A C# edit** reaches the running shell in about a second. The first one takes a little longer, while the compiler warms up. An edited method runs its new code at its next call.
 - **A window showing an edited type** gets a new one of its content, so a change to a constructor shows too. The window keeps its place, and every other window keeps its content and its state. A view whose constructor takes arguments stays, and its edited methods still run. Keep state that must survive in a model the view is given.
