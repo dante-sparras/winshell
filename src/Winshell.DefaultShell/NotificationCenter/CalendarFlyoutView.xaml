@@ -234,6 +234,7 @@
                 <CheckBox
                     x:Name="WeekBox"
                     Content="Week numbers"
+                    AutomationProperties.AutomationId="WeekNumbersBox"
                     IsChecked="{x:Bind Preferences.CalendarWeekNumbers, Mode=OneWay}"
                     Click="OnWeekNumbers" />
             </StackPanel>

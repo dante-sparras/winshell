@@ -51,6 +51,8 @@ public sealed partial class TrayIconButton : Button
         {
             Follow(false);
             _item = value;
+            // The app changes its tooltip at will; the program it belongs to does not.
+            AutomationProperties.SetAutomationId(this, value is null ? "" : "TrayIcon." + value.Id);
             Follow(true);
             Show();
         }
@@ -134,8 +136,6 @@ public sealed partial class TrayIconButton : Button
         var item = Item;
         var tip = item is null ? "" : TrayArea.IconTip(item.Tooltip, item.AppName);
         AutomationProperties.SetName(this, item is null ? "" : TrayArea.IconName(item.Tooltip, item.AppName));
-        // The tooltip changes as the app likes, so the id is the program's.
-        AutomationProperties.SetAutomationId(this, item is null ? "" : "TrayIcon." + item.Id);
         ToolTipService.SetToolTip(this, tip.Length == 0 ? null : tip);
         var pixels = ShellIcon.Pixels(XamlRoot, 16);
         var image = item?.IconAt(pixels);
