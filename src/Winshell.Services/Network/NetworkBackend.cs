@@ -72,6 +72,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     private NetworkAccessStatus _access;
     private readonly SemaphoreSlim _accessGate = new(1, 1);
     private readonly List<Radio> _radios = [];
+    private IReadOnlySet<Guid>? _wifiIds;
     private readonly ProfileWriteQueue _profileWrites = new();
     private readonly IWlanProfileApi _profiles = WlanProfileApi.Instance;
 
@@ -90,19 +91,52 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         NetworkChange.NetworkAvailabilityChanged += (_, _) => Refresh();
         NetworkNative.Listen(Refresh);
         await RefreshNowAsync().ConfigureAwait(false);
+    }
 
+    /// <summary>
+    /// Whether a read must reread the Wi-Fi radios and adapters: the first read, and each read whose set of
+    /// Wi-Fi device ids differs from the last. A USB adapter plugged in or out changes that set.
+    /// </summary>
+    internal static bool WifiDevicesChanged(IReadOnlySet<Guid>? known, IReadOnlySet<Guid> now) =>
+        known is null || !known.SetEquals(now);
+
+    /// <summary>Rereads the Wi-Fi radios, and the adapters when access is allowed, and moves the radio handlers to the new radios.</summary>
+    private async Task ReloadWifiAsync()
+    {
         // Reading radio state needs no control permission and must never prompt on import.
+        List<Radio> radios = [];
         try
         {
-            foreach (var radio in (await Radio.GetRadiosAsync()).Where(r => r.Kind == RadioKind.WiFi))
-            {
-                radio.StateChanged += (_, _) => Refresh();
-                lock (_lock) _radios.Add(radio);
-            }
+            radios.AddRange((await Radio.GetRadiosAsync()).Where(r => r.Kind == RadioKind.WiFi));
         }
         catch (UnauthorizedAccessException) { }
-        await RefreshNowAsync().ConfigureAwait(false);
+
+        bool allowed;
+        lock (_lock)
+            allowed = _access == NetworkAccessStatus.Allowed;
+        var adapters = allowed ? await WiFiAdapter.FindAllAdaptersAsync() : null;
+
+        lock (_lock)
+        {
+            foreach (var radio in _radios)
+                radio.StateChanged -= OnRadioStateChanged;
+            _radios.Clear();
+            foreach (var radio in radios)
+            {
+                radio.StateChanged += OnRadioStateChanged;
+                _radios.Add(radio);
+            }
+
+            if (adapters is not null && _access == NetworkAccessStatus.Allowed)
+            {
+                _wifiAdapters.Clear();
+                foreach (var adapter in adapters)
+                    _wifiAdapters[adapter.NetworkAdapter.NetworkAdapterId] = adapter;
+            }
+        }
     }
+
+    private void OnRadioStateChanged(Radio sender, object args) => Refresh();
 
     /// <summary>
     /// Asks Windows to set every Wi-Fi radio, then rereads them. Null when they report <paramref name="enabled"/>.
@@ -174,16 +208,25 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     internal static bool IsExpectedFailure(Exception e) => e is UnauthorizedAccessException or System.Runtime.InteropServices.COMException
         or InvalidOperationException or NotSupportedException or ArgumentException or System.ComponentModel.Win32Exception or IOException;
 
-    protected override Task<NetworkSnapshot> ReadAsync()
+    protected override async Task<NetworkSnapshot> ReadAsync()
     {
-        try { return ReadStateAsync(); }
+        try
+        {
+            var snapshot = ReadState();
+            var ids = snapshot.Devices.Where(d => d.Type == DeviceType.Wifi).Select(d => d.Id).ToHashSet();
+            if (!WifiDevicesChanged(_wifiIds, ids))
+                return snapshot;
+            await ReloadWifiAsync().ConfigureAwait(false);
+            _wifiIds = ids;
+            return ReadState();
+        }
         catch (Exception e) when (IsExpectedFailure(e))
         {
-            return Task.FromResult(NetworkSnapshot.Initial with { Error = e.Message });
+            return NetworkSnapshot.Initial with { Error = e.Message };
         }
     }
 
-    private Task<NetworkSnapshot> ReadStateAsync()
+    private NetworkSnapshot ReadState()
     {
         var profiles = WinNetworkInformation.GetConnectionProfiles().Where(p => p.NetworkAdapter is not null).ToList();
         var wlanStates = InterfaceStates();
@@ -254,8 +297,8 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                 MapCost(cost.NetworkCostType), cost.Roaming, cost.OverDataLimit,
                 p.GetSignalBars() is { } bars ? bars / 5.0 : null);
         }).ToArray();
-        return Task.FromResult(new NetworkSnapshot(true, devices, connectivity, wifiEnabled, wifiHardware,
-            connectionProfiles, _access, ReadAirplaneMode(), WifiState: wifiState));
+        return new NetworkSnapshot(true, devices, connectivity, wifiEnabled, wifiHardware,
+            connectionProfiles, _access, ReadAirplaneMode(), WifiState: wifiState);
     }
 
     private List<NetworkInfo> ReadWifiNetworks(Guid id, ConnectionState deviceState, ConnectionProfile? profile)
@@ -432,7 +475,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
 
     public async Task ScanAsync(Guid device)
     {
-        var adapter = Adapter(device) ?? throw new UnauthorizedAccessException("Call Networking.requestAccess() before scanning Wi-Fi networks.");
+        var adapter = Adapter(device) ?? throw new UnauthorizedAccessException("Call NetworkingService.RequestAccess() before scanning Wi-Fi networks.");
         try { await adapter.ScanAsync(); }
         catch (UnauthorizedAccessException)
         {
