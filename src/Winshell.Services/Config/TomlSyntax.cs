@@ -74,9 +74,10 @@ internal static class TomlSyntax
             table.Items.GetChild(index - 1)!.Comma = null;
     }
 
-    // The trivia after an array item is its comment and line break, then the indentation of what follows: the next
-    // item, or the closing bracket. The open bracket's trivia is the same before the first item. A document loads only
-    // without errors, so an array has its brackets and every item its value, and an item followed by another has a comma.
+    // The trivia after an array item is its comment and line break, then the blank and comment lines above what follows
+    // and its indentation: the next item, or the closing bracket. The open bracket's trivia is the same before the first
+    // item. A document loads only without errors, so an array has its brackets and every item its value, and an item
+    // followed by another has a comma.
 
     /// <summary>
     /// Takes out an array's last item with its lines: the comment lines above it and its own comment. What is left ends

@@ -352,6 +352,7 @@ public sealed class TomlDocumentTests
     [InlineData("pins = [\"a\",\n  \"b\"]\n", "a", "pins = [\"a\"]\n")]
     [InlineData("pins = [\"a\", # one\n  \"b\"]\n", "a", "pins = [\"a\" # one\n]\n")]
     [InlineData("pins = [\n  \"a\",\n  # more to come\n]\n", "", "pins = [\n  # more to come\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n\n  # about b\n  \"b\",\n\n]\n", "a", "pins = [\n  \"a\",\n\n]\n")]
     public void A_list_that_grows_or_shrinks_keeps_its_layout(string original, string items, string expected)
     {
         var document = Parse(original);
