@@ -5,7 +5,7 @@ The default shell has its own settings window, laid out like Windows 11 Settings
 ## Opening it
 
 - Right-click an empty part of the taskbar and choose **Taskbar settings**, as on Windows 11.
-- `winshell ipc call settings open <page>`, where `<page>` is a page (`personalization`, `taskbar`, `start`, `quickSettings`, `notifications`, `hotkeys`, `startup`, `about`) or a setting, such as `taskbarAutoHide`. An empty page opens it where it was, with the keyboard in the search box.
+- `winshell ipc call settings open <page>`, where `<page>` is a page (`personalization`, `taskbar`, `start`, `quickSettings`, `notifications`, `hotkeys`, `startup`, `about`), a page under one (`pins`, Start's **Pinned apps**), or a setting, such as `taskbarAutoHide`. An empty page opens it where it was, with the keyboard in the search box.
 - The **Open Winshell Settings** hotkey, once one is set on the Hotkeys page.
 
 Closing the window hides it. The next open brings it back on the page it was on.

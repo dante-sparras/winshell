@@ -35,7 +35,7 @@ internal sealed class SettingsHost
         _ipc = shell.Ipc.Handle("settings", "open", OpenPage);
     }
 
-    /// <summary>Opens a page, or the page of a setting. An empty page keeps the one already shown and takes the search box.</summary>
+    /// <summary>Opens a page, a subpage, or the page of a setting. An empty page keeps the one already shown and takes the search box.</summary>
     public void Open(string? page)
     {
         Ensure();

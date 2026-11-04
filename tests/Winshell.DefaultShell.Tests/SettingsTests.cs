@@ -17,9 +17,10 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
-    public void Each_key_names_one_page_or_setting()
+    public void Each_key_names_one_page_subpage_or_setting()
     {
-        Assert.Distinct(SettingsCatalog.Pages.Select(page => page.Key).Concat(Keys(SettingsCatalog.Settings)), StringComparer.Ordinal);
+        var keys = SettingsCatalog.Pages.Select(page => page.Key).Concat(SettingsCatalog.Subpages.Select(subpage => subpage.Key)).Concat(Keys(SettingsCatalog.Settings));
+        Assert.Distinct(keys, StringComparer.Ordinal);
     }
 
     [Fact]
@@ -67,12 +68,24 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal("Pinned apps", navigation.Crumbs[1].Title);
         Assert.False(navigation.Crumbs[1].Link);
 
-        Assert.False(navigation.Open("pins"));
         Assert.False(navigation.Open("taskbr"));
         Assert.Equal("start", navigation.Page);
         Assert.Equal("pins", navigation.Subpage);
         Assert.Equal("Winshell Settings has no page or setting named \"taskbr\"", SettingsCatalog.Unknown("taskbr"));
-        Assert.Equal("Winshell Settings has no page or setting named \"pins\"", SettingsCatalog.Unknown("pins"));
+    }
+
+    [Fact]
+    public void Open_goes_to_a_subpage_by_its_key()
+    {
+        var navigation = new SettingsNavigation();
+        Assert.True(navigation.Open("startPins"));
+
+        Assert.Null(SettingsCatalog.Unknown("pins"));
+        Assert.True(navigation.Open("pins"));
+
+        Assert.Equal(new SettingsBody("start", "pins"), navigation.Shown);
+        Assert.Equal(["Start", "Pinned apps"], navigation.Crumbs.Select(crumb => crumb.Title));
+        Assert.Null(navigation.FocusKey);
     }
 
     [Fact]
