@@ -2,7 +2,7 @@ namespace Winshell.Diagnostics;
 
 /// <summary>
 /// What <see cref="Doctor.Run"/> reads on this PC. Each call only reads. A configuration project is not one of these:
-/// <see cref="DoctorProject.Configuration"/> reads the project file itself.
+/// <see cref="DoctorProject.Configuration(string)"/> reads the project file itself.
 /// </summary>
 internal sealed class DoctorFacts : IDoctorFacts
 {

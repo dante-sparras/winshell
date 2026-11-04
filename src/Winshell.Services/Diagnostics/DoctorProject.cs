@@ -10,28 +10,40 @@ internal static class DoctorProject
     /// </summary>
     internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
     {
-        var found = FindProject(configRoot);
-        return
-        [
-            Doctor.Guard("project", "Project", () => Project(found.Project, found.Problem)),
-            Doctor.Guard("downloaded", "Downloaded", () => Downloaded(found.Project)),
-            Doctor.Guard("built", "Built", () => Built(found.Project)),
-            Doctor.Guard("build", "Build", () => BuildNeeded(found.Project)),
-        ];
+        var found = FindProject(null, configRoot);
+        return Configuration(found.Project, found.Problem);
     }
+
+    /// <summary>The same checks for <paramref name="projectFile"/>, the project the CLI picked, read again as it is now.</summary>
+    internal static IReadOnlyList<DoctorCheck> Picked(string projectFile, string configRoot)
+    {
+        var found = FindProject(projectFile, configRoot);
+        return Configuration(found.Project, found.Problem);
+    }
+
+    /// <summary>The same checks for a project the caller has found already, or for none and <paramref name="problem"/>.</summary>
+    internal static IReadOnlyList<DoctorCheck> Configuration(ConfigurationProject? project, string? problem) =>
+    [
+        Doctor.Guard("project", "Project", () => Project(project, problem)),
+        Doctor.Guard("downloaded", "Downloaded", () => Downloaded(project)),
+        Doctor.Guard("built", "Built", () => Built(project)),
+        Doctor.Guard("build", "Build", () => BuildNeeded(project)),
+    ];
 
     private readonly record struct FoundProject(ConfigurationProject? Project, string? Problem);
 
-    private static FoundProject FindProject(string root)
+    /// <param name="path">A project file the CLI picked, or null to search <paramref name="root"/>.</param>
+    /// <param name="root">The config folder.</param>
+    private static FoundProject FindProject(string? path, string root)
     {
         try
         {
-            var project = ConfigurationProject.Find(null, null, root, out var problem);
+            var project = ConfigurationProject.Find(path, null, root, out var problem);
             return new(project, problem);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new(null, $"Winshell cannot read the config folder: {e.Message}");
+            return new(null, $"Winshell cannot read {path ?? "the config folder"}: {e.Message}");
         }
     }
 

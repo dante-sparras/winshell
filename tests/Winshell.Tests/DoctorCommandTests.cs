@@ -58,6 +58,24 @@ public sealed class DoctorCommandTests : IDisposable
     }
 
     [Fact]
+    public void A_folder_given_with_p_is_not_searched_like_the_config_folder()
+    {
+        var folder = Path.Combine(_root, "holder");
+        Directory.CreateDirectory(Path.Combine(folder, "default"));
+        File.WriteAllText(Path.Combine(folder, "default", "Inner.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+
+        var (code, output, _) = Run("doctor", "--json", "-p", folder);
+
+        Assert.Equal(1, code);
+        using var json = JsonDocument.Parse(output);
+        var messages = json.RootElement.GetProperty("checks").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("id").GetString() ?? "", c => c.GetProperty("message").GetString());
+        Assert.StartsWith("No .csproj at ", messages["project"], StringComparison.Ordinal);
+        Assert.EndsWith(@"\holder", messages["project"], StringComparison.Ordinal);
+        Assert.Equal("No configuration project to build.", messages["built"]);
+    }
+
+    [Fact]
     public void Text_has_a_line_a_check_and_no_color_when_redirected()
     {
         var empty = Path.Combine(_root, "empty");
