@@ -36,6 +36,7 @@ internal sealed class ShellNotices : IDisposable
     private readonly CrashReports _crashes;
     private readonly Func<Notice, Action, Action, IDisposable> _show;
     private readonly Action<string> _open;
+    private readonly Func<bool> _isQuiet;
     private IDisposable? _window;
     private bool _disposed;
 
@@ -44,24 +45,26 @@ internal sealed class ShellNotices : IDisposable
     /// <param name="crashes">The crash reports. One the shell survives shows a notice.</param>
     /// <param name="show">Shows a notice, given what its button does and what closing it does. Disposing takes it away.</param>
     /// <param name="open">Opens a file: the project that did not build, or a crash report.</param>
-    public ShellNotices(IEventLoop loop, Log log, CrashReports crashes, Func<Notice, Action, Action, IDisposable> show, Action<string> open)
+    /// <param name="isQuiet">Whether Windows is holding notifications back. A failure waits for it, and goes to the log.</param>
+    public ShellNotices(IEventLoop loop, Log log, CrashReports crashes, Func<Notice, Action, Action, IDisposable> show, Action<string> open, Func<bool> isQuiet)
     {
         _loop = loop;
         _log = log;
         _crashes = crashes;
         _show = show;
         _open = open;
+        _isQuiet = isQuiet;
         crashes.Written += OnReport;
     }
-
-    /// <summary>Whether Windows is holding notifications back. A test replaces this.</summary>
-    internal Func<bool> IsQuiet { get; set; } = () => Win32.SHQueryUserNotificationState(out var state) == 0 && QuietState(state);
 
     /// <summary>The notice showing now, or null.</summary>
     public Notice? Current { get; private set; }
 
     /// <summary>A full-screen app, a presentation, a busy state or quiet hours, the states in which Windows holds a toast back.</summary>
     internal static bool QuietState(int state) => state is QunsBusy or QunsFullScreen or QunsPresentation or QunsQuietTime;
+
+    /// <summary>Whether Windows is holding notifications back, as it reports it now.</summary>
+    internal static bool WindowsIsQuiet() => Win32.SHQueryUserNotificationState(out var state) == 0 && QuietState(state);
 
     /// <summary>How long a crash notice stays for someone who asked Windows to keep notifications up. A shorter setting doesn't shorten it.</summary>
     internal static TimeSpan CrashTimeoutFor(uint messageSeconds) =>
@@ -170,7 +173,7 @@ internal sealed class ShellNotices : IDisposable
         {
             if (Current?.Kind == NoticeKind.BuildError)
                 return;
-            if (IsQuiet())
+            if (_isQuiet())
             {
                 _log.Info("shell", $"A crash notice was held back while Windows is quiet. See {report.Path}");
                 return;

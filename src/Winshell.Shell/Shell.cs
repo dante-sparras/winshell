@@ -250,7 +250,8 @@ public sealed partial class Shell : IDisposable
                             log,
                             instance.Crashes,
                             (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
-                            path => OpenToRead.Open(path, log));
+                            path => OpenToRead.Open(path, log),
+                            ShellNotices.WindowsIsQuiet);
                         shell.Notices = notices;
                         // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
                         if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
@@ -316,9 +317,8 @@ public sealed partial class Shell : IDisposable
     /// </summary>
     private string? RestartForUpdate()
     {
-        var another = Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId);
-        if (UpdateRestart.Decide(_arguments, Environment.ProcessId, another, out _) is { } refused)
-            return refused;
+        if (Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId))
+            return "Another Winshell is running. Close it, then restart this one.";
         Loop.Post(() =>
         {
             if (StartNext() is null)

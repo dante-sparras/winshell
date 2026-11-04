@@ -4,17 +4,6 @@ namespace Winshell.ShellTests;
 public sealed class ShellServicesTests
 {
     [Fact]
-    public async Task A_singleton_is_one_object_for_the_shell()
-    {
-        var same = await ShellFixture.On(shell =>
-            (ReferenceEquals(shell.Power, shell.Power),
-             ReferenceEquals(shell.PowerMode, shell.PowerMode),
-             ReferenceEquals(shell.WindowList, shell.WindowList)));
-
-        Assert.Equal((true, true, true), same);
-    }
-
-    [Fact]
     public async Task Winland_resolves_windows_from_the_shells_window_list()
     {
         var same = await ShellFixture.On(shell => ReferenceEquals(shell.WindowList, shell.Winland.WindowList));

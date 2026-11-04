@@ -23,10 +23,7 @@ public sealed class ShellNoticeTests : IDisposable
     public ShellNoticeTests()
     {
         _crashes = new CrashReports(_dir);
-        _notices = new ShellNotices(_loop, new Log { Sink = (_, category, message) => _logged.Add($"{category}: {message}") }, _crashes, Show, _opened.Add)
-        {
-            IsQuiet = () => _quiet,
-        };
+        _notices = new ShellNotices(_loop, new Log { Sink = (_, category, message) => _logged.Add($"{category}: {message}") }, _crashes, Show, _opened.Add, () => _quiet);
     }
 
     public void Dispose()
@@ -223,13 +220,14 @@ public sealed class ShellNoticeTests : IDisposable
         {
             var notice = Build();
             using var window = new NoticeWindow(notice, () => { }, () => { }, shell.Loop);
-            await ShellFixture.LaidOut((FrameworkElement)window.Window.Content!);
+            var panel = (PanelWindow)shell.Platform.Windows.Single().Client;
+            await ShellFixture.LaidOut((FrameworkElement)panel.Content!);
             return (
-                window.Window.Width,
-                window.Window.Height,
-                window.Window.Host!.HoldsEdge,
-                AutomationProperties.GetName(window.Window.Content!),
-                AutomationProperties.GetLiveSetting(window.Window.Content!));
+                panel.Width,
+                panel.Height,
+                panel.Host!.HoldsEdge,
+                AutomationProperties.GetName(panel.Content!),
+                AutomationProperties.GetLiveSetting(panel.Content!));
         });
 
         Assert.Equal(364, read.Width);
@@ -246,7 +244,7 @@ public sealed class ShellNoticeTests : IDisposable
         var fits = await ShellFixture.On(async shell =>
         {
             using var window = new NoticeWindow(Build(), () => { }, () => { }, shell.Loop);
-            var root = (Grid)window.Window.Content!;
+            var root = (Grid)((PanelWindow)shell.Platform.Windows.Single().Client).Content!;
             var action = ((StackPanel)root.Children[0]).Children.OfType<Button>().Last();
             await ShellFixture.LaidOut(action);
             await Wait.UntilAsync(
