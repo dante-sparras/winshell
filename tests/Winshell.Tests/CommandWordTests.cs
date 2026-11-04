@@ -30,6 +30,40 @@ public class CommandWordTests
     }
 
     [Theory]
+    [InlineData("ipc", "winshell ipc needs a command. Run winshell ipc --help.")]
+    [InlineData("inspect", "winshell inspect needs a command. Run winshell inspect --help.")]
+    [InlineData("ipc call", "winshell ipc call needs a target and a function.")]
+    [InlineData("ipc call notes", "winshell ipc call needs a target and a function.")]
+    [InlineData("ipc prop notes", "winshell ipc prop needs get, then a target and a property.")]
+    [InlineData("ipc prop get notes", "winshell ipc prop needs get, then a target and a property.")]
+    [InlineData("ipc wait notes", "winshell ipc wait needs a target and a signal.")]
+    [InlineData("ipc listen", "winshell ipc listen needs a target and a signal.")]
+    [InlineData("inspect screenshot", "winshell inspect screenshot needs a file.")]
+    [InlineData("inspect click", "winshell inspect click needs a name.")]
+    [InlineData("inspect hover", "winshell inspect hover needs a name.")]
+    public void A_command_without_the_words_it_needs_names_them(string line, string message)
+    {
+        var e = Assert.Throws<ArgumentException>(() => CliParser.Parse(line.Split(' ')));
+
+        Assert.Equal(message, e.Message);
+    }
+
+    [Theory]
+    [InlineData("ipc show")]
+    [InlineData("ipc call notes add -v")]
+    [InlineData("ipc prop get notes count")]
+    [InlineData("ipc listen notes changed")]
+    [InlineData("inspect tree")]
+    [InlineData("inspect screenshot out.png TaskbarView")]
+    [InlineData("inspect click StartButton")]
+    public void A_command_with_its_words_is_read(string line)
+    {
+        var options = CliParser.Parse(line.Split(' '));
+
+        Assert.Equal(line.Split(' ')[1..], options.Positional);
+    }
+
+    [Theory]
     [InlineData("help kill", "kill")]
     [InlineData("help ipc", "ipc")]
     public void Help_with_a_command_is_that_command_s_help(string line, string command)

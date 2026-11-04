@@ -104,7 +104,7 @@ public sealed class InspectCommandTests : IDisposable
     [InlineData("nothing")]
     [InlineData("click")]
     [InlineData("screenshot")]
-    public void A_wrong_command_exits_2_and_prints_its_usage(string command)
+    public void A_wrong_or_short_command_exits_2(string command)
     {
         var (code, _, _) = Run(command);
 

@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.Globalization;
 
 namespace Winshell;
@@ -31,10 +32,14 @@ internal static class CliParser
                 return new CliOptions { Command = topic, ShowHelp = true };
             case "log":
                 break;
-            // ipc and inspect check the words after their first themselves.
+            // ipc and inspect take a command of their own, then the words that command needs.
             case "ipc" or "inspect":
-                if (positional.Length > 0 && !Subcommands(command).Contains(positional[0]))
+                if (positional.Length == 0)
+                    throw new ArgumentException($"winshell {command} needs a command. Run winshell {command} --help.");
+                if (!Subcommands(command).Contains(positional[0]))
                     throw new ArgumentException($"Unknown {command} command \"{positional[0]}\". Run winshell {command} --help.");
+                if (Lacks(command, positional) is { } needs)
+                    throw new ArgumentException($"winshell {command} {positional[0]} needs {needs}.");
                 break;
             default:
                 if (positional.Length > 0)
@@ -98,6 +103,17 @@ internal static class CliParser
         "ipc" => ["show", "call", "prop", "wait", "listen"],
         "inspect" => ["tree", "screenshot", "click", "hover"],
         _ => [],
+    };
+
+    /// <summary>What an ipc or inspect command still needs, such as "a target and a function", or null when it has it.</summary>
+    private static string? Lacks(string command, ImmutableArray<string> words) => (command, words[0]) switch
+    {
+        ("ipc", "call") when words.Length < 3 => "a target and a function",
+        ("ipc", "prop") when words.Length < 4 || words[1] != "get" => "get, then a target and a property",
+        ("ipc", "wait" or "listen") when words.Length < 3 => "a target and a signal",
+        ("inspect", "screenshot") when words.Length < 2 => "a file",
+        ("inspect", "click" or "hover") when words.Length < 2 => "a name",
+        _ => null,
     };
 
     private static ArgumentException UnknownCommand(string command) =>
