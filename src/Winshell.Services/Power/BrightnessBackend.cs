@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Management;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 using Winshell.Native;
 
 namespace Winshell.Power;
@@ -29,8 +30,9 @@ internal sealed record BrightnessSnapshot(bool Ready, IReadOnlyList<BrightnessIn
 
 /// <summary>
 /// Monitor brightness. An internal panel comes from WMI. An external monitor comes from one DDC/CI read.
-/// Reads happen when the shell starts and when an internal panel reports a change, so external monitors
-/// are not polled.
+/// Reads happen when the shell starts, when the displays change, when an internal panel reports a change, and
+/// after a burst of writes ends, so external monitors are not polled. A monitor whose read fails stays at its
+/// last reading while it is connected.
 /// </summary>
 internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
 {
@@ -40,7 +42,7 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
 
     private BrightnessBackend()
         : base(BrightnessSnapshot.Initial)
-        => Writer = new BrightnessWriter(Set);
+        => Writer = new BrightnessWriter(Set, Refresh);
 
     /// <summary>Writes brightness off the UI thread, since one write can take hundreds of milliseconds.</summary>
     public BrightnessWriter Writer { get; }
@@ -49,6 +51,7 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
 
     protected override async Task StartAsync()
     {
+        SystemEvents.DisplaySettingsChanged += (_, _) => Refresh();
         WatchInternal();
         await RefreshNowAsync().ConfigureAwait(false);
     }
@@ -68,9 +71,9 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
     }
 
     protected override Task<BrightnessSnapshot> ReadAsync()
-        => Task.FromResult(new BrightnessSnapshot(true, ReadMonitors()));
+        => Task.FromResult(new BrightnessSnapshot(true, ReadMonitors(Current.Monitors)));
 
-    private static List<BrightnessInfo> ReadMonitors()
+    private static List<BrightnessInfo> ReadMonitors(IReadOnlyList<BrightnessInfo> previous)
     {
         var panels = ReadWmi();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -89,16 +92,21 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
                 result.Add(new BrightnessInfo(panel.Instance, name, BrightnessConnection.Internal, panel.Minimum, panel.Maximum, panel.Current));
                 continue;
             }
-            if (TryReadDdc(screen.Handle, out var min, out var current, out var max))
-            {
-                var name = screen.Info.Model.Length > 0 ? screen.Info.Model : screen.Info.Name;
-                result.Add(new BrightnessInfo(screen.Info.Id, name, BrightnessConnection.External, min, max, current));
-            }
+            var reading = TryReadDdc(screen.Handle, out var min, out var current, out var max) ? (min, current, max) : ((int, int, int)?)null;
+            var external = External(screen.Info.Id, screen.Info.Model.Length > 0 ? screen.Info.Model : screen.Info.Name, reading, previous);
+            if (external is not null)
+                result.Add(external);
         }
         foreach (var panel in panels.Where(p => !used.Contains(p.Instance)))
             result.Add(new BrightnessInfo(panel.Instance, panel.Instance, BrightnessConnection.Internal, panel.Minimum, panel.Maximum, panel.Current));
         return result;
     }
+
+    /// <summary>An external monitor's info. A failed read (<paramref name="reading"/> is null) keeps the monitor's last reading, so one bad read does not remove it.</summary>
+    internal static BrightnessInfo? External(string id, string name, (int Minimum, int Current, int Maximum)? reading, IReadOnlyList<BrightnessInfo> previous)
+        => reading is { } r
+            ? new BrightnessInfo(id, name, BrightnessConnection.External, r.Minimum, r.Maximum, r.Current)
+            : previous.FirstOrDefault(p => p.Connection == BrightnessConnection.External && p.DeviceName == id);
 
     /// <summary>Sets one monitor. Returns a Windows error, or 0. Callers must not use this from tests.</summary>
     private uint Set(string deviceName, int brightness)
@@ -118,7 +126,6 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
         {
             ok = false;
         }
-        Refresh();
         return ok ? 0u : 1u;
     }
 
@@ -264,8 +271,9 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
 /// <summary>
 /// Writes each monitor's brightness on a background thread, one write at a time. A value asked for while a
 /// write runs replaces the one waiting, so a slider drag writes the newest value and drops the steps between.
+/// <paramref name="drained"/> runs each time a monitor's writes end.
 /// </summary>
-internal sealed class BrightnessWriter(Func<string, int, uint> write)
+internal sealed class BrightnessWriter(Func<string, int, uint> write, Action? drained = null)
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, (int Brightness, Action<uint> Failed)> _pending = [];
@@ -304,7 +312,7 @@ internal sealed class BrightnessWriter(Func<string, int, uint> write)
                     if (!_pending.Remove(deviceName, out next))
                     {
                         _running.Remove(deviceName);
-                        return;
+                        break;
                     }
                 }
                 if (next.Brightness == last)
@@ -314,6 +322,7 @@ internal sealed class BrightnessWriter(Func<string, int, uint> write)
                 if (error != 0)
                     next.Failed(error);
             }
+            drained?.Invoke();
         }
 #pragma warning disable CA1031 // A write that fails is reported. On this thread it would end the shell.
         catch (Exception e)
