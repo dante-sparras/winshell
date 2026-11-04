@@ -35,7 +35,6 @@ Many agents work on this repo at once.
 
 ## Before you finish
 
-- Writing, refactoring or reviewing C#? Follow [docs/agents/csharp-practices.md](docs/agents/csharp-practices.md).
 - Writing, changing or reviewing a test? It must pass the gate in [skills/test-audit/SKILL.md](skills/test-audit/SKILL.md).
 - Before every push, `pwsh scripts/check.ps1` must pass: the build with 0 warnings, formatting, fast .NET tests and PowerShell tooling tests, targeting under two minutes with no window opened.
 - Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/check.ps1 -Tier Slow`, following [the live UI procedure](docs/development.md#live-ui-with-winland-running). `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The Package workflow runs it, not required, on PRs that change `templates/` or the release files.
