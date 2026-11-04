@@ -41,9 +41,6 @@ public sealed class KeepAwake : ObservableObject, IDisposable
 
     internal static bool AnyActive => Volatile.Read(ref _active) > 0;
 
-    /// <summary>Whether this instance holds a power request with Windows.</summary>
-    internal bool HoldsRequest => _request != 0;
-
     // Each enabled instance holds its own request, and Windows keeps the PC awake while any is held.
     private unsafe void Acquire()
     {
