@@ -38,13 +38,32 @@ public sealed partial class NativeMenuTests
             }
         })
         { IsBackground = true, Name = "Tray app" };
+        var started = TimeProvider.System.GetTimestamp();
         app.SetApartmentState(ApartmentState.STA);
         app.Start();
         Wait.Until(() => menuThread != 0 && MenuShowsOn(menuThread), "the app's menu to open");
+        var opened = TimeProvider.System.GetElapsedTime(started);
+        var before = State(menuThread);
 
         NativeMenu.Dismiss();
 
-        await closed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        // This failed once on CI and never here, so a menu that stays open says what its thread was doing.
+        try
+        {
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"The menu stayed open. It took {opened.TotalMilliseconds:F0} ms to open. Its thread before the cancel: {before}. After: {State(menuThread)}.");
+        }
+    }
+
+    /// <summary>What Windows says about a thread's menu: whether one shows, and the thread's menu mode, owner and capture.</summary>
+    private static string State(uint thread)
+    {
+        var info = new GuiThreadInfo { Size = (uint)Marshal.SizeOf<GuiThreadInfo>() };
+        var known = GetGUIThreadInfo(thread, ref info);
+        return $"menu shows {MenuShowsOn(thread)}, info read {known}, flags 0x{info.Flags:x}, owner {info.MenuOwner != 0}, capture {info.Capture != 0}";
     }
 
     private static bool MenuShowsOn(uint thread)
@@ -71,6 +90,19 @@ public sealed partial class NativeMenuTests
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyMenu(nint menu);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GuiThreadInfo
+    {
+        public uint Size;
+        public uint Flags;
+        public nint Active, Focus, Capture, MenuOwner, MoveSize, Caret;
+        public int Left, Top, Right, Bottom;
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
 
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint FindWindowExW(nint parent, nint childAfter, string? className, string? windowName);
