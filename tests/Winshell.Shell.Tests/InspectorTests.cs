@@ -140,7 +140,7 @@ public sealed class InspectorTests : IDisposable
     }
 
     [Fact]
-    public async Task A_click_finds_an_element_by_its_automation_name_which_what_it_holds_may_share()
+    public async Task A_click_finds_an_element_by_its_automation_name_even_when_what_it_holds_shares_it()
     {
         var clicks = await ShellFixture.On(async shell =>
         {

@@ -188,10 +188,14 @@ internal static class Inspector
     private static string Ambiguous(string command, string name, List<(int Window, FrameworkElement Element)> found, List<ShellWindow> windows)
     {
         var quoted = name.Any(char.IsWhiteSpace) ? $"\"{name}\"" : name;
+        // A window tells them apart only when they are in different windows.
+        var hint = found.DistinctBy(match => match.Window).Count() > 1
+            ? $"Add the window, as in winshell inspect {command} {quoted} {found[0].Window}, or use a name only one of them has."
+            : "Use a name only one of them has.";
         return string.Join('\n', [
             $"{name} names {found.Count} elements:",
             .. found.Select(match => $"  window {match.Window} ({windows[match.Window].Content?.GetType().Name}): {Described(match.Element)}"),
-            $"Add the window, as in winshell inspect {command} {quoted} {found[0].Window}, or use a name only one of them has.",
+            hint,
         ]);
     }
 
