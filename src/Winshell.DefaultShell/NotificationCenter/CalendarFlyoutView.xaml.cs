@@ -22,15 +22,11 @@ public sealed partial class CalendarFlyoutView : UserControl
 
     public Preferences Preferences { get; }
 
-    /// <summary>The Close button asked to hide the popup.</summary>
-    public event Action? CloseRequested;
-
-    public void FocusClose() => CloseButton.Focus(FocusState.Programmatic);
+    /// <summary>The keyboard lands on the flyout itself, as on quick settings. Tab reaches its controls, and Esc closes it.</summary>
+    public void FocusFlyout() => Focus(FocusState.Programmatic);
 
     /// <summary>The taskbar is going away. The center and the preferences stay.</summary>
     public void Release() => Bindings.StopTracking();
-
-    private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void OnSized(object sender, SizeChangedEventArgs e)
     {
