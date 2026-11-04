@@ -40,7 +40,8 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
     {
         var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
-        var process = ProbeShell.Start(config, Path.Combine(_dir, "local"), program: ProbeShell.Build(Path.Combine(_dir, "hung"), HungSource));
+        File.WriteAllText(Path.Combine(config, ProbeShell.HangMarker), "");
+        var process = ProbeShell.Start(config, Path.Combine(_dir, "local"), shellId: "hung");
         _started.Add(process);
         var pidFile = Path.Combine(config, "child.pid");
         Wait.Until(() => File.Exists(pidFile), "the shell's program to start");
@@ -59,29 +60,6 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
             child.WaitForExit(5000);
         }
     }
-
-    // A shell that answers the quit and then never exits, with a child of its own, the way a program it started would look: a child of the shell.
-    private const string HungSource =
-        """
-        using System.Diagnostics;
-        using Winshell;
-
-        internal sealed class Hung : ShellConfiguration
-        {
-            public override void Start(Shell shell)
-            {
-                var child = Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;
-                File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR")!, "child.pid"), child.Id.ToString());
-                AppDomain.CurrentDomain.ProcessExit += (_, _) => Thread.Sleep(Timeout.Infinite);
-            }
-        }
-
-        internal static class Program
-        {
-            [STAThread]
-            private static void Main() => Shell.Run<Hung>(new ShellOptions { ShellId = "hung" });
-        }
-        """;
 
     private Process Start(string configDir)
     {
