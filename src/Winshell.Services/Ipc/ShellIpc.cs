@@ -114,7 +114,7 @@ public sealed class ShellIpc
     private Target Find(string target) =>
         _targets.TryGetValue(target, out var found) ? found : throw new IpcException($"Target not found: {target}");
 
-    private Removal Add<T>(string target, string name, T member, Func<Target, List<T>> list)
+    private DisposeAction Add<T>(string target, string name, T member, Func<Target, List<T>> list)
         where T : IIpcMember
     {
         if (!_targets.TryGetValue(target, out var found))
@@ -128,7 +128,7 @@ public sealed class ShellIpc
         }
         else
             members.Add(member);
-        return new Removal(() =>
+        return new DisposeAction(() =>
         {
             // A later registration under this name took over, and it stays.
             if (members.Remove(member) && found.IsEmpty)
@@ -189,11 +189,6 @@ public sealed class ShellIpc
         public List<IpcSignal> Signals { get; } = [];
 
         public bool IsEmpty => Functions.Count == 0 && Properties.Count == 0 && Signals.Count == 0;
-    }
-
-    private sealed class Removal(Action remove) : IDisposable
-    {
-        public void Dispose() => remove();
     }
 }
 

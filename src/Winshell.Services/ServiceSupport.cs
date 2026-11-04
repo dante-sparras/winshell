@@ -80,7 +80,7 @@ internal abstract class SnapshotSource<T>
         }
         if (start)
             ServiceSupport.Run(Category, StartAsync);
-        return new Subscription(() =>
+        return new DisposeAction(() =>
         {
             lock (_lock)
                 _listeners -= listener;
@@ -130,12 +130,5 @@ internal abstract class SnapshotSource<T>
             listeners = _listeners;
         }
         listeners?.Invoke(next);
-    }
-
-    private sealed class Subscription(Action dispose) : IDisposable
-    {
-        private Action? _dispose = dispose;
-
-        public void Dispose() => Interlocked.Exchange(ref _dispose, null)?.Invoke();
     }
 }
