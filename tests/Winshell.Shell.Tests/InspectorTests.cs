@@ -48,6 +48,8 @@ public sealed class InspectorTests : IDisposable
 
     public sealed class Page : StackPanel;
 
+    public sealed class Other : StackPanel;
+
     private static Page Filled(out Button button, out TextBlock label)
     {
         label = new TextBlock { Name = "Label", Text = "hello" };
@@ -138,11 +140,13 @@ public sealed class InspectorTests : IDisposable
     }
 
     [Fact]
-    public async Task A_click_finds_an_element_by_its_automation_name()
+    public async Task A_click_finds_an_element_by_its_automation_name_even_when_what_it_holds_shares_it()
     {
         var clicks = await ShellFixture.On(async shell =>
         {
-            var button = new Button { Content = "Go" };
+            var card = new TextBlock { Text = "Go" };
+            AutomationProperties.SetName(card, "Start");
+            var button = new Button { Content = card };
             AutomationProperties.SetName(button, "Start");
             var count = 0;
             button.Click += (_, _) => count++;
@@ -156,6 +160,47 @@ public sealed class InspectorTests : IDisposable
         });
 
         Assert.Equal(1, clicks);
+    }
+
+    [Fact]
+    public async Task A_name_two_windows_share_clicks_neither_and_lists_both_until_a_window_is_named()
+    {
+        var (message, clicks) = await ShellFixture.On(async shell =>
+        {
+            var first = new Button { Name = "Twin", Content = "Go" };
+            var second = new Button { Name = "Twin", Content = "Go" };
+            var firstClicks = 0;
+            var secondClicks = 0;
+            first.Click += (_, _) => firstClicks++;
+            second.Click += (_, _) => secondClicks++;
+            var page = new Page();
+            page.Children.Add(first);
+            var other = new Other();
+            other.Children.Add(second);
+            using var firstPanel = Panel(page);
+            using var secondPanel = Panel(other);
+            await ShellFixture.LaidOut(first);
+            await ShellFixture.LaidOut(second);
+
+            var message = "";
+            try
+            {
+                await Inspector.Run(shell, "click", ["Twin"]);
+            }
+            catch (IpcException e)
+            {
+                message = e.Message;
+            }
+            await Inspector.Run(shell, "click", ["Twin", nameof(Other)]);
+            await ShellFixture.LaidOut(second);
+            return (message, (firstClicks, secondClicks));
+        });
+
+        Assert.Contains("Twin names 2 elements", message, StringComparison.Ordinal);
+        Assert.Contains($"({nameof(Page)}): Button name=Twin", message, StringComparison.Ordinal);
+        Assert.Contains($"({nameof(Other)}): Button name=Twin", message, StringComparison.Ordinal);
+        Assert.Contains("winshell inspect click Twin ", message, StringComparison.Ordinal);
+        Assert.Equal((0, 1), clicks);
     }
 
     [Fact]

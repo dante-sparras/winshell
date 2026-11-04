@@ -31,8 +31,8 @@ internal static class Inspector
         {
             "tree" => Tree(shell),
             "screenshot" when args.Count > 0 => await Screenshot(Shown(shell, window), args[0], shell.IsDark),
-            "click" when args.Count > 0 => Click(Find(shell, args[0], window), args[0]),
-            "hover" when args.Count > 0 => Hover(Find(shell, args[0], window), args[0]),
+            "click" when args.Count > 0 => Click(Find(shell, command, args[0], window), args[0]),
+            "hover" when args.Count > 0 => Hover(Find(shell, command, args[0], window), args[0]),
             _ => throw new IpcException($"Unknown inspect command {command}"),
         };
     }
@@ -164,12 +164,52 @@ internal static class Inspector
             ?? throw new IpcException($"No open window shows {name}.");
     }
 
-    private static FrameworkElement Find(Shell shell, string name, IReadOnlyList<string> window)
+    /// <summary>The one element <paramref name="name"/> names. When it names more, acting on the first would act on a guess.</summary>
+    private static FrameworkElement Find(Shell shell, string command, string name, IReadOnlyList<string> window)
     {
-        var windows = window.Count > 0 ? [Window(shell, window)] : Windows(shell);
-        return windows.Select(open => open.Content).OfType<UIElement>().SelectMany(content => (UIElement[])[content, .. Popups(content)])
-            .Select(root => Find(root, name)).FirstOrDefault(found => found is not null)
-            ?? throw new IpcException($"No element is named {name}. winshell inspect tree lists them.");
+        var windows = Windows(shell);
+        var searched = window.Count > 0 ? [Window(shell, window)] : windows;
+        var found = new List<(int Window, FrameworkElement Element)>();
+        foreach (var open in searched)
+        {
+            if (open.Content is not { } content)
+                continue;
+            var at = windows.IndexOf(open);
+            foreach (var root in (UIElement[])[content, .. Popups(content)])
+                Find(root, name, element => found.Add((at, element)));
+        }
+        return found switch
+        {
+            [] => throw new IpcException($"No element is named {name}. winshell inspect tree lists them."),
+            [var (_, element)] => element,
+            _ => throw new IpcException(Ambiguous(command, name, found, windows)),
+        };
+    }
+
+    private static string Ambiguous(string command, string name, List<(int Window, FrameworkElement Element)> found, List<ShellWindow> windows)
+    {
+        var quoted = name.Any(char.IsWhiteSpace) ? $"\"{name}\"" : name;
+        // A window tells them apart only when they are in different windows.
+        var hint = found.DistinctBy(match => match.Window).Count() > 1
+            ? $"Add the window, as in winshell inspect {command} {quoted} {found[0].Window}, or use a name only one of them has."
+            : "Use a name only one of them has.";
+        return string.Join('\n', [
+            $"{name} names {found.Count} elements:",
+            .. found.Select(match => $"  window {match.Window} ({windows[match.Window].Content?.GetType().Name}): {Described(match.Element)}"),
+            hint,
+        ]);
+    }
+
+    private static string Described(FrameworkElement element)
+    {
+        var text = element.GetType().Name;
+        if (element.Name.Length > 0)
+            text += $" name={element.Name}";
+        if (AutomationProperties.GetAutomationId(element) is { Length: > 0 } id)
+            text += $" id={id}";
+        if (AutomationProperties.GetName(element) is { Length: > 0 } label)
+            text += $" label=\"{label}\"";
+        return text;
     }
 
     /// <summary>What the open popups of a window show, such as a flyout or a menu, which its content's tree does not hold.</summary>
@@ -188,17 +228,20 @@ internal static class Inspector
         return Window(shell, named).Content?.XamlRoot?.Content ?? throw new IpcException("That window is empty.");
     }
 
-    private static FrameworkElement? Find(DependencyObject element, string name)
+    /// <summary>
+    /// Each element the name names. The search does not go into one it found: a button and the card it holds, both
+    /// labelled with the setting's title, are one thing to click.
+    /// </summary>
+    private static void Find(DependencyObject element, string name, Action<FrameworkElement> found)
     {
         if (element is FrameworkElement framed
             && (framed.Name == name || AutomationProperties.GetAutomationId(framed) == name || AutomationProperties.GetName(framed) == name))
-            return framed;
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
         {
-            if (Find(VisualTreeHelper.GetChild(element, i), name) is { } found)
-                return found;
+            found(framed);
+            return;
         }
-        return null;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+            Find(VisualTreeHelper.GetChild(element, i), name, found);
     }
 
     /// <summary>What Narrator does to activate an element. A disabled control refuses it, as it refuses a click.</summary>

@@ -79,7 +79,8 @@ public sealed class InspectCommandTests : IDisposable
     {
         Assert.Equal(0, Count(Run("tree").Output, "StartView"));
 
-        var (code, output, error) = Run("click", "StartButton");
+        // Each display can have a taskbar, so the window says which StartButton.
+        var (code, output, error) = Run("click", "StartButton", "TaskbarView");
 
         Assert.Equal("", error);
         Assert.Equal((0, "Clicked StartButton"), (code, output.Trim()));
