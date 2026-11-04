@@ -155,6 +155,30 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
+    public async Task Automatic_updates_say_why_they_are_off_when_this_build_does_not_update_itself()
+    {
+        var (available, description) = await ShellFixture.On(async shell =>
+        {
+            using var rig = new Rig(shell, null);
+            try
+            {
+                Assert.Equal("", shell.Ipc.Call("settings", "open", ["autoUpdate"]));
+                var root = (FrameworkElement)(await rig.Shown()).Content!;
+                var title = SettingsCatalog.RequireSetting("autoUpdate").Title;
+                var card = Find<SettingsCard>(root, found => found.Title == title) ?? throw new InvalidOperationException("About has no automatic updates card.");
+                return (shell.Updates.Available, card.Description);
+            }
+            finally
+            {
+                rig.Restore();
+            }
+        });
+
+        Assert.False(available);
+        Assert.Equal(SettingsAbout.AutomaticUnavailable, description);
+    }
+
+    [Fact]
     public async Task The_taskbar_menu_offers_Taskbar_settings_and_closes_when_it_is_chosen()
     {
         var opened = await ShellFixture.On(async shell =>

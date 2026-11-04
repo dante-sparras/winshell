@@ -13,6 +13,7 @@ public static class SettingsAbout
     public const string NoUpdates = "This build of Winshell does not update itself";
     public const string WingetUpdates = "Updated by winget";
     public const string PackagedUpdates = "Updates come from where you installed Winshell, such as the Microsoft Store";
+    public const string AutomaticUnavailable = "Only a Winshell that updates itself downloads updates";
     public const string NoFolder = "This shell has no config folder";
     public const string NoLog = "This instance writes no log";
     public const string DiagnosticsUnavailable = "Only a shell started by winshell.exe can check its setup";
@@ -46,6 +47,9 @@ public static class SettingsAbout
         status == UpdateStatus.Ready ? "Restart Winshell to update" : "Check for Winshell updates";
 
     public static bool AutomaticEnabled(bool available) => available;
+
+    /// <summary>What automatic updates do, or why the switch is off when this build does not update itself.</summary>
+    public static string Automatic(bool available, string idle) => available ? idle : AutomaticUnavailable;
 
     public static bool AutomaticOn(bool available, bool autoUpdate) => available && autoUpdate;
 

@@ -166,6 +166,8 @@ public sealed class SettingsPagesTests : IDisposable
         Assert.True(SettingsAbout.UpdatesBusy(UpdateStatus.Downloading));
         Assert.False(SettingsAbout.UpdatesBusy(UpdateStatus.Ready));
         Assert.False(SettingsAbout.AutomaticEnabled(false));
+        Assert.Equal(SettingsAbout.AutomaticUnavailable, SettingsAbout.Automatic(false, "idle"));
+        Assert.Equal("idle", SettingsAbout.Automatic(true, "idle"));
         Assert.False(SettingsAbout.AutomaticOn(false, true));
         Assert.True(SettingsAbout.AutomaticOn(true, true));
         Assert.Equal(SettingsAbout.NoFolder, SettingsAbout.Folder(""));
