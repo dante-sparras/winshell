@@ -19,8 +19,6 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
         InitializeComponent();
         TilesCard.Apply(SettingsCatalog.RequireSetting("quickSettingsTiles"));
         TilesCard.IsTabStop = true;
-        Tiles.RemoveLabel = "Remove";
-        Tiles.RemoveGlyph = "\uE738";
         Tiles.EmptyText = "Quick settings shows no tiles";
         Tiles.MoveRequested += OnMove;
         Tiles.RemoveRequested += OnRemove;

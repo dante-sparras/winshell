@@ -5,7 +5,7 @@ using Winshell.DefaultShell.Taskbar;
 
 namespace Winshell.DefaultShell;
 
-/// <summary>One row of an order list: its name, and move up, move down and remove.</summary>
+/// <summary>One row of an order list: its name, and move up, move down and unpin.</summary>
 public sealed partial class SettingsOrderRow : UserControl
 {
     private string _icon = "";
@@ -28,7 +28,7 @@ public sealed partial class SettingsOrderRow : UserControl
 
     public event EventHandler? Removed;
 
-    public void Bind(SettingsOrderItem item, int index, int count, string removeLabel, string removeGlyph)
+    public void Bind(SettingsOrderItem item, int index, int count)
     {
         Key = item.Key;
         Label.Text = item.Title;
@@ -38,16 +38,15 @@ public sealed partial class SettingsOrderRow : UserControl
         Icon.Visibility = Visibility.Collapsed;
         Up.IsEnabled = index > 0;
         Down.IsEnabled = index < count - 1;
-        RemoveIcon.Glyph = removeGlyph;
         AutomationProperties.SetName(this, item.Title);
         AutomationProperties.SetPositionInSet(this, index + 1);
         AutomationProperties.SetSizeOfSet(this, count);
         AutomationProperties.SetName(Up, "Move " + item.Title + " up");
         AutomationProperties.SetName(Down, "Move " + item.Title + " down");
-        AutomationProperties.SetName(Remove, removeLabel + " " + item.Title);
+        AutomationProperties.SetName(Remove, "Unpin " + item.Title);
         ToolTipService.SetToolTip(Up, "Move up");
         ToolTipService.SetToolTip(Down, "Move down");
-        ToolTipService.SetToolTip(Remove, removeLabel);
+        ToolTipService.SetToolTip(Remove, "Unpin");
         if (IsLoaded)
             LoadIcon();
     }
