@@ -667,8 +667,10 @@ internal sealed class IpcServer : IDisposable
         if (PipeTrust.ServerRefusal(client) is { } refusal)
             throw new IOException(refusal);
         using var reader = new StreamReader(client, Encoding.UTF8);
-        await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
-        await writer.WriteLineAsync(JsonSerializer.Serialize(request with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text }, IpcJson.Default.IpcRequest)).ConfigureAwait(false);
+        // Written straight to the pipe, with no writer to flush on the way out: a shell that closed its end without
+        // answering would make that flush throw, and the instance would look unreachable.
+        var sent = JsonSerializer.Serialize(request with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text }, IpcJson.Default.IpcRequest);
+        await client.WriteAsync(Encoding.UTF8.GetBytes(sent + Environment.NewLine), cancel).ConfigureAwait(false);
         while (true)
         {
             var line = await reader.ReadLineAsync(cancel).ConfigureAwait(false);

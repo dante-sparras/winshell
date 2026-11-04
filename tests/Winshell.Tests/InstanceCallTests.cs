@@ -14,6 +14,22 @@ public class InstanceCallTests
     private InstanceInfo Instance =>
         new("abc123", Environment.ProcessId, "shell", @"C:\cfg\MyShell.exe", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), _pipe, "log.txt");
 
+    // Whether the close lands before or after the call starts reading varies, so the call is made several times.
+    [Fact]
+    public async Task A_call_to_an_instance_that_closes_the_pipe_without_answering_says_so()
+    {
+        for (var call = 0; call < 10; call++)
+        {
+            await using var shell = IpcServer.OpenFirst(_pipe);
+            var closing = ReadThen(shell, shell.Dispose);
+
+            var answer = await InstanceCall.AskAsync(Instance, new IpcRequest("show"));
+
+            Assert.Equal(new InstanceCall.Answer(null, "Instance abc123 closed the control pipe without answering."), answer);
+            await closing;
+        }
+    }
+
     [Fact]
     public async Task A_call_this_winshell_refuses_names_the_instance_and_the_reason()
     {
