@@ -137,6 +137,7 @@
                     <Button
                         Grid.Column="1"
                         Content="Today"
+                        Height="32"
                         Padding="8,4"
                         BorderThickness="0"
                         Background="Transparent"
