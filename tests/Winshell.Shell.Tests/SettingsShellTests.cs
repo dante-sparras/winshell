@@ -217,7 +217,7 @@ public sealed class SettingsShellTests
     }
 
     [Fact]
-    public async Task Settings_names_and_draws_a_tiles_unpin_button_as_quick_settings_does()
+    public async Task Settings_names_and_draws_unpin_as_quick_settings_does()
     {
         var (settings, quick, tip) = await ShellFixture.On(async shell =>
         {
@@ -231,7 +231,7 @@ public sealed class SettingsShellTests
                 Assert.Equal("", shell.Ipc.Call("settings", "open", ["quickSettings"]));
                 var root = (FrameworkElement)(await rig.Shown()).Content!;
                 var row = Find<SettingsOrderRow>(root, found => found.Key == kind.Key) ?? throw new InvalidOperationException($"Settings lists no {kind.Key} tile.");
-                return (Action(row.RemoveButton), Action(badge), ToolTipService.GetToolTip(row.RemoveButton) as string);
+                return (Shows(row.RemoveButton), Shows(badge), ToolTipService.GetToolTip(row.RemoveButton) as string);
             }
             finally
             {
@@ -398,7 +398,7 @@ public sealed class SettingsShellTests
     }
 
     /// <summary>What a button says it does, and the icon it shows.</summary>
-    private static (string Name, string Glyph) Action(Button button) =>
+    private static (string Name, string Glyph) Shows(Button button) =>
         (AutomationProperties.GetName(button), (button.Content as FontIcon ?? throw new InvalidOperationException("The button shows no icon.")).Glyph);
 
     private static Button Button(FloatingWindow window, string name)
