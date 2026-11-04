@@ -17,11 +17,21 @@ For the folder map, see [Project structure](docs/development.md#project-structur
 Many agents work on this repo at once.
 
 - First, in every session, run `git fetch origin main` and `git rev-list --left-right --count HEAD...origin/main`. A second count above 0 means this checkout, and the `AGENTS.md` you just read, are behind `main`: update the base as [Start a task](docs/development.md#start-a-task) describes before you edit or rely on them.
-- One task is one issue, one worktree, one branch and one PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
+- One task is one thread, one issue, one worktree, one branch and one small PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
 - Name the branch `agent/<tool>/<issue#>-<slug>`, such as `agent/claude/123-tray-overflow`, and put `Fixes #<issue#>` in the PR body.
-- Run tasks side by side only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
+- Run tasks side by side, and assign them to parallel threads, only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
 - One PR at a time changes a shared file: a `Directory.*.props` such as `Directory.Packages.props`, `global.json`, `nuget.config`, `.editorconfig`, `winshell.slnx`, `src/BannedSymbols.txt`, `tests/TestSupport/`, a lockfile, or a type more than one module uses.
 - Work that builds on another open PR is a stack of small PRs made with `gh stack` (`gh extension install github/gh-stack`), not one big PR.
+
+### Conflicts and merging
+
+`main` has no merge queue and doesn't require a PR to be up to date, so two PRs that each pass can break `main` together.
+
+1. When your PR conflicts with `main`, rebase onto the latest `origin/main` (a stacked PR runs `gh stack rebase`); never merge `main` into your branch. Force-push only your own PR branch, with `git push --force-with-lease origin HEAD`, never `main`.
+2. Resolve each conflict by intent: find the PR that changed the same code with `git log --oneline <your-branch>..origin/main -- <file>`, read it, and keep both behaviors. Taking "ours" or "theirs" wholesale is never a resolution.
+3. If both sides change the same behavior, run `git rebase --abort`, comment on your PR naming the other PR and the collision, and escalate to the lead thread, or to the user if there is none, instead of guessing.
+4. Run `pwsh scripts/check.ps1` again before you push, even after a clean rebase: it can still break logic.
+5. You own the PR until it merges: enable auto-merge with `gh pr merge <number> --squash --auto`, fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`.
 
 ## Before you finish
 
