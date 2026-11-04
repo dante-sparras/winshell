@@ -1,6 +1,6 @@
 # Contributing
 
-The [development runbook](docs/development.md) covers the prerequisites, the first checkout, and every command. Run `pwsh scripts/check.ps1` before every push.
+The [development runbook](docs/development.md) covers the prerequisites, the first checkout, and every command. Before every push, run the [checks for the change](docs/development.md#checks-by-change): prose-only changes need lint; compiled documentation needs its targeted tests; other changes need the full check.
 
 ## Write tests that don't flake
 
