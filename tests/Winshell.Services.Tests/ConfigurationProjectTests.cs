@@ -34,15 +34,6 @@ public sealed class ConfigurationProjectTests : IDisposable
         return error;
     }
 
-    [Fact]
-    public void Several_projects_in_the_config_folder_are_named_not_passed_over()
-    {
-        Project("A.csproj");
-        Project("B.csproj");
-
-        Assert.Equal($"Several projects in {_root}; name one with -p: A.csproj, B.csproj", Refusal());
-    }
-
     private CommandResult Builds(string file, IReadOnlyList<string> arguments, string folder)
     {
         _commands.Add(file + " " + string.Join(' ', arguments));
@@ -84,6 +75,16 @@ public sealed class ConfigurationProjectTests : IDisposable
 
         Assert.Equal(file, Found(name: "work").ProjectFile);
         Assert.Equal($"No config named \"home\" in {_root}", Refusal(name: "home"));
+    }
+
+    [Fact]
+    public void Several_projects_in_the_config_folder_are_refused_not_passed_over()
+    {
+        Project("A.csproj");
+        Project("B.csproj");
+        Project(@"default\Default.csproj");
+
+        Assert.Equal($"Several projects in {_root}; name one with -p: A.csproj, B.csproj", Refusal());
     }
 
     [Fact]

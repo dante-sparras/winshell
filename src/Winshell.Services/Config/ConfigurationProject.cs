@@ -111,7 +111,7 @@ internal sealed partial class ConfigurationProject
                 error = $"No config named \"{name}\" in {root}";
             return found;
         }
-        // Several projects in the root is an answer too: the default folder must not overwrite it with none.
+        // Several projects in the root is a refusal, not a miss: neither default nor a lone folder may stand in for it.
         if (In(root, out error) is { } atRoot)
             return atRoot;
         if (error is not null)
