@@ -17,6 +17,7 @@ public sealed partial class SettingsLink : HyperlinkButton
         if (entry.Uri.Length > 0)
             NavigateUri = new Uri(entry.Uri);
         AutomationProperties.SetName(this, entry.Title);
+        AutomationProperties.SetAutomationId(this, entry.Key);
         AutomationProperties.SetAccessibilityView(Body, AccessibilityView.Raw);
     }
 }

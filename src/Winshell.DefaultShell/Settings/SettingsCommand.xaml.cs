@@ -13,6 +13,7 @@ public sealed partial class SettingsCommand : Button
     {
         Body.Apply(entry, description, clickable: true, chevron: "\uE76C");
         AutomationProperties.SetName(this, entry.Title);
+        AutomationProperties.SetAutomationId(this, entry.Key);
         AutomationProperties.SetAccessibilityView(Body, AccessibilityView.Raw);
     }
 }
