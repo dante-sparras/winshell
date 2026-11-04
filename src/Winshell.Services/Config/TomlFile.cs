@@ -28,8 +28,9 @@ public sealed class TomlCommentAttribute(string text) : Attribute
 /// </code>
 /// The file is read in the constructor, so a default belongs in the property's initializer. After that the object
 /// follows the file, and assigning a property writes it, on the loop that was passed in. Everything else in the file
-/// stays, as <see cref="TomlDocument"/> says. A write reads the file again and puts only assigned values into it, and
-/// the keys it does not have yet. When that read fails or does not parse, nothing is written and a warning is logged.
+/// stays, as <see cref="TomlDocument"/> says. A key no property reads stays too, and a warning names its line and the
+/// key it may be a misspelling of. A write reads the file again and puts only assigned values into it, and the keys it
+/// does not have yet. When that read fails or does not parse, nothing is written and a warning is logged.
 /// </summary>
 public abstract class TomlFile : ObservableObject, IDisposable
 {
@@ -166,7 +167,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
             return;
         }
         Error = "";
-        Apply(document, keepAssigned: false);
+        Apply(document, text, keepAssigned: false);
         _assigned.Clear();
         Loaded = true;
     }
@@ -189,7 +190,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
         Error = "";
         // A file that has not changed was applied already, and its refused values reported.
         if (text != _text)
-            Apply(document, keepAssigned: true);
+            Apply(document, text ?? "", keepAssigned: true);
         var read = document.Values;
         foreach (var key in _keys)
         {
@@ -233,10 +234,18 @@ public abstract class TomlFile : ObservableObject, IDisposable
 
     /// <summary>
     /// Loads the values of <paramref name="document"/> into the properties. One that does not fit its property, or is
-    /// refused, is reported and left: nothing writes a key that was not assigned, so the file keeps it as it is.
+    /// refused, is reported and left: nothing writes a key that was not assigned, so the file keeps it as it is. So is a
+    /// key no property reads, with the one it may be a misspelling of.
     /// </summary>
-    private void Apply(TomlDocument document, bool keepAssigned)
+    private void Apply(TomlDocument document, string text, bool keepAssigned)
     {
+        foreach (var name in document.Values.Keys)
+        {
+            if (_keys.Exists(key => key.Name == name))
+                continue;
+            var guess = Nearest(name) is { } near ? $" Did you mean {near}?" : "";
+            Warn($"{TomlSyntax.KeyAt(_path, text, name)}: {name} is not a key this file has, so it is ignored.{guess}");
+        }
         _loading = true;
         try
         {
@@ -256,6 +265,34 @@ public abstract class TomlFile : ObservableObject, IDisposable
         {
             _loading = false;
         }
+    }
+
+    /// <summary>The key <paramref name="name"/> may be a misspelling of: one that differs in case or in a letter or two.</summary>
+    private string? Nearest(string name)
+    {
+        var best = (Name: (string?)null, Distance: 3);
+        foreach (var key in _keys)
+        {
+            var distance = Distance(name.ToLowerInvariant(), key.Name.ToLowerInvariant());
+            if (distance < best.Distance && distance < Math.Max(name.Length, key.Name.Length) / 2)
+                best = (key.Name, distance);
+        }
+        return best.Name;
+    }
+
+    /// <summary>The fewest letters to add, remove or change to turn one word into the other.</summary>
+    private static int Distance(string a, string b)
+    {
+        var previous = Enumerable.Range(0, b.Length + 1).ToArray();
+        for (var i = 1; i <= a.Length; i++)
+        {
+            var current = new int[b.Length + 1];
+            current[0] = i;
+            for (var j = 1; j <= b.Length; j++)
+                current[j] = Math.Min(Math.Min(current[j - 1], previous[j]) + 1, previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            previous = current;
+        }
+        return previous[b.Length];
     }
 
     private void Leave(Key key, string reason) => Warn($"{_path}: {key.Name} {reason}, so it was left unchanged");

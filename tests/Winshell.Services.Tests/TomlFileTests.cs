@@ -83,7 +83,7 @@ public sealed class TomlFileTests
         Assert.Equal(["Contoso.Chat", "Contoso.Mail"], settings.Hidden.Select(row => row["id"]));
         Assert.Equal("Chat", settings.Hidden[0]["name"]);
         Assert.False(settings.Hidden[1].ContainsKey("name"));
-        Assert.Empty(fixture.Messages);
+        Assert.Equal([$"TomlFile: {fixture.FilePath}[5:1]: unknown is not a key this file has, so it is ignored."], fixture.Messages);
     }
 
     [Fact]
@@ -239,7 +239,12 @@ public sealed class TomlFileTests
             kept = true
 
             """, fixture.Text);
-        Assert.Empty(fixture.Messages);
+        Assert.Equal(
+            [
+                $"TomlFile: {fixture.FilePath}[5:1]: unknown is not a key this file has, so it is ignored.",
+                $"TomlFile: {fixture.FilePath}[8:1]: other is not a key this file has, so it is ignored.",
+            ],
+            fixture.Messages);
     }
 
     [Fact]
@@ -358,6 +363,23 @@ public sealed class TomlFileTests
         fixture.Loop.Process();
 
         Assert.Single(fixture.Messages);
+    }
+
+    [Fact]
+    public void A_key_the_file_does_not_read_is_reported_once_with_its_line_and_the_key_it_may_be()
+    {
+        using var fixture = new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\n\n[colors]\nmode = \"dark\"\n");
+        using var settings = Open(fixture);
+        settings.Name = "next";
+        fixture.Loop.Process();
+
+        Assert.Equal(
+            [
+                "TomlFile: " + fixture.FilePath + "[2:1]: Size is not a key this file has, so it is ignored. Did you mean size?",
+                "TomlFile: " + fixture.FilePath + "[3:3]: tilez is not a key this file has, so it is ignored. Did you mean tiles?",
+                "TomlFile: " + fixture.FilePath + "[5:1]: colors is not a key this file has, so it is ignored.",
+            ],
+            fixture.Messages);
     }
 
     [Theory]
