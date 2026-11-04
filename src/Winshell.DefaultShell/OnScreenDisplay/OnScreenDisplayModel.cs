@@ -140,6 +140,8 @@ public sealed class OnScreenDisplayModel : ObservableObject
         {
             if (!Set(ref field, value))
                 return;
+            if (!value)
+                _volumeKey = null;
             Refresh();
             Note(ref _volumeKey, VolumeKey(), VolumeKnown, "volume");
         }
@@ -204,6 +206,8 @@ public sealed class OnScreenDisplayModel : ObservableObject
         {
             if (!Set(ref field, value))
                 return;
+            if (!value)
+                _microphoneKey = null;
             Refresh();
             Note(ref _microphoneKey, MicrophoneKey(), MicrophoneKnown, "microphone");
         }

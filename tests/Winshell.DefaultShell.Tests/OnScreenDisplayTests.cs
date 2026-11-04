@@ -251,6 +251,59 @@ public sealed class OnScreenDisplayTests
     }
 
     [Fact]
+    public void Switching_the_default_output_does_not_show_until_its_volume_changes()
+    {
+        using var rig = new Rig();
+        var speakers = rig.Graph.Add(new FakePlayback("Speakers"));
+        speakers.SetAudio(0.2f, false);
+        var headphones = rig.Graph.Add(new FakePlayback("Headphones"));
+        headphones.SetAudio(0.7f, true);
+        rig.Graph.Use(speakers);
+        rig.Bind();
+        rig.Settle();
+
+        rig.Graph.Use(headphones);
+        Assert.False(rig.Model.Open);
+
+        headphones.SetAudio(0.5f, true);
+        Assert.Equal("Volume muted", rig.Model.Announcement);
+    }
+
+    [Fact]
+    public void Removing_the_last_output_does_not_show_a_volume_of_zero()
+    {
+        using var rig = new Rig();
+        var speakers = rig.Graph.Add(new FakePlayback("Speakers"));
+        speakers.SetAudio(0.4f, true);
+        rig.Graph.Use(speakers);
+        rig.Bind();
+        rig.Settle();
+
+        rig.Graph.Use(null);
+        Assert.False(rig.Model.Open);
+
+        rig.Graph.Use(speakers);
+        Assert.False(rig.Model.Open);
+    }
+
+    [Fact]
+    public void Removing_a_muted_microphone_does_not_show_the_microphone_on()
+    {
+        using var rig = new Rig();
+        var mic = rig.Graph.AddRecording("Microphone");
+        mic.SetAudio(0f, true);
+        rig.Graph.UseRecording(mic);
+        rig.Bind();
+        rig.Settle();
+
+        rig.Graph.UseRecording(null);
+        Assert.False(rig.Model.Open);
+
+        rig.Graph.UseRecording(mic);
+        Assert.False(rig.Model.Open);
+    }
+
+    [Fact]
     public void A_monitor_that_appears_later_does_not_show_until_its_brightness_changes()
     {
         using var rig = new Rig();
