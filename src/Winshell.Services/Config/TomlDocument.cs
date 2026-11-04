@@ -430,7 +430,7 @@ internal sealed class TomlDocument
     }
 
     /// <summary>A value as TOML, or null for one TOML cannot hold.</summary>
-    private static string? Format(object? value)
+    internal static string? Format(object? value)
     {
         switch (value)
         {

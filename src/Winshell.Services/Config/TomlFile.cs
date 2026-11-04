@@ -258,7 +258,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
                 if ((keepAssigned && _assigned.Contains(key)) || !document.Values.TryGetValue(key.Name, out var value))
                     continue;
                 if (!TryConvert(value!, key.Property.PropertyType, out var converted))
-                    Leave(Where(key.Name), key, $"should be {Expected(key.Property.PropertyType, value!)}, not {Shown(value)}");
+                    Leave(Where(key.Name), key, $"should be {Expected(key.Property.PropertyType)}, not {Shown(value!)}");
                 else if (_check?.Invoke(key.Name, converted) is { Length: > 0 } reason)
                     Leave(Where(key.Name), key, reason);
                 else if (!TomlDocument.Same(TomlDocument.Plain(key.Property.GetValue(this)), value))
@@ -301,8 +301,10 @@ public abstract class TomlFile : ObservableObject, IDisposable
 
     private void Leave(string where, Key key, string reason) => Warn($"{where}: {key.Name} {reason}, so it was left unchanged");
 
-    /// <summary>What a property of <paramref name="type"/> takes, said for <paramref name="value"/>, which it does not.</summary>
-    private static string Expected(Type type, object value)
+    private void Warn(string message) => _log.Warn("io", "TomlFile: " + message);
+
+    /// <summary>What a property of <paramref name="type"/> takes, for a warning about a value it does not.</summary>
+    private static string Expected(Type type)
     {
         var target = Nullable.GetUnderlyingType(type) ?? type;
         if (target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
@@ -310,7 +312,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
         if (target == typeof(bool))
             return "true or false";
         if (target == typeof(int))
-            return value is long ? string.Create(CultureInfo.InvariantCulture, $"a whole number from {int.MinValue} to {int.MaxValue}") : "a whole number";
+            return string.Create(CultureInfo.InvariantCulture, $"a whole number from {int.MinValue} to {int.MaxValue}");
         if (target == typeof(long))
             return "a whole number";
         if (target == typeof(double))
@@ -323,7 +325,9 @@ public abstract class TomlFile : ObservableObject, IDisposable
         var target = Nullable.GetUnderlyingType(type) ?? type;
         if (target == typeof(bool))
             return "true or false values";
-        if (target == typeof(int) || target == typeof(long))
+        if (target == typeof(int))
+            return string.Create(CultureInfo.InvariantCulture, $"whole numbers from {int.MinValue} to {int.MaxValue}");
+        if (target == typeof(long))
             return "whole numbers";
         if (target == typeof(double))
             return "numbers";
@@ -332,17 +336,12 @@ public abstract class TomlFile : ObservableObject, IDisposable
         return target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>) ? "lists" : "tables";
     }
 
-    /// <summary>A value read from the file, as TOML, or <c>a table</c>.</summary>
-    private static string Shown(object? value) => value switch
+    /// <summary>A value read from the file, as TOML, cut short past 100 characters.</summary>
+    private static string Shown(object value)
     {
-        string text => TomlSyntax.Quote(text),
-        bool flag => flag ? "true" : "false",
-        long or double => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "",
-        IReadOnlyList<object?> items => "[" + string.Join(", ", items.Select(Shown)) + "]",
-        _ => "a table",
-    };
-
-    private void Warn(string message) => _log.Warn("io", "TomlFile: " + message);
+        var text = TomlDocument.Format(value) ?? "";
+        return text.Length > 100 ? text[..100] + "…" : text;
+    }
 
     private static bool TryConvert(object value, Type type, [NotNullWhen(true)] out object? converted)
     {
