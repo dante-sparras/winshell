@@ -9,19 +9,15 @@ public sealed class TrayClickerTests
     [Fact]
     public void An_elevated_shell_clicks_no_app_above_medium_integrity()
     {
-        const uint low = 0x1000, high = 0x3000, system = 0x4000, unknown = uint.MaxValue;
+        const uint low = 0x1000, medium = ProcessIntegrity.Medium, high = 0x3000, system = 0x4000;
         Assert.False(TrayClicker.MayClick(high, high));
         Assert.False(TrayClicker.MayClick(high, system));
-        Assert.False(TrayClicker.MayClick(high, unknown));
-        Assert.True(TrayClicker.MayClick(high, TrayClicker.MediumIntegrity));
+        Assert.False(TrayClicker.MayClick(high, null));
+        Assert.True(TrayClicker.MayClick(high, medium));
         Assert.True(TrayClicker.MayClick(high, low));
         // Unelevated, Windows keeps the shell out of elevated apps itself, as it does Explorer.
-        Assert.True(TrayClicker.MayClick(TrayClicker.MediumIntegrity, high));
-        Assert.True(TrayClicker.MayClick(TrayClicker.MediumIntegrity, TrayClicker.MediumIntegrity));
-
-        Assert.InRange(TrayClicker.IntegrityLevel((uint)Environment.ProcessId), low, system);
-        // The System Idle Process has no token to read.
-        Assert.Equal(unknown, TrayClicker.IntegrityLevel(0));
+        Assert.True(TrayClicker.MayClick(medium, high));
+        Assert.True(TrayClicker.MayClick(medium, medium));
     }
 
     [Fact]
@@ -53,7 +49,7 @@ public sealed class TrayClickerTests
         }
 
         // An app before version 4 is told the mouse message: WM_LBUTTONDOWN, then WM_LBUTTONUP.
-        var own = TrayClicker.IntegrityLevel((uint)Environment.ProcessId);
+        var own = ProcessIntegrity.TryRead((uint)Environment.ProcessId);
         string[] expected = TrayClicker.MayClick(own, own) ? [$"foreground {app} {Environment.ProcessId}", "callback 201", "callback 202"] : [];
         Assert.Equal(expected, seen);
     }

@@ -6,9 +6,9 @@ namespace Winshell.Services.Tests;
 
 public class PipeTrustTests
 {
-    private const int Low = 0x1000;
-    private const int Medium = 0x2000;
-    private const int High = 0x3000;
+    private const uint Low = 0x1000;
+    private const uint Medium = 0x2000;
+    private const uint High = 0x3000;
 
     [Fact]
     public void A_lower_integrity_is_refused_and_an_unknown_level_fails_closed()
@@ -16,14 +16,10 @@ public class PipeTrustTests
         Assert.False(PipeTrust.AtLeast(Low, Medium));
         Assert.True(PipeTrust.AtLeast(Medium, Medium));
         Assert.True(PipeTrust.AtLeast(High, Medium));
+        Assert.False(PipeTrust.AtLeast(null, Medium));
+        Assert.False(PipeTrust.AtLeast(Medium, null));
         Assert.False(PipeTrust.AtLeast(0, Medium));
         Assert.False(PipeTrust.AtLeast(Medium, 0));
-    }
-
-    [Fact]
-    public void The_running_process_has_an_integrity_level()
-    {
-        Assert.True(PipeTrust.IntegrityRid(Environment.ProcessId) >= Medium);
     }
 
     [Fact]

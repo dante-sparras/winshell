@@ -9,10 +9,9 @@ namespace Winshell.Tray;
 /// Lets the app with this window and process id take the foreground; <see cref="TrayHost"/> passes
 /// <see cref="LetAppTakeForeground"/>.
 /// </param>
-internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
+internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
 {
-    internal const uint MediumIntegrity = 0x2000;
-    private static readonly uint ShellIntegrity = IntegrityLevel((uint)Environment.ProcessId);
+    private static readonly uint? ShellIntegrity = ProcessIntegrity.TryRead((uint)Environment.ProcessId);
 
     private readonly TrayCursor _cursor = new(loop, CursorPosition, point => SetCursorPos(point.X, point.Y));
 
@@ -23,7 +22,7 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, u
         if (!Win32.IsWindow(icon.Window) || icon.CallbackMessage == 0)
             return;
         Win32.GetWindowThreadProcessId(icon.Window, out var pid);
-        if (!MayClick(ShellIntegrity, IntegrityLevel(pid)))
+        if (!MayClick(ShellIntegrity, ProcessIntegrity.TryRead(pid)))
             return;
         var point = at ?? CursorPosition();
         // Apps read the cursor when they open a menu, and many ignore the point in the message.
@@ -40,7 +39,7 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, u
     /// Windows keeps its clicks from an elevated app unless that app lets them in. An elevated shell would not be
     /// kept out, so it clicks no app above medium integrity, nor one whose level it cannot read.
     /// </summary>
-    internal static bool MayClick(uint shell, uint app) => shell <= MediumIntegrity || app <= MediumIntegrity;
+    internal static bool MayClick(uint? shell, uint? app) => shell <= ProcessIntegrity.Medium || app <= ProcessIntegrity.Medium;
 
     /// <summary>
     /// Lets the app take the foreground for its menu or window. Nothing is activated for it, so the window the user
@@ -79,40 +78,6 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, u
         return (p.X, p.Y);
     }
 
-    /// <summary>A process's mandatory integrity level, or <see cref="uint.MaxValue"/> when it cannot be read.</summary>
-    internal static uint IntegrityLevel(uint pid)
-    {
-        var process = Win32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (process == 0)
-            return uint.MaxValue;
-        try
-        {
-            if (!Win32.OpenProcessToken(process, TOKEN_QUERY, out var token))
-                return uint.MaxValue;
-            try
-            {
-                // A TOKEN_MANDATORY_LABEL, followed by the label's SID, S-1-16-level.
-                var label = stackalloc byte[64];
-                if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
-                    return uint.MaxValue;
-                var sid = *(nint*)label;
-                return *GetSidSubAuthority(sid, (uint)(*GetSidSubAuthorityCount(sid) - 1));
-            }
-            finally
-            {
-                Win32.CloseHandle(token);
-            }
-        }
-        finally
-        {
-            Win32.CloseHandle(process);
-        }
-    }
-
-    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-    private const uint TOKEN_QUERY = 0x0008;
-    private const int TokenIntegrityLevel = 25;
-
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SendNotifyMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
@@ -125,9 +90,4 @@ internal sealed unsafe partial class TrayClicker(IEventLoop loop, Action<nint, u
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetCursorPos(int x, int y);
 
-    [LibraryImport("advapi32.dll")]
-    private static partial byte* GetSidSubAuthorityCount(nint sid);
-
-    [LibraryImport("advapi32.dll")]
-    private static partial uint* GetSidSubAuthority(nint sid, uint index);
 }

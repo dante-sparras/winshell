@@ -17,17 +17,17 @@ namespace Winshell;
 internal static partial class PipeTrust
 {
     private const uint LabelSecurityInformation = 0x10;
-    private const uint ProcessQueryLimitedInformation = 0x1000;
-    private const uint TokenQuery = 0x0008;
-    private const int TokenIntegrityLevel = 25;
     private const uint PipeAccessDuplex = 0x3;
     private const uint FileFlagOverlapped = 0x40000000;
     private const uint FileFlagFirstPipeInstance = 0x00080000;
     private const uint PipeRejectRemoteClients = 0x8;
     private const int ErrorAccessDenied = 5;
 
-    /// <summary>True when <paramref name="actor"/> is known and is not below <paramref name="floor"/>.</summary>
-    internal static bool AtLeast(int actor, int floor) => actor != 0 && floor != 0 && actor >= floor;
+    /// <summary>
+    /// True when both levels are known and <paramref name="actor"/> is not below <paramref name="floor"/>. Untrusted, 0,
+    /// passes on neither side.
+    /// </summary>
+    internal static bool AtLeast(uint? actor, uint? floor) => actor >= floor && floor > 0;
 
     /// <summary>
     /// Creates one server instance. The medium label is part of the first instance's descriptor, which later
@@ -162,7 +162,7 @@ internal static partial class PipeTrust
             return "The control pipe belongs to another user.";
         if (!Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid))
             return "The shell behind the control pipe could not be identified.";
-        if (!AtLeast(IntegrityRid((int)pid), IntegrityRid(Environment.ProcessId)))
+        if (!AtLeast(ProcessIntegrity.TryRead(pid), ProcessIntegrity.TryRead((uint)Environment.ProcessId)))
             return "The shell runs at a lower integrity level than this command. Run the command without elevation.";
         return null;
     }
@@ -174,55 +174,11 @@ internal static partial class PipeTrust
     {
         if (!GetNamedPipeClientProcessId(pipe.DangerousGetHandle(), out var pid))
             return $"The shell could not identify the command's process ({Marshal.GetLastWin32Error()}).";
-        var client = IntegrityRid((int)pid);
-        var floor = IntegrityRid(Environment.ProcessId);
-        if (client == 0 || floor == 0)
+        if (ProcessIntegrity.TryRead(pid) is not { } client || ProcessIntegrity.TryRead((uint)Environment.ProcessId) is not { } floor)
             return $"The shell could not read the integrity level of process {pid}.";
         if (!AtLeast(client, floor))
             return $"The shell runs at a higher integrity level (0x{floor:X}) than process {pid} (0x{client:X}). Run the command elevated.";
         return null;
-    }
-
-    internal static unsafe int IntegrityRid(int pid)
-    {
-        var process = Win32.OpenProcess(ProcessQueryLimitedInformation, false, (uint)pid);
-        if (process == 0)
-            return 0;
-        try
-        {
-            if (!Win32.OpenProcessToken(process, TokenQuery, out var token))
-                return 0;
-            try
-            {
-                var buffer = Marshal.AllocHGlobal(256);
-                try
-                {
-                    if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, (void*)buffer, 256, out _))
-                        return 0;
-                    var sid = Marshal.ReadIntPtr(buffer);
-                    var countPtr = GetSidSubAuthorityCount(sid);
-                    if (countPtr == 0)
-                        return 0;
-                    var count = Marshal.ReadByte(countPtr);
-                    if (count == 0)
-                        return 0;
-                    var ridPtr = GetSidSubAuthority(sid, (uint)(count - 1));
-                    return ridPtr == 0 ? 0 : Marshal.ReadInt32(ridPtr);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(buffer);
-                }
-            }
-            finally
-            {
-                Win32.CloseHandle(token);
-            }
-        }
-        finally
-        {
-            Win32.CloseHandle(process);
-        }
     }
 
     [LibraryImport("advapi32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
@@ -240,12 +196,6 @@ internal static partial class PipeTrust
     [LibraryImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetKernelObjectSecurity(nint handle, uint securityInformation, nint securityDescriptor, uint length, out uint needed);
-
-    [LibraryImport("advapi32.dll")]
-    private static partial nint GetSidSubAuthority(nint sid, uint index);
-
-    [LibraryImport("advapi32.dll")]
-    private static partial nint GetSidSubAuthorityCount(nint sid);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
