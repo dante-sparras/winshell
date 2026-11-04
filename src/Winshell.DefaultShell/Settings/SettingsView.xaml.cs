@@ -296,7 +296,7 @@ public sealed partial class SettingsView : UserControl
             var button = new SettingsCommand();
             button.Apply(result, SettingsCatalog.ResultText(result));
             var key = result.Key;
-            // The page's own row stays in the tree, collapsed, and has the key as its id.
+            // The page's own row stays in the tree, collapsed, with the key as its id, so a result needs an id of its own.
             AutomationProperties.SetAutomationId(button, key + "Result");
             button.Click += (_, _) =>
             {

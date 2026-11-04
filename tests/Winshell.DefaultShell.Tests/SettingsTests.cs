@@ -19,9 +19,7 @@ public sealed class SettingsTests : IDisposable
     [Fact]
     public void Each_key_names_one_page_or_setting()
     {
-        var keys = SettingsCatalog.Pages.Select(page => page.Key).Concat(Keys(SettingsCatalog.Settings));
-
-        Assert.Empty(keys.GroupBy(key => key, StringComparer.Ordinal).Where(same => same.Count() > 1).Select(same => same.Key));
+        Assert.Distinct(SettingsCatalog.Pages.Select(page => page.Key).Concat(Keys(SettingsCatalog.Settings)), StringComparer.Ordinal);
     }
 
     [Fact]
