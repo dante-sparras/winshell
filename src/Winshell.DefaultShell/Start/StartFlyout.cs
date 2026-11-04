@@ -165,13 +165,22 @@ internal sealed class StartFlyout
         var documents = _documents;
         _ = Task.Run(() =>
         {
-            var found = documents.Search(query);
-            _loop.Post(() =>
+            try
             {
-                if (_released || generation != _generation)
-                    return;
-                _popup.SetDocuments(found);
-            });
+                var found = documents.Search(query);
+                _loop.Post(() =>
+                {
+                    if (_released || generation != _generation)
+                        return;
+                    _popup.SetDocuments(found);
+                });
+            }
+#pragma warning disable CA1031 // Nobody awaits this task; a failed search is logged, not left unobserved.
+            catch (Exception e)
+#pragma warning restore CA1031
+            {
+                _log.Warn("start", $"Searching recent files failed: {e.Message}");
+            }
         });
     }
 
