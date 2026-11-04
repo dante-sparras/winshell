@@ -195,8 +195,8 @@ jobs:
             --jq '.actions_caches[] | "\(.id) \(.key)"' | sed -E 's/-[0-9a-f]{40}-.*//' | awk 'seen[$2]++ >= 2 { print $1 }' |
             xargs -r -I{} gh api --method DELETE "repos/$GH_REPO/actions/caches/{}"
 
-  pester:
-    name: pester
+  installer:
+    name: installer
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.scripts != 'false' }}
     runs-on: windows-2025
