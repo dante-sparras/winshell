@@ -40,10 +40,17 @@ internal sealed class InstanceLog : IDisposable
                 return;
             var waiting = _pending.Length > 0;
             _pending.Append(stampedLine).Append('\n');
-            if (level >= LogLevel.Warn)
-                FlushLocked();
-            else if (!waiting)
-                _timer.Change(_delay, Timeout.InfiniteTimeSpan);
+            try
+            {
+                if (level >= LogLevel.Warn)
+                    FlushLocked();
+            }
+            finally
+            {
+                // The first line to wait starts the timer, as does a warning whose flush failed.
+                if (!waiting && _pending.Length > 0)
+                    _timer.Change(_delay, Timeout.InfiniteTimeSpan);
+            }
         }
     }
 

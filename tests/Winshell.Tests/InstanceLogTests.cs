@@ -1,6 +1,9 @@
 namespace Winshell.Tests;
 
-/// <summary>The instance log rolls instead of growing without limit, and a warning is on disk at once.</summary>
+/// <summary>
+/// The instance log rolls instead of growing without limit, a warning is on disk at once, and an ordinary line a
+/// moment later.
+/// </summary>
 public sealed class InstanceLogTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
