@@ -9,7 +9,7 @@ internal static class KillCommand
         var choice = InstanceSelection.Select(options);
         if (choice.Info is not { } info)
         {
-            Console.Error.WriteLine(choice.Error);
+            Console.Error.WriteLine(choice.Error == InstanceSelection.NoneRunning ? InstanceSelection.NoneToKill : choice.Error);
             return choice.Code;
         }
         // Null once the instance has accepted the kill. No answer is a failure too.

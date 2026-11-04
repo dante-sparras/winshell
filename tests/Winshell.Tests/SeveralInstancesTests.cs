@@ -22,7 +22,7 @@ public class SeveralInstancesTests
         var choice = InstanceSelection.ChooseUnselected([]);
 
         Assert.Equal(1, choice.Code);
-        Assert.Equal("No running instances", choice.Error);
+        Assert.Equal("No running instances. Start one with winshell run.", choice.Error);
         Assert.Null(choice.Info);
     }
 
