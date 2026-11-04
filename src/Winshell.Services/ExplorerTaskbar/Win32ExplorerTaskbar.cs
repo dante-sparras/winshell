@@ -126,11 +126,16 @@ internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
 
     private static unsafe APPBARDATA AppBar(nint hwnd) => new() { cbSize = (uint)sizeof(APPBARDATA), hWnd = hwnd };
 
+    /// <summary>Explorer's windows of that class. The tray host makes a <c>Shell_TrayWnd</c> of its own in this process.</summary>
     private static List<nint> Windows(string className)
     {
         var found = new List<nint>();
         for (nint hwnd = 0, next; (next = Win32.FindWindowExW(0, hwnd, className, null)) != 0; hwnd = next)
-            found.Add(next);
+        {
+            Win32.GetWindowThreadProcessId(next, out var pid);
+            if (pid != Environment.ProcessId)
+                found.Add(next);
+        }
         return found;
     }
 
