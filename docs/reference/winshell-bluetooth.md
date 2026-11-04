@@ -87,7 +87,7 @@ The action running on a BluetoothDevice.
 
 ## BluetoothService
 
-The default adapter and the paired and nearby devices. Reading it never pairs, connects or changes a radio. While monitoring is on, state is read again every three seconds.
+The default adapter and the paired and nearby devices. Reading it never pairs, connects or changes a radio. While monitoring is on, Windows' device and radio events read the state again, and so does a slow timer, because Windows announces no change to discoverable and incoming-connection state, or to a battery level.
 
 Has the members of [ObservableObject](winshell.md#observableobject).
 
@@ -103,8 +103,8 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Ready` | bool, read-only | A read has completed. A completed read can have no adapter. |
 | `OperationFailed` | Action of string | Starting or stopping discovery failed. |
 | `Dispose()` | void | Stops monitoring and discovery, and cancels a running pairing. |
-| `Refresh()` | void | Reads the state now, rather than at the next three-second read. |
+| `Refresh()` | void | Reads the state now, rather than at the next change Windows reports. |
 | `StartDiscovery()` | void | Starts looking for nearby devices. Needs an adapter that is on. |
-| `StartMonitoring()` | void | Reads adapter and device state until StopMonitoring. Nothing is read before this. |
+| `StartMonitoring()` | void | Reads adapter and device state, and again at every change Windows reports, until StopMonitoring. Nothing is read before this. |
 | `StopDiscovery()` | void | Stops looking, and clears the unpaired devices it found. |
-| `StopMonitoring()` | void | Stops the three-second read. A later StartMonitoring starts it again. |
+| `StopMonitoring()` | void | Stops watching Windows. A later StartMonitoring starts again. |

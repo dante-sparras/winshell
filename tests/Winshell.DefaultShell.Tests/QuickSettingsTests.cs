@@ -168,11 +168,9 @@ public sealed class QuickSettingsTests
         rig.Popup.Show();
         Assert.True(rig.Popup.ShowingTiles);
         Assert.True(rig.Popup.IsOpen);
-        var running = rig.Bluetooth.MonitorTask;
         rig.Popup.ShowVolume();
         rig.Popup.Show();
         Assert.True(rig.Popup.ShowingTiles);
-        Assert.Same(running, rig.Bluetooth.MonitorTask);
     }
 
     [Fact]
@@ -616,30 +614,26 @@ public sealed class QuickSettingsTests
     }
 
     [Fact]
-    public async Task Bluetooth_is_read_only_while_a_flyout_is_open()
+    public void Bluetooth_is_watched_only_while_a_flyout_is_open()
     {
         using var rig = QuickSettingsRig.Create(laptop: false);
-        Assert.Null(rig.Bluetooth.MonitorTask);
+        Assert.False(rig.BluetoothBackend.Watching);
 
         rig.Popup.Show();
-        var running = rig.Bluetooth.MonitorTask;
-        Assert.NotNull(running);
-        Assert.False(running.IsCompleted);
+        Assert.True(rig.BluetoothBackend.Watching);
 
         var second = rig.Track(rig.Quick.CreatePopup());
         second.Show();
-        Assert.Same(running, rig.Bluetooth.MonitorTask);
         second.Hide();
-        rig.Bluetooth.StartMonitoring();
-        Assert.Same(running, rig.Bluetooth.MonitorTask);
+        Assert.True(rig.BluetoothBackend.Watching);
 
         rig.Popup.ShowOutput();
         rig.Popup.Show();
         Assert.True(rig.Popup.ShowingTiles);
-        Assert.Same(running, rig.Bluetooth.MonitorTask);
+        Assert.True(rig.BluetoothBackend.Watching);
 
         rig.Popup.Hide();
-        await Wait.UntilAsync(() => running.IsCompleted, "monitoring to stop");
+        Assert.False(rig.BluetoothBackend.Watching);
     }
 
     [Fact]
@@ -966,6 +960,18 @@ internal sealed class RigSessions : IMediaSessions
 internal sealed class SnapshotBluetooth : IBluetoothBackend
 {
     public BluetoothSnapshot Snapshot { get; set; } = BluetoothSnapshot.Initial;
+
+    public bool Watching { get; private set; }
+
+    public event Action? Changed
+    {
+        add { }
+        remove { }
+    }
+
+    public void StartWatching() => Watching = true;
+
+    public void StopWatching() => Watching = false;
 
     public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation) => Task.FromResult(Snapshot);
 
