@@ -42,6 +42,15 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     }
 
     [Fact(Timeout = PatienceMs)]
+    public void The_templates_take_WindowsAppSDK_from_the_Winshell_package()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        // A version of its own here would drift from Directory.Packages.props and fail restore with NU1605.
+        Assert.DoesNotContain("Microsoft.WindowsAppSDK", File.ReadAllText(templates.SmallProject), StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.WindowsAppSDK", File.ReadAllText(templates.DefaultProject), StringComparison.Ordinal);
+    }
+
+    [Fact(Timeout = PatienceMs)]
     public void Packing_and_creating_the_templates_leaves_the_user_PATH_as_it_was()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
@@ -311,8 +320,11 @@ public sealed class PackedTemplates : IDisposable
         using var stream = nuspec.Open();
         var dependencies = XDocument.Load(stream).Descendants().Where(element => element.Name.LocalName == "dependency")
             .ToDictionary(element => element.Attribute("id")!.Value, element => element.Attribute("version")!.Value);
-        Assert.Equal("2.6.4", dependencies["Microsoft.WindowsAppSDK.WinUI"]);
-        Assert.Equal("2.6.4", dependencies["Microsoft.WindowsAppSDK.Foundation"]);
+        // A new project gets WindowsAppSDK through this package, so these are the versions it restores.
+        var pinned = XDocument.Load(Path.Combine(Repo(), "Directory.Packages.props")).Descendants("PackageVersion")
+            .ToDictionary(element => element.Attribute("Include")!.Value, element => element.Attribute("Version")!.Value);
+        Assert.Equal(pinned["Microsoft.WindowsAppSDK.WinUI"], dependencies["Microsoft.WindowsAppSDK.WinUI"]);
+        Assert.Equal(pinned["Microsoft.WindowsAppSDK.Foundation"], dependencies["Microsoft.WindowsAppSDK.Foundation"]);
         Assert.Equal(
             ["Microsoft.Win32.SystemEvents", "Microsoft.WindowsAppSDK.Foundation", "Microsoft.WindowsAppSDK.WinUI", "System.Management", "Tomlyn", "Vortice.Direct3D11", "Vortice.DXGI"],
             dependencies.Keys.Order(StringComparer.OrdinalIgnoreCase));
