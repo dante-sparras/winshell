@@ -3,8 +3,7 @@ using System.Text;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// The budgets for a TOML file. The numbers are the production limits; every refusal uses a small budget or a short
-/// in-memory document, so the test never builds a large file.
+/// The budgets for a TOML file. The numbers are the production limits; a file past one is as large as the limit.
 /// </summary>
 public sealed class TomlLimitsTests
 {
@@ -76,8 +75,7 @@ public sealed class TomlLimitsTests
         using var settings = new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
         Assert.Equal("kept", settings.Name);
 
-        var oversized = "name = \"replaced and longer\"\n"u8.ToArray();
-        settings.MaxFileBytes = 8;
+        var oversized = Encoding.UTF8.GetBytes("name = \"" + new string('x', DataLimits.MaxTextBytes) + "\"\n");
         File.WriteAllBytes(fixture.FilePath, oversized);
 
         Wait.Until(() => settings.Error.Length > 0, "the file past the limit", fixture.Loop.Process);
@@ -94,10 +92,11 @@ public sealed class TomlLimitsTests
     [Fact]
     public void The_limit_counts_bytes_and_not_characters()
     {
-        var accented = "name = \"é\"\n"u8.ToArray();
+        // Fewer characters than the limit, more bytes.
+        var accented = Encoding.UTF8.GetBytes("name = \"" + new string('é', DataLimits.MaxTextBytes / 2) + "\"\n");
+        Assert.True(accented.Length > DataLimits.MaxTextBytes);
         using var fixture = new TomlFixture("name = \"kept\"");
         using var settings = new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
-        settings.MaxFileBytes = accented.Length - 1;
 
         File.WriteAllBytes(fixture.FilePath, accented);
 
@@ -111,11 +110,9 @@ public sealed class TomlLimitsTests
     {
         using var fixture = new TomlFixture("name = \"kept\"");
         using var settings = new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
-        settings.MaxFileBytes = 8;
-        File.WriteAllText(fixture.FilePath, "name = \"replaced and longer\"\n");
+        File.WriteAllText(fixture.FilePath, "name = \"" + new string('x', DataLimits.MaxTextBytes) + "\"\n");
         Wait.Until(() => settings.Error.Length > 0, "the file past the limit", fixture.Loop.Process);
 
-        settings.MaxFileBytes = DataLimits.MaxTextBytes;
         File.WriteAllText(fixture.FilePath, "name = \"kept\"");
 
         Wait.Until(() => settings.Error.Length == 0, "the file back under the limit", fixture.Loop.Process);

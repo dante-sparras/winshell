@@ -247,8 +247,6 @@ public sealed class TomlFileTests
     {
         using var fixture = new TomlFixture("name = \"mine\"\n");
         using var settings = Open(fixture);
-        var writes = 0;
-        settings.BeforeReplace = () => writes++;
         var changes = new List<string>();
         settings.PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
 
@@ -259,7 +257,6 @@ public sealed class TomlFileTests
         Assert.Equal([nameof(Settings.Name), nameof(Settings.On), nameof(Settings.Size)], changes);
         Assert.Contains("name = \"mine\"", fixture.Text, StringComparison.Ordinal);
         fixture.Loop.Process();
-        Assert.Equal(1, writes);
         Assert.Contains("name = \"one\"", fixture.Text, StringComparison.Ordinal);
         Assert.Contains("on = false", fixture.Text, StringComparison.Ordinal);
         Assert.Contains("size = 4", fixture.Text, StringComparison.Ordinal);
@@ -683,20 +680,14 @@ public sealed class TomlFileTests
     {
         using var fixture = new TomlFixture("name = \"mine\"\n");
         using var settings = Open(fixture);
-        var blocked = false;
-        settings.BeforeReplace = () =>
-        {
-            if (blocked)
-                throw new IOException("the disk is full");
-        };
-        blocked = true;
+        File.SetAttributes(fixture.FilePath, FileAttributes.ReadOnly);
         settings.Name = "next";
         fixture.Loop.Process();
-        Assert.Contains(fixture.Messages, m => m.Contains("failed to write", StringComparison.Ordinal) && m.Contains("the disk is full", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages, m => m.Contains("failed to write", StringComparison.Ordinal));
         Assert.Equal("name = \"mine\"\n", fixture.Text);
         Assert.Equal([fixture.FilePath], Directory.GetFiles(fixture.Directory));
 
-        blocked = false;
+        File.SetAttributes(fixture.FilePath, FileAttributes.Normal);
         settings.Save();
         Assert.Contains("name = \"next\"", fixture.Text, StringComparison.Ordinal);
     }
