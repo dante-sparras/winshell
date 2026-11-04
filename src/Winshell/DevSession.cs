@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
@@ -52,16 +53,56 @@ internal static class DevSession
 {
     public static async Task<int> Run(ConfigurationProject project)
     {
+        Process? watch = null;
+        // dotnet watch has a console of its own, which Ctrl+C, Ctrl+Break and closing this one never reach. Each of
+        // those ends this process once the handler returns, so the handler stops the shell and dotnet watch first.
+        void Stop(PosixSignalContext context) => StopShellAndWatch(project, Volatile.Read(ref watch));
+        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
+        using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Stop);
+        using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Stop);
+        using var end = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Stop);
         while (true)
         {
-            if (await Watch(project) is { } exitCode)
+            if (await Watch(project, started => Volatile.Write(ref watch, started)) is { } exitCode)
                 return exitCode;
             Console.WriteLine("Building, because the XAML you saved needs it.");
         }
     }
 
+    /// <summary>
+    /// Asks this project's shell to quit, then ends dotnet watch and what it started. The shell quits first, so the apps
+    /// it opened are not part of the tree that ends, and its app bar and tray go as they do for <c>winshell kill</c>.
+    /// </summary>
+    private static void StopShellAndWatch(ConfigurationProject project, Process? watch)
+    {
+        if (ShellOf(project) is { } shell)
+        {
+#pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process. Its thread runs no continuation.
+            _ = InstanceCall.AskAsync(shell, new IpcRequest("kill")).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
+            try
+            {
+                using var process = Process.GetProcessById(shell.Pid);
+                if (Instances.IsThisInstance(shell, process) && !process.WaitForExit(TimeSpan.FromSeconds(3)))
+                    process.Kill();
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
+            {
+                // The shell has exited already.
+            }
+        }
+        try
+        {
+            watch?.Kill(entireProcessTree: true);
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
+        {
+            // dotnet watch has exited already.
+        }
+    }
+
     /// <summary>How <c>dotnet watch</c> ended, or null when a shell asked for a build, which only a new start gives it.</summary>
-    private static async Task<int?> Watch(ConfigurationProject project)
+    private static async Task<int?> Watch(ConfigurationProject project, Action<Process> started)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -83,6 +124,7 @@ internal static class DevSession
             Console.Error.WriteLine(ConfigurationProject.NeedsSdk);
             return 1;
         }
+        started(process);
         var lines = Channel.CreateUnbounded<string>();
         var pumps = Task.WhenAll(Pump(process.StandardOutput, lines.Writer), Pump(process.StandardError, lines.Writer));
         _ = pumps.ContinueWith(_ => lines.Writer.Complete(), TaskScheduler.Default);
@@ -121,12 +163,17 @@ internal static class DevSession
             await lines.WriteAsync(line);
     }
 
+    /// <summary>The running shell this project built, or null before its first start.</summary>
+    private static InstanceInfo? ShellOf(ConfigurationProject project)
+    {
+        var folder = project.Folder + Path.DirectorySeparatorChar;
+        return Instances.List(false).Select(i => i.Info).FirstOrDefault(i => i.ConfigPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Tells the shell of this project. Before its first start there is none, and the console has the error.</summary>
     private static async Task Show(ConfigurationProject project, string notice)
     {
-        var folder = project.Folder + Path.DirectorySeparatorChar;
-        var shell = Instances.List(false).Select(i => i.Info).FirstOrDefault(i => i.ConfigPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
-        if (shell is null)
+        if (ShellOf(project) is not { } shell)
             return;
         var request = notice.Length > 0
             ? new IpcRequest("build-error", Args: [notice, project.ProjectFile])
