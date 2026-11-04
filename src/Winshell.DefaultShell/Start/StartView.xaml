@@ -28,7 +28,7 @@
         <Grid x:Name="SearchHost">
             <TextBox
                 x:Name="SearchBox"
-                Padding="36,0,12,0"
+                Padding="36,5,12,6"
                 VerticalContentAlignment="Center"
                 PlaceholderText="Search apps"
                 AutomationProperties.Name="Search apps"
