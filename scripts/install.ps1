@@ -11,11 +11,8 @@
     irm | iex, and running this file with the call operator, also add that folder to this session's
     PATH and tell you to run winshell. pwsh -File leaves the caller unchanged and tells you to open
     a new terminal.
-    A later install removes a leftover bin.old-* folder once nothing from that install is running.
     It also deletes %LOCALAPPDATA%\winshell\updates, so a staged update cannot replace this install
-    on the next start. A link, or a folder that cannot be deleted, is left in place and named.
-    If a Microsoft Store copy is also installed, it says so and still finishes. The Store's
-    WindowsApps alias usually comes first on PATH, so winshell may start that copy.
+    on the next start. If a Microsoft Store copy is also installed, it says so and still finishes.
 
     The installed files are the portable build, so Winshell's own update check keeps working.
 
@@ -25,709 +22,246 @@
         irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1 | iex
         & ([scriptblock]::Create((irm https://github.com/enpaze/winshell/releases/latest/download/install.ps1))) -Version x.y.z -AutoStart
 
-    This file is a release asset. It does not dot-source a neighbor, and it does not run downloaded text.
+    This file is a release asset, fetched on its own. It does not dot-source a neighbor, and it does not
+    run downloaded text. docs/development.md describes the variables its tests set.
 #>
 param(
     [string] $Version,
     [switch] $AutoStart
 )
 
-function Write-WinshellLine([string] $Message) {
-    [Console]::Out.WriteLine($Message)
-}
+# uninstall.ps1 has its own copy of the helpers both scripts need, since each is fetched alone.
+function Write-WinshellLine([string] $Message) { [Console]::Out.WriteLine($Message) }
 
-function Confirm-WinshellTestIsolation {
+function Assert-WinshellTestIsolation {
     if ($env:WINSHELL_INSTALL_TEST -ne '1') { return }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        throw 'Refusing to change PATH: a test must set WINSHELL_USER_PATH_FILE.'
+    if (-not $env:WINSHELL_USER_PATH_FILE -or -not $env:WINSHELL_AUTOSTART_FILE) {
+        throw 'A test must set WINSHELL_USER_PATH_FILE and WINSHELL_AUTOSTART_FILE.'
     }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_AUTOSTART_FILE)) {
-        throw 'Refusing to change sign-in: a test must set WINSHELL_AUTOSTART_FILE.'
-    }
-    $realLocal = [Environment]::GetFolderPath('LocalApplicationData')
-    $realRoaming = [Environment]::GetFolderPath('ApplicationData')
-    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA) -or
-        [string]::Equals([IO.Path]::GetFullPath($env:LOCALAPPDATA), [IO.Path]::GetFullPath($realLocal), [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Refusing to use the real LOCALAPPDATA from a test.'
-    }
-    if ([string]::IsNullOrWhiteSpace($env:APPDATA) -or
-        [string]::Equals([IO.Path]::GetFullPath($env:APPDATA), [IO.Path]::GetFullPath($realRoaming), [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Refusing to use the real APPDATA from a test.'
-    }
-}
-
-function Get-WinshellInstallRoot {
-    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is not set.' }
-    $root = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\winshell'))
-    $suffix = [IO.Path]::DirectorySeparatorChar + 'Programs' + [IO.Path]::DirectorySeparatorChar + 'winshell'
-    if (-not $root.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to use $root. Winshell installs into %LOCALAPPDATA%\Programs\winshell."
-    }
-    return $root
-}
-
-function Get-WinshellBin([string] $Root) {
-    return (Join-Path $Root 'bin')
-}
-
-function Get-WinshellStartMenuFolder {
-    if ([string]::IsNullOrWhiteSpace($env:APPDATA)) { throw 'APPDATA is not set.' }
-    return [IO.Path]::GetFullPath((Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))
-}
-
-function Get-WinshellShortcutPath {
-    return (Join-Path (Get-WinshellStartMenuFolder) 'Winshell.lnk')
-}
-
-function Test-WinshellReparsePoint([string] $Path) {
-    if (-not (Test-Path -LiteralPath $Path)) { return $false }
-    $item = Get-Item -LiteralPath $Path -Force
-    return [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
-}
-
-function Get-WinshellArchitecture {
-    param([string] $Name)
-    if ([string]::IsNullOrWhiteSpace($Name)) {
-        $Name = $null
-        try { $Name = [string][Runtime.InteropServices.RuntimeInformation]::OSArchitecture } catch { $Name = $null }
-        if ([string]::IsNullOrWhiteSpace($Name)) {
-            if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
-                $Name = $env:PROCESSOR_ARCHITEW6432
-            } else {
-                $Name = $env:PROCESSOR_ARCHITECTURE
-            }
+    $real = [Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData')
+    foreach ($folder in $env:LOCALAPPDATA, $env:APPDATA) {
+        if (-not $folder -or $real -contains [IO.Path]::GetFullPath($folder).TrimEnd('\')) {
+            throw 'Refusing to use the real LOCALAPPDATA or APPDATA from a test.'
         }
     }
-    switch -Regex ($Name) {
-        '^(X64|AMD64)$' { return 'x64' }
-        '^(Arm64|ARM64)$' { return 'arm64' }
-        default { throw "Winshell publishes win-x64 and win-arm64. This PC is '$Name'." }
-    }
 }
 
-function Resolve-WinshellVersion {
-    param([string] $Version)
-    $value = $Version
-    if ([string]::IsNullOrWhiteSpace($value)) { $value = $env:WINSHELL_VERSION }
-    if ([string]::IsNullOrWhiteSpace($value)) { return $null }
-    $value = $value.Trim()
-    if ($value.StartsWith('v') -or $value.StartsWith('V')) { $value = $value.Substring(1) }
-    if ($value -notmatch '^\d+\.\d+\.\d+$') { throw "Version must be x.y.z, not '$value'." }
-    return $Matches[0]
+function Assert-WinshellNotRunning([string] $Root, [string] $Again) {
+    $prefix = $Root.TrimEnd('\') + '\'
+    # A process whose path Windows will not tell us could be this install.
+    $ids = @(Get-CimInstance Win32_Process -Filter "Name = 'winshell.exe' OR Name = 'winshellw.exe'" |
+            Where-Object { -not $_.ExecutablePath -or $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { $_.ProcessId })
+    if ($ids) { throw "Winshell is running (pid $($ids -join ', ')). Close it, then run the $Again again.`nNothing was changed." }
 }
 
-function Resolve-WinshellAutoStart {
-    param([bool] $Switch)
-    if ($Switch) { return $true }
-    $value = $env:WINSHELL_AUTOSTART
-    if ([string]::IsNullOrWhiteSpace($value)) { return $false }
-    return $value.Trim() -match '^(1|true|yes)$'
+function Remove-WinshellFolder([string] $Path) {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return $false }
+    # Windows PowerShell's Remove-Item -Recurse can follow a junction out of the folder.
+    if ($item.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw "Refusing to delete $Path because it is a link." }
+    Remove-Item -LiteralPath $Path -Recurse -Force
+    return $true
 }
 
-function Get-WinshellReleaseBase {
-    $official = 'https://github.com/enpaze/winshell/releases'
-    $base = $official
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_RELEASE_BASE)) {
-        $base = $env:WINSHELL_RELEASE_BASE.Trim().TrimEnd('/')
-    }
-    if ($base -eq $official) { return $base }
-    if ($base -match '^http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$') { return $base }
-    throw 'WINSHELL_RELEASE_BASE must be https://github.com/enpaze/winshell/releases or an http://127.0.0.1 test server.'
-}
-
-function Get-WinshellDownloadUrl([string] $Base, [string] $Version, [string] $File) {
-    if ($File -notmatch '^[A-Za-z0-9._-]+$') { throw "Unexpected release file name '$File'." }
-    if ([string]::IsNullOrWhiteSpace($Version)) { return "$Base/latest/download/$File" }
-    return "$Base/download/v$Version/$File"
-}
-
-function ConvertFrom-WinshellChecksumMap([string] $Text) {
-    $map = @{}
-    $clean = $Text.TrimStart([char]0xFEFF)
-    foreach ($line in @($clean -split '\r?\n')) {
-        if ($line.Trim().Length -eq 0) { continue }
-        if ($line -notmatch '^([0-9A-Fa-f]{64}) [ *](\S+)$') {
-            throw 'SHA256SUMS.txt has a line that is not a checksum.'
-        }
-        $map[$Matches[2]] = $Matches[1].ToLowerInvariant()
-    }
-    if ($map.Count -eq 0) { throw 'SHA256SUMS.txt is empty.' }
-    return $map
-}
-
-function Select-WinshellPackageName($Checksums, [string] $Arch, [string] $Version) {
-    if (-not [string]::IsNullOrWhiteSpace($Version)) {
-        $name = "winshell-$Version-win-$Arch.zip"
-        if (-not $Checksums.ContainsKey($name)) { throw "Release v$Version has no $name in SHA256SUMS.txt." }
-        return $name
-    }
-    $best = $null
-    $bestVersion = $null
-    foreach ($key in @($Checksums.Keys)) {
-        if ($key -match "^winshell-(\d+\.\d+\.\d+)-win-$Arch\.zip$") {
-            $parsed = [version]$Matches[1]
-            if ($null -eq $bestVersion -or $parsed -gt $bestVersion) {
-                $bestVersion = $parsed
-                $best = $key
-            }
-        }
-    }
-    if (-not $best) { throw "The latest release has no win-$Arch zip in SHA256SUMS.txt." }
-    return $best
-}
-
-function Add-WinshellCompressionAssembly {
-    if (-not ('System.IO.Compression.ZipFile' -as [type])) {
-        Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
-    }
-    if (-not ('System.IO.Compression.ZipFile' -as [type])) {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-    }
-}
-
-function Expand-WinshellZip([string] $ZipPath, [string] $Destination) {
-    Add-WinshellCompressionAssembly
-    $destRoot = [IO.Path]::GetFullPath($Destination)
-    if (-not (Test-Path -LiteralPath $destRoot)) {
-        New-Item -ItemType Directory -Path $destRoot | Out-Null
-    }
-    $prefix = $destRoot.TrimEnd('\') + '\'
-    $archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
+function Remove-WinshellStagedUpdate {
+    # A staged update replaces the next start, even of another install.
+    $updates = Join-Path $env:LOCALAPPDATA 'winshell\updates'
     try {
-        foreach ($entry in $archive.Entries) {
-            $name = $entry.FullName.Replace('\', '/')
-            if ($name.EndsWith('/')) { continue }
-            $segments = $name.Split('/')
-            foreach ($segment in $segments) {
-                if ($segment -eq '' -or $segment -eq '.' -or $segment -eq '..' -or $segment.IndexOf(':') -ge 0) {
-                    throw "The archive entry '$($entry.FullName)' is not inside the archive."
-                }
-            }
-            $relative = $name.Replace('/', [IO.Path]::DirectorySeparatorChar)
-            $target = [IO.Path]::GetFullPath((Join-Path $destRoot $relative))
-            if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
-                throw "The archive entry '$($entry.FullName)' escapes the install folder."
-            }
-            $parent = Split-Path -Parent $target
-            if (-not (Test-Path -LiteralPath $parent)) {
-                New-Item -ItemType Directory -Path $parent | Out-Null
-            }
-            $inputStream = $entry.Open()
-            try {
-                $output = [IO.File]::Create($target)
-                try { $inputStream.CopyTo($output) } finally { $output.Dispose() }
-            } finally { $inputStream.Dispose() }
+        if (Remove-WinshellFolder $updates) {
+            Write-WinshellLine "Removed $updates."
+            return $true
         }
-    } finally { $archive.Dispose() }
-}
-
-function Receive-WinshellWeb([string] $Uri, [string] $OutFile) {
-    $previousProtocol = $null
-    $previousProgress = $ProgressPreference
-    if ($PSVersionTable.PSVersion.Major -lt 6) {
-        $previousProtocol = [Net.ServicePointManager]::SecurityProtocol
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    }
-    $ProgressPreference = 'SilentlyContinue'
-    try {
-        $params = @{
-            Uri             = $Uri
-            UseBasicParsing = $true
-            Headers         = @{ 'User-Agent' = 'winshell-install' }
-        }
-        if (-not [string]::IsNullOrWhiteSpace($OutFile)) {
-            $params.OutFile = $OutFile
-            Invoke-WebRequest @params | Out-Null
-            return
-        }
-        $content = (Invoke-WebRequest @params).Content
-        if ($content -is [byte[]]) { return [Text.Encoding]::UTF8.GetString($content) }
-        return [string]$content
     } catch {
-        throw "Could not download $Uri. $($_.Exception.Message)"
-    } finally {
-        $ProgressPreference = $previousProgress
-        if ($null -ne $previousProtocol) {
-            [Net.ServicePointManager]::SecurityProtocol = $previousProtocol
-        }
+        Write-WinshellLine "The staged update is still at $updates. $($_.Exception.Message)"
     }
+    return $false
 }
 
-function Get-WinshellImagePath([int] $ProcessId) {
-    # MainModule.FileName is empty from a 32-bit host and does not throw. Limited query works across that boundary.
-    if (-not ('Winshell.Install.Process' -as [type])) {
-        Add-Type -Namespace Winshell.Install -Name Process -MemberDefinition @'
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-public static extern System.IntPtr OpenProcess(uint access, bool inherit, int processId);
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-public static extern bool QueryFullProcessImageNameW(System.IntPtr process, int flags, System.Text.StringBuilder name, ref int size);
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-public static extern bool CloseHandle(System.IntPtr handle);
-'@
+function Get-WinshellUserPath {
+    # Tests read and write a file instead of HKCU\Environment.
+    if ($env:WINSHELL_USER_PATH_FILE) {
+        if (Test-Path -LiteralPath $env:WINSHELL_USER_PATH_FILE) { return [IO.File]::ReadAllText($env:WINSHELL_USER_PATH_FILE) }
+        return ''
     }
-    $handle = [Winshell.Install.Process]::OpenProcess(0x1000, $false, $ProcessId)
-    if ($handle -eq [IntPtr]::Zero) { return $null }
-    try {
-        $capacity = 32768
-        $builder = New-Object System.Text.StringBuilder $capacity
-        $size = $capacity
-        $ok = [Winshell.Install.Process]::QueryFullProcessImageNameW($handle, 0, $builder, [ref]$size)
-        if (-not $ok -or $builder.Length -eq 0) { return $null }
-        return $builder.ToString()
-    } finally {
-        [void][Winshell.Install.Process]::CloseHandle($handle)
-    }
-}
-
-function Get-WinshellProcessIdUnder([string] $Directory) {
-    $root = [IO.Path]::GetFullPath($Directory)
-    if (-not $root.EndsWith('\')) { $root = $root + '\' }
-    $ids = @()
-    foreach ($name in @('winshell', 'winshellw')) {
-        $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
-        foreach ($proc in $procs) {
-            $path = Get-WinshellImagePath ([int]$proc.Id)
-            if ([string]::IsNullOrWhiteSpace($path)) {
-                throw "Winshell is running (pid $($proc.Id)). Close it, then run the installer again.`nNothing was changed."
-            }
-            if ($path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
-                $ids += [int]$proc.Id
-            }
-        }
-    }
-    return $ids
-}
-
-function Get-WinshellRunningId([string] $Directory, [scriptblock] $ProcessesUnder) {
-    $ids = if ($ProcessesUnder) { @(& $ProcessesUnder $Directory) } else { @(Get-WinshellProcessIdUnder $Directory) }
-    return @($ids | Where-Object { $null -ne $_ -and "$_" -ne '' })
-}
-
-function Get-WinshellStorePackage([scriptblock] $StorePackages) {
-    # Tests pass -StorePackages. Otherwise a test must not ask this PC which packages are installed.
-    if ($StorePackages) {
-        $found = @(& $StorePackages)
-    } elseif ($env:WINSHELL_INSTALL_TEST -eq '1') {
-        $found = @()
-    } else {
-        try {
-            $found = @(Get-AppxPackage -Name '*Winshell*')
-        } catch {
-            $found = @()
-        }
-    }
-    return @($found | Where-Object { $null -ne $_ -and "$_" -ne '' })
-}
-
-function Split-WinshellPath([string] $Path) {
-    if ([string]::IsNullOrEmpty($Path)) { return @() }
-    return @($Path.Split(';') | Where-Object { $_ -ne '' })
-}
-
-function Test-WinshellSamePath([string] $Left, [string] $Right) {
-    if ($null -eq $Left -or $null -eq $Right) { return $false }
-    return [string]::Equals($Left.TrimEnd('\', '/'), $Right.TrimEnd('\', '/'), [StringComparison]::OrdinalIgnoreCase)
-}
-
-function Get-WinshellPathValue {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        if (-not (Test-Path -LiteralPath $env:WINSHELL_USER_PATH_FILE)) { return '' }
-        return [IO.File]::ReadAllText($env:WINSHELL_USER_PATH_FILE, [Text.UTF8Encoding]::new($false))
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $false)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
     if (-not $key) { return '' }
-    try {
-        $raw = $key.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-        if ($null -eq $raw) { return '' }
-        return [string]$raw
-    } finally { $key.Dispose() }
+    try { return [string]$key.GetValue('Path', '', 'DoNotExpandEnvironmentNames') } finally { $key.Dispose() }
 }
 
-function Publish-WinshellEnvironmentChange {
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) { return }
+function Set-WinshellUserPath([string] $Value) {
+    if ($env:WINSHELL_USER_PATH_FILE) {
+        [IO.File]::WriteAllText($env:WINSHELL_USER_PATH_FILE, $Value)
+        return
+    }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    try {
+        # REG_EXPAND_SZ stays, so an entry such as %USERPROFILE%\bin still expands.
+        $kind = 'ExpandString'
+        if ($key.GetValueNames() -contains 'Path' -and $key.GetValueKind('Path') -eq 'String') { $kind = 'String' }
+        $key.SetValue('Path', $Value, $kind)
+    } finally { $key.Dispose() }
+    # WM_SETTINGCHANGE, so a terminal Explorer starts next sees the new PATH.
     if (-not ('Winshell.Install.Native' -as [type])) {
-        Add-Type -Namespace Winshell.Install -Name Native -MemberDefinition @'
-[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, int msg, System.UIntPtr wParam, string lParam, uint flags, uint timeout, out System.UIntPtr result);
-'@
+        Add-Type -Namespace Winshell.Install -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, int msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);'
     }
     $result = [UIntPtr]::Zero
     [void][Winshell.Install.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
 }
 
-function Set-WinshellPathValue([string] $Value) {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        $parent = Split-Path -Parent $env:WINSHELL_USER_PATH_FILE
-        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
-            New-Item -ItemType Directory -Path $parent | Out-Null
-        }
-        [IO.File]::WriteAllText($env:WINSHELL_USER_PATH_FILE, $Value, [Text.UTF8Encoding]::new($false))
-        return
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
-    if (-not $key) { $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment') }
+function Receive-WinshellFile([string] $Uri, [string] $Path) {
     try {
-        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
-        try { $kind = $key.GetValueKind('Path') } catch { $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString }
-        if ($kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString -and $kind -ne [Microsoft.Win32.RegistryValueKind]::String) {
-            $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
-        }
-        $key.SetValue('Path', $Value, $kind)
-    } finally { $key.Dispose() }
-    Publish-WinshellEnvironmentChange
-}
-
-function Add-WinshellSessionPathEntry([string] $Entry) {
-    # The stored user PATH is separate. This only edits the current process, so a developer prompt
-    # or a venv entry stays put.
-    $entry = $Entry.TrimEnd('\')
-    foreach ($part in @(Split-WinshellPath $env:Path)) {
-        if (Test-WinshellSamePath $part $entry) { return }
-    }
-    if ([string]::IsNullOrEmpty($env:Path)) {
-        $env:Path = $entry
-        return
-    }
-    if ($env:Path.EndsWith(';')) {
-        $env:Path = $env:Path + $entry
-    } else {
-        $env:Path = $env:Path + ';' + $entry
-    }
-}
-
-function Remove-WinshellSessionPathEntry([string] $Entry) {
-    # The stored user PATH is separate. This only edits the current process, so a developer prompt
-    # or a venv entry stays put.
-    $parts = @(Split-WinshellPath $env:Path)
-    $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
-    if ($kept.Count -eq $parts.Count) { return }
-    $env:Path = $kept -join ';'
-}
-
-function Test-WinshellSessionKeepsPath([string] $CommandPath, [string] $InvocationName) {
-    # iex has no script path. `& .\install.ps1` returns to this process, which already has the folder.
-    # pwsh -File and `pwsh install.ps1` exit, so that process's PATH does not help the caller.
-    if ([string]::IsNullOrEmpty($CommandPath)) { return $true }
-    return $InvocationName -eq '&'
-}
-
-function Get-WinshellInstalledLine([string] $Installed, [bool] $SessionKeepsPath) {
-    if ($SessionKeepsPath) {
-        return "Winshell $Installed is installed. Run winshell."
-    }
-    return "Winshell $Installed is installed. Open a new terminal and run winshell."
-}
-
-function Add-WinshellPathEntry([string] $Entry) {
-    $entry = $Entry.TrimEnd('\')
-    $parts = @(Split-WinshellPath (Get-WinshellPathValue))
-    $added = $true
-    foreach ($part in $parts) {
-        if (Test-WinshellSamePath $part $entry) { $added = $false; break }
-    }
-    if ($added) { Set-WinshellPathValue ((@($parts + $entry)) -join ';') }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        Add-WinshellSessionPathEntry $entry
-    }
-    return $added
-}
-
-function Remove-WinshellPathEntry([string] $Entry) {
-    $parts = @(Split-WinshellPath (Get-WinshellPathValue))
-    $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
-    $removed = $kept.Count -ne $parts.Count
-    if ($removed) { Set-WinshellPathValue ($kept -join ';') }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        Remove-WinshellSessionPathEntry $Entry
-    }
-    return $removed
-}
-
-function Format-WinshellArgument([string] $Argument) {
-    $special = [char[]]@(32, 9, 34)
-    if ($Argument.Length -gt 0 -and $Argument.IndexOfAny($special) -lt 0) { return $Argument }
-    $sb = [Text.StringBuilder]::new('"')
-    $slashes = 0
-    foreach ($c in $Argument.ToCharArray()) {
-        if ($c -eq '\') {
-            $slashes++
-            continue
-        }
-        if ($c -eq '"') {
-            [void]$sb.Append([char]92, ($slashes * 2) + 1)
-        } elseif ($slashes -gt 0) {
-            [void]$sb.Append([char]92, $slashes)
-        }
-        $slashes = 0
-        [void]$sb.Append($c)
-    }
-    if ($slashes -gt 0) { [void]$sb.Append([char]92, $slashes * 2) }
-    [void]$sb.Append('"')
-    return $sb.ToString()
-}
-
-function Get-WinshellSignInCommand([string] $Exe) {
-    $conhost = Join-Path $env:SystemRoot 'System32\conhost.exe'
-    return (@(
-            (Format-WinshellArgument $conhost),
-            '--headless',
-            (Format-WinshellArgument $Exe),
-            '--no-duplicate'
-        ) -join ' ')
-}
-
-function Get-WinshellAutostartCommand {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_AUTOSTART_FILE)) {
-        if (-not (Test-Path -LiteralPath $env:WINSHELL_AUTOSTART_FILE)) { return $null }
-        $text = [IO.File]::ReadAllText($env:WINSHELL_AUTOSTART_FILE, [Text.UTF8Encoding]::new($false))
-        if ($text.Length -eq 0) { return $null }
-        return $text
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run', $false)
-    if (-not $key) { return $null }
-    try {
-        $value = $key.GetValue('Winshell', $null)
-        if ($value -is [string] -and $value.Length -gt 0) { return $value }
-        return $null
-    } finally { $key.Dispose() }
-}
-
-function Set-WinshellAutostartCommand([string] $Command) {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_AUTOSTART_FILE)) {
-        if ([string]::IsNullOrEmpty($Command)) {
-            if (Test-Path -LiteralPath $env:WINSHELL_AUTOSTART_FILE) {
-                Remove-Item -LiteralPath $env:WINSHELL_AUTOSTART_FILE -Force
-            }
-            return
-        }
-        $parent = Split-Path -Parent $env:WINSHELL_AUTOSTART_FILE
-        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
-            New-Item -ItemType Directory -Path $parent | Out-Null
-        }
-        [IO.File]::WriteAllText($env:WINSHELL_AUTOSTART_FILE, $Command, [Text.UTF8Encoding]::new($false))
-        return
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run', $true)
-    if (-not $key) {
-        $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
-    }
-    try {
-        if ([string]::IsNullOrEmpty($Command)) {
-            $key.DeleteValue('Winshell', $false)
-        } else {
-            $key.SetValue('Winshell', $Command, [Microsoft.Win32.RegistryValueKind]::String)
-        }
-    } finally { $key.Dispose() }
-}
-
-function Set-WinshellShortcut([string] $Exe) {
-    Confirm-WinshellTestIsolation
-    $path = Get-WinshellShortcutPath
-    $folder = Split-Path -Parent $path
-    if (Test-WinshellReparsePoint $folder) { throw "Refusing to create a shortcut in $folder because it is a link." }
-    if (-not (Test-Path -LiteralPath $folder)) {
-        New-Item -ItemType Directory -Path $folder | Out-Null
-    }
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut($path)
-    $link.TargetPath = $Exe
-    $link.Arguments = '--no-duplicate'
-    $link.WorkingDirectory = Split-Path -Parent $Exe
-    $link.Description = 'Winshell'
-    $link.Save()
-}
-
-function Move-WinshellDirectory([string] $From, [string] $To) {
-    try {
-        [IO.Directory]::Move($From, $To)
-    } catch [System.IO.IOException] {
-        Copy-Item -LiteralPath $From -Destination $To -Recurse -Force
-        Remove-Item -LiteralPath $From -Recurse -Force
-    }
-}
-
-function Remove-WinshellStagedUpdate {
-    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is not set.' }
-    $updates = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'winshell\updates'))
-    if (-not (Test-Path -LiteralPath $updates)) { return $false }
-    # A leftover staged update replaces the next start, including an older install. A recursive delete could follow a link.
-    if (Test-WinshellReparsePoint $updates) {
-        Write-WinshellLine "The staged update is still at $updates because it is a link."
-        return $false
-    }
-    Write-WinshellLine "Removing $updates."
-    try {
-        Remove-Item -LiteralPath $updates -Recurse -Force -ErrorAction Stop
+        Invoke-WebRequest -Uri $Uri -OutFile $Path -UseBasicParsing
     } catch {
-        Write-WinshellLine "The staged update is still at $updates because it could not be deleted."
-        return $false
-    }
-    return $true
-}
-
-function Remove-WinshellOldBin([string] $Parent) {
-    foreach ($item in @(Get-ChildItem -LiteralPath $Parent -Force -Directory -Filter 'bin.old-*')) {
-        # The installer never leaves a link here, and a recursive delete could follow one out of the install.
-        if (Test-WinshellReparsePoint $item.FullName) { continue }
-        try {
-            Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
-        } catch {
-            Write-WinshellLine "The previous copy is still at $($item.FullName) because it could not be deleted."
-        }
+        throw "Could not download $Uri. $($_.Exception.Message)"
     }
 }
 
-function Install-WinshellBin([string] $Stage, [string] $Bin, [scriptblock] $ProcessesUnder) {
-    $parent = Split-Path -Parent $Bin
-    if (-not (Test-Path -LiteralPath $parent)) {
-        New-Item -ItemType Directory -Path $parent | Out-Null
-    }
-    if (Test-WinshellReparsePoint $parent) { throw "Refusing to install into $parent because it is a link." }
-    if (Test-WinshellReparsePoint $Bin) { throw "Refusing to replace $Bin because it is a link." }
-    $running = @(Get-WinshellRunningId $parent $ProcessesUnder)
-    if ($running.Count -gt 0) {
-        throw "Winshell is running (pid $($running -join ', ')). Close it, then run the installer again.`nNothing was changed."
-    }
-    Remove-WinshellOldBin $parent
-    $old = Join-Path $parent ('bin.old-' + [guid]::NewGuid().ToString('n'))
-    $movedOld = $false
-    if (Test-Path -LiteralPath $Bin) {
-        [IO.Directory]::Move($Bin, $old)
-        $movedOld = $true
-    }
-    try {
-        Move-WinshellDirectory $Stage $Bin
-    } catch {
-        if (Test-Path -LiteralPath $Bin) {
-            Remove-Item -LiteralPath $Bin -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        if ($movedOld -and -not (Test-Path -LiteralPath $Bin)) {
-            [IO.Directory]::Move($old, $Bin)
-        }
-        throw
-    }
-    if ($movedOld -and (Test-Path -LiteralPath $old)) {
-        try {
-            Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction Stop
-        } catch {
-            Write-WinshellLine "Winshell is installed. The previous copy is still at $old because it could not be deleted."
-        }
-    }
-}
-
-function Install-Winshell {
-    [CmdletBinding()]
-    param(
-        [string] $Version,
-        [switch] $AutoStart,
-        [scriptblock] $DownloadText,
-        [scriptblock] $DownloadFile,
-        [scriptblock] $ProcessesUnder,
-        [scriptblock] $StorePackages,
-        [switch] $SessionKeepsPath
-    )
+function Install-Winshell([string] $Version, [switch] $AutoStart, [switch] $SessionKeepsPath) {
     $ErrorActionPreference = 'Stop'
-    Set-StrictMode -Version 2.0
-    Confirm-WinshellTestIsolation
-    $resolved = Resolve-WinshellVersion -Version $Version
-    $enableSignIn = Resolve-WinshellAutoStart -Switch ([bool]$AutoStart)
-    $arch = Get-WinshellArchitecture
-    $root = Get-WinshellInstallRoot
-    $bin = Get-WinshellBin $root
-    if (Test-WinshellReparsePoint $root) { throw "Refusing to install into $root because it is a link." }
-    if (Test-Path -LiteralPath $root) {
-        $running = @(Get-WinshellRunningId $root $ProcessesUnder)
-        if ($running.Count -gt 0) {
-            throw "Winshell is running (pid $($running -join ', ')). Close it, then run the installer again.`nNothing was changed."
+    $ProgressPreference = 'SilentlyContinue'
+    Assert-WinshellTestIsolation
+    $Version = "$Version".Trim()
+    if (-not $Version) { $Version = "$env:WINSHELL_VERSION".Trim() }
+    if ($Version) {
+        $Version = $Version -replace '^v', ''
+        if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must be x.y.z, not '$Version'." }
+    }
+    $signIn = $AutoStart -or ("$env:WINSHELL_AUTOSTART".Trim() -match '^(1|true|yes)$')
+    $arch = switch ([string][Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+        'X64' { 'x64' }
+        'Arm64' { 'arm64' }
+        default { throw "Winshell publishes win-x64 and win-arm64. This PC is '$_'." }
+    }
+    $base = 'https://github.com/enpaze/winshell/releases'
+    if ($env:WINSHELL_RELEASE_BASE) {
+        # Tests serve a release from this PC. Nothing else stands in for GitHub.
+        $base = $env:WINSHELL_RELEASE_BASE.Trim().TrimEnd('/')
+        if ($base -ne 'https://github.com/enpaze/winshell/releases' -and
+            $base -notmatch '^http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$') {
+            throw 'WINSHELL_RELEASE_BASE must be https://github.com/enpaze/winshell/releases or an http://127.0.0.1 test server.'
         }
     }
-    if ($resolved) {
-        Write-WinshellLine "Installing Winshell $resolved (win-$arch)."
+    $root = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\winshell'))
+    $bin = Join-Path $root 'bin'
+    $stage = Join-Path $root 'bin.new'
+    $old = Join-Path $root 'bin.old'
+    Assert-WinshellNotRunning $root 'installer'
+    if ($Version) {
+        Write-WinshellLine "Installing Winshell $Version (win-$arch)."
     } else {
         Write-WinshellLine "Installing the latest Winshell (win-$arch)."
     }
-    $base = Get-WinshellReleaseBase
-    $sumsUrl = Get-WinshellDownloadUrl $base $resolved 'SHA256SUMS.txt'
-    Write-WinshellLine 'Downloading SHA256SUMS.txt.'
-    $sumsText = if ($DownloadText) { [string](& $DownloadText $sumsUrl) } else { [string](Receive-WinshellWeb $sumsUrl $null) }
-    $checksums = ConvertFrom-WinshellChecksumMap $sumsText
-    $package = Select-WinshellPackageName $checksums $arch $resolved
-    $expected = $checksums[$package]
-    # latest/download changes when a release is published. The checksum line names one version, so the zip
-    # comes from that release instead of a second request to latest/download.
-    $packageVersion = $resolved
-    if ([string]::IsNullOrWhiteSpace($packageVersion) -and $package -match '^winshell-(\d+\.\d+\.\d+)-win-') {
-        $packageVersion = $Matches[1]
+    if ($PSVersionTable.PSVersion.Major -lt 6) {
+        # Windows PowerShell can default to TLS 1.0, which GitHub refuses.
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     }
-    $packageUrl = Get-WinshellDownloadUrl $base $packageVersion $package
+    $release = if ($Version) { "$base/download/v$Version" } else { "$base/latest/download" }
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('winshell-install-' + [guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $temp | Out-Null
     try {
-        $zip = Join-Path $temp 'download.zip'
+        Write-WinshellLine 'Downloading SHA256SUMS.txt.'
+        Receive-WinshellFile "$release/SHA256SUMS.txt" (Join-Path $temp 'SHA256SUMS.txt')
+        $name = if ($Version) { [regex]::Escape("winshell-$Version-win-$arch.zip") } else { "winshell-\d+\.\d+\.\d+-win-$arch\.zip" }
+        $line = [regex]::Match([IO.File]::ReadAllText((Join-Path $temp 'SHA256SUMS.txt')), "(?m)^([0-9A-Fa-f]{64}) [ *]($name)\r?$")
+        if (-not $line.Success) { throw "That release lists no win-$arch zip in SHA256SUMS.txt." }
+        $package = $line.Groups[2].Value
+        $installed = $package.Split('-')[1]
+        # latest/download moves when a release is published, so the zip comes from the release its checksum names.
         Write-WinshellLine "Downloading $package."
-        if ($DownloadFile) { & $DownloadFile $packageUrl $zip } else { Receive-WinshellWeb $packageUrl $zip }
-        if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw "The download did not write $package." }
-        $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $zip = Join-Path $temp $package
+        Receive-WinshellFile "$base/download/v$installed/$package" $zip
         Write-WinshellLine 'Verifying SHA256.'
+        $expected = $line.Groups[1].Value.ToLowerInvariant()
+        $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($actual -ne $expected) {
             throw "SHA256 mismatch for $package.`nExpected: $expected`nActual:   $actual`nThe download was discarded. Nothing was installed."
         }
-        $stage = Join-Path $temp 'stage'
-        Expand-WinshellZip $zip $stage
-        foreach ($required in @('winshell.exe', 'winshellw.exe')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $stage $required) -PathType Leaf)) {
-                throw "The archive does not contain $required. Nothing was installed."
-            }
+        # The stage is next to bin, on the same volume, so the old copy goes aside and the new one in by renaming.
+        # A file still open in bin fails the first rename, before anything changed.
+        Remove-WinshellFolder $stage | Out-Null
+        Remove-WinshellFolder $old | Out-Null
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::ExtractToDirectory($zip, $stage)
+        foreach ($required in 'winshell.exe', 'winshellw.exe') {
+            if (-not (Test-Path -LiteralPath (Join-Path $stage $required))) { throw "The archive does not contain $required. Nothing was installed." }
         }
         Write-WinshellLine "Installing to $bin."
-        Install-WinshellBin $stage $bin $ProcessesUnder
-        Remove-WinshellStagedUpdate | Out-Null
+        if (Test-Path -LiteralPath $bin) { Rename-Item -LiteralPath $bin -NewName 'bin.old' }
+        Rename-Item -LiteralPath $stage -NewName 'bin'
     } finally {
-        if (Test-Path -LiteralPath $temp) {
-            Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
-        }
+        Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $stage) { Remove-WinshellFolder $stage | Out-Null }
     }
-    if (Add-WinshellPathEntry $bin) {
-        Write-WinshellLine "Adding $bin to your PATH."
-    } else {
+    try {
+        Remove-WinshellFolder $old | Out-Null
+    } catch {
+        Write-WinshellLine "The previous copy is still at $old. $($_.Exception.Message)"
+    }
+    Remove-WinshellStagedUpdate | Out-Null
+
+    $parts = @((Get-WinshellUserPath).Split(';') | Where-Object { $_ })
+    if ($parts | Where-Object { $_.TrimEnd('\') -eq $bin }) {
         Write-WinshellLine "$bin is already on your PATH."
+    } else {
+        Write-WinshellLine "Adding $bin to your PATH."
+        Set-WinshellUserPath (($parts + $bin) -join ';')
     }
+    # This session's PATH is separate from the stored one. Tests leave it alone.
+    if (-not $env:WINSHELL_USER_PATH_FILE -and -not ("$env:Path".Split(';') | Where-Object { $_.TrimEnd('\') -eq $bin })) {
+        $env:Path = "$env:Path".TrimEnd(';') + ';' + $bin
+    }
+
     Write-WinshellLine 'Creating the Start menu shortcut.'
-    Set-WinshellShortcut (Join-Path $bin 'winshellw.exe')
-    if ($enableSignIn) {
-        Set-WinshellAutostartCommand (Get-WinshellSignInCommand (Join-Path $bin 'winshell.exe'))
+    $programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+    New-Item -ItemType Directory -Force -Path $programs | Out-Null
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $programs 'Winshell.lnk'))
+    $link.TargetPath = Join-Path $bin 'winshellw.exe'
+    $link.Arguments = '--no-duplicate'
+    $link.WorkingDirectory = $bin
+    $link.Description = 'Winshell'
+    $link.Save()
+
+    if ($signIn) {
+        # The command Winshell's own Settings writes, so it reads this entry as its own. It quotes only what has a space.
+        $command = @((Join-Path $env:SystemRoot 'System32\conhost.exe'), '--headless', (Join-Path $bin 'winshell.exe'), '--no-duplicate' |
+                ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+        if ($env:WINSHELL_AUTOSTART_FILE) {
+            [IO.File]::WriteAllText($env:WINSHELL_AUTOSTART_FILE, $command)
+        } else {
+            $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
+            try { $key.SetValue('Winshell', $command) } finally { $key.Dispose() }
+        }
         Write-WinshellLine 'Winshell will run when you sign in.'
     }
-    $installed = $resolved
-    if ($package -match '^winshell-(\d+\.\d+\.\d+)-') { $installed = $Matches[1] }
-    Write-WinshellLine (Get-WinshellInstalledLine $installed ([bool]$SessionKeepsPath))
-    if (@(Get-WinshellStorePackage $StorePackages).Count -gt 0) {
+
+    if ($SessionKeepsPath) {
+        Write-WinshellLine "Winshell $installed is installed. Run winshell."
+    } else {
+        Write-WinshellLine "Winshell $installed is installed. Open a new terminal and run winshell."
+    }
+    # A test must not ask this PC which packages it has.
+    $store = @()
+    if ($env:WINSHELL_INSTALL_TEST -ne '1') {
+        try { $store = @(Get-AppxPackage -Name '*Winshell*') } catch { $store = @() }
+    }
+    if ($store.Count -gt 0) {
         Write-WinshellLine 'A Microsoft Store copy of Winshell is also installed. Its WindowsApps alias usually comes first on PATH, so winshell may start the Store app instead of this copy.'
     }
 }
 
-if ($MyInvocation.InvocationName -ne '.') {
-    # WDAC and AppLocker can hold a session in Constrained Language Mode, where the .NET calls in this file fail,
-    # including the one that reports an error below.
-    $languageMode = $ExecutionContext.SessionState.LanguageMode
-    if ($languageMode -ne 'FullLanguage') {
-        Write-Error -ErrorAction Continue "install.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $languageMode. Download the portable zip from https://github.com/enpaze/winshell/releases instead."
-        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
-        exit 1
-    }
+# WDAC and AppLocker can hold a session in Constrained Language Mode, where the .NET calls above fail.
+if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
+    Write-Error -ErrorAction Continue "install.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $($ExecutionContext.SessionState.LanguageMode). Download the portable zip from https://github.com/enpaze/winshell/releases instead."
+    if ($PSCommandPath) { exit 1 }
+} else {
     try {
-        $keeps = Test-WinshellSessionKeepsPath $PSCommandPath $MyInvocation.InvocationName
+        # iex has no script path, and `& .\install.ps1` returns to this session, so either keeps the PATH just added.
+        $keeps = -not $PSCommandPath -or $MyInvocation.InvocationName -eq '&'
         Install-Winshell -Version $Version -AutoStart:$AutoStart -SessionKeepsPath:$keeps
     } catch {
-        $message = $_.Exception.Message
-        if ([string]::IsNullOrWhiteSpace($message)) { $message = $_.ToString() }
-        [Console]::Error.WriteLine($message)
-        # iex leaves PSCommandPath empty. exit would close that session.
-        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
-        exit 1
+        [Console]::Error.WriteLine($_.Exception.Message)
+        # exit would close the window iex runs in.
+        if ($PSCommandPath) { exit 1 }
     }
 }

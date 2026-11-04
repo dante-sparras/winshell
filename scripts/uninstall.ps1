@@ -15,347 +15,156 @@
 
         irm https://github.com/enpaze/winshell/releases/latest/download/uninstall.ps1 | iex
 
-    This file is a release asset. It does not dot-source a neighbor, and it does not run downloaded text.
+    This file is a release asset, fetched on its own. It does not dot-source a neighbor, and it does not
+    run downloaded text. docs/development.md describes the variables its tests set.
 #>
 
-function Write-WinshellLine([string] $Message) {
-    [Console]::Out.WriteLine($Message)
-}
+# install.ps1 has its own copy of the helpers both scripts need, since each is fetched alone.
+function Write-WinshellLine([string] $Message) { [Console]::Out.WriteLine($Message) }
 
-function Confirm-WinshellTestIsolation {
+function Assert-WinshellTestIsolation {
     if ($env:WINSHELL_INSTALL_TEST -ne '1') { return }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        throw 'Refusing to change PATH: a test must set WINSHELL_USER_PATH_FILE.'
+    if (-not $env:WINSHELL_USER_PATH_FILE -or -not $env:WINSHELL_AUTOSTART_FILE) {
+        throw 'A test must set WINSHELL_USER_PATH_FILE and WINSHELL_AUTOSTART_FILE.'
     }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_AUTOSTART_FILE)) {
-        throw 'Refusing to change sign-in: a test must set WINSHELL_AUTOSTART_FILE.'
-    }
-    $realLocal = [Environment]::GetFolderPath('LocalApplicationData')
-    $realRoaming = [Environment]::GetFolderPath('ApplicationData')
-    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA) -or
-        [string]::Equals([IO.Path]::GetFullPath($env:LOCALAPPDATA), [IO.Path]::GetFullPath($realLocal), [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Refusing to use the real LOCALAPPDATA from a test.'
-    }
-    if ([string]::IsNullOrWhiteSpace($env:APPDATA) -or
-        [string]::Equals([IO.Path]::GetFullPath($env:APPDATA), [IO.Path]::GetFullPath($realRoaming), [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Refusing to use the real APPDATA from a test.'
-    }
-}
-
-function Get-WinshellInstallRoot {
-    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is not set.' }
-    $root = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\winshell'))
-    $suffix = [IO.Path]::DirectorySeparatorChar + 'Programs' + [IO.Path]::DirectorySeparatorChar + 'winshell'
-    if (-not $root.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to use $root. Winshell installs into %LOCALAPPDATA%\Programs\winshell."
-    }
-    return $root
-}
-
-function Get-WinshellBin([string] $Root) {
-    return (Join-Path $Root 'bin')
-}
-
-function Get-WinshellStartMenuFolder {
-    if ([string]::IsNullOrWhiteSpace($env:APPDATA)) { throw 'APPDATA is not set.' }
-    return [IO.Path]::GetFullPath((Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))
-}
-
-function Get-WinshellShortcutPath {
-    return (Join-Path (Get-WinshellStartMenuFolder) 'Winshell.lnk')
-}
-
-function Test-WinshellReparsePoint([string] $Path) {
-    if (-not (Test-Path -LiteralPath $Path)) { return $false }
-    $item = Get-Item -LiteralPath $Path -Force
-    return [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
-}
-
-function Get-WinshellImagePath([int] $ProcessId) {
-    # MainModule.FileName is empty from a 32-bit host and does not throw. Limited query works across that boundary.
-    if (-not ('Winshell.Install.Process' -as [type])) {
-        Add-Type -Namespace Winshell.Install -Name Process -MemberDefinition @'
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-public static extern System.IntPtr OpenProcess(uint access, bool inherit, int processId);
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-public static extern bool QueryFullProcessImageNameW(System.IntPtr process, int flags, System.Text.StringBuilder name, ref int size);
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-public static extern bool CloseHandle(System.IntPtr handle);
-'@
-    }
-    $handle = [Winshell.Install.Process]::OpenProcess(0x1000, $false, $ProcessId)
-    if ($handle -eq [IntPtr]::Zero) { return $null }
-    try {
-        $capacity = 32768
-        $builder = New-Object System.Text.StringBuilder $capacity
-        $size = $capacity
-        $ok = [Winshell.Install.Process]::QueryFullProcessImageNameW($handle, 0, $builder, [ref]$size)
-        if (-not $ok -or $builder.Length -eq 0) { return $null }
-        return $builder.ToString()
-    } finally {
-        [void][Winshell.Install.Process]::CloseHandle($handle)
-    }
-}
-
-function Get-WinshellProcessIdUnder([string] $Directory) {
-    $root = [IO.Path]::GetFullPath($Directory)
-    if (-not $root.EndsWith('\')) { $root = $root + '\' }
-    $ids = @()
-    foreach ($name in @('winshell', 'winshellw')) {
-        $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
-        foreach ($proc in $procs) {
-            $path = Get-WinshellImagePath ([int]$proc.Id)
-            if ([string]::IsNullOrWhiteSpace($path)) {
-                throw "Winshell is running (pid $($proc.Id)). Close it, then run the uninstaller again.`nNothing was changed."
-            }
-            if ($path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
-                $ids += [int]$proc.Id
-            }
+    $real = [Environment]::GetFolderPath('LocalApplicationData'), [Environment]::GetFolderPath('ApplicationData')
+    foreach ($folder in $env:LOCALAPPDATA, $env:APPDATA) {
+        if (-not $folder -or $real -contains [IO.Path]::GetFullPath($folder).TrimEnd('\')) {
+            throw 'Refusing to use the real LOCALAPPDATA or APPDATA from a test.'
         }
     }
-    return $ids
 }
 
-function Get-WinshellRunningId([string] $Directory, [scriptblock] $ProcessesUnder) {
-    $ids = if ($ProcessesUnder) { @(& $ProcessesUnder $Directory) } else { @(Get-WinshellProcessIdUnder $Directory) }
-    return @($ids | Where-Object { $null -ne $_ -and "$_" -ne '' })
+function Assert-WinshellNotRunning([string] $Root, [string] $Again) {
+    $prefix = $Root.TrimEnd('\') + '\'
+    # A process whose path Windows will not tell us could be this install.
+    $ids = @(Get-CimInstance Win32_Process -Filter "Name = 'winshell.exe' OR Name = 'winshellw.exe'" |
+            Where-Object { -not $_.ExecutablePath -or $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { $_.ProcessId })
+    if ($ids) { throw "Winshell is running (pid $($ids -join ', ')). Close it, then run the $Again again.`nNothing was changed." }
 }
 
-function Split-WinshellPath([string] $Path) {
-    if ([string]::IsNullOrEmpty($Path)) { return @() }
-    return @($Path.Split(';') | Where-Object { $_ -ne '' })
+function Remove-WinshellFolder([string] $Path) {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return $false }
+    # Windows PowerShell's Remove-Item -Recurse can follow a junction out of the folder.
+    if ($item.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw "Refusing to delete $Path because it is a link." }
+    Remove-Item -LiteralPath $Path -Recurse -Force
+    return $true
 }
 
-function Test-WinshellSamePath([string] $Left, [string] $Right) {
-    if ($null -eq $Left -or $null -eq $Right) { return $false }
-    return [string]::Equals($Left.TrimEnd('\', '/'), $Right.TrimEnd('\', '/'), [StringComparison]::OrdinalIgnoreCase)
-}
-
-function Get-WinshellPathValue {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        if (-not (Test-Path -LiteralPath $env:WINSHELL_USER_PATH_FILE)) { return '' }
-        return [IO.File]::ReadAllText($env:WINSHELL_USER_PATH_FILE, [Text.UTF8Encoding]::new($false))
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $false)
-    if (-not $key) { return '' }
+function Remove-WinshellStagedUpdate {
+    # A staged update replaces the next start, even of another install.
+    $updates = Join-Path $env:LOCALAPPDATA 'winshell\updates'
     try {
-        $raw = $key.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-        if ($null -eq $raw) { return '' }
-        return [string]$raw
-    } finally { $key.Dispose() }
+        if (Remove-WinshellFolder $updates) {
+            Write-WinshellLine "Removed $updates."
+            return $true
+        }
+    } catch {
+        Write-WinshellLine "The staged update is still at $updates. $($_.Exception.Message)"
+    }
+    return $false
 }
 
-function Publish-WinshellEnvironmentChange {
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) { return }
+function Get-WinshellUserPath {
+    # Tests read and write a file instead of HKCU\Environment.
+    if ($env:WINSHELL_USER_PATH_FILE) {
+        if (Test-Path -LiteralPath $env:WINSHELL_USER_PATH_FILE) { return [IO.File]::ReadAllText($env:WINSHELL_USER_PATH_FILE) }
+        return ''
+    }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+    if (-not $key) { return '' }
+    try { return [string]$key.GetValue('Path', '', 'DoNotExpandEnvironmentNames') } finally { $key.Dispose() }
+}
+
+function Set-WinshellUserPath([string] $Value) {
+    if ($env:WINSHELL_USER_PATH_FILE) {
+        [IO.File]::WriteAllText($env:WINSHELL_USER_PATH_FILE, $Value)
+        return
+    }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    try {
+        # REG_EXPAND_SZ stays, so an entry such as %USERPROFILE%\bin still expands.
+        $kind = 'ExpandString'
+        if ($key.GetValueNames() -contains 'Path' -and $key.GetValueKind('Path') -eq 'String') { $kind = 'String' }
+        $key.SetValue('Path', $Value, $kind)
+    } finally { $key.Dispose() }
+    # WM_SETTINGCHANGE, so a terminal Explorer starts next sees the new PATH.
     if (-not ('Winshell.Install.Native' -as [type])) {
-        Add-Type -Namespace Winshell.Install -Name Native -MemberDefinition @'
-[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, int msg, System.UIntPtr wParam, string lParam, uint flags, uint timeout, out System.UIntPtr result);
-'@
+        Add-Type -Namespace Winshell.Install -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, int msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);'
     }
     $result = [UIntPtr]::Zero
     [void][Winshell.Install.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
 }
 
-function Set-WinshellPathValue([string] $Value) {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        $parent = Split-Path -Parent $env:WINSHELL_USER_PATH_FILE
-        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
-            New-Item -ItemType Directory -Path $parent | Out-Null
-        }
-        [IO.File]::WriteAllText($env:WINSHELL_USER_PATH_FILE, $Value, [Text.UTF8Encoding]::new($false))
-        return
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
-    if (-not $key) { $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment') }
-    try {
-        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
-        try { $kind = $key.GetValueKind('Path') } catch { $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString }
-        if ($kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString -and $kind -ne [Microsoft.Win32.RegistryValueKind]::String) {
-            $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
-        }
-        $key.SetValue('Path', $Value, $kind)
-    } finally { $key.Dispose() }
-    Publish-WinshellEnvironmentChange
-}
-
-function Remove-WinshellSessionPathEntry([string] $Entry) {
-    # The stored user PATH is separate. This only edits the current process, so a developer prompt
-    # or a venv entry stays put.
-    $parts = @(Split-WinshellPath $env:Path)
-    $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
-    if ($kept.Count -eq $parts.Count) { return }
-    $env:Path = $kept -join ';'
-}
-
-function Remove-WinshellPathEntry([string] $Entry) {
-    $parts = @(Split-WinshellPath (Get-WinshellPathValue))
-    $kept = @($parts | Where-Object { -not (Test-WinshellSamePath $_ $Entry) })
-    $removed = $kept.Count -ne $parts.Count
-    if ($removed) { Set-WinshellPathValue ($kept -join ';') }
-    if ([string]::IsNullOrWhiteSpace($env:WINSHELL_USER_PATH_FILE)) {
-        Remove-WinshellSessionPathEntry $Entry
-    }
-    return $removed
-}
-
-function Get-WinshellAutostartCommand {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_AUTOSTART_FILE)) {
-        if (-not (Test-Path -LiteralPath $env:WINSHELL_AUTOSTART_FILE)) { return $null }
-        $text = [IO.File]::ReadAllText($env:WINSHELL_AUTOSTART_FILE, [Text.UTF8Encoding]::new($false))
-        if ($text.Length -eq 0) { return $null }
-        return $text
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run', $false)
-    if (-not $key) { return $null }
-    try {
-        $value = $key.GetValue('Winshell', $null)
-        if ($value -is [string] -and $value.Length -gt 0) { return $value }
-        return $null
-    } finally { $key.Dispose() }
-}
-
-function Set-WinshellAutostartCommand([string] $Command) {
-    Confirm-WinshellTestIsolation
-    if (-not [string]::IsNullOrWhiteSpace($env:WINSHELL_AUTOSTART_FILE)) {
-        if ([string]::IsNullOrEmpty($Command)) {
-            if (Test-Path -LiteralPath $env:WINSHELL_AUTOSTART_FILE) {
-                Remove-Item -LiteralPath $env:WINSHELL_AUTOSTART_FILE -Force
-            }
-            return
-        }
-        $parent = Split-Path -Parent $env:WINSHELL_AUTOSTART_FILE
-        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
-            New-Item -ItemType Directory -Path $parent | Out-Null
-        }
-        [IO.File]::WriteAllText($env:WINSHELL_AUTOSTART_FILE, $Command, [Text.UTF8Encoding]::new($false))
-        return
-    }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run', $true)
-    if (-not $key) {
-        $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
-    }
-    try {
-        if ([string]::IsNullOrEmpty($Command)) {
-            $key.DeleteValue('Winshell', $false)
-        } else {
-            $key.SetValue('Winshell', $Command, [Microsoft.Win32.RegistryValueKind]::String)
-        }
-    } finally { $key.Dispose() }
-}
-
-function Test-WinshellSameFile([string] $Left, [string] $Right) {
-    if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) { return $false }
-    return [string]::Equals(
-        [IO.Path]::GetFullPath($Left).TrimEnd('\'),
-        [IO.Path]::GetFullPath($Right).TrimEnd('\'),
-        [StringComparison]::OrdinalIgnoreCase)
-}
-
-function Test-WinshellCommandTarget([string] $Command, [string] $Exe) {
-    if ([string]::IsNullOrWhiteSpace($Command) -or [string]::IsNullOrWhiteSpace($Exe)) { return $false }
-    $full = [IO.Path]::GetFullPath($Exe)
-    $pattern = [regex]::Escape($full)
-    return [regex]::IsMatch($Command, "(?i)(^|[\s""])$pattern($|[\s""])")
-}
-
-function Remove-WinshellStagedUpdate {
-    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is not set.' }
-    $updates = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'winshell\updates'))
-    if (-not (Test-Path -LiteralPath $updates)) { return $false }
-    # A leftover staged update replaces the next start, including an older install. A recursive delete could follow a link.
-    if (Test-WinshellReparsePoint $updates) {
-        Write-WinshellLine "The staged update is still at $updates because it is a link."
-        return $false
-    }
-    Write-WinshellLine "Removing $updates."
-    try {
-        Remove-Item -LiteralPath $updates -Recurse -Force -ErrorAction Stop
-    } catch {
-        Write-WinshellLine "The staged update is still at $updates because it could not be deleted."
-        return $false
-    }
-    return $true
-}
-
-function Get-WinshellShortcutTarget([string] $Path) {
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut($Path)
-    return [string]$link.TargetPath
-}
-
 function Uninstall-Winshell {
-    [CmdletBinding()]
-    param([scriptblock] $ProcessesUnder)
     $ErrorActionPreference = 'Stop'
-    Set-StrictMode -Version 2.0
-    Confirm-WinshellTestIsolation
-    $root = Get-WinshellInstallRoot
-    $bin = Get-WinshellBin $root
-    $exe = Join-Path $bin 'winshell.exe'
-    $gui = Join-Path $bin 'winshellw.exe'
-    if (Test-Path -LiteralPath $root) {
-        if (Test-WinshellReparsePoint $root) {
-            throw "Refusing to remove $root because it is a link.`nNothing was changed."
-        }
-        $running = @(Get-WinshellRunningId $root $ProcessesUnder)
-        if ($running.Count -gt 0) {
-            throw "Winshell is running (pid $($running -join ', ')). Close it, then run the uninstaller again.`nNothing was changed."
-        }
-    }
-    $removed = $false
-    if (Test-Path -LiteralPath $root) {
-        Write-WinshellLine "Removing $root."
-        Remove-Item -LiteralPath $root -Recurse -Force
-        $removed = $true
-    }
-    if (Remove-WinshellPathEntry $bin) {
+    Assert-WinshellTestIsolation
+    $root = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\winshell'))
+    $bin = Join-Path $root 'bin'
+    Assert-WinshellNotRunning $root 'uninstaller'
+    $removed = Remove-WinshellFolder $root
+    if ($removed) { Write-WinshellLine "Removed $root." }
+
+    $parts = @((Get-WinshellUserPath).Split(';') | Where-Object { $_ })
+    $kept = @($parts | Where-Object { $_.TrimEnd('\') -ne $bin })
+    if ($kept.Count -ne $parts.Count) {
         Write-WinshellLine "Removing $bin from your PATH."
+        Set-WinshellUserPath ($kept -join ';')
         $removed = $true
     }
-    $shortcut = Get-WinshellShortcutPath
-    $target = Get-WinshellShortcutTarget $shortcut
-    if ((Test-WinshellSameFile $target $exe) -or (Test-WinshellSameFile $target $gui)) {
+    # This session's PATH is separate from the stored one. Tests leave it alone.
+    $session = @("$env:Path".Split(';') | Where-Object { $_ })
+    $keptSession = @($session | Where-Object { $_.TrimEnd('\') -ne $bin })
+    if (-not $env:WINSHELL_USER_PATH_FILE -and $keptSession.Count -ne $session.Count) { $env:Path = $keptSession -join ';' }
+
+    # Another install's shortcut and sign-in entry stay. Either exe in this bin is this install.
+    $shortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Winshell.lnk'
+    if ((Test-Path -LiteralPath $shortcut) -and
+        (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath -in (Join-Path $bin 'winshell.exe'), (Join-Path $bin 'winshellw.exe')) {
         Write-WinshellLine 'Removing the Start menu shortcut.'
         Remove-Item -LiteralPath $shortcut -Force
         $removed = $true
     }
-    $command = Get-WinshellAutostartCommand
-    # Settings used to record winshellw.exe when Start launched the windowed copy. Either name in this folder is this install.
-    if ((Test-WinshellCommandTarget $command $exe) -or (Test-WinshellCommandTarget $command $gui)) {
-        Write-WinshellLine 'Removing the sign-in entry.'
-        Set-WinshellAutostartCommand ''
-        $removed = $true
+    $ours = "(?i)(^|[\s""])$([regex]::Escape($bin))\\winshellw?\.exe($|[\s""])"
+    if ($env:WINSHELL_AUTOSTART_FILE) {
+        if ((Test-Path -LiteralPath $env:WINSHELL_AUTOSTART_FILE) -and [IO.File]::ReadAllText($env:WINSHELL_AUTOSTART_FILE) -match $ours) {
+            Write-WinshellLine 'Removing the sign-in entry.'
+            Remove-Item -LiteralPath $env:WINSHELL_AUTOSTART_FILE -Force
+            $removed = $true
+        }
+    } else {
+        $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run', $true)
+        if ($key) {
+            try {
+                if ([string]$key.GetValue('Winshell') -match $ours) {
+                    Write-WinshellLine 'Removing the sign-in entry.'
+                    $key.DeleteValue('Winshell')
+                    $removed = $true
+                }
+            } finally { $key.Dispose() }
+        }
     }
     if (Remove-WinshellStagedUpdate) { $removed = $true }
-    if (-not $removed) {
+
+    if ($removed) {
+        Write-WinshellLine 'Winshell is uninstalled. Your configuration in %APPDATA%\winshell was left in place. Logs and state stay in %LOCALAPPDATA%\winshell.'
+    } else {
         Write-WinshellLine 'Winshell is not installed.'
-        return
     }
-    Write-WinshellLine 'Winshell is uninstalled. Your configuration in %APPDATA%\winshell was left in place. Logs and state stay in %LOCALAPPDATA%\winshell.'
 }
 
-if ($MyInvocation.InvocationName -ne '.') {
-    # WDAC and AppLocker can hold a session in Constrained Language Mode, where the .NET calls in this file fail,
-    # including the one that reports an error below.
-    $languageMode = $ExecutionContext.SessionState.LanguageMode
-    if ($languageMode -ne 'FullLanguage') {
-        Write-Error -ErrorAction Continue "uninstall.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $languageMode. Delete %LOCALAPPDATA%\Programs\winshell by hand, then remove its PATH entry and Start menu shortcut."
-        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
-        exit 1
-    }
+# WDAC and AppLocker can hold a session in Constrained Language Mode, where the .NET calls above fail.
+if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
+    Write-Error -ErrorAction Continue "uninstall.ps1 needs PowerShell's full language mode, and a system policy such as WDAC or AppLocker keeps this session in $($ExecutionContext.SessionState.LanguageMode). Delete %LOCALAPPDATA%\Programs\winshell by hand, then remove its PATH entry and Start menu shortcut."
+    if ($PSCommandPath) { exit 1 }
+} else {
     try {
         Uninstall-Winshell
     } catch {
-        $message = $_.Exception.Message
-        if ([string]::IsNullOrWhiteSpace($message)) { $message = $_.ToString() }
-        [Console]::Error.WriteLine($message)
-        # iex leaves PSCommandPath empty. exit would close that session.
-        if ([string]::IsNullOrEmpty($PSCommandPath)) { return }
-        exit 1
+        [Console]::Error.WriteLine($_.Exception.Message)
+        # exit would close the window iex runs in.
+        if ($PSCommandPath) { exit 1 }
     }
 }
