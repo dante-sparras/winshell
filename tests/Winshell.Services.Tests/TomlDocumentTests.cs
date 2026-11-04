@@ -190,6 +190,19 @@ public sealed class TomlDocumentTests
         Assert.Equal("# Above other.\n", document.ToString());
     }
 
+    [Theory]
+    [InlineData("x = 1\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "x = 1\n\n# Other settings.\n[other]\nk = 1\n")]
+    [InlineData("[other]\nk = 1\n[a]\nk = 1\n# The end.\n", "[other]\nk = 1\n# The end.\n")]
+    [InlineData("[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "# Other settings.\n[other]\nk = 1\n")]
+    public void The_comments_after_a_table_stay_when_the_table_goes(string original, string expected)
+    {
+        var document = Parse(original);
+
+        document.Set("a", null);
+
+        Assert.Equal(expected, document.ToString());
+    }
+
     [Fact]
     public void Null_takes_out_a_table_and_a_key_the_file_does_not_have_stays_out()
     {
