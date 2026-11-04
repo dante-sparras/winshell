@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.TestSupport;
 
 /// <summary>
@@ -22,11 +20,11 @@ internal static class Wait
     internal static void Until(Func<bool> done, string what, TimeSpan patience, Action? between = null)
     {
         var token = TestContext.Current.CancellationToken;
-        var started = Stopwatch.GetTimestamp();
+        var started = TimeProvider.System.GetTimestamp();
         var pause = FirstPause;
         while (!done())
         {
-            Assert.True(Stopwatch.GetElapsedTime(started) < patience, $"Timed out: {what}");
+            Assert.True(TimeProvider.System.GetElapsedTime(started) < patience, $"Timed out: {what}");
             token.WaitHandle.WaitOne(pause);
             token.ThrowIfCancellationRequested();
             pause = Next(pause);
@@ -46,11 +44,11 @@ internal static class Wait
     internal static async Task UntilAsync(Func<bool> done, string what, Func<Task> between)
     {
         var token = TestContext.Current.CancellationToken;
-        var started = Stopwatch.GetTimestamp();
+        var started = TimeProvider.System.GetTimestamp();
         var pause = FirstPause;
         while (!done())
         {
-            Assert.True(Stopwatch.GetElapsedTime(started) < Patience, $"Timed out: {what}");
+            Assert.True(TimeProvider.System.GetElapsedTime(started) < Patience, $"Timed out: {what}");
 #pragma warning disable RS0030 // This is the one place a test waits on time.
             await Task.Delay(pause, token);
 #pragma warning restore RS0030

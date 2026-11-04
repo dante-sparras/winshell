@@ -444,14 +444,14 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
-    public void A_server_that_outlives_its_build_does_not_hold_up_the_result()
+    public async Task A_server_that_outlives_its_build_does_not_hold_up_the_result()
     {
-        var watch = Stopwatch.StartNew();
+        // The server outlives the wait below, so a Run that waited for it to close its output would not be done in time.
+        var run = Task.Run(() => ConfigurationProject.Run("cmd", ["/c", "start /b ping -n 60 127.0.0.1 >nul & echo built"], Path.GetTempPath()));
 
-        var result = ConfigurationProject.Run("cmd", ["/c", "start /b ping -n 15 127.0.0.1 >nul & echo built"], Path.GetTempPath());
+        Wait.Until(() => run.IsCompleted, "the result while the server still runs");
 
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Took {watch.Elapsed}.");
-        Assert.Equal((0, "built"), ToTuple(result));
+        Assert.Equal((0, "built"), ToTuple(await run));
     }
 
     private static (int, string) ToTuple(CommandResult result) => (result.ExitCode, result.Output);

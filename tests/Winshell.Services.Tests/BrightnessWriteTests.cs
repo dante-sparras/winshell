@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Winshell.Power;
 
 namespace Winshell.Services.Tests;
@@ -20,22 +19,19 @@ public class BrightnessWriteTests
             lock (written)
                 written.Add(value);
             started.Release();
-            release.Wait(TimeSpan.FromSeconds(10));
+            release.Wait(TestContext.Current.CancellationToken);
             return 0;
         });
         var monitor = new BrightnessMonitor(writer, Log.Default);
         monitor.Update(new BrightnessInfo("DISPLAY1", "Panel", BrightnessConnection.Internal, 0, 100, 40));
 
-        var clock = Stopwatch.StartNew();
+        // The write is held until release is set below, so a setter that waited for it would never return.
         monitor.Brightness = 50;
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"Setting the brightness took {clock.Elapsed}.");
         Assert.Equal(50, monitor.Brightness);
 
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken), "The first write did not start.");
-        clock.Restart();
+        started.Wait(TestContext.Current.CancellationToken);
         for (var value = 51; value <= 80; value++)
             monitor.Brightness = value;
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"Setting the brightness took {clock.Elapsed}.");
         Assert.Equal(80, monitor.Brightness);
 
         // A read that arrives while writes are still running does not move the value back.
