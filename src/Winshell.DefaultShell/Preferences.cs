@@ -61,7 +61,10 @@ public sealed partial class Preferences(string path, IEventLoop loop, Log? log =
     public WindowBackdrop Material => Backdrop == "mica" ? WindowBackdrop.Mica : WindowBackdrop.Acrylic;
 
     /// <summary>Whether <see cref="AccentColor"/> is one Winshell can use.</summary>
-    public bool ValidAccent => AccentPattern().IsMatch(AccentColor);
+    public bool ValidAccent => IsAccent(AccentColor);
+
+    /// <summary>Whether text is a <c>#RRGGBB</c> accent.</summary>
+    public static bool IsAccent(string? text) => text is not null && AccentPattern().IsMatch(text);
 
     /// <summary><see cref="TaskbarAppsOn"/>, or <c>all</c> when the file has one Winshell cannot use.</summary>
     public string AppsOn => TaskbarAppsOn is "all" or "main" or "where" ? TaskbarAppsOn : "all";
@@ -109,6 +112,6 @@ public sealed partial class Preferences(string path, IEventLoop loop, Log? log =
         }
     }
 
-    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
+    [GeneratedRegex(@"^#[0-9a-fA-F]{6}\z")]
     private static partial Regex AccentPattern();
 }

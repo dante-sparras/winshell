@@ -109,6 +109,7 @@ public sealed class PreferencesTests : IDisposable
     [InlineData("", false)]
     [InlineData("red", false)]
     [InlineData("#12345", false)]
+    [InlineData("#112233\n", false)]
     public void An_accent_is_six_hex_digits(string value, bool valid)
     {
         using var preferences = Open(new ManualEventLoop());

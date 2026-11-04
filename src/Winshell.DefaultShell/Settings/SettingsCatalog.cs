@@ -161,25 +161,12 @@ public static class SettingsCatalog
     /// not one Winshell can store. Anything other than <c>manual</c> follows Windows.
     /// </summary>
     public static string ChooseAccent(string choice, string? systemAccent) =>
-        choice == "manual" ? IsAccent(systemAccent) ? systemAccent!.ToUpperInvariant() : "#0078D4" : "";
-
-    public static bool IsAccent(string? text)
-    {
-        if (text is not { Length: 7 } || text[0] != '#')
-            return false;
-        for (var i = 1; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (c is not ((>= '0' and <= '9') or (>= 'a' and <= 'f') or (>= 'A' and <= 'F')))
-                return false;
-        }
-        return true;
-    }
+        choice == "manual" ? Preferences.IsAccent(systemAccent) ? systemAccent!.ToUpperInvariant() : "#0078D4" : "";
 
     /// <summary>Whether a check drawn on <paramref name="hex"/> is black.</summary>
     public static bool LightGlyph(string hex)
     {
-        if (!IsAccent(hex))
+        if (!Preferences.IsAccent(hex))
             return false;
         var r = byte.Parse(hex.AsSpan(1, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture) / 255d;
         var g = byte.Parse(hex.AsSpan(3, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture) / 255d;
