@@ -124,6 +124,12 @@ internal static class ProbeShell
     }
 
     /// <summary>Builds the probe in <paramref name="folder"/>, with its source in <c>Program.cs</c>, and returns the program.</summary>
+    /// <remarks>
+    /// Each new folder rebuilds the src/ projects into their shared obj folders, which <see cref="Gate"/> cannot keep
+    /// apart from a build <c>winshell reload</c> runs in another process. A test that wants the probe to behave
+    /// differently puts a file in its config folder for <see cref="Source"/> to read, as <see cref="HangMarker"/> does,
+    /// and runs the shared program.
+    /// </remarks>
     internal static string Build(string folder)
     {
         lock (Gate)
