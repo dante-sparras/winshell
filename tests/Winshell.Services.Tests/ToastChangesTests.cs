@@ -10,7 +10,7 @@ public sealed class ToastChangesTests
     private ToastChanges Changes() => new(() => _stamp, _time);
 
     [Fact]
-    public void The_toasts_are_read_again_when_the_database_changes_and_at_least_every_minute()
+    public void The_toasts_are_read_again_when_the_database_changes_or_cannot_be_read_and_at_least_every_minute()
     {
         var changes = Changes();
         Assert.True(changes.Due(out var current));
