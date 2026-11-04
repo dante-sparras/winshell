@@ -74,6 +74,17 @@ public sealed class DirectoryWatchTests : IDisposable
         Assert.False(lost);
     }
 
+    [Fact]
+    public void A_file_watch_disposed_twice_is_harmless()
+    {
+        var watch = new FileWatch(Path.Combine(_directory, "watched.txt"), new ManualEventLoop(), () => { });
+        watch.Dispose();
+
+        var second = Record.Exception(watch.Dispose);
+
+        Assert.Null(second);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

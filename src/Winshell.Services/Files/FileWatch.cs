@@ -78,5 +78,6 @@ public sealed class FileWatch : IDisposable
     {
         _disposed = true;
         _watch?.Dispose();
+        _watch = null;
     }
 }

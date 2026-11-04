@@ -33,6 +33,7 @@ internal sealed partial class DirectoryWatch : IDisposable
     private readonly Thread _thread;
     private bool _reading;
     private volatile bool _stopped;
+    private int _disposed;
 
     private DirectoryWatch(SafeFileHandle handle, uint filter, bool subtree, Action<string> changed, Action lost)
     {
@@ -118,6 +119,9 @@ internal sealed partial class DirectoryWatch : IDisposable
 
     public void Dispose()
     {
+        // A second call would free the buffers again.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         _stopped = true;
         if (_thread.ThreadState != ThreadState.Unstarted)
         {
