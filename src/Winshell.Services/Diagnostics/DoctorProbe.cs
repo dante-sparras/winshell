@@ -198,7 +198,7 @@ internal static unsafe partial class DoctorProbe
     public static IReadOnlyList<DoctorScreens.WindowFacts> EdgeWindows()
     {
         _windows = [];
-        NativeMethods.EnumWindows(&CollectWindow, 0);
+        Win32.EnumWindows(&CollectWindow, 0);
         var handles = _windows;
         _windows = null;
         var result = new List<DoctorScreens.WindowFacts>();
@@ -207,7 +207,7 @@ internal static unsafe partial class DoctorProbe
         {
             if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || NativeMethods.IsCloaked(hwnd) || !Win32.GetWindowRect(hwnd, out var rect))
                 continue;
-            var length = NativeMethods.GetClassName(hwnd, name, 256);
+            var length = Win32.GetClassNameW(hwnd, name, 256);
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
             result.Add(new DoctorScreens.WindowFacts(new string(name, 0, Math.Max(0, length)), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
         }

@@ -333,7 +333,7 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
         manager = null;
         error = "";
         var providerId = typeof(IServiceProvider).GUID;
-        var hr = CoCreateInstance(in ImmersiveShellClass, 0, ClsctxLocalServer, in providerId, out var shellPointer);
+        var hr = Win32.CoCreateInstance(in ImmersiveShellClass, 0, ClsctxLocalServer, in providerId, out var shellPointer);
         if (hr < 0 || shellPointer == 0)
         {
             error = $"unavailable: immersive shell {Hex(hr)}";
@@ -430,9 +430,6 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
     }
 
     private static string Hex(int hr) => $"0x{hr:X8}";
-
-    [LibraryImport("ole32.dll")]
-    private static partial int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
 
     [LibraryImport("combase.dll")]
     private static partial nint WindowsGetStringRawBuffer(nint hstring, out uint length);

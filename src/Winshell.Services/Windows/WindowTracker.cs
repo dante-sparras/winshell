@@ -75,12 +75,12 @@ internal static unsafe class WindowTracker
         ];
         foreach (var (min, max) in ranges)
         {
-            if (SetWinEventHook(min, max, 0, &OnWinEvent, 0, 0, WINEVENT_OUTOFCONTEXT) == 0)
+            if (Win32.SetWinEventHook(min, max, 0, &OnWinEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT) == 0)
                 log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
         StartShellHook(log);
         _enumerated = [];
-        EnumWindows(&Collect, 0);
+        Win32.EnumWindows(&Collect, 0);
         foreach (var hwnd in _enumerated)
             Dirty.Add(hwnd);
         _enumerated = null;
@@ -231,7 +231,7 @@ internal static unsafe class WindowTracker
         {
             if (Tracked.ContainsKey(hwnd))
                 return hwnd;
-            hwnd = GetWindow(hwnd, GW_OWNER);
+            hwnd = Win32.GetWindow(hwnd, Win32.GW_OWNER);
         }
         return 0;
     }
@@ -246,17 +246,17 @@ internal static unsafe class WindowTracker
         // thread waiting for this one, as SystemEvents does while it raises an event, and neither would ever go on.
         if (!Win32.IsWindowVisible(hwnd))
             return false;
-        var style = (long)Win32.GetWindowLongPtr(hwnd, GWL_STYLE);
-        var ex = (long)Win32.GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
+        var ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         return WindowRules.ShowsOnTaskbar(new TaskbarWindowFacts(
             Win32.IsWindow(hwnd),
             Win32.IsWindowVisible(hwnd),
             hwnd == GetShellWindow(),
             (style & WS_CHILD) != 0,
-            (ex & WS_EX_APPWINDOW) != 0,
-            GetWindow(hwnd, GW_OWNER) != 0,
-            (ex & WS_EX_TOOLWINDOW) != 0,
-            (ex & WS_EX_NOACTIVATE) != 0,
+            (ex & Win32.WS_EX_APPWINDOW) != 0,
+            Win32.GetWindow(hwnd, Win32.GW_OWNER) != 0,
+            (ex & Win32.WS_EX_TOOLWINDOW) != 0,
+            (ex & Win32.WS_EX_NOACTIVATE) != 0,
             GetWindowTextLength(hwnd) > 0,
             IsCloaked(hwnd)));
     }
@@ -265,16 +265,16 @@ internal static unsafe class WindowTracker
     {
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
-        var monitor = Win32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var monitor = Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST);
         var mi = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
         var device = monitor != 0 && Win32.GetMonitorInfo(monitor, ref mi) ? new string(mi.szDevice).TrimEnd('\0') : "";
         var fullscreen = false;
         if (!minimized && device.Length > 0 && Win32.GetWindowRect(hwnd, out var rect))
         {
             // No title bar and covering the whole monitor, as a game or a video player in fullscreen does.
-            var style = (long)Win32.GetWindowLongPtr(hwnd, GWL_STYLE);
+            var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
             var screen = mi.rcMonitor;
-            fullscreen = (style & WS_CAPTION) != WS_CAPTION && rect.Left <= screen.Left && rect.Top <= screen.Top && rect.Right >= screen.Right && rect.Bottom >= screen.Bottom;
+            fullscreen = (style & Win32.WS_CAPTION) != Win32.WS_CAPTION && rect.Left <= screen.Left && rect.Top <= screen.Top && rect.Right >= screen.Right && rect.Bottom >= screen.Bottom;
         }
         Identities.TryGetValue(hwnd, out var previous);
         // The property can arrive after the window is first shown. Read it every time. The package id and the
@@ -289,7 +289,7 @@ internal static unsafe class WindowTracker
         string? executable = previous.Executable is { Length: > 0 } ? null : ExePath(hwnd);
         var identity = Resolve(previous, property, package, executable);
         Identities[hwnd] = identity;
-        var owner = GetWindow(hwnd, GW_OWNER);
+        var owner = Win32.GetWindow(hwnd, Win32.GW_OWNER);
         return new WindowInfo(hwnd, WindowText(hwnd), identity.AppId, identity.Executable, identity.Icon, owner, maximized, minimized, fullscreen, device);
     }
 
@@ -324,14 +324,14 @@ internal static unsafe class WindowTracker
         var target = monitors.FirstOrDefault(m => m.Info.Id == deviceName);
         if (target is null)
             return;
-        var sourceHandle = Win32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var sourceHandle = Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST);
         var source = sourceHandle == 0 ? null : Screens.Describe(sourceHandle);
         if (source is null || source.Info.Id == target.Info.Id)
             return;
         if (!Win32.GetWindowRect(hwnd, out var current))
             return;
         var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
-        var hasPlacement = GetWindowPlacement(hwnd, ref placement);
+        var hasPlacement = Win32.GetWindowPlacement(hwnd, ref placement);
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
         // The placement is in workspace coordinates and the monitor frames are in screen coordinates. A restored
@@ -341,20 +341,20 @@ internal static unsafe class WindowTracker
         if (hasPlacement && !minimized && !maximized)
             bias = (current.Left - placement.Normal.Left, current.Top - placement.Normal.Top);
         else if (hasPlacement && monitors.FirstOrDefault(m => m.Info.IsPrimary) is { } primary)
-            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, ((long)Win32.GetWindowLongPtr(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0);
+            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0);
         var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current, WindowRules.Shift(placement.Normal, bias.X, bias.Y));
         if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
             return;
         var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
         if (!hasPlacement)
         {
-            Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+            Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
             return;
         }
         placement.Normal = WindowRules.Shift(next, -bias.X, -bias.Y);
-        placement.ShowCmd = (uint)(minimized ? SW_SHOWMINIMIZED : maximized ? SW_MAXIMIZE : SW_SHOWNORMAL);
+        placement.ShowCmd = (uint)(minimized ? Win32.SW_SHOWMINIMIZED : maximized ? SW_MAXIMIZE : Win32.SW_SHOWNORMAL);
         placement.Flags |= WPF_ASYNCWINDOWPLACEMENT;
-        SetWindowPlacement(hwnd, placement);
+        Win32.SetWindowPlacement(hwnd, placement);
     }
 
     private static MonitorFrame Frame(ConnectedMonitor monitor)
@@ -372,7 +372,7 @@ internal static unsafe class WindowTracker
     public static void Activate(nint hwnd)
     {
         if (Win32.IsIconic(hwnd))
-            ShowWindowAsync(hwnd, SW_RESTORE);
+            ShowWindowAsync(hwnd, Win32.SW_RESTORE);
         if (Win32.SetForegroundWindow(hwnd) && Win32.GetForegroundWindow() == hwnd)
             return;
         var foreground = Win32.GetForegroundWindow();
@@ -382,7 +382,7 @@ internal static unsafe class WindowTracker
         {
             try
             {
-                Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+                Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
                 Win32.SetForegroundWindow(hwnd);
             }
             finally
@@ -399,9 +399,9 @@ internal static unsafe class WindowTracker
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
-    public static void Close(nint hwnd) => Win32.PostMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+    public static void Close(nint hwnd) => Win32.PostMessageW(hwnd, Win32.WM_SYSCOMMAND, SC_CLOSE, 0);
 
-    public static void SetMaximized(nint hwnd, bool maximized) => ShowWindowAsync(hwnd, maximized ? SW_MAXIMIZE : SW_RESTORE);
+    public static void SetMaximized(nint hwnd, bool maximized) => ShowWindowAsync(hwnd, maximized ? SW_MAXIMIZE : Win32.SW_RESTORE);
 
-    public static void SetMinimized(nint hwnd, bool minimized) => ShowWindowAsync(hwnd, minimized ? SW_MINIMIZE : SW_RESTORE);
+    public static void SetMinimized(nint hwnd, bool minimized) => ShowWindowAsync(hwnd, minimized ? Win32.SW_MINIMIZE : Win32.SW_RESTORE);
 }

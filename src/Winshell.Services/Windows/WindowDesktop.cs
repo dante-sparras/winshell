@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Winshell.Native;
 
 namespace Winshell.Windows;
 
@@ -6,7 +7,7 @@ namespace Winshell.Windows;
 /// Which virtual desktop a window is on, and moving it to another, through the supported
 /// <c>IVirtualDesktopManager</c>. Unlike the desktop list in <see cref="VirtualDesktopBroker"/>, it works on every build.
 /// </summary>
-internal static partial class WindowDesktop
+internal static class WindowDesktop
 {
     private const uint ClsctxInprocServer = 1;
 
@@ -67,7 +68,7 @@ internal static partial class WindowDesktop
         if (_manager is not null)
             return _manager;
         var iid = typeof(IVirtualDesktopManager).GUID;
-        var hr = CoCreateInstance(in ManagerClass, 0, ClsctxInprocServer, in iid, out var pointer);
+        var hr = Win32.CoCreateInstance(in ManagerClass, 0, ClsctxInprocServer, in iid, out var pointer);
         if (hr < 0 || pointer == 0)
         {
             if (!_loggedUnavailable)
@@ -91,9 +92,6 @@ internal static partial class WindowDesktop
             Marshal.Release(pointer);
         }
     }
-
-    [LibraryImport("ole32.dll")]
-    private static partial int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
 }
 
 [ComImport]

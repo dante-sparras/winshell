@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
+using Winshell.Native;
 
 namespace Winshell;
 
@@ -87,7 +88,7 @@ internal static partial class PipeTrust
         }
         finally
         {
-            LocalFree(sd);
+            Win32.LocalFree(sd);
         }
     }
 
@@ -121,7 +122,7 @@ internal static partial class PipeTrust
         finally
         {
             Marshal.FreeHGlobal(buffer);
-            LocalFree(sd);
+            Win32.LocalFree(sd);
         }
     }
 
@@ -144,7 +145,7 @@ internal static partial class PipeTrust
             }
             finally
             {
-                LocalFree(text);
+                Win32.LocalFree(text);
             }
         }
         finally
@@ -159,7 +160,7 @@ internal static partial class PipeTrust
         var user = WindowsIdentity.GetCurrent().User;
         if (user is null || !user.Equals(pipe.GetAccessControl().GetOwner(typeof(SecurityIdentifier))))
             return "The control pipe belongs to another user.";
-        if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid))
+        if (!Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid))
             return "The shell behind the control pipe could not be identified.";
         if (!AtLeast(IntegrityRid((int)pid), IntegrityRid(Environment.ProcessId)))
             return "The shell runs at a lower integrity level than this command. Run the command without elevation.";
@@ -182,21 +183,21 @@ internal static partial class PipeTrust
         return null;
     }
 
-    internal static int IntegrityRid(int pid)
+    internal static unsafe int IntegrityRid(int pid)
     {
-        var process = OpenProcess(ProcessQueryLimitedInformation, false, (uint)pid);
+        var process = Win32.OpenProcess(ProcessQueryLimitedInformation, false, (uint)pid);
         if (process == 0)
             return 0;
         try
         {
-            if (!OpenProcessToken(process, TokenQuery, out var token))
+            if (!Win32.OpenProcessToken(process, TokenQuery, out var token))
                 return 0;
             try
             {
                 var buffer = Marshal.AllocHGlobal(256);
                 try
                 {
-                    if (!GetTokenInformation(token, TokenIntegrityLevel, buffer, 256, out _))
+                    if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, (void*)buffer, 256, out _))
                         return 0;
                     var sid = Marshal.ReadIntPtr(buffer);
                     var countPtr = GetSidSubAuthorityCount(sid);
@@ -215,12 +216,12 @@ internal static partial class PipeTrust
             }
             finally
             {
-                CloseHandle(token);
+                Win32.CloseHandle(token);
             }
         }
         finally
         {
-            CloseHandle(process);
+            Win32.CloseHandle(process);
         }
     }
 
@@ -240,26 +241,11 @@ internal static partial class PipeTrust
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetKernelObjectSecurity(nint handle, uint securityInformation, nint securityDescriptor, uint length, out uint needed);
 
-    [LibraryImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetTokenInformation(nint token, int tokenClass, nint buffer, uint length, out uint returnLength);
-
-    [LibraryImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool OpenProcessToken(nint process, uint access, out nint token);
-
     [LibraryImport("advapi32.dll")]
     private static partial nint GetSidSubAuthority(nint sid, uint index);
 
     [LibraryImport("advapi32.dll")]
     private static partial nint GetSidSubAuthorityCount(nint sid);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetNamedPipeServerProcessId(nint pipe, out uint processId);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -275,11 +261,4 @@ internal static partial class PipeTrust
         public nint SecurityDescriptor;
         public int InheritHandle;
     }
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint LocalFree(nint memory);
-
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CloseHandle(nint handle);
 }

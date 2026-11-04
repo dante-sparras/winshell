@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
 
@@ -30,7 +31,10 @@ internal struct RECT
     }
 }
 
-/// <summary>The restored position of a window. The rectangle is in workspace coordinates, not the screen pixels of <c>GetWindowRect</c>.</summary>
+/// <summary>
+/// The restored position of a window. The rectangle is in workspace coordinates, not the screen coordinates of
+/// <c>GetWindowRect</c>, though in the same pixels for a per-monitor aware process.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct WINDOWPLACEMENT
 {
@@ -358,6 +362,8 @@ internal static partial class Win32
     public const uint ABN_FULLSCREENAPP = 2;
     public const uint ABS_AUTOHIDE = 1;
 
+    public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+
     public const int WH_KEYBOARD_LL = 13;
     public const int WH_MOUSE_LL = 14;
 
@@ -456,6 +462,16 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     public static partial nint GetWindow(nint hwnd, uint command);
+
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint FindWindowExW(nint parent, nint after, string? className, string? windowName);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool EnumWindows(delegate* unmanaged<nint, nint, int> callback, nint data);
+
+    [LibraryImport("user32.dll")]
+    public static unsafe partial int GetClassNameW(nint hwnd, char* name, int capacity);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -714,6 +730,16 @@ internal static partial class Win32
     [LibraryImport("kernel32.dll")]
     public static partial nint LocalFree(nint memory);
 
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial SafeFileHandle CreateFileW(string fileName, uint access, uint share, nint security, uint creation, uint flags, nint template);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetNamedPipeServerProcessId(nint pipe, out uint processId);
+
+    [LibraryImport("ole32.dll")]
+    public static partial int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
+
     [LibraryImport("combase.dll")]
     public static partial int WindowsDeleteString(nint value);
 
@@ -745,6 +771,13 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool UnhookWindowsHookEx(nint hook);
+
+    [LibraryImport("user32.dll")]
+    public static unsafe partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnhookWinEvent(nint hook);
 
     [LibraryImport("user32.dll")]
     public static partial nint CallNextHookEx(nint hook, int code, nint wParam, nint lParam);

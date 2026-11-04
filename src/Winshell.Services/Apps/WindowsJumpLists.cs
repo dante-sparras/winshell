@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Winshell.Native;
 
 namespace Winshell.Apps;
 
@@ -25,7 +26,7 @@ internal sealed class WindowsJumpListReader : IJumpListReader
         if (string.IsNullOrWhiteSpace(appUserModelId))
             return JumpListRead.Missing;
         var iid = typeof(IApplicationDocumentLists).GUID;
-        var hr = CoCreateInstance(in Clsid, 0, ClsctxInprocServer, in iid, out var pointer);
+        var hr = Win32.CoCreateInstance(in Clsid, 0, ClsctxInprocServer, in iid, out var pointer);
         if (hr < 0 || pointer == 0)
             return JumpListRead.Missing;
         IApplicationDocumentLists lists;
@@ -115,9 +116,6 @@ internal sealed class WindowsJumpListReader : IJumpListReader
         }
         return null;
     }
-
-    [DllImport("ole32.dll")]
-    private static extern int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
 
     [ComImport]
     [Guid("3c594f9f-9f30-47a1-979a-c9e83d3d0a06")]
