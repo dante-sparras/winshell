@@ -108,6 +108,7 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
             // Explorer restarted and forgot every app bar: reserve the edge again.
             Remove();
             platform.Loop.Post(place);
+            platform.TaskbarCreated();
             return 0;
         }
         if (msg != Message)
