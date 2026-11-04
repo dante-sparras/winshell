@@ -88,10 +88,14 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
     /// <summary>Removes every app bar now held. Safe from any thread, so a crash on one can give the edges back.</summary>
     public static void RemoveAll()
     {
-        foreach (var window in Held.Keys)
+        // As in Remove: Explorer's taskbar first, so the request reaches Explorer rather than this process's tray host.
+        using (ShellPlatform.ExplorerFirst())
         {
-            var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = window };
-            Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
+            foreach (var window in Held.Keys)
+            {
+                var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = window };
+                Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
+            }
         }
         Held.Clear();
     }
