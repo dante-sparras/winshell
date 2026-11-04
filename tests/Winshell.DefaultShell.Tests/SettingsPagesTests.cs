@@ -75,12 +75,11 @@ public sealed class SettingsPagesTests : IDisposable
         var loop = new ManualEventLoop();
         using var missing = new QuickSettingsLayout(Path.Combine(_folder, "missing.toml"), loop, Quiet());
         Assert.Null(missing.Pinned);
-        Assert.Equal(QuickSettingsKind.All.Select(kind => kind.Key), SettingsTiles.Keys(null));
+        Assert.Equal(QuickSettingsKind.All.Select(kind => kind.Key), QuickSettingsOrder.Keys(null));
 
         File.WriteAllText(Path.Combine(_folder, "empty.toml"), "pinned = []\n");
         using var empty = new QuickSettingsLayout(Path.Combine(_folder, "empty.toml"), loop, Quiet());
-        Assert.Empty(SettingsTiles.Shown(SettingsTiles.Keys(empty.Pinned)));
-        Assert.Equal(["WiFi"], SettingsTiles.Remove(["WiFi", "wifi"], "wifi"));
+        Assert.Empty(QuickSettingsOrder.Keys(empty.Pinned));
     }
 
     [Fact]
@@ -89,26 +88,54 @@ public sealed class SettingsPagesTests : IDisposable
         var loop = new ManualEventLoop();
         var path = Path.Combine(_folder, "quick-settings.toml");
         File.WriteAllText(path, """
-            pinned = ["bluetooth", "wifi", "custom"]
+            pinned = ["bluetooth", "custom", "wifi"]
 
             """);
         using var layout = new QuickSettingsLayout(path, loop, Quiet());
-        var keys = SettingsTiles.Keys(layout.Pinned);
-        Assert.Equal(["bluetooth", "wifi"], SettingsTiles.Shown(keys).Select(kind => kind.Key));
-        Assert.Equal(["airplaneMode", "energySaver", "powerMode", "nightLight", "accessibility"], SettingsTiles.Unpinned(keys).Select(kind => kind.Key));
+        var keys = QuickSettingsOrder.Keys(layout.Pinned);
 
-        var moved = SettingsTiles.Move(keys, "wifi", -1);
-        Assert.Equal(["wifi", "bluetooth", "custom"], moved);
-        Assert.NotNull(moved);
-        layout.Pinned = [.. moved.Cast<object?>()];
-        var removed = SettingsTiles.Remove(moved, "bluetooth");
-        var added = SettingsTiles.Add(removed, "nightLight");
-        layout.Pinned = [.. added.Cast<object?>()];
+        // A key no tile has stays between the two on show, and a step lands on the neighbour's side of it.
+        Assert.Equal("bluetooth", QuickSettingsOrder.Step(["bluetooth", "wifi"], "wifi", -1));
+        Assert.Equal(["wifi", "bluetooth", "custom"], QuickSettingsOrder.Move(keys, "wifi", "bluetooth"));
+        Assert.Equal(["custom", "bluetooth", "wifi"], QuickSettingsOrder.Move(keys, "bluetooth", "custom"));
+        Assert.Equal(["custom", "wifi", "bluetooth"], QuickSettingsOrder.Move(keys, "bluetooth", "wifi"));
+        Assert.Null(QuickSettingsOrder.Move(keys, "wifi", "wifi"));
+        Assert.Null(QuickSettingsOrder.Move(keys, "wifi", "nightLight"));
+        Assert.Equal("wifi", QuickSettingsOrder.Step(["bluetooth", "wifi"], "wifi", 1));
+        Assert.Null(QuickSettingsOrder.Step(["bluetooth"], "wifi", 1));
+
+        var removed = QuickSettingsOrder.Remove(keys, "bluetooth");
+        QuickSettingsOrder.Save(layout, QuickSettingsOrder.Add(removed, "nightLight"));
         loop.Process();
 
         using var again = new QuickSettingsLayout(path, new ManualEventLoop(), Quiet());
-        Assert.Equal(["wifi", "custom", "nightLight"], again.Pinned!.Cast<string>());
-        Assert.Equal(["bluetooth", "airplaneMode", "energySaver", "powerMode", "accessibility"], SettingsTiles.Unpinned(SettingsTiles.Keys(again.Pinned)).Select(kind => kind.Key));
+        Assert.Equal(["custom", "wifi", "nightLight"], again.Pinned!.Cast<string>());
+    }
+
+    [Fact]
+    public void A_key_the_file_lists_twice_is_removed_whole_moved_once_and_never_added_again()
+    {
+        List<string> twice = ["wifi", "bluetooth", "wifi"];
+
+        Assert.Equal(["bluetooth"], QuickSettingsOrder.Remove(twice, "wifi"));
+        Assert.Equal(twice, QuickSettingsOrder.Add(twice, "wifi"));
+        Assert.Equal(["bluetooth", "wifi"], QuickSettingsOrder.Move(twice, "wifi", "bluetooth"));
+    }
+
+    [Fact]
+    public void A_list_the_file_already_has_is_not_written_back()
+    {
+        var path = Path.Combine(_folder, "quick-settings.toml");
+        File.WriteAllText(path, "pinned = [\"wifi\"]\n");
+        using var layout = new QuickSettingsLayout(path, new ManualEventLoop(), Quiet());
+        var heard = 0;
+        layout.PropertyChanged += (_, _) => heard++;
+
+        QuickSettingsOrder.Save(layout, ["wifi"]);
+        Assert.Equal(0, heard);
+
+        QuickSettingsOrder.Save(layout, ["wifi", "bluetooth"]);
+        Assert.Equal(1, heard);
     }
 
     [Theory]

@@ -11,7 +11,7 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
 {
     private readonly QuickSettingsLayout _layout;
     private readonly Dictionary<string, Button> _add = new(StringComparer.Ordinal);
-    private IReadOnlyList<string> _keys = [];
+    private List<string> _keys = [];
 
     public SettingsQuickSettingsPage(QuickSettingsLayout layout)
     {
@@ -43,8 +43,7 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
 
     private void OnMove(object? sender, SettingsOrderMove move)
     {
-        var next = SettingsTiles.Move(_keys, move.Key, move.Offset);
-        if (next is null)
+        if (QuickSettingsOrder.Step(Ids(Shown()), move.Key, move.Offset) is not { } target || QuickSettingsOrder.Move(_keys, move.Key, target) is not { } next)
             return;
         Write(next);
         Tiles.Focus(move.Key, move.Button);
@@ -52,15 +51,9 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
 
     private void OnRemove(object? sender, string key)
     {
-        var shown = SettingsTiles.Shown(_keys);
-        var index = 0;
-        for (var i = 0; i < shown.Count; i++)
-        {
-            if (shown[i].Key == key)
-                index = i;
-        }
-        Write(SettingsTiles.Remove(_keys, key));
-        var next = SettingsOrder.FocusIndex(Ids(SettingsTiles.Shown(_keys)), index);
+        var index = Math.Max(0, Ids(Shown()).IndexOf(key));
+        Write(QuickSettingsOrder.Remove(_keys, key));
+        var next = SettingsOrder.FocusIndex(Ids(Shown()), index);
         if (next is not null)
             Tiles.Focus(next, "remove");
     }
@@ -69,15 +62,9 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
     {
         if (sender is not Button { Tag: string key })
             return;
-        var before = Ids(SettingsTiles.Unpinned(_keys));
-        var index = 0;
-        for (var i = 0; i < before.Count; i++)
-        {
-            if (before[i] == key)
-                index = i;
-        }
-        Write(SettingsTiles.Add(_keys, key));
-        var stay = SettingsOrder.FocusIndex(Ids(SettingsTiles.Unpinned(_keys)), index);
+        var index = Math.Max(0, Ids(Unpinned()).IndexOf(key));
+        Write(QuickSettingsOrder.Add(_keys, key));
+        var stay = SettingsOrder.FocusIndex(Ids(Unpinned()), index);
         if (stay is not null && _add.TryGetValue(stay, out var button))
         {
             button.Focus(FocusState.Programmatic);
@@ -87,16 +74,21 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
             Tiles.Focus(key, "remove");
     }
 
-    private void Write(IReadOnlyList<string> keys) => _layout.Pinned = [.. keys.Cast<object?>()];
+    private void Write(IReadOnlyList<string> keys) => QuickSettingsOrder.Save(_layout, keys);
+
+    private List<QuickSettingsKind> Shown() =>
+        [.. _keys.Select(key => QuickSettingsKind.All.FirstOrDefault(kind => kind.Key == key)).OfType<QuickSettingsKind>()];
+
+    private List<QuickSettingsKind> Unpinned() => [.. QuickSettingsKind.All.Where(kind => !_keys.Contains(kind.Key))];
 
     private void Show()
     {
-        _keys = SettingsTiles.Keys(_layout.Pinned);
+        _keys = QuickSettingsOrder.Keys(_layout.Pinned);
         var items = new List<SettingsOrderItem>();
-        foreach (var kind in SettingsTiles.Shown(_keys))
+        foreach (var kind in Shown())
             items.Add(new SettingsOrderItem(kind.Key, kind.Title, kind.Glyph));
         Tiles.Show(items);
-        var unpinned = SettingsTiles.Unpinned(_keys);
+        var unpinned = Unpinned();
         AddHeader.Visibility = unpinned.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         Add.Children.Clear();
         _add.Clear();
@@ -111,11 +103,5 @@ public sealed partial class SettingsQuickSettingsPage : UserControl
         }
     }
 
-    private static List<string> Ids(IReadOnlyList<QuickSettingsKind> kinds)
-    {
-        var ids = new List<string>(kinds.Count);
-        foreach (var kind in kinds)
-            ids.Add(kind.Key);
-        return ids;
-    }
+    private static List<string> Ids(IReadOnlyList<QuickSettingsKind> kinds) => [.. kinds.Select(kind => kind.Key)];
 }

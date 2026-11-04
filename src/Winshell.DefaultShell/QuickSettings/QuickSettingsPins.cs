@@ -9,8 +9,6 @@ namespace Winshell.DefaultShell.Taskbar;
 /// </summary>
 public sealed class QuickSettingsPins : ObservableObject
 {
-    private static readonly string[] DefaultKeys = [.. QuickSettingsKind.All.Select(static kind => kind.Key)];
-
     private readonly IReadOnlyList<QuickSettingsTile> _tiles;
     private readonly QuickSettingsLayout _layout;
 
@@ -34,23 +32,15 @@ public sealed class QuickSettingsPins : ObservableObject
     /// <summary>Puts the tile with this key where the tile with another key is.</summary>
     public void Move(string key, string target)
     {
-        var pinned = PinnedKeys();
-        var at = pinned.IndexOf(target);
-        // Before the target when moving back, after it when moving on: the index is taken before the key is removed.
-        if (key == target || at < 0)
-            return;
-        var keys = pinned.Where(item => item != key).ToList();
-        keys.Insert(at, key);
-        SetPinned(keys);
+        if (QuickSettingsOrder.Move(PinnedKeys(), key, target) is { } moved)
+            QuickSettingsOrder.Save(_layout, moved);
     }
 
     /// <summary>Moves a tile by an offset among the tiles on show, and returns the key the keyboard stays on.</summary>
     public string MoveBy(string key, int offset)
     {
-        var shown = Shown.Select(tile => tile.Key).ToList();
-        var from = shown.IndexOf(key);
-        var to = Math.Max(0, Math.Min(shown.Count - 1, from + offset));
-        Move(key, shown[to]);
+        if (QuickSettingsOrder.Step([.. Shown.Select(tile => tile.Key)], key, offset) is { } target)
+            Move(key, target);
         return key;
     }
 
@@ -58,14 +48,14 @@ public sealed class QuickSettingsPins : ObservableObject
     public string? Unpin(string key, bool fromKeyboard)
     {
         var at = Shown.Select(tile => tile.Key).ToList().IndexOf(key);
-        SetPinned(PinnedKeys().Where(item => item != key).ToList());
+        QuickSettingsOrder.Save(_layout, QuickSettingsOrder.Remove(PinnedKeys(), key));
         if (!fromKeyboard || Shown.Count == 0)
             return null;
         return Shown[Math.Min(at, Shown.Count - 1)].Key;
     }
 
     /// <summary>Pins a tile at the end of the order.</summary>
-    public void Add(string key) => SetPinned([.. PinnedKeys(), key]);
+    public void Add(string key) => QuickSettingsOrder.Save(_layout, QuickSettingsOrder.Add(PinnedKeys(), key));
 
     /// <summary>Lists the tiles again, as which of them the PC can show may have changed.</summary>
     internal void Refresh()
@@ -90,16 +80,7 @@ public sealed class QuickSettingsPins : ObservableObject
             Refresh();
     }
 
-    private List<string> PinnedKeys() =>
-        _layout.Pinned is { } pinned ? pinned.OfType<string>().ToList() : [.. DefaultKeys];
-
-    /// <summary>Writes the order. A list the file already has is left, so a read does not write it back.</summary>
-    private void SetPinned(IReadOnlyList<string> keys)
-    {
-        if (_layout.Pinned is { } current && current.Count == keys.Count && current.Zip(keys).All(pair => Equals(pair.First, pair.Second)))
-            return;
-        _layout.Pinned = [.. keys.Cast<object?>()];
-    }
+    private List<string> PinnedKeys() => QuickSettingsOrder.Keys(_layout.Pinned);
 
     private static void Replace<T>(ObservableCollection<T> target, List<T> next)
     {

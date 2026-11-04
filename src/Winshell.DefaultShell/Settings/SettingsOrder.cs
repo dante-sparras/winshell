@@ -7,36 +7,36 @@ public sealed record SettingsOrderItem(string Key, string Title, string Glyph = 
 public readonly record struct SettingsOrderMove(string Key, int Offset, string Button);
 
 /// <summary>
-/// The order list Winshell Settings uses for pins and tiles. Moving steps through the rows on show. Keys those rows
-/// do not contain keep their place. Comparison is case-insensitive for pins and exact for tiles.
+/// The order list Winshell Settings uses for pins. Moving steps through the rows on show. Keys those rows do not
+/// contain keep their place. Comparison is case-insensitive.
 /// </summary>
 public static class SettingsOrder
 {
-    public static IReadOnlyList<string>? Move(IReadOnlyList<string> keys, IReadOnlyList<string> visible, string id, int offset, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+    public static IReadOnlyList<string>? Move(IReadOnlyList<string> keys, IReadOnlyList<string> visible, string id, int offset)
     {
-        var at = IndexOf(visible, id, comparison);
+        var at = IndexOf(visible, id);
         if (at < 0 || offset == 0 || at + offset < 0 || at + offset >= visible.Count)
             return null;
         var neighbour = visible[at + offset];
         var list = new List<string>(keys.Count);
         foreach (var key in keys)
         {
-            if (!key.Equals(id, comparison))
+            if (!key.Equals(id, StringComparison.OrdinalIgnoreCase))
                 list.Add(key);
         }
-        var to = IndexOf(list, neighbour, comparison);
+        var to = IndexOf(list, neighbour);
         if (to < 0)
             return null;
         list.Insert(offset > 0 ? to + 1 : to, id);
         return list;
     }
 
-    public static IReadOnlyList<string> Remove(IReadOnlyList<string> keys, string id, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+    public static IReadOnlyList<string> Remove(IReadOnlyList<string> keys, string id)
     {
         var list = new List<string>(keys.Count);
         foreach (var key in keys)
         {
-            if (!key.Equals(id, comparison))
+            if (!key.Equals(id, StringComparison.OrdinalIgnoreCase))
                 list.Add(key);
         }
         return list;
@@ -46,11 +46,11 @@ public static class SettingsOrder
     public static string? FocusIndex(IReadOnlyList<string> keys, int index) =>
         keys.Count == 0 ? null : keys[Math.Clamp(index, 0, keys.Count - 1)];
 
-    private static int IndexOf(IReadOnlyList<string> keys, string id, StringComparison comparison)
+    private static int IndexOf(IReadOnlyList<string> keys, string id)
     {
         for (var i = 0; i < keys.Count; i++)
         {
-            if (keys[i].Equals(id, comparison))
+            if (keys[i].Equals(id, StringComparison.OrdinalIgnoreCase))
                 return i;
         }
         return -1;
