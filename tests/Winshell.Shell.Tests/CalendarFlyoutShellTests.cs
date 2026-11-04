@@ -21,11 +21,12 @@ public sealed class CalendarFlyoutShellTests
             var sizes = await ShellFixture.On(async shell =>
             {
                 var loop = new ManualEventLoop();
+                var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero));
                 using var listener = new NotificationListener(loop, shell.Log, new NoNotifications());
                 using var preferences = new Preferences(Path.Combine(directory, "preferences.toml"), loop, shell.Log);
-                var center = new NotificationCenter(listener, preferences, TimeProvider.System);
-                var view = new CalendarFlyoutView(new CalendarMonth(TimeProvider.System), center, preferences);
-                using var window = new FloatingWindow { Title = "Winshell test", Width = 384, Height = 780, Content = view };
+                var center = new NotificationCenter(listener, preferences, time);
+                var view = new CalendarFlyoutView(new CalendarMonth(time), center, preferences);
+                using var window = new FloatingWindow { Title = "Winshell test", Width = 320, Height = 480, Content = view };
                 window.Visible = true;
                 await ShellFixture.LaidOut(view);
                 return new[] { "Previous month", "Next month" }.Select(name => Size(view, name)).ToArray();
@@ -35,7 +36,13 @@ public sealed class CalendarFlyoutShellTests
         }
         finally
         {
-            Directory.Delete(directory, true);
+            try
+            {
+                Directory.Delete(directory, true);
+            }
+            catch (IOException)
+            {
+            }
         }
     }
 
