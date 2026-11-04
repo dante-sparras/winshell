@@ -284,16 +284,9 @@ internal sealed class TomlDocument
                 item.Value = ParsedValue(desired[i], item.Value);
         }
         while (array.Items.ChildrenCount > desired.Count)
-            array.Items.RemoveChildAt(array.Items.ChildrenCount - 1);
+            RemoveLastItem(array);
         for (var i = array.Items.ChildrenCount; i < desired.Count; i++)
-        {
-            if (array.Items.ChildrenCount > 0)
-            {
-                var previous = array.Items.GetChild(array.Items.ChildrenCount - 1)!;
-                previous.Comma ??= Comma();
-            }
-            array.Items.Add(new ArrayItemSyntax { Value = ParsedValue(desired[i], null) });
-        }
+            AppendItem(array, ParsedValue(desired[i], null));
     }
 
     private void UpdateInline(InlineTableSyntax table, IReadOnlyDictionary<string, object?> desired)

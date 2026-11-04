@@ -339,6 +339,29 @@ public sealed class TomlDocumentTests
         Assert.Contains("id = \"Contoso.Chat\"", text, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("pins = [\"a\", \"b\", \"c\"]\n", "a c", "pins = [\"a\", \"c\"]\n")]
+    [InlineData("pins = [\"a\"]\n", "a b", "pins = [\"a\", \"b\"]\n")]
+    [InlineData("pins = [\n  \"a\",\n  \"b\",\n]\n", "a b c", "pins = [\n  \"a\",\n  \"b\",\n  \"c\",\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n  \"b\" # last\n]\n", "a b c", "pins = [\n  \"a\",\n  \"b\", # last\n  \"c\"\n]\n")]
+    [InlineData("pins = [\n  \"a\", # one\n  \"b\"\n]\n", "a", "pins = [\n  \"a\" # one\n]\n")]
+    [InlineData("pins = [\n    \"a\", # one\n    \"b\", # two\n  ]\n", "a", "pins = [\n    \"a\", # one\n  ]\n")]
+    [InlineData("pins = [\n  \"a\",\n  \"b\",\n  # more to come\n]\n", "a", "pins = [\n  \"a\",\n  # more to come\n]\n")]
+    [InlineData("pins = [\n  \"a\", \"b\",\n  \"c\", \"d\",\n]\n", "a b c d e", "pins = [\n  \"a\", \"b\",\n  \"c\", \"d\", \"e\",\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n]\n", "", "pins = []\n")]
+    [InlineData("pins = [\"a\",\n  \"b\"]\n", "a", "pins = [\"a\"]\n")]
+    [InlineData("pins = [\"a\", # one\n  \"b\"]\n", "a", "pins = [\"a\" # one\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n  # more to come\n]\n", "", "pins = [\n  # more to come\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n\n  # about b\n  \"b\",\n\n]\n", "a", "pins = [\n  \"a\",\n\n]\n")]
+    public void A_list_that_grows_or_shrinks_keeps_its_layout(string original, string items, string expected)
+    {
+        var document = Parse(original);
+
+        document.Set("pins", items.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList());
+
+        Assert.Equal(expected, document.ToString());
+    }
+
     [Fact]
     public void A_date_inside_a_changed_value_keeps_its_text()
     {
