@@ -9,7 +9,7 @@ namespace Winshell.Media;
 /// Windows' object behind one <see cref="SmtcSession"/>. Its events arrive on other threads; what they report is read
 /// there and posted to the UI thread, where the session takes it in.
 /// </summary>
-internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession target, GlobalSystemMediaTransportControlsSession session)
+internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession target, GlobalSystemMediaTransportControlsSession session) : ISmtcLink
 {
     private int _mediaRequest;
     private int _mediaApplied;

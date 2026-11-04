@@ -229,7 +229,7 @@ public sealed class AppIndexTests
         var root = Temp();
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
-        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(200), false, false);
+        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(200), false);
         try
         {
             catalog.Start();
@@ -253,7 +253,7 @@ public sealed class AppIndexTests
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
         WriteLink(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
-        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500), false, false);
+        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500), false);
         try
         {
             catalog.Start();

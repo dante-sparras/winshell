@@ -16,6 +16,7 @@ on:
       - "scripts/package.ps1"
       - "scripts/publish-release.ps1"
       - "tests/Scripts/PublishRelease.Tests.ps1"
+      - "tests/Scripts/Package.Tests.ps1"
       - "packaging/**"
       - "templates/**"
       - "src/Winshell.Package/**"

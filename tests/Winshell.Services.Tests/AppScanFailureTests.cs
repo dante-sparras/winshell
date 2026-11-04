@@ -28,7 +28,6 @@ public class AppScanFailureTests
                 () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase),
                 TimeSpan.FromMilliseconds(30),
                 watchPackages: false,
-                registerIcons: false,
                 log);
             catalog.Start();
             await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);

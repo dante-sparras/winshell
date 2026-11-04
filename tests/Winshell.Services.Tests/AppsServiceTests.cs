@@ -18,7 +18,7 @@ public sealed class AppsServiceTests : IDisposable
     public AppsServiceTests()
     {
         Directory.CreateDirectory(_folder);
-        _catalog = new AppCatalog([_folder], () => _packaged, () => _usage, TimeSpan.Zero, false, false);
+        _catalog = new AppCatalog([_folder], () => _packaged, () => _usage, TimeSpan.Zero, false);
     }
 
     public void Dispose()

@@ -1,3 +1,4 @@
+#requires -Version 7.0
 # Builds the files a release ships into one folder, and checks them. See docs/development.md#releasing.
 #
 #   pwsh scripts/package.ps1                  publishes, packs and verifies both architectures into artifacts/
@@ -37,38 +38,6 @@ param(
     [string] $PublisherDisplayName
 )
 
-# A script block passed to Array.Sort writes to the pipeline instead of returning the comparison.
-if (-not ('Winshell.Package.ZipNameComparer' -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Collections;
-using System.Management.Automation;
-namespace Winshell.Package {
-    public sealed class ZipNameComparer : IComparer {
-        public int Compare(object left, object right) {
-            var a = (string)PSObject.AsPSObject(left).Properties["Name"].Value;
-            var b = (string)PSObject.AsPSObject(right).Properties["Name"].Value;
-            return StringComparer.Ordinal.Compare(a, b);
-        }
-    }
-}
-'@
-}
-
-# Ordinal, not the current culture. Sort-Object -CaseSensitive still uses the culture, and lt-LT orders "y" after "į".
-function Sort-WinshellZipEntry {
-    param($Files)
-    $incoming = @($Files)
-    if ($incoming.Count -eq 1 -and $incoming[0] -is [System.Array]) { $incoming = @($incoming[0]) }
-    $items = New-Object object[] $incoming.Count
-    for ($i = 0; $i -lt $incoming.Count; $i++) { $items[$i] = $incoming[$i] }
-    if ($items.Length -gt 1) { [Array]::Sort($items, [Winshell.Package.ZipNameComparer]::new()) }
-    return ,$items
-}
-
-# Tests dot-source this file to call Sort-WinshellZipEntry, then stop before any build.
-if ($env:WINSHELL_PACKAGE_TEST -eq '1') { return }
-
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
@@ -105,18 +74,24 @@ function Assert-Inside([string] $path, [string] $parent) {
 # A zip of a folder whose bytes depend only on the files: entries sorted by path, each dated the release day.
 function New-Zip([string] $dir, [string] $zip) {
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-    $files = Sort-WinshellZipEntry @(Get-ChildItem -LiteralPath $dir -File -Recurse |
-        ForEach-Object { [pscustomobject]@{ Path = $_.FullName; Name = [IO.Path]::GetRelativePath($dir, $_.FullName).Replace('\', '/') } })
+    # Ordinal, not the current culture: lt-LT orders "y" after "į". A dictionary keeps names that differ only in case.
+    $paths = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    foreach ($file in Get-ChildItem -LiteralPath $dir -File -Recurse) {
+        $paths[[IO.Path]::GetRelativePath($dir, $file.FullName).Replace('\', '/')] = $file.FullName
+    }
+    $names = [string[]]::new($paths.Count)
+    $paths.Keys.CopyTo($names, 0)
+    [Array]::Sort($names, [StringComparer]::Ordinal)
     $stream = [IO.File]::Open($zip, [IO.FileMode]::CreateNew)
     try {
         $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create)
         try {
-            foreach ($file in $files) {
-                $entry = $archive.CreateEntry($file.Name, [IO.Compression.CompressionLevel]::Optimal)
+            foreach ($name in $names) {
+                $entry = $archive.CreateEntry($name, [IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = [DateTimeOffset]::new($releaseDay, [TimeSpan]::Zero)
                 $to = $entry.Open()
                 try {
-                    $from = [IO.File]::OpenRead($file.Path)
+                    $from = [IO.File]::OpenRead($paths[$name])
                     try { $from.CopyTo($to) } finally { $from.Dispose() }
                 } finally { $to.Dispose() }
             }

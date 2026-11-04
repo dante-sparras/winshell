@@ -7,51 +7,25 @@ namespace Winshell.Media;
 /// <summary>What one media session says about itself, kept up to date from the system media controls.</summary>
 internal sealed class SmtcSession
 {
-    private readonly SmtcSessionLink? _link;
+    private readonly ISmtcLink _link;
     private readonly SessionArt _art;
     private bool _released;
     private DateTimeOffset _positionTime = TimeProvider.System.GetUtcNow();
     private double _position;
 
     public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id, string appName)
+        : this(loop, log, id, IdOf(session), appName, self => new SmtcSessionLink(loop, log, self, session))
+    {
+    }
+
+    // The link is what talks to Windows for this session. A test gives it one that records commands.
+    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName, Func<SmtcSession, ISmtcLink> link)
     {
         Id = id;
-        AppId = IdOf(session);
+        AppId = appId;
         AppName = appName;
         _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"), OnArtChanged);
-        _link = new SmtcSessionLink(loop, log, this, session);
-    }
-
-    /// <summary>No Windows session. Tests change what this object stores, and its commands land in <see cref="Sent"/>.</summary>
-    internal static SmtcSession CreateForTests(string appId = "test") => new(appId);
-
-    private SmtcSession(string appId)
-    {
-        // A test passes no thumbnail, so the art never reads one and never posts.
-        _art = new SessionArt(null!, _ => { }, OnArtChanged);
-        AppId = appId;
-        AppName = appId;
-        Sent = [];
-    }
-
-    /// <summary>What a test session was asked to do. Null on a real one.</summary>
-    internal List<string>? Sent { get; }
-
-    /// <summary>Sets the playback commands this session accepts and reports which of them changed.</summary>
-    internal void SetControls(bool canPlay = false, bool canPause = false, bool canStop = false,
-        bool canGoNext = false, bool canGoPrevious = false, bool canSeek = false)
-    {
-        var changed = new List<string>();
-        Set(canPlay, CanPlay, v => CanPlay = v, "canPlay", changed);
-        Set(canPause, CanPause, v => CanPause = v, "canPause", changed);
-        Set(canStop, CanStop, v => CanStop = v, "canStop", changed);
-        Set(canGoNext, CanGoNext, v => CanGoNext = v, "canGoNext", changed);
-        Set(canGoPrevious, CanGoPrevious, v => CanGoPrevious = v, "canGoPrevious", changed);
-        Set(canSeek, CanSeek, v => CanSeek = v, "canSeek", changed);
-        if (changed.Count == 0)
-            return;
-        changed.Add("canTogglePlaying");
-        Changed?.Invoke(changed, false);
+        _link = link(this);
     }
 
     /// <summary>The app id Windows reports for a session. The same session gets a new object on every list.</summary>
@@ -160,15 +134,15 @@ internal sealed class SmtcSession
         return Length > 0 ? Math.Clamp(position, 0, Length) : Math.Max(0, position);
     }
 
-    public void Start() => _link?.Start();
+    public void Start() => _link.Start();
 
     /// <summary>Follows the new object Windows returned for this same session, without dropping the read in progress.</summary>
-    public void Retarget(GlobalSystemMediaTransportControlsSession session) => _link?.Retarget(session);
+    public void Retarget(GlobalSystemMediaTransportControlsSession session) => _link.Retarget(session);
 
     public void Release()
     {
         _released = true;
-        _link?.Release();
+        _link.Release();
         _art.Release();
     }
 
@@ -202,10 +176,7 @@ internal sealed class SmtcSession
 
     private void Send(string what, Func<GlobalSystemMediaTransportControlsSession, global::Windows.Foundation.IAsyncOperation<bool>> command)
     {
-        if (_link is not null)
-            _link.Send(what, command);
-        else
-            Sent?.Add(what);
+        _link.Send(what, command);
     }
 
     // Updates from Windows

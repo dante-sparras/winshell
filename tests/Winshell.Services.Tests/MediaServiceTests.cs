@@ -13,11 +13,50 @@ public sealed class MediaServiceTests
 
     private readonly List<string> _warnings = [];
     private readonly Log _log;
-    private readonly SmtcSession _native = SmtcSession.CreateForTests();
+    private readonly RecordingLink _link = new();
+    private readonly SmtcSession _native;
 
-    public MediaServiceTests() => _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
+    public MediaServiceTests()
+    {
+        _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
+        _native = Native(_link);
+    }
 
-    private sealed class FakeSessions : IMediaSessions
+    /// <summary>A session with no Windows behind it. Its commands land on the link.</summary>
+    private SmtcSession Native(RecordingLink link, string appId = "test") => new(new ManualEventLoop(), _log, 0, appId, appId, _ => link);
+
+    private sealed class RecordingLink : ISmtcLink
+    {
+        public List<string> Sent { get; } = [];
+
+        public void Start()
+        {
+        }
+
+        public void Retarget(GlobalSystemMediaTransportControlsSession session)
+        {
+        }
+
+        public void Release()
+        {
+        }
+
+        public void Send(string what, Func<GlobalSystemMediaTransportControlsSession, global::Windows.Foundation.IAsyncOperation<bool>> command) => Sent.Add(what);
+    }
+
+    private static void Controls(SmtcSession native, bool canPlay = false, bool canPause = false, bool canStop = false,
+        bool canGoNext = false, bool canGoPrevious = false, bool canSeek = false) =>
+        native.ApplyPlayback(new SmtcPlayback(Stopped)
+        {
+            CanPlay = canPlay,
+            CanPause = canPause,
+            CanStop = canStop,
+            CanGoNext = canGoNext,
+            CanGoPrevious = canGoPrevious,
+            CanSeek = canSeek,
+        });
+
+    private sealed class FakeSessions(Func<string, SmtcSession> create) : IMediaSessions
     {
         private readonly List<SmtcSession> _sessions = [];
 
@@ -29,7 +68,7 @@ public sealed class MediaServiceTests
 
         public SmtcSession Add(string appId)
         {
-            var session = SmtcSession.CreateForTests(appId);
+            var session = create(appId);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             return session;
@@ -60,7 +99,7 @@ public sealed class MediaServiceTests
     [Fact]
     public void The_sessions_follow_Windows_and_one_that_stays_is_the_same_object()
     {
-        var sessions = new FakeSessions();
+        var sessions = new FakeSessions(id => Native(new RecordingLink(), id));
         var first = sessions.Add("a.exe");
         using var media = new MediaService(new ManualEventLoop(), _log, sessions);
         var second = sessions.Add("b.exe");
@@ -76,13 +115,13 @@ public sealed class MediaServiceTests
     [Fact]
     public void A_session_that_left_stops_reporting()
     {
-        var sessions = new FakeSessions();
+        var sessions = new FakeSessions(id => Native(new RecordingLink(), id));
         var native = sessions.Add("a.exe");
         using var media = new MediaService(new ManualEventLoop(), _log, sessions);
         var changes = Watch(media.Sessions[0]);
 
         sessions.Remove(native);
-        native.SetControls(canPlay: true);
+        Controls(native, canPlay: true);
 
         Assert.Empty(changes);
     }
@@ -90,14 +129,14 @@ public sealed class MediaServiceTests
     [Fact]
     public void A_disposed_service_stops_following_Windows()
     {
-        var sessions = new FakeSessions();
+        var sessions = new FakeSessions(id => Native(new RecordingLink(), id));
         var native = sessions.Add("a.exe");
         var media = new MediaService(new ManualEventLoop(), _log, sessions);
         var changes = Watch(media.Sessions[0]);
 
         media.Dispose();
         sessions.Add("b.exe");
-        native.SetControls(canPlay: true);
+        Controls(native, canPlay: true);
 
         Assert.Single(media.Sessions);
         Assert.Empty(changes);
@@ -112,20 +151,20 @@ public sealed class MediaServiceTests
 
         Assert.False(session.CanControl);
 
-        _native.SetControls(canPause: true);
+        Controls(_native, canPause: true);
         Assert.True(session.CanControl);
         Assert.Equal(1, Count());
 
-        _native.SetControls(canPause: true, canGoNext: true);
-        _native.SetControls(canGoNext: true);
+        Controls(_native, canPause: true, canGoNext: true);
+        Controls(_native, canGoNext: true);
         Assert.True(session.CanControl);
         Assert.Equal(1, Count());
 
-        _native.SetControls();
+        Controls(_native);
         Assert.False(session.CanControl);
         Assert.Equal(2, Count());
 
-        _native.SetControls(canSeek: true);
+        Controls(_native, canSeek: true);
         Assert.True(session.CanControl);
         Assert.Equal(3, Count());
     }
@@ -133,12 +172,12 @@ public sealed class MediaServiceTests
     [Fact]
     public void Can_control_reports_the_loss_of_a_command_the_session_started_with()
     {
-        _native.SetControls(canPlay: true);
+        Controls(_native, canPlay: true);
         var session = Session();
         var changes = Watch(session);
         Assert.True(session.CanControl);
 
-        _native.SetControls();
+        Controls(_native);
 
         Assert.False(session.CanControl);
         Assert.Contains(nameof(MediaSession.CanControl), changes);
@@ -235,7 +274,7 @@ public sealed class MediaServiceTests
         session.Stop();
         session.PlaybackState = MediaPlaybackState.Stopped;
 
-        Assert.Equal(["play", "next", "previous", "play", "pause", "pause", "stop", "stop"], _native.Sent);
+        Assert.Equal(["play", "next", "previous", "play", "pause", "pause", "stop", "stop"], _link.Sent);
         Assert.Empty(_warnings);
     }
 
@@ -247,7 +286,7 @@ public sealed class MediaServiceTests
 
         session.Play();
 
-        Assert.Empty(_native.Sent!);
+        Assert.Empty(_link.Sent);
         Assert.Empty(_warnings);
     }
 
@@ -275,7 +314,7 @@ public sealed class MediaServiceTests
             refused[i]();
             Assert.Equal(i + 1, _warnings.Count);
         }
-        Assert.Empty(_native.Sent!);
+        Assert.Empty(_link.Sent);
     }
 
     [Fact]
@@ -285,7 +324,7 @@ public sealed class MediaServiceTests
 
         session.PlaybackState = (MediaPlaybackState)7;
 
-        Assert.Empty(_native.Sent!);
+        Assert.Empty(_link.Sent);
         Assert.Contains("unknown value 7", Assert.Single(_warnings), StringComparison.Ordinal);
     }
 
@@ -319,7 +358,7 @@ public sealed class MediaServiceTests
         session.LoopState = MediaLoopState.List;
         session.LoopState = MediaLoopState.Track;
 
-        Assert.Equal(["set shuffle", "set loopState"], _native.Sent);
+        Assert.Equal(["set shuffle", "set loopState"], _link.Sent);
     }
 
     [Theory]
@@ -337,7 +376,7 @@ public sealed class MediaServiceTests
 
         session.Rate = rate;
 
-        Assert.Equal(asked ? 1 : 0, _native.Sent!.Count);
+        Assert.Equal(asked ? 1 : 0, _link.Sent.Count);
         Assert.Equal(asked ? 0 : 1, _warnings.Count);
     }
 
@@ -385,7 +424,7 @@ public sealed class MediaServiceTests
         session.Position = 500;
         Assert.Equal(125, session.Position);
 
-        Assert.Equal(["set position", "set position", "set position"], _native.Sent);
+        Assert.Equal(["set position", "set position", "set position"], _link.Sent);
     }
 
     [Fact]
@@ -419,8 +458,8 @@ public sealed class MediaServiceTests
     [Fact]
     public void A_session_of_a_store_app_can_be_switched_to_and_one_with_no_window_cannot()
     {
-        Assert.True(new MediaSession(SmtcSession.CreateForTests("Publisher.App_abc!App"), _log).CanSwitchTo);
+        Assert.True(new MediaSession(Native(new RecordingLink(), "Publisher.App_abc!App"), _log).CanSwitchTo);
         Assert.False(Session().CanSwitchTo);
-        Assert.False(new MediaSession(SmtcSession.CreateForTests("no-such-program.exe"), _log).CanSwitchTo);
+        Assert.False(new MediaSession(Native(new RecordingLink(), "no-such-program.exe"), _log).CanSwitchTo);
     }
 }
