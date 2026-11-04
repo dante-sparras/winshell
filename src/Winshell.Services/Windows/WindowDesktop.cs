@@ -36,6 +36,7 @@ internal static partial class WindowDesktop
         }
     }
 
+    /// <summary>Moves the window to that desktop. False when Windows refuses or the manager is unavailable.</summary>
     public static bool Move(nint hwnd, Guid desktop)
     {
         if (hwnd == 0 || desktop == Guid.Empty)
