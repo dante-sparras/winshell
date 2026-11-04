@@ -95,12 +95,12 @@ internal sealed partial class ConfigurationProject
             {
                 if (full.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
                     return new ConfigurationProject(full);
-                error = $"No .csproj at {full}";
+                error = $"No .csproj at {full}.";
                 return null;
             }
             var found = In(full, out error);
             if (found is null && error is null)
-                error = $"No .csproj at {full}";
+                error = $"No .csproj at {full}.";
             return found;
         }
         if (name is not null)
@@ -108,7 +108,7 @@ internal sealed partial class ConfigurationProject
             var folder = Path.Combine(root, name);
             var found = In(folder, out error);
             if (found is null && error is null)
-                error = $"No config named \"{name}\" in {root}";
+                error = $"No config named \"{name}\" in {root}.";
             return found;
         }
         // Several projects in the root is a refusal, not a miss: neither default nor a lone folder may stand in for it.
@@ -123,7 +123,7 @@ internal sealed partial class ConfigurationProject
         var folders = Directory.EnumerateDirectories(root).Where(folder => Projects(folder).Length > 0).ToList();
         if (folders.Count > 1)
         {
-            error = $"Several configs in {root}; pick one with -c: {string.Join(", ", folders.Select(Path.GetFileName))}";
+            error = $"Several configs in {root}; pick one with -c: {string.Join(", ", folders.Select(Path.GetFileName))}.";
             return null;
         }
         return folders.Count == 1 ? In(folders[0], out error) : null;
@@ -328,7 +328,7 @@ internal sealed partial class ConfigurationProject
         var projects = Projects(folder);
         if (projects.Length > 1)
         {
-            error = $"Several projects in {folder}; name one with -p: {string.Join(", ", projects.Select(Path.GetFileName))}";
+            error = $"Several projects in {folder}; name one with -p: {string.Join(", ", projects.Select(Path.GetFileName))}.";
             return null;
         }
         return projects.Length == 1 ? new ConfigurationProject(projects[0]) : null;

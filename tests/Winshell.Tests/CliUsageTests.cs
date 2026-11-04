@@ -7,16 +7,16 @@ namespace Winshell.Tests;
 public class CliUsageTests
 {
     [Theory]
-    [InlineData("kill", "--pid", "abc", "--pid needs a whole number")]
-    [InlineData("kill", "--pid", "1.5", "--pid needs a whole number")]
-    [InlineData("kill", "--pid", "999999999999", "--pid needs a whole number")]
-    [InlineData("kill", "--pid", "-1", "--pid needs a whole number")]
-    [InlineData("kill", "--pid", "", "--pid needs a whole number")]
-    [InlineData("log", "--tail", "ten", "--tail needs a whole number")]
-    [InlineData("log", "--tail", "-5", "--tail needs a whole number")]
-    [InlineData("log", "-t", "ten", "-t needs a whole number")]
-    [InlineData("kill", "--pid", null, "--pid needs a value")]
-    [InlineData("log", "--tail", null, "--tail needs a value")]
+    [InlineData("kill", "--pid", "abc", "--pid needs a whole number.")]
+    [InlineData("kill", "--pid", "1.5", "--pid needs a whole number.")]
+    [InlineData("kill", "--pid", "999999999999", "--pid needs a whole number.")]
+    [InlineData("kill", "--pid", "-1", "--pid needs a whole number.")]
+    [InlineData("kill", "--pid", "", "--pid needs a whole number.")]
+    [InlineData("log", "--tail", "ten", "--tail needs a whole number.")]
+    [InlineData("log", "--tail", "-5", "--tail needs a whole number.")]
+    [InlineData("log", "-t", "ten", "-t needs a whole number.")]
+    [InlineData("kill", "--pid", null, "--pid needs a value.")]
+    [InlineData("log", "--tail", null, "--tail needs a value.")]
     public void A_bad_number_exits_2_with_a_message(string command, string option, string? value, string message)
     {
         var args = value is null ? new[] { command, option } : new[] { command, option, value };
@@ -34,7 +34,7 @@ public class CliUsageTests
 
         Assert.Equal(1, code);
         Assert.Equal("", output);
-        Assert.Equal("No instance with process id 0" + Environment.NewLine, error);
+        Assert.Equal("No instance with process id 0." + Environment.NewLine, error);
     }
 
     [Fact]

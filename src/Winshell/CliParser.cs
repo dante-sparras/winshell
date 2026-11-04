@@ -215,7 +215,7 @@ internal static class CliParser
                 raw = true;
                 continue;
             }
-            string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value");
+            string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value.");
             var name = LongName(args[i]);
             if (name is not null && command is not null && !Takes(command, name))
                 throw new ArgumentException($"winshell {command} does not take \"{args[i]}\".");
@@ -336,7 +336,7 @@ internal static class CliParser
     {
         // NumberStyles.Integer keeps "+5", surrounding whitespace and "-0" (which is 0). A negative is not a whole number.
         if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
-            throw new ArgumentException($"{option} needs a whole number");
+            throw new ArgumentException($"{option} needs a whole number.");
         return value;
     }
 
