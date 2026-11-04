@@ -14,13 +14,13 @@ internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
     private uint _callback;
     private bool _active;
 
+    /// <summary>Takes every taskbar window not yet taken, so calling it again picks up one Explorer made since.</summary>
     public void Hide()
     {
-        if (_active)
-            return;
         _active = true;
-        var primary = Windows("Shell_TrayWnd");
-        var secondary = Windows("Shell_SecondaryTrayWnd");
+        _saved.RemoveAll(s => !IsExplorerTaskbar(s.Hwnd));
+        var primary = Windows("Shell_TrayWnd").Where(NotTaken).ToList();
+        var secondary = Windows("Shell_SecondaryTrayWnd").Where(NotTaken).ToList();
         var sample = primary.Count > 0 ? primary[0] : secondary.Count > 0 ? secondary[0] : 0;
         var autohide = sample != 0 && Autohide(sample);
         foreach (var hwnd in primary)
@@ -38,6 +38,8 @@ internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
         _saved.Clear();
         _active = false;
     }
+
+    private bool NotTaken(nint hwnd) => _saved.All(s => s.Hwnd != hwnd);
 
     private void Take(nint hwnd, bool primary, bool autohide)
     {

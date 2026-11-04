@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.XamlTypeInfo;
+using Winshell.Native;
 using Winshell.Updates;
 
 namespace Winshell;
@@ -69,6 +70,7 @@ public sealed partial class Shell : IDisposable
         _arguments = arguments;
         Ipc = new ShellIpc(log);
         Platform = new ShellPlatform(loop, log);
+        Platform.TaskbarMayHaveChanged += () => NativeCallback.Guard(log, "explorer-taskbar", () => _explorerTaskbarSession?.Rehide());
     }
 
     /// <summary>The project folder <c>winshell dev</c> runs, where a shell follows its <c>.xaml</c> files.</summary>

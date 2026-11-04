@@ -136,7 +136,16 @@ internal sealed unsafe class ShellPlatform : IDisposable
 
     // Screens and the work area
 
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Loop.Post(RefreshScreens);
+    /// <summary>Raised on the shell's thread when Explorer may have made a taskbar window.</summary>
+    internal event Action? TaskbarMayHaveChanged;
+
+    internal void TaskbarCreated() => TaskbarMayHaveChanged?.Invoke();
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        Loop.Post(RefreshScreens);
+        Loop.Post(TaskbarCreated);
+    }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e) => FollowSystem(SystemChanges.From(e.Category));
 

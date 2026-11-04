@@ -49,6 +49,16 @@ internal sealed class ExplorerTaskbarSession : IDisposable
         }
     }
 
+    /// <summary>Takes a taskbar window Explorer made since <see cref="Hide"/>. Does nothing unless the taskbar is hidden.</summary>
+    public void Rehide()
+    {
+        lock (_gate)
+        {
+            if (_hidden)
+                _taskbar?.Hide();
+        }
+    }
+
     /// <summary>Puts Explorer's taskbar back when this session had hidden it. Does nothing otherwise.</summary>
     public void Restore()
     {

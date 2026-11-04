@@ -62,4 +62,22 @@ public class ExplorerTaskbarTests
         Assert.Equal(2, fake.Restores);
         Assert.Equal(1, fake.Created);
     }
+
+    [Fact]
+    public void A_new_taskbar_window_is_taken_while_hidden_and_never_otherwise()
+    {
+        var fake = new Fake();
+        var session = Session(fake);
+
+        session.Rehide();
+        Assert.Equal(0, fake.Created);
+
+        session.Hide();
+        session.Rehide();
+        Assert.Equal(2, fake.Hides);
+
+        session.Restore();
+        session.Rehide();
+        Assert.Equal(2, fake.Hides);
+    }
 }

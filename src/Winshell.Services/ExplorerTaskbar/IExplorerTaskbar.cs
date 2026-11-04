@@ -6,6 +6,7 @@ namespace Winshell.ExplorerTaskbar;
 /// </summary>
 internal interface IExplorerTaskbar
 {
+    /// <summary>Hides the taskbar windows. Called again, it takes any window it has not taken yet.</summary>
     void Hide();
 
     void Restore();
