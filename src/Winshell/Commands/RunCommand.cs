@@ -114,7 +114,7 @@ internal static class RunCommand
         try
         {
             // With -d the program starts the shell again and returns, and that shell must not hold this one's output. The
-            // program's own -d can't do it: a console program's standard handles are then a new console, not these.
+            // program's own -d can't do it: it inherits these pipes, but they are not its standard handles.
             if (daemonize)
                 StandardHandles.KeepFromChildren();
             // UseShellExecute=false starts a process, so Start cannot return null for an opened document.
