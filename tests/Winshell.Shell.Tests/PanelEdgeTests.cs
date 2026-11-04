@@ -47,26 +47,30 @@ public sealed class PanelEdgeTests
     [Fact]
     public async Task A_panel_goes_behind_a_fullscreen_app_and_comes_back_when_it_leaves()
     {
-        var (covered, back) = await ShellFixture.On(_ =>
+        await ShellFixture.On(async _ =>
         {
             using var app = new FloatingWindow { Width = 300, Height = 200, Content = new Grid() };
             app.Visible = true;
+            // A corner panel reserves nothing, so Explorer sends it no notice about a fullscreen app.
             using var panel = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
             panel.Visible = true;
             var host = panel.Host!;
+            var appHost = app.Host!;
 
-            // Explorer tells an app bar when a fullscreen window takes its screen, and when it leaves.
-            Win32.SendMessageW(host.Handle, AppBar.Message, (nint)Win32.ABN_FULLSCREENAPP, 1);
-            host.PlacePanel();
-            var behind = InFront(app.Host!.Handle, host.Handle);
-            Win32.SendMessageW(host.Handle, AppBar.Message, (nint)Win32.ABN_FULLSCREENAPP, 0);
-            host.PlacePanel();
-
-            return (behind, InFront(host.Handle, app.Host.Handle));
+            try
+            {
+                app.Fullscreen = true;
+                Win32.SetForegroundWindow(appHost.Handle);
+                await Wait.UntilAsync(() => InFront(appHost.Handle, host.Handle), "the panel to go behind the fullscreen app");
+                app.Fullscreen = false;
+                await Wait.UntilAsync(() => InFront(host.Handle, appHost.Handle), "the panel to come back when the app leaves");
+            }
+            finally
+            {
+                app.Fullscreen = false;
+            }
+            return 0;
         });
-
-        Assert.True(covered);
-        Assert.True(back);
     }
 
     private static bool InFront(nint window, nint other)
