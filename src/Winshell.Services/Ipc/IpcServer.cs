@@ -668,7 +668,7 @@ internal sealed class IpcServer : IDisposable
             throw new IOException(refusal);
         using var reader = new StreamReader(client, Encoding.UTF8);
         // Written straight to the pipe, with no writer to flush on the way out: a shell that closed its end without
-        // answering would make that flush throw, and the request would look unreachable.
+        // answering would make that flush throw, and the instance would look unreachable.
         var sent = JsonSerializer.Serialize(request with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text }, IpcJson.Default.IpcRequest);
         await client.WriteAsync(Encoding.UTF8.GetBytes(sent + Environment.NewLine), cancel).ConfigureAwait(false);
         while (true)
