@@ -123,14 +123,14 @@ internal static class ProbeShell
         }
     }
 
-    /// <summary>Builds the probe in <paramref name="folder"/>, with its source in <c>Program.cs</c>, and returns the program.</summary>
-    internal static string Build(string folder)
+    /// <summary>Builds the probe in <paramref name="folder"/>, with <paramref name="source"/> or the bare shell in <c>Program.cs</c>, and returns the program.</summary>
+    internal static string Build(string folder, string? source = null)
     {
         lock (Gate)
-            return BuildLocked(folder);
+            return BuildLocked(folder, source ?? Source);
     }
 
-    private static string BuildLocked(string folder)
+    private static string BuildLocked(string folder, string source)
     {
         var root = Repo.Root;
         Directory.CreateDirectory(folder);
@@ -138,7 +138,7 @@ internal static class ProbeShell
         WriteIfDifferent(Path.Combine(folder, "global.json"), File.ReadAllText(Path.Combine(root, "global.json")));
         var project = Path.Combine(folder, "Probe.csproj");
         WriteIfDifferent(project, Project(Path.Combine(root, "src", "Winshell.Shell", "Winshell.Shell.csproj")));
-        WriteIfDifferent(Path.Combine(folder, "Program.cs"), Source);
+        WriteIfDifferent(Path.Combine(folder, "Program.cs"), source);
         var program = Path.Combine(folder, "bin", "shell", "Probe.exe");
         var info = new ProcessStartInfo("dotnet")
         {
