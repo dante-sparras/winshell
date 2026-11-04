@@ -299,7 +299,7 @@ internal sealed partial class ConfigurationProject
         return error.StartsWith(inFolder, StringComparison.OrdinalIgnoreCase) ? error[inFolder.Length..] : error;
     }
 
-    [GeneratedRegex(@"\s+\[[^\]]*\.csproj(::[^\]]*)?\]$")]
+    [GeneratedRegex(@"\s+\[[^\]]*\.csproj(::[^\]]*)?\]$", RegexOptions.IgnoreCase)]
     private static partial Regex ProjectSuffix();
 
     /// <summary>The project's <c>AssemblyName</c> when it writes one out, or else its file name. A computed one is not read: that would take MSBuild.</summary>
