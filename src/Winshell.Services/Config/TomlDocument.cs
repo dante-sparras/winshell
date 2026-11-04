@@ -69,8 +69,11 @@ internal sealed class TomlDocument
             if (Same(current, desired))
                 return;
             var before = _document.ToString();
-            var updated = UpdateOwned(owned, key, Changes(current, desired));
-            if (!updated || !TryLoad("", _document.ToString(), out _, out _, out _))
+            var changes = Changes(current, desired);
+            var updated = UpdateOwned(owned, key, changes);
+            // A null for a part under its own header or in dotted keys is not taken out in place.
+            if (!updated || !TryLoad("", _document.ToString(), out _, out var read, out _)
+                || Keeps(Plain(read.TryGetValue(key, out var after) ? after : null), changes))
             {
                 _document = SyntaxParser.Parse(before);
                 Take(FindOwned(_document, key));
@@ -121,6 +124,16 @@ internal sealed class TomlDocument
         (IReadOnlyList<object?> old, IReadOnlyList<object?> list) =>
             list.Select((item, i) => item is not null && i < old.Count ? Changes(old[i], item) : item).ToList(),
         _ => desired,
+    };
+
+    /// <summary>Whether <paramref name="read"/> still has a key that <paramref name="changes"/> takes out.</summary>
+    private static bool Keeps(object? read, object changes) => (read, changes) switch
+    {
+        (IReadOnlyDictionary<string, object?> table, IReadOnlyDictionary<string, object?> taken) =>
+            taken.Any(pair => table.TryGetValue(pair.Key, out var value) && (pair.Value is null || Keeps(value, pair.Value))),
+        (IReadOnlyList<object?> list, IReadOnlyList<object?> items) =>
+            items.Where((item, i) => item is not null && i < list.Count && Keeps(list[i], item)).Any(),
+        _ => false,
     };
 
     /// <summary>What an update in place makes of <paramref name="current"/>, for writing it again whole.</summary>
