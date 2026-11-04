@@ -55,20 +55,20 @@ internal static class IpcValues
         $"Function {target}.{function} has a type IPC can't pass. It takes and returns string, int, bool, real, double or color.";
 
     public static string WrongCount(string target, string function, int declared, int given) =>
-        $"Function {target}.{function} takes {declared} argument{(declared == 1 ? "" : "s")}, {given} given";
+        $"Function {target}.{function} takes {declared} argument{(declared == 1 ? "" : "s")}, {given} given.";
 
     public static int ParseInt(string text, string name) =>
-        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : throw new IpcException($"Argument {name} is not an int: {text}");
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : throw new IpcException($"Argument {name} is not an int: {text}.");
 
     public static double ParseReal(string text, string name) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : throw new IpcException($"Argument {name} is not a real: {text}");
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : throw new IpcException($"Argument {name} is not a real: {text}.");
 
     public static bool ParseBool(string text, string name) => text switch
     {
         "true" => true,
         "false" => false,
         _ when int.TryParse(text, out var n) => n != 0,
-        _ => throw new IpcException($"Argument {name} is not a bool: {text}"),
+        _ => throw new IpcException($"Argument {name} is not a bool: {text}."),
     };
 
     /// <summary>A color can come without its <c>#</c>, so a hotkey need not quote it.</summary>

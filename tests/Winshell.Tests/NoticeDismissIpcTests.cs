@@ -32,12 +32,12 @@ public sealed class NoticeDismissIpcTests : IDisposable
 
         var extra = Run("ipc", "--pid", pid, "call", "notice", "dismiss", "now");
         Assert.Equal(1, extra.Code);
-        Assert.Contains("Function notice.dismiss takes 0 arguments, 1 given", extra.Error, StringComparison.Ordinal);
+        Assert.Contains("Function notice.dismiss takes 0 arguments, 1 given.", extra.Error, StringComparison.Ordinal);
         Assert.False(process.HasExited);
 
         var other = Run("ipc", "--pid", pid, "call", "notice", "open");
         Assert.Equal(1, other.Code);
-        Assert.Contains("Target not found: notice", other.Error, StringComparison.Ordinal);
+        Assert.Contains("Target not found: notice.", other.Error, StringComparison.Ordinal);
         Assert.False(process.HasExited);
     }
 

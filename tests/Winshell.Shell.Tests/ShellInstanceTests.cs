@@ -79,7 +79,7 @@ public sealed class ShellInstanceTests
         Assert.Equal("42", called.Value);
         Assert.Equal(shell.ShellId, read.Value);
         Assert.False(refused.Ok);
-        Assert.Equal("Argument number is not an int: many", refused.Error);
+        Assert.Equal("Argument number is not an int: many.", refused.Error);
     }
 
     [Fact]

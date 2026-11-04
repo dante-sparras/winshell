@@ -78,14 +78,14 @@ public sealed class ShellIpcTests
         var ran = false;
         ipc.Handle("t", "one", (string text) => ran = true);
 
-        Assert.Equal("Function t.one takes 1 argument, 0 given", Assert.Throws<IpcException>(() => ipc.Call("t", "one", [])).Message);
-        Assert.Equal("Function t.one takes 1 argument, 2 given", Assert.Throws<IpcException>(() => ipc.Call("t", "one", ["a", "b"])).Message);
+        Assert.Equal("Function t.one takes 1 argument, 0 given.", Assert.Throws<IpcException>(() => ipc.Call("t", "one", [])).Message);
+        Assert.Equal("Function t.one takes 1 argument, 2 given.", Assert.Throws<IpcException>(() => ipc.Call("t", "one", ["a", "b"])).Message);
         Assert.False(ran);
     }
 
     [Theory]
-    [InlineData("many", "Argument n is not an int: many")]
-    [InlineData("1.5", "Argument n is not an int: 1.5")]
+    [InlineData("many", "Argument n is not an int: many.")]
+    [InlineData("1.5", "Argument n is not an int: 1.5.")]
     public void Text_that_is_not_the_declared_type_is_refused(string text, string message)
     {
         var ipc = Ipc();
@@ -100,7 +100,7 @@ public sealed class ShellIpcTests
         var ipc = Ipc();
         ipc.Handle("t", "paint", (Color color) => { });
 
-        Assert.Equal("Argument color is not a color: 12", Assert.Throws<IpcException>(() => ipc.Call("t", "paint", ["12"])).Message);
+        Assert.Equal("Argument color is not a color: 12.", Assert.Throws<IpcException>(() => ipc.Call("t", "paint", ["12"])).Message);
     }
 
     [Fact]
@@ -136,10 +136,10 @@ public sealed class ShellIpcTests
         var ipc = Ipc();
         ipc.Handle("t", "known", () => { });
 
-        Assert.Equal("Target not found: other", Assert.Throws<IpcException>(() => ipc.Call("other", "known", [])).Message);
-        Assert.Equal("Function not found: t.other", Assert.Throws<IpcException>(() => ipc.Call("t", "other", [])).Message);
-        Assert.Equal("Property not found: t.other", Assert.Throws<IpcException>(() => ipc.GetProperty("t", "other")).Message);
-        Assert.Equal("Signal not found: t.other", Assert.Throws<IpcException>(() => ipc.Listen("t", "other", _ => { })).Message);
+        Assert.Equal("Target not found: other.", Assert.Throws<IpcException>(() => ipc.Call("other", "known", [])).Message);
+        Assert.Equal("Function not found: t.other.", Assert.Throws<IpcException>(() => ipc.Call("t", "other", [])).Message);
+        Assert.Equal("Property not found: t.other.", Assert.Throws<IpcException>(() => ipc.GetProperty("t", "other")).Message);
+        Assert.Equal("Signal not found: t.other.", Assert.Throws<IpcException>(() => ipc.Listen("t", "other", _ => { })).Message);
     }
 
     [Fact]

@@ -33,7 +33,7 @@ internal static class Inspector
             "screenshot" when args.Count > 0 => await Screenshot(Shown(shell, window), args[0], shell.IsDark),
             "click" when args.Count > 0 => Click(Find(shell, command, args[0], window), args[0]),
             "hover" when args.Count > 0 => Hover(Find(shell, command, args[0], window), args[0]),
-            _ => throw new IpcException($"Unknown inspect command {command}"),
+            _ => throw new IpcException($"Unknown inspect command {command}."),
         };
     }
 

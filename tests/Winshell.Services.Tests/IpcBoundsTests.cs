@@ -36,7 +36,7 @@ public class IpcBoundsTests
         var response = JsonSerializer.Deserialize(line, IpcJson.Default.IpcResponse);
         Assert.NotNull(response);
         Assert.False(response.Ok);
-        Assert.Equal("Request is too long", response.Error);
+        Assert.Equal("Request is too long.", response.Error);
         await writing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await using var parked = await Connect(name);

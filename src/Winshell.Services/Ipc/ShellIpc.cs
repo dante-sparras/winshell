@@ -81,7 +81,7 @@ public sealed class ShellIpc
     /// <summary>Calls a function. Returns its result as text, or throws <see cref="IpcException"/> with a message for the CLI.</summary>
     internal string Call(string target, string function, IReadOnlyList<string> args)
     {
-        var found = Find(target).Functions.Find(f => f.Name == function) ?? throw new IpcException($"Function not found: {target}.{function}");
+        var found = Find(target).Functions.Find(f => f.Name == function) ?? throw new IpcException($"Function not found: {target}.{function}.");
         if (args.Count != found.Types.Length)
             throw new IpcException(IpcValues.WrongCount(target, function, found.Types.Length, args.Count));
         var converted = new object[args.Count];
@@ -100,19 +100,19 @@ public sealed class ShellIpc
 
     internal string GetProperty(string target, string property)
     {
-        var found = Find(target).Properties.Find(p => p.Name == property) ?? throw new IpcException($"Property not found: {target}.{property}");
+        var found = Find(target).Properties.Find(p => p.Name == property) ?? throw new IpcException($"Property not found: {target}.{property}.");
         return Format(found.Read());
     }
 
     /// <summary>Calls back with a signal's argument as text each time it fires, until disposed.</summary>
     internal IDisposable Listen(string target, string signal, Action<string> onSignal)
     {
-        var found = Find(target).Signals.Find(s => s.Name == signal) ?? throw new IpcException($"Signal not found: {target}.{signal}");
+        var found = Find(target).Signals.Find(s => s.Name == signal) ?? throw new IpcException($"Signal not found: {target}.{signal}.");
         return found.Connect(onSignal);
     }
 
     private Target Find(string target) =>
-        _targets.TryGetValue(target, out var found) ? found : throw new IpcException($"Target not found: {target}");
+        _targets.TryGetValue(target, out var found) ? found : throw new IpcException($"Target not found: {target}.");
 
     private DisposeAction Add<T>(string target, string name, T member, Func<Target, List<T>> list)
         where T : IIpcMember
@@ -147,7 +147,7 @@ public sealed class ShellIpc
         if (type == typeof(bool))
             return IpcValues.ParseBool(text, name);
         if (type == typeof(Color))
-            return ParseColor(IpcValues.ColorText(text)) ?? throw new IpcException($"Argument {name} is not a color: {text}");
+            return ParseColor(IpcValues.ColorText(text)) ?? throw new IpcException($"Argument {name} is not a color: {text}.");
         return text;
     }
 
