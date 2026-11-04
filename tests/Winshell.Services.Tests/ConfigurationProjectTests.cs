@@ -34,6 +34,15 @@ public sealed class ConfigurationProjectTests : IDisposable
         return error;
     }
 
+    [Fact]
+    public void Several_projects_in_the_config_folder_are_named_not_passed_over()
+    {
+        Project("A.csproj");
+        Project("B.csproj");
+
+        Assert.Equal($"Several projects in {_root}; name one with -p: A.csproj, B.csproj", Refusal());
+    }
+
     private CommandResult Builds(string file, IReadOnlyList<string> arguments, string folder)
     {
         _commands.Add(file + " " + string.Join(' ', arguments));
