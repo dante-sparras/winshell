@@ -224,7 +224,16 @@ public class IpcBoundsTests
         var buf = new byte[8192];
         while (lines.Count < count)
         {
-            var n = await stream.ReadAsync(buf, TestContext.Current.CancellationToken);
+            int n;
+            try
+            {
+                n = await stream.ReadAsync(buf, TestContext.Current.CancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Assert.Fail($"The listener delivered {lines.Count} lines, not {count}.");
+                throw;
+            }
             Assert.NotEqual(0, n);
             for (var i = 0; i < n; i++)
             {
