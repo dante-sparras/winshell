@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Time.Testing;
+
 namespace Winshell.Tests;
 
 /// <summary>
@@ -53,7 +55,9 @@ public sealed class InstanceLogTests : IDisposable
     public void A_timed_flush_that_cannot_reopen_the_file_does_not_end_the_process_and_logging_resumes()
     {
         var path = Path.Combine(_dir, "log.txt");
-        using var log = new InstanceLog(path, cap: 10, flushAfter: TimeSpan.FromMilliseconds(20));
+        var time = new FakeTimeProvider();
+        var delay = TimeSpan.FromMilliseconds(500);
+        using var log = new InstanceLog(path, cap: 10, flushAfter: delay, time: time);
         log.Write(LogLevel.Warn, "fills-the-file-past-the-cap");
 
         // Move the file the log holds aside and keep a new one at its path open, so the roll cannot move or reopen it.
@@ -61,12 +65,13 @@ public sealed class InstanceLogTests : IDisposable
         using (new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         {
             log.Write(LogLevel.Info, "lost-with-the-failed-roll");
-            // Nothing on disk shows the timer firing, so give it time to.
-            TestContext.Current.CancellationToken.WaitHandle.WaitOne(300);
+            // The timer's flush runs here, on this thread, and fails.
+            time.Advance(delay);
         }
 
         log.Write(LogLevel.Info, "after-the-file-is-free");
-        Wait.Until(() => Read(path).Contains("after-the-file-is-free", StringComparison.Ordinal), "the line after recovery on disk");
+        time.Advance(delay);
+        Assert.Contains("after-the-file-is-free", Read(path), StringComparison.Ordinal);
     }
 
     private static string Read(string path)

@@ -17,18 +17,18 @@ internal sealed class InstanceLog : IDisposable
     private readonly long _cap;
     private readonly object _gate = new();
     private readonly TimeSpan _delay;
-    private readonly Timer _timer;
+    private readonly ITimer _timer;
     private StreamWriter? _writer;
     private readonly StringBuilder _pending = new();
     private bool _closed;
 
-    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushAfter = null)
+    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushAfter = null, TimeProvider? time = null)
     {
         _path = path;
         _cap = cap;
         _writer = Open();
         _delay = flushAfter ?? TimeSpan.FromMilliseconds(500);
-        _timer = new Timer(_ => FlushFromTimer(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _timer = (time ?? TimeProvider.System).CreateTimer(_ => FlushFromTimer(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>Queues one already-stamped line. Warn and above are on disk before this returns.</summary>
