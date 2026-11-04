@@ -346,11 +346,14 @@ public sealed class TomlDocumentTests
     [InlineData("pins = [\n  \"a\",\n  \"b\" # last\n]\n", "a b c", "pins = [\n  \"a\",\n  \"b\", # last\n  \"c\"\n]\n")]
     [InlineData("pins = [\n  \"a\", # one\n  \"b\"\n]\n", "a", "pins = [\n  \"a\" # one\n]\n")]
     [InlineData("pins = [\n    \"a\", # one\n    \"b\", # two\n  ]\n", "a", "pins = [\n    \"a\", # one\n  ]\n")]
+    [InlineData("pins = [\n  \"a\",\n  \"b\",\n  # more to come\n]\n", "a", "pins = [\n  \"a\",\n  # more to come\n]\n")]
+    [InlineData("pins = [\n  \"a\", \"b\",\n  \"c\", \"d\",\n]\n", "a b c d e", "pins = [\n  \"a\", \"b\",\n  \"c\", \"d\", \"e\",\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n]\n", "", "pins = []\n")]
     public void A_list_that_grows_or_shrinks_keeps_its_layout(string original, string items, string expected)
     {
         var document = Parse(original);
 
-        document.Set("pins", items.Split(' ').ToList());
+        document.Set("pins", items.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList());
 
         Assert.Equal(expected, document.ToString());
     }

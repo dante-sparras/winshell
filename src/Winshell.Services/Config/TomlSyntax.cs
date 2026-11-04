@@ -75,9 +75,13 @@ internal static class TomlSyntax
     }
 
     // The trivia after an array item is its comment and line break, then the indentation of what follows: the next
-    // item, or the closing bracket. The open bracket's trivia is the same before the first item.
+    // item, or the closing bracket. The open bracket's trivia is the same before the first item. A document loads only
+    // without errors, so an array has its brackets and every item its value.
 
-    /// <summary>Takes out an array's last item. What is left ends the array as that item did: with or without a comma, and the bracket where it was.</summary>
+    /// <summary>
+    /// Takes out an array's last item, and its comment. What is left ends the array as that item did: with or without a
+    /// comma, then the comment lines and the bracket that followed it. An array left empty with no comment is <c>[]</c>.
+    /// </summary>
     public static void RemoveLastItem(ArraySyntax array)
     {
         var items = array.Items;
@@ -86,17 +90,26 @@ internal static class TomlSyntax
         items.RemoveChildAt(items.ChildrenCount - 1);
         if (items.ChildrenCount == 0)
         {
-            array.OpenBracket!.TrailingTrivia = Join(array.OpenBracket.TrailingTrivia, end);
+            var left = Ended(array.OpenBracket!.TrailingTrivia, end);
+            array.OpenBracket.TrailingTrivia = left.Exists(t => t.Kind == TokenKind.Comment) ? left : null;
             return;
         }
         var kept = items.GetChild(items.ChildrenCount - 1)!;
-        var after = Join(After(kept), end);
-        if (last.Comma is null)
+        if (last.Comma is null && kept.Comma is { } comma)
+        {
+            var value = LastToken(kept.Value!);
+            List<SyntaxTrivia> own = [.. value.TrailingTrivia ?? [], .. comma.TrailingTrivia ?? []];
             kept.Comma = null;
-        SetAfter(kept, after);
+            value.TrailingTrivia = Ended(own, end);
+        }
+        else
+            SetAfter(kept, Ended(After(kept), end));
     }
 
-    /// <summary>Adds an item at the end of an array, on a line of its own and indented the same when the last item is.</summary>
+    /// <summary>
+    /// Adds an item at the end of an array: on a line of its own, indented the same, when the last item starts its own
+    /// line, and after it on its line otherwise. What followed the last item follows the new one.
+    /// </summary>
     public static void AppendItem(ArraySyntax array, ValueSyntax value)
     {
         var items = array.Items;
@@ -107,20 +120,33 @@ internal static class TomlSyntax
             return;
         }
         var last = items.GetChild(items.ChildrenCount - 1)!;
-        var before = items.ChildrenCount > 1 ? items.GetChild(items.ChildrenCount - 2)!.Comma?.TrailingTrivia : array.OpenBracket!.TrailingTrivia;
-        var end = After(last);
-        var between = Join(end, before);
-        if (between.Count == 0)
-            between.Add(new SyntaxTrivia(TokenKind.Whitespaces, " "));
+        var before = items.ChildrenCount > 1
+            ? items.GetChild(items.ChildrenCount - 2)!.Comma?.TrailingTrivia
+            : array.OpenBracket!.TrailingTrivia;
+        var end = After(last) ?? [];
+        List<SyntaxTrivia> between;
+        List<SyntaxTrivia> after;
+        if (before is not null && LastBreak(before) is var line and >= 0)
+        {
+            var endLine = LastBreak(end);
+            between = endLine >= 0 ? [.. end[..(endLine + 1)], .. before[(line + 1)..]] : before[line..];
+            after = endLine >= 0 ? end[endLine..] : end;
+        }
+        else
+        {
+            between = before is { Count: > 0 } ? [.. before] : [new SyntaxTrivia(TokenKind.Whitespaces, " ")];
+            after = end;
+        }
         if (last.Comma is null)
             LastToken(last.Value!).TrailingTrivia = null;
         else
-            item.Comma = new SyntaxToken(TokenKind.Comma, ",");
-        last.Comma ??= new SyntaxToken(TokenKind.Comma, ",");
-        last.Comma.TrailingTrivia = between;
+            item.Comma = Comma(after);
+        last.Comma = Comma(between);
         items.Add(item);
-        SetAfter(item, Join(null, end));
+        SetAfter(item, after);
     }
+
+    private static SyntaxToken Comma(List<SyntaxTrivia> trailing) => new(TokenKind.Comma, ",") { TrailingTrivia = trailing };
 
     private static List<SyntaxTrivia>? After(ArrayItemSyntax item) =>
         item.Comma is { } comma ? comma.TrailingTrivia : LastToken(item.Value!).TrailingTrivia;
@@ -134,19 +160,18 @@ internal static class TomlSyntax
     }
 
     /// <summary>
-    /// The trivia after an item that had <paramref name="own"/> and is now followed by what <paramref name="next"/> came
-    /// before: its comments and line break, then the indentation in <paramref name="next"/>. An item with no line break
-    /// of its own takes the line break in <paramref name="next"/> too.
+    /// What follows an item that had <paramref name="own"/> after it once the item after it, which had
+    /// <paramref name="end"/>, is gone: its own comment and line break, then what followed that item's line.
     /// </summary>
-    private static List<SyntaxTrivia> Join(List<SyntaxTrivia>? own, List<SyntaxTrivia>? next)
+    private static List<SyntaxTrivia> Ended(List<SyntaxTrivia>? own, List<SyntaxTrivia>? end)
     {
-        var nextLine = LastLine(next);
-        if (own is not null && LastLine(own) is var ownLine and >= 0)
-            return [.. own[..(ownLine + 1)], .. next?[(nextLine + 1)..] ?? []];
-        return next?[Math.Max(nextLine, 0)..] ?? [];
+        var endLine = end?.FindIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
+        if (own is not null && LastBreak(own) is var ownLine and >= 0)
+            return [.. own[..(ownLine + 1)], .. end?[(endLine + 1)..] ?? []];
+        return end?[Math.Max(endLine, 0)..] ?? [];
     }
 
-    private static int LastLine(List<SyntaxTrivia>? trivia) => trivia?.FindLastIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
+    private static int LastBreak(List<SyntaxTrivia>? trivia) => trivia?.FindLastIndex(t => t.Kind == TokenKind.NewLine) ?? -1;
 
     public static void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline, IEnumerable<string>? commentLines = null)
     {
