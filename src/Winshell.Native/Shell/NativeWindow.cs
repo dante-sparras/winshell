@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using Windows.Win32;
 
 namespace Winshell.Native;
 
@@ -67,7 +68,7 @@ internal sealed unsafe class NativeWindow
         _handler = handler;
     }
 
-    /// <summary>The window, or 0 once released.</summary>
+    /// <summary>The window, or 0 once released or destroyed.</summary>
     internal nint Handle { get; private set; }
 
     /// <summary>Makes a window of <paramref name="className"/>, registered once in the process. Throws when Windows would not.</summary>
@@ -92,10 +93,16 @@ internal sealed unsafe class NativeWindow
         var hwnd = Handle;
         if (hwnd == 0)
             return;
-        Handle = 0;
-        Live.TryRemove(hwnd, out _);
+        Forget(hwnd);
         if (destroy)
             Win32.DestroyWindow(hwnd);
+    }
+
+    private void Forget(nint hwnd)
+    {
+        Live.TryRemove(new KeyValuePair<nint, NativeWindow>(hwnd, this));
+        if (Handle == hwnd)
+            Handle = 0;
     }
 
     private static void Register(string className)
@@ -138,6 +145,12 @@ internal sealed unsafe class NativeWindow
             catch (Exception)
 #pragma warning restore CA1031
             {
+            }
+            finally
+            {
+                // The last message a window gets, so a window its handler did not release lets go of it here.
+                if (msg == PInvoke.WM_NCDESTROY)
+                    window.Forget(hwnd);
             }
         }
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);

@@ -1,12 +1,13 @@
 using System.Runtime.InteropServices;
+using Windows.Win32.Foundation;
+using Windows.Win32.UI.Shell;
 
 namespace Winshell.Native;
 
 /// <summary>The icons the Windows shell shows for its items: programs, files and packaged apps.</summary>
 internal static unsafe partial class ShellItemImage
 {
-    // SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK | SIIGBF_SCALEUP.
-    private const int IconFlags = 0x4 | 0x1 | 0x100;
+    private const SIIGBF IconFlags = SIIGBF.SIIGBF_ICONONLY | SIIGBF.SIIGBF_BIGGERSIZEOK | SIIGBF.SIIGBF_SCALEUP;
 
     /// <summary>
     /// The icon for the item <paramref name="parsingName"/> names, at <paramref name="size"/> by
@@ -21,7 +22,7 @@ internal static unsafe partial class ShellItemImage
         try
         {
             factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(pointer);
-            var result = factory.GetImage(new SIZE { Cx = size, Cy = size }, IconFlags, out var bitmap);
+            var result = factory.GetImage(new SIZE(size, size), IconFlags, out var bitmap);
             if (bitmap == 0)
                 return null;
             try
@@ -68,14 +69,7 @@ internal static unsafe partial class ShellItemImage
     private interface IShellItemImageFactory
     {
         [PreserveSig]
-        int GetImage(SIZE size, int flags, out nint bitmap);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SIZE
-    {
-        public int Cx;
-        public int Cy;
+        int GetImage(SIZE size, SIIGBF flags, out nint bitmap);
     }
 
     /// <summary>

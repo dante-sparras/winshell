@@ -60,7 +60,7 @@ internal static class ShellIcon
         {
             return TrayImage.Bitmap(ShellImage.Load(path, size));
         }
-        catch (COMException)
+        catch (Exception e) when (e is COMException or ArgumentException)
         {
             return null;
         }

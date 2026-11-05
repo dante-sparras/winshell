@@ -4,3 +4,4 @@ DestroyMenu
 GetGUIThreadInfo
 TRACK_POPUP_MENU_FLAGS
 TrackPopupMenuEx
+WM_NCDESTROY
