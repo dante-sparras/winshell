@@ -225,7 +225,7 @@ public sealed class ShellNoticeTests : IDisposable
             return (
                 panel.Width,
                 panel.Height,
-                panel.Host!.HoldsEdge,
+                HoldsEdge: panel.Host!.Placement.AppBar?.Registered == true,
                 AutomationProperties.GetName(panel.Content!),
                 AutomationProperties.GetLiveSetting(panel.Content!));
         });

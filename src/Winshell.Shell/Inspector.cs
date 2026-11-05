@@ -52,7 +52,7 @@ internal static class Inspector
     }
 
     private static List<ShellWindow> Windows(Shell shell) =>
-        [.. shell.Platform.Windows.Where(host => host.IsVisible).Select(host => host.Client).OfType<ShellWindow>()];
+        [.. shell.Platform.Windows.Where(host => host.Placement.IsVisible).Select(host => host.Client).OfType<ShellWindow>()];
 
     /// <summary>The windows open now, each with its content's tree, as JSON.</summary>
     private static string Tree(Shell shell)
@@ -255,7 +255,7 @@ internal static class Inspector
     /// <summary>What Narrator does to activate an element. A disabled control refuses it, as it refuses a click.</summary>
     private static string Click(FrameworkElement element, string name)
     {
-        ShellWindow.Of(element)?.Host?.Press();
+        ShellWindow.Of(element)?.Host?.Messages.Press();
         var peer = FrameworkElementAutomationPeer.FromElement(element) ?? FrameworkElementAutomationPeer.CreatePeerForElement(element);
         switch (peer?.GetPattern(PatternInterface.Invoke), peer?.GetPattern(PatternInterface.Toggle), peer?.GetPattern(PatternInterface.ExpandCollapse))
         {

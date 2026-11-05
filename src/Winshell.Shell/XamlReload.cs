@@ -77,7 +77,7 @@ internal static partial class XamlReload
             shell.Log.Warn("dev", $"{NeedsBuild}: {Path.GetFileName(file)}");
             return null;
         }
-        var panels = shell.Platform.Windows.Select(host => host.Content).OfType<DependencyObject>()
+        var panels = shell.Platform.Windows.Select(host => host.Presentation.Content).OfType<DependencyObject>()
             .SelectMany(root => Of(root, name)).ToList();
         foreach (var panel in panels)
         {

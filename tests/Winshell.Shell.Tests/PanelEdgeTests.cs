@@ -23,9 +23,9 @@ public sealed class PanelEdgeTests
             panel.Dispose();
 
             // Explorer tells a bar when another bar moves, and that notice can land on the loop after the bar is gone.
-            host.PlacePanel();
+            host.Placement.PlacePanel();
 
-            return host.HoldsEdge;
+            return host.Placement.AppBar?.Registered == true;
         });
 
         Assert.False(holds);

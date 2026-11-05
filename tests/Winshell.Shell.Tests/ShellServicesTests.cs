@@ -26,9 +26,9 @@ public sealed class ShellServicesTests
     [Fact]
     public void The_color_scheme_overrides_Windows_mode()
     {
-        Assert.True(Shell.DarkFor(ColorScheme.Dark, false));
-        Assert.False(Shell.DarkFor(ColorScheme.Light, true));
-        Assert.True(Shell.DarkFor(ColorScheme.System, true));
-        Assert.False(Shell.DarkFor(ColorScheme.System, false));
+        Assert.True(ShellPlatform.DarkFor(ColorScheme.Dark, false));
+        Assert.False(ShellPlatform.DarkFor(ColorScheme.Light, true));
+        Assert.True(ShellPlatform.DarkFor(ColorScheme.System, true));
+        Assert.False(ShellPlatform.DarkFor(ColorScheme.System, false));
     }
 }

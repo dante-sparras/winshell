@@ -55,7 +55,7 @@ internal sealed class FlyoutDismissal : IDisposable
         var open = false;
         foreach (var window in _platform.Windows)
         {
-            if (window.XamlRoot is not { } root)
+            if (window.Presentation.XamlRoot is not { } root)
                 continue;
             foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(root))
             {
@@ -73,7 +73,7 @@ internal sealed class FlyoutDismissal : IDisposable
     {
         var scale = root.RasterizationScale;
         var corner = child.TransformToVisual(null).TransformPoint(default);
-        var (left, top) = window.MapToScreen(corner.X, corner.Y);
+        var (left, top) = window.Placement.MapToScreen(corner.X, corner.Y);
         return pt.X >= left && pt.Y >= top && pt.X < left + child.ActualWidth * scale && pt.Y < top + child.ActualHeight * scale;
     }
 

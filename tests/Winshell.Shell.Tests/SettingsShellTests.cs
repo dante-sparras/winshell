@@ -330,7 +330,7 @@ public sealed class SettingsShellTests
             var messages = rig.Listen();
             try
             {
-                Assert.DoesNotContain(shell.Platform.Windows, window => window.Content is SettingsView);
+                Assert.DoesNotContain(shell.Platform.Windows, window => window.Presentation.Content is SettingsView);
 
                 Assert.Equal("", shell.Ipc.Call("settings", "open", ["taskbarAutoHide"]));
                 var window = await rig.Shown();
@@ -456,8 +456,8 @@ public sealed class SettingsShellTests
 
     private static FloatingWindow SettingsWindow(Shell shell)
     {
-        var host = shell.Platform.Windows.Single(window => window.Content is SettingsView);
-        return (FloatingWindow)ShellWindow.Of((SettingsView)host.Content!)!;
+        var host = shell.Platform.Windows.Single(window => window.Presentation.Content is SettingsView);
+        return (FloatingWindow)ShellWindow.Of((SettingsView)host.Presentation.Content!)!;
     }
 
     private static T? Find<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
@@ -551,9 +551,9 @@ public sealed class SettingsShellTests
         public void Dispose()
         {
             Restore();
-            foreach (var host in Shell.Platform.Windows.Where(window => window.Content is SettingsView).ToList())
+            foreach (var host in Shell.Platform.Windows.Where(window => window.Presentation.Content is SettingsView).ToList())
             {
-                if (host.Content is UIElement view && ShellWindow.Of(view) is { } window)
+                if (host.Presentation.Content is UIElement view && ShellWindow.Of(view) is { } window)
                     window.Dispose();
                 else
                     host.Dispose();

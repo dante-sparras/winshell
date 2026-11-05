@@ -65,7 +65,15 @@ internal sealed class ShellPlatform : IDisposable
     public string PrimaryScreenId => _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
 
     /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <see cref="ColorScheme.System"/> follows it.</summary>
-    public bool IsDark => Shell.DarkFor(_scheme, _windowsDark);
+    public bool IsDark => DarkFor(_scheme, _windowsDark);
+
+    /// <summary>Whether <paramref name="scheme"/> is dark, with Windows in <paramref name="windowsDark"/>.</summary>
+    internal static bool DarkFor(ColorScheme scheme, bool windowsDark) => scheme switch
+    {
+        ColorScheme.Dark => true,
+        ColorScheme.Light => false,
+        _ => windowsDark,
+    };
 
     public bool IsHighContrast { get; private set; }
 
@@ -214,8 +222,8 @@ internal sealed class ShellPlatform : IDisposable
             RefreshScreens();
             foreach (var w in _windows.ToArray())
             {
-                if (w.Kind == WindowKind.Panel && w.IsVisible)
-                    w.PlacePanel();
+                if (w.Kind == WindowKind.Panel && w.Placement.IsVisible)
+                    w.Placement.PlacePanel();
             }
         });
     }
@@ -288,8 +296,8 @@ internal sealed class ShellPlatform : IDisposable
     {
         foreach (var w in _grabbing.ToArray())
         {
-            if (!w.ContainsScreenPoint(pt))
-                w.Dismiss();
+            if (!w.Placement.ContainsScreenPoint(pt))
+                w.Client.OnDismissed();
         }
     }
 

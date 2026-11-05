@@ -50,7 +50,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
             if (!Set(ref _content, value))
                 return;
             if (_host is not null)
-                _host.Content = value;
+                _host.Presentation.Content = value;
         }
     }
 
@@ -70,7 +70,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
             if (_host is not null)
             {
                 ApplyPlacement();
-                _host.SetVisible(value);
+                _host.Placement.SetVisible(value);
             }
         }
     }
@@ -110,7 +110,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     public double Scale => _scale;
 
     /// <summary>The window's origin on the virtual desktop, in logical pixels.</summary>
-    public Point Origin => _host?.Origin ?? default;
+    public Point Origin => _host?.Placement.Origin ?? default;
 
     /// <summary>The screen this window is on, or was asked to be on. Null is the primary screen.</summary>
     public ScreenInfo? Screen
@@ -130,7 +130,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         set
         {
             if (Set(ref _opacity, Math.Clamp(value, 0, 1)))
-                _host?.SetOpacity(_opacity);
+                _host?.Presentation.SetOpacity(_opacity);
         }
     }
 
@@ -141,7 +141,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         set
         {
             if (Set(ref _backdrop, value))
-                _host?.SetBackdrop(_backdrop, _corners);
+                _host?.Presentation.SetBackdrop(_backdrop, _corners);
         }
     }
 
@@ -152,7 +152,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         set
         {
             if (Set(ref _corners, value))
-                _host?.SetBackdrop(_backdrop, _corners);
+                _host?.Presentation.SetBackdrop(_backdrop, _corners);
         }
     }
 
@@ -167,7 +167,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         {
             _inputRegion = value;
             Changed();
-            _host?.SetInputRegion(value);
+            _host?.Placement.SetInputRegion(value);
         }
     }
 
@@ -178,7 +178,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         set
         {
             if (Set(ref _visibleMask, value))
-                _host?.SetVisibleMask(value);
+                _host?.Presentation.SetVisibleMask(value);
         }
     }
 
@@ -195,39 +195,39 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     public event Action<Exception>? Failed;
 
     /// <summary>Takes the keyboard, if this kind of window may.</summary>
-    public void Focus() => _host?.SetKeyboardFocus(true);
+    public void Focus() => _host?.Presentation.SetKeyboardFocus(true);
 
     /// <summary>Puts the window above the others at its level, without focusing it.</summary>
-    public void Raise() => _host?.Raise();
+    public void Raise() => _host?.Placement.Raise();
 
     /// <summary>
     /// Lets the user move the window by dragging, as a title bar does. Call it when a pointer button goes down.
     /// </summary>
-    public void StartSystemMove() => _host?.StartSystemMove();
+    public void StartSystemMove() => _host?.Placement.StartSystemMove();
 
     /// <summary>
     /// Lets the user resize the window by dragging an edge or a corner, as its border does. Call it when a pointer
     /// button goes down. Two adjacent edges, such as top and left, name a corner. Any other combination resizes from
     /// the bottom-right corner.
     /// </summary>
-    public void StartSystemResize(Edges edges) => _host?.StartSystemResize(edges);
+    public void StartSystemResize(Edges edges) => _host?.Placement.StartSystemResize(edges);
 
     /// <summary>A point in logical window coordinates, in physical pixels on the virtual desktop.</summary>
-    public (int X, int Y) MapToScreen(double x, double y) => _host?.MapToScreen(x, y) ?? ((int)x, (int)y);
+    public (int X, int Y) MapToScreen(double x, double y) => _host?.Placement.MapToScreen(x, y) ?? ((int)x, (int)y);
 
     private protected void EnsureHost()
     {
         if (_host is not null)
             return;
         _host = _shell.Platform.CreateWindow(Kind, this);
-        _host.Content = _content;
-        _host.SetBackdrop(_backdrop, _corners);
+        _host.Presentation.Content = _content;
+        _host.Presentation.SetBackdrop(_backdrop, _corners);
         if (_opacity != 1)
-            _host.SetOpacity(_opacity);
+            _host.Presentation.SetOpacity(_opacity);
         if (_inputRegion is not null)
-            _host.SetInputRegion(_inputRegion);
+            _host.Placement.SetInputRegion(_inputRegion);
         if (_visibleMask is { } mask)
-            _host.SetVisibleMask(mask);
+            _host.Presentation.SetVisibleMask(mask);
         HostCreated?.Invoke();
     }
 
@@ -302,7 +302,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         {
             EnsureHost();
             ApplyPlacement();
-            _host!.SetVisible(true);
+            _host!.Placement.SetVisible(true);
         }
     }
 
