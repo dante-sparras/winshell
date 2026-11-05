@@ -10,7 +10,7 @@ public sealed class AppsService : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
     private readonly Log _log;
-    private readonly AppCatalog _catalog;
+    private readonly IAppsBackend _backend;
     private readonly TimeProvider _time;
     private readonly Dictionary<string, AppEntry> _byId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AppUsage> _bumps = new(StringComparer.OrdinalIgnoreCase);
@@ -18,14 +18,14 @@ public sealed class AppsService : ObservableObject, IDisposable
     private IReadOnlyDictionary<string, AppUsage> _usage = new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
-    internal AppsService(IEventLoop loop, Log log, AppCatalog? catalog = null, TimeProvider? time = null)
+    internal AppsService(IEventLoop loop, Log log, IAppsBackend? backend = null, TimeProvider? time = null)
     {
         _loop = loop;
         _log = log;
-        _catalog = catalog ?? AppCatalog.Shared;
+        _backend = backend ?? AppCatalog.Shared;
         _time = time ?? TimeProvider.System;
-        _catalog.Changed += OnChanged;
-        _catalog.Start();
+        _backend.Changed += OnChanged;
+        _backend.Start();
         Apply();
     }
 
@@ -55,7 +55,7 @@ public sealed class AppsService : ObservableObject, IDisposable
     {
         if (_disposed)
             return;
-        var snapshot = _catalog.Snapshot;
+        var snapshot = _backend.Snapshot;
         _entries = snapshot.Entries;
         _usage = snapshot.Usage;
         var ids = _entries.Select(entry => entry.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -70,7 +70,7 @@ public sealed class AppsService : ObservableObject, IDisposable
             if (_byId.TryGetValue(entry.Id, out var kept))
                 kept.Update(entry, UsageFor(entry));
             else
-                _byId[entry.Id] = new AppEntry(entry, UsageFor(entry), _loop, _log) { Launched = OnLaunched };
+                _byId[entry.Id] = new AppEntry(entry, UsageFor(entry), _loop, _log, _backend) { Launched = OnLaunched };
         }
         Publish();
     }
@@ -108,7 +108,7 @@ public sealed class AppsService : ObservableObject, IDisposable
     public void Dispose()
     {
         _disposed = true;
-        _catalog.Changed -= OnChanged;
+        _backend.Changed -= OnChanged;
     }
 }
 
@@ -117,16 +117,18 @@ public sealed class AppEntry : ObservableObject
 {
     private readonly IEventLoop _loop;
     private readonly Log _log;
+    private readonly IAppsBackend _backend;
     private AppRecord _entry;
     private AppUsage _usage;
 
-    internal AppEntry(AppRecord entry, AppUsage usage, IEventLoop loop, Log log)
+    internal AppEntry(AppRecord entry, AppUsage usage, IEventLoop loop, Log log, IAppsBackend backend)
     {
         Id = entry.Id;
         _entry = entry;
         _usage = usage;
         _loop = loop;
         _log = log;
+        _backend = backend;
     }
 
     internal Action<AppRecord>? Launched { get; set; }
@@ -183,10 +185,32 @@ public sealed class AppEntry : ObservableObject
     {
         var entry = _entry;
         void Warn(string message) => _log.Warn("apps", $"Failed to launch {entry.Name}: {message}");
-        if (entry.Packaged)
-            AppLaunch.Packaged(entry.Id, entry.Arguments, _loop, Warn, () => Launched?.Invoke(entry));
-        else if (AppLaunch.Shortcut(entry.LaunchPath, entry.StartIn, Warn))
-            Launched?.Invoke(entry);
+        if (!entry.Packaged)
+        {
+            if (_backend.OpenShortcut(entry.LaunchPath, entry.StartIn) is { } error)
+                Warn(error);
+            else
+                Launched?.Invoke(entry);
+            return;
+        }
+        // Activation returns once the app is up, so its outcome, and the Apps folder when it failed, run on the loop.
+        _ = _backend.ActivateAsync(entry.Id, entry.Arguments).ContinueWith(activated =>
+        {
+            var error = activated.Result;
+            _loop.Post(() =>
+            {
+                if (error is not null)
+                {
+                    Warn(error);
+                    if (_backend.OpenAppsFolder(entry.Id) is { } failed)
+                    {
+                        Warn(failed);
+                        return;
+                    }
+                }
+                Launched?.Invoke(entry);
+            });
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     internal void Update(AppRecord entry, AppUsage usage)

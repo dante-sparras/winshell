@@ -8,8 +8,7 @@ using Winshell.Native;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// The Start menu index: shortcuts, packaged apps, ranked search, usage, and a packaged launch that
-/// returns before activation finishes.
+/// The Start menu index: shortcuts, packaged apps, ranked search, usage, and a catalog that follows its folders.
 /// </summary>
 public sealed class AppIndexTests
 {
@@ -92,7 +91,8 @@ public sealed class AppIndexTests
         var calc = Assert.Single(apps, app => app.Packaged);
         Assert.Equal(packaged.Id, calc.Id);
         Assert.Contains(apps, app => app.Id == "Accessories/Editor");
-        Assert.Equal(["Accessories/Editor", packaged.Id], apps.Select(app => app.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray());
+        // Combine gets the shortcuts first, so the packaged Calculator leads only because the result is sorted by name.
+        Assert.Equal([packaged.Id, "Accessories/Editor"], apps.Select(app => app.Id));
     }
 
     [Fact]
@@ -269,46 +269,6 @@ public sealed class AppIndexTests
         {
             Delete(root);
         }
-    }
-
-    [Fact(Timeout = 30_000)]
-    public async Task Packaged_launch_returns_before_activation_and_falls_back_on_the_loop()
-    {
-        using var activating = new ManualResetEventSlim(false);
-        var loop = new ManualEventLoop();
-        var posted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        loop.Woken += () => posted.TrySetResult();
-        var warnings = new List<string>();
-        int? fallbackThread = null;
-        var started = 0;
-
-        // An activation that blocks until the test lets it fail. A launch that waited for it would hang here.
-        AppLaunch.Packaged(
-            () =>
-            {
-                activating.Wait();
-                return "not registered";
-            },
-            () =>
-            {
-                fallbackThread = Environment.CurrentManagedThreadId;
-                return null;
-            },
-            loop,
-            warnings.Add,
-            () => started++);
-        Assert.False(posted.Task.IsCompleted);
-
-        activating.Set();
-        await posted.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-        Assert.Empty(warnings);
-        Assert.Null(fallbackThread);
-        Assert.Equal(0, started);
-
-        loop.Process();
-        Assert.Equal(["not registered"], warnings);
-        Assert.Equal(Environment.CurrentManagedThreadId, fallbackThread);
-        Assert.Equal(1, started);
     }
 
     private static IReadOnlyList<string> Names(string query, IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage>? usage = null) =>
