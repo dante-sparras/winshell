@@ -16,7 +16,8 @@ namespace Winshell;
 
 /// <summary>
 /// What a native window shows, and the keyboard that reaches it: a XAML island whose background stays transparent, over
-/// a material, both following the shell's theme. The island goes in once every part of the window exists.
+/// a material, both following the shell's theme. The content's root exists before the native window; the island goes in
+/// once every part of the window exists.
 /// </summary>
 internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) : IDisposable
 {
@@ -41,7 +42,10 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
 
     public XamlRoot? XamlRoot => _root.XamlRoot;
 
-    /// <summary>Puts the content in the native window, which exists now, and follows the theme from then on.</summary>
+    /// <summary>
+    /// Readies the native window, which exists now, for the material: its frame, and for a panel or popup no fade, peek,
+    /// rounding or border. Then puts the content in it and follows the theme from then on.
+    /// </summary>
     public void Attach()
     {
         // The material shows wherever the content is transparent.

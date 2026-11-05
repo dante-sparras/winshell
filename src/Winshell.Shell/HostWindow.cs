@@ -3,9 +3,10 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>
-/// The native window behind a shell window, and its life. It makes the window and the parts that own its
-/// <see cref="Placement"/>, <see cref="Presentation"/> and <see cref="Messages"/>, and lets go of them when its client
-/// disposes it or Windows destroys it. A window that throws while handling a message stops, and its client makes another.
+/// The native window behind a shell window, and its life. It makes the window with its three parts,
+/// <see cref="Placement"/>, <see cref="Presentation"/> and <see cref="Messages"/>, and releases the window, its place
+/// and its content when its client disposes it or Windows destroys it. A window that throws while handling a message
+/// stops, and its client makes another.
 /// </summary>
 internal sealed class HostWindow : IDisposable
 {
@@ -20,14 +21,14 @@ internal sealed class HostWindow : IDisposable
         _platform = platform;
         Kind = kind;
         Client = client;
+        Presentation = new HostPresentation(this, platform);
+        Messages = new HostMessages(this, platform, dismissMenu);
         var (style, exStyle) = Styles(kind);
         _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage);
         Handle = _window.Handle;
-        // The handler gets no message until Create returns, and nothing here pumps one, so every part exists before
-        // the first message. Their constructors send and pump none; the presentation attaches its island below.
+        // The handler gets no message until Create returns, and the placement's constructor sends and pumps none, so
+        // every part exists before the first message.
         Placement = new HostPlacement(this, platform);
-        Presentation = new HostPresentation(this, platform);
-        Messages = new HostMessages(this, platform, dismissMenu);
         // A window that could not be finished is destroyed here; its client never gets it to dispose.
         try
         {
