@@ -163,7 +163,7 @@ public sealed class FloatingWindow : ShellWindow
 
     private protected override void ApplyPlacement()
     {
-        Host!.SetFloating(new FloatingPlacement(
+        Host!.Placement.SetFloating(new FloatingPlacement(
             Screen,
             _title,
             double.IsNaN(Width) ? 640 : Width,

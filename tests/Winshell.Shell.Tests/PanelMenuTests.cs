@@ -22,7 +22,7 @@ public sealed class PanelMenuTests
             if (mouseActivation)
                 Assert.Equal(Win32.MA_NOACTIVATE, Win32.SendMessageW(host.Handle, Win32.WM_MOUSEACTIVATE, 0, 0));
             else
-                host.Press();
+                host.Messages.Press();
 
             Assert.True(dismissalRequested);
             Assert.Equal(foreground, Win32.GetForegroundWindow());

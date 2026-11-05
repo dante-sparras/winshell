@@ -118,13 +118,13 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         if (_placement is not { } f)
             return null;
         if (f.MinimumSize.Width > 0)
-            info.ptMinTrackSize.X = (int)(f.MinimumSize.Width * host.Scale);
+            info.ptMinTrackSize.X = (int)(f.MinimumSize.Width * host.Placement.Scale);
         if (f.MinimumSize.Height > 0)
-            info.ptMinTrackSize.Y = (int)(f.MinimumSize.Height * host.Scale);
+            info.ptMinTrackSize.Y = (int)(f.MinimumSize.Height * host.Placement.Scale);
         if (f.MaximumSize.Width > 0)
-            info.ptMaxTrackSize.X = (int)(f.MaximumSize.Width * host.Scale);
+            info.ptMaxTrackSize.X = (int)(f.MaximumSize.Width * host.Placement.Scale);
         if (f.MaximumSize.Height > 0)
-            info.ptMaxTrackSize.Y = (int)(f.MaximumSize.Height * host.Scale);
+            info.ptMaxTrackSize.Y = (int)(f.MaximumSize.Height * host.Placement.Scale);
         return 0;
     }
 
@@ -136,8 +136,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             _lastWidth = placement.Width;
             _lastHeight = placement.Height;
             var dpi = Win32.GetDpiForWindow(Handle);
-            host.Scale = dpi / 96.0;
-            var client = new RECT(0, 0, (int)Math.Round(placement.Width * host.Scale), (int)Math.Round(placement.Height * host.Scale));
+            host.Placement.Scale = dpi / 96.0;
+            var client = new RECT(0, 0, (int)Math.Round(placement.Width * host.Placement.Scale), (int)Math.Round(placement.Height * host.Placement.Scale));
             var (style, ex) = HostWindow.Styles(WindowKind.Floating);
             Win32.AdjustWindowRectExForDpi(ref client, style, false, ex, dpi);
             int x, y;
@@ -156,7 +156,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             Win32.SetWindowPos(Handle, 0, x, y, client.Width, client.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
             _placed = true;
         }
-        if (host.IsVisible)
+        if (host.Placement.IsVisible)
         {
             if (placement.Minimized && !Win32.IsIconic(Handle))
                 Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
@@ -195,7 +195,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         SetStyle(saved.Style);
         Reframe();
         var monitor = Screens.Find(saved.MonitorId) ?? CurrentMonitor();
-        var scale = host.Scale > 0 ? host.Scale : saved.Scale;
+        var scale = host.Placement.Scale > 0 ? host.Placement.Scale : saved.Scale;
         if (monitor is not null && saved.Matches(monitor.Info.Id, monitor.Bounds, scale) && saved.HasPlacement)
         {
             var next = saved.Placement;
@@ -206,7 +206,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
                 next.Flags &= ~Win32.WPF_RESTORETOMAXIMIZED;
             if (Win32.SetWindowPlacement(Handle, next))
             {
-                host.UpdateSize();
+                host.Placement.UpdateSize();
                 return;
             }
         }
@@ -217,7 +217,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         }
         var rect = saved.RectOn(monitor.Bounds, scale);
         PlaceOuter(rect);
-        if (!host.IsVisible)
+        if (!host.Placement.IsVisible)
             return;
         var maximized = placement.StateRequested ? placement.Maximized : saved.Maximized;
         var minimized = placement.StateRequested ? placement.Minimized : saved.Minimized;
@@ -231,7 +231,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
 
     private uint Shown(SavedFloatingPlace saved)
     {
-        if (!host.IsVisible)
+        if (!host.Placement.IsVisible)
             return (uint)Win32.SW_HIDE;
         if (saved.Minimized)
             return (uint)Win32.SW_SHOWMINIMIZED;
@@ -249,7 +249,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
     {
         var monitor = CurrentMonitor();
         var dpi = Win32.GetDpiForWindow(Handle);
-        var scale = dpi == 0 ? monitor?.Scale ?? host.Scale : dpi / 96.0;
+        var scale = dpi == 0 ? monitor?.Scale ?? host.Placement.Scale : dpi / 96.0;
         if (scale <= 0)
             scale = 1;
         var bounds = monitor?.Bounds ?? default;
@@ -327,7 +327,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         PlaceOuter(bounds);
     }
 
-    private void PlaceOuter(RECT rect) => host.Move(rect, 0, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+    private void PlaceOuter(RECT rect) => host.Placement.Move(rect, 0, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
 
     private void ApplyCorners(int preference) =>
         Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
