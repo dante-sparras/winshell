@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Winshell.Native;
 
@@ -23,7 +22,7 @@ internal interface IVirtualDesktopSource
 }
 
 /// <summary>The build Windows reports, from <c>RtlGetVersion</c> rather than the version a manifest can change.</summary>
-internal readonly partial record struct WindowsVersion(uint Build, uint Update)
+internal readonly record struct WindowsVersion(uint Build, uint Update)
 {
     public override string ToString() => Update == 0 ? Build.ToString(CultureInfo.InvariantCulture) : $"{Build}.{Update}";
 
@@ -31,13 +30,7 @@ internal readonly partial record struct WindowsVersion(uint Build, uint Update)
 
     private static WindowsVersion? _current;
 
-    public static WindowsVersion Read()
-    {
-        var info = new OsVersionInfo { Size = (uint)Marshal.SizeOf<OsVersionInfo>() };
-        if (RtlGetVersion(ref info) < 0)
-            return new(0, 0);
-        return new(info.Build, ReadUpdate());
-    }
+    public static WindowsVersion Read() => OsVersion.Build() is { } build ? new(build, ReadUpdate()) : new(0, 0);
 
     private static uint ReadUpdate()
     {
@@ -56,20 +49,6 @@ internal readonly partial record struct WindowsVersion(uint Build, uint Update)
             return 0;
         }
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private unsafe struct OsVersionInfo
-    {
-        public uint Size;
-        public uint Major;
-        public uint Minor;
-        public uint Build;
-        public uint PlatformId;
-        public fixed char ServicePack[128];
-    }
-
-    [LibraryImport("ntdll.dll")]
-    private static partial int RtlGetVersion(ref OsVersionInfo info);
 }
 
 /// <summary>
@@ -78,14 +57,9 @@ internal readonly partial record struct WindowsVersion(uint Build, uint Update)
 /// different slots, so <see cref="DesktopContract"/> refuses every other build. A failed read never calls create,
 /// switch or remove. Which desktop a window is on is <see cref="WindowDesktop"/>'s.
 /// </summary>
-internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
+internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
 {
     public static VirtualDesktopBroker Shared { get; } = new();
-
-    private const uint ClsctxLocalServer = 4;
-
-    private static readonly Guid ImmersiveShellClass = new("C2F03A33-21F5-47FA-B4BB-156362A2F239");
-    private static readonly Guid InternalService = new("C5E0CDCA-7B6E-41B2-9FC4-D93975CC467B");
 
     public DesktopContract Contract
     {
@@ -108,377 +82,35 @@ internal sealed partial class VirtualDesktopBroker : IVirtualDesktopSource
     public bool TryRead(out IReadOnlyList<DesktopRecord> desktops, out Guid current, out string error)
     {
         desktops = [];
-        current = Guid.Empty;
-        error = "";
-        if (!TryInternal(out var manager, out error) || manager is null)
+        if (!ImmersiveDesktops.TryRead(out var entries, out current, out error))
             return false;
-
-        nint arrayPointer = 0;
-        object? arrayObject = null;
-        var held = new List<object>();
-        try
-        {
-            var hr = manager.GetCount(out var count);
-            if (hr < 0)
-            {
-                error = $"failed: GetCount {Hex(hr)}";
-                return false;
-            }
-            if (count is 0 or > 128)
-            {
-                error = $"failed: GetCount returned {count}";
-                return false;
-            }
-
-            hr = manager.GetDesktops(out arrayPointer);
-            if (hr < 0 || arrayPointer == 0)
-            {
-                error = $"failed: GetDesktops {Hex(hr)}";
-                return false;
-            }
-            arrayObject = Marshal.GetObjectForIUnknown(arrayPointer);
-            var array = (IObjectArray)arrayObject;
-            hr = array.GetCount(out var listed);
-            if (hr < 0 || listed != count)
-            {
-                error = $"failed: the desktop list has {listed} entries after GetCount returned {count} ({Hex(hr)})";
-                return false;
-            }
-
-            var iid = typeof(IVirtualDesktop).GUID;
-            var records = new DesktopRecord[count];
-            for (uint i = 0; i < count; i++)
-            {
-                hr = array.GetAt(i, in iid, out var item);
-                if (hr < 0)
-                {
-                    error = $"failed: GetAt {i} {Hex(hr)}";
-                    return false;
-                }
-                held.Add(item);
-                var desktop = (IVirtualDesktop)item;
-                hr = desktop.GetId(out var id);
-                if (hr < 0 || id == Guid.Empty)
-                {
-                    error = $"failed: desktop {i} has no id ({Hex(hr)})";
-                    return false;
-                }
-                records[i] = new DesktopRecord(id, ReadName(desktop));
-            }
-
-            hr = manager.GetCurrentDesktop(out var currentPointer);
-            if (hr < 0 || currentPointer == 0)
-            {
-                error = $"failed: GetCurrentDesktop {Hex(hr)}";
-                return false;
-            }
-            try
-            {
-                var currentObject = Marshal.GetObjectForIUnknown(currentPointer);
-                held.Add(currentObject);
-                hr = ((IVirtualDesktop)currentObject).GetId(out current);
-            }
-            finally
-            {
-                Marshal.Release(currentPointer);
-            }
-            if (hr < 0 || current == Guid.Empty)
-            {
-                error = $"failed: the current desktop has no id ({Hex(hr)})";
-                current = Guid.Empty;
-                return false;
-            }
-
-            desktops = records;
-            error = "";
-            return true;
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            error = $"failed: {ex.GetType().Name}";
-            desktops = [];
-            current = Guid.Empty;
-            return false;
-        }
-        finally
-        {
-            if (arrayPointer != 0)
-                Marshal.Release(arrayPointer);
-            foreach (var item in held)
-                Release(item);
-            Release(arrayObject);
-            Release(manager);
-        }
+        desktops = entries.Select(entry => new DesktopRecord(entry.Id, entry.Name)).ToList();
+        return true;
     }
 
     public bool SwitchTo(Guid id)
     {
-        if (!WithDesktop(id, out var manager, out var pointer) || manager is null)
-            return false;
-        try
-        {
-            var hr = manager.SwitchDesktop(pointer);
-            if (hr < 0)
-                Log.Default.Warn("desktops", $"SwitchDesktop failed ({Hex(hr)}).");
-            return hr >= 0;
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            Log.Default.Warn("desktops", $"SwitchDesktop failed ({ex.GetType().Name}).");
-            return false;
-        }
-        finally
-        {
-            Marshal.Release(pointer);
-            Release(manager);
-        }
+        if (ImmersiveDesktops.SwitchTo(id, out var problem))
+            return true;
+        Log.Default.Warn("desktops", $"SwitchDesktop {problem}.");
+        return false;
     }
 
     public Guid? Create()
     {
-        if (!TryInternal(out var manager, out var error) || manager is null)
-        {
-            Log.Default.Warn("desktops", $"CreateDesktop did not run ({error}).");
-            return null;
-        }
-        nint pointer = 0;
-        object? created = null;
-        try
-        {
-            var hr = manager.CreateDesktop(out pointer);
-            if (hr < 0 || pointer == 0)
-            {
-                Log.Default.Warn("desktops", $"CreateDesktop failed ({Hex(hr)}).");
-                return null;
-            }
-            created = Marshal.GetObjectForIUnknown(pointer);
-            hr = ((IVirtualDesktop)created).GetId(out var id);
-            if (hr < 0 || id == Guid.Empty)
-            {
-                Log.Default.Warn("desktops", $"CreateDesktop returned a desktop with no id ({Hex(hr)}).");
-                return null;
-            }
+        if (ImmersiveDesktops.Create(out var problem) is { } id)
             return id;
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            Log.Default.Warn("desktops", $"CreateDesktop failed ({ex.GetType().Name}).");
-            return null;
-        }
-        finally
-        {
-            if (pointer != 0)
-                Marshal.Release(pointer);
-            Release(created);
-            Release(manager);
-        }
+        Log.Default.Warn("desktops", $"CreateDesktop {problem}.");
+        return null;
     }
 
     public bool Remove(Guid id, Guid fallback)
     {
         if (id == Guid.Empty || fallback == Guid.Empty || id == fallback)
             return false;
-        if (!TryInternal(out var manager, out var error) || manager is null)
-        {
-            Log.Default.Warn("desktops", $"RemoveDesktop did not run ({error}).");
-            return false;
-        }
-        nint destroy = 0, onto = 0;
-        try
-        {
-            if (!TryFind(manager, id, out destroy) || !TryFind(manager, fallback, out onto))
-            {
-                Log.Default.Warn("desktops", "RemoveDesktop could not find the desktop or its fallback.");
-                return false;
-            }
-            var hr = manager.RemoveDesktop(destroy, onto);
-            if (hr < 0)
-                Log.Default.Warn("desktops", $"RemoveDesktop failed ({Hex(hr)}).");
-            return hr >= 0;
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            Log.Default.Warn("desktops", $"RemoveDesktop failed ({ex.GetType().Name}).");
-            return false;
-        }
-        finally
-        {
-            if (destroy != 0)
-                Marshal.Release(destroy);
-            if (onto != 0)
-                Marshal.Release(onto);
-            Release(manager);
-        }
-    }
-
-    private bool WithDesktop(Guid id, out IVirtualDesktopManagerInternal? manager, out nint pointer)
-    {
-        pointer = 0;
-        if (!TryInternal(out manager, out var error) || manager is null)
-        {
-            Log.Default.Warn("desktops", $"SwitchDesktop did not run ({error}).");
-            return false;
-        }
-        if (TryFind(manager, id, out pointer))
+        if (ImmersiveDesktops.Remove(id, fallback, out var problem))
             return true;
-        Release(manager);
-        manager = null;
-        Log.Default.Warn("desktops", "SwitchDesktop could not find that desktop.");
+        Log.Default.Warn("desktops", $"RemoveDesktop {problem}.");
         return false;
     }
-
-    private static bool TryInternal(out IVirtualDesktopManagerInternal? manager, out string error)
-    {
-        manager = null;
-        error = "";
-        var providerId = typeof(IServiceProvider).GUID;
-        var hr = Win32.CoCreateInstance(in ImmersiveShellClass, 0, ClsctxLocalServer, in providerId, out var shellPointer);
-        if (hr < 0 || shellPointer == 0)
-        {
-            error = $"unavailable: immersive shell {Hex(hr)}";
-            return false;
-        }
-
-        object? shellObject = null;
-        nint managerPointer = 0;
-        try
-        {
-            shellObject = Marshal.GetObjectForIUnknown(shellPointer);
-            var shell = (IServiceProvider)shellObject;
-            var iid = typeof(IVirtualDesktopManagerInternal).GUID;
-            var service = InternalService;
-            hr = shell.QueryService(in service, in iid, out managerPointer);
-            if (hr < 0 || managerPointer == 0)
-            {
-                error = $"unavailable: virtual desktop service {Hex(hr)}";
-                return false;
-            }
-            manager = (IVirtualDesktopManagerInternal)Marshal.GetObjectForIUnknown(managerPointer);
-            return true;
-        }
-        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
-        {
-            error = $"unavailable: {ex.GetType().Name}";
-            manager = null;
-            return false;
-        }
-        finally
-        {
-            Marshal.Release(shellPointer);
-            if (managerPointer != 0)
-                Marshal.Release(managerPointer);
-            Release(shellObject);
-        }
-    }
-
-    private static bool TryFind(IVirtualDesktopManagerInternal manager, Guid id, out nint pointer)
-    {
-        pointer = 0;
-        var hr = manager.GetDesktops(out var arrayPointer);
-        if (hr < 0 || arrayPointer == 0)
-            return false;
-        object? arrayObject = null;
-        var held = new List<object>();
-        try
-        {
-            arrayObject = Marshal.GetObjectForIUnknown(arrayPointer);
-            var array = (IObjectArray)arrayObject;
-            if (array.GetCount(out var count) < 0 || count > 128)
-                return false;
-            var iid = typeof(IVirtualDesktop).GUID;
-            for (uint i = 0; i < count; i++)
-            {
-                if (array.GetAt(i, in iid, out var item) < 0)
-                    return false;
-                held.Add(item);
-                var desktop = (IVirtualDesktop)item;
-                if (desktop.GetId(out var found) < 0 || found != id)
-                    continue;
-                pointer = Marshal.GetComInterfaceForObject(desktop, typeof(IVirtualDesktop));
-                return true;
-            }
-            return false;
-        }
-        finally
-        {
-            Marshal.Release(arrayPointer);
-            foreach (var item in held)
-                Release(item);
-            Release(arrayObject);
-        }
-    }
-
-    private static string ReadName(IVirtualDesktop desktop)
-    {
-        if (desktop.GetName(out var name) < 0 || name == 0)
-            return "";
-        try
-        {
-            return Marshal.PtrToStringUni(WindowsGetStringRawBuffer(name, out _)) ?? "";
-        }
-        finally
-        {
-            _ = Win32.WindowsDeleteString(name);
-        }
-    }
-
-    private static void Release(object? com)
-    {
-        if (com is not null && Marshal.IsComObject(com))
-            Marshal.ReleaseComObject(com);
-    }
-
-    private static string Hex(int hr) => $"0x{hr:X8}";
-
-    [LibraryImport("combase.dll")]
-    private static partial nint WindowsGetStringRawBuffer(nint hstring, out uint length);
-}
-
-[ComImport]
-[Guid("6D5140C1-7436-11CE-8034-00AA006009FA")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IServiceProvider
-{
-    [PreserveSig] int QueryService(in Guid service, in Guid iid, out nint instance);
-}
-
-/// <summary>
-/// The internal desktop manager on builds 26100 through 26399. Slots Windows inserted in 24H2 stay, including
-/// <c>MoveDesktop</c>, which is not called: removing it would move <c>RemoveDesktop</c> onto the wrong slot.
-/// </summary>
-[ComImport]
-[Guid("53F5CA0B-158F-4124-900C-057158060B27")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IVirtualDesktopManagerInternal
-{
-    [PreserveSig] int GetCount(out uint count);
-    [PreserveSig] int MoveViewToDesktop(nint view, nint desktop);
-    [PreserveSig] int CanViewMoveDesktops(nint view, out int canMove);
-    [PreserveSig] int GetCurrentDesktop(out nint desktop);
-    [PreserveSig] int GetDesktops(out nint desktops);
-    [PreserveSig] int GetAdjacentDesktop(nint desktop, int direction, out nint adjacent);
-    [PreserveSig] int SwitchDesktop(nint desktop);
-    [PreserveSig] int SwitchDesktopAndMoveForegroundView(nint desktop);
-    [PreserveSig] int CreateDesktop(out nint desktop);
-    [PreserveSig] int MoveDesktop(nint desktop, int index);
-    [PreserveSig] int RemoveDesktop(nint destroy, nint fallback);
-}
-
-[ComImport]
-[Guid("3F07F4BE-B107-441A-AF0F-39D82529072C")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IVirtualDesktop
-{
-    [PreserveSig] int IsViewVisible(nint view, out int visible);
-    [PreserveSig] int GetId(out Guid id);
-    [PreserveSig] int GetName(out nint name);
-}
-
-[ComImport]
-[Guid("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IObjectArray
-{
-    [PreserveSig] int GetCount(out uint count);
-    [PreserveSig] int GetAt(uint index, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object item);
 }

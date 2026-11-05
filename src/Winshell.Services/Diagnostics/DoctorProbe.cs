@@ -5,7 +5,6 @@ using Windows.UI.Notifications.Management;
 using Winshell.Native;
 using Winshell.Notifications;
 using Winshell.Session;
-using Winshell.Windows;
 
 namespace Winshell.Diagnostics;
 
@@ -160,7 +159,7 @@ internal static class DoctorProbe
         var result = new List<DoctorScreens.WindowFacts>();
         foreach (var hwnd in TopLevelWindows.List())
         {
-            if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || NativeMethods.IsCloaked(hwnd) || !Win32.GetWindowRect(hwnd, out var rect))
+            if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || TopLevelWindows.IsCloaked(hwnd) || !Win32.GetWindowRect(hwnd, out var rect))
                 continue;
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
             result.Add(new DoctorScreens.WindowFacts(TopLevelWindows.ClassName(hwnd), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));

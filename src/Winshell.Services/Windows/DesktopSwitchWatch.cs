@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Windows;
@@ -7,7 +6,7 @@ namespace Winshell.Windows;
 /// Raises <see cref="Fired"/> on the UI thread when Windows switches virtual desktop. The hook stays for the
 /// process, the same way the window list's hooks do.
 /// </summary>
-internal static unsafe class DesktopSwitchWatch
+internal static class DesktopSwitchWatch
 {
     private static IEventLoop? _loop;
     private static bool _posted;
@@ -19,12 +18,11 @@ internal static unsafe class DesktopSwitchWatch
         if (_loop is not null)
             return;
         _loop = loop;
-        if (Win32.SetWinEventHook(Win32.EVENT_SYSTEM_DESKTOPSWITCH, Win32.EVENT_SYSTEM_DESKTOPSWITCH, 0, &OnEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT) == 0)
+        if (!WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent))
             log.Warn("desktops", "SetWinEventHook failed for a desktop switch; the list updates only after Winshell changes a desktop");
     }
 
-    [UnmanagedCallersOnly]
-    private static void OnEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time) =>
+    private static void OnEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
         NativeCallback.Guard(Log.Default, "desktops", () =>
         {
             if (_posted || _loop is null)

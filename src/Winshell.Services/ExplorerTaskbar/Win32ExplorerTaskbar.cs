@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.ExplorerTaskbar;
@@ -8,7 +9,7 @@ namespace Winshell.ExplorerTaskbar;
 /// registering it again would make it reserve an edge. This is the only type that calls Win32 on
 /// <c>Shell_TrayWnd</c> or <c>Shell_SecondaryTrayWnd</c>.
 /// </summary>
-internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
+internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
 {
     private readonly List<Saved> _saved = [];
     private uint _callback;
@@ -91,7 +92,7 @@ internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
         return (state & Win32.ABS_AUTOHIDE) != 0;
     }
 
-    private static unsafe bool TryPosition(nint hwnd, bool primary, out uint edge, out RECT rect)
+    private static bool TryPosition(nint hwnd, bool primary, out uint edge, out RECT rect)
     {
         if (primary)
         {
@@ -113,18 +114,17 @@ internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
         return false;
     }
 
-    private static unsafe uint EdgeOf(nint hwnd, RECT window)
+    private static uint EdgeOf(nint hwnd, RECT window)
     {
-        var info = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
-        var monitor = Win32.GetMonitorInfo(Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST), ref info)
-            ? info.rcMonitor
+        var monitor = Monitors.TryRead(Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST), out var info)
+            ? info.Bounds
             : window;
         if (window.Height <= window.Width)
             return Math.Abs(window.Top - monitor.Top) < Math.Abs(monitor.Bottom - window.Bottom) ? Win32.ABE_TOP : Win32.ABE_BOTTOM;
         return Math.Abs(window.Left - monitor.Left) < Math.Abs(monitor.Right - window.Right) ? Win32.ABE_LEFT : Win32.ABE_RIGHT;
     }
 
-    private static unsafe APPBARDATA AppBar(nint hwnd) => new() { cbSize = (uint)sizeof(APPBARDATA), hWnd = hwnd };
+    private static APPBARDATA AppBar(nint hwnd) => new() { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
 
     /// <summary>Explorer's windows of that class. The tray host makes a <c>Shell_TrayWnd</c> of its own in this process.</summary>
     private static List<nint> Windows(string className)
@@ -140,14 +140,8 @@ internal sealed unsafe class Win32ExplorerTaskbar : IExplorerTaskbar
     }
 
     /// <summary>False when the handle was destroyed or reused, so restore does not show some other window.</summary>
-    private static unsafe bool IsExplorerTaskbar(nint hwnd)
-    {
-        if (!Win32.IsWindow(hwnd))
-            return false;
-        var buffer = stackalloc char[64];
-        var got = Win32.GetClassNameW(hwnd, buffer, 64);
-        return got > 0 && new string(buffer, 0, got) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
-    }
+    private static bool IsExplorerTaskbar(nint hwnd) =>
+        Win32.IsWindow(hwnd) && TopLevelWindows.ClassName(hwnd) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
 
     private sealed class Saved
     {

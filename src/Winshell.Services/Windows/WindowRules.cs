@@ -140,7 +140,7 @@ internal static class WindowRules
             or Win32.EVENT_OBJECT_HIDE;
 
     /// <summary>Whether a shell hook message is <c>HSHELL_FLASH</c>: a window flashed to ask for attention.</summary>
-    public static bool IsFlash(nint code) => code == (NativeMethods.HSHELL_REDRAW | NativeMethods.HSHELL_HIGHBIT);
+    public static bool IsFlash(nint code) => code == ShellHookWindow.Flash;
 
     /// <summary>
     /// Keeps the windows that want attention current, as the taskbar does: a window wants it from when it flashes
