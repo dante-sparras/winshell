@@ -5,9 +5,10 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary>
-/// <c>winshell reload</c> builds a configuration project and then asks the instance to start the next process.
-/// A build that fails leaves that instance running and tells it to show the notice. These tests edit and rebuild the
-/// probe, so they build one of their own that no other test starts.
+/// <c>winshell reload</c> builds a configuration project and then asks the instance to start the next process, or under
+/// <c>winshell run</c> asks it to quit for its supervisor to start. A build that fails leaves that instance running and
+/// tells it to show the notice. These tests edit and rebuild the probe, so they build one of their own that no other test
+/// starts. A probe can hide Explorer's real taskbar, which is put back however a test ends.
 /// </summary>
 [Trait("Category", "Slow")]
 public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadCommandTests.OwnProbe>
@@ -20,6 +21,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     private readonly string _config;
     private readonly OwnProbe _probe;
     private readonly List<Process> _started = [];
+    private readonly bool _taskbarHidden = ExplorerTaskbarRecovery.AnyHidden();
 
     /// <summary>
     /// The probe these tests build and edit, once for the class. The shared one is built first, so that no other build
@@ -96,7 +98,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         try
         {
             File.WriteAllText(source, original + "\n// rebuilt\n");
-            var result = Reload(process);
+            var result = Reload(process.Id);
 
             Assert.Equal("", result.Error);
             Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
@@ -132,10 +134,115 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         }
     }
 
+    /// <summary>
+    /// The supervisor starts the edit a reload built, beside the program that ran, and owns it: it starts it again after
+    /// a crash, with the taskbar that shell hid back.
+    /// </summary>
+    [Fact(Timeout = BuildTimeout)]
+    public void A_reload_under_winshell_run_stays_supervised()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        Assert.False(_taskbarHidden, "Explorer's taskbar was hidden before the test.");
+        var source = Path.Combine(_probe.Folder, "Program.cs");
+        var original = File.ReadAllText(source);
+        var run = Supervise();
+        try
+        {
+            var first = NextPid(0, shellId: null);
+            // Once the shell's thread answers, its configuration has started and will not see the marker.
+            Assert.Equal(0, Run("ipc", "--pid", first.ToString(CultureInfo.InvariantCulture), "show").Code);
+            var marker = Path.Combine(_config, ProbeShell.HideTaskbarMarker);
+            File.WriteAllText(marker, "");
+            File.WriteAllText(source, original.Replace("?? \"probe\"", "?? \"reloaded\"", StringComparison.Ordinal));
+
+            Reload(first);
+
+            var second = NextPid(first, "reloaded");
+            Wait.Until(() => !File.Exists(marker), "the reloaded shell to hide the taskbar");
+            Assert.True(ExplorerTaskbarRecovery.AnyHidden());
+            // Ended without its cleanup, as a crash would end it.
+            using (var crashed = Process.GetProcessById(second))
+            {
+                crashed.Kill();
+                crashed.WaitForExit();
+            }
+            NextPid(second, "reloaded");
+            Assert.False(ExplorerTaskbarRecovery.AnyHidden());
+            Assert.False(run.HasExited);
+        }
+        finally
+        {
+            File.WriteAllText(source, original);
+        }
+    }
+
+    /// <summary>A reload ends a shell that does not finish quitting, so its supervisor can start the next one.</summary>
+    [Fact(Timeout = BuildTimeout)]
+    public void A_reload_under_winshell_run_ends_a_shell_that_hangs_on_its_way_out()
+    {
+        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
+        var hang = Path.Combine(_config, ProbeShell.HangMarker);
+        File.WriteAllText(hang, "");
+        var run = Supervise();
+        var shell = NextPid(0, shellId: null);
+        var pidFile = Path.Combine(_config, "child.pid");
+        Wait.Until(() => File.Exists(pidFile), "the shell's program to start");
+        // Only this shell hangs.
+        File.Delete(hang);
+        using var program = Process.GetProcessById(int.Parse(File.ReadAllText(pidFile), CultureInfo.InvariantCulture));
+        using var hung = Process.GetProcessById(shell);
+        try
+        {
+            Reload(shell);
+
+            Assert.True(hung.HasExited);
+            NextPid(shell, shellId: null);
+            Assert.False(run.HasExited);
+        }
+        finally
+        {
+            program.Kill();
+            program.WaitForExit(5000);
+        }
+    }
+
+    /// <summary>Starts <c>winshell run</c> on this class's probe, which runs its last build.</summary>
+    private Process Supervise()
+    {
+        var info = WinshellCli.StartInfo(["run", "--no-build", "-p", _probe.Folder]);
+        info.Environment["WINSHELL_CONFIG_DIR"] = _config;
+        info.Environment["WINSHELL_LOCAL_DIR"] = _local;
+        var run = Process.Start(info)!;
+        _started.Add(run);
+        // Read the output so the supervisor never blocks on a full pipe.
+        run.ErrorDataReceived += (_, _) => { };
+        run.OutputDataReceived += (_, _) => { };
+        run.BeginErrorReadLine();
+        run.BeginOutputReadLine();
+        return run;
+    }
+
+    /// <summary>The process id of a listed shell other than <paramref name="previous"/>, with <paramref name="shellId"/> when it is given.</summary>
+    private int NextPid(int previous, string? shellId)
+    {
+        var pid = 0;
+        Wait.Until(
+            () =>
+            {
+                pid = Listed()
+                    .Where(row => row.GetProperty("pid").GetInt32() != previous && (shellId is null || row.GetProperty("shellId").GetString() == shellId))
+                    .Select(row => row.GetProperty("pid").GetInt32())
+                    .FirstOrDefault();
+                return pid != 0;
+            },
+            $"a shell after {previous} in winshell list");
+        return pid;
+    }
+
     private Process ReloadTo(Process running, string original, string shellId)
     {
         File.WriteAllText(Path.Combine(_probe.Folder, "Program.cs"), original.Replace("?? \"probe\"", $"?? \"{shellId}\"", StringComparison.Ordinal));
-        Reload(running);
+        Reload(running.Id);
         Wait.Until(() => running.HasExited, "the old process to exit");
         var pid = 0;
         Wait.Until(
@@ -150,10 +257,10 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         return next;
     }
 
-    /// <summary>Reloads <paramref name="running"/>, failing with what the reload printed unless it exits 0.</summary>
-    private (int Code, string Output, string Error) Reload(Process running)
+    /// <summary>Reloads the shell <paramref name="pid"/>, failing with what the reload printed unless it exits 0.</summary>
+    private (int Code, string Output, string Error) Reload(int pid)
     {
-        var result = Run("reload", "--pid", running.Id.ToString(CultureInfo.InvariantCulture));
+        var result = Run("reload", "--pid", pid.ToString(CultureInfo.InvariantCulture));
         Assert.True(result.Code == 0, $"Reload exited {result.Code}.\n{result.Output}\n{result.Error}");
         return result;
     }
@@ -221,6 +328,9 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             }
             process.Dispose();
         }
+        // A test that failed can leave the taskbar its probe hid. One that another program hid stays hidden.
+        if (!_taskbarHidden)
+            ExplorerTaskbarRecovery.Restore();
         try
         {
             Directory.Delete(_dir, true);

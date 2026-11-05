@@ -6,6 +6,8 @@ namespace Winshell;
 /// could not start and said why, which a new start would only repeat. Any other exit is a crash, unless <c>winshell kill</c>
 /// or <c>winshell reload</c> had asked the shell to stop. The next start waits 1, 2, 4, 8 and then 10 seconds, and the
 /// sixth crash in a row ends supervision. A shell that ran for a minute was running well, so its crash counts as the first.
+/// A shell <c>winshell reload</c> asked to quit for its supervisor starts again at once, however it exits, and counts
+/// its crashes from none, as the first did.
 /// </summary>
 /// <remarks>
 /// A shell that exits 0 has put Explorer's taskbar back itself. After any other exit, the taskbar comes back if none of
@@ -34,7 +36,7 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
         {
             var hidden = taskbarHidden();
             var started = time.GetTimestamp();
-            var exit = (Code: 1, StopAsked: false);
+            var exit = (Code: 1, StopAsked: false, ReloadAsked: false);
             try
             {
                 exit = await RunOnceAsync(stop);
@@ -45,7 +47,14 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
                     restoreTaskbar();
             }
             var code = exit.Code;
-            if (code is 0 or 1 || exit.StopAsked || stop.IsCancellationRequested)
+            if (exit.StopAsked || stop.IsCancellationRequested)
+                return code;
+            if (exit.ReloadAsked)
+            {
+                crashes = 0;
+                continue;
+            }
+            if (code is 0 or 1)
                 return code;
             crashes = time.GetElapsedTime(started) >= RunningWell ? 1 : crashes + 1;
             if (crashes == CrashesBeforeGivingUp)
@@ -67,11 +76,11 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
     }
 
     /// <summary>One child, to its exit. 1 when it did not start, and the start has said why.</summary>
-    private async Task<(int Code, bool StopAsked)> RunOnceAsync(CancellationToken stop)
+    private async Task<(int Code, bool StopAsked, bool ReloadAsked)> RunOnceAsync(CancellationToken stop)
     {
         using var child = start();
         if (child is null)
-            return (1, false);
+            return (1, false, false);
         int code;
         try
         {
@@ -82,6 +91,6 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
             await child.StopAsync();
             code = await child.Exited;
         }
-        return (code, child.StopAsked);
+        return (code, child.StopAsked, child.ReloadAsked);
     }
 }

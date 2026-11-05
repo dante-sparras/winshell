@@ -119,6 +119,60 @@ public sealed class ShellSupervisorTests
         Assert.Equal(1, _shells.Count);
     }
 
+    /// <summary>
+    /// <c>winshell reload</c> asked the shell to quit for its supervisor. One that crashed on the way out could not put
+    /// the taskbar back.
+    /// </summary>
+    [Theory]
+    [InlineData(0, new[] { "start", "start" })]
+    [InlineData(AccessViolation, new[] { "start", "restore", "start" })]
+    public async Task A_reload_starts_the_shell_again_at_once(int code, string[] events)
+    {
+        var run = Supervise(CancellationToken.None);
+
+        (await _shells.Started(1)).Exit(code, reloadAsked: true);
+        var second = await _shells.Started(2);
+
+        Assert.Equal(events, _shells.Events);
+        second.Exit(0);
+        Assert.Equal(0, await run);
+    }
+
+    [Fact]
+    public async Task A_shell_a_reload_started_waits_as_long_as_the_first_after_its_crash()
+    {
+        var run = Supervise(CancellationToken.None);
+        (await _shells.Started(1)).Exit(AccessViolation);
+        await _time.Waiting();
+        _time.Advance(TimeSpan.FromSeconds(1));
+        (await _shells.Started(2)).Exit(AccessViolation);
+        await _time.Waiting();
+        _time.Advance(TimeSpan.FromSeconds(2));
+        (await _shells.Started(3)).Exit(0, reloadAsked: true);
+
+        (await _shells.Started(4)).Exit(AccessViolation);
+        await _time.Waiting();
+        _time.Advance(TimeSpan.FromSeconds(1) - Tick);
+        Assert.Equal(4, _shells.Count);
+        _time.Advance(Tick);
+        var fifth = await _shells.Started(5);
+
+        fifth.Exit(0);
+        Assert.Equal(0, await run);
+    }
+
+    /// <summary><c>winshell kill</c> came after a reload, before the shell quit.</summary>
+    [Fact]
+    public async Task A_stop_asked_for_after_a_reload_ends_supervision()
+    {
+        var run = Supervise(CancellationToken.None);
+
+        (await _shells.Started(1)).Exit(0, stopAsked: true, reloadAsked: true);
+
+        Assert.Equal(0, await run);
+        Assert.Equal(["start"], _shells.Events);
+    }
+
     [Fact]
     public async Task A_shell_that_does_not_start_ends_supervision_with_the_taskbar_back()
     {
@@ -260,9 +314,12 @@ public sealed class ShellSupervisorTests
 
         public bool StopAsked { get; private set; }
 
-        public void Exit(int code, bool stopAsked = false)
+        public bool ReloadAsked { get; private set; }
+
+        public void Exit(int code, bool stopAsked = false, bool reloadAsked = false)
         {
             StopAsked = stopAsked;
+            ReloadAsked = reloadAsked;
             _exit.SetResult(code);
         }
 

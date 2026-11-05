@@ -128,7 +128,7 @@ Pass `Path.Combine(shell.ConfigRoot, "preferences.toml")` and `shell.Loop`. The 
             shell.Log.Warn("shell", "Reload did not start.");
 ```
 
-That starts this program again with `--after` and quits. It does not build. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over. There is no file watcher. [`winshell dev`](#develop-a-shell) applies each edit as you save.
+That starts this program again with `--after` and quits. It does not build, and the new process runs with no supervisor. `winshell reload` builds first. On failure the running instance stays and a notice shows. On success the new instance takes over, and under `winshell run` it stays supervised: `winshell run` starts it after this one quits. There is no file watcher. [`winshell dev`](#develop-a-shell) applies each edit as you save.
 
 `winshell run --no-build` skips the build. The sign-in entry uses it, so signing in does not need the SDK and does not run a broken edit.
 
