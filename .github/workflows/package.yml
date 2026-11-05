@@ -23,6 +23,8 @@ on:
       - "tests/Winshell.Package.Tests/**"
       - "src/Winshell/Winshell.csproj"
       - "Directory.Build.props"
+      - "Directory.Build.targets"
+      - "BannedSymbols.Interop.txt"
       - "Directory.Packages.props"
       - "global.json"
       - "!**/*.md"

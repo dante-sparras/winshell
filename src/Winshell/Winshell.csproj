@@ -7,7 +7,6 @@
     <RootNamespace>Winshell</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\packaging\winshell.ico</ApplicationIcon>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- WinUI's self-contained payload needs an architecture. A plain build keeps the ordinary folder, so tests find
          winshell.exe. A publish for an architecture keeps its own: sharing obj would give arm64 the x64 ReadyToRun code. -->

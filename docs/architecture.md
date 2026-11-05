@@ -1,6 +1,6 @@
 # Architecture
 
-Winshell is a modular monolith: one program, with assembly boundaries for shared infrastructure and folder boundaries for service features. These are the decided target rules. The migration below introduces them in independently buildable steps; this document does not claim that every boundary is already enforced.
+Winshell is a modular monolith: one program, with assembly boundaries for shared infrastructure and folder boundaries for service features. These are the decided target rules. The migration below introduces them in independently buildable steps; the build enforces the [sealed interop](#sealed-interop) boundary, and the other boundaries are not all enforced yet.
 
 ## Dependency direction
 
@@ -31,7 +31,11 @@ Adopt CsWin32 when introducing Native. Generate Win32 declarations there from an
 
 Keep allocation and release together: handles, COM objects, buffers and callbacks have an explicit owner and lifetime. Callback exceptions must not escape into native code. Put safe operations at this boundary; do not expose the generated declaration set as a public service API or move feature policy into Native.
 
-An analyzer or BannedApi rule must fail the build for interop attributes outside Native. Disable unsafe compilation outside Native as a compiler guard. Apply the rules through shared build configuration so a newly added project is covered automatically. Do not exempt a consumer, suppress the diagnostics or exclude generated consumer code to bypass the boundary.
+The build enforces this in the root `Directory.Build.targets`, for every project except Native. It adds `BannedSymbols.Interop.txt`, so `DllImport`, `LibraryImport`, `ComImport`, `GeneratedComInterface` and `GeneratedComClass` fail with RS0030. Outside WinUI projects it forces `AllowUnsafeBlocks` off, so unsafe code fails with CS0227. It runs after each project file, so setting `AllowUnsafeBlocks` there has no effect. A new project under `src/` or `tests/` is covered without edits. Native keeps the clock ban the other `src/` projects have. Do not exempt a consumer, suppress the diagnostics or exclude generated consumer code to bypass the boundary.
+
+A project with `UseWinUI` keeps unsafe compilation, because CsWinRT generates its trim-safe vtables and generic instantiations only when unsafe code is allowed. Hand-written unsafe code there is still forbidden; the [architecture tests](#architecture-proof) check for it. The interop ban applies to WinUI projects too.
+
+The one exception is the Windows App SDK's `UndockedRegFreeWinRT-AutoInitializer.cs`, which its package adds to each self-contained WinUI executable. It is package startup code we don't own, not our interop, so only that file, matched by its path in the NuGet package folder, drops the ban. Any `[DllImport]` of ours in the same project still fails.
 
 ## Services and feature ownership
 
@@ -65,7 +69,7 @@ Remove the orphan Qml, Runtime and Platform.Windows `bin`/`obj` trees. Verify ea
 
 Add `Winshell.Architecture.Tests` to the normal fast checks. Use NetArchTest or project-reference and compiled dependency guards to enforce downward dependencies and prevent cross-feature backend use. Guard the actual project graph and backend consumers, including implementations, rather than maintaining a list of expected source files. A renamed or newly added backend must still be covered.
 
-The compiler/analyzer owns the interop ban; architecture tests own the assembly and feature boundaries. Demonstrate that each guard rejects a representative forbidden dependency or declaration, then remove that violation. Do not add production hooks solely to exercise the guards.
+The compiler/analyzer owns the interop ban; architecture tests own the assembly and feature boundaries, and check that hand-written sources in WinUI projects contain no unsafe code. Scan the source files, not the compiled assemblies, where CsWinRT's generated unsafe code looks the same. Demonstrate that each guard rejects a representative forbidden dependency or declaration, then remove that violation. Do not add production hooks solely to exercise the guards.
 
 Tests follow the installed `test-audit` skill's gate, [where a test belongs](../CONTRIBUTING.md#where-a-test-belongs) and the [test rules](../CONTRIBUTING.md#write-tests-that-dont-flake). Never weaken a test, skip a failure or add flaky retries. Use fake clocks and real completion signals. A refactor that retains behavior retains its existing proof.
 

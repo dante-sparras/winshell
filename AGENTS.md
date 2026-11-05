@@ -21,7 +21,7 @@ Many agents work on this repo at once.
 - One task is one thread, one issue, one worktree, one branch and one small PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
 - Name the branch `agent/<tool>/<issue#>-<slug>`, such as `agent/claude/123-tray-overflow`, and put `Fixes #<issue#>` in the PR body.
 - Run tasks side by side, and assign them to parallel threads, only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
-- One PR at a time changes a shared file: a `Directory.*.props` such as `Directory.Packages.props`, `global.json`, `nuget.config`, `.editorconfig`, `winshell.slnx`, `src/BannedSymbols.txt`, `tests/TestSupport/`, a lockfile, or a type more than one module uses.
+- One PR at a time changes a shared file: a `Directory.*` build file such as `Directory.Packages.props` or `Directory.Build.targets`, `global.json`, `nuget.config`, `.editorconfig`, `winshell.slnx`, `src/BannedSymbols.txt`, `BannedSymbols.Interop.txt`, `tests/TestSupport/`, a lockfile, or a type more than one module uses.
 - Prefer a stack of small, focused PRs for related work, using `gh stack` (`gh extension install github/gh-stack`). Each layer still owns its issue and worktree; follow the [PR stack workflow](docs/development.md#pull-request-stacks).
 - Use `gh stack init <bottom-branch> [<next-branch> ...]` to adopt branches, `gh stack add <next-branch>` to add a layer, and `gh stack submit` to publish the stack. Check its state with `gh stack view`; update it with `gh stack rebase`, the required checks in each affected worktree, then `gh stack push`.
 
