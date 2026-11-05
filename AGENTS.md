@@ -23,7 +23,6 @@ Many agents work on this repo at once.
 - Run tasks side by side, and assign them to parallel threads, only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
 - One PR at a time changes a shared file: a `Directory.*` build file such as `Directory.Packages.props` or `Directory.Build.targets`, `global.json`, `nuget.config`, `.editorconfig`, `winshell.slnx`, `src/BannedSymbols.txt`, `BannedSymbols.Interop.txt`, `tests/TestSupport/`, a lockfile, or a type more than one module uses.
 - Prefer a stack of small, focused PRs for related work, using `gh stack` (`gh extension install github/gh-stack`). Each layer still owns its issue and worktree; follow the [PR stack workflow](docs/development.md#pull-request-stacks).
-- Use `gh stack init <bottom-branch> [<next-branch> ...]` to adopt branches, `gh stack add <next-branch>` to add a layer, and `gh stack submit` to publish the stack. Check its state with `gh stack view`; update it with `gh stack rebase`, the required checks in each affected worktree, then `gh stack push`.
 
 ### Conflicts and merging
 
@@ -33,7 +32,7 @@ Many agents work on this repo at once.
 2. Resolve each conflict by intent: find the PR that changed the same code with `git log --oneline <your-branch>..origin/main -- <file>`, read it, and keep both behaviors. Taking "ours" or "theirs" wholesale is never a resolution.
 3. If both sides change the same behavior, run `git rebase --abort`, comment on your PR naming the other PR and the collision, and escalate to the lead thread, or to the user if there is none, instead of guessing.
 4. Run the [checks for the change](docs/development.md#checks-by-change) again before you push, even after a clean rebase: it can still break logic.
-5. You own the PR until it merges: fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`. For a standalone PR, enable auto-merge with `gh pr merge <number> --squash --auto`.
+5. You own the PR until it merges: fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`. For a standalone PR, enable auto-merge with `gh pr merge <number> --squash --auto`. A delegated agent hands its PR to the lead thread once auto-merge is on, or once every layer of its stack is open, and the lead sees it to `MERGED`.
 6. For a stack, wait until every PR meets its merge requirements, then merge the whole stack with `gh stack merge <stack-number> --squash` as one operation to avoid intermediate rebases and repeated CI runs.
 
 ## Before you finish
