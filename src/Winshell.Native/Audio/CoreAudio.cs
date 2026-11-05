@@ -44,6 +44,7 @@ internal static class CoreAudio
 
     /// <summary>One of a device's interfaces, such as its endpoint volume.</summary>
     public static T Activate<T>(IMMDevice device)
+        where T : class
     {
         var iid = typeof(T).GUID;
         device.Activate(ref iid, CLSCTX.CLSCTX_ALL, 0, out var obj);
