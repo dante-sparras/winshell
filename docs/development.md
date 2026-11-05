@@ -65,6 +65,24 @@ T3 Code's Winshell project uses worktrees and automatic pulls, with a **Check ta
 
 For agent shell commands, use profile-free PowerShell (`pwsh -NoProfile`, or `login: false` in Codex's command tool). Search with `rg` and read the relevant file section or diff; set a bounded output limit so unrelated output does not hide failures.
 
+### Pull request stacks
+
+Prefer small, focused PR stacks for related work. Each layer still has its own issue, branch, worktree and PR. Create a dependent layer's worktree from its predecessor's branch, then adopt the existing branches in bottom-to-top order with `gh stack init`.
+
+Install the extension once with `gh extension install github/gh-stack`.
+
+| Command | When to use it |
+| --- | --- |
+| `gh stack init <bottom-branch> [<next-branch> ...]` | Start a stack or adopt existing branches, ordered from the branch targeting `main` to the top layer. |
+| `gh stack add <next-branch>` | Create the next branch on top of the stack. Return the current worktree to its previous branch, then use `git worktree add <folder> <next-branch>` for the new layer before editing. |
+| `gh stack view` | Inspect the layers and their PR status. |
+| `gh stack submit` | Fill in each PR's title and description in the interactive editor, then push and publish the stack. Follow the [PR template](../CONTRIBUTING.md#pr-description). Run the required checks in each affected worktree before this command, since it pushes. |
+| `gh stack rebase` | Fetch the latest trunk and rebase each layer onto its updated parent. Resolve conflicts by intent, as [AGENTS.md](../AGENTS.md#conflicts-and-merging) describes. |
+| `gh stack push` | Push updated layers together with explicit leases. Run `pwsh scripts/check.ps1` in each affected worktree after rebasing and before pushing. |
+| `gh stack merge <stack-number> --squash` | Merge the ready stack in one operation, with one squash commit per PR. Every layer must meet its required checks and reviews. This avoids intermediate rebases and repeated CI runs between individual merges. |
+
+For automation without the interactive editor, create each PR with `gh pr create --base <parent-branch> --head <branch> --title <title> --body-file <file>`, using `main` for the bottom layer. Then link the PRs in bottom-to-top order with `gh stack link <bottom-pr> <next-pr> ...`. To extend an existing stack, use `gh stack link <stack-number> <new-pr>`.
+
 ## Commands
 
 | Command | What it does |
