@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Tray;
@@ -9,11 +8,11 @@ namespace Winshell.Tray;
 /// Lets the app with this window and process id take the foreground; <see cref="TrayHost"/> passes
 /// <see cref="LetAppTakeForeground"/>.
 /// </param>
-internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
+internal sealed class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
 {
     private static readonly uint? ShellIntegrity = ProcessIntegrity.TryRead((uint)Environment.ProcessId);
 
-    private readonly TrayCursor _cursor = new(loop, CursorPosition, point => SetCursorPos(point.X, point.Y));
+    private readonly TrayCursor _cursor = new(loop, CursorPosition, point => Cursor.MoveTo(point.X, point.Y));
 
     public void Dispose() => _cursor.Dispose();
 
@@ -48,7 +47,7 @@ internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> le
     internal static void LetAppTakeForeground(nint window, uint pid)
     {
         // A click on a shell window is input this process just received, which lets it pass the right on.
-        if (AllowSetForegroundWindow(pid))
+        if (TrayApp.AllowForeground(pid))
             return;
         // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
         var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
@@ -57,7 +56,7 @@ internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> le
         try
         {
             Win32.SetForegroundWindow(window);
-            AllowSetForegroundWindow(pid);
+            TrayApp.AllowForeground(pid);
         }
         finally
         {
@@ -69,7 +68,7 @@ internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> le
     private static void Send(TrayIcon icon, uint message, (int X, int Y) point)
     {
         var (wParam, lParam) = TrayProtocol.Callback(icon.Version, icon.Id, message, point.X, point.Y);
-        SendNotifyMessageW(icon.Window, icon.CallbackMessage, wParam, lParam);
+        TrayApp.Notify(icon.Window, icon.CallbackMessage, wParam, lParam);
     }
 
     private static (int X, int Y) CursorPosition()
@@ -77,16 +76,4 @@ internal sealed partial class TrayClicker(IEventLoop loop, Action<nint, uint> le
         Win32.GetCursorPos(out var p);
         return (p.X, p.Y);
     }
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SendNotifyMessageW(nint hwnd, uint msg, nint wParam, nint lParam);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AllowSetForegroundWindow(uint processId);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetCursorPos(int x, int y);
 }

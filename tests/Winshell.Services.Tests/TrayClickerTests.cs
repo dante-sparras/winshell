@@ -35,9 +35,9 @@ public sealed class TrayClickerTests
         {
             if (msg == 0x8001)
                 seen.Add($"callback {lParam:X}");
-            return DefWindowProcW(hwnd, msg, wParam, lParam);
+            return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
         };
-        var previous = SetWindowLongPtrW(app, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(record));
+        var previous = Win32.SetWindowLongPtr(app, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(record));
         // The real handoff joins the user's foreground thread, so a recorder stands in for it.
         using var clicker = new TrayClicker(new ManualEventLoop(), (window, pid) => seen.Add($"foreground {window} {pid}"));
         try
@@ -46,7 +46,7 @@ public sealed class TrayClickerTests
         }
         finally
         {
-            SetWindowLongPtrW(app, GWLP_WNDPROC, previous);
+            Win32.SetWindowLongPtr(app, GWLP_WNDPROC, previous);
             Win32.DestroyWindow(app);
             GC.KeepAlive(record);
         }
@@ -60,10 +60,4 @@ public sealed class TrayClickerTests
     private delegate nint WindowProc(nint hwnd, uint msg, nint wParam, nint lParam);
 
     private const int GWLP_WNDPROC = -4;
-
-    [DllImport("user32.dll")]
-    private static extern nint SetWindowLongPtrW(nint hwnd, int index, nint value);
-
-    [DllImport("user32.dll")]
-    private static extern nint DefWindowProcW(nint hwnd, uint msg, nint wParam, nint lParam);
 }

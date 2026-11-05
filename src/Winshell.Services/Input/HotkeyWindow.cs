@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Input;
@@ -8,25 +7,21 @@ namespace Winshell.Input;
 /// chord is registered.
 /// </summary>
 /// <param name="onHotkey">Runs on the window's thread with the id of the chord Windows saw pressed.</param>
-internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
+internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
 {
     private const int ErrorAlreadyRegistered = 1409;
-    private const int ErrorClassAlreadyExists = 1410;
     private const uint ModNoRepeat = 0x4000;
-    private const string ClassName = "WinshellHotkey";
 
     private readonly object _lock = new();
     private readonly Dictionary<OsChord, int> _ids = [];
     private readonly Dictionary<int, OsChord> _chords = [];
-    private GCHandle _self;
-    private nint _hwnd;
+    private HotkeyTarget? _target;
     private int _nextId = 1;
-    private bool _classRegistered;
     private bool _disposed;
 
     public nint Handle
     {
-        get { lock (_lock) return _hwnd; }
+        get { lock (_lock) return _target?.Handle ?? 0; }
     }
 
     public int Count
@@ -52,7 +47,7 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
         if (!EnsureWindow())
             return HotkeyClaim.Invalid($"{chord.Text} could not be registered (0).");
         int id;
-        nint hwnd;
+        HotkeyTarget target;
         lock (_lock)
         {
             if (_ids.ContainsKey(chord.OsKey))
@@ -60,25 +55,24 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
             if (_nextId > 0xBFFF)
                 return HotkeyClaim.Invalid($"{chord.Text} could not be registered (no id).");
             id = _nextId;
-            hwnd = _hwnd;
+            target = _target!;
         }
-        if (!Win32.RegisterHotKey(hwnd, id, chord.Win32Modifiers | ModNoRepeat, (uint)chord.VirtualKey))
+        if (!target.Register(id, chord.Win32Modifiers | ModNoRepeat, (uint)chord.VirtualKey, out var code))
         {
-            var code = Marshal.GetLastPInvokeError();
             return code == ErrorAlreadyRegistered
                 ? HotkeyClaim.Taken($"{chord.Text} is already in use by Windows or another app.")
                 : HotkeyClaim.Invalid($"{chord.Text} could not be registered ({code}).");
         }
         lock (_lock)
         {
-            if (_disposed || _hwnd != hwnd)
+            if (_disposed || _target != target)
             {
-                Win32.UnregisterHotKey(hwnd, id);
+                target.Unregister(id);
                 return HotkeyClaim.Invalid("Hotkeys are shut down.");
             }
             if (_ids.ContainsKey(chord.OsKey))
             {
-                Win32.UnregisterHotKey(hwnd, id);
+                target.Unregister(id);
                 return HotkeyClaim.Active;
             }
             _ids[chord.OsKey] = id;
@@ -96,7 +90,7 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
     public void UnregisterUnused(Func<OsChord, bool> inUse)
     {
         List<int> ids = [];
-        nint hwnd;
+        HotkeyTarget? target;
         lock (_lock)
         {
             foreach (var (chord, id) in _ids)
@@ -109,12 +103,12 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
                 if (_chords.Remove(id, out var chord))
                     _ids.Remove(chord);
             }
-            hwnd = _hwnd;
+            target = _target;
         }
-        if (hwnd != 0)
+        if (target is not null)
         {
             foreach (var id in ids)
-                Win32.UnregisterHotKey(hwnd, id);
+                target.Unregister(id);
         }
         DestroyIfIdle();
     }
@@ -122,8 +116,7 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
     public void Dispose()
     {
         int[] ids;
-        nint hwnd;
-        GCHandle self;
+        HotkeyTarget? target;
         lock (_lock)
         {
             if (_disposed)
@@ -132,104 +125,51 @@ internal sealed unsafe class HotkeyWindow(Action<int> onHotkey) : IDisposable
             ids = [.. _ids.Values];
             _ids.Clear();
             _chords.Clear();
-            hwnd = _hwnd;
-            _hwnd = 0;
-            self = _self;
-            _self = default;
+            target = _target;
+            _target = null;
         }
-        if (hwnd != 0)
+        if (target is not null)
         {
             foreach (var id in ids)
-                Win32.UnregisterHotKey(hwnd, id);
-            Win32.SetWindowLongPtr(hwnd, Win32.GWLP_USERDATA, 0);
-            Win32.DestroyWindow(hwnd);
+                target.Unregister(id);
+            target.Dispose();
         }
-        if (self.IsAllocated)
-            self.Free();
     }
 
     private void DestroyIfIdle()
     {
-        nint hwnd;
-        GCHandle self;
+        HotkeyTarget target;
         lock (_lock)
         {
-            if (_ids.Count > 0 || _hwnd == 0)
+            if (_ids.Count > 0 || _target is null)
                 return;
-            hwnd = _hwnd;
-            _hwnd = 0;
-            self = _self;
-            _self = default;
+            target = _target;
+            _target = null;
         }
-        Win32.SetWindowLongPtr(hwnd, Win32.GWLP_USERDATA, 0);
-        Win32.DestroyWindow(hwnd);
-        if (self.IsAllocated)
-            self.Free();
+        target.Dispose();
     }
 
     private bool EnsureWindow()
     {
         lock (_lock)
         {
-            if (_hwnd != 0)
+            if (_target is not null)
                 return true;
             if (_disposed)
                 return false;
         }
-        if (!_classRegistered && !RegisterClass())
+        var target = HotkeyTarget.Create(id => NativeCallback.Guard(Log.Default, "hotkey", () => onHotkey(id)));
+        if (target is null)
             return false;
-        _classRegistered = true;
-        var hwnd = Win32.CreateWindowExW(0, ClassName, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
-        if (hwnd == 0)
-            return false;
-        var self = GCHandle.Alloc(this);
-        Win32.SetWindowLongPtr(hwnd, Win32.GWLP_USERDATA, GCHandle.ToIntPtr(self));
         lock (_lock)
         {
-            if (_disposed || _hwnd != 0)
+            if (_disposed || _target is not null)
             {
-                Win32.SetWindowLongPtr(hwnd, Win32.GWLP_USERDATA, 0);
-                Win32.DestroyWindow(hwnd);
-                self.Free();
-                return !_disposed && _hwnd != 0;
+                target.Dispose();
+                return !_disposed && _target is not null;
             }
-            _hwnd = hwnd;
-            _self = self;
+            _target = target;
             return true;
         }
-    }
-
-    private static bool RegisterClass()
-    {
-        fixed (char* name = ClassName)
-        {
-            var wc = new WNDCLASSEXW
-            {
-                cbSize = (uint)sizeof(WNDCLASSEXW),
-                lpfnWndProc = &Proc,
-                hInstance = Win32.GetModuleHandleW(null),
-                lpszClassName = name,
-            };
-            if (Win32.RegisterClassExW(wc) != 0)
-                return true;
-            return Marshal.GetLastPInvokeError() == ErrorClassAlreadyExists;
-        }
-    }
-
-    private void OnHotkey(int id) => onHotkey(id);
-
-    [UnmanagedCallersOnly]
-    private static nint Proc(nint hwnd, uint msg, nint wParam, nint lParam)
-    {
-        if (msg == Win32.WM_HOTKEY)
-        {
-            NativeCallback.Guard(Log.Default, "hotkey", () =>
-            {
-                var data = Win32.GetWindowLongPtr(hwnd, Win32.GWLP_USERDATA);
-                if (data != 0 && GCHandle.FromIntPtr(data).Target is HotkeyWindow window)
-                    window.OnHotkey((int)wParam);
-            });
-        }
-        return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 }
