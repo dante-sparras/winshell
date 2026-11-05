@@ -128,7 +128,7 @@ Before every push, run the [checks for the change](#checks-by-change), then its 
 | Job | When it runs | How to run it locally |
 | --- | --- | --- |
 | `installer` | PRs and pushes to `main` that change `scripts/`, `tests/Scripts/` or workflows/actions. | Windows PowerShell 5.1 runs `tests/Scripts/Install.Tests.ps1` with Pester 5.6.1 against temporary profiles and releases served on loopback. PowerShell 7 tooling suites run once in `ci`. |
-| `slow` | Non-draft PRs and pushes to `main` that change more than docs or Markdown, in `ci.yml` | `pwsh scripts/check.ps1 -Tier Slow`, on an empty Winland workspace. |
+| `slow` | Non-draft PRs and pushes to `main` that change more than docs or Markdown, in `ci.yml` | `pwsh scripts/check.ps1 -Tier Slow`, under [Live UI with Winland running](#live-ui-with-winland-running). |
 | `pr-size` | Every pull request, from `pr-size.yml` on the base branch. Not required. | Nothing to run. It labels the pull request `size:XS` to `size:XL`, as "PR description" in `CONTRIBUTING.md` says. |
 | `trim-caches` | Every push to `main`, after `ci`, in `ci.yml` | Nothing to run. It deletes all but the two newest CodeQL databases of each language from the Actions cache, which would otherwise pass the 10 GB GitHub keeps. |
 | `links` | Pushes to `main` that change docs or Markdown, and every Monday, in `links.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents`. |
@@ -165,27 +165,20 @@ dotnet test tests/Winshell.Core.Tests --filter FullyQualifiedName~DirectoryWatch
 
 ## Live UI with Winland running
 
-Winland tiles every normal window, so the windows a live run or a test opens change size and land among the user's windows. When `winland` is running, do that work on an empty workspace on a monitor the user is not using, and never swap the focused monitor's workspace:
+Winland tiles every normal window, so the windows a live run or a test opens would change size and land among the user's windows. When `winland` is running, keep them out of tiling with an `ignore` rule, and leave the user's workspaces as they are:
 
 ```powershell
-$monitors = winland -j monitors | ConvertFrom-Json
-$focused = $monitors | Where-Object focused | Select-Object -First 1
-$spare = $monitors | Where-Object { -not $_.focused } | Select-Object -First 1
-if (-not $spare) { throw 'One monitor: ask before swapping the workspace the user is on.' }
-$workspace = $spare.activeWorkspace.id
 winland keyword windowrule 'ignore, exe:(winshell|winshellw|Winshell\..*Tests)\.exe'
-winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace empty;dispatch focusmonitor $($focused.id)"
 ```
 
-- One run at a time on a machine. The workspace and the rule are shared, so a parallel run would note another run's empty workspace as the user's, and `winland reload` would drop its rule.
-- The rule reaches windows that open after it, and a workspace dispatch acts on the focused monitor, which is why the batch moves the focus and gives it back. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
-- The workspace does not contain what the rule ignores: an ignored window opens where Windows puts it, usually on the primary monitor, and a taskbar opens on every screen. Keep what a test opens small and short.
+- One run at a time on a machine. The rule is shared, so a parallel run's `winland reload` would drop it.
+- The rule reaches windows that open after it. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
+- No workspace contains what the rule ignores: an ignored window opens where Windows puts it, usually on the primary monitor, and a taskbar opens on every screen. Keep what a test opens small and short.
 - `winland -j clients` must list no Winshell window, and the user's windows must be where they were when you finish.
-- Open a real window there. Winland must tile it, it must open above the shell's windows, and no shell window may draw over it. Check again after `winland dispatch fullscreen`, where the taskbar goes behind it.
-- Finish in a `finally`, so the spare monitor goes back and the rule goes:
+- Winland must keep tiling the user's windows, and no shell window may draw over them.
+- Finish in a `finally`, so the rule goes:
 
 ```powershell
-winland --batch "dispatch focusmonitor $($spare.id);dispatch workspace $workspace;dispatch focusmonitor $($focused.id)"
 winland reload
 ```
 

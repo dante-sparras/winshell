@@ -53,7 +53,7 @@ Many agents work on this repo at once.
 
 ## Live UI with Winland running
 
-Before running slow tests, a shell, or packaging that opens windows, follow [Live UI with Winland running](docs/development.md#live-ui-with-winland-running). Run one live session at a time, use an unused monitor, and restore it in `finally`. With one monitor, ask before changing the user's workspace.
+Before running slow tests, a shell, or packaging that opens windows, follow [Live UI with Winland running](docs/development.md#live-ui-with-winland-running). Its `ignore` rule keeps those windows out of tiling, so the user's workspaces stay as they are. Run one live session at a time, and drop the rule with `winland reload` in `finally`.
 
 For a visual change, follow [See what you changed](docs/development.md#see-what-you-changed): run a shell built from the `winshell` template, or the probe shell, with the change, inspect it, view its screenshot, and check the tree.
 
