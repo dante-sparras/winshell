@@ -35,13 +35,6 @@ internal sealed class OwnedIcon : IDisposable
         }
     }
 
-    /// <summary>A copy of this icon, which no longer knows the resource it was loaded from. Null when Windows refuses.</summary>
-    internal OwnedIcon? Copy()
-    {
-        nint copy = PInvoke.CopyIcon((HICON)Handle);
-        return copy == 0 ? null : new OwnedIcon(copy);
-    }
-
     public void Dispose()
     {
         if (Handle == 0)

@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 using Winshell.Tray;
 
@@ -365,16 +367,23 @@ public sealed class TrayHostTests : IDisposable
         // A 16-pixel icon from shell32's resources, as an app loads it at 100%, and a copy that no longer knows its resource.
         using var loaded = OwnedIcon.Load(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 4, "", 16);
         Assert.NotNull(loaded);
-        using var copied = loaded.Copy();
-        Assert.NotNull(copied);
-        var host = Start(HostNames, out _);
-        Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_ICON, icon: (int)loaded.Handle));
-        Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 2, TrayProtocol.NIF_ICON, icon: (int)copied.Handle));
-        var fromResource = host.Icons.Single(i => i.Id == 1);
-        var drawn = host.Icons.Single(i => i.Id == 2);
-        Assert.NotNull(fromResource.Resource);
-        Assert.Null(drawn.Resource);
-        Assert.Equal(16, fromResource.Image?.Width);
+        var copied = PInvoke.CopyIcon((HICON)loaded.Handle);
+        Assert.NotEqual(0, (nint)copied);
+        try
+        {
+            var host = Start(HostNames, out _);
+            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_ICON, icon: (int)loaded.Handle));
+            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 2, TrayProtocol.NIF_ICON, icon: (int)(nint)copied));
+            var fromResource = host.Icons.Single(i => i.Id == 1);
+            var drawn = host.Icons.Single(i => i.Id == 2);
+            Assert.NotNull(fromResource.Resource);
+            Assert.Null(drawn.Resource);
+            Assert.Equal(16, fromResource.Image?.Width);
+        }
+        finally
+        {
+            PInvoke.DestroyIcon(copied);
+        }
     }
 
     private TrayHost StartExplorer()
