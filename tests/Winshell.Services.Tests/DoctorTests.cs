@@ -2,7 +2,6 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 using Winshell.Diagnostics;
-using Winshell.Session;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 using static Winshell.Diagnostics.Doctor;
 using static Winshell.Diagnostics.DoctorCrashes;
@@ -280,33 +279,22 @@ public sealed class DoctorTests : IDisposable
     [Fact]
     public void A_packaged_sign_in_is_the_startup_task_not_a_path()
     {
-        Assert.Equal(CheckStatus.Pass, SignIn(FakeTask(StartupTaskState.Disabled)).Status);
-        Assert.StartsWith("Winshell does not start when you sign in.", SignIn(FakeTask(StartupTaskState.Disabled)).Message, StringComparison.Ordinal);
-        Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"), SignIn(FakeTask(StartupTaskState.Enabled)));
-        Assert.Equal(CheckStatus.Pass, SignIn(FakeTask(StartupTaskState.EnabledByPolicy)).Status);
+        Assert.Equal(CheckStatus.Pass, SignIn(StartupTaskState.Disabled).Status);
+        Assert.StartsWith("Winshell does not start when you sign in.", SignIn(StartupTaskState.Disabled).Message, StringComparison.Ordinal);
+        Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"), SignIn(StartupTaskState.Enabled));
+        Assert.Equal(CheckStatus.Pass, SignIn(StartupTaskState.EnabledByPolicy).Status);
 
-        var user = SignIn(FakeTask(StartupTaskState.DisabledByUser));
+        var user = SignIn(StartupTaskState.DisabledByUser);
         Assert.Equal(CheckStatus.Warn, user.Status);
         Assert.Equal("Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", user.Message);
 
-        var policy = SignIn(FakeTask(StartupTaskState.DisabledByPolicy));
+        var policy = SignIn(StartupTaskState.DisabledByPolicy);
         Assert.Equal(CheckStatus.Warn, policy.Status);
         Assert.Contains("policy", policy.Message, StringComparison.OrdinalIgnoreCase);
 
-        var missing = SignIn((IStartupTask?)null);
+        var missing = SignIn((StartupTaskState?)null);
         Assert.Equal(CheckStatus.Warn, missing.Status);
         Assert.Contains("no startup task", missing.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static IStartupTask FakeTask(StartupTaskState state) => new StateTask(state);
-
-    private sealed class StateTask(StartupTaskState state) : IStartupTask
-    {
-        public StartupTaskState State => state;
-
-        public StartupTaskState RequestEnable() => state;
-
-        public bool Disable() => false;
     }
 
     [Fact]

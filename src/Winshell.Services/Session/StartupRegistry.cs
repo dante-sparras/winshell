@@ -150,20 +150,6 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Win
         return string.IsNullOrEmpty(dir) ? "winshell.exe" : Path.Combine(dir, "winshell.exe");
     }
 
-    /// <summary><c>winshell.exe</c> and <c>winshellw.exe</c> in the same folder are one install.</summary>
-    internal static bool SameInstall(string left, string right)
-    {
-        static bool Pair(string path)
-        {
-            var name = Path.GetFileName(path);
-            return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
-                || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
-        }
-        if (!Pair(left) || !Pair(right))
-            return false;
-        return string.Equals(Path.GetDirectoryName(Path.GetFullPath(left)), Path.GetDirectoryName(Path.GetFullPath(right)), StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>Whether two sign-in commands start the same install. The windowed name counts as the console name.</summary>
     internal static bool SameSignInCommand(string left, string right) =>
         string.Equals(NormalizeSignInExe(left), NormalizeSignInExe(right), StringComparison.OrdinalIgnoreCase);
