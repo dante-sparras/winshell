@@ -125,14 +125,4 @@ internal static class DocumentLists
         [PreserveSig]
         int GetList(uint listType, uint count, in Guid iid, [MarshalAs(UnmanagedType.Interface)] out IObjectArray? array);
     }
-
-    [ComImport]
-    [Guid("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IObjectArray
-    {
-        [PreserveSig] int GetCount(out uint count);
-
-        [PreserveSig] int GetAt(uint index, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object? item);
-    }
 }

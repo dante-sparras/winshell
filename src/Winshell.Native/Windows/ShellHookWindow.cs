@@ -6,7 +6,8 @@ namespace Winshell.Native;
 
 /// <summary>
 /// A message-only window that gets the shell hook messages Explorer's taskbar gets, for the process. Windows calls
-/// the handler on the thread that started it, inside a window procedure, so the handler must not throw: guard its body.
+/// the handler on the thread that started it, inside a window procedure. A handler's exception does not reach Windows,
+/// so a handler logs its own.
 /// </summary>
 internal static unsafe class ShellHookWindow
 {
@@ -46,7 +47,15 @@ internal static unsafe class ShellHookWindow
     {
         if (message != _message || _message == 0)
             return Win32.DefWindowProcW(hwnd, message, wParam, lParam);
-        _received?.Invoke(wParam, lParam);
+        try
+        {
+            _received?.Invoke(wParam, lParam);
+        }
+#pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
         return 0;
     }
 }

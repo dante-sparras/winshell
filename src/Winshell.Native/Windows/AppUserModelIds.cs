@@ -5,8 +5,8 @@ using Windows.Win32.Foundation;
 namespace Winshell.Native;
 
 /// <summary>
-/// Application user model ids, the ids Windows groups taskbar buttons by: the one a window or a shortcut sets, and
-/// the one a packaged process has.
+/// Application user model ids, the ids Windows groups taskbar buttons by: the one a window sets, and the one a
+/// packaged process has.
 /// </summary>
 internal static unsafe class AppUserModelIds
 {

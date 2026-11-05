@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Windows;
@@ -16,10 +17,20 @@ internal static class WindowDesktop
     {
         if (hwnd == 0)
             return "";
-        var manager = Manager();
-        if (manager is null || manager.DesktopOf(hwnd, out var id) < 0 || id == Guid.Empty)
+        try
+        {
+            var manager = Manager();
+            if (manager is null)
+                return "";
+            if (manager.DesktopOf(hwnd, out var id) < 0 || id == Guid.Empty)
+                return "";
+            return id.ToString("D");
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
+        {
+            _manager = null;
             return "";
-        return id.ToString("D");
+        }
     }
 
     /// <summary>Moves the window to that desktop. False when Windows refuses or the manager is unavailable.</summary>
@@ -27,16 +38,25 @@ internal static class WindowDesktop
     {
         if (hwnd == 0 || desktop == Guid.Empty)
             return false;
-        var manager = Manager();
-        if (manager is null)
-            return false;
-        var hr = manager.Move(hwnd, desktop);
-        if (hr < 0)
+        try
         {
-            Log.Default.Warn("desktops", $"MoveWindowToDesktop failed (0x{hr:X8}).");
+            var manager = Manager();
+            if (manager is null)
+                return false;
+            var hr = manager.Move(hwnd, desktop);
+            if (hr < 0)
+            {
+                Log.Default.Warn("desktops", $"MoveWindowToDesktop failed (0x{hr:X8}).");
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
+        {
+            _manager = null;
+            Log.Default.Warn("desktops", $"MoveWindowToDesktop failed ({ex.GetType().Name}).");
             return false;
         }
-        return true;
     }
 
     private static WindowDesktopManager? Manager()
@@ -44,7 +64,7 @@ internal static class WindowDesktop
         if (_manager is not null)
             return _manager;
         _manager = WindowDesktopManager.Create(out var hr);
-        if (_manager is null && !_loggedUnavailable)
+        if (hr < 0 && !_loggedUnavailable)
         {
             _loggedUnavailable = true;
             Log.Default.Warn("desktops", $"IVirtualDesktopManager is unavailable (0x{hr:X8}).");

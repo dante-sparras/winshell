@@ -17,30 +17,35 @@ internal static unsafe class TopLevelWindows
 
     private const int ClassNameCapacity = 256;
 
-    [ThreadStatic]
-    private static List<nint>? _found;
-
-    /// <summary>Every top-level window, front to back.</summary>
+    /// <summary>Every top-level window, in z-order from the top.</summary>
     internal static List<nint> List()
     {
-        var found = new List<nint>();
-        _found = found;
+        var windows = new List<nint>();
+        var handle = GCHandle.Alloc(windows);
         try
         {
-            Win32.EnumWindows(&Collect, 0);
+            Win32.EnumWindows(&Collect, GCHandle.ToIntPtr(handle));
         }
         finally
         {
-            _found = null;
+            handle.Free();
         }
-        return found;
+        return windows;
     }
 
     [UnmanagedCallersOnly]
-    private static int Collect(nint hwnd, nint data)
+    private static int Collect(nint hwnd, nint windows)
     {
-        _found?.Add(hwnd);
-        return 1;
+        try
+        {
+            ((List<nint>)GCHandle.FromIntPtr(windows).Target!).Add(hwnd);
+            return 1;
+        }
+        catch (OutOfMemoryException)
+        {
+            // An exception must not reach Windows. Stop with the windows listed so far.
+            return 0;
+        }
     }
 
     /// <summary>The window's title, cut at <see cref="MaxTitle"/> characters. Empty when it has none.</summary>
@@ -56,6 +61,7 @@ internal static unsafe class TopLevelWindows
 
     internal static bool HasTitle(nint hwnd) => PInvoke.GetWindowTextLength((HWND)hwnd) > 0;
 
+    /// <summary>The window's class name, or empty when it cannot be read.</summary>
     internal static string ClassName(nint hwnd)
     {
         var buffer = stackalloc char[ClassNameCapacity];

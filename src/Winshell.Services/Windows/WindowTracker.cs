@@ -38,6 +38,7 @@ internal static class WindowTracker
     private static readonly HashSet<nint> Dirty = [];
     private static readonly HashSet<nint> Flashed = [];
     private static readonly HashSet<nint> Wanting = [];
+    private static readonly List<WinEventHook> Hooks = [];
     private static IEventLoop? _loop;
     private static bool _flushPosted;
     private static bool _foregroundDirty;
@@ -69,7 +70,9 @@ internal static class WindowTracker
         ];
         foreach (var (min, max) in ranges)
         {
-            if (!WinEventHook.Start(min, max, OnWinEvent))
+            if (WinEventHook.Start(min, max, OnWinEvent) is { } hook)
+                Hooks.Add(hook);
+            else
                 log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a

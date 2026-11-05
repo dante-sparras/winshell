@@ -10,6 +10,7 @@ internal static class DesktopSwitchWatch
 {
     private static IEventLoop? _loop;
     private static bool _posted;
+    private static WinEventHook? _hook;
 
     public static event Action? Fired;
 
@@ -18,7 +19,8 @@ internal static class DesktopSwitchWatch
         if (_loop is not null)
             return;
         _loop = loop;
-        if (!WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent))
+        _hook = WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent);
+        if (_hook is null)
             log.Warn("desktops", "SetWinEventHook failed for a desktop switch; the list updates only after Winshell changes a desktop");
     }
 
