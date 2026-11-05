@@ -17,7 +17,7 @@ public sealed class RedirectedOutputTests : IDisposable
         var run = WinshellCli.Run(["run", "-p", missing], ("WINSHELL_CONFIG_DIR", _dir));
         var doctor = WinshellCli.Run(["doctor", "-p", missing], ("WINSHELL_CONFIG_DIR", _dir));
 
-        Assert.Equal(1, run.Code);
+        run.AssertExitCode(1);
         Assert.Contains("Björk 東京", run.Error, StringComparison.Ordinal);
         Assert.Contains("Björk 東京", doctor.Output, StringComparison.Ordinal);
     }

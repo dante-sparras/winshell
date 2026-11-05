@@ -20,21 +20,21 @@ public class CliUsageTests
     public void A_bad_number_exits_2_with_a_message(string command, string option, string? value, string message)
     {
         var args = value is null ? new[] { command, option } : new[] { command, option, value };
-        var (code, output, error) = Run(args);
+        var result = Run(args);
 
-        Assert.Equal(2, code);
-        Assert.Equal("", output);
-        Assert.Equal(message + Environment.NewLine, error);
+        result.AssertExitCode(2);
+        Assert.Equal("", result.Output);
+        Assert.Equal(message + Environment.NewLine, result.Error);
     }
 
     [Fact]
     public void A_whole_number_pid_that_is_not_an_instance_exits_1()
     {
-        var (code, output, error) = Run(["kill", "--pid", "0"]);
+        var result = Run(["kill", "--pid", "0"]);
 
-        Assert.Equal(1, code);
-        Assert.Equal("", output);
-        Assert.Equal("No instance with process id 0." + Environment.NewLine, error);
+        result.AssertExitCode(1);
+        Assert.Equal("", result.Output);
+        Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
 
     [Fact]
@@ -44,11 +44,11 @@ public class CliUsageTests
         File.WriteAllText(path, "one\r\ntwo\r\n");
         try
         {
-            var (code, output, error) = Run(["log", path, "--tail", "2147483647"]);
+            var result = Run(["log", path, "--tail", "2147483647"]);
 
-            Assert.Equal(0, code);
-            Assert.Equal("", error);
-            Assert.Equal("one" + Environment.NewLine + "two" + Environment.NewLine, output);
+            result.AssertExitCode(0);
+            Assert.Equal("", result.Error);
+            Assert.Equal("one" + Environment.NewLine + "two" + Environment.NewLine, result.Output);
         }
         finally
         {
@@ -56,7 +56,7 @@ public class CliUsageTests
         }
     }
 
-    private static (int Code, string Output, string Error) Run(string[] args) =>
+    private static ChildProcess Run(string[] args) =>
         WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-usage-absent")));

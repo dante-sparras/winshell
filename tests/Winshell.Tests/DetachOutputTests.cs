@@ -28,10 +28,10 @@ public sealed class DetachOutputTests : IDisposable, IClassFixture<ProbeBuild>
         var project = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(ProbeShell.Program)))!;
 
         // WinshellCli reads both streams to their end, and fails if they stay open after the process exits.
-        var (code, _, error) = WinshellCli.Run(["run", "-d", "--no-build", "-p", project], Folders);
+        var result = WinshellCli.Run(["run", "-d", "--no-build", "-p", project], Folders);
 
-        Assert.Equal(0, code);
-        Assert.Equal("", error);
+        result.AssertExitCode(0);
+        Assert.Equal("", result.Error);
         Wait.Until(() => Running().Count > 0, "the shell -d left behind");
     }
 

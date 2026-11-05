@@ -74,7 +74,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             File.WriteAllText(source, original + "\nthis is not C#\n");
             var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
 
-            Assert.Equal(1, result.Code);
+            result.AssertExitCode(1);
             Assert.Equal("", result.Output);
             Assert.Contains("error ", result.Error, StringComparison.Ordinal);
             Assert.DoesNotContain("did not reload", result.Error, StringComparison.Ordinal);
@@ -150,7 +150,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         {
             var first = NextPid(0, shellId: null);
             // Once the shell's thread answers, its configuration has started and will not see the marker.
-            Assert.Equal(0, Run("ipc", "--pid", first.ToString(CultureInfo.InvariantCulture), "show").Code);
+            Run("ipc", "--pid", first.ToString(CultureInfo.InvariantCulture), "show").AssertExitCode(0);
             var marker = Path.Combine(_config, ProbeShell.HideTaskbarMarker);
             File.WriteAllText(marker, "");
             File.WriteAllText(source, original.Replace("?? \"probe\"", "?? \"reloaded\"", StringComparison.Ordinal));
@@ -219,7 +219,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             var result = Run("reload", "--pid", shell.ToString(CultureInfo.InvariantCulture));
 
             var id = Listed().Single(row => row.GetProperty("pid").GetInt32() == shell).GetProperty("id").GetString();
-            Assert.Equal(1, result.Code);
+            result.AssertExitCode(1);
             Assert.Equal("", result.Output);
             Assert.Equal($"Could not find the project that builds instance {id}, so it was not reloaded.{Environment.NewLine}", result.Error);
             Assert.False(run.HasExited);
@@ -282,10 +282,10 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     }
 
     /// <summary>Reloads the shell <paramref name="pid"/>, failing with what the reload printed unless it exits 0.</summary>
-    private (int Code, string Output, string Error) Reload(int pid)
+    private ChildProcess Reload(int pid)
     {
         var result = Run("reload", "--pid", pid.ToString(CultureInfo.InvariantCulture));
-        Assert.True(result.Code == 0, $"Reload exited {result.Code}.\n{result.Output}\n{result.Error}");
+        result.AssertExitCode(0);
         return result;
     }
 
@@ -294,7 +294,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     {
         var result = Run("reload", "--pid", "0");
 
-        Assert.Equal(1, result.Code);
+        result.AssertExitCode(1);
         Assert.Equal("", result.Output);
         Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
@@ -309,12 +309,12 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     private List<JsonElement> Listed()
     {
         var result = Run("list", "--json");
-        Assert.Equal(0, result.Code);
+        result.AssertExitCode(0);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) =>
+    private ChildProcess Run(params string[] args) =>
         WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
 
     public void Dispose()

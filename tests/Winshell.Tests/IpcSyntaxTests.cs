@@ -16,11 +16,11 @@ public sealed class IpcSyntaxTests : IDisposable
     [InlineData("winshell ipc wait needs a target and a signal.", "wait", "foo")]
     public void A_wrong_ipc_command_exits_2_with_nothing_running(string message, params string[] words)
     {
-        var (code, output, error) = WinshellCli.Run(["ipc", .. words], ("WINSHELL_LOCAL_DIR", _root));
+        var result = WinshellCli.Run(["ipc", .. words], ("WINSHELL_LOCAL_DIR", _root));
 
-        Assert.Equal(2, code);
-        Assert.Equal("", output);
-        Assert.Equal(message + Environment.NewLine, error);
+        result.AssertExitCode(2);
+        Assert.Equal("", result.Output);
+        Assert.Equal(message + Environment.NewLine, result.Error);
     }
 
     public void Dispose()

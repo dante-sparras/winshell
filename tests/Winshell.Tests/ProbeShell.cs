@@ -79,33 +79,20 @@ internal static class ProbeShell
     /// A <c>-d</c> start, to the end of the process that returns, with its output read to the end as a script would: the
     /// shell it leaves behind must not hold that output open.
     /// </summary>
-    internal static int Detach(string config, string local, string[] args)
+    internal static ChildProcess Detach(string config, string local, string[] args)
     {
-        var info = new ProcessStartInfo(Program) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        var info = new ProcessStartInfo(Program);
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
         info.Environment["WINSHELL_CONFIG_DIR"] = config;
         info.Environment["WINSHELL_LOCAL_DIR"] = local;
-        using var process = Process.Start(info)!;
-        // Threads of their own, as WinshellCli reads: a busy pool would leave a pipe unread.
-        var readOutput = new Thread(() => process.StandardOutput.ReadToEnd()) { IsBackground = true };
-        var readError = new Thread(() => process.StandardError.ReadToEnd()) { IsBackground = true };
-        readOutput.Start();
-        readError.Start();
-        if (!process.WaitForExit(20_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            Assert.Fail("The probe did not return from -d.");
-        }
-        Assert.True(readOutput.Join(20_000) && readError.Join(20_000), "The probe's -d start left its output open.");
-        return process.ExitCode;
+        return ChildProcess.Run(info, TimeSpan.FromSeconds(20));
     }
 
     private static HashSet<int> Listed(string config, string local)
     {
         var result = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
-        Assert.Equal(0, result.Code);
+        result.AssertExitCode(0);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).ToHashSet();
     }
@@ -148,14 +135,7 @@ internal static class ProbeShell
         WriteIfDifferent(project, Project(Path.Combine(root, "src", "Winshell.Shell", "Winshell.Shell.csproj")));
         WriteIfDifferent(Path.Combine(folder, "Program.cs"), Source);
         var program = Path.Combine(folder, "bin", "shell", "Probe.exe");
-        var info = new ProcessStartInfo("dotnet")
-        {
-            WorkingDirectory = folder,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var info = new ProcessStartInfo("dotnet") { WorkingDirectory = folder };
         info.ArgumentList.Add("build");
         info.ArgumentList.Add(project);
         info.ArgumentList.Add("-c");
@@ -163,15 +143,8 @@ internal static class ProbeShell
         info.ArgumentList.Add("-o");
         info.ArgumentList.Add(Path.Combine(folder, "bin", "shell"));
         info.ArgumentList.Add("--nologo");
-        using var process = Process.Start(info)!;
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Fail("The probe shell did not build within 10 minutes.");
-        }
-        Assert.True(process.ExitCode == 0 && File.Exists(program), output + error);
+        ChildProcess.Run(info, TimeSpan.FromMinutes(10)).AssertExitCode(0);
+        Assert.True(File.Exists(program), $"The probe built, but {program} is not there.");
         return program;
     }
 

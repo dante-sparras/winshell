@@ -52,7 +52,7 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
         }
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) =>
+    private ChildProcess Run(params string[] args) =>
         WinshellCli.Run(["inspect", "--pid", _pid, .. args], Folders);
 
     private static int Count(string tree, string type) =>
@@ -61,12 +61,12 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
     [Fact]
     public void The_tree_is_json_and_names_the_panel_and_its_button()
     {
-        var (code, output, error) = Run("tree");
+        var result = Run("tree");
 
-        Assert.Equal("", error);
-        Assert.Equal(0, code);
-        Assert.Equal(1, Count(output, "ProbePage"));
-        Assert.Contains("\"name\": \"Open\"", output, StringComparison.Ordinal);
+        Assert.Equal("", result.Error);
+        result.AssertExitCode(0);
+        Assert.Equal(1, Count(result.Output, "ProbePage"));
+        Assert.Contains("\"name\": \"Open\"", result.Output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -75,10 +75,11 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
         Assert.Equal(0, Count(Run("tree").Output, "ProbePopup"));
 
         // The window is named as well as the element, as a shell with a bar on each display must.
-        var (code, output, error) = Run("click", "Open", "ProbePage");
+        var result = Run("click", "Open", "ProbePage");
 
-        Assert.Equal("", error);
-        Assert.Equal((0, "Clicked Open"), (code, output.Trim()));
+        Assert.Equal("", result.Error);
+        result.AssertExitCode(0);
+        Assert.Equal("Clicked Open", result.Output.Trim());
         Wait.Until(() => Count(Run("tree").Output, "ProbePopup") == 1, "the popup to open");
     }
 
@@ -87,20 +88,20 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
     {
         var file = Path.Combine(_dir, "panel.png");
 
-        var (code, output, error) = Run("screenshot", file, "ProbePage");
+        var result = Run("screenshot", file, "ProbePage");
 
-        Assert.Equal("", error);
-        Assert.Equal(0, code);
-        Assert.Contains(file, output, StringComparison.Ordinal);
+        Assert.Equal("", result.Error);
+        result.AssertExitCode(0);
+        Assert.Contains(file, result.Output, StringComparison.Ordinal);
         Assert.Equal([0x89, 0x50, 0x4E, 0x47], File.ReadAllBytes(file)[..4]);
     }
 
     [Fact]
     public void An_element_that_is_not_there_exits_1_and_says_so()
     {
-        var (code, _, error) = Run("click", "NoSuchThing");
+        var result = Run("click", "NoSuchThing");
 
-        Assert.Equal(1, code);
-        Assert.Contains("No element is named NoSuchThing", error, StringComparison.Ordinal);
+        result.AssertExitCode(1);
+        Assert.Contains("No element is named NoSuchThing", result.Error, StringComparison.Ordinal);
     }
 }

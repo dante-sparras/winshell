@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Winshell.Core.Tests;
@@ -227,12 +226,7 @@ public sealed class CrashReportSafetyTests : IDisposable
 
     private static void Junction(string link, string target)
     {
-        var psi = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var arg in new[] { "/c", "mklink", "/J", link, target })
-            psi.ArgumentList.Add(arg);
-        using var mklink = Process.Start(psi)!;
-        mklink.WaitForExit();
-        Assert.Equal(0, mklink.ExitCode);
+        ChildProcess.Run("cmd.exe", "/c", "mklink", "/J", link, target).AssertExitCode(0);
         Assert.NotNull(new DirectoryInfo(link).LinkTarget);
     }
 

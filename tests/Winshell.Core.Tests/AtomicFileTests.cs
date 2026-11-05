@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.Core.Tests;
 
 /// <summary>A save follows a symbolic link, writes through a hard link, and loses to a hand edit that lands during the replace.</summary>
@@ -148,12 +146,7 @@ public sealed class AtomicFileTests
 
     private static void HardLink(string link, string real)
     {
-        var start = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argument in new[] { "/c", "mklink", "/H", link, real })
-            start.ArgumentList.Add(argument);
-        using var command = Process.Start(start)!;
-        command.WaitForExit();
-        Assert.Equal(0, command.ExitCode);
+        ChildProcess.Run("cmd.exe", "/c", "mklink", "/H", link, real).AssertExitCode(0);
     }
 
     private sealed class TempDirectory(DirectoryInfo directory) : IDisposable

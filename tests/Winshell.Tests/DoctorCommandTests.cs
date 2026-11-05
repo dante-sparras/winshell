@@ -25,10 +25,10 @@ public sealed class DoctorCommandTests : IDisposable
         Directory.CreateDirectory(project);
         File.WriteAllText(Path.Combine(project, "Broken.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
-        var (code, output, _) = Run("doctor", "--json", "-p", project);
+        var result = Run("doctor", "--json", "-p", project);
 
-        Assert.Equal(1, code);
-        using var json = JsonDocument.Parse(output);
+        result.AssertExitCode(1);
+        using var json = JsonDocument.Parse(result.Output);
         var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
         Assert.Equal(Ids, checks.Select(c => c.GetProperty("id").GetString()));
         var built = checks.Single(c => c.GetProperty("id").GetString() == "built");
@@ -46,10 +46,10 @@ public sealed class DoctorCommandTests : IDisposable
         File.WriteAllText(Path.Combine(folder, "Other.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
         var missing = Path.Combine(folder, "missing");
 
-        var (code, output, _) = Run("doctor", "--json", "-p", missing);
+        var result = Run("doctor", "--json", "-p", missing);
 
-        Assert.Equal(1, code);
-        using var json = JsonDocument.Parse(output);
+        result.AssertExitCode(1);
+        using var json = JsonDocument.Parse(result.Output);
         var messages = json.RootElement.GetProperty("checks").EnumerateArray()
             .ToDictionary(c => c.GetProperty("id").GetString() ?? "", c => c.GetProperty("message").GetString());
         Assert.StartsWith("No .csproj at ", messages["project"], StringComparison.Ordinal);
@@ -64,10 +64,10 @@ public sealed class DoctorCommandTests : IDisposable
         Directory.CreateDirectory(Path.Combine(folder, "default"));
         File.WriteAllText(Path.Combine(folder, "default", "Inner.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
-        var (code, output, _) = Run("doctor", "--json", "-p", folder);
+        var result = Run("doctor", "--json", "-p", folder);
 
-        Assert.Equal(1, code);
-        using var json = JsonDocument.Parse(output);
+        result.AssertExitCode(1);
+        using var json = JsonDocument.Parse(result.Output);
         var messages = json.RootElement.GetProperty("checks").EnumerateArray()
             .ToDictionary(c => c.GetProperty("id").GetString() ?? "", c => c.GetProperty("message").GetString());
         Assert.StartsWith("No .csproj at ", messages["project"], StringComparison.Ordinal);
@@ -113,7 +113,7 @@ public sealed class DoctorCommandTests : IDisposable
         var acl = folder.GetAccessControl();
         acl.AddAccessRule(deny);
         folder.SetAccessControl(acl);
-        (int Code, string Output, string Error) result;
+        ChildProcess result;
         try
         {
             result = RunIn(unreadable, "doctor", "--json");
@@ -124,7 +124,7 @@ public sealed class DoctorCommandTests : IDisposable
             folder.SetAccessControl(acl);
         }
 
-        Assert.Equal(1, result.Code);
+        result.AssertExitCode(1);
         Assert.Empty(result.Error);
         using var json = JsonDocument.Parse(result.Output);
         var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
@@ -134,10 +134,10 @@ public sealed class DoctorCommandTests : IDisposable
         Assert.StartsWith("Winshell cannot read the config folder", project.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) => RunIn(_root, args);
+    private ChildProcess Run(params string[] args) => RunIn(_root, args);
 
     /// <summary>Runs winshell.exe with the config folder overridden to a folder of this class's.</summary>
-    private static (int Code, string Output, string Error) RunIn(string configRoot, params string[] args) =>
+    private static ChildProcess RunIn(string configRoot, params string[] args) =>
         WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configRoot));
 
     public void Dispose()

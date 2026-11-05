@@ -20,24 +20,24 @@ public class CliHelpTests
     public void Help_exits_0_and_does_not_run_the_command(string command, string? help, string expected)
     {
         var args = help is null ? new[] { command } : new[] { command, help };
-        var (code, output, error) = Run(args);
+        var result = Run(args);
 
-        Assert.Equal(0, code);
-        Assert.Contains(expected, output, StringComparison.Ordinal);
-        Assert.DoesNotContain("No running instances", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("No running instances", output, StringComparison.Ordinal);
-        Assert.Equal("", error);
+        result.AssertExitCode(0);
+        Assert.Contains(expected, result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("No running instances", result.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("No running instances", result.Output, StringComparison.Ordinal);
+        Assert.Equal("", result.Error);
     }
 
     [Fact]
     public void Help_names_the_exit_codes()
     {
-        var (code, output, _) = Run(["--help"]);
-        Assert.Equal(0, code);
-        Assert.Contains("2 the command line was wrong", output, StringComparison.Ordinal);
+        var result = Run(["--help"]);
+        result.AssertExitCode(0);
+        Assert.Contains("2 the command line was wrong", result.Output, StringComparison.Ordinal);
     }
 
-    private static (int Code, string Output, string Error) Run(string[] args) =>
+    private static ChildProcess Run(string[] args) =>
         WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-help-absent")));

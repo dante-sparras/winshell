@@ -24,7 +24,7 @@ public sealed class CliJsonOutputTests : IDisposable, IClassFixture<ProbeBuild>
         var process = _started = ProbeShell.Start(Path.Combine(_dir, "config"), Local);
 
         var list = Run("list", "--json");
-        Assert.Equal(0, list.Code);
+        list.AssertExitCode(0);
         Assert.Contains("café", list.Output, StringComparison.Ordinal);
         Assert.DoesNotContain("\\u00E9", list.Output, StringComparison.OrdinalIgnoreCase);
         using var listed = JsonDocument.Parse(list.Output);
@@ -40,7 +40,7 @@ public sealed class CliJsonOutputTests : IDisposable, IClassFixture<ProbeBuild>
         Assert.False(string.IsNullOrEmpty(row.GetProperty("log").GetString()));
 
         var show = Run("ipc", "--pid", process.Id.ToString(CultureInfo.InvariantCulture), "show", "-j");
-        Assert.Equal(0, show.Code);
+        show.AssertExitCode(0);
         Assert.DoesNotContain("\\u00E9", show.Output, StringComparison.OrdinalIgnoreCase);
         using var shown = JsonDocument.Parse(show.Output);
         Assert.Equal(JsonValueKind.Array, shown.RootElement.ValueKind);
@@ -63,7 +63,7 @@ public sealed class CliJsonOutputTests : IDisposable, IClassFixture<ProbeBuild>
         Assert.Contains("\"exitedAt\":", file, StringComparison.Ordinal);
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) =>
+    private ChildProcess Run(params string[] args) =>
         WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Local), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
 
     public void Dispose()

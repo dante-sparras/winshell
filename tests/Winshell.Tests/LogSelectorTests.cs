@@ -35,30 +35,30 @@ public sealed class LogSelectorTests : IDisposable
     [InlineData("-i", "deadbeef", "No instance with id deadbeef.")]
     public void A_selector_that_matches_nothing_is_an_error(string option, string value, string message)
     {
-        var (code, output, error) = Run(["log", option, value]);
+        var result = Run(["log", option, value]);
 
-        Assert.Equal(1, code);
-        Assert.Contains(message, error);
-        Assert.DoesNotContain("the stopped instance's log", output);
+        result.AssertExitCode(1);
+        Assert.Contains(message, result.Error);
+        Assert.DoesNotContain("the stopped instance's log", result.Output);
     }
 
     [Fact]
     public void A_selector_can_name_a_stopped_instance()
     {
-        var (code, output, _) = Run(["log", "-i", StoppedId[..6]]);
+        var result = Run(["log", "-i", StoppedId[..6]]);
 
-        Assert.Equal(0, code);
-        Assert.Contains("the stopped instance's log", output);
+        result.AssertExitCode(0);
+        Assert.Contains("the stopped instance's log", result.Output);
     }
 
     [Fact]
     public void With_no_selector_a_stopped_instance_is_shown_and_named()
     {
-        var (code, output, error) = Run(["log"]);
+        var result = Run(["log"]);
 
-        Assert.Equal(0, code);
-        Assert.Contains("the stopped instance's log", output);
-        Assert.Contains($"Showing the log of stopped instance {StoppedId}", error);
+        result.AssertExitCode(0);
+        Assert.Contains("the stopped instance's log", result.Output);
+        Assert.Contains($"Showing the log of stopped instance {StoppedId}", result.Error);
     }
 
     [Fact]
@@ -84,10 +84,10 @@ public sealed class LogSelectorTests : IDisposable
             ["exitedAt"] = DateTime.Now.AddMinutes(-1),
         }));
 
-        var (code, output, _) = Run(["log", "-p", project]);
+        var result = Run(["log", "-p", project]);
 
-        Assert.Equal(0, code);
-        Assert.Contains("the log of the shell in shell.next", output);
+        result.AssertExitCode(0);
+        Assert.Contains("the log of the shell in shell.next", result.Output);
     }
 
     public void Dispose()
@@ -101,6 +101,6 @@ public sealed class LogSelectorTests : IDisposable
         }
     }
 
-    private (int Code, string Output, string Error) Run(string[] args) =>
+    private ChildProcess Run(string[] args) =>
         WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", _root));
 }

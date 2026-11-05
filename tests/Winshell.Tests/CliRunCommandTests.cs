@@ -9,43 +9,43 @@ public class CliRunCommandTests
     [Fact]
     public void No_arguments_print_help_and_do_not_start_a_shell()
     {
-        var (code, output, error) = Run([]);
+        var result = Run([]);
 
-        Assert.Equal(0, code);
-        Assert.Equal("", error);
-        Assert.Contains("winshell run", output, StringComparison.Ordinal);
+        result.AssertExitCode(0);
+        Assert.Equal("", result.Error);
+        Assert.Contains("winshell run", result.Output, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Options_before_the_command_do_not_start_a_shell()
     {
         // An unknown command, not kill: kill would stop a real instance on this PC.
-        var (code, output, error) = Run(["-v", "nosuch"]);
+        var result = Run(["-v", "nosuch"]);
 
-        Assert.Equal(2, code);
-        Assert.Equal("", output);
-        Assert.Equal("Unknown command \"nosuch\". Run winshell --help." + Environment.NewLine, error);
+        result.AssertExitCode(2);
+        Assert.Equal("", result.Output);
+        Assert.Equal("Unknown command \"nosuch\". Run winshell --help." + Environment.NewLine, result.Error);
     }
 
     [Fact]
     public void A_pid_option_before_kill_selects_that_process()
     {
-        var (code, output, error) = Run(["--pid", "0", "kill"]);
+        var result = Run(["--pid", "0", "kill"]);
 
-        Assert.Equal(1, code);
-        Assert.Equal("", output);
-        Assert.Equal("No instance with process id 0." + Environment.NewLine, error);
+        result.AssertExitCode(1);
+        Assert.Equal("", result.Output);
+        Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
 
     [Fact]
     public void Run_with_a_missing_path_fails_before_a_shell_starts()
     {
         var missing = Path.Combine(Path.GetTempPath(), "winshell-cli-run-missing-" + Guid.NewGuid().ToString("N"));
-        var (code, output, error) = Run(["run", "-p", missing]);
+        var result = Run(["run", "-p", missing]);
 
-        Assert.Equal(1, code);
-        Assert.Equal("", output);
-        Assert.Contains("No .csproj", error, StringComparison.Ordinal);
+        result.AssertExitCode(1);
+        Assert.Equal("", result.Output);
+        Assert.Contains("No .csproj", result.Error, StringComparison.Ordinal);
     }
 
     /// <summary>The sign-in entry passes <c>--no-build --no-duplicate</c>, and the Start tile <c>--no-duplicate</c>.</summary>
@@ -62,11 +62,12 @@ public class CliRunCommandTests
         Directory.CreateDirectory(local);
         try
         {
-            var (code, output, error) = WinshellCli.Run(args.Split(' '), ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
+            var result = WinshellCli.Run(args.Split(' '), ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
 
-            Assert.Equal((0, "", ""), (code, output, error));
+            Assert.Equal((0, "", ""), (result.Code, result.Output, result.Error));
             var listed = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
-            Assert.Equal((0, "[]"), (listed.Code, listed.Output.Trim()));
+            listed.AssertExitCode(0);
+            Assert.Equal("[]", listed.Output.Trim());
         }
         finally
         {
@@ -101,11 +102,11 @@ public class CliRunCommandTests
                 ["processStart"] = self.StartTime.ToUniversalTime().Ticks,
             }));
 
-            var (code, output, error) = WinshellCli.Run(["run", "-n", "-p", project], ("WINSHELL_LOCAL_DIR", root));
+            var result = WinshellCli.Run(["run", "-n", "-p", project], ("WINSHELL_LOCAL_DIR", root));
 
-            Assert.Equal(0, code);
-            Assert.Equal("", output);
-            Assert.Equal("", error);
+            result.AssertExitCode(0);
+            Assert.Equal("", result.Output);
+            Assert.Equal("", result.Error);
         }
         finally
         {
@@ -113,7 +114,7 @@ public class CliRunCommandTests
         }
     }
 
-    private static (int Code, string Output, string Error) Run(string[] args) =>
+    private static ChildProcess Run(string[] args) =>
         WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-run-absent")));

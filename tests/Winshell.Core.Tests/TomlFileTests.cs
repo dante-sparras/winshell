@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using Tomlyn.Parsing;
 
@@ -62,12 +61,7 @@ public sealed class TomlFileTests
 
     private static void HardLink(string link, string real)
     {
-        var start = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argument in new[] { "/c", "mklink", "/H", link, real })
-            start.ArgumentList.Add(argument);
-        using var command = Process.Start(start)!;
-        command.WaitForExit();
-        Assert.Equal(0, command.ExitCode);
+        ChildProcess.Run("cmd.exe", "/c", "mklink", "/H", link, real).AssertExitCode(0);
     }
 
     [Fact]

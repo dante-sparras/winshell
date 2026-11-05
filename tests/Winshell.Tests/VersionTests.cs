@@ -13,10 +13,10 @@ public class VersionTests
     public void The_cli_prints_the_release_please_version(string line)
     {
         var manifest = ManifestVersion();
-        var (code, output, error) = WinshellCli.Run(line.Split(' '));
-        Assert.Equal(0, code);
-        Assert.Equal("", error);
-        Assert.Matches($"^winshell {Regex.Escape(manifest)}(\\+\\S+)?\\r?\\n$", output);
+        var result = WinshellCli.Run(line.Split(' '));
+        result.AssertExitCode(0);
+        Assert.Equal("", result.Error);
+        Assert.Matches($"^winshell {Regex.Escape(manifest)}(\\+\\S+)?\\r?\\n$", result.Output);
     }
 
     private static string ManifestVersion()
