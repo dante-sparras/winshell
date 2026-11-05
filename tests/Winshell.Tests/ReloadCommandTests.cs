@@ -206,6 +206,30 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         }
     }
 
+    /// <summary>Its supervisor starts only a project's last build, so without the project the shell keeps running.</summary>
+    [Fact]
+    public void A_reload_under_winshell_run_without_its_project_is_refused()
+    {
+        var run = Supervise();
+        var shell = NextPid(0, shellId: null);
+        var projectFile = Directory.GetFiles(_probe.Folder, "*.csproj").Single();
+        File.Move(projectFile, projectFile + ".gone");
+        try
+        {
+            var result = Run("reload", "--pid", shell.ToString(CultureInfo.InvariantCulture));
+
+            var id = Listed().Single(row => row.GetProperty("pid").GetInt32() == shell).GetProperty("id").GetString();
+            Assert.Equal(1, result.Code);
+            Assert.Equal("", result.Output);
+            Assert.Equal($"Could not find the project that builds instance {id}, so it was not reloaded.{Environment.NewLine}", result.Error);
+            Assert.False(run.HasExited);
+        }
+        finally
+        {
+            File.Move(projectFile + ".gone", projectFile);
+        }
+    }
+
     /// <summary>Starts <c>winshell run</c> on this class's probe, which runs its last build.</summary>
     private Process Supervise()
     {

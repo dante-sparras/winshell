@@ -105,13 +105,13 @@ public sealed class ShellSupervisorTests
         Assert.Equal(1, _shells.Count);
     }
 
-    /// <summary>A kill or a reload asked it to stop, and it crashed on the way out or <c>--force</c> ended it.</summary>
+    /// <summary><c>winshell kill</c> asked it to stop, and it crashed on the way out or <c>--force</c> ended it.</summary>
     [Fact]
     public async Task A_crash_after_a_stop_was_asked_for_ends_supervision_with_the_taskbar_back()
     {
         var run = Supervise(CancellationToken.None);
 
-        (await _shells.Started(1)).Exit(-1, stopAsked: true);
+        (await _shells.Started(1)).Exit(-1, ExitIntent.Stop);
 
         Assert.Equal(-1, await run);
         Assert.Equal(["start", "restore"], _shells.Events);
@@ -130,7 +130,7 @@ public sealed class ShellSupervisorTests
     {
         var run = Supervise(CancellationToken.None);
 
-        (await _shells.Started(1)).Exit(code, reloadAsked: true);
+        (await _shells.Started(1)).Exit(code, ExitIntent.Reload);
         var second = await _shells.Started(2);
 
         Assert.Equal(events, _shells.Events);
@@ -148,7 +148,7 @@ public sealed class ShellSupervisorTests
         (await _shells.Started(2)).Exit(AccessViolation);
         await _time.Waiting();
         _time.Advance(TimeSpan.FromSeconds(2));
-        (await _shells.Started(3)).Exit(0, reloadAsked: true);
+        (await _shells.Started(3)).Exit(0, ExitIntent.Reload);
 
         (await _shells.Started(4)).Exit(AccessViolation);
         await _time.Waiting();
@@ -159,18 +159,6 @@ public sealed class ShellSupervisorTests
 
         fifth.Exit(0);
         Assert.Equal(0, await run);
-    }
-
-    /// <summary><c>winshell kill</c> came after a reload, before the shell quit.</summary>
-    [Fact]
-    public async Task A_stop_asked_for_after_a_reload_ends_supervision()
-    {
-        var run = Supervise(CancellationToken.None);
-
-        (await _shells.Started(1)).Exit(0, stopAsked: true, reloadAsked: true);
-
-        Assert.Equal(0, await run);
-        Assert.Equal(["start"], _shells.Events);
     }
 
     [Fact]
@@ -312,14 +300,11 @@ public sealed class ShellSupervisorTests
 
         public Task<int> Exited => _exit.Task;
 
-        public bool StopAsked { get; private set; }
+        public ExitIntent Intent { get; private set; }
 
-        public bool ReloadAsked { get; private set; }
-
-        public void Exit(int code, bool stopAsked = false, bool reloadAsked = false)
+        public void Exit(int code, ExitIntent intent = ExitIntent.None)
         {
-            StopAsked = stopAsked;
-            ReloadAsked = reloadAsked;
+            Intent = intent;
             _exit.SetResult(code);
         }
 

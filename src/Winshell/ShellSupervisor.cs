@@ -4,10 +4,10 @@ namespace Winshell;
 /// Runs a shell in a child process and starts it again when it crashes. Exit code 0 is a stop that was asked for, such as
 /// <c>winshell kill</c>, a reload that handed over to a new process, Ctrl+C, or a duplicate that left. 1 is a shell that
 /// could not start and said why, which a new start would only repeat. Any other exit is a crash, unless <c>winshell kill</c>
-/// or <c>winshell reload</c> had asked the shell to stop. The next start waits 1, 2, 4, 8 and then 10 seconds, and the
-/// sixth crash in a row ends supervision. A shell that ran for a minute was running well, so its crash counts as the first.
-/// A shell <c>winshell reload</c> asked to quit for its supervisor starts again at once, however it exits, and counts
-/// its crashes from none, as the first did.
+/// had asked the shell to stop. The next start waits 1, 2, 4, 8 and then 10 seconds, and the sixth crash in a row ends
+/// supervision. A shell that ran for a minute was running well, so its crash counts as the first. A shell
+/// <c>winshell reload</c> asked to quit for its supervisor starts again at once, however it exits, and counts its crashes
+/// from none, as the first did.
 /// </summary>
 /// <remarks>
 /// A shell that exits 0 has put Explorer's taskbar back itself. After any other exit, the taskbar comes back if none of
@@ -36,7 +36,7 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
         {
             var hidden = taskbarHidden();
             var started = time.GetTimestamp();
-            var exit = (Code: 1, StopAsked: false, ReloadAsked: false);
+            var exit = (Code: 1, Intent: ExitIntent.None);
             try
             {
                 exit = await RunOnceAsync(stop);
@@ -47,9 +47,9 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
                     restoreTaskbar();
             }
             var code = exit.Code;
-            if (exit.StopAsked || stop.IsCancellationRequested)
+            if (exit.Intent == ExitIntent.Stop || stop.IsCancellationRequested)
                 return code;
-            if (exit.ReloadAsked)
+            if (exit.Intent == ExitIntent.Reload)
             {
                 crashes = 0;
                 continue;
@@ -76,11 +76,11 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
     }
 
     /// <summary>One child, to its exit. 1 when it did not start, and the start has said why.</summary>
-    private async Task<(int Code, bool StopAsked, bool ReloadAsked)> RunOnceAsync(CancellationToken stop)
+    private async Task<(int Code, ExitIntent Intent)> RunOnceAsync(CancellationToken stop)
     {
         using var child = start();
         if (child is null)
-            return (1, false, false);
+            return (1, ExitIntent.None);
         int code;
         try
         {
@@ -91,6 +91,6 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
             await child.StopAsync();
             code = await child.Exited;
         }
-        return (code, child.StopAsked, child.ReloadAsked);
+        return (code, child.Intent);
     }
 }

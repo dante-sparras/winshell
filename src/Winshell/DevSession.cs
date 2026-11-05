@@ -30,31 +30,10 @@ internal static class DevSession
     {
         if (ShellOf(project) is { } shell)
         {
-            try
-            {
-                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(closing ? 1 : 3));
+            var patience = closing ? ShellExit.Patience.Closing : ShellExit.Patience.Interactive;
 #pragma warning disable VSTHRD002 // A signal handler must finish before Windows ends this process, and the build loop waits for this anyway. No thread here runs a continuation it waits for.
-                _ = InstanceCall.AskAsync(shell, new IpcRequest("kill"), deadline.Token).GetAwaiter().GetResult();
+            _ = ShellExit.QuitAsync(shell, ExitIntent.None, patience, ShellExit.Ending.Always).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
-            }
-            catch (OperationCanceledException)
-            {
-                // The shell did not answer in time. It is ended below.
-            }
-            try
-            {
-                using var process = Process.GetProcessById(shell.Pid);
-                // winshell kill waits five seconds too.
-                if (Instances.IsThisInstance(shell, process) && !process.WaitForExit(TimeSpan.FromSeconds(closing ? 2 : 5)))
-                {
-                    process.Kill();
-                    process.WaitForExit(TimeSpan.FromSeconds(1));
-                }
-            }
-            catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
-            {
-                // The shell has exited already.
-            }
         }
         try
         {
