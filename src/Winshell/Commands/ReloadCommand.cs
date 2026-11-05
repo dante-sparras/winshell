@@ -29,17 +29,14 @@ internal static class ReloadCommand
                 return 1;
             }
         }
-        // A configuration's program with a supervisor only quits, and its supervisor starts the last build and owns it. Any
-        // other shell hands over to a process it starts itself, which its supervisor must not start again beside, even
+        // A configuration's program with a supervisor only quits, and its supervisor starts the last build and owns it.
+        if (project is not null && await QuitForSupervisorAsync(info) is { } code)
+            return code;
+        // Any other shell hands over to a process it starts itself, which its supervisor must not start again beside, even
         // after a crash on the way out.
-        var bySupervisor = project is not null && ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Reload, asked: true);
-        var told = bySupervisor ? ShellProcess.Asked.Reload : ShellProcess.Asked.Stop;
-        if (!bySupervisor)
-            ShellProcess.TellSupervisor(info.Pid, told, asked: true);
+        ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Stop, asked: true);
         // A handover starts the program the build left, which is not always the one this instance runs.
-        var request = bySupervisor
-            ? new IpcRequest("kill")
-            : new IpcRequest("reload", Args: project is null ? null : [project.Program]);
+        var request = new IpcRequest("reload", Args: project is null ? null : [project.Program]);
         InstanceCall.Answer answer;
         try
         {
@@ -47,27 +44,54 @@ internal static class ReloadCommand
         }
         catch
         {
-            ShellProcess.TellSupervisor(info.Pid, told, asked: false);
+            ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Stop, asked: false);
             throw;
         }
         if (answer.Response is not { } response)
         {
-            ShellProcess.TellSupervisor(info.Pid, told, asked: false);
+            ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Stop, asked: false);
             Console.Error.WriteLine(answer.Failure);
             return 1;
         }
         if (!response.Ok)
         {
-            ShellProcess.TellSupervisor(info.Pid, told, asked: false);
+            ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Stop, asked: false);
             Console.Error.WriteLine($"Instance {info.Id} did not reload: {response.Error}");
             return 1;
         }
-        // The quit is only posted. A shell that hangs on its way out is ended, as a reload asked for the new one. The shell
-        // has accepted the quit, so its supervisor still starts the new one whenever it exits.
-        if (bySupervisor && !KillCommand.WaitForShellExit(info, TimeSpan.FromSeconds(5)) && !KillCommand.EndProcess(info))
+        Console.WriteLine($"Reloaded {info.Id}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Asks a shell to quit for its supervisor, which starts the last build, and returns the exit code. Null when the shell
+    /// has no supervisor.
+    /// </summary>
+    internal static async Task<int?> QuitForSupervisorAsync(InstanceInfo info)
+    {
+        if (!ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Reload, asked: true))
+            return null;
+        var gone = false;
+        try
         {
-            Console.Error.WriteLine($"Could not end instance {info.Id}.");
-            return 1;
+            var answer = await InstanceCall.AskAsync(info, new IpcRequest("kill"));
+            // The quit is only posted, and a shell can exit before its answer is written. One that accepted the quit and
+            // hangs on its way out is ended, as a reload asked for the new one.
+            var accepted = answer.Response is { Ok: true };
+            gone = KillCommand.WaitForShellExit(info, TimeSpan.FromSeconds(5)) || (accepted && KillCommand.EndProcess(info));
+            if (!gone)
+            {
+                Console.Error.WriteLine(answer.Response is { Ok: false } refused
+                    ? $"Instance {info.Id} did not reload: {refused.Error}"
+                    : answer.Failure ?? $"Could not end instance {info.Id}.");
+                return 1;
+            }
+        }
+        finally
+        {
+            // Its supervisor reads the request when the shell exits, so only a shell that still runs has it taken back.
+            if (!gone && !KillCommand.WaitForShellExit(info, TimeSpan.Zero))
+                ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Reload, asked: false);
         }
         Console.WriteLine($"Reloaded {info.Id}");
         return 0;
