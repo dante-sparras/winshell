@@ -67,7 +67,7 @@ Add `Winshell.Architecture.Tests` to the normal fast checks. Use NetArchTest or 
 
 The compiler/analyzer owns the interop ban; architecture tests own the assembly and feature boundaries. Demonstrate that each guard rejects a representative forbidden dependency or declaration, then remove that violation. Do not add production hooks solely to exercise the guards.
 
-Tests follow the [test-audit gate](../skills/test-audit/SKILL.md) and [test rules](../CONTRIBUTING.md#write-tests-that-dont-flake). Never weaken a test, skip a failure or add flaky retries. Use fake clocks and real completion signals. A refactor that retains behavior retains its existing proof.
+Tests follow the installed `test-audit` skill's gate, [where a test belongs](../CONTRIBUTING.md#where-a-test-belongs) and the [test rules](../CONTRIBUTING.md#write-tests-that-dont-flake). Never weaken a test, skip a failure or add flaky retries. Use fake clocks and real completion signals. A refactor that retains behavior retains its existing proof.
 
 ## Migration and delivery
 

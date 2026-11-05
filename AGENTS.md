@@ -17,6 +17,7 @@ For the folder map, see [Project structure](docs/development.md#project-structur
 Many agents work on this repo at once.
 
 - First, in every session, run `git fetch origin main` and `git rev-list --left-right --count HEAD...origin/main`. A second count above 0 means this checkout, and the `AGENTS.md` you just read, are behind `main`: update the base as [Start a task](docs/development.md#start-a-task) describes before you edit or rely on them.
+- Next, before any other work, install the agent skills with `pwsh scripts/install-skills.ps1` ([Agent skills](docs/development.md#agent-skills)). Use the installed skills, such as `test-audit`; never read a skill from a copy of its source.
 - One task is one thread, one issue, one worktree, one branch and one small PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
 - Name the branch `agent/<tool>/<issue#>-<slug>`, such as `agent/claude/123-tray-overflow`, and put `Fixes #<issue#>` in the PR body.
 - Run tasks side by side, and assign them to parallel threads, only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
@@ -37,7 +38,7 @@ Many agents work on this repo at once.
 
 ## Before you finish
 
-- Writing, changing or reviewing a test? It must pass the gate in [skills/test-audit/SKILL.md](skills/test-audit/SKILL.md).
+- Writing, changing or reviewing a test? It must pass the installed `test-audit` skill's gate and [Where a test belongs](CONTRIBUTING.md#where-a-test-belongs).
 - Before every push, run the [checks for the change](docs/development.md#checks-by-change). Prose-only changes need `pwsh -NoProfile scripts/check.ps1 -Lint`. Pages containing or removing C# examples, and generated reference pages, also need the targeted `DocsTests` command there. Other changes need `pwsh scripts/check.ps1`: build with 0 warnings, formatting, fast .NET tests and PowerShell tooling tests, with no window opened.
 - Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/check.ps1 -Tier Slow`, following [the live UI procedure](docs/development.md#live-ui-with-winland-running). `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The Package workflow runs it, not required, on PRs that change `templates/` or the release files.
 - CI runs the remaining checks, so leave `package.ps1` and arm64 to it. The required `ci` job checks Markdown links offline and selects prose-only, compiled-documentation or full checks on PRs and pushes to `main`. The required `slow` job skips documentation-only changes. The ruleset also requires `installer`, `actionlint`, `pr-title` and `pr-rules`.
@@ -58,7 +59,7 @@ For a visual change, follow [See what you changed](docs/development.md#see-what-
 
 ## Agent skills
 
-Install the project skills as described in [Development](docs/development.md#agent-skills). Installed copies in `.agents/skills/` and `.claude/skills/` are ignored; edit project-owned sources in `skills/`.
+Install the skills first in every session, as described in [Development](docs/development.md#agent-skills). `skills-lock.json` pins each one to its source; the installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git.
 
 ### Issue tracker
 
@@ -70,7 +71,7 @@ The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 
 ### Test audit
 
-Audits and sweeps of `tests/` follow `skills/test-audit/SKILL.md`. It is this repo's own, adapted from OpenClaw's skill.
+Audits and sweeps of `tests/` follow the installed `test-audit` skill, from OpenClaw at the commit `skills-lock.json` pins. This repo's test boundaries are in [Where a test belongs](CONTRIBUTING.md#where-a-test-belongs).
 
 ### Domain docs
 

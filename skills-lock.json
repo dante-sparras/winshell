@@ -141,9 +141,11 @@
       "computedHash": "6e029f9d1d5acdc2e79e745f86424c218180b7b4c6a7c660e32c4802db12d6cf"
     },
     "test-audit": {
-      "source": "./skills/test-audit",
-      "sourceType": "local",
-      "computedHash": "827e4bb19cdd76af59dcd29754959860f6e3d32572269b4bfbee8a449f992c59"
+      "source": "openclaw/openclaw",
+      "ref": "46943d587ace8d66012467d9b4c5dfc833469945",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/test-audit/SKILL.md",
+      "computedHash": "2b203b479ebf0c524fe5a2a91461300c327b3179df2b92b48d0503663a6423c0"
     },
     "to-questionnaire": {
       "source": "mattpocock/skills",

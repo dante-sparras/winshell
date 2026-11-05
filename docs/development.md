@@ -41,7 +41,7 @@ To update a source build, close Winshell, pull the newer source and publish it o
 
 ## Agent skills
 
-Install every skill `skills-lock.json` records, the project-owned test-audit skill included, for Codex and Claude Code:
+Install every skill `skills-lock.json` records, for Codex and Claude Code. Agents do this first in every session:
 
 ```sh
 pwsh scripts/install-skills.ps1
@@ -49,7 +49,7 @@ pwsh scripts/install-skills.ps1
 
 It installs each source at the ref the lock pins, as copies. The CLI's `experimental_install` links instead, and on Windows that leaves the external skills linked to no agent.
 
-Installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git. Keep `skills-lock.json` tracked for external skills. The custom test-audit source and its license live in `skills/test-audit/`; reinstall it after changing that source. Skills become available in a new agent session.
+Installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git; keep `skills-lock.json` tracked. Every skill installs from the source repository the lock records, `test-audit` included, which comes from OpenClaw. Skills become available in a new agent session.
 
 ## Start a task
 
@@ -369,7 +369,6 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 │   └── Directory.Build.props        # What every test project shares
 ├── winshell.slnx                    # The solution the check builds
 ├── Directory.Solution.targets       # Points Git at .githooks when the solution builds
-├── skills/                          # Project-owned skill sources; installed copies are ignored
 ├── CONTRIBUTING.md                  # Test rules, branch names, PR titles and descriptions
 └── GLOSSARY.md                      # The words this repo uses
 ```
