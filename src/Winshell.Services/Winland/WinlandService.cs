@@ -640,7 +640,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     private void SetActiveWindow(WinlandWindow? window) => Set(ref _activeWindow, window, nameof(ActiveWindow));
 
-    /// <summary>Stops following Winland and closes the connection to its pipe.</summary>
+    /// <summary>Stops following Winland: the lists no longer change. The process keeps its one connection to Winland's pipe.</summary>
     public void Dispose()
     {
         if (_disposed)
