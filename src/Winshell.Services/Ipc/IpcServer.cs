@@ -331,7 +331,11 @@ internal sealed class IpcServer : IDisposable
             : new IpcResponse(true);
     }
 
-    /// <summary><c>winshell reload</c> after a build that failed. The two arguments are the error and the project file.</summary>
+    /// <summary>
+    /// <c>winshell reload</c> reports a failed build with it, and <c>winshell dev</c> reports each build. The two
+    /// arguments are the error and the project file. An empty error says the project built, which closes that project's
+    /// build-error notice.
+    /// </summary>
     private IpcResponse BuildError(IpcRequest request)
     {
         if (request.Args is not { Count: 2 } args)

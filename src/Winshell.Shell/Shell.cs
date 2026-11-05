@@ -393,7 +393,7 @@ public sealed partial class Shell : IDisposable
         public void Quit() => shell.Quit();
 
         public void ShowBuildError(string error, string projectFile) =>
-            shell.Notices?.Show(ShellNotices.ForBuildError(error, projectFile));
+            shell.Notices?.ShowBuildError(error, projectFile);
 
         public Task<string> Inspect(string command, IReadOnlyList<string> args) => Inspector.Run(shell, command, args);
     }

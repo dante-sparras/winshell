@@ -101,6 +101,18 @@ internal sealed class ShellNotices : IDisposable
             Hide();
     }
 
+    /// <summary>
+    /// Shows why a project did not build, or, given no error, takes away the notice of that project's last failed build.
+    /// A build that works leaves any other notice alone.
+    /// </summary>
+    public void ShowBuildError(string error, string projectFile)
+    {
+        if (error.Length > 0)
+            Show(ForBuildError(error, projectFile));
+        else if (Current is { Kind: NoticeKind.BuildError } current && current.Target == projectFile)
+            Hide();
+    }
+
     /// <summary>The notice for something that failed: what failed, what Winshell did, and the report.</summary>
     public static Notice ForCrash(CrashReport report, TimeSpan timeout)
     {
