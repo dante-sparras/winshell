@@ -222,13 +222,7 @@ public sealed class CalendarDay : ObservableObject
 /// <summary>One weekday initial above the grid.</summary>
 public sealed class CalendarHeading : ObservableObject
 {
-    private string _text = "";
-
-    public string Text
-    {
-        get => _text;
-        private set => Set(ref _text, value);
-    }
+    public string Text { get; private set => Set(ref field, value); } = "";
 
     internal void Update(string text) => Text = text;
 }
