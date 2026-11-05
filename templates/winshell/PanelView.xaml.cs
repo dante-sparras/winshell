@@ -4,5 +4,8 @@ namespace MyShell;
 
 public sealed partial class PanelView : UserControl
 {
-    public PanelView() => InitializeComponent();
+    public PanelView()
+    {
+        InitializeComponent();
+    }
 }
