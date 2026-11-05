@@ -1,0 +1,5 @@
+T:System.Runtime.InteropServices.DllImportAttribute;Declare interop in Winshell.Native and call its managed operation
+T:System.Runtime.InteropServices.LibraryImportAttribute;Declare interop in Winshell.Native and call its managed operation
+T:System.Runtime.InteropServices.ComImportAttribute;Declare interop in Winshell.Native and call its managed operation
+T:System.Runtime.InteropServices.Marshalling.GeneratedComInterfaceAttribute;Declare interop in Winshell.Native and call its managed operation
+T:System.Runtime.InteropServices.Marshalling.GeneratedComClassAttribute;Declare interop in Winshell.Native and call its managed operation

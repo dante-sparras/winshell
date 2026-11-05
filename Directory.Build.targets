@@ -1,0 +1,13 @@
+<Project>
+  <!-- Sealed interop: only Winshell.Native declares interop or compiles unsafe code (docs/architecture.md).
+       This file runs after each project file, so a project can't turn either guard off. -->
+  <PropertyGroup>
+    <_WinshellIsNative Condition="'$(MSBuildProjectFullPath)' == '$(MSBuildThisFileDirectory)src\Winshell.Native\Winshell.Native.csproj'">true</_WinshellIsNative>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(_WinshellIsNative)' != 'true'">
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(_WinshellIsNative)' != 'true'">
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Interop.txt" />
+  </ItemGroup>
+</Project>

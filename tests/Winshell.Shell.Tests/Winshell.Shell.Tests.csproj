@@ -7,7 +7,6 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <!-- DocsTests compiles the reference generator as a library: the feature lets its #: lines through, and the
        constant leaves out its top-level statements. -->
