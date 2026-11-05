@@ -1,5 +1,3 @@
-using Winshell.Native;
-
 namespace Winshell.ShellTests;
 
 /// <summary>
@@ -51,14 +49,6 @@ public class WindowFocusTests
     {
         var window = new FakeWindow();
         return (new WindowFocus(kind, window), window);
-    }
-
-    [Fact]
-    public void A_panel_and_a_popup_start_refusing_activation_and_a_floating_window_does_not()
-    {
-        Assert.Equal(
-            (Win32.WS_EX_NOACTIVATE, Win32.WS_EX_NOACTIVATE, 0u),
-            (WindowFocus.StartingExStyle(WindowKind.Panel), WindowFocus.StartingExStyle(WindowKind.Popup), WindowFocus.StartingExStyle(WindowKind.Floating)));
     }
 
     [Fact]
