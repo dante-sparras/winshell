@@ -1,0 +1,42 @@
+name: Close Fixed Issues
+
+on:
+  # A merged PR's run reads this file from its merge commit, which stays when a stack merge deletes the PR's base branch.
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read # compare the merge commit with main
+  issues: write # close the issues
+  pull-requests: read # the PR's closing references
+
+jobs:
+  close-fixed-issues:
+    name: close-fixed-issues
+    # GitHub sometimes leaves open an issue that a merged PR fixes (#1433).
+    if: ${{ github.event.pull_request.merged }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Close each issue the PR fixes that is still open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          # GitHub closes an issue within seconds when it works; let it, so the issue links to the PR that closed it.
+          sleep 30
+          # A stack layer's base is its parent's branch, but a stack merge puts its commit on main. A PR fixes its issues
+          # only once its commit is on main.
+          status=$(gh api "repos/$REPO/compare/main...$SHA" --jq .status)
+          if [[ "$status" != behind && "$status" != identical ]]; then
+            echo "$SHA is not on main."
+            exit 0
+          fi
+          # gh issue close skips a closed issue without commenting.
+          gh pr view "$PR" --repo "$REPO" --json closingIssuesReferences --jq '.closingIssuesReferences[]
+            | select(.repository.owner.login + "/" + .repository.name == env.REPO) | .number' |
+            while read -r issue; do
+              gh issue close "$issue" --repo "$REPO" --comment "Fixed by #$PR."
+            done
