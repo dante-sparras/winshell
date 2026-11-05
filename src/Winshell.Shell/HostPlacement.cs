@@ -105,7 +105,7 @@ internal sealed class HostPlacement
         Scale = monitor.Scale;
         var r = DesktopSpace.ToPhysical(placement.Rect, monitor.Bounds, Scale);
         Move(r, Win32.HWND_TOPMOST, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
-        _platform.UpdatePopupGrab(_host, _visible && placement.GrabFocus);
+        _platform.OutsideClicks.Grab(_host, _visible && placement.GrabFocus);
     }
 
     public void SetFloating(FloatingPlacement placement)
@@ -209,7 +209,7 @@ internal sealed class HostPlacement
             Win32.ShowWindow(Handle, Win32.SW_HIDE);
         }
         if (kind == WindowKind.Popup)
-            _platform.UpdatePopupGrab(_host, visible && Popup?.GrabFocus == true);
+            _platform.OutsideClicks.Grab(_host, visible && Popup?.GrabFocus == true);
     }
 
     public void SetInputRegion(IReadOnlyList<Rect>? rects)
@@ -279,7 +279,7 @@ internal sealed class HostPlacement
     /// <summary>Gives back what the window holds while it is placed: a popup's grab on clicks and a panel's edge.</summary>
     internal void Release()
     {
-        _platform.UpdatePopupGrab(_host, false);
+        _platform.OutsideClicks.Grab(_host, false);
         AppBar?.Remove();
     }
 }

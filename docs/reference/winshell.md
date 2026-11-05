@@ -165,9 +165,9 @@ Has the members of [ShellWindow](#shellwindow).
 | Member | Type | Description |
 | --- | --- | --- |
 | `PopupWindow()` | constructor | A hidden popup of the running shell, 100 by 100 at the virtual desktop's origin until Rect is set. |
-| `GrabFocus` | bool | Takes the keyboard while shown. A click outside the popup, or Esc, then dismisses it. |
+| `GrabFocus` | bool | Takes the keyboard while shown. A click outside the popup and its open flyouts, or Esc, then dismisses it. |
 | `Rect` | Rect | Where the popup sits, in logical pixels on the virtual desktop. |
-| `Dismissed` | Action | A click outside the popup, or Esc, dismissed it. It is hidden. |
+| `Dismissed` | Action | A click outside the popup and its open flyouts, or Esc, dismissed it. It is hidden. |
 
 ## ScreenInfo
 
