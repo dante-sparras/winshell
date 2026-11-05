@@ -1,4 +1,4 @@
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 public sealed class DirectoryWatchTests : IDisposable
 {

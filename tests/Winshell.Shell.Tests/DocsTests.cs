@@ -3,8 +3,9 @@ using Winshell.Docs;
 namespace Winshell.ShellTests;
 
 /// <summary>
-/// Each reference page is generated from the public API of <c>Winshell.Shell</c> and <c>Winshell.Services</c>. Each
-/// <c>csharp</c> sample in the docs and the README is text from <see cref="GuideSamples"/>, which this project builds.
+/// Each reference page is generated from the public API of <c>Winshell.Shell</c>, <c>Winshell.Services</c> and
+/// <c>Winshell.Core</c>. Each <c>csharp</c> sample in the docs and the README is text from <see cref="GuideSamples"/>,
+/// which this project builds.
 /// </summary>
 public sealed class DocsTests
 {

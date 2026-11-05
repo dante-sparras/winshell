@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>
 /// What a crash report must not do: keep a secret, hide a different crash, lose a report to another writer, show up

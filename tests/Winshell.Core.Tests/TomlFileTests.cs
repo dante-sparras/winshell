@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using Tomlyn.Parsing;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary><see cref="TomlFile"/> reads a file into typed properties and writes an assigned property back into it.</summary>
 public sealed class TomlFileTests

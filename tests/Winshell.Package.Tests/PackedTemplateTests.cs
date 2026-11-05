@@ -305,7 +305,7 @@ public sealed class PackedTemplates : IDisposable
         using var zip = ZipFile.OpenRead(nupkg);
         var names = zip.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
         var lib = "lib/net10.0-windows10.0.22621.0/";
-        Assert.Equal([lib + "Winshell.Native.dll", lib + "Winshell.Services.dll", lib + "Winshell.Shell.dll"], names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order());
+        Assert.Equal([lib + "Winshell.Core.dll", lib + "Winshell.Native.dll", lib + "Winshell.Services.dll", lib + "Winshell.Shell.dll"], names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order());
 
         var services = zip.GetEntry(lib + "Winshell.Services.dll")!;
         var extracted = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));

@@ -1,5 +1,5 @@
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>Crash reports. Every report goes to a temp folder this class creates.</summary>
 public sealed class CrashTests : IDisposable

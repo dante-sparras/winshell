@@ -8,9 +8,11 @@
     <PackageReference Include="Microsoft.Windows.CsWin32" PrivateAssets="all" />
     <!-- Each feature folder may keep its own list, so migrations side by side don't edit one shared file. -->
     <AdditionalFiles Include="**\NativeMethods.txt" Exclude="NativeMethods.txt;bin\**;obj\**" />
+    <InternalsVisibleTo Include="Winshell.Core" />
     <InternalsVisibleTo Include="Winshell.Services" />
     <InternalsVisibleTo Include="Winshell.Shell" />
     <!-- The test projects. Each compiles tests/TestSupport, whose parent process watch calls what Testing/NativeMethods.txt generates. -->
+    <InternalsVisibleTo Include="Winshell.Core.Tests" />
     <InternalsVisibleTo Include="Winshell.DefaultShell.Tests" />
     <InternalsVisibleTo Include="Winshell.Package.Tests" />
     <InternalsVisibleTo Include="Winshell.Services.Tests" />

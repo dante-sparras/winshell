@@ -1,5 +1,5 @@
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>The next start shows a fatal crash report once, and skips one older than the last clean exit.</summary>
 public sealed class CrashFollowUpTests : IDisposable

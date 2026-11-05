@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>
 /// The budgets for a TOML file. The numbers are the production limits; a file past one is as large as the limit.
