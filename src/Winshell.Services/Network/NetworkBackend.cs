@@ -4,7 +4,7 @@ using Windows.Devices.Radios;
 using Windows.Devices.WiFi;
 using Windows.Networking.Connectivity;
 using Windows.Security.Credentials;
-using static Winshell.Network.NetworkNative;
+using Winshell.Native;
 using WinNetworkInformation = Windows.Networking.Connectivity.NetworkInformation;
 
 namespace Winshell.Network;
@@ -89,7 +89,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         WinNetworkInformation.NetworkStatusChanged += _ => Refresh();
         NetworkChange.NetworkAddressChanged += (_, _) => Refresh();
         NetworkChange.NetworkAvailabilityChanged += (_, _) => Refresh();
-        NetworkNative.Listen(Refresh);
+        Wlan.Listen(() => NativeCallback.Guard(Log.Default, "network", Refresh));
         await RefreshNowAsync().ConfigureAwait(false);
     }
 
@@ -229,7 +229,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     private NetworkSnapshot ReadState()
     {
         var profiles = WinNetworkInformation.GetConnectionProfiles().Where(p => p.NetworkAdapter is not null).ToList();
-        var wlanStates = InterfaceStates();
+        var wlanStates = Wlan.InterfaceStates();
 
         var devices = new List<NetworkDeviceInfo>();
         foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
@@ -243,7 +243,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
             if (type == DeviceType.None || !Guid.TryParse(nic.Id, out var id))
                 continue;
             // Hyper-V switches, VPNs, Wi-Fi Direct and filter drivers are not devices a shell shows.
-            if (GetInterface(id) is not { HardwareInterface: true } row)
+            if (IpHelper.GetInterface(id) is not { HardwareInterface: true } row)
                 continue;
             if (type == DeviceType.Wired && nic.Description.Contains("Bluetooth", StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -273,7 +273,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                     }
                     : up ? ConnectionState.Connected : ConnectionState.Disconnected;
                 devices.Add(new NetworkDeviceInfo(id, type, nic.Name, address, state, false, 0,
-                    ReadWifiNetworks(id, state, profile), MapDeviceMode(OperationMode(id))));
+                    ReadWifiNetworks(id, state, profile), MapDeviceMode(Wlan.OperationMode(id))));
             }
         }
 
@@ -337,7 +337,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     private List<WifiProfileInfo> ReadSavedProfiles(Guid id)
     {
         var saved = new List<WifiProfileInfo>();
-        foreach (var name in ProfileNames(id).Order(StringComparer.Ordinal))
+        foreach (var name in Wlan.ProfileNames(id).Order(StringComparer.Ordinal))
         {
             if (name.Length == 0)
                 continue;
@@ -345,7 +345,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
             uint error;
             try
             {
-                error = GetProfile(id, name, out xml, out _);
+                error = Wlan.GetProfile(id, name, out xml, out _);
             }
             catch (Exception e) when (IsExpectedFailure(e))
             {
@@ -437,7 +437,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
 
     public uint Forget(Guid device, string name)
     {
-        var error = DeleteProfile(device, name);
+        var error = Wlan.DeleteProfile(device, name);
         Refresh();
         return error;
     }

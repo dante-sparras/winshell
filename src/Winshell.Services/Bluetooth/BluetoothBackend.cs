@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
 using Winshell.Native;
@@ -28,7 +27,7 @@ internal sealed record BluetoothSnapshot(bool Ready, BluetoothAdapterInfo? Adapt
 /// The device icon is the class and appearance on that same enumeration.
 /// Each shell generation owns and stops its own nearby-device watchers.
 /// </summary>
-internal sealed partial class BluetoothBackend : IBluetoothBackend
+internal sealed class BluetoothBackend : IBluetoothBackend
 {
     private const string AddressKey = "System.Devices.Aep.DeviceAddress";
     private const string ConnectedKey = "System.Devices.Aep.IsConnected";
@@ -143,8 +142,8 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
             cancellation.ThrowIfCancellationRequested();
             // These queries can block. Their own thread keeps them off the shell's thread and off the pool.
             var visibility = await OffUi(() => (
-                Discoverable: BluetoothIsDiscoverable(0),
-                Pairable: BluetoothIsConnectable(0))).ConfigureAwait(false);
+                Discoverable: BluetoothRadios.IsDiscoverable(),
+                Pairable: BluetoothRadios.IsConnectable())).ConfigureAwait(false);
             var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
                 ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State),
                 visibility.Discoverable, visibility.Pairable);
@@ -276,9 +275,9 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         lock (_lock) ObjectDisposedException.ThrowIf(_disposed, this);
         return OffUi(() =>
         {
-            if (BluetoothIsDiscoverable(0) == discoverable)
+            if (BluetoothRadios.IsDiscoverable() == discoverable)
                 return null;
-            return BluetoothEnableDiscovery(0, discoverable) ? null : DiscoveryUnchanged;
+            return BluetoothRadios.EnableDiscovery(discoverable) ? null : DiscoveryUnchanged;
         });
     }
 
@@ -292,9 +291,9 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         lock (_lock) ObjectDisposedException.ThrowIf(_disposed, this);
         return OffUi(() =>
         {
-            if (BluetoothIsConnectable(0) == pairable)
+            if (BluetoothRadios.IsConnectable() == pairable)
                 return null;
-            return BluetoothEnableIncomingConnections(0, pairable) ? null : ConnectionsUnchanged;
+            return BluetoothRadios.EnableIncomingConnections(pairable) ? null : ConnectionsUnchanged;
         });
     }
 
@@ -466,45 +465,9 @@ internal sealed partial class BluetoothBackend : IBluetoothBackend
         var filters = await DeviceInformation.FindAllAsync(aqs, null, DeviceInformationKind.DeviceInterface);
         var any = false;
         foreach (var filter in filters)
-            any |= KsOneShot(filter.Id, connect ? 0u : 1u);
+            any |= BluetoothAudio.SetConnection(filter.Id, connect);
         return any;
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KSPROPERTY
-    {
-        public Guid Set;
-        public uint Id;
-        public uint Flags;
-    }
-
-    private static unsafe bool KsOneShot(string path, uint property)
-    {
-        using var handle = Win32.CreateFileW(path, 0xC0000000, 3, 0, 3, 0, 0);
-        if (handle.IsInvalid) return false;
-        var request = new KSPROPERTY { Set = new Guid("7fa06c40-b8f6-4c7e-8556-e8c33a12e54d"), Id = property, Flags = 1 };
-        return DeviceIoControl(handle, 0x2F0003, &request, (uint)sizeof(KSPROPERTY), null, 0, out _, 0);
-    }
-
-    [LibraryImport("bthprops.cpl")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool BluetoothIsDiscoverable(nint radio);
-
-    [LibraryImport("bthprops.cpl")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool BluetoothIsConnectable(nint radio);
-
-    [LibraryImport("bthprops.cpl")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool BluetoothEnableDiscovery(nint radio, [MarshalAs(UnmanagedType.Bool)] bool enabled);
-
-    [LibraryImport("bthprops.cpl")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool BluetoothEnableIncomingConnections(nint radio, [MarshalAs(UnmanagedType.Bool)] bool enabled);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool DeviceIoControl(SafeFileHandle device, uint code, void* input, uint inputSize, void* output, uint outputSize, out uint returned, nint overlapped);
 
     internal static bool IsExpectedFailure(Exception e) => e is UnauthorizedAccessException or COMException
         or InvalidOperationException or NotSupportedException or ArgumentException or IOException;

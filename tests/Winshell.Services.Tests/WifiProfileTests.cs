@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
+using Windows.Win32.NetworkManagement.WiFi;
+using Winshell.Native;
 using Winshell.Network;
 
 namespace Winshell.Services.Tests;
@@ -311,16 +313,16 @@ public sealed class WifiProfileTests
     [Fact]
     public void Profile_reads_request_no_plaintext_key_and_the_connect_struct_matches_native_layout()
     {
-        Assert.Equal(0u, NetworkNative.ProfileReadFlags());
-        Assert.Equal(0u, NetworkNative.ProfileReadFlags() & 0x4);
-        Assert.Equal(0u, NetworkNative.ProfileWriteFlags(0x4));
-        Assert.Equal(0x2u, NetworkNative.ProfileWriteFlags(0x6));
-        Assert.Equal((nint)0, Marshal.OffsetOf<NetworkNative.WlanConnectionParameters>("Mode"));
-        Assert.Equal((nint)IntPtr.Size, Marshal.OffsetOf<NetworkNative.WlanConnectionParameters>("Profile"));
-        Assert.Equal((nint)(IntPtr.Size * 2), Marshal.OffsetOf<NetworkNative.WlanConnectionParameters>("Ssid"));
-        Assert.Equal((nint)(IntPtr.Size * 3), Marshal.OffsetOf<NetworkNative.WlanConnectionParameters>("BssidList"));
-        Assert.Equal((nint)(IntPtr.Size * 4), Marshal.OffsetOf<NetworkNative.WlanConnectionParameters>("BssType"));
-        Assert.Equal((nint)(IntPtr.Size * 4 + 4), Marshal.OffsetOf<NetworkNative.WlanConnectionParameters>("Flags"));
+        Assert.Equal(0u, Wlan.ProfileReadFlags());
+        Assert.Equal(0u, Wlan.ProfileReadFlags() & 0x4);
+        Assert.Equal(0u, Wlan.ProfileWriteFlags(0x4));
+        Assert.Equal(0x2u, Wlan.ProfileWriteFlags(0x6));
+        Assert.Equal((nint)0, Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.wlanConnectionMode)));
+        Assert.Equal((nint)IntPtr.Size, Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.strProfile)));
+        Assert.Equal((nint)(IntPtr.Size * 2), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.pDot11Ssid)));
+        Assert.Equal((nint)(IntPtr.Size * 3), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.pDesiredBssidList)));
+        Assert.Equal((nint)(IntPtr.Size * 4), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.dot11BssType)));
+        Assert.Equal((nint)(IntPtr.Size * 4 + 4), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.dwFlags)));
     }
 
     [Fact]

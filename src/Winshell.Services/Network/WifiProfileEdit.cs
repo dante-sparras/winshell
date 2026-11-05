@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Winshell.Native;
 
 namespace Winshell.Network;
 
@@ -9,6 +10,30 @@ internal interface IWlanProfileApi
     uint Set(Guid adapter, string xml, uint flags, out uint reason);
     uint Connect(Guid adapter, string profileName, bool hidden);
     uint Delete(Guid adapter, string profileName);
+}
+
+/// <summary>The real WLAN profile calls. Tests use a fake <see cref="IWlanProfileApi"/> and do not construct this.</summary>
+internal sealed class WlanProfileApi : IWlanProfileApi
+{
+    public static readonly WlanProfileApi Instance = new();
+
+    public uint Get(Guid adapter, string profileName, out string? xml, out uint flags) =>
+        Wlan.GetProfile(adapter, profileName, out xml, out flags);
+
+    /// <summary>Refuses a document past <see cref="WifiProfileXml.MaxCharacters"/> with ERROR_INVALID_PARAMETER.</summary>
+    public uint Set(Guid adapter, string xml, uint flags, out uint reason)
+    {
+        if (xml.Length <= WifiProfileXml.MaxCharacters)
+            return Wlan.SetProfile(adapter, xml, flags, out reason);
+        reason = 0;
+        return 87;
+    }
+
+    public uint Connect(Guid adapter, string profileName, bool hidden) =>
+        Wlan.ConnectProfile(adapter, profileName, hidden);
+
+    public uint Delete(Guid adapter, string profileName) =>
+        Wlan.DeleteProfile(adapter, profileName);
 }
 
 /// <summary>A profile write. <see cref="Wrote"/> is false when nothing was sent to Windows.</summary>
@@ -53,7 +78,7 @@ internal static class WifiProfileEdit
 
     private static ProfileChange Write(IWlanProfileApi api, Guid adapter, string xml, uint flags)
     {
-        var error = api.Set(adapter, xml, NetworkNative.ProfileWriteFlags(flags), out _);
+        var error = api.Set(adapter, xml, Wlan.ProfileWriteFlags(flags), out _);
         return error == 0 ? new ProfileChange(null, true) : new ProfileChange(WindowsMessage(error), true);
     }
 }
