@@ -31,7 +31,7 @@ internal static class ReloadCommand
         }
         // A configuration's program with a supervisor only quits, and its supervisor starts the last build and owns it. Any
         // other shell hands over to a process it starts itself, which its supervisor must not start again beside, even
-        // after a crash on the way out. For the default shell that process is a new winshell run, which supervises it.
+        // after a crash on the way out.
         var bySupervisor = project is not null && ShellProcess.TellSupervisor(info.Pid, ShellProcess.Asked.Reload, asked: true);
         var told = bySupervisor ? ShellProcess.Asked.Reload : ShellProcess.Asked.Stop;
         if (!bySupervisor)

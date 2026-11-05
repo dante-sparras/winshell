@@ -6,7 +6,7 @@ namespace Winshell.Tests;
 [Trait("Category", "Slow")]
 public class UnknownOptionTests
 {
-    // Each run names a path that is not there, so a bug in the check cannot start the default shell.
+    // Each run names a path that is not there, so a bug in the check fails with 1 and cannot start a shell.
     [Theory]
     [InlineData("run -p {missing} --pth", "Unknown option \"--pth\".")]
     [InlineData("run -p {missing} --log-times", "Unknown option \"--log-times\".")]

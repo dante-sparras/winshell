@@ -4,40 +4,30 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using Winshell.DefaultShell;
 
 namespace Winshell.Commands;
 
 internal static class RunCommand
 {
-    /// <summary>
-    /// Set on the process that runs the default shell for its supervisor, which has already put any update in place. A
-    /// failure to install it is in <see cref="UpdateFailureVariable"/>, as the version, a line break and the error. That
-    /// process clears both, so what it starts, the process a reload hands over to included, starts as usual.
-    /// </summary>
-    private const string SupervisedVariable = "WINSHELL_SUPERVISED";
-
-    private const string UpdateFailureVariable = "WINSHELL_UPDATE_FAILURE";
-
     internal static int Run(CliOptions options)
     {
-        if (Environment.GetEnvironmentVariable(SupervisedVariable) is not null)
+        var project = ConfigurationSelection.FindProject(options, out var error);
+        if (error is not null)
         {
-            var failure = Environment.GetEnvironmentVariable(UpdateFailureVariable)?.Split('\n', 2);
-            Environment.SetEnvironmentVariable(SupervisedVariable, null);
-            Environment.SetEnvironmentVariable(UpdateFailureVariable, null);
-            return RunDefault(failure is [{ } version, { } message] ? new InstalledUpdate(version, message) : null);
+            // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
+            StartupError.Report(error, StartupError.FolderFor(options.Path, ConfigPaths.Root()));
+            return 1;
         }
+        // With no configuration there is nothing to run, so nothing starts and nothing is said.
+        if (project is null)
+            return 0;
         var originalArgs = options.Arguments.ToArray();
-        // Restarted to update: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
-        if (options.After is { } previous)
-            Instances.WaitForExit(previous);
         // A downloaded update goes in place before any shell runs, and then the new winshell.exe runs the shell.
         // System.Diagnostics.Process is loaded first, from the files this one started with.
         // RunUpdated is the private static method below.
         RuntimeHelpers.PrepareMethod(typeof(RunCommand).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!.MethodHandle);
         using (Process.GetCurrentProcess()) { }
-        var update = InstallUpdate(options.After);
+        var update = InstallUpdate();
         if (update is { Error: null })
         {
             Console.Error.WriteLine($"Updated Winshell to {update.Version}.");
@@ -46,21 +36,6 @@ internal static class RunCommand
         if (update is { Error: { } updateError })
             Console.Error.WriteLine($"Could not update Winshell to {update.Version}: {updateError}");
 
-        var project = ConfigurationSelection.FindProject(options, out var error);
-        if (error is not null)
-        {
-            // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
-            StartupError.Report(error, StartupError.FolderFor(options.Path, ConfigPaths.Root()));
-            return 1;
-        }
-        if (project is null)
-        {
-            if (options.Path is null)
-                // -d starts this program again. That child supervises the shell, so this process must not also detach.
-                if (options.Daemonize)
-                    return Detach(ChildArguments(originalArgs));
-            return Supervise(DefaultShellStart(originalArgs, update), null);
-        }
         // Before the build: a duplicate exits quietly, so it must not wait on one or fail on a broken edit.
         if (options.NoDuplicate && Instances.List(false).Any(i => InstanceSelection.RunsProject(i.Info, project)))
             return 0;
@@ -118,34 +93,18 @@ internal static class RunCommand
         }
     }
 
-    /// <summary>The process that runs the default shell for this one, which supervises it.</summary>
-    private static ProcessStartInfo DefaultShellStart(string[] originalArgs, InstalledUpdate? update)
-    {
-        var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false }; // The CLI runs from its apphost.
-        foreach (var a in ChildArguments(originalArgs))
-            psi.ArgumentList.Add(a);
-        psi.Environment[SupervisedVariable] = "1";
-        if (update is { Error: { } failure })
-            psi.Environment[UpdateFailureVariable] = $"{update.Version}\n{failure}";
-        return psi;
-    }
-
     /// <summary>
     /// Runs the shell <paramref name="shell"/> starts under a <see cref="ShellSupervisor"/>, and returns its last exit code.
-    /// <paramref name="project"/> is the configuration project whose program that is, or null for the default shell.
+    /// <paramref name="project"/> is the configuration project whose program that is.
     /// </summary>
-    private static int Supervise(ProcessStartInfo shell, ConfigurationProject? project)
+    private static int Supervise(ProcessStartInfo shell, ConfigurationProject project)
     {
         IShellChild? Start()
         {
             // A reload builds beside a program that still runs, in bin\shell.next, so each start runs the last build. A
             // dialog about a start that failed offers its folder.
-            if (project is not null)
-                shell.FileName = project.Program;
-            var child = ShellProcess.Start(shell, project is null ? null : System.IO.Path.GetDirectoryName(shell.FileName));
-            // The shell reports a failed update once. A shell started again after a crash does not repeat it.
-            shell.Environment.Remove(UpdateFailureVariable);
-            return child;
+            shell.FileName = project.Program;
+            return ShellProcess.Start(shell, System.IO.Path.GetDirectoryName(shell.FileName));
         }
         var supervisor = new ShellSupervisor(Start, ExplorerTaskbarRecovery.AnyHidden, ExplorerTaskbarRecovery.Restore, TimeProvider.System);
         using var stop = new CancellationTokenSource();
@@ -190,24 +149,6 @@ internal static class RunCommand
 #pragma warning restore VSTHRD002
     }
 
-    /// <summary>
-    /// The default shell, in this process, which its supervisor started. <c>--no-duplicate</c> and <c>-v</c> are on the
-    /// command line <see cref="Shell.Run{T}"/> reads.
-    /// </summary>
-    private static int RunDefault(InstalledUpdate? update)
-    {
-        using var updater = Updater.ForRelease(CliMetadata.ReleaseRepository, CliMetadata.Version, Log.Default);
-        if (updater is not null && update is { Error: { } failure })
-            updater.ReportApplyFailure(update.Version, failure);
-        var options = new ShellOptions
-        {
-            ShellId = "winshell-default",
-            Updater = updater,
-        };
-        Shell.Run<DefaultShellConfiguration>(options);
-        return Environment.ExitCode;
-    }
-
     /// <summary>What the configuration's program should see. Winshell's own selectors stay here.</summary>
     private static List<string> ProgramArguments(CliOptions options)
     {
@@ -225,7 +166,7 @@ internal static class RunCommand
     /// as it needs them and mix versions, so the update stays ready until a start finds none. A named mutex keeps
     /// two starts at the same moment, before either is listed, from installing over each other: the second skips.
     /// </summary>
-    private static InstalledUpdate? InstallUpdate(int? after)
+    private static InstalledUpdate? InstallUpdate()
     {
         using var installing = new Mutex(false, @"Local\winshell-update");
         bool mine;
@@ -241,7 +182,7 @@ internal static class RunCommand
             return null;
         try
         {
-            return Instances.List(false).Any(i => i.Info.Pid != after) ? null : Updater.InstallStaged(CliMetadata.ReleaseRepository, CliMetadata.Version);
+            return Instances.List(false).Count > 0 ? null : Updater.InstallStaged(CliMetadata.ReleaseRepository, CliMetadata.Version);
         }
         finally
         {

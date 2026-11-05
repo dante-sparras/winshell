@@ -8,7 +8,6 @@ internal static class CliParser
 {
     internal static CliOptions Parse(string[] args)
     {
-        args = WithoutAfter(args, out var after);
         var command = FirstCommand(args);
         if (command is not null && !Commands.ContainsKey(command))
             throw UnknownCommand(command);
@@ -51,7 +50,6 @@ internal static class CliParser
         return options with
         {
             Command = command,
-            After = after,
             Arguments = [.. args],
             ShowVersion = VersionRequested(args),
             ShellStartAllowed = OnlyShellStartOptions(args),
@@ -338,21 +336,5 @@ internal static class CliParser
         if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
             throw new ArgumentException($"{option} needs a whole number.");
         return value;
-    }
-
-    /// <summary>
-    /// Takes <c>--after &lt;pid&gt;</c> out of the options. Only an update's restart passes it, and it is not one
-    /// of the arguments the shell was started with: a restart or a sign-in entry must not repeat it. It stays in
-    /// place after <c>--</c> and after an <c>ipc call</c> function name, where it is an argument.
-    /// </summary>
-    internal static string[] WithoutAfter(string[] args, out int? after)
-    {
-        after = null;
-        var region = OptionRegionLength(args);
-        var i = Array.IndexOf(args, "--after", 0, region);
-        if (i < 0 || i + 1 >= args.Length || !int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var pid))
-            return args;
-        after = pid;
-        return [.. args[..i], .. args[(i + 2)..]];
     }
 }

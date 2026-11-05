@@ -6,7 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Brings every layer's assembly into the output, so the tests can read what each one references. -->
-    <ProjectReference Include="..\..\src\Winshell.DefaultShell\Winshell.DefaultShell.csproj" />
+    <ProjectReference Include="..\..\src\Winshell.Shell\Winshell.Shell.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />

@@ -413,8 +413,8 @@ public sealed class DoctorTests : IDisposable
 
         Assert.Equal(["windows", "dotnet", "project", "downloaded", "built", "build", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"], checks.Select(c => c.Id));
         Assert.DoesNotContain(checks, c => c.Message.StartsWith("Could not check", StringComparison.Ordinal));
-        Assert.Equal(CheckStatus.Pass, checks.Single(c => c.Id == "project").Status);
-        Assert.Contains("default shell", checks.Single(c => c.Id == "project").Message, StringComparison.Ordinal);
+        Assert.Equal(CheckStatus.Warn, checks.Single(c => c.Id == "project").Status);
+        Assert.Contains("starts nothing", checks.Single(c => c.Id == "project").Message, StringComparison.Ordinal);
         Assert.Equal(CheckStatus.Pass, checks.Single(c => c.Id == "crashes").Status);
         Assert.All(checks.Where(c => c.Status != CheckStatus.Pass), c => Assert.False(string.IsNullOrEmpty(c.Fix)));
         Assert.Equal(before, Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList());

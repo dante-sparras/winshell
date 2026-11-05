@@ -19,13 +19,14 @@ public sealed class DoctorConfigurationTests : IDisposable
     private static readonly DateTime Long = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void No_project_is_the_default_shell_and_nothing_to_build()
+    public void No_project_warns_that_nothing_runs_and_has_nothing_to_build()
     {
         var checks = DoctorProject.Configuration(Path.Combine(_root, "missing"));
 
         Assert.Equal(["project", "downloaded", "built", "build"], checks.Select(c => c.Id));
-        Assert.Equal(CheckStatus.Pass, checks[0].Status);
-        Assert.Equal("No configuration project: Winshell runs its default shell.", checks[0].Message);
+        Assert.Equal(CheckStatus.Warn, checks[0].Status);
+        Assert.Equal("No configuration project, so winshell run starts nothing.", checks[0].Message);
+        Assert.Equal("Make one with dotnet new winshell, as the configuration guide shows.", checks[0].Fix);
         Assert.All(checks.Skip(1), c => Assert.Equal(CheckStatus.Pass, c.Status));
         Assert.Contains("No configuration project", checks[1].Message, StringComparison.Ordinal);
     }

@@ -23,7 +23,7 @@ internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, str
 /// </summary>
 /// <param name="ExePath">The path of the running <c>winshell.exe</c>.</param>
 /// <param name="ConfigRoot">The config root: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> if set.</param>
-/// <param name="ConfigFile">The project file that runs, or null when Winshell would run its default shell, or cannot pick one.</param>
+/// <param name="ConfigFile">The project file that runs, or null when there is none, or none can be picked.</param>
 /// <param name="ConfigProblem">Why no config can be picked, such as several configs and no <c>-c</c>; null when one can.</param>
 /// <param name="Instances">The running Winshell instances.</param>
 /// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
@@ -77,8 +77,8 @@ public static class Doctor
             configuration = [.. DoctorProject.Configuration(search)];
         }
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
-        if (!blocked && configuration[0].Status != CheckStatus.Fail)
-            configuration[0] = WithUserFiles(configuration[0], facts.UserConfigProblems(context.ConfigFile, context.ConfigRoot, context.LocalRoot));
+        if (!blocked && configuration[0].Status == CheckStatus.Pass && facts.PreferencesProblem(context.ConfigRoot) is { } preferences)
+            configuration[0] = WithPreferences(configuration[0], preferences);
         DoctorCheck[] checks =
         [
             Guard("windows", "Windows", () => Windows(facts.WindowsBuild(), facts.WindowsUpdateRevision(), facts.WindowsDisplayVersion(), facts.WindowsServer(), facts.TransparencyEffectsOff(), facts.ContrastThemeOn())),
@@ -167,21 +167,20 @@ public static class Doctor
         return new("dotnet", ".NET", CheckStatus.Pass, $"{description}, {how}");
     }
 
-    /// <summary>User TOML that does not parse is a warning on the project check. A failure already says what to fix.</summary>
-    private static DoctorCheck WithUserFiles(DoctorCheck check, IReadOnlyList<string>? userFiles)
+    /// <summary>
+    /// A <c>preferences.toml</c> that does not parse is a warning on a project check that passed. A project that is not
+    /// there or failed already says what to fix, and with no project nothing reads the file.
+    /// </summary>
+    private static DoctorCheck WithPreferences(DoctorCheck check, string problem) => check with
     {
-        if (userFiles is not { Count: > 0 })
-            return check;
-        var note = string.Join(" ", userFiles);
-        var message = check.Message.EndsWith('.') ? $"{check.Message} {note}" : $"{check.Message}. {note}";
-        if (check.Status != CheckStatus.Pass)
-            return check with { Message = message };
-        return check with { Status = CheckStatus.Warn, Message = message, Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses." };
-    }
+        Status = CheckStatus.Warn,
+        Message = check.Message.EndsWith('.') ? $"{check.Message} {problem}" : $"{check.Message}. {problem}",
+        Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses.",
+    };
 
     /// <summary>
     /// Every check, for the shell running in this process. A configuration project's program is checked in its own
-    /// folder. The default shell is checked in <paramref name="configRoot"/>. Nothing is built.
+    /// folder. Any other program is checked in <paramref name="configRoot"/>. Nothing is built.
     /// </summary>
     public static IReadOnlyList<DoctorCheck> ForThisProcess(string configRoot)
     {
@@ -241,9 +240,9 @@ public static class Doctor
     internal static DoctorCheck Notifications(string access) => access switch
     {
         "Allowed" => new("notifications", "Notifications", CheckStatus.Pass, "Windows lets Winshell read notifications"),
-        "Denied" => new("notifications", "Notifications", CheckStatus.Warn, "Windows does not let Winshell read notifications, so the notification center stays empty.", "In Settings > Privacy & security > Notifications, let apps access your notifications."),
-        "Unspecified" => new("notifications", "Notifications", CheckStatus.Warn, "Winshell has not asked to read notifications yet, so the notification center stays empty.", "Choose Allow notification access in Winshell Settings > Notifications."),
-        _ => new("notifications", "Notifications", CheckStatus.Warn, "Windows does not let this Winshell read notifications: reading them needs an installed package with that permission. The notification center stays empty.", "Install Winshell from its package, or use Windows' notification center."),
+        "Denied" => new("notifications", "Notifications", CheckStatus.Warn, "Windows does not let Winshell read notifications, so a shell sees none.", "In Settings > Privacy & security > Notifications, let apps access your notifications."),
+        "Unspecified" => new("notifications", "Notifications", CheckStatus.Warn, "Winshell has not asked to read notifications yet, so a shell sees none.", "Have the shell call Shell.Notifications.RequestAccess from a button."),
+        _ => new("notifications", "Notifications", CheckStatus.Warn, "Windows does not let this Winshell read notifications: reading them needs an installed package with that permission. A shell sees none.", "Install Winshell from its package."),
     };
 
     // Running instances

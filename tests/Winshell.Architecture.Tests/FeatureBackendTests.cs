@@ -6,7 +6,7 @@ namespace Winshell.Architecture.Tests;
 
 /// <summary>
 /// Only the Services feature that owns a backend uses it: its <c>I*Backend</c> interface and the types that implement
-/// it. Other features, Shell and DefaultShell use the service. The feature is the backend interface's namespace.
+/// it. Other features and Shell use the service. The feature is the backend interface's namespace.
 /// </summary>
 public partial class FeatureBackendTests
 {
@@ -28,7 +28,7 @@ public partial class FeatureBackendTests
             .SelectMany(type => backends.Where(backend => backend.IsAssignableFrom(type)).Select(backend => (type, backend.Namespace)))
             .ToLookup(pair => pair.type, pair => pair.Namespace);
 
-        var crossings = new[] { services, Assembly.Load("Winshell.Shell"), Assembly.Load("Winshell.DefaultShell") }
+        var crossings = new[] { services, Assembly.Load("Winshell.Shell") }
             .SelectMany(assembly => assembly.GetTypes())
             .SelectMany(user => Uses(user).SelectMany(Parts).Distinct()
                 .Where(used => owners.Contains(used) && !(user.Assembly == services && owners[used].Contains(user.Namespace)))

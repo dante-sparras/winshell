@@ -7,7 +7,7 @@ Winshell is a modular monolith: one program, with assembly boundaries for shared
 The production libraries follow this order, from their consumers toward their dependencies:
 
 ```text
-Winshell.DefaultShell -> Winshell.Shell -> Winshell.Services -> Winshell.Core -> Winshell.Native
+Winshell.Shell -> Winshell.Services -> Winshell.Core -> Winshell.Native
 ```
 
 A project may reference a lower layer directly when it needs that layer's contract. It must never reference a higher layer or form a cycle. For example, Shell can call a safe Native window operation without adding a forwarding method to Services. Native references no other Winshell project. The CLI composes these libraries and owns process supervision; the package project assembles their distribution.
@@ -18,7 +18,6 @@ A project may reference a lower layer directly when it needs that layer's contra
 | `Winshell.Core` | `IEventLoop`/`EventQueue`, `Log`, `ObservableObject`, TOML and Crashes, with the file and version helpers they use. Shared infrastructure has no dependency on a service feature or WinUI. |
 | `Winshell.Services` | One assembly of feature folders. Services apply policy and publish state on the event loop; feature backends perform platform work. |
 | `Winshell.Shell` | WinUI hosting, window lifecycle and composition through the existing public Shell API. |
-| `Winshell.DefaultShell` | The default desktop's views, models and preferences. |
 | CLI (`src/Winshell`) | Commands, configuration builds and shell process supervision. |
 
 Keep the existing public Shell API. Moving an implementation does not justify compatibility shims, forwarding assemblies or duplicate implementations. Keep shared infrastructure in Core and feature policy in its owning Services folder.
@@ -45,15 +44,13 @@ Only a feature may consume its own backend contracts and implementations. Anothe
 
 Test service policy against fake backends on a real `EventQueue`. Fakes supply platform results and signals; the real service supplies the behavior under test. Keep tests that own distinct platform, transport or lifecycle contracts. Preserve assertion strength when moving tests to their new owner.
 
-## Shell and default desktop
+## Shell
 
 Split `HostWindow` by responsibility, with explicit owners for window lifetime, placement, native message handling and presentation. Thin out `Shell.cs` and `ShellServices.cs` so they compose focused types instead of collecting feature behavior. Preserve disposal order, event-loop affinity, cancellation and the existing public Shell API.
 
-DefaultShell's models derive from Core's `ObservableObject`. A property that only stores a value and reports its change is a `field` setter, one line when it needs nothing else. The models take no MVVM source generator: a generated property is no shorter, and DefaultShell's sources ship in the template, so the generator would become a dependency of every configuration. Keep model behavior and notification ordering explicit.
-
 ## Crash supervision
 
-The CLI supervises a shell in a child process. An unexpected shell exit triggers respawn with backoff; a requested stop ends supervision. Keep restart policy, cancellation and child ownership in a focused supervisor rather than in the window host. Drive policy time through `TimeProvider` so tests can advance it without sleeping. A reload is not a stop: the supervisor starts a reloaded configuration's program itself, so it owns the new child under the same rules as the first. A default shell's reload hands over to a new `winshell run`, which supervises it. A configuration that calls `shell.Reload()` itself still hands over to an unsupervised process: the supervisor cannot see that start.
+The CLI supervises a shell in a child process. An unexpected shell exit triggers respawn with backoff; a requested stop ends supervision. Keep restart policy, cancellation and child ownership in a focused supervisor rather than in the window host. Drive policy time through `TimeProvider` so tests can advance it without sleeping. A reload is not a stop: the supervisor starts a reloaded configuration's program itself, so it owns the new child under the same rules as the first. A configuration that calls `shell.Reload()` itself still hands over to an unsupervised process: the supervisor cannot see that start.
 
 The supervisor owns Explorer taskbar recovery independently of the child. Restore the taskbar after a child exits without its own cleanup, before waiting or respawning, after a launch failure, and when supervision stops. Recovery must run even if the shell cannot execute its cleanup. A child that exited cleanly has restored the taskbar itself, and a taskbar already hidden when a child started belongs to another shell: restoring either would take the taskbar from the shell that hid it. A new child acquires its own taskbar state; a restart must not inherit a stale hidden-taskbar lease. Verify recovery across crashes, repeated failures and intentional shutdown.
 
@@ -75,7 +72,7 @@ Remove the orphan Qml, Runtime and Platform.Windows `bin`/`obj` trees. Verify ea
 | Unsafe code outside Native, in a project without WinUI | The build: CS0227, since `Directory.Build.targets` turns `AllowUnsafeBlocks` off |
 | Hand-written unsafe code in a WinUI project | `WinUISourceTests`: parses the C# files of each `UseWinUI` project in `winshell.slnx`, outside `bin` and `obj`, and the files it links, for `unsafe`, `fixed` and pointer types |
 | Layer order | `LayerTests`: each layer's project references and its compiled assembly's Winshell references name only layers below it. Restore already fails on an upward project reference that closes a cycle (MSB4006); the test catches the rest, such as a reference to a project outside the layers or to a built DLL |
-| Feature backends | `FeatureBackendTests`: in the compiled Services, Shell and DefaultShell, only types in an `I*Backend` interface's own namespace in Services, such as `Winshell.Session`, name the interface or a type that implements it, in a declaration, signature or method body |
+| Feature backends | `FeatureBackendTests`: in the compiled Services and Shell, only types in an `I*Backend` interface's own namespace in Services, such as `Winshell.Session`, name the interface or a type that implements it, in a declaration, signature or method body |
 
 The tests read the project files and the compiled assemblies, never a list of expected files, so a new project, reference or backend is covered without editing them; only a new layer is added to `LayerTests`' list. The CLI, `src/Winshell`, composes the layers and is outside these guards. A WinUI project's assembly can't tell CsWinRT's generated unsafe code from ours, so that guard reads the sources. Show that a new or changed guard rejects a representative forbidden dependency or declaration, then remove that violation. Do not add production hooks solely to exercise the guards.
 
@@ -88,7 +85,7 @@ Deliver in dependency order, with the rules documented first:
 1. Introduce Native with CsWin32 and package integration. Migrate interop and its callers in focused, independently buildable groups, converting the remaining `DllImport` declarations. Remove each replaced declaration in the same PR. Seal the boundary with build enforcement once the last consumer has moved; finish Native before starting the higher-layer restructuring.
 2. Extract Core and include it in the single package. Move infrastructure and its existing tests without changing behavior. Add architecture tests as the relevant boundaries become enforceable, and complete the full graph guard when all layers exist.
 3. Complete the Services feature seams and their fake-based tests. Split HostWindow and thin Shell composition while preserving its public API. These can proceed side by side only when their files and shared types do not overlap.
-4. Move DefaultShell's remaining backing-field properties to `field` setters and add CLI crash supervision with taskbar recovery. Remove the named orphan build trees. Keep independent changes in separate PRs and serialize any shared build or package edits.
+4. Add CLI crash supervision with taskbar recovery. Remove the named orphan build trees. Keep independent changes in separate PRs and serialize any shared build or package edits.
 5. Verify the complete dependency graph, interop ban, feature isolation, package contents, TOML behavior and recovery contracts. Confirm every migration PR has merged.
 
 Each small PR owns one issue, thread, worktree and branch. Record its allowed paths, prerequisites and acceptance checks in its issue. Prefer [PR stacks](development.md#pull-request-stacks) for dependent layers; each layer must still build and be reviewable on its own. An intermediate migration step is not permission to add new interop outside Native or expand an old boundary violation.

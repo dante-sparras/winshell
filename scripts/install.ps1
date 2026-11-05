@@ -14,8 +14,6 @@
     It also deletes %LOCALAPPDATA%\winshell\updates, so a staged update cannot replace this install
     on the next start. If a Microsoft Store copy is also installed, it says so and still finishes.
 
-    The installed files are the portable build, so Winshell's own update check keeps working.
-
     iex cannot pass parameters. WINSHELL_VERSION (x.y.z) and WINSHELL_AUTOSTART (1, true, or yes)
     are the same choices as -Version and -AutoStart.
 
@@ -223,8 +221,8 @@ function Install-Winshell([string] $Version, [switch] $AutoStart, [switch] $Sess
     $link.Save()
 
     if ($signIn) {
-        # The command Winshell's own Settings writes, so it reads this entry as its own. It quotes only what has a space.
-        $command = @((Join-Path $env:SystemRoot 'System32\conhost.exe'), '--headless', (Join-Path $bin 'winshell.exe'), '--no-duplicate' |
+        # The command Winshell's StartupService writes, so it reads this entry as its own. It quotes only what has a space.
+        $command = @((Join-Path $env:SystemRoot 'System32\conhost.exe'), '--headless', (Join-Path $bin 'winshell.exe'), '--no-build', '--no-duplicate' |
                 ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
         if ($env:WINSHELL_AUTOSTART_FILE) {
             [IO.File]::WriteAllText($env:WINSHELL_AUTOSTART_FILE, $command)

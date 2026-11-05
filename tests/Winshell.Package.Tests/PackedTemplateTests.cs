@@ -13,7 +13,7 @@ using Microsoft.Win32;
 namespace Winshell.Package.Tests;
 
 /// <summary>
-/// Packs the library and the templates, builds each one the way a start does, and runs it. This is slow, and the main
+/// Packs the library and the template, builds a shell from it the way a start does, and runs it. This is slow, and the main
 /// test stage leaves <c>Category=Package</c> out.
 /// </summary>
 [Trait("Category", "Package")]
@@ -34,24 +34,15 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     }
 
     [Fact(Timeout = PatienceMs)]
-    public void The_default_shell_is_listed_and_killed()
-    {
-        TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
-        // The project's own name, not the built-in default shell's id, whose folders and mutex it would share.
-        Run("PackedShell", templates.DefaultProject);
-    }
-
-    [Fact(Timeout = PatienceMs)]
-    public void The_templates_take_WindowsAppSDK_from_the_Winshell_package()
+    public void The_template_takes_WindowsAppSDK_from_the_Winshell_package()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
         // A version of its own here would drift from Directory.Packages.props and fail restore with NU1605.
         Assert.DoesNotContain("Microsoft.WindowsAppSDK", File.ReadAllText(templates.SmallProject), StringComparison.Ordinal);
-        Assert.DoesNotContain("Microsoft.WindowsAppSDK", File.ReadAllText(templates.DefaultProject), StringComparison.Ordinal);
     }
 
     [Fact(Timeout = PatienceMs)]
-    public void Packing_and_creating_the_templates_leaves_the_user_PATH_as_it_was()
+    public void Packing_and_creating_the_template_leaves_the_user_PATH_as_it_was()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
         Assert.Equal(templates.UserPathBefore, PackedTemplates.UserPath());
@@ -187,7 +178,7 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     }
 }
 
-/// <summary>One pack and one copy of each template, shared by the shells that run it.</summary>
+/// <summary>One pack and one copy of the template, shared by the tests that use it.</summary>
 public sealed class PackedTemplates : IDisposable
 {
     private readonly string _work = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
@@ -214,14 +205,11 @@ public sealed class PackedTemplates : IDisposable
         var install = DotnetNew(hive, "install", templates);
         Assert.True(install.ExitCode == 0, install.Output);
         SmallProject = Instantiate(hive, packages, "winshell");
-        DefaultProject = Instantiate(hive, packages, "winshell-default");
     }
 
     public string Version { get; }
 
     public string SmallProject { get; }
-
-    public string DefaultProject { get; }
 
     /// <summary>The developer's own PATH, read before anything was packed or created.</summary>
     public (RegistryValueKind Kind, string? Value) UserPathBefore { get; }

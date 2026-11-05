@@ -2,7 +2,7 @@
 
 Every public type a configuration uses, by namespace. A page lists each type and the members it declares. A test fails when a type or member is missing, or when a table names one the type does not have. Members inherited from another type on these pages are listed on that type.
 
-See also the [command line](command-line.md) and [the default shell](default-shell.md).
+See also the [command line](command-line.md).
 
 | Namespace | What it has |
 | --- | --- |

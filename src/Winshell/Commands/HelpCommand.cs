@@ -18,8 +18,8 @@ internal static class HelpCommand
             case "run":
                 return Help("""
                     winshell run [-c <name> | -p <path>] [-d] [-n] [--no-build] [-- <args>...]
-                      Starts a shell: a configuration project, built first when a source is newer than its
-                      program, or the default shell when there is no project.
+                      Starts a configuration project's shell, built first when a source is newer than its
+                      program. With no project, nothing starts.
                       -d, --daemonize        run in the background
                       -n, --no-duplicate     exit quietly if this config is already running
                           --no-build         run the last build, and do not build again
@@ -44,7 +44,6 @@ internal static class HelpCommand
                     winshell reload [-i <id> | --pid <pid> | -c <name> | -p <path>]
                       Builds a configuration project and asks its instance to start again.
                       A build that fails leaves the instance running and asks it to show the error.
-                      The default shell starts again.
                       With one running instance and no selector, that instance is used.
                       With several, this exits and lists them.
                     """);

@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace Winshell;
 
-/// <summary>A shell <see cref="ShellSupervisor"/> runs: a configuration's program, or <c>winshell.exe</c> running the default shell.</summary>
+/// <summary>A shell <see cref="ShellSupervisor"/> runs: a configuration's program.</summary>
 internal sealed class ShellProcess : IShellChild
 {
     private readonly Process _process;

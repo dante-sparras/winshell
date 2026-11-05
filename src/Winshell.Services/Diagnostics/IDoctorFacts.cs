@@ -20,7 +20,7 @@ internal interface IDoctorFacts
 
     bool SelfContained(string exePath);
 
-    IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot);
+    string? PreferencesProblem(string configRoot);
 
     bool CanWrite(string folder);
 

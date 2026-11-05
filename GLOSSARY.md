@@ -1,6 +1,6 @@
 # Winshell
 
-Winshell is a Windows 11 shell. A configuration is a .NET project that builds into one program and describes the windows it shows.
+Winshell is a toolkit for writing a Windows 11 shell. It ships no shell of its own. A configuration is a .NET project that builds into one program and describes the windows it shows.
 
 ## The shell
 
@@ -55,36 +55,16 @@ A control shown over a window, in that window's overlay. It is not a window of i
 _Avoid_: popup, popup window, dialog
 
 **Taskbar**:
-The default shell's panel along the bottom of each screen: Start, Search, the apps, the notification area and the clock. Explorer's own taskbar is the Windows taskbar.
+Explorer's own bar along the bottom of each screen, the Windows taskbar. A shell's bar is a panel.
 _Avoid_: bar, dock, task list
-
-**Pinned app**:
-An app the taskbar keeps a button for while it is not running.
-_Avoid_: favorite, launcher, quick launch
 
 **Preview**:
 The live image of an app window the taskbar shows over its button.
 _Avoid_: thumbnail (that is the DWM API it uses), peek
 
-**Quick settings**:
-The popup window Windows 11 opens from the taskbar's network, volume and battery icons: tiles, the volume and brightness sliders, and the battery.
-_Avoid_: action center, control center
-
-**Tile**:
-A button in quick settings for one setting, such as Wi-Fi. It shows whether the setting is on, and opens Settings when Winshell cannot change it.
-_Avoid_: quick action, toggle
-
-**Winshell Settings**:
-The default shell's settings window, laid out like Windows 11 Settings. It changes Winshell's own choices only. "Settings" alone means Windows Settings.
-_Avoid_: control panel, config app
-
 **Preferences**:
-The choices made in Winshell Settings, kept in `preferences.toml` in the config folder.
+A configuration's own choices, kept in a TOML file it reads through `TomlFile`.
 _Avoid_: settings (that is Windows Settings)
-
-**On-screen display**:
-The panel Windows 11 shows when volume, brightness, media or the microphone mute changes. It sits above the taskbar and does not reserve space.
-_Avoid_: volume flyout, indicator, toast
 
 **Screen**:
 One monitor on the desktop.

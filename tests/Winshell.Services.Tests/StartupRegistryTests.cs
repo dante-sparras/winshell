@@ -92,17 +92,17 @@ public sealed class StartupRegistryTests : IDisposable
         const string folder = @"C:\Program Files\Winshell";
         var console = WindowsStartupRegistry.CommandFor(folder + @"\winshell.exe", ["--no-duplicate"]);
         Assert.Equal(console, WindowsStartupRegistry.CommandFor(folder + @"\winshellw.exe", ["--no-duplicate"]));
-        Assert.Equal($@"{conhost} --headless ""{folder}\winshell.exe"" --no-duplicate", console);
+        Assert.Equal($@"{conhost} --headless ""{folder}\winshell.exe"" --no-build --no-duplicate", console);
 
         var run = _testKey + @"\Run";
         var registry = new WindowsStartupRegistry(console, run, _testKey + @"\StartupApproved");
         using (var key = Registry.CurrentUser.CreateSubKey(run))
-            key.SetValue(SignInEntry.Name, $@"{conhost} --headless ""{folder}\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
+            key.SetValue(SignInEntry.Name, $@"{conhost} --headless ""{folder}\winshellw.exe"" --no-build --no-duplicate", RegistryValueKind.String);
         Assert.True(registry.IsRegistered());
         Assert.False(registry.PointsElsewhere());
 
         using (var key = Registry.CurrentUser.CreateSubKey(run))
-            key.SetValue(SignInEntry.Name, $@"{conhost} --headless ""C:\Old\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
+            key.SetValue(SignInEntry.Name, $@"{conhost} --headless ""C:\Old\winshellw.exe"" --no-build --no-duplicate", RegistryValueKind.String);
         Assert.True(registry.PointsElsewhere());
     }
 

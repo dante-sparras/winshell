@@ -49,7 +49,7 @@ Follows one file that may not exist yet, and calls back on the loop when it may 
 
 ## FloatingWindow
 
-A normal window with a title bar, as Winshell Settings is.
+A normal window with a title bar.
 
 Has the members of [ShellWindow](#shellwindow).
 

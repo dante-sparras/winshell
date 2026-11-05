@@ -4,8 +4,8 @@ using static Winshell.Diagnostics.Doctor;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// The project check reads the TOML files a shell loads, and the Windows check mentions transparency and a contrast
-/// theme. Neither adds a check. Every file is under a temp folder this class creates.
+/// The project check reads the <c>preferences.toml</c> the configuration guide keeps in the config folder, and the
+/// Windows check mentions transparency and a contrast theme. Neither adds a check. Every file is under a temp folder this class creates.
 /// </summary>
 public sealed class DoctorUserConfigTests : IDisposable
 {
@@ -40,10 +40,11 @@ public sealed class DoctorUserConfigTests : IDisposable
     }
 
     [Fact]
-    public void A_broken_user_file_warns_and_a_project_failure_stays_a_failure()
+    public void A_broken_preferences_file_warns_and_a_project_failure_stays_a_failure()
     {
         var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
+        File.WriteAllText(Path.Combine(config, "Mine.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
         var preferences = Path.Combine(config, "preferences.toml");
         File.WriteAllText(preferences, "colorScheme =\n");
         var local = Path.Combine(_dir, "local");
@@ -52,7 +53,7 @@ public sealed class DoctorUserConfigTests : IDisposable
         var warned = Run(Context(config, local, crashes), DoctorFacts.Pc).Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Warn, warned.Status);
-        Assert.Contains("default shell", warned.Message, StringComparison.Ordinal);
+        Assert.Contains("Mine.csproj", warned.Message, StringComparison.Ordinal);
         Assert.Contains(Printed(preferences), warned.Message, StringComparison.Ordinal);
         Assert.Contains("until the file parses", warned.Fix, StringComparison.Ordinal);
 
@@ -64,95 +65,59 @@ public sealed class DoctorUserConfigTests : IDisposable
     }
 
     [Fact]
-    public void A_missing_or_readable_user_file_leaves_the_project_check_alone()
+    public void With_no_project_a_broken_preferences_file_is_not_mentioned()
     {
-        var shell = Path.Combine(_dir, "Work");
-        Directory.CreateDirectory(shell);
-        var project = Path.Combine(shell, "Work.csproj");
-        File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
-        File.WriteAllText(Path.Combine(shell, "preferences.toml"), "# keep\ncolorScheme = \"dark\"\n");
-        File.WriteAllText(Path.Combine(shell, "launcher.toml"), "");
+        var config = Path.Combine(_dir, "config");
+        Directory.CreateDirectory(config);
+        File.WriteAllText(Path.Combine(config, "preferences.toml"), "colorScheme =\n");
 
-        Assert.Empty(DoctorProbe.UserConfigProblems(project, _dir, Path.Combine(_dir, "local")));
+        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc).Single(c => c.Id == "project");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Equal("No configuration project, so winshell run starts nothing.", check.Message);
+        Assert.Equal("Make one with dotnet new winshell, as the configuration guide shows.", check.Fix);
     }
 
     [Fact]
-    public void Preferences_launcher_and_quick_settings_are_read_where_the_shell_loads_them()
+    public void A_missing_or_readable_preferences_file_is_no_problem()
+    {
+        var config = Path.Combine(_dir, "config");
+        Directory.CreateDirectory(config);
+
+        Assert.Null(DoctorProbe.PreferencesProblem(config));
+        File.WriteAllText(Path.Combine(config, "preferences.toml"), "# keep\ncolorScheme = \"dark\"\n");
+        Assert.Null(DoctorProbe.PreferencesProblem(config));
+    }
+
+    [Fact]
+    public void Preferences_are_read_from_the_config_folder_and_not_the_project_folder()
     {
         var config = Path.Combine(_dir, "config");
         var shell = Path.Combine(config, "Work");
         Directory.CreateDirectory(shell);
         var projectFile = Path.Combine(shell, "Work.csproj");
         File.WriteAllText(projectFile, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
-        var project = ConfigurationProject.Find(projectFile, null, config, out var error);
-        Assert.Null(error);
         var preferences = Path.Combine(config, "preferences.toml");
-        var launcher = Path.Combine(config, "launcher.toml");
-        var tiles = Path.Combine(_dir, "local", "state", "by-shell", ShellIdentity.DefaultId(project!.Program, config), "quick-settings.toml");
-        Directory.CreateDirectory(Path.GetDirectoryName(tiles)!);
         File.WriteAllText(preferences, "colorScheme =\n");
-        File.WriteAllText(launcher, "pins = [\n");
-        File.WriteAllText(tiles, "pinned = [\n");
         var decoy = Path.Combine(shell, "preferences.toml");
         File.WriteAllText(decoy, "colorScheme =\n");
 
-        var problems = DoctorProbe.UserConfigProblems(projectFile, config, Path.Combine(_dir, "local"));
+        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), projectFile), DoctorFacts.Pc).Single(c => c.Id == "project");
 
-        Assert.Equal(3, problems.Count);
-        Assert.Contains(problems, p => p.StartsWith(preferences + "[", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.StartsWith(launcher + "[", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.StartsWith(tiles + "[", StringComparison.Ordinal));
-        Assert.DoesNotContain(problems, p => p.Contains(decoy, StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void The_default_shell_reads_preferences_from_the_config_folder()
-    {
-        var config = Path.Combine(_dir, "config");
-        var local = Path.Combine(_dir, "local");
-        Directory.CreateDirectory(config);
-        Directory.CreateDirectory(Path.Combine(local, "default-shell"));
-        var preferences = Path.Combine(config, "preferences.toml");
-        File.WriteAllText(preferences, "colorScheme =\n");
-        File.WriteAllText(Path.Combine(local, "default-shell", "preferences.toml"), "colorScheme =\n");
-        File.WriteAllText(Path.Combine(local, "default-shell", "launcher.toml"), "pins = [\"explorer\"]\n");
-
-        var problem = Assert.Single(DoctorProbe.UserConfigProblems(null, config, local));
-
-        Assert.StartsWith(preferences + "[", problem, StringComparison.Ordinal);
-        var check = Run(Context(config, local, Path.Combine(_dir, "crashes")), DoctorFacts.Pc).Single(c => c.Id == "project");
         Assert.Equal(CheckStatus.Warn, check.Status);
-        Assert.Contains("default shell", check.Message, StringComparison.Ordinal);
-        Assert.Contains("preferences.toml", check.Message, StringComparison.Ordinal);
-        Assert.False(string.IsNullOrEmpty(check.Fix));
+        Assert.Contains(Printed(preferences) + "[", check.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Printed(decoy), check.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A_shell_outside_the_config_folder_keeps_preferences_in_that_folder()
-    {
-        var config = Path.Combine(_dir, "config");
-        var elsewhere = Path.Combine(_dir, "elsewhere");
-        Directory.CreateDirectory(config);
-        Directory.CreateDirectory(elsewhere);
-        File.WriteAllText(Path.Combine(elsewhere, "MyShell.exe"), "");
-        File.WriteAllText(Path.Combine(elsewhere, "preferences.toml"), "colorScheme = \"dark\"\n");
-        var preferences = Path.Combine(config, "preferences.toml");
-        File.WriteAllText(preferences, "colorScheme =\n");
-
-        var problem = Assert.Single(DoctorProbe.UserConfigProblems(Path.Combine(elsewhere, "MyShell.exe"), config, Path.Combine(_dir, "local")));
-
-        Assert.StartsWith(preferences + "[", problem, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_user_file_that_cannot_be_read_warns_and_names_it()
+    public void A_preferences_file_that_cannot_be_read_is_named_with_why()
     {
         var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
         var preferences = Path.Combine(config, "preferences.toml");
         using var locked = new FileStream(preferences, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
 
-        var problem = Assert.Single(DoctorProbe.UserConfigProblems(null, config, Path.Combine(_dir, "local")));
+        var problem = DoctorProbe.PreferencesProblem(config);
 
         Assert.StartsWith(preferences + ": could not be read:", problem, StringComparison.Ordinal);
     }

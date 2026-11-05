@@ -19,6 +19,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Winshell.Shell\Winshell.Shell.csproj" />
-    <ProjectReference Include="..\..\src\Winshell.DefaultShell\Winshell.DefaultShell.csproj" />
   </ItemGroup>
 </Project>

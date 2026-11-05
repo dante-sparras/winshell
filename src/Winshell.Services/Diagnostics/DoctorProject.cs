@@ -52,7 +52,7 @@ internal static class DoctorProject
         if (problem is not null)
             return new("project", "Project", CheckStatus.Fail, problem, "Pick a config with winshell -c <name>, or give its folder with -p, and make sure your account can read it.");
         if (project is null)
-            return new("project", "Project", CheckStatus.Pass, "No configuration project: Winshell runs its default shell.");
+            return new("project", "Project", CheckStatus.Warn, "No configuration project, so winshell run starts nothing.", "Make one with dotnet new winshell, as the configuration guide shows.");
         return new("project", "Project", CheckStatus.Pass, project.ProjectFile);
     }
 

@@ -84,12 +84,12 @@ public sealed class DoctorCommandTests : IDisposable
         var (_, output, _) = RunIn(empty, "doctor");
 
         Assert.DoesNotContain("\e[", output);
-        Assert.Contains("  PASS  Project", output, StringComparison.Ordinal);
+        Assert.Contains("  WARN  Project", output, StringComparison.Ordinal);
         Assert.Matches(@"\d+ passed, \d+ warnings?, \d+ failed\.", output);
     }
 
     [Fact]
-    public void Without_a_config_it_checks_the_default_shell_and_writes_nothing()
+    public void Without_a_config_it_warns_that_nothing_runs_and_writes_nothing()
     {
         var empty = Path.Combine(_root, "none");
         Directory.CreateDirectory(empty);
@@ -98,8 +98,8 @@ public sealed class DoctorCommandTests : IDisposable
 
         using var json = JsonDocument.Parse(output);
         var project = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("id").GetString() == "project");
-        Assert.Equal("pass", project.GetProperty("status").GetString());
-        Assert.Contains("default shell", project.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal("warn", project.GetProperty("status").GetString());
+        Assert.Contains("starts nothing", project.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateFileSystemEntries(empty));
     }
 

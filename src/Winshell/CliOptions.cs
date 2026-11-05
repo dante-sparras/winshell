@@ -22,9 +22,6 @@ internal sealed record CliOptions
 
     public int? Pid { get; init; }
 
-    /// <summary>A shell that restarted to update: this one waits for that process to end first.</summary>
-    public int? After { get; init; }
-
     public bool Daemonize { get; init; }
 
     public bool NoDuplicate { get; init; }

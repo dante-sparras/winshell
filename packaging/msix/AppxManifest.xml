@@ -57,7 +57,7 @@
           </uap3:AppExecutionAlias>
         </uap3:Extension>
         <!-- Sign-in. Off until the shell asks Windows to enable it. Windows starts this package, not a Run-key path. -->
-        <desktop:Extension Category="windows.startupTask" Executable="winshellw.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--no-duplicate">
+        <desktop:Extension Category="windows.startupTask" Executable="winshellw.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--no-build --no-duplicate">
           <desktop:StartupTask TaskId="Winshell" Enabled="false" DisplayName="Winshell" />
         </desktop:Extension>
       </Extensions>
@@ -67,9 +67,9 @@
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
     <rescap:Capability Name="unvirtualizedResources" />
-    <!-- The notification center reads Windows' notifications. -->
+    <!-- A shell reads Windows' notifications. -->
     <uap3:Capability Name="userNotificationListener" />
-    <!-- Quick settings' Wi-Fi list and Bluetooth devices. Windows asks for location before it lists Wi-Fi networks. -->
+    <!-- A shell's Wi-Fi list and Bluetooth devices. Windows asks for location before it lists Wi-Fi networks. -->
     <DeviceCapability Name="wiFiControl" />
     <DeviceCapability Name="bluetooth" />
     <DeviceCapability Name="location" />

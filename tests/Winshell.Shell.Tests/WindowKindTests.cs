@@ -90,13 +90,13 @@ public sealed class WindowKindTests
         var read = await ShellFixture.On(async _ =>
         {
             var content = new Grid();
-            using var window = new FloatingWindow { Title = "Winshell Settings", Width = 500, Height = 300, Content = content };
+            using var window = new FloatingWindow { Title = "Notes", Width = 500, Height = 300, Content = content };
             window.Visible = true;
             await ShellFixture.LaidOut(content);
             return (window.ActualWidth, window.ActualHeight, Win32Title(window.Host!.Handle));
         });
 
-        Assert.Equal((500d, 300d, "Winshell Settings"), read);
+        Assert.Equal((500d, 300d, "Notes"), read);
     }
 
     [Fact]

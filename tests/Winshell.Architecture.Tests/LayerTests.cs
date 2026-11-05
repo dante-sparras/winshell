@@ -7,7 +7,7 @@ namespace Winshell.Architecture.Tests;
 public class LayerTests
 {
     // From the top down. A layer may use any layer below it, and none above it.
-    private static readonly string[] Layers = ["Winshell.DefaultShell", "Winshell.Shell", "Winshell.Services", "Winshell.Core", "Winshell.Native"];
+    private static readonly string[] Layers = ["Winshell.Shell", "Winshell.Services", "Winshell.Core", "Winshell.Native"];
 
     [Fact]
     public void A_project_references_only_layers_below_it()
