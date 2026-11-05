@@ -144,10 +144,10 @@ internal static class WindowRules
 
     /// <summary>
     /// Keeps the windows that want attention current, as the taskbar does: a window wants it from when it flashes
-    /// until it is activated or leaves the list. Returns whether the set changed.
+    /// until it is activated or leaves the list.
     /// </summary>
-    public static bool SettleAttention(HashSet<nint> wanting, nint active, Func<nint, bool> listed) =>
-        wanting.RemoveWhere(hwnd => hwnd == active || !listed(hwnd)) > 0;
+    public static void SettleAttention(HashSet<nint> wanting, nint active, Func<nint, bool> listed) =>
+        wanting.RemoveWhere(hwnd => hwnd == active || !listed(hwnd));
 
     /// <summary>
     /// The part of a window a preview shows, relative to the window's corner: its visible frame, without the

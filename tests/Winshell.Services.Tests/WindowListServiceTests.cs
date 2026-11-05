@@ -3,16 +3,15 @@ using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>The window list over a stand-in, so no real window is read, moved or closed.</summary>
+/// <summary>The window list over a fake backend, so no real window is read, moved or closed.</summary>
 public sealed class WindowListServiceTests
 {
+    private const string Terminal = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App";
+
     private readonly ManualEventLoop _loop = new();
-    private readonly FakeWindows _windows = new();
+    private readonly FakeWindowBackend _windows = new();
 
     private WindowListService Start(VirtualDesktopsService? desktops = null) => new(_loop, Log.Default, desktops, _windows);
-
-    private static WindowInfo Window(nint hwnd, string title = "Title", nint owner = 0, string monitor = "M1") =>
-        new(hwnd, title, "app", @"C:\app.exe", "icon", owner, false, false, false, monitor);
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -24,14 +23,13 @@ public sealed class WindowListServiceTests
     [Fact]
     public void A_new_window_goes_at_the_end_and_a_window_that_stays_is_the_same_object()
     {
-        _windows.Open(Window(1), Window(2));
+        _windows.Show(1);
+        _windows.Show(2);
         using var list = Start();
         var kept = list.Windows[1];
 
-        // The slot window 1 leaves in the tracker's dictionary is what window 3 takes.
-        _windows.Items.Remove(1);
-        _windows.Open(Window(3));
-        _windows.Push();
+        _windows.Destroy(1);
+        _windows.Show(3);
         _loop.Process();
 
         Assert.Equal([2, 3], list.Windows.Select(window => (int)window.Hwnd));
@@ -41,13 +39,12 @@ public sealed class WindowListServiceTests
     [Fact]
     public void A_change_reports_only_the_properties_that_differ()
     {
-        _windows.Open(Window(1, "Before"));
+        _windows.Show(1, "Before");
         using var list = Start();
         var window = list.Windows[0];
         var changes = Watch(window);
 
-        _windows.Open(Window(1, "After") with { Maximized = true });
-        _windows.Push();
+        _windows.Show(1, FakeWindowBackend.Window("After") with { Maximized = true });
         _loop.Process();
 
         Assert.Equal([nameof(AppWindow.Title), nameof(AppWindow.Maximized)], changes);
@@ -56,19 +53,66 @@ public sealed class WindowListServiceTests
     }
 
     [Fact]
+    public void Title_changes_before_the_loop_turns_raise_Title_once_with_the_last_value()
+    {
+        _windows.Show(1, "First");
+        using var list = Start();
+        var window = list.Windows[0];
+        var changes = Watch(window);
+
+        _windows.Show(1, "Second");
+        _windows.Show(1, "Third");
+        _windows.Show(1, "Last");
+        _loop.Process();
+
+        Assert.Equal([nameof(AppWindow.Title)], changes);
+        Assert.Equal("Last", window.Title);
+    }
+
+    [Fact]
+    public void A_window_opened_and_closed_before_the_loop_turns_never_appears()
+    {
+        using var list = Start();
+        var listChanges = 0;
+        list.Windows.CollectionChanged += (_, _) => listChanges++;
+
+        _windows.Show(1);
+        _windows.Destroy(1);
+        _loop.Process();
+
+        Assert.Equal(0, listChanges);
+    }
+
+    [Fact]
+    public void A_window_that_changes_while_another_is_read_is_listed_afterwards()
+    {
+        _windows.Show(1);
+        using var list = Start();
+        _windows.Reading = hwnd =>
+        {
+            if (hwnd == 1 && !_windows.Shown.ContainsKey(2))
+                _windows.Show(2);
+        };
+
+        _windows.Show(1, "Changed");
+        _loop.Process();
+
+        Assert.Equal([1, 2], list.Windows.Select(window => (int)window.Hwnd));
+    }
+
+    [Fact]
     public void A_closed_window_leaves_the_list_before_it_says_so()
     {
-        _windows.Open(Window(1));
-        _windows.Active = 1;
+        _windows.Show(1);
+        _windows.Foreground = 1;
         using var list = Start();
         var window = list.Windows[0];
         Assert.Same(window, list.ActiveWindow);
         var stillListed = true;
         window.Closed += (_, _) => stillListed = list.Windows.Contains(window);
 
-        _windows.Items.Remove(1);
-        _windows.Active = 0;
-        _windows.Push();
+        _windows.Foreground = 0;
+        _windows.Destroy(1);
         _loop.Process();
 
         Assert.False(stillListed);
@@ -76,32 +120,65 @@ public sealed class WindowListServiceTests
     }
 
     [Fact]
-    public void The_window_in_front_is_activated_and_a_flash_shows_until_it_stops()
+    public void An_owned_dialog_activates_its_owner_and_its_flash_shows_on_the_owner_until_then()
     {
-        _windows.Open(Window(1), Window(2));
-        _windows.Active = 1;
-        _windows.Wanting.Add(2);
+        _windows.Show(1);
+        _windows.Show(3);
+        _windows.Owners[2] = 1;
+        _windows.Foreground = 3;
         using var list = Start();
+        var owner = list.Windows[0];
+        var other = list.Windows[1];
+        Assert.True(other.Activated);
 
-        Assert.True(list.Windows[0].Activated);
-        Assert.False(list.Windows[1].Activated);
-        Assert.True(list.Windows[1].Attention);
-
-        _windows.Active = 2;
-        _windows.Wanting.Clear();
-        _windows.Push();
+        _windows.Flash(2);
         _loop.Process();
 
-        Assert.Same(list.Windows[1], list.ActiveWindow);
-        Assert.False(list.Windows[0].Activated);
-        Assert.True(list.Windows[1].Activated);
-        Assert.False(list.Windows[1].Attention);
+        Assert.True(owner.Attention);
+        Assert.False(owner.Activated);
+
+        _windows.Focus(2);
+        _loop.Process();
+
+        Assert.Same(owner, list.ActiveWindow);
+        Assert.True(owner.Activated);
+        Assert.False(owner.Attention);
+        Assert.False(other.Activated);
+    }
+
+    [Fact]
+    public void A_window_without_an_id_uses_its_package_or_program_until_it_sets_one()
+    {
+        var chrome = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+        _windows.Show(1, FakeWindowBackend.Window() with { PackageAppId = Terminal });
+        _windows.Show(2, FakeWindowBackend.Window() with { Executable = chrome });
+        using var list = Start();
+        var packaged = list.Windows[0];
+        var program = list.Windows[1];
+
+        Assert.Equal(Terminal, packaged.AppId);
+        Assert.Equal(@"shell:AppsFolder\" + Terminal, packaged.Icon);
+        Assert.Equal("chrome", program.AppId);
+        Assert.Equal(chrome, program.Icon);
+
+        _windows.Show(1, FakeWindowBackend.Window() with { PackageAppId = "Other_8wekyb3d8bbwe!App" });
+        _windows.Show(2, FakeWindowBackend.Window() with { AppUserModelId = Terminal });
+        _loop.Process();
+
+        Assert.Equal(Terminal, packaged.AppId);
+        Assert.Equal(Terminal, program.AppId);
+        Assert.Equal(@"shell:AppsFolder\" + Terminal, program.Icon);
+        Assert.Equal(chrome, program.Executable);
     }
 
     [Fact]
     public void A_parent_is_the_owner_when_the_owner_is_listed()
     {
-        _windows.Open(Window(2, owner: 1), Window(3, owner: 9), Window(1));
+        _windows.Show(2);
+        _windows.Show(3);
+        _windows.Show(1);
+        _windows.Owners[2] = 1;
+        _windows.Owners[3] = 9;
         using var list = Start();
 
         Assert.Same(list.Windows.Single(window => window.Hwnd == 1), list.Windows[0].Parent);
@@ -111,7 +188,7 @@ public sealed class WindowListServiceTests
     [Fact]
     public void Setting_a_state_asks_Windows_and_the_value_follows_what_Windows_reports()
     {
-        _windows.Open(Window(1));
+        _windows.Show(1);
         using var list = Start();
         var window = list.Windows[0];
 
@@ -126,7 +203,7 @@ public sealed class WindowListServiceTests
     [Fact]
     public void Requests_go_to_that_window()
     {
-        _windows.Open(Window(7));
+        _windows.Show(7);
         using var list = Start();
         var window = list.Windows[0];
         var screen = new ScreenInfo("M2", "", "", "", "", default, default, 1, 0, 0, 60, false);
@@ -143,15 +220,15 @@ public sealed class WindowListServiceTests
     {
         var screen = new ScreenInfo("M1", "", "", "", "", default, default, 1, 0, 0, 60, true);
         _windows.Screens["M1"] = screen;
-        _windows.Open(Window(1), Window(2, monitor: "gone"));
+        _windows.Show(1);
+        _windows.Show(2, FakeWindowBackend.Window() with { Monitor = "gone" });
         using var list = Start();
         var changes = Watch(list.Windows[1]);
 
         Assert.Same(screen, Assert.Single(list.Windows[0].Screens));
         Assert.Empty(list.Windows[1].Screens);
 
-        _windows.Open(Window(2, monitor: "M1"));
-        _windows.Push();
+        _windows.Show(2);
         _loop.Process();
 
         Assert.Equal([nameof(AppWindow.Screens)], changes);
@@ -164,7 +241,7 @@ public sealed class WindowListServiceTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
         using var desktops = new VirtualDesktopsService(_loop, Log.Default, FakeDesktops.Holding(first, first, second));
-        _windows.Open(Window(1));
+        _windows.Show(1);
         _windows.DesktopIds[1] = first.ToString("D");
         using var list = Start(desktops);
         var window = list.Windows[0];
@@ -183,7 +260,7 @@ public sealed class WindowListServiceTests
         var only = Guid.NewGuid();
         var source = FakeDesktops.Holding(only, only);
         using var desktops = new VirtualDesktopsService(_loop, Log.Default, source);
-        _windows.Open(Window(1));
+        _windows.Show(1);
         using var list = Start(desktops);
         var changes = Watch(list.Windows[0]);
 
@@ -195,7 +272,7 @@ public sealed class WindowListServiceTests
     [Fact]
     public void Without_a_desktop_list_a_window_still_has_a_desktop_id()
     {
-        _windows.Open(Window(1));
+        _windows.Show(1);
         _windows.DesktopIds[1] = "id";
         using var list = Start();
 
@@ -208,67 +285,11 @@ public sealed class WindowListServiceTests
     {
         var list = Start();
 
-        _windows.Open(Window(1));
-        _windows.Push();
+        _windows.Show(1);
         list.Dispose();
         _loop.Process();
 
         Assert.Empty(list.Windows);
         Assert.False(_windows.HasListeners);
-    }
-
-    private sealed class FakeWindows : IWindowSource
-    {
-        public Dictionary<nint, WindowInfo> Items { get; } = [];
-
-        public HashSet<nint> Wanting { get; } = [];
-
-        public Dictionary<string, ScreenInfo> Screens { get; } = [];
-
-        public Dictionary<nint, string> DesktopIds { get; } = [];
-
-        public List<string> Calls { get; } = [];
-
-        public IReadOnlyDictionary<nint, WindowInfo> Windows => Items;
-
-        public nint Active { get; set; }
-
-        public bool HasListeners => Changed is not null;
-
-        public event Action? Changed;
-
-        public void Open(params WindowInfo[] windows)
-        {
-            foreach (var window in windows)
-                Items[window.Hwnd] = window;
-        }
-
-        public void Push() => Changed?.Invoke();
-
-        public void Start(IEventLoop loop, Log log)
-        {
-        }
-
-        public bool WantsAttention(nint hwnd) => Wanting.Contains(hwnd);
-
-        public ScreenInfo? Screen(string deviceName) => Screens.GetValueOrDefault(deviceName);
-
-        public string DesktopId(nint hwnd) => DesktopIds.GetValueOrDefault(hwnd, "");
-
-        public bool MoveToDesktop(nint hwnd, Guid desktop)
-        {
-            DesktopIds[hwnd] = desktop.ToString("D");
-            return true;
-        }
-
-        public void Activate(nint hwnd) => Calls.Add($"activate:{hwnd}");
-
-        public void Close(nint hwnd) => Calls.Add($"close:{hwnd}");
-
-        public void SetMaximized(nint hwnd, bool maximized) => Calls.Add($"maximize:{hwnd}:{maximized}");
-
-        public void SetMinimized(nint hwnd, bool minimized) => Calls.Add($"minimize:{hwnd}:{minimized}");
-
-        public void MoveToMonitor(nint hwnd, string deviceName) => Calls.Add($"move:{hwnd}:{deviceName}");
     }
 }

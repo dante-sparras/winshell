@@ -112,9 +112,9 @@ public sealed class WinlandServiceTests
     [Fact]
     public void A_window_is_the_app_window_with_its_handle()
     {
-        var windows = new Listing();
-        windows.Open(Info(0x10));
-        using var list = new WindowListService(_loop, Log.Default, source: windows);
+        var windows = new FakeWindowBackend();
+        windows.Show(0x10);
+        using var list = new WindowListService(_loop, Log.Default, backend: windows);
         using var service = Connected();
         var editor = service.Windows.Single(window => window.Address == "10");
         var browser = service.Windows.Single(window => window.Address == "20");
@@ -129,13 +129,11 @@ public sealed class WinlandServiceTests
         Assert.Equal([nameof(WinlandWindow.Window)], changes);
         Assert.Null(browser.Window);
 
-        windows.Open(Info(0x20));
-        windows.Push();
+        windows.Show(0x20);
         _loop.Process();
         Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20), browser.Window);
 
-        windows.Items.Remove(0x10);
-        windows.Push();
+        windows.Destroy(0x10);
         _loop.Process();
         Assert.Null(editor.Window);
         Assert.Contains(nameof(WinlandWindow.Window), changes);
@@ -144,9 +142,10 @@ public sealed class WinlandServiceTests
     [Fact]
     public void A_window_list_attached_before_winland_reports_clients_still_resolves_them()
     {
-        var windows = new Listing();
-        windows.Open(Info(0x10), Info(0x20));
-        using var list = new WindowListService(_loop, Log.Default, source: windows);
+        var windows = new FakeWindowBackend();
+        windows.Show(0x10);
+        windows.Show(0x20);
+        using var list = new WindowListService(_loop, Log.Default, backend: windows);
         _backend.Replies["j/monitors"] = Monitors;
         _backend.Replies["j/workspaces"] = Workspaces;
         _backend.Replies["j/clients"] = Clients;
@@ -466,59 +465,6 @@ public sealed class WinlandServiceTests
         Assert.Equal(title, service.Windows[0].Title);
         Assert.Same(Log.Default, Assert.Single(_backend.Stopped));
         Assert.Equal(0, _backend.Listeners);
-    }
-
-    private static WindowInfo Info(nint hwnd) => new(hwnd, "Title", "app", @"C:\app.exe", "", 0, false, false, false, "M1");
-
-    private sealed class Listing : IWindowSource
-    {
-        public Dictionary<nint, WindowInfo> Items { get; } = [];
-
-        public IReadOnlyDictionary<nint, WindowInfo> Windows => Items;
-
-        public nint Active { get; set; }
-
-        public event Action? Changed;
-
-        public void Open(params WindowInfo[] windows)
-        {
-            foreach (var window in windows)
-                Items[window.Hwnd] = window;
-        }
-
-        public void Push() => Changed?.Invoke();
-
-        public void Start(IEventLoop loop, Log log)
-        {
-        }
-
-        public bool WantsAttention(nint hwnd) => false;
-
-        public ScreenInfo? Screen(string deviceName) => null;
-
-        public string DesktopId(nint hwnd) => "";
-
-        public bool MoveToDesktop(nint hwnd, Guid desktop) => false;
-
-        public void Activate(nint hwnd)
-        {
-        }
-
-        public void Close(nint hwnd)
-        {
-        }
-
-        public void SetMaximized(nint hwnd, bool maximized)
-        {
-        }
-
-        public void SetMinimized(nint hwnd, bool minimized)
-        {
-        }
-
-        public void MoveToMonitor(nint hwnd, string deviceName)
-        {
-        }
     }
 
     private sealed class FakeBackend : IWinlandBackend

@@ -101,9 +101,10 @@ public sealed class CaptureSessionTests
     public void An_app_window_is_captured_without_its_handle_and_closing_it_stops()
     {
         var loop = new ManualEventLoop();
-        var windows = new Listing();
-        windows.Open(Info(10), Info(20));
-        using var list = new WindowListService(loop, Log.Default, source: windows);
+        var windows = new FakeWindowBackend();
+        windows.Show(10);
+        windows.Show(20);
+        using var list = new WindowListService(loop, Log.Default, backend: windows);
         var first = list.Windows.Single(window => window.Hwnd == 10);
         var second = list.Windows.Single(window => window.Hwnd == 20);
         var backends = new List<FakeCapture>();
@@ -129,14 +130,12 @@ public sealed class CaptureSessionTests
         Assert.True(session.Start());
         Assert.Equal(new CaptureTarget(20, ""), backends[1].Target);
 
-        windows.Items.Remove(10);
-        windows.Push();
+        windows.Destroy(10);
         loop.Process();
         Assert.True(session.Running);
         Assert.Same(second, session.Target!.Source);
 
-        windows.Items.Remove(20);
-        windows.Push();
+        windows.Destroy(20);
         loop.Process();
         Assert.False(session.Running);
         Assert.Null(session.Target);
@@ -339,59 +338,6 @@ public sealed class CaptureSessionTests
         finally
         {
             from.Free();
-        }
-    }
-
-    private static WindowInfo Info(nint hwnd) => new(hwnd, "Title", "app", @"C:\app.exe", "", 0, false, false, false, "M1");
-
-    private sealed class Listing : IWindowSource
-    {
-        public Dictionary<nint, WindowInfo> Items { get; } = [];
-
-        public IReadOnlyDictionary<nint, WindowInfo> Windows => Items;
-
-        public nint Active { get; set; }
-
-        public event Action? Changed;
-
-        public void Open(params WindowInfo[] windows)
-        {
-            foreach (var window in windows)
-                Items[window.Hwnd] = window;
-        }
-
-        public void Push() => Changed?.Invoke();
-
-        public void Start(IEventLoop loop, Log log)
-        {
-        }
-
-        public bool WantsAttention(nint hwnd) => false;
-
-        public ScreenInfo? Screen(string deviceName) => null;
-
-        public string DesktopId(nint hwnd) => "";
-
-        public bool MoveToDesktop(nint hwnd, Guid desktop) => false;
-
-        public void Activate(nint hwnd)
-        {
-        }
-
-        public void Close(nint hwnd)
-        {
-        }
-
-        public void SetMaximized(nint hwnd, bool maximized)
-        {
-        }
-
-        public void SetMinimized(nint hwnd, bool minimized)
-        {
-        }
-
-        public void MoveToMonitor(nint hwnd, string deviceName)
-        {
         }
     }
 
