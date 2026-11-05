@@ -1,5 +1,5 @@
 using Microsoft.Win32;
-using static Winshell.Windows.NativeMethods;
+using Winshell.Native;
 
 namespace Winshell.Windows;
 
@@ -9,12 +9,10 @@ namespace Winshell.Windows;
 /// </summary>
 internal sealed class WindowPeek(Func<bool> turnedOn, Func<bool, nint, nint, bool> set)
 {
-    private const uint PeekOneWindow = 1;
-
     private nint _window;
     private nint _above;
 
-    public static WindowPeek ForSystem() => new(SettingIsOn, SetLivePreview);
+    public static WindowPeek ForSystem() => new(SettingIsOn, DwmLivePreview.Set);
 
     /// <summary>Peeks at a window, or at nothing when it is 0, leaving the window <paramref name="above"/> in front.</summary>
     public void Show(nint window, nint above)
@@ -39,17 +37,5 @@ internal sealed class WindowPeek(Func<bool> turnedOn, Func<bool, nint, nint, boo
     {
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
         return key?.GetValue("EnableAeroPeek") is int and not 0;
-    }
-
-    private static bool SetLivePreview(bool on, nint window, nint above)
-    {
-        try
-        {
-            return DwmpActivateLivePreview(on, window, above, PeekOneWindow, 0) == 0;
-        }
-        catch (EntryPointNotFoundException)
-        {
-            return false;
-        }
     }
 }

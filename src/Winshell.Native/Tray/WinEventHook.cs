@@ -4,8 +4,9 @@ using System.Runtime.InteropServices;
 namespace Winshell.Native;
 
 /// <summary>
-/// An out-of-context WinEvent hook for one event type, removed when disposed. Windows calls it on the thread that set
-/// it, from that thread's message loop. A handler's exception does not reach Windows, so a handler logs its own.
+/// An out-of-context WinEvent hook for one event type or a range of them, removed when disposed. Windows calls it on
+/// the thread that set it, from that thread's message loop. A handler's exception does not reach Windows, so a handler
+/// logs its own.
 /// </summary>
 internal sealed unsafe class WinEventHook : IDisposable
 {
@@ -22,9 +23,13 @@ internal sealed unsafe class WinEventHook : IDisposable
 
     /// <summary>Hooks <paramref name="eventType"/>, or returns null when Windows would not.</summary>
     /// <param name="onEvent">Gets the event type, the window, the object id and the child id.</param>
-    internal static WinEventHook? Start(uint eventType, Action<uint, nint, int, int> onEvent)
+    internal static WinEventHook? Start(uint eventType, Action<uint, nint, int, int> onEvent) => Start(eventType, eventType, onEvent);
+
+    /// <summary>Hooks the event types <paramref name="min"/> through <paramref name="max"/>, or returns null when Windows would not.</summary>
+    /// <param name="onEvent">Gets the event type, the window, the object id and the child id.</param>
+    internal static WinEventHook? Start(uint min, uint max, Action<uint, nint, int, int> onEvent)
     {
-        var handle = Win32.SetWinEventHook(eventType, eventType, 0, &OnEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT);
+        var handle = Win32.SetWinEventHook(min, max, 0, &OnEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT);
         if (handle == 0)
             return null;
         var hook = new WinEventHook(handle, onEvent);

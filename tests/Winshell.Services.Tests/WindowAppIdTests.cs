@@ -1,6 +1,7 @@
 
 using Winshell.Native;
 using Winshell.Windows;
+using WIN32_ERROR = Windows.Win32.Foundation.WIN32_ERROR;
 
 namespace Winshell.Services.Tests;
 
@@ -33,8 +34,8 @@ public class WindowAppIdTests
     public void A_window_property_set_after_the_first_describe_replaces_the_program_name()
     {
         var exe = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
-        var none = NativeMethods.ReadAppUserModelId((_, _) =>
-            new NativeMethods.AppUserModelQuery(NativeMethods.AppModelErrorNoApplication, 0));
+        var none = AppUserModelIds.Read((_, _) =>
+            new AppUserModelIds.Query(WIN32_ERROR.APPMODEL_ERROR_NO_APPLICATION, 0));
         Assert.Equal("", none);
 
         var first = WindowTracker.Resolve(default, "", none, exe);
@@ -52,19 +53,19 @@ public class WindowAppIdTests
     [Fact]
     public void A_package_id_longer_than_windows_allows_is_ignored()
     {
-        var read = NativeMethods.ReadAppUserModelId((_, _) =>
-            new NativeMethods.AppUserModelQuery(
-                Win32.ERROR_INSUFFICIENT_BUFFER,
-                (uint)NativeMethods.MaxAppUserModelIdCharacters + 1));
+        var read = AppUserModelIds.Read((_, _) =>
+            new AppUserModelIds.Query(
+                WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER,
+                (uint)AppUserModelIds.MaxCharacters + 1));
         Assert.Equal("", read);
     }
 
     private static string Read(string id) =>
-        NativeMethods.ReadAppUserModelId((buffer, _) =>
+        AppUserModelIds.Read((buffer, _) =>
         {
             if (buffer is null)
-                return new NativeMethods.AppUserModelQuery(Win32.ERROR_INSUFFICIENT_BUFFER, (uint)id.Length + 1);
+                return new AppUserModelIds.Query(WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER, (uint)id.Length + 1);
             id.CopyTo(buffer);
-            return new NativeMethods.AppUserModelQuery(NativeMethods.ErrorSuccess, (uint)id.Length + 1);
+            return new AppUserModelIds.Query(WIN32_ERROR.ERROR_SUCCESS, (uint)id.Length + 1);
         });
 }

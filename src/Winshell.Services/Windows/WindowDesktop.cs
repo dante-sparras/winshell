@@ -9,9 +9,7 @@ namespace Winshell.Windows;
 /// </summary>
 internal static class WindowDesktop
 {
-    private static readonly Guid ManagerClass = new("AA509086-5CA9-4C25-8F95-589D3C07B48A");
-
-    private static IVirtualDesktopManager? _manager;
+    private static WindowDesktopManager? _manager;
     private static bool _loggedUnavailable;
 
     /// <summary>The id of the desktop the window is on, or empty when Windows does not say.</summary>
@@ -24,7 +22,7 @@ internal static class WindowDesktop
             var manager = Manager();
             if (manager is null)
                 return "";
-            if (manager.GetWindowDesktopId(hwnd, out var id) < 0 || id == Guid.Empty)
+            if (manager.DesktopOf(hwnd, out var id) < 0 || id == Guid.Empty)
                 return "";
             return id.ToString("D");
         }
@@ -45,7 +43,7 @@ internal static class WindowDesktop
             var manager = Manager();
             if (manager is null)
                 return false;
-            var hr = manager.MoveWindowToDesktop(hwnd, in desktop);
+            var hr = manager.Move(hwnd, desktop);
             if (hr < 0)
             {
                 Log.Default.Warn("desktops", $"MoveWindowToDesktop failed (0x{hr:X8}).");
@@ -61,43 +59,16 @@ internal static class WindowDesktop
         }
     }
 
-    private static IVirtualDesktopManager? Manager()
+    private static WindowDesktopManager? Manager()
     {
         if (_manager is not null)
             return _manager;
-        var iid = typeof(IVirtualDesktopManager).GUID;
-        var hr = Win32.CoCreateInstance(in ManagerClass, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
-        if (hr < 0 || pointer == 0)
+        _manager = WindowDesktopManager.Create(out var hr);
+        if (hr < 0 && !_loggedUnavailable)
         {
-            if (!_loggedUnavailable)
-            {
-                _loggedUnavailable = true;
-                Log.Default.Warn("desktops", $"IVirtualDesktopManager is unavailable (0x{hr:X8}).");
-            }
-            return null;
+            _loggedUnavailable = true;
+            Log.Default.Warn("desktops", $"IVirtualDesktopManager is unavailable (0x{hr:X8}).");
         }
-        try
-        {
-            _manager = (IVirtualDesktopManager)Marshal.GetObjectForIUnknown(pointer);
-            return _manager;
-        }
-        catch (InvalidCastException)
-        {
-            return null;
-        }
-        finally
-        {
-            Marshal.Release(pointer);
-        }
+        return _manager;
     }
-}
-
-[ComImport]
-[Guid("A5CD92FF-29BE-454C-8D04-D82879FB3F1B")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IVirtualDesktopManager
-{
-    [PreserveSig] int IsWindowOnCurrentVirtualDesktop(nint hwnd, out int onCurrent);
-    [PreserveSig] int GetWindowDesktopId(nint hwnd, out Guid desktopId);
-    [PreserveSig] int MoveWindowToDesktop(nint hwnd, in Guid desktopId);
 }

@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -6,7 +5,6 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Winshell.Native;
 using Winshell.Windows;
-using static Winshell.Windows.NativeMethods;
 
 namespace Winshell;
 
@@ -174,15 +172,16 @@ public sealed class WindowThumbnail : FrameworkElement
             ReleaseThumbnail();
         if (_thumbnail == 0)
         {
-            if (DwmRegisterThumbnail(destination, window.Hwnd, out var thumbnail) != 0)
+            var thumbnail = DwmThumbnails.Register(destination, window.Hwnd);
+            if (thumbnail == 0)
                 return;
             _thumbnail = thumbnail;
             _destination = destination;
             _applied = default;
         }
-        if (DwmQueryThumbnailSourceSize(_thumbnail, out var size) != 0 || size.Width <= 0 || size.Height <= 0)
+        if (!DwmThumbnails.TrySourceSize(_thumbnail, out var width, out var height) || width <= 0 || height <= 0)
             return;
-        var source = SourceRect(window.Hwnd, size.Width, size.Height);
+        var source = SourceRect(window.Hwnd, width, height);
         var paint = new ThumbnailPaint(
             WindowRules.FitPreview(box, source.Width, source.Height),
             source,
@@ -198,7 +197,7 @@ public sealed class WindowThumbnail : FrameworkElement
     private RECT SourceRect(nint hwnd, int width, int height)
     {
         if (!Win32.IsIconic(hwnd) && Win32.GetWindowRect(hwnd, out var window)
-            && Win32.DwmGetWindowRect(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var frame, Marshal.SizeOf<RECT>()) == 0)
+            && TopLevelWindows.TryFrameBounds(hwnd, out var frame))
         {
             var visible = WindowRules.PreviewSource(window, frame);
             _insets = new RECT(visible.Left, visible.Top, window.Width - visible.Right, window.Height - visible.Bottom);
@@ -257,23 +256,13 @@ public sealed class WindowThumbnail : FrameworkElement
             _applied = hidden;
     }
 
-    private bool Apply(ThumbnailPaint paint)
-    {
-        var properties = new DWM_THUMBNAIL_PROPERTIES
-        {
-            Flags = DWM_TNP_RECTDESTINATION | DWM_TNP_RECTSOURCE | DWM_TNP_OPACITY | DWM_TNP_VISIBLE,
-            Destination = paint.Destination,
-            Source = paint.Source,
-            Opacity = paint.Opacity,
-            Visible = paint.Visible ? 1 : 0,
-        };
-        return Win32.DwmUpdateThumbnailProperties(_thumbnail, properties) == 0;
-    }
+    private bool Apply(ThumbnailPaint paint) =>
+        DwmThumbnails.Update(_thumbnail, paint.Destination, paint.Source, paint.Opacity, paint.Visible);
 
     private void ReleaseThumbnail()
     {
         if (_thumbnail != 0)
-            _ = DwmUnregisterThumbnail(_thumbnail);
+            DwmThumbnails.Unregister(_thumbnail);
         _thumbnail = 0;
         _destination = 0;
         _applied = default;

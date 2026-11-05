@@ -1,7 +1,5 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 using Winshell.Input;
-using static Winshell.Windows.NativeMethods;
 
 namespace Winshell.Windows;
 
@@ -33,20 +31,17 @@ internal readonly record struct WindowIdentity(
 /// The windows the taskbar and Alt+Tab show, for the whole process, kept current by WinEvent hooks set on the UI
 /// thread. Events are gathered and read once per turn of the loop, then <see cref="Changed"/> is raised.
 /// </summary>
-internal static unsafe class WindowTracker
+internal static class WindowTracker
 {
     private static readonly Dictionary<nint, WindowInfo> Tracked = [];
     private static readonly Dictionary<nint, WindowIdentity> Identities = [];
     private static readonly HashSet<nint> Dirty = [];
     private static readonly HashSet<nint> Flashed = [];
     private static readonly HashSet<nint> Wanting = [];
-    private static uint _shellHookMessage;
+    private static readonly List<WinEventHook> Hooks = [];
     private static IEventLoop? _loop;
     private static bool _flushPosted;
     private static bool _foregroundDirty;
-
-    [ThreadStatic]
-    private static List<nint>? _enumerated;
 
     /// <summary>Raised on the UI thread after windows came, went or changed, or the foreground moved.</summary>
     public static event Action? Changed;
@@ -75,53 +70,27 @@ internal static unsafe class WindowTracker
         ];
         foreach (var (min, max) in ranges)
         {
-            if (Win32.SetWinEventHook(min, max, 0, &OnWinEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT) == 0)
+            if (WinEventHook.Start(min, max, OnWinEvent) is { } hook)
+                Hooks.Add(hook);
+            else
                 log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
-        StartShellHook(log);
-        _enumerated = [];
-        Win32.EnumWindows(&Collect, 0);
-        foreach (var hwnd in _enumerated)
+        // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
+        // window flashes.
+        if (!ShellHookWindow.Start(OnShellHook))
+            log.Warn("windows", "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
+        foreach (var hwnd in TopLevelWindows.List())
             Dirty.Add(hwnd);
-        _enumerated = null;
         _foregroundDirty = true;
         Flush();
     }
 
-    /// <summary>
-    /// Asks for the shell hook messages Explorer's taskbar gets. Only <c>HSHELL_FLASH</c> is read: WinEvents say
-    /// nothing when a window flashes.
-    /// </summary>
-    private static void StartShellHook(Log log)
-    {
-        const string className = "WinshellShellHook";
-        _shellHookMessage = Win32.RegisterWindowMessageW("SHELLHOOK");
-        fixed (char* name = className)
-        {
-            var wc = new WNDCLASSEXW
-            {
-                cbSize = (uint)sizeof(WNDCLASSEXW),
-                lpfnWndProc = &ShellHookProc,
-                hInstance = Win32.GetModuleHandleW(null),
-                lpszClassName = name,
-            };
-            Win32.RegisterClassExW(wc);
-        }
-        var hwnd = Win32.CreateWindowExW(0, className, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
-        if (hwnd == 0 || _shellHookMessage == 0 || !RegisterShellHookWindow(hwnd))
-            log.Warn("windows", "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
-    }
-
-    [UnmanagedCallersOnly]
-    private static nint ShellHookProc(nint hwnd, uint message, nint wParam, nint lParam)
-    {
-        if (message != _shellHookMessage || _shellHookMessage == 0)
-            return Win32.DefWindowProcW(hwnd, message, wParam, lParam);
+    private static void OnShellHook(nint code, nint hwnd) =>
         NativeCallback.Guard(Log.Default, "windows", () =>
         {
-            if (WindowRules.IsFlash(wParam) && lParam != 0)
+            if (WindowRules.IsFlash(code) && hwnd != 0)
             {
-                Flashed.Add(lParam);
+                Flashed.Add(hwnd);
                 if (!_flushPosted && _loop is not null)
                 {
                     _flushPosted = true;
@@ -129,18 +98,8 @@ internal static unsafe class WindowTracker
                 }
             }
         });
-        return 0;
-    }
 
-    [UnmanagedCallersOnly]
-    private static int Collect(nint hwnd, nint data)
-    {
-        _enumerated!.Add(hwnd);
-        return 1;
-    }
-
-    [UnmanagedCallersOnly]
-    private static void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time) =>
+    private static void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
         NativeCallback.Guard(Log.Default, "windows", () => Mark(eventType, hwnd, idObject, idChild));
 
     private static void Mark(uint eventType, nint hwnd, int idObject, int idChild)
@@ -149,7 +108,7 @@ internal static unsafe class WindowTracker
         // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
         if (eventType == Win32.EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
             return;
-        var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && Win32.GetAncestor(hwnd, GA_ROOT) == hwnd;
+        var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && TopLevelWindows.RootOf(hwnd) == hwnd;
         var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);
         if (!marksWindow && !WindowRules.MarksForeground(eventType))
             return;
@@ -218,7 +177,7 @@ internal static unsafe class WindowTracker
 
     private static nint ActiveOf(nint foreground)
     {
-        var hwnd = foreground == 0 ? 0 : Win32.GetAncestor(foreground, GA_ROOT);
+        var hwnd = foreground == 0 ? 0 : TopLevelWindows.RootOf(foreground);
         for (var depth = 0; hwnd != 0 && depth < 16; depth++)
         {
             if (Tracked.ContainsKey(hwnd))
@@ -238,19 +197,18 @@ internal static unsafe class WindowTracker
         // thread waiting for this one, as SystemEvents does while it raises an event, and neither would ever go on.
         if (!Win32.IsWindowVisible(hwnd))
             return false;
-        var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
         var ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         return WindowRules.ShowsOnTaskbar(new TaskbarWindowFacts(
             Win32.IsWindow(hwnd),
             Win32.IsWindowVisible(hwnd),
-            hwnd == GetShellWindow(),
-            (style & WS_CHILD) != 0,
+            TopLevelWindows.IsShellWindow(hwnd),
+            TopLevelWindows.HasChildStyle(hwnd),
             (ex & Win32.WS_EX_APPWINDOW) != 0,
             Win32.GetWindow(hwnd, Win32.GW_OWNER) != 0,
             (ex & Win32.WS_EX_TOOLWINDOW) != 0,
             (ex & Win32.WS_EX_NOACTIVATE) != 0,
-            GetWindowTextLength(hwnd) > 0,
-            IsCloaked(hwnd)));
+            TopLevelWindows.HasTitle(hwnd),
+            TopLevelWindows.IsCloaked(hwnd)));
     }
 
     private static WindowInfo Describe(nint hwnd)
@@ -258,30 +216,30 @@ internal static unsafe class WindowTracker
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
         var monitor = Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST);
-        var mi = new MONITORINFOEXW { cbSize = (uint)sizeof(MONITORINFOEXW) };
-        var device = monitor != 0 && Win32.GetMonitorInfo(monitor, ref mi) ? new string(mi.szDevice).TrimEnd('\0') : "";
+        var mi = default(MonitorInfo);
+        var device = monitor != 0 && Monitors.TryRead(monitor, out mi) ? mi.Device : "";
         var fullscreen = false;
         if (!minimized && device.Length > 0 && Win32.GetWindowRect(hwnd, out var rect))
         {
             // No title bar and covering the whole monitor, as a game or a video player in fullscreen does.
             var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
-            fullscreen = WindowRules.CoversMonitor(style, rect, mi.rcMonitor);
+            fullscreen = WindowRules.CoversMonitor(style, rect, mi.Bounds);
         }
         Identities.TryGetValue(hwnd, out var previous);
         // The property can arrive after the window is first shown. Read it every time. The package id and the
         // program path do not change, so each is read once.
-        var property = WindowAppId(hwnd);
+        var property = AppUserModelIds.OfWindow(hwnd);
         string? package = null;
         if (property.Length == 0 && !previous.PackageKnown)
         {
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
-            package = ProcessAppUserModelId(pid);
+            package = AppUserModelIds.OfProcess(pid);
         }
         string? executable = previous.Executable is { Length: > 0 } ? null : ExePath(hwnd);
         var identity = Resolve(previous, property, package, executable);
         Identities[hwnd] = identity;
         var owner = Win32.GetWindow(hwnd, Win32.GW_OWNER);
-        return new WindowInfo(hwnd, WindowText(hwnd), identity.AppId, identity.Executable, identity.Icon, owner, maximized, minimized, fullscreen, device);
+        return new WindowInfo(hwnd, TopLevelWindows.Title(hwnd), identity.AppId, identity.Executable, identity.Icon, owner, maximized, minimized, fullscreen, device);
     }
 
     /// <summary>
@@ -300,6 +258,13 @@ internal static unsafe class WindowTracker
             WindowRules.IconPath(source, path),
             package,
             previous.PackageKnown || packageAppId is not null);
+    }
+
+    /// <summary>The full path of the program that owns a window, or empty when it cannot be read.</summary>
+    private static string ExePath(nint hwnd)
+    {
+        Win32.GetWindowThreadProcessId(hwnd, out var pid);
+        return ProcessImage.TryRead(pid) ?? "";
     }
 
     /// <summary>
@@ -321,8 +286,7 @@ internal static unsafe class WindowTracker
             return;
         if (!Win32.GetWindowRect(hwnd, out var current))
             return;
-        var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
-        var hasPlacement = Win32.GetWindowPlacement(hwnd, ref placement);
+        var hasPlacement = TopLevelWindows.TryPlacement(hwnd, out var placement);
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
         // The placement is in workspace coordinates and the monitor frames are in screen coordinates. A restored
@@ -337,15 +301,10 @@ internal static unsafe class WindowTracker
         if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
             return;
         var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
-        if (!hasPlacement)
-        {
-            Win32.SetWindowPos(hwnd, 0, next.Left, next.Top, next.Width, next.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
-            return;
-        }
-        placement.Normal = WindowRules.Shift(next, -bias.X, -bias.Y);
-        placement.ShowCmd = (uint)(minimized ? Win32.SW_SHOWMINIMIZED : maximized ? SW_MAXIMIZE : Win32.SW_SHOWNORMAL);
-        placement.Flags |= WPF_ASYNCWINDOWPLACEMENT;
-        Win32.SetWindowPlacement(hwnd, placement);
+        if (hasPlacement)
+            TopLevelWindows.Place(hwnd, placement, WindowRules.Shift(next, -bias.X, -bias.Y), minimized, maximized);
+        else
+            TopLevelWindows.Move(hwnd, next);
     }
 
     private static MonitorFrame Frame(ConnectedMonitor monitor)
@@ -363,7 +322,7 @@ internal static unsafe class WindowTracker
     public static void Activate(nint hwnd)
     {
         if (Win32.IsIconic(hwnd))
-            ShowWindowAsync(hwnd, Win32.SW_RESTORE);
+            TopLevelWindows.Restore(hwnd);
         if (Win32.SetForegroundWindow(hwnd) && Win32.GetForegroundWindow() == hwnd)
             return;
         var foreground = Win32.GetForegroundWindow();
@@ -373,7 +332,7 @@ internal static unsafe class WindowTracker
         {
             try
             {
-                Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+                TopLevelWindows.Raise(hwnd);
                 Win32.SetForegroundWindow(hwnd);
             }
             finally
@@ -390,9 +349,21 @@ internal static unsafe class WindowTracker
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
-    public static void Close(nint hwnd) => Win32.PostMessageW(hwnd, Win32.WM_SYSCOMMAND, SC_CLOSE, 0);
+    public static void Close(nint hwnd) => TopLevelWindows.Close(hwnd);
 
-    public static void SetMaximized(nint hwnd, bool maximized) => ShowWindowAsync(hwnd, maximized ? SW_MAXIMIZE : Win32.SW_RESTORE);
+    public static void SetMaximized(nint hwnd, bool maximized)
+    {
+        if (maximized)
+            TopLevelWindows.Maximize(hwnd);
+        else
+            TopLevelWindows.Restore(hwnd);
+    }
 
-    public static void SetMinimized(nint hwnd, bool minimized) => ShowWindowAsync(hwnd, minimized ? Win32.SW_MINIMIZE : Win32.SW_RESTORE);
+    public static void SetMinimized(nint hwnd, bool minimized)
+    {
+        if (minimized)
+            TopLevelWindows.Minimize(hwnd);
+        else
+            TopLevelWindows.Restore(hwnd);
+    }
 }
