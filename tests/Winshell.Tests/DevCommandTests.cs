@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using System.Management;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Windows.Win32;
+using Winshell.Native;
 
 namespace Winshell.Tests;
 
@@ -213,14 +214,14 @@ public sealed class DevCommandTests : IDisposable
     public void Ctrl_Break_stops_dotnet_watch_and_the_shell()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
-        Assert.True(GetConsoleWindow() != 0 || GetConsoleProcessList([0], 1) > 0, "The test program has no console to send a Ctrl+Break on.");
+        Assert.True(ProcessConsole.Window() != 0 || PInvoke.GetConsoleProcessList(new uint[1]) > 0, "The test program has no console to send a Ctrl+Break on.");
         StartDev(ownGroup: true);
         Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
         Assert.Contains(FromProject(), p => p.StartsWith("Dev.exe ", StringComparison.Ordinal));
         var id = InstanceId();
 
         // Ctrl+C reaches every process on the console, this test's too. Ctrl+Break can be sent to one process group.
-        Assert.True(GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)_dev!.Id), "Ctrl+Break was not sent.");
+        Assert.True(PInvoke.GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)_dev!.Id), "Ctrl+Break was not sent.");
 
         Assert.True(_dev.WaitForExit(TimeSpan.FromSeconds(30)), "winshell dev did not exit.");
         Wait.Until(() => FromProject().Count == 0, "dotnet watch and the shell to end", TimeSpan.FromSeconds(30));
@@ -287,14 +288,4 @@ public sealed class DevCommandTests : IDisposable
     }
 
     private const uint CtrlBreakEvent = 1;
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GenerateConsoleCtrlEvent(uint ctrlEvent, uint processGroupId);
-
-    [DllImport("kernel32.dll")]
-    private static extern nint GetConsoleWindow();
-
-    [DllImport("kernel32.dll")]
-    private static extern uint GetConsoleProcessList(uint[] processes, uint count);
 }

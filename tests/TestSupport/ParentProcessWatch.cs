@@ -2,6 +2,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.System.Diagnostics.ToolHelp;
 
 namespace Winshell.TestSupport;
 
@@ -28,12 +31,9 @@ internal static class ParentProcessWatch
 
     private static Process? Parent()
     {
-        var status = NtQueryInformationProcess(Process.GetCurrentProcess().Handle, 0, out var info, Marshal.SizeOf<BasicInformation>(), out _);
-        if (status != 0)
-            throw new Win32Exception(status, "NtQueryInformationProcess failed");
         try
         {
-            return Process.GetProcessById((int)info.ParentProcessId);
+            return Process.GetProcessById((int)ParentId());
         }
         catch (ArgumentException)
         {
@@ -41,17 +41,25 @@ internal static class ParentProcessWatch
         }
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BasicInformation
+    private static uint ParentId()
     {
-        public nint ExitStatus;
-        public nint PebBaseAddress;
-        public nint AffinityMask;
-        public nint BasePriority;
-        public nint ProcessId;
-        public nint ParentProcessId;
+        var snapshot = PInvoke.CreateToolhelp32Snapshot(CREATE_TOOLHELP_SNAPSHOT_FLAGS.TH32CS_SNAPPROCESS, 0);
+        if (snapshot == new HANDLE(-1))
+            throw new Win32Exception();
+        try
+        {
+            var self = (uint)Environment.ProcessId;
+            var entry = new PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32W>() };
+            for (var more = PInvoke.Process32FirstW(snapshot, ref entry); more; more = PInvoke.Process32NextW(snapshot, ref entry))
+            {
+                if (entry.th32ProcessID == self)
+                    return entry.th32ParentProcessID;
+            }
+            throw new InvalidOperationException("This process is not in the process snapshot.");
+        }
+        finally
+        {
+            PInvoke.CloseHandle(snapshot);
+        }
     }
-
-    [DllImport("ntdll.dll")]
-    private static extern int NtQueryInformationProcess(nint process, int informationClass, out BasicInformation information, int length, out int returned);
 }
