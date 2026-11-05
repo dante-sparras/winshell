@@ -55,7 +55,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Workspaces` | ObservableCollection of [WinlandWorkspace](#winlandworkspace), read-only | The Workspaces, by id, then by Monitor where two have the same number. |
 | `RawEvent` | Action of [WinlandEvent](#winlandevent) | Emitted for every line of the event stream, after the objects are updated. |
 | `Dispatch(string request)` | void | Sends `dispatch` and the request to Winland. A failure is logged. |
-| `Dispose()` | void | Stops following Winland and closes the connection to its pipe. |
+| `Dispose()` | void | Stops following Winland: the lists no longer change. The process keeps its one connection to Winland's pipe. |
 | `MonitorFor([ScreenInfo](winshell.md#screeninfo)? screen)` | [WinlandMonitor](#winlandmonitor)? | The Monitor of a screen, matched by its `\\.\DISPLAYn` name. Before Winland's first Monitor list arrives, it adds a Monitor for the screen that the list fills in later; after it, null when Winland reports no such Monitor. |
 | `RefreshMonitors()` | void | Asks Winland for its Monitors again. Updates the listed ones and removes those it no longer reports. |
 | `RefreshWindows()` | void | Asks Winland for its windows again, adding new ones and updating titles and Workspaces. |

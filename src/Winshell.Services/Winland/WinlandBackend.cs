@@ -6,62 +6,59 @@ using Winshell.Native;
 namespace Winshell.Winland;
 
 /// <summary>
-/// The one connection to Winland for the whole process: its event stream, and a fresh pipe connection per request.
-/// While Winland is not running it looks for the pipe after 3 s, then twice as long each time, up to every 30 s. Its
-/// events are raised on a background thread, in order; each engine's <see cref="WinlandService"/> posts them to its
-/// own loop.
+/// The one connection to Winland for the whole process, <see cref="Instance"/>: its event stream, and a fresh pipe
+/// connection per request. While Winland is not running it looks for the pipe after 3 s, then twice as long each time,
+/// up to every 30 s. Its events are raised on a background thread, in order; each engine's
+/// <see cref="WinlandService"/> posts them to its own loop.
 /// </summary>
-internal static class WinlandConnection
+internal sealed class WinlandBackend : IWinlandBackend
 {
     private static readonly TimeSpan FirstPoll = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan LastPoll = TimeSpan.FromSeconds(30);
     private static readonly int SessionId = Process.GetCurrentProcess().SessionId;
     private static readonly IReadOnlyList<string> Candidates = WinlandProtocol.PipeNames(Environment.GetEnvironmentVariable("WINLAND_PIPE"), SessionId);
-    private static readonly object LogsLock = new();
-    private static readonly List<Log> Logs = [];
-    private static int _started;
-    private static volatile string? _pipeName;
-    private static volatile int _processId;
-    private static volatile bool _connected;
+    public static readonly WinlandBackend Instance = new();
 
-    /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
-    internal static void RegisterLog(Log log)
+    private readonly List<Log> _logs = [];
+    private int _started;
+    private volatile string? _pipeName;
+    private volatile int _processId;
+    private volatile bool _connected;
+
+    public event Action<bool>? ConnectionChanged;
+
+    public event Action<string>? EventReceived;
+
+    public bool IsConnected => _connected;
+
+    public int ProcessId => _processId;
+
+    public string PipePath => @"\\.\pipe\" + (_pipeName ?? Candidates[0]);
+
+    public void Start(Log log)
     {
-        lock (LogsLock)
-        {
-            if (!Logs.Contains(log))
-                Logs.Add(log);
-        }
-    }
-
-    /// <summary>Drops a log registered by <see cref="RegisterLog"/>.</summary>
-    internal static void UnregisterLog(Log log)
-    {
-        lock (LogsLock)
-            Logs.Remove(log);
-    }
-
-    /// <summary>Raised when the event stream connects (true) or is lost (false).</summary>
-    public static event Action<bool>? ConnectionChanged;
-
-    /// <summary>Raised for each line of the event stream.</summary>
-    public static event Action<string>? EventReceived;
-
-    public static bool IsConnected => _connected;
-
-    /// <summary>The process that answers the event stream, or 0 while none does.</summary>
-    public static int ProcessId => _processId;
-
-    /// <summary>The pipe Winland answers on, or the one it would use when it is not running.</summary>
-    public static string PipePath => @"\\.\pipe\" + (_pipeName ?? Candidates[0]);
-
-    public static void EnsureStarted()
-    {
+        RegisterLog(log);
         if (Interlocked.Exchange(ref _started, 1) == 0)
             _ = Task.Run(FollowEvents);
     }
 
-    private static async Task FollowEvents()
+    public void Stop(Log log)
+    {
+        lock (_logs)
+            _logs.Remove(log);
+    }
+
+    /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
+    internal void RegisterLog(Log log)
+    {
+        lock (_logs)
+        {
+            if (!_logs.Contains(log))
+                _logs.Add(log);
+        }
+    }
+
+    private async Task FollowEvents()
     {
         var poll = FirstPoll;
         while (true)
@@ -113,8 +110,7 @@ internal static class WinlandConnection
     /// <summary>The wait after <paramref name="poll"/> finds no Winland: twice as long, at most 30 s.</summary>
     internal static TimeSpan NextPoll(TimeSpan poll) => poll * 2 < LastPoll ? poll * 2 : LastPoll;
 
-    /// <summary>Sends one request and reads its reply. Null when Winland is not running or does not answer.</summary>
-    public static async Task<string?> RequestAsync(string command)
+    public async Task<string?> RequestAsync(string command)
     {
         var names = _pipeName is { } known ? [known] : Candidates;
         foreach (var name in names)
@@ -162,7 +158,7 @@ internal static class WinlandConnection
         Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
 
     /// <summary>Calls each handler in turn. One that throws is logged, and the others still run.</summary>
-    internal static void Raise<T>(Action<T>? handlers, T value)
+    internal void Raise<T>(Action<T>? handlers, T value)
     {
         if (handlers is null)
             return;
@@ -176,8 +172,8 @@ internal static class WinlandConnection
             {
                 var message = e.ToString();
                 Log[] logs;
-                lock (LogsLock)
-                    logs = Logs.ToArray();
+                lock (_logs)
+                    logs = _logs.ToArray();
                 if (logs.Length == 0)
                     Log.Default.Warn("winland", message);
                 else

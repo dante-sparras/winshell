@@ -13,7 +13,7 @@ public sealed class QuietPollingTests
         for (var i = 0; i < 6; i++)
         {
             waits.Add(poll.TotalSeconds);
-            poll = WinlandConnection.NextPoll(poll);
+            poll = WinlandBackend.NextPoll(poll);
         }
         Assert.Equal(new double[] { 3, 6, 12, 24, 30, 30 }, waits);
     }

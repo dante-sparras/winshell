@@ -16,7 +16,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
     private readonly Log _log;
-    private readonly IWinlandLink _link;
+    private readonly IWinlandBackend _backend;
     private readonly List<WinlandMonitor> _monitorList = [];
     private readonly List<WinlandWorkspace> _workspaceList = [];
     private readonly List<WinlandWindow> _windowList = [];
@@ -31,15 +31,15 @@ public sealed class WinlandService : ObservableObject, IDisposable
     // Bumped when the connection is lost, so replies to an older connection's requests are dropped.
     private int _generation;
 
-    internal WinlandService(IEventLoop loop, Log log, IWinlandLink? link = null)
+    internal WinlandService(IEventLoop loop, Log log, IWinlandBackend? backend = null)
     {
         _loop = loop;
         _log = log;
-        _link = link ?? new WinlandPipe(log);
-        _link.ConnectionChanged += OnConnectionChanged;
-        _link.EventReceived += OnEventReceived;
-        _link.Start();
-        if (_link.IsConnected)
+        _backend = backend ?? WinlandBackend.Instance;
+        _backend.ConnectionChanged += OnConnectionChanged;
+        _backend.EventReceived += OnEventReceived;
+        _backend.Start(log);
+        if (_backend.IsConnected)
             RefreshAll();
     }
 
@@ -65,10 +65,10 @@ public sealed class WinlandService : ObservableObject, IDisposable
     public WinlandWindow? ActiveWindow => _activeWindow;
 
     /// <summary>Winland's pipe. It takes requests and, after an <c>events</c> request, streams events.</summary>
-    public string PipePath => _link.PipePath;
+    public string PipePath => _backend.PipePath;
 
     /// <summary>The process that answers on the pipe, or 0 while none does.</summary>
-    public int ProcessId => _link.ProcessId;
+    public int ProcessId => _backend.ProcessId;
 
     /// <summary>
     /// The full path of the config Winland read, as its <c>files</c> request reports it. Null while no Winland answers,
@@ -250,7 +250,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private void Request(string command, Action<string?> onReply)
     {
         var generation = _generation;
-        _ = _link.RequestAsync(command).ContinueWith(t =>
+        _ = _backend.RequestAsync(command).ContinueWith(t =>
         {
             var reply = t.IsCompletedSuccessfully ? t.Result : null;
             _loop.Post(() =>
@@ -272,7 +272,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     /// <summary>A query that got no answer while the stream is up is asked again, so a busy Winland still fills the lists.</summary>
     private void RetryIfConnected(string? reply, Action retry)
     {
-        if (reply is not null || !_link.IsConnected)
+        if (reply is not null || !_backend.IsConnected)
             return;
         var generation = _generation;
         _loop.Schedule(TimeSpan.FromSeconds(1), () =>
@@ -640,15 +640,15 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     private void SetActiveWindow(WinlandWindow? window) => Set(ref _activeWindow, window, nameof(ActiveWindow));
 
-    /// <summary>Stops following Winland and closes the connection to its pipe.</summary>
+    /// <summary>Stops following Winland: the lists no longer change. The process keeps its one connection to Winland's pipe.</summary>
     public void Dispose()
     {
         if (_disposed)
             return;
         _disposed = true;
         Attach(null);
-        _link.ConnectionChanged -= OnConnectionChanged;
-        _link.EventReceived -= OnEventReceived;
-        _link.Dispose();
+        _backend.ConnectionChanged -= OnConnectionChanged;
+        _backend.EventReceived -= OnEventReceived;
+        _backend.Stop(_log);
     }
 }

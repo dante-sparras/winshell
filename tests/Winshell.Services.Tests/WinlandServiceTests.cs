@@ -4,7 +4,7 @@ using Winshell.Winland;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>The Winland service over a fake link: no pipe is opened, and replies come from a dictionary.</summary>
+/// <summary>The Winland service over a fake backend: no pipe is opened, and replies come from a dictionary.</summary>
 public sealed class WinlandServiceTests
 {
     private const string Monitors = """
@@ -28,23 +28,23 @@ public sealed class WinlandServiceTests
         """;
 
     private readonly ManualEventLoop _loop = new();
-    private readonly FakeLink _link = new();
+    private readonly FakeBackend _backend = new();
 
     private WinlandService Connected()
     {
-        _link.Replies["j/monitors"] = Monitors;
-        _link.Replies["j/workspaces"] = Workspaces;
-        _link.Replies["j/clients"] = Clients;
-        _link.Replies["j/activewindow"] = """{"address":"0x10"}""";
-        _link.Connected = true;
-        var service = new WinlandService(_loop, Log.Default, _link);
+        _backend.Replies["j/monitors"] = Monitors;
+        _backend.Replies["j/workspaces"] = Workspaces;
+        _backend.Replies["j/clients"] = Clients;
+        _backend.Replies["j/activewindow"] = """{"address":"0x10"}""";
+        _backend.Connected = true;
+        var service = new WinlandService(_loop, Log.Default, _backend);
         _loop.Process();
         return service;
     }
 
     private void Raise(string line)
     {
-        _link.Raise(line);
+        _backend.Raise(line);
         _loop.Process();
     }
 
@@ -147,12 +147,12 @@ public sealed class WinlandServiceTests
         var windows = new Listing();
         windows.Open(Info(0x10), Info(0x20));
         using var list = new WindowListService(_loop, Log.Default, source: windows);
-        _link.Replies["j/monitors"] = Monitors;
-        _link.Replies["j/workspaces"] = Workspaces;
-        _link.Replies["j/clients"] = Clients;
-        _link.Replies["j/activewindow"] = """{"address":"0x10"}""";
-        _link.Connected = true;
-        using var service = new WinlandService(_loop, Log.Default, _link);
+        _backend.Replies["j/monitors"] = Monitors;
+        _backend.Replies["j/workspaces"] = Workspaces;
+        _backend.Replies["j/clients"] = Clients;
+        _backend.Replies["j/activewindow"] = """{"address":"0x10"}""";
+        _backend.Connected = true;
+        using var service = new WinlandService(_loop, Log.Default, _backend);
         service.Attach(list);
         _loop.Process();
 
@@ -291,11 +291,11 @@ public sealed class WinlandServiceTests
     public void A_lost_connection_empties_everything_and_a_late_reply_is_dropped()
     {
         using var service = Connected();
-        var late = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _link.Pending = late;
+        var late = new TaskCompletionSource<string?>();
+        _backend.Pending = late;
         service.RefreshWindows();
 
-        _link.RaiseConnection(false);
+        _backend.RaiseConnection(false);
         _loop.Process();
 
         Assert.Empty(service.Monitors);
@@ -305,14 +305,13 @@ public sealed class WinlandServiceTests
         Assert.Null(service.FocusedWorkspace);
         Assert.Null(service.ActiveWindow);
 
-        _link.Pending = null;
+        _backend.Pending = null;
         late.SetResult(Clients);
-        Wait.ForNothingToHappen(TimeSpan.FromMilliseconds(50));
         _loop.Process();
         Assert.Empty(service.Windows);
 
-        _link.Connected = true;
-        _link.RaiseConnection(true);
+        _backend.Connected = true;
+        _backend.RaiseConnection(true);
         _loop.Process();
         Assert.Equal(2, service.Monitors.Count);
     }
@@ -320,22 +319,33 @@ public sealed class WinlandServiceTests
     [Fact]
     public void A_query_with_no_answer_is_asked_again_while_the_stream_is_up()
     {
-        _link.Connected = true;
-        using var service = new WinlandService(_loop, Log.Default, _link);
+        _backend.Connected = true;
+        using var service = new WinlandService(_loop, Log.Default, _backend);
         _loop.Process();
         Assert.Empty(service.Monitors);
 
-        _link.Replies["j/monitors"] = Monitors;
+        _backend.Replies["j/monitors"] = Monitors;
         _loop.Advance(TimeSpan.FromSeconds(1));
 
         Assert.Equal(2, service.Monitors.Count);
     }
 
     [Fact]
+    public void A_query_with_no_answer_is_not_asked_again_while_Winland_is_down()
+    {
+        using var service = new WinlandService(_loop, Log.Default, _backend);
+
+        service.RefreshWindows();
+        _loop.Advance(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(["j/clients"], _backend.Sent);
+    }
+
+    [Fact]
     public void A_screen_finds_its_monitor_and_before_the_first_list_one_is_added()
     {
         var screen = new ScreenInfo(@"\\.\DISPLAY1", "DISPLAY1", "", "", "", default, default, 1, 0, 0, 60, true);
-        using (var early = new WinlandService(_loop, Log.Default, _link))
+        using (var early = new WinlandService(_loop, Log.Default, _backend))
         {
             var added = early.MonitorFor(screen);
             Assert.Equal(@"\\.\DISPLAY1", added!.Name);
@@ -352,16 +362,16 @@ public sealed class WinlandServiceTests
     {
         var lines = new List<string>();
         var log = new Log { Sink = (_, _, message) => lines.Add(message) };
-        using var service = new WinlandService(_loop, log, _link);
-        _link.Replies["dispatch workspace 3"] = "ok";
-        _link.Replies["dispatch bad"] = "unknown request";
+        using var service = new WinlandService(_loop, log, _backend);
+        _backend.Replies["dispatch workspace 3"] = "ok";
+        _backend.Replies["dispatch bad"] = "unknown request";
 
         service.Dispatch("workspace 3");
         service.Dispatch("bad");
         service.Dispatch("nothing");
         _loop.Process();
 
-        Assert.Equal(["dispatch workspace 3", "dispatch bad", "dispatch nothing"], _link.Sent);
+        Assert.Equal(["dispatch workspace 3", "dispatch bad", "dispatch nothing"], _backend.Sent);
         Assert.Equal(2, lines.Count);
         Assert.Contains("unknown request", lines[0], StringComparison.Ordinal);
         Assert.Contains("not running", lines[1], StringComparison.Ordinal);
@@ -371,7 +381,7 @@ public sealed class WinlandServiceTests
     public void Activating_a_workspace_on_another_monitor_focuses_that_monitor_first()
     {
         using var service = Connected();
-        _link.Sent.Clear();
+        _backend.Sent.Clear();
 
         service.Workspaces.First(w => w.Name == "3" && w.Monitor!.Id == 1).Activate();
         service.Workspaces.First(w => w.Name == "3" && w.Monitor!.Id == 0).Activate();
@@ -382,13 +392,13 @@ public sealed class WinlandServiceTests
             "[[BATCH]]dispatch focusmonitor 1;dispatch workspace 3",
             "dispatch workspace 3",
             "dispatch workspace special:special",
-        ], _link.Sent);
+        ], _backend.Sent);
     }
 
     [Fact]
     public void The_pipe_path_is_what_Winland_says()
     {
-        using var service = new WinlandService(_loop, Log.Default, _link);
+        using var service = new WinlandService(_loop, Log.Default, _backend);
 
         Assert.Equal(@"\\.\pipe\winland-test", service.PipePath);
     }
@@ -396,18 +406,18 @@ public sealed class WinlandServiceTests
     [Fact]
     public void The_process_on_the_pipe_is_announced_as_Winland_comes_and_goes()
     {
-        using var service = new WinlandService(_loop, Log.Default, _link);
+        using var service = new WinlandService(_loop, Log.Default, _backend);
         var changes = Watch(service);
 
-        _link.ProcessId = 4321;
-        _link.RaiseConnection(true);
+        _backend.ProcessId = 4321;
+        _backend.RaiseConnection(true);
         _loop.Process();
         Assert.Equal(4321, service.ProcessId);
         Assert.Contains(nameof(WinlandService.ProcessId), changes);
 
         changes.Clear();
-        _link.ProcessId = 0;
-        _link.RaiseConnection(false);
+        _backend.ProcessId = 0;
+        _backend.RaiseConnection(false);
         _loop.Process();
         Assert.Equal(0, service.ProcessId);
         Assert.Contains(nameof(WinlandService.ProcessId), changes);
@@ -416,17 +426,17 @@ public sealed class WinlandServiceTests
     [Fact]
     public void The_files_Winland_reports_are_read_as_it_connects_and_on_reload_and_dropped_as_it_goes()
     {
-        _link.Replies["j/files"] = """{"config":"D:\\work.conf","log":null}""";
+        _backend.Replies["j/files"] = """{"config":"D:\\work.conf","log":null}""";
         using var service = Connected();
         Assert.Equal(@"D:\work.conf", service.ConfigPath);
         Assert.Null(service.LogPath);
 
         // A reload with debug:disable_logs false starts the log.
-        _link.Replies["j/files"] = """{"config":"D:\\work.conf","log":"D:\\state\\winland.log"}""";
+        _backend.Replies["j/files"] = """{"config":"D:\\work.conf","log":"D:\\state\\winland.log"}""";
         Raise("configreloaded>>");
         Assert.Equal(@"D:\state\winland.log", service.LogPath);
 
-        _link.RaiseConnection(false);
+        _backend.RaiseConnection(false);
         _loop.Process();
         Assert.Null(service.ConfigPath);
         Assert.Null(service.LogPath);
@@ -435,12 +445,12 @@ public sealed class WinlandServiceTests
     [Fact]
     public void A_Winland_that_does_not_answer_files_reports_none()
     {
-        _link.Replies["j/files"] = "error: unknown request";
+        _backend.Replies["j/files"] = "error: unknown request";
         using var service = Connected();
 
         Assert.Null(service.ConfigPath);
         Assert.Null(service.LogPath);
-        Assert.Single(_link.Sent, "j/files");
+        Assert.Single(_backend.Sent, "j/files");
     }
 
     [Fact]
@@ -449,13 +459,13 @@ public sealed class WinlandServiceTests
         var service = Connected();
         var title = service.Windows[0].Title;
 
-        _link.Raise("windowtitlev2>>10,Late");
+        _backend.Raise("windowtitlev2>>10,Late");
         service.Dispose();
         _loop.Process();
 
         Assert.Equal(title, service.Windows[0].Title);
-        Assert.Equal(1, _link.Disposals);
-        Assert.Equal(0, _link.Listeners);
+        Assert.Same(Log.Default, Assert.Single(_backend.Stopped));
+        Assert.Equal(0, _backend.Listeners);
     }
 
     private static WindowInfo Info(nint hwnd) => new(hwnd, "Title", "app", @"C:\app.exe", "", 0, false, false, false, "M1");
@@ -511,7 +521,7 @@ public sealed class WinlandServiceTests
         }
     }
 
-    private sealed class FakeLink : IWinlandLink
+    private sealed class FakeBackend : IWinlandBackend
     {
         public bool Connected { get; set; }
 
@@ -521,7 +531,7 @@ public sealed class WinlandServiceTests
 
         public TaskCompletionSource<string?>? Pending { get; set; }
 
-        public int Disposals { get; private set; }
+        public List<Log> Stopped { get; } = [];
 
         public int Listeners => (ConnectionChanged?.GetInvocationList().Length ?? 0) + (EventReceived?.GetInvocationList().Length ?? 0);
 
@@ -535,7 +545,7 @@ public sealed class WinlandServiceTests
 
         public event Action<string>? EventReceived;
 
-        public void Start()
+        public void Start(Log log)
         {
         }
 
@@ -553,6 +563,6 @@ public sealed class WinlandServiceTests
             ConnectionChanged?.Invoke(connected);
         }
 
-        public void Dispose() => Disposals++;
+        public void Stop(Log log) => Stopped.Add(log);
     }
 }

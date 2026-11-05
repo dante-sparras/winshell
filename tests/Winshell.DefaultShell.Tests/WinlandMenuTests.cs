@@ -135,7 +135,7 @@ public sealed class WinlandMenuTests : IDisposable
 
     public void Dispose() => _winland?.Dispose();
 
-    private sealed class FakeWinlandLink : IWinlandLink
+    private sealed class FakeWinlandLink : IWinlandBackend
     {
         public int ProcessId { get; set; }
 
@@ -160,7 +160,7 @@ public sealed class WinlandMenuTests : IDisposable
         public event Action<string>? EventReceived;
 #pragma warning restore CS0067
 
-        public void Start()
+        public void Start(Log log)
         {
         }
 
@@ -176,7 +176,7 @@ public sealed class WinlandMenuTests : IDisposable
             });
         }
 
-        public void Dispose()
+        public void Stop(Log log)
         {
         }
     }
