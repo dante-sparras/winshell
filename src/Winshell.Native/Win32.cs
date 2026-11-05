@@ -721,8 +721,12 @@ internal static partial class Win32
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetWindowAttribute(nint hwnd, int attribute, in uint value, int size);
 
-    [LibraryImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
-    public static partial int DwmGetWindowRect(nint hwnd, int attribute, out RECT value, int size);
+    /// <summary>
+    /// Handwritten: CsWin32's declaration takes an <c>IBindCtx</c>, whose generated monikers use the banned
+    /// <c>System.Runtime.InteropServices.ComTypes.FILETIME</c>.
+    /// </summary>
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial int SHCreateItemFromParsingName(string path, nint bindContext, in Guid iid, out nint item);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmUpdateThumbnailProperties(nint thumbnail, in DWM_THUMBNAIL_PROPERTIES properties);
