@@ -63,7 +63,9 @@ public sealed class ShellSupervisorTests
 
         _time.Advance(TimeSpan.FromMinutes(1));
         third.Exit(AccessViolation);
-        _time.Advance(TimeSpan.FromSeconds(1));
+        _time.Advance(TimeSpan.FromSeconds(1) - Tick);
+        Assert.Equal(3, _shells.Count);
+        _time.Advance(Tick);
         var fourth = await _shells.Started(4);
 
         fourth.Exit(0);

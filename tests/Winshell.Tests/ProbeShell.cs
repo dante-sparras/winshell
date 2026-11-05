@@ -7,7 +7,8 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// A real program with no windows, shell id <c>probe</c> unless a test names another, built once into <c>bin\shell</c>.
-/// Tests of instances start it, so they hold no taskbar and no screen edge. A class that starts it has the
+/// Tests of instances start it, so they hold no taskbar and no screen edge unless a test puts <see cref="HideTaskbarMarker"/>
+/// in its config folder. A class that starts it has the
 /// <see cref="ProbeBuild"/> fixture. Nothing changes that build once it is made: a test that edits and rebuilds a probe
 /// builds one of its own with <see cref="Build"/>.
 /// </summary>

@@ -51,7 +51,7 @@ Use CommunityToolkit.Mvvm source generators only in DefaultShell and only where 
 
 The CLI supervises a shell in a child process. An unexpected shell exit triggers respawn with backoff; a requested stop ends supervision. Keep restart policy, cancellation and child ownership in a focused supervisor rather than in the window host. Drive policy time through `TimeProvider` so tests can advance it without sleeping.
 
-The supervisor owns Explorer taskbar recovery independently of the child. Restore the taskbar after a child exits, before waiting or respawning, after a launch failure, and when supervision stops. Recovery must run even if the shell cannot execute its cleanup. A new child acquires its own taskbar state; a restart must not inherit a stale hidden-taskbar lease. Verify recovery across crashes, repeated failures and intentional shutdown.
+The supervisor owns Explorer taskbar recovery independently of the child. Restore the taskbar after a child exits without its own cleanup, before waiting or respawning, after a launch failure, and when supervision stops. Recovery must run even if the shell cannot execute its cleanup. A child that exited cleanly has restored the taskbar itself, and a taskbar already hidden when a child started belongs to another shell: restoring either would take the taskbar from the shell that hid it. A new child acquires its own taskbar state; a restart must not inherit a stale hidden-taskbar lease. Verify recovery across crashes, repeated failures and intentional shutdown.
 
 ## Distribution and configuration
 
