@@ -1,5 +1,7 @@
 # Development
 
+The [architecture rules](architecture.md) define the target assembly boundaries, feature ownership and migration order.
+
 ## Prerequisites
 
 - Git
