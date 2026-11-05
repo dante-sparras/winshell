@@ -104,7 +104,7 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
         Assert.True(process.WaitForExit(20_000));
         // Without a timeout this waits for the output to be read to its end.
         process.WaitForExit();
-        ChildProcess.Exited(process, _printed[process.Id]).AssertExitCode(0);
+        ChildProcess.Exited("The probe", process, _printed[process.Id]).AssertExitCode(0);
         Assert.Equal("", _printed[process.Id].ToString());
     }
 

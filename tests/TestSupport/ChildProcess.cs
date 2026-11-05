@@ -51,12 +51,12 @@ internal sealed record ChildProcess(int Code, string Output, string Error)
 
     /// <summary>
     /// How <paramref name="process"/> ended, for a process the test read as it ran: <paramref name="printed"/> holds both
-    /// its streams, written under its own lock.
+    /// its streams, written under its own lock, as far as they have been read.
     /// </summary>
-    internal static ChildProcess Exited(Process process, StringBuilder printed)
+    internal static ChildProcess Exited(string command, Process process, StringBuilder printed)
     {
         lock (printed)
-            return new ChildProcess(process.ExitCode, printed.ToString(), "");
+            return new ChildProcess(process.ExitCode, printed.ToString(), "") { Command = command };
     }
 
     /// <summary>Fails the test, showing what the process printed, unless it exited with <paramref name="expected"/>.</summary>

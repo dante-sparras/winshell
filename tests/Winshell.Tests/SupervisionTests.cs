@@ -66,11 +66,11 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         Assert.StartsWith("Killed ", killed.Output, StringComparison.Ordinal);
         Assert.True(process.HasExited);
         // The shell writes to the supervisor's output, so what it printed is there.
-        ChildProcess.Exited(process, _printed).AssertExitCode(0);
+        ChildProcess.Exited("The probe", process, _printed).AssertExitCode(0);
         Assert.Empty(Listed());
         // A kill was asked for, so winshell run ends with the shell and does not start it again.
         Wait.Until(() => run.HasExited, "winshell run to end with its shell");
-        ChildProcess.Exited(run, _printed).AssertExitCode(0);
+        ChildProcess.Exited("winshell run", run, _printed).AssertExitCode(0);
 
         // A clean exit keeps the record, marked exited, so the log can still be found.
         var stopped = Cli("log");
@@ -152,7 +152,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
             killed.AssertExitCode(0);
             Wait.Until(() => run.HasExited, "winshell run to end with its shell");
             // The exit code of the end --force gave it.
-            ChildProcess.Exited(run, _printed).AssertExitCode(-1);
+            ChildProcess.Exited("winshell run", run, _printed).AssertExitCode(-1);
             Assert.Empty(Listed());
         }
         finally

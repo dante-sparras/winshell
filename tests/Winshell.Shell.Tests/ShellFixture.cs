@@ -19,8 +19,8 @@ internal static class ShellFixture
     private static readonly SemaphoreSlim OneAction = new(1, 1);
     private static readonly AsyncLocal<int> Depth = new();
 
-    // The windows each test's turns on the shell opened and left open, for NoWindowLeftOpen to check once it ends.
-    private static readonly ConcurrentDictionary<string, List<HostWindow>> Opened = new();
+    // The windows each test's turns on the shell left open, by name, for NoWindowLeftOpen to report once it ends.
+    private static readonly ConcurrentDictionary<string, List<string>> Left = new();
 
     private static Thread StartThread()
     {
@@ -66,11 +66,14 @@ internal static class ShellFixture
         {
             var shell = await Current().WaitAsync(TestContext.Current.CancellationToken);
             var before = await OnThread(shell, s => Task.FromResult(s.Platform.Windows.ToList()));
-            var result = await body();
-            var opened = await OnThread(shell, s => Task.FromResult(s.Platform.Windows.Except(before).ToList()));
-            if (opened.Count > 0 && TestContext.Current.Test is { } test)
-                Opened.AddOrUpdate(test.UniqueID, opened, (_, earlier) => [.. earlier, .. opened]);
-            return result;
+            try
+            {
+                return await body();
+            }
+            finally
+            {
+                await CloseLeft(shell, before);
+            }
         }
         finally
         {
@@ -80,6 +83,31 @@ internal static class ShellFixture
     }
 
     public static Task<T> On<T>(Func<Shell, T> action) => On(shell => Task.FromResult(action(shell)));
+
+    /// <summary>
+    /// Closes the windows a turn opened and left open, before the next turn can see them, and keeps their names for
+    /// <see cref="NoWindowLeftOpenAttribute"/>.
+    /// </summary>
+    private static async Task CloseLeft(Shell shell, List<HostWindow> before)
+    {
+        try
+        {
+            var left = await OnThread(shell, s =>
+            {
+                var opened = s.Platform.Windows.Except(before).ToList();
+                var names = opened.Select(Describe).ToList();
+                foreach (var window in opened)
+                    (window.Client as ShellWindow)?.Dispose();
+                return Task.FromResult(names);
+            });
+            if (left.Count > 0 && TestContext.Current.Test is { } test)
+                Left.AddOrUpdate(test.UniqueID, left, (_, earlier) => [.. earlier, .. left]);
+        }
+        catch (OperationCanceledException)
+        {
+            // The test ran out of time, which already fails it.
+        }
+    }
 
     private static async Task<T> OnThread<T>(Shell shell, Func<Shell, Task<T>> action)
     {
@@ -112,23 +140,8 @@ internal static class ShellFixture
         return sized.Task;
     }
 
-    /// <summary>
-    /// The windows <paramref name="test"/> opened on the shell and left open, named. They are closed, so the tests after it
-    /// see only their own.
-    /// </summary>
-    internal static async Task<List<string>> LeftOpenBy(IXunitTest test)
-    {
-        if (!Opened.TryRemove(test.UniqueID, out var opened))
-            return [];
-        return await OnThread(await Current(), shell =>
-        {
-            var left = opened.Where(shell.Platform.Windows.Contains).ToList();
-            var named = left.Select(Describe).ToList();
-            foreach (var window in left)
-                (window.Client as IDisposable)?.Dispose();
-            return Task.FromResult(named);
-        });
-    }
+    /// <summary>The names of the windows <paramref name="test"/>'s turns on the shell left open.</summary>
+    internal static List<string> LeftOpenBy(IXunitTest test) => Left.TryRemove(test.UniqueID, out var names) ? names : [];
 
     /// <summary>A window as a failure names it: its type, its title or the name of what it shows, and what it shows.</summary>
     private static string Describe(HostWindow window)
@@ -145,18 +158,16 @@ internal static class ShellFixture
 }
 
 /// <summary>
-/// Fails a test that ends with a window still open that one of its turns on the shell opened, and names the window. The
-/// shell is one for the whole run, so a window left open would otherwise fail the next test that counts the shell's
-/// windows. Each turn holds the shell to itself, so the windows that are new when it ends are that test's.
+/// Fails a test whose turn on the shell left a window open, and names the window. The shell is one for the whole run, so
+/// a window left open would fail the next test that counts the shell's windows. Each turn holds the shell to itself, and
+/// the windows new when it ends are closed then, before another turn can see them.
 /// </summary>
 [AttributeUsage(AttributeTargets.Assembly)]
 internal sealed class NoWindowLeftOpenAttribute : BeforeAfterTestAttribute
 {
     public override void After(MethodInfo methodUnderTest, IXunitTest test)
     {
-#pragma warning disable VSTHRD002 // xUnit's After is synchronous, and the shell's own thread completes the task.
-        var open = ShellFixture.LeftOpenBy(test).GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
-        Assert.True(open.Count == 0, $"The test left {open.Count} shell window(s) open: {string.Join("; ", open)}.");
+        var left = ShellFixture.LeftOpenBy(test);
+        Assert.True(left.Count == 0, $"The test left {left.Count} shell window(s) open: {string.Join("; ", left)}.");
     }
 }

@@ -83,7 +83,7 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
             var killed = CliRun(["kill", "--pid", pid], folders);
             killed.AssertExitCode(0);
             Wait.Until(() => process.HasExited, "winshell kill to stop the shell");
-            ChildProcess.Exited(process, output).AssertExitCode(0);
+            ChildProcess.Exited("The packed shell", process, output).AssertExitCode(0);
         }
         finally
         {
