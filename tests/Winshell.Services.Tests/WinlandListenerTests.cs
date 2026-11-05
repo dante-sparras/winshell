@@ -13,15 +13,10 @@ public class WinlandListenerTests
         var later = false;
         Action<int> handlers = _ => throw new InvalidOperationException("listener failed");
         handlers += _ => later = true;
-        WinlandConnection.RegisterLog(log);
-        try
-        {
-            WinlandConnection.Raise(handlers, 0);
-        }
-        finally
-        {
-            WinlandConnection.UnregisterLog(log);
-        }
+        var backend = new WinlandBackend();
+        backend.RegisterLog(log);
+
+        backend.Raise(handlers, 0);
 
         Assert.True(later);
         Assert.Single(lines);
