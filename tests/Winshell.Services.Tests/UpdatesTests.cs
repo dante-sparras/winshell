@@ -476,15 +476,17 @@ public sealed class UpdatesTests : IDisposable
         Assert.Empty(Directory.EnumerateDirectories(UpdateTrust.Root(UpdatesDir)));
     }
 
-    [Fact]
-    public async Task A_signed_install_refuses_an_update_that_leaves_out_a_signed_binary()
+    [Theory]
+    [InlineData("winshellw.exe")]
+    [InlineData("Winshell.Native.dll")]
+    public async Task A_signed_install_refuses_an_update_that_leaves_out_a_signed_binary(string name)
     {
         File.WriteAllText(Path.Combine(InstallDir, "winshell.exe"), "signed by CN=Winshell");
-        var staged = await Download(("winshell.exe", Exe("signed by CN=Winshell")));
+        var staged = await Download(SignedRelease().Where(file => file.Name != name).ToArray());
 
         var error = UpdateInstall.ApplyVerified(UpdatesDir, staged, InstallDir, FakeSigner);
 
-        Assert.Equal("This Winshell is signed, but the update has no winshellw.exe, so Winshell does not install it.", error);
+        Assert.Equal($"This Winshell is signed, but the update has no {name}, so Winshell does not install it.", error);
         Assert.Equal(["winshell.exe"], Directory.EnumerateFileSystemEntries(InstallDir).Select(Path.GetFileName));
         Assert.False(Directory.Exists(staged));
     }

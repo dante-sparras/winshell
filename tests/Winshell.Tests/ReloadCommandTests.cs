@@ -137,7 +137,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     {
         File.WriteAllText(Path.Combine(_probe.Folder, "Program.cs"), original.Replace("?? \"probe\"", $"?? \"{shellId}\"", StringComparison.Ordinal));
         var result = Run("reload", "--pid", running.Id.ToString(CultureInfo.InvariantCulture));
-        Assert.Equal(0, result.Code);
+        Assert.True(result.Code == 0, $"Reload exited {result.Code}.\n{result.Output}\n{result.Error}");
         Wait.Until(() => running.HasExited, "the old process to exit");
         var pid = 0;
         Wait.Until(

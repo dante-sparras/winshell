@@ -5,12 +5,12 @@
     <IsPackable>true</IsPackable>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <PackageId>Winshell</PackageId>
-    <Description>The library a Winshell configuration references: services and WinUI windows.</Description>
+    <Description>The library a Winshell configuration references: native operations, services and WinUI windows.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/enpaze/winshell</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Copyright>Copyright (c) 2026 Dante Sparrås</Copyright>
-    <!-- The project's own assembly is a marker. The package carries the two libraries below. -->
+    <!-- The project's own assembly is a marker. The package carries the three libraries below. -->
   </PropertyGroup>
 
   <!-- What a configuration's project restores. WinUI is these two packages, self-contained in that project. -->
@@ -24,18 +24,19 @@
     <PackageReference Include="Vortice.DXGI" />
   </ItemGroup>
 
-  <!-- Private so the package does not depend on a Winshell.Shell or Winshell.Services package. The assemblies are included below. -->
+  <!-- Private so the package does not depend on separate Winshell module packages. The assemblies are included below. -->
   <ItemGroup>
+    <ProjectReference Include="..\Winshell.Native\Winshell.Native.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Winshell.Shell\Winshell.Shell.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Winshell.Services\Winshell.Services.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- IncludeBuildOutput stays false, so the marker assembly is not packed. NuGet only
-       copies BuildOutputInPackage when IncludeBuildOutput is true, so these two go in as files. -->
+       copies BuildOutputInPackage when IncludeBuildOutput is true, so these three go in as files. -->
   <Target Name="IncludeWinshellAssemblies" BeforeTargets="_GetPackageFiles" DependsOnTargets="ResolveReferences">
     <ItemGroup>
       <None Include="@(ReferenceCopyLocalPaths)"
-            Condition="'%(Extension)' == '.dll' and ('%(Filename)' == 'Winshell.Shell' or '%(Filename)' == 'Winshell.Services')">
+            Condition="'%(Extension)' == '.dll' and ('%(Filename)' == 'Winshell.Native' or '%(Filename)' == 'Winshell.Shell' or '%(Filename)' == 'Winshell.Services')">
         <Pack>true</Pack>
         <PackagePath>lib/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
       </None>
