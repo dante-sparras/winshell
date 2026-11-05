@@ -23,7 +23,7 @@ public sealed class SessionServiceTests
     [Fact]
     public void Lock_asks_Windows_once()
     {
-        var windows = new FakeLock(accepts: true);
+        var windows = new FakeSessionBackend(accepts: true);
 
         Assert.True(new SessionService(_log, windows).Lock());
 
@@ -34,7 +34,7 @@ public sealed class SessionServiceTests
     [Fact]
     public void Lock_reports_when_Windows_refuses()
     {
-        Assert.False(new SessionService(_log, new FakeLock(accepts: false)).Lock());
+        Assert.False(new SessionService(_log, new FakeSessionBackend(accepts: false)).Lock());
 
         Assert.Equal(["session: Windows did not lock the session."], _warnings);
     }
@@ -261,7 +261,7 @@ public sealed class SessionServiceTests
         public void RequestFrame(Action action) => throw new NotSupportedException();
     }
 
-    private sealed class FakeLock(bool accepts) : IWorkstationLock
+    private sealed class FakeSessionBackend(bool accepts) : ISessionBackend
     {
         public int Calls { get; private set; }
 
