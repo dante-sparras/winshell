@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.Foundation;
 
 namespace Winshell.Native;
 
@@ -7,7 +9,7 @@ namespace Winshell.Native;
 /// <c>ERROR_INSUFFICIENT_BUFFER</c> and the required size when the first buffer is short, so a path past 1024
 /// characters is read on a second call, up to the Win32 limit.
 /// </summary>
-internal static partial class ProcessImage
+internal static class ProcessImage
 {
     /// <summary>Characters, including the terminating null, that a Win32 path can hold.</summary>
     internal const int MaxCharacters = 32_767;
@@ -50,14 +52,14 @@ internal static partial class ProcessImage
         return null;
     }
 
-    private static QueryResult Query(nint process, char[] buffer, int capacity)
+    private static unsafe QueryResult Query(nint process, char[] buffer, int capacity)
     {
-        var size = capacity;
-        var ok = QueryFullProcessImageNameW(process, 0, buffer, ref size);
-        return new QueryResult(ok, size, ok ? 0 : Marshal.GetLastPInvokeError());
+        var size = (uint)capacity;
+        fixed (char* name = buffer)
+        {
+            var ok = PInvoke.QueryFullProcessImageName(new HANDLE(process), 0, name, &size);
+            var error = ok ? 0 : Marshal.GetLastPInvokeError();
+            return new QueryResult(ok, size > int.MaxValue ? -1 : (int)size, error);
+        }
     }
-
-    [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool QueryFullProcessImageNameW(nint process, uint flags, [Out] char[] name, ref int size);
 }

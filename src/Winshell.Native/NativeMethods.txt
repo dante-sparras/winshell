@@ -1,1 +1,5 @@
 LockWorkStation
+QueryFullProcessImageNameW
+CloseHandle
+GetSidSubAuthorityCount
+GetSidSubAuthority

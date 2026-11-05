@@ -194,6 +194,17 @@ internal struct BITMAP
     public nint bmBits;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct DWM_THUMBNAIL_PROPERTIES
+{
+    public uint Flags;
+    public RECT Destination;
+    public RECT Source;
+    public byte Opacity;
+    public int Visible;
+    public int SourceClientAreaOnly;
+}
+
 internal static partial class Win32
 {
     public const uint WS_POPUP = 0x80000000;
@@ -710,6 +721,12 @@ internal static partial class Win32
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetWindowAttribute(nint hwnd, int attribute, in uint value, int size);
 
+    [LibraryImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+    public static partial int DwmGetWindowRect(nint hwnd, int attribute, out RECT value, int size);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmUpdateThumbnailProperties(nint thumbnail, in DWM_THUMBNAIL_PROPERTIES properties);
+
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmExtendFrameIntoClientArea(nint hwnd, in MARGINS margins);
 
@@ -735,9 +752,7 @@ internal static partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetEvent(nint handle);
 
-    [LibraryImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool CloseHandle(nint handle);
+    public static bool CloseHandle(nint handle) => global::Windows.Win32.PInvoke.CloseHandle(new global::Windows.Win32.Foundation.HANDLE(handle));
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     public static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);

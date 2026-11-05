@@ -1,4 +1,5 @@
-using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.Security;
 
 namespace Winshell.Native;
 
@@ -6,7 +7,7 @@ namespace Winshell.Native;
 /// A process's mandatory integrity level: the last sub-authority of its token's label SID, S-1-16-level. Low is
 /// 0x1000, medium 0x2000, high 0x3000 and system 0x4000.
 /// </summary>
-internal static unsafe partial class ProcessIntegrity
+internal static unsafe class ProcessIntegrity
 {
     internal const uint Medium = 0x2000;
 
@@ -28,11 +29,11 @@ internal static unsafe partial class ProcessIntegrity
                 var label = stackalloc byte[64];
                 if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
                     return null;
-                var sid = *(nint*)label;
-                var count = GetSidSubAuthorityCount(sid);
+                var sid = new PSID(*(void**)label);
+                var count = PInvoke.GetSidSubAuthorityCount(sid);
                 if (count == null || *count == 0)
                     return null;
-                var level = GetSidSubAuthority(sid, (uint)(*count - 1));
+                var level = PInvoke.GetSidSubAuthority(sid, (uint)(*count - 1));
                 return level == null ? null : *level;
             }
             finally
@@ -45,10 +46,4 @@ internal static unsafe partial class ProcessIntegrity
             Win32.CloseHandle(process);
         }
     }
-
-    [LibraryImport("advapi32.dll")]
-    private static partial byte* GetSidSubAuthorityCount(nint sid);
-
-    [LibraryImport("advapi32.dll")]
-    private static partial uint* GetSidSubAuthority(nint sid, uint index);
 }

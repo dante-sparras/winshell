@@ -44,17 +44,11 @@ internal static unsafe partial class NativeMethods
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int attribute, out int value, int size);
 
-    [LibraryImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
-    public static partial int DwmGetWindowRect(nint hwnd, int attribute, out Native.RECT value, int size);
-
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmRegisterThumbnail(nint destination, nint source, out nint thumbnail);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmUnregisterThumbnail(nint thumbnail);
-
-    [LibraryImport("dwmapi.dll")]
-    public static partial int DwmUpdateThumbnailProperties(nint thumbnail, in DWM_THUMBNAIL_PROPERTIES properties);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmQueryThumbnailSourceSize(nint thumbnail, out THUMBNAIL_SIZE size);
@@ -183,17 +177,6 @@ internal static unsafe partial class NativeMethods
             return "";
         }
     }
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct DWM_THUMBNAIL_PROPERTIES
-{
-    public uint Flags;
-    public Native.RECT Destination;
-    public Native.RECT Source;
-    public byte Opacity;
-    public int Visible;
-    public int SourceClientAreaOnly;
 }
 
 [StructLayout(LayoutKind.Sequential)]
