@@ -1,4 +1,5 @@
 using Winshell.Native;
+using Winshell.Session;
 
 namespace Winshell.Diagnostics;
 
@@ -44,9 +45,9 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public IReadOnlyList<string> CompatibilityLayers(string exePath) => DoctorProbe.CompatibilityLayers(exePath);
 
-    public string? RunEntry() => DoctorProbe.RunEntry();
+    public string? RunEntry() => SignInEntry.Command();
 
-    public bool RunEntryTurnedOff() => DoctorProbe.RunEntryTurnedOff();
+    public bool RunEntryTurnedOff() => SignInEntry.TurnedOffInWindows();
 
     public string ResolveLinks(string path) => DoctorProbe.ResolveLinks(path);
 

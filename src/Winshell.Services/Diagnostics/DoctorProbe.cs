@@ -4,8 +4,6 @@ using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
 using Winshell.Native;
 using Winshell.Notifications;
-using StartupTask = global::Windows.ApplicationModel.StartupTask;
-using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Diagnostics;
 
@@ -18,12 +16,6 @@ internal static class DoctorProbe
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string LayersKey = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
     private const string PersonalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
-
-    // The sign-in entry Winshell and its installer write: a Winshell value under the user's Run key, with the on and off
-    // Startup apps in Windows keeps for it. A package's startup task has the same name.
-    private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string StartupApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
-    private const string SignInName = "Winshell";
 
     public static int WindowsBuild() => Environment.OSVersion.Version.Build;
 
@@ -204,36 +196,6 @@ internal static class DoctorProbe
             }
         }
         return layers;
-    }
-
-    public static string? RunEntry()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-        return key?.GetValue(SignInName) as string;
-    }
-
-    // Startup apps writes 12 bytes: an odd first byte is off.
-    public static bool RunEntryTurnedOff()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(StartupApprovedKey);
-        return key?.GetValue(SignInName) is byte[] { Length: > 0 } state && (state[0] & 1) == 1;
-    }
-
-    /// <summary>The state of this package's startup task, or null when it has none or Windows does not hand it over.</summary>
-    public static StartupTaskState? SignInTaskState()
-    {
-        StartupTask? task;
-        try
-        {
-#pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
-            task = Task.Run(static async () => await StartupTask.GetAsync(SignInName).AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            return null;
-        }
-        return task?.State;
     }
 
     /// <summary>The file a path names in the end, past symbolic links, or the path itself when it is no link or cannot be read.</summary>

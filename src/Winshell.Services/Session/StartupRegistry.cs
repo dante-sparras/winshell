@@ -23,47 +23,27 @@ internal interface IStartupRegistry
 }
 
 /// <summary>A value under <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>, for the current user only.</summary>
-internal sealed class WindowsStartupRegistry(string command, string runKey = WindowsStartupRegistry.RunKey, string approvedKey = WindowsStartupRegistry.ApprovedKey) : IStartupRegistry
+internal sealed class WindowsStartupRegistry(string command, string runKey = SignInEntry.RunKey, string approvedKey = SignInEntry.ApprovedKey) : IStartupRegistry
 {
-    public const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-
-    /// <summary>Where the Startup apps page keeps its on and off, one binary value per Run value.</summary>
-    public const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
-
-    public const string ValueName = "Winshell";
-
     public string Command => command;
 
-    public bool IsRegistered() => Try(() =>
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(runKey);
-        return key?.GetValue(ValueName) is string;
-    });
+    public bool IsRegistered() => Try(() => SignInEntry.Command(runKey) is not null);
 
-    public bool PointsElsewhere() => Try(() =>
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(runKey);
-        return key?.GetValue(ValueName) is string value && !SameSignInCommand(value, command);
-    });
+    public bool PointsElsewhere() => Try(() => SignInEntry.Command(runKey) is { } value && !SameSignInCommand(value, command));
 
-    // The page writes 12 bytes: an odd first byte is off, with the time it was turned off after it.
-    public bool TurnedOffInWindows() => Try(() =>
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(approvedKey);
-        return key?.GetValue(ValueName) is byte[] { Length: > 0 } state && (state[0] & 1) == 1;
-    });
+    public bool TurnedOffInWindows() => Try(() => SignInEntry.TurnedOffInWindows(approvedKey));
 
     public bool Register() => Try(() =>
     {
         using var key = Registry.CurrentUser.CreateSubKey(runKey);
-        key.SetValue(ValueName, command, RegistryValueKind.String);
+        key.SetValue(SignInEntry.Name, command, RegistryValueKind.String);
         return true;
     });
 
     public bool Unregister() => Try(() =>
     {
         using var key = Registry.CurrentUser.OpenSubKey(runKey, writable: true);
-        key?.DeleteValue(ValueName, throwOnMissingValue: false);
+        key?.DeleteValue(SignInEntry.Name, throwOnMissingValue: false);
         return true;
     });
 
@@ -223,23 +203,7 @@ internal interface IStartupTask
 /// </summary>
 internal static class WindowsStartupTasks
 {
-    public const string TaskId = "Winshell";
-
-    public static IStartupTask? Open()
-    {
-        try
-        {
-            // Sync because StartupService reads the task as it is made, and a UI binds its properties.
-#pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
-            var task = Task.Run(static async () => await StartupTask.GetAsync(TaskId).AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
-            return task is null ? null : new Real(task);
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            return null;
-        }
-    }
+    public static IStartupTask? Open() => SignInEntry.OpenTask() is { } task ? new Real(task) : null;
 
     private sealed class Real(StartupTask task) : IStartupTask
     {

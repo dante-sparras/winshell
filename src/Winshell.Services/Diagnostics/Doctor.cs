@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Winshell.Session;
 using Winshell.Updates;
 
 namespace Winshell.Diagnostics;
@@ -89,7 +90,7 @@ public static class Doctor
             Guard("appBars", "App bars", () => DoctorScreens.AppBars(facts.Monitors(), facts.EdgeWindows())),
             Guard("dpi", "DPI", () => DoctorScreens.Dpi(facts.PerMonitorV2(), facts.CompatibilityLayers(context.ExePath), facts.Monitors())),
             Guard("signIn", "Sign-in", () => Packaging.IsPackaged
-                ? DoctorSignIn.SignIn(DoctorProbe.SignInTaskState())
+                ? DoctorSignIn.SignIn(SignInEntry.TaskState())
                 : DoctorSignIn.SignIn(facts.RunEntry(), facts.RunEntryTurnedOff(), context.ExePath, File.Exists, facts.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(facts.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
