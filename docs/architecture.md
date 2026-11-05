@@ -1,6 +1,6 @@
 # Architecture
 
-Winshell is a modular monolith: one program, with assembly boundaries for shared infrastructure and folder boundaries for service features. These are the decided target rules. The migration below introduces them in independently buildable steps; this document does not claim that every boundary is already enforced.
+Winshell is a modular monolith: one program, with assembly boundaries for shared infrastructure and folder boundaries for service features. These are the decided target rules. The migration below introduces them in independently buildable steps; the build enforces the [sealed interop](#sealed-interop) boundary, and the other boundaries are not all enforced yet.
 
 ## Dependency direction
 
@@ -31,7 +31,9 @@ Adopt CsWin32 when introducing Native. Generate Win32 declarations there from an
 
 Keep allocation and release together: handles, COM objects, buffers and callbacks have an explicit owner and lifetime. Callback exceptions must not escape into native code. Put safe operations at this boundary; do not expose the generated declaration set as a public service API or move feature policy into Native.
 
-An analyzer or BannedApi rule must fail the build for interop attributes outside Native. Disable unsafe compilation outside Native as a compiler guard. Apply the rules through shared build configuration so a newly added project is covered automatically. Do not exempt a consumer, suppress the diagnostics or exclude generated consumer code to bypass the boundary.
+The build enforces this. The root `Directory.Build.targets` adds `BannedSymbols.Interop.txt` to every project except Native, so `DllImport`, `LibraryImport`, `ComImport`, `GeneratedComInterface` and `GeneratedComClass` fail with RS0030, and it forces `AllowUnsafeBlocks` off, so unsafe code fails with CS0227. It runs after each project file, so a project can't turn either guard back on, and a new project under `src/` or `tests/` is covered without edits. Native keeps the clock and sleep bans the other projects have. Do not exempt a consumer, suppress the diagnostics or exclude generated consumer code to bypass the boundary.
+
+The one exception is the Windows App SDK's `UndockedRegFreeWinRT-AutoInitializer.cs`, which its package adds to each self-contained WinUI executable. It is package startup code we don't own, not our interop, so only that file, matched by its path in the NuGet package folder, drops the ban. Any `[DllImport]` of ours in the same project still fails.
 
 ## Services and feature ownership
 

@@ -10,4 +10,24 @@
   <ItemGroup Condition="'$(_WinshellIsNative)' != 'true'">
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Interop.txt" />
   </ItemGroup>
+
+  <!-- The one exception. The Windows App SDK adds UndockedRegFreeWinRT-AutoInitializer.cs to each self-contained WinUI
+       exe. It is package startup code we don't own, not our interop. Only that file, at its path in the package folder,
+       drops the ban; a [DllImport] of ours in the same project still fails. -->
+  <Target Name="_WinshellAllowWindowsAppSdkInitializer" BeforeTargets="CoreCompile" Condition="'$(_WinshellIsNative)' != 'true'">
+    <PropertyGroup>
+      <_WinshellWindowsAppSdkPackage>$([MSBuild]::NormalizeDirectory('$(NuGetPackageRoot)', 'microsoft.windowsappsdk.foundation'))</_WinshellWindowsAppSdkPackage>
+      <_WinshellInteropConfig>$(IntermediateOutputPath)Winshell.WindowsAppSdkInitializer.globalconfig</_WinshellInteropConfig>
+    </PropertyGroup>
+    <ItemGroup>
+      <_WinshellWindowsAppSdkInitializer Include="@(Compile->'%(FullPath)')"
+        Condition="'%(Filename)%(Extension)' == 'UndockedRegFreeWinRT-AutoInitializer.cs' and $([System.String]::Copy('%(FullPath)').StartsWith('$(_WinshellWindowsAppSdkPackage)', StringComparison.OrdinalIgnoreCase))" />
+    </ItemGroup>
+    <WriteLinesToFile Condition="'@(_WinshellWindowsAppSdkInitializer)' != ''" File="$(_WinshellInteropConfig)" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="is_global = true;@(_WinshellWindowsAppSdkInitializer->'[%(Identity)]'->Replace('\', '/'));dotnet_diagnostic.RS0030.severity = none" />
+    <ItemGroup Condition="'@(_WinshellWindowsAppSdkInitializer)' != ''">
+      <EditorConfigFiles Include="$(_WinshellInteropConfig)" />
+      <FileWrites Include="$(_WinshellInteropConfig)" />
+    </ItemGroup>
+  </Target>
 </Project>
