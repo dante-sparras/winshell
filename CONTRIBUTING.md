@@ -2,6 +2,22 @@
 
 The [development runbook](docs/development.md) covers the prerequisites, the first checkout, and every command. Before every push, run the [checks for the change](docs/development.md#checks-by-change): prose-only changes need lint; compiled documentation needs its targeted tests; other changes need the full check.
 
+## Where a test belongs
+
+Every new or changed test passes the authoring gate of the `test-audit` skill, which `pwsh scripts/install-skills.ps1` installs (see [Agent skills](docs/development.md#agent-skills)). In this repo, each contract has one owner, at the cheapest boundary that can show it:
+
+| Project | Owns |
+| --- | --- |
+| `Winshell.Services.Tests` | A service against a fake of its Windows backend, on a real `EventQueue` |
+| `Winshell.DefaultShell.Tests` | The default shell's models, with no window |
+| `Winshell.Shell.Tests` | A real shell with real windows |
+| `Winshell.Tests` | `winshell.exe` and shell programs as separate processes |
+| `Winshell.Package.Tests` | The packed library and templates, `Category=Package` |
+
+A regression test goes red before the fix for the intended reason and green after it; say so in the PR, or say why you couldn't show it. One bug gets one test at its owner, however many layers it crossed. A test needs no `internal` member, constructor overload, flag or hook that production code doesn't use.
+
+Keep these even when they are static or slow: the public API of the `Winshell` package, the control pipe protocol, CLI output and exit codes, TOML and other files on disk, security guards, platform behavior, defaults, generated templates, the package, the release scripts, and observable ordering.
+
 ## Write tests that don't flake
 
 A test waits on a real signal: an event, a task's completion, or a fake clock.

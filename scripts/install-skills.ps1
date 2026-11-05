@@ -17,14 +17,10 @@ try {
     $sources = $lock.GetEnumerator() | Group-Object { $_.Value.source + '#' + $_.Value['ref'] }
     foreach ($source in $sources) {
         $first = $source.Group[0].Value
-        $package = if ($first.sourceType -eq 'local') { $first.source } elseif ($first['ref']) { "$($first.source)#$($first.ref)" } else { $first.source }
+        $package = if ($first['ref']) { "$($first.source)#$($first.ref)" } else { $first.source }
         $names = @($source.Group | ForEach-Object { $_.Key } | Sort-Object)
         Write-Host "$package : $($names -join ', ')"
-        if ($first.sourceType -eq 'local') {
-            npx -y $skills add $package @agents
-        } else {
-            npx -y $skills add $package -s @names @agents
-        }
+        npx -y $skills add $package -s @names @agents
         if ($LASTEXITCODE -ne 0) { throw "Installing $package failed." }
     }
 } finally {
