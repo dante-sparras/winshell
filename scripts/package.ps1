@@ -316,7 +316,7 @@ if ($Verify) {
     }
     $machines = @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }
     # What SignPath signs: the binaries built from this repository. The runtime and libraries keep their publishers' signatures.
-    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll', 'Winshell.DefaultShell.dll'
+    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Native.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll', 'Winshell.DefaultShell.dll'
     $verifyRoot = Join-Path $Out 'verify'
     foreach ($rid in $Runtime) {
         $name = "winshell-$Version-$rid.zip"
