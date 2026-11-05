@@ -67,7 +67,7 @@ public sealed class SettingsShellTests : IDisposable
         var log = new Log { Sink = static (_, _, _) => { } };
         using var updater = new Updater("enpaze/winshell", Path.Combine(_folder, "install"), updatesDir, "0.5.0", "win-x64", log, new Refuse());
         using var updates = new UpdatesService(loop, log, updater);
-        using var tray = new SystemTray(loop, log, new FakeTrayHost());
+        using var tray = new SystemTray(loop, log, new FakeTrayBackend());
         using var preferences = new Preferences(Path.Combine(_folder, "update.toml"), loop);
         using var status = new StatusRig();
         var area = new TrayArea(tray, status.Status, updates);
@@ -92,7 +92,7 @@ public sealed class SettingsShellTests : IDisposable
         var loop = new ManualEventLoop();
         var log = new Log { Sink = static (_, _, _) => { } };
         using var updates = new UpdatesService(loop, log, null);
-        using var tray = new SystemTray(loop, log, new FakeTrayHost());
+        using var tray = new SystemTray(loop, log, new FakeTrayBackend());
         using var status = new StatusRig();
         var area = new TrayArea(tray, status.Status, updates);
 

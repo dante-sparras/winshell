@@ -39,8 +39,9 @@ public sealed class TrayAreaTests
     public void Icons_on_the_bar_and_in_the_overflow_follow_the_tray_in_order()
     {
         using var rig = new StatusRig();
-        var host = new FakeTrayHost();
-        using var tray = new SystemTray(rig.Loop, rig.Log, host);
+        var backend = new FakeTrayBackend();
+        using var tray = new SystemTray(rig.Loop, rig.Log, backend);
+        rig.Loop.Process();
         using var updates = new UpdatesService(rig.Loop, rig.Log, null);
         var area = new TrayArea(tray, rig.Status, updates);
 
@@ -50,53 +51,41 @@ public sealed class TrayAreaTests
         Assert.False(area.UpdateReady);
         Assert.Equal("", area.UpdateLabel);
 
-        var plain = new TrayIcon { Key = "plain", Tip = "Tip" };
-        host.Add(plain);
+        var plain = backend.Add(Program("plain"), tip: "Tip");
         Assert.Equal("plain", Assert.Single(area.Hidden).Id);
         Assert.Empty(area.OnBar);
         Assert.True(area.HasOverflow);
 
-        var a = Icon("a", overflow: false);
-        var b = Icon("b", overflow: true);
-        var c = Icon("c", overflow: false);
-        var d = Icon("d", overflow: true);
-        host.Add(a);
-        host.Add(b);
-        host.Add(c);
-        host.Add(d);
+        backend.Add(Program("a"), tip: "a", onBar: true);
+        var b = backend.Add(Program("b"), tip: "b");
+        var c = backend.Add(Program("c"), tip: "c", onBar: true);
+        var d = backend.Add(Program("d"), tip: "d");
         Assert.Equal(["plain", "b", "d"], Ids(area.Hidden));
         Assert.Equal(["a", "c"], Ids(area.OnBar));
 
         var hidden = area.Hidden.ToList();
         var changes = 0;
         area.Hidden.CollectionChanged += (_, _) => changes++;
-        var e = Icon("e", overflow: false);
-        host.Add(e);
+        backend.Add(Program("e"), tip: "e", onBar: true);
         Assert.Equal(0, changes);
         Assert.Equal(hidden, area.Hidden);
         Assert.Equal(["a", "c", "e"], Ids(area.OnBar));
 
-        c.Overflow = true;
-        host.Change(c);
+        backend.Move(c, onBar: false);
         Assert.Equal(["a", "e"], Ids(area.OnBar));
         Assert.Equal(["plain", "b", "c", "d"], Ids(area.Hidden));
 
-        host.Remove(b);
+        backend.Remove(b);
         Assert.Equal(["plain", "c", "d"], Ids(area.Hidden));
         Assert.Equal(["a", "e"], Ids(area.OnBar));
 
-        var secret = Icon("secret", overflow: false);
-        secret.Hidden = true;
-        host.Add(secret);
+        backend.Add(Program("secret"), tip: "secret", onBar: true, hidden: true);
         Assert.DoesNotContain(area.OnBar, item => item.Id == "secret");
         Assert.DoesNotContain(area.Hidden, item => item.Id == "secret");
 
-        plain.Overflow = false;
-        c.Overflow = false;
-        d.Overflow = false;
-        host.Change(plain);
-        host.Change(c);
-        host.Change(d);
+        backend.Move(plain, onBar: true);
+        backend.Move(c, onBar: true);
+        backend.Move(d, onBar: true);
         Assert.False(area.HasOverflow);
         Assert.Empty(area.Hidden);
         Assert.Equal(["plain", "a", "c", "d", "e"], Ids(area.OnBar));
@@ -106,8 +95,7 @@ public sealed class TrayAreaTests
     public void The_update_icon_raises_its_event()
     {
         using var rig = new StatusRig();
-        var host = new FakeTrayHost();
-        using var tray = new SystemTray(rig.Loop, rig.Log, host);
+        using var tray = new SystemTray(rig.Loop, rig.Log, new FakeTrayBackend());
         using var updates = new UpdatesService(rig.Loop, rig.Log, null);
         var area = new TrayArea(tray, rig.Status, updates);
         var update = 0;
@@ -118,7 +106,7 @@ public sealed class TrayAreaTests
         Assert.Equal(1, update);
     }
 
-    private static TrayIcon Icon(string key, bool overflow) => new() { Key = key, Tip = key, Overflow = overflow };
+    private static string Program(string name) => $@"C:\Apps\{name}.exe";
 
     private static List<string> Ids(IEnumerable<SystemTrayItem> items) => [.. items.Select(item => item.Id)];
 }

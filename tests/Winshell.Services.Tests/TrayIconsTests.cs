@@ -92,4 +92,19 @@ public sealed class TrayIconsTests
         Assert.False(_icons.Icons.Single(icon => icon.Id == 1).Overflow);
         Assert.True(_icons.Icons.Single(icon => icon.Id == 2).Overflow);
     }
+
+    [Fact]
+    public void Only_nim_setversion_sets_the_version()
+    {
+        // A balloon timeout of 4 is not interface version 4.
+        _icons.Apply(Call(TrayProtocol.Add, TrayProtocol.NIF_INFO) with { Info = "Hi", TimeoutOrVersion = TrayProtocol.Version4 });
+        var icon = Assert.Single(_icons.Icons);
+        Assert.Equal(0u, icon.Version);
+
+        _icons.Apply(Call(TrayProtocol.SetVersion) with { TimeoutOrVersion = TrayProtocol.Version4 });
+        Assert.Equal(TrayProtocol.Version4, icon.Version);
+
+        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with { Info = "Again", TimeoutOrVersion = TrayProtocol.Version });
+        Assert.Equal(TrayProtocol.Version4, icon.Version);
+    }
 }
