@@ -1,0 +1,7 @@
+ConvertStringSecurityDescriptorToSecurityDescriptorW
+ConvertSecurityDescriptorToStringSecurityDescriptorW
+SetKernelObjectSecurity
+GetKernelObjectSecurity
+GetNamedPipeClientProcessId
+CreateNamedPipeW
+SDDL_REVISION_1

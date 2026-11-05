@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace Winshell.Services.Tests;
 
@@ -148,12 +148,13 @@ public sealed class AtomicFileTests
 
     private static void HardLink(string link, string real)
     {
-        if (!CreateHardLinkW(link, real, IntPtr.Zero))
-            throw new InvalidOperationException("CreateHardLinkW failed: " + Marshal.GetLastWin32Error());
+        var start = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in new[] { "/c", "mklink", "/H", link, real })
+            start.ArgumentList.Add(argument);
+        using var command = Process.Start(start)!;
+        command.WaitForExit();
+        Assert.Equal(0, command.ExitCode);
     }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool CreateHardLinkW(string fileName, string existingFileName, IntPtr securityAttributes);
 
     private sealed class TempDirectory(DirectoryInfo directory) : IDisposable
     {

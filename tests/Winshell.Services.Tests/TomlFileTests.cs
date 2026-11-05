@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Text;
 using Tomlyn.Parsing;
 
@@ -60,8 +60,15 @@ public sealed class TomlFileTests
     private static Dictionary<string, object?> Row(params (string Key, object? Value)[] items) =>
         items.ToDictionary(item => item.Key, item => item.Value);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool CreateHardLinkW(string fileName, string existingFileName, IntPtr securityAttributes);
+    private static void HardLink(string link, string real)
+    {
+        var start = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in new[] { "/c", "mklink", "/H", link, real })
+            start.ArgumentList.Add(argument);
+        using var command = Process.Start(start)!;
+        command.WaitForExit();
+        Assert.Equal(0, command.ExitCode);
+    }
 
     [Fact]
     public void Values_are_read_from_the_file_and_a_key_it_does_not_have_keeps_its_default()
@@ -639,7 +646,7 @@ public sealed class TomlFileTests
     {
         using var fixture = new TomlFixture("name = \"mine\"\n");
         var other = Path.Combine(fixture.Directory, "other.toml");
-        Assert.True(CreateHardLinkW(other, fixture.FilePath, IntPtr.Zero), "CreateHardLinkW failed");
+        HardLink(other, fixture.FilePath);
         using var settings = Open(fixture);
 
         settings.Name = "next";

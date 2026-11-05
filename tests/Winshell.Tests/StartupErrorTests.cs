@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace Winshell.Tests;
 
 /// <summary>
@@ -61,17 +59,6 @@ public class StartupErrorTests
         {
             Directory.Delete(root, recursive: true);
         }
-    }
-
-    [Fact]
-    public void The_dialog_struct_matches_the_packed_windows_layout()
-    {
-        if (nint.Size != 8)
-            return;
-        Assert.Equal(160, Marshal.SizeOf<StartupError.DialogConfig>());
-        Assert.Equal(28, Marshal.OffsetOf<StartupError.DialogConfig>(nameof(StartupError.DialogConfig.pszWindowTitle)));
-        Assert.Equal(64, Marshal.OffsetOf<StartupError.DialogConfig>(nameof(StartupError.DialogConfig.pButtons)));
-        Assert.Equal(156, Marshal.OffsetOf<StartupError.DialogConfig>(nameof(StartupError.DialogConfig.cxWidth)));
     }
 
     private static List<(string Message, string? Folder)> Asked(Action report)

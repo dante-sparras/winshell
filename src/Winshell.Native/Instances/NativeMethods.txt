@@ -1,0 +1,6 @@
+GetStdHandle
+SetHandleInformation
+GetFileType
+GetConsoleWindow
+TaskDialogIndirect
+TD_ERROR_ICON

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO.Pipes;
-using System.Runtime.InteropServices;
 using System.Text;
 using Winshell.Native;
 
@@ -12,7 +11,7 @@ namespace Winshell.Winland;
 /// events are raised on a background thread, in order; each engine's <see cref="WinlandService"/> posts them to its
 /// own loop.
 /// </summary>
-internal static partial class WinlandConnection
+internal static class WinlandConnection
 {
     private static readonly TimeSpan FirstPoll = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan LastPoll = TimeSpan.FromSeconds(30);
@@ -145,7 +144,7 @@ internal static partial class WinlandConnection
         {
             await pipe.ConnectAsync(timeoutMs).ConfigureAwait(false);
             // Only a Winland in this session is ours to talk to, as Winland's own CLI checks.
-            if (ServerProcess(pipe) is not { } pid || !ProcessIdToSessionId(pid, out var session) || session != SessionId)
+            if (ServerProcess(pipe) is not { } pid || ProcessSession.Of(pid) is not { } session || session != SessionId)
             {
                 await pipe.DisposeAsync().ConfigureAwait(false);
                 return null;
@@ -187,8 +186,4 @@ internal static partial class WinlandConnection
             }
         }
     }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool ProcessIdToSessionId(uint processId, out uint sessionId);
 }

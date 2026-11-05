@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 using Winshell.Native;
 
 namespace Winshell;
@@ -10,39 +8,27 @@ namespace Winshell;
 /// not missed. That thread makes every read, because Windows cancels a read when the thread that made it ends.
 /// Callbacks run on the watch thread and must not block.
 /// </summary>
-internal sealed partial class DirectoryWatch : IDisposable
+internal sealed class DirectoryWatch : IDisposable
 {
     // FILE_NOTIFY_CHANGE_FILE_NAME | SIZE | LAST_WRITE.
     public const uint FileChanges = 0x00000001 | 0x00000008 | 0x00000010;
     // FILE_NOTIFY_CHANGE_FILE_NAME | DIR_NAME.
     public const uint NameChanges = 0x00000001 | 0x00000002;
 
-    private const int BufferSize = 16 * 1024;
-    private const uint FileListDirectory = 1;
-    private const uint FileFlagBackupSemantics = 0x02000000;
-
-    private readonly SafeFileHandle _handle;
-    private readonly uint _filter;
-    private readonly bool _subtree;
+    private readonly DirectoryChanges _changes;
     private readonly Action<string> _changed;
     private readonly Action _lost;
-    private readonly ManualResetEvent _completed = new(false);
     private readonly ManualResetEventSlim _started = new(false);
-    private readonly nint _buffer = Marshal.AllocHGlobal(BufferSize);
-    private readonly nint _overlapped = Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
     private readonly Thread _thread;
     private bool _reading;
     private volatile bool _stopped;
     private int _disposed;
 
-    private DirectoryWatch(SafeFileHandle handle, uint filter, bool subtree, Action<string> changed, Action lost)
+    private DirectoryWatch(DirectoryChanges changes, Action<string> changed, Action lost)
     {
-        _handle = handle;
-        _filter = filter;
-        _subtree = subtree;
+        _changes = changes;
         _changed = changed;
         _lost = lost;
-        Marshal.StructureToPtr(new NativeOverlapped { EventHandle = _completed.SafeWaitHandle.DangerousGetHandle() }, _overlapped, false);
         _thread = new Thread(Run) { IsBackground = true, Name = "Directory watch" };
     }
 
@@ -54,14 +40,9 @@ internal sealed partial class DirectoryWatch : IDisposable
     /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
     public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost, bool subtree = false)
     {
-        var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0, (uint)FileMode.Open,
-            FileFlagBackupSemantics | Win32.FILE_FLAG_OVERLAPPED, 0);
-        if (handle.IsInvalid)
-        {
-            handle.Dispose();
+        if (DirectoryChanges.Open(path, filter, subtree) is not { } changes)
             return null;
-        }
-        var watch = new DirectoryWatch(handle, filter, subtree, changed, lost);
+        var watch = new DirectoryWatch(changes, changed, lost);
         watch._thread.Start();
         // A handoff, not a stall: the new thread only makes the first read, which returns at once.
         watch._started.Wait();
@@ -73,53 +54,38 @@ internal sealed partial class DirectoryWatch : IDisposable
         return watch;
     }
 
-    private bool Read() => ReadDirectoryChangesW(_handle, _buffer, BufferSize, _subtree, _filter, IntPtr.Zero, _overlapped, IntPtr.Zero);
-
     private void Run()
     {
-        _reading = Read();
+        _reading = _changes.Read();
         _started.Set();
         if (!_reading)
             return;
+        var names = new List<string>();
         while (true)
         {
-            var ok = GetOverlappedResult(_handle, _overlapped, out var returned, true);
+            names.Clear();
+            var ok = _changes.Wait(names);
             if (_stopped)
                 return;
             // A failed read is a folder that went away. An empty one is a buffer that overflowed.
-            if (!ok || returned == 0)
+            if (!ok)
             {
                 _lost();
                 return;
             }
-            Report(returned);
-            if (!Read())
+            foreach (var name in names)
+                _changed(name);
+            if (!_changes.Read())
             {
                 _lost();
                 return;
             }
-        }
-    }
-
-    private void Report(int count)
-    {
-        var offset = 0;
-        while (offset + 12 <= count)
-        {
-            var next = Marshal.ReadInt32(_buffer, offset);
-            var nameBytes = Marshal.ReadInt32(_buffer, offset + 8);
-            if ((uint)nameBytes > (uint)(count - offset - 12))
-                return;
-            _changed(Marshal.PtrToStringUni(_buffer + offset + 12, nameBytes / sizeof(char)));
-            if (next <= 0)
-                return;
-            offset += next;
         }
     }
 
     public void Dispose()
     {
-        // A second call would free the buffers again.
+        // A second call would cancel through a closed handle.
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
         _stopped = true;
@@ -128,28 +94,11 @@ internal sealed partial class DirectoryWatch : IDisposable
             // Cancel until the thread ends. It may be between reads, where one cancel would miss it.
             do
             {
-                CancelIoEx(_handle, IntPtr.Zero);
+                _changes.Cancel();
             }
             while (!_thread.Join(1));
         }
-        _handle.Dispose();
-        _completed.Dispose();
+        _changes.Dispose();
         _started.Dispose();
-        Marshal.FreeHGlobal(_buffer);
-        Marshal.FreeHGlobal(_overlapped);
     }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool ReadDirectoryChangesW(
-        SafeFileHandle directory, nint buffer, int bufferLength, [MarshalAs(UnmanagedType.Bool)] bool watchSubtree, uint filter, nint bytesReturned,
-        nint overlapped, nint completion);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetOverlappedResult(SafeFileHandle file, nint overlapped, out int bytes, [MarshalAs(UnmanagedType.Bool)] bool wait);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CancelIoEx(SafeFileHandle file, nint overlapped);
 }
