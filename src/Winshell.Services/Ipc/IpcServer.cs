@@ -240,18 +240,17 @@ internal sealed class IpcServer : IDisposable
                 await Send(writer, new IpcResponse(false, Error: mismatch), _cancel.Token).ConfigureAwait(false);
                 return;
             }
-            // Kill is left out: an update can change winshell under a running shell, and it must still be possible to stop it.
-            if (request.Op != "kill" && IpcProtocol.ReleaseRefusal(ProductVersion.Current.Text, request.Winshell) is { } release)
+            if (IpcOps.ChecksRelease(request.Op) && IpcProtocol.ReleaseRefusal(ProductVersion.Current.Text, request.Winshell) is { } release)
             {
                 await Send(writer, new IpcResponse(false, Error: release), _cancel.Token).ConfigureAwait(false);
                 return;
             }
-            if (request.Op is "listen" or "wait")
+            if (request.Op is IpcOps.Listen or IpcOps.Wait)
             {
-                await Listen(request, writer, stream, once: request.Op == "wait").ConfigureAwait(false);
+                await Listen(request, writer, stream, once: request.Op == IpcOps.Wait).ConfigureAwait(false);
                 return;
             }
-            var response = request.Op == "inspect"
+            var response = request.Op == IpcOps.Inspect
                 ? await Inspect(request).ConfigureAwait(false)
                 : await OnUiThread(() => Handle(request)).ConfigureAwait(false);
             try
@@ -260,7 +259,7 @@ internal sealed class IpcServer : IDisposable
             }
             finally
             {
-                if (request.Op == "reload" && response.Ok)
+                if (request.Op == IpcOps.Reload && response.Ok)
                     _loop.Post(_control.Reloaded);
             }
         }
@@ -280,20 +279,20 @@ internal sealed class IpcServer : IDisposable
     private IpcResponse Handle(IpcRequest request)
     {
         // Before the configuration's handlers: there is no handler when the configuration did not load.
-        if (_dismissNotice is not null && request is { Op: "call", Target: "notice", Name: "dismiss" })
+        if (_dismissNotice is not null && request is { Op: IpcOps.Call, Target: "notice", Name: "dismiss" })
             return DismissNotice(request.Args);
         var ipc = _control.Ipc;
         try
         {
             return request.Op switch
             {
-                "show" when request.Json => new IpcResponse(true, CliJson.IpcShow(ipc.Describe())),
-                "show" => new IpcResponse(true, ipc.Show()),
-                "call" => new IpcResponse(true, ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
-                "prop" => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
-                "kill" => Kill(),
-                "reload" => Reload(request),
-                "build-error" => BuildError(request),
+                IpcOps.Show when request.Json => new IpcResponse(true, CliJson.IpcShow(ipc.Describe())),
+                IpcOps.Show => new IpcResponse(true, ipc.Show()),
+                IpcOps.Call => new IpcResponse(true, ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
+                IpcOps.Prop => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
+                IpcOps.Kill => Kill(),
+                IpcOps.Reload => Reload(request),
+                IpcOps.Build => Build(request),
                 _ => new IpcResponse(false, Error: $"Unknown request {request.Op}."),
             };
         }
@@ -325,22 +324,20 @@ internal sealed class IpcServer : IDisposable
 
     private IpcResponse Reload(IpcRequest request)
     {
-        var program = request.Args is { Count: > 0 } args ? args[0] : null;
-        return _control.Reload(program) is { } error
+        return _control.Reload(request.ReloadProgram) is { } error
             ? new IpcResponse(false, Error: error)
             : new IpcResponse(true);
     }
 
     /// <summary>
-    /// <c>winshell reload</c> reports a failed build with it, and <c>winshell dev</c> reports each build. The two
-    /// arguments are the error and the project file. An empty error says the project built, which closes that project's
-    /// build-error notice.
+    /// <c>winshell reload</c> reports a failed build with it, and <c>winshell dev</c> reports each build. An empty error
+    /// says the project built, which closes that project's build-error notice.
     /// </summary>
-    private IpcResponse BuildError(IpcRequest request)
+    private IpcResponse Build(IpcRequest request)
     {
-        if (request.Args is not { Count: 2 } args)
-            return new IpcResponse(false, Error: "build-error takes the error and the project file.");
-        _control.ShowBuildError(args[0], args[1]);
+        if (request.BuildReport is not var (error, projectFile))
+            return new IpcResponse(false, Error: "build takes the error and the project file.");
+        _control.ShowBuildError(error, projectFile);
         return new IpcResponse(true);
     }
 

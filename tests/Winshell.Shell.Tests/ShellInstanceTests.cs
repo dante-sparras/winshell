@@ -70,10 +70,10 @@ public sealed class ShellInstanceTests
         using var handler = await ShellFixture.On(s => s.Ipc.Handle("tests", "twice", (int number) => number * 2));
         using var property = await ShellFixture.On(s => s.Ipc.Property("tests", "name", () => s.ShellId));
 
-        var shown = Assert.Single(await Ask(new IpcRequest("show")));
-        var called = Assert.Single(await Ask(new IpcRequest("call", "tests", "twice", ["21"])));
-        var read = Assert.Single(await Ask(new IpcRequest("prop", "tests", "name")));
-        var refused = Assert.Single(await Ask(new IpcRequest("call", "tests", "twice", ["many"])));
+        var shown = Assert.Single(await Ask(IpcRequest.ForShow(false)));
+        var called = Assert.Single(await Ask(IpcRequest.ForCall("tests", "twice", ["21"])));
+        var read = Assert.Single(await Ask(IpcRequest.ForProp("tests", "name")));
+        var refused = Assert.Single(await Ask(IpcRequest.ForCall("tests", "twice", ["many"])));
 
         Assert.Contains("function twice(number: int): int", shown.Value, StringComparison.Ordinal);
         Assert.Equal("42", called.Value);
@@ -86,7 +86,7 @@ public sealed class ShellInstanceTests
     public async Task A_build_error_shows_on_the_running_shell() => await ShellFixture.Hold(async () =>
     {
         var shell = await ShellFixture.Current();
-        var response = Assert.Single(await Ask(new IpcRequest("build-error", Args: ["Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"])));
+        var response = Assert.Single(await Ask(IpcRequest.ForBuild("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj")));
 
         try
         {
@@ -107,8 +107,8 @@ public sealed class ShellInstanceTests
     {
         using var handler = await ShellFixture.On(s => s.Ipc.Handle("tests", "fail", new Action(() => throw new InvalidOperationException("no"))));
 
-        var failed = Assert.Single(await Ask(new IpcRequest("call", "tests", "fail", [])));
-        var shown = Assert.Single(await Ask(new IpcRequest("show")));
+        var failed = Assert.Single(await Ask(IpcRequest.ForCall("tests", "fail", [])));
+        var shown = Assert.Single(await Ask(IpcRequest.ForShow(false)));
 
         Assert.False(failed.Ok);
         Assert.Equal("ipc: InvalidOperationException: no", failed.Error);

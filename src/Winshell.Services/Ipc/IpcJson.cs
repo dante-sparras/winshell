@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Winshell;
 
-internal sealed record IpcRequest(
+internal sealed partial record IpcRequest(
     [property: JsonPropertyName("op")] string Op,
     [property: JsonPropertyName("target")] string? Target = null,
     [property: JsonPropertyName("name")] string? Name = null,

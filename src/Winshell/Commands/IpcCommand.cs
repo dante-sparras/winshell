@@ -10,10 +10,11 @@ internal static class IpcCommand
         var args = options.Positional;
         IpcRequest request = args[0] switch
         {
-            "show" => new IpcRequest("show", Json: options.Json),
-            "call" => new IpcRequest("call", args[1], args[2], args.Skip(3).ToList()),
-            "prop" => new IpcRequest("prop", args[2], args[3]),
-            "wait" or "listen" => new IpcRequest(args[0], args[1], args[2]),
+            IpcOps.Show => IpcRequest.ForShow(options.Json),
+            IpcOps.Call => IpcRequest.ForCall(args[1], args[2], args.Skip(3).ToList()),
+            IpcOps.Prop => IpcRequest.ForProp(args[2], args[3]),
+            IpcOps.Wait => IpcRequest.ForWait(args[1], args[2]),
+            IpcOps.Listen => IpcRequest.ForListen(args[1], args[2]),
             _ => throw new UnreachableException($"No ipc command \"{args[0]}\"."),
         };
         var choice = InstanceSelection.Select(options);
@@ -22,7 +23,7 @@ internal static class IpcCommand
             Console.Error.WriteLine(choice.Error);
             return choice.Code;
         }
-        if (request.Op != "listen")
+        if (request.Op != IpcOps.Listen)
         {
             var answer = await InstanceCall.AskAsync(info, request);
             if (answer.Response is not { } response)

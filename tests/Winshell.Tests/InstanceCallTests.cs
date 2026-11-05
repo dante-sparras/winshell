@@ -23,7 +23,7 @@ public class InstanceCallTests
             await using var shell = IpcServer.OpenFirst(_pipe);
             var closing = ReadThen(shell, shell.Dispose);
 
-            var answer = await InstanceCall.AskAsync(Instance, new IpcRequest("show"), TestContext.Current.CancellationToken);
+            var answer = await InstanceCall.AskAsync(Instance, IpcRequest.ForShow(false), TestContext.Current.CancellationToken);
 
             Assert.Equal(new InstanceCall.Answer(null, "Instance abc123 closed the control pipe without answering."), answer);
             await closing;
@@ -41,7 +41,7 @@ public class InstanceCallTests
             writer.WriteLine($$"""{"ok":true,"winshell":"{{other}}"}""");
         });
 
-        var answer = await InstanceCall.AskAsync(Instance, new IpcRequest("show"), TestContext.Current.CancellationToken);
+        var answer = await InstanceCall.AskAsync(Instance, IpcRequest.ForShow(false), TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new InstanceCall.Answer(null, $"Could not reach instance abc123: {IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text)}"),
