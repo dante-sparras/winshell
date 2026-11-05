@@ -409,7 +409,7 @@ public sealed class DoctorTests : IDisposable
         Directory.CreateDirectory(config);
         var before = Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList();
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc);
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
 
         Assert.Equal(["windows", "dotnet", "project", "downloaded", "built", "build", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"], checks.Select(c => c.Id));
         Assert.DoesNotContain(checks, c => c.Message.StartsWith("Could not check", StringComparison.Ordinal));

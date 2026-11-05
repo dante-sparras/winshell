@@ -7,7 +7,8 @@ namespace Winshell.Diagnostics;
 
 /// <summary>
 /// Reads what <see cref="Doctor"/> checks from this PC. Everything here only reads: the registry, files, windows,
-/// screens and processes. <see cref="CanWrite"/> makes one empty file and removes it again.
+/// screens and processes. <see cref="CanWrite"/> makes one empty file and removes it again. A configuration project is
+/// not read here: <see cref="DoctorProject.Configuration(string)"/> reads the project file itself.
 /// </summary>
 internal static class DoctorProbe
 {

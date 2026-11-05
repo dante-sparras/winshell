@@ -28,7 +28,7 @@ internal static class DoctorCommand
             DoctorInstances(),
             ShellLocations.LocalRoot,
             ShellLocations.CrashRoot,
-            search), DoctorFacts.Pc);
+            search));
         if (options.Json)
         {
             Console.WriteLine(Diagnostics.DoctorReport.ToJson(checks, CliMetadata.Version));
