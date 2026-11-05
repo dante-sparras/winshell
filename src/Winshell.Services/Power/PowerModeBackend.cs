@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Power;
@@ -13,7 +11,7 @@ internal sealed record PowerModeSnapshot(bool Ready, PowerModeLevel Mode, Effect
 /// The Windows power mode (Settings, System, Power). The slider is the public user-configured AC or DC
 /// mode. The effective mode is what Windows is applying, including energy saver and game mode.
 /// </summary>
-internal sealed partial class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
+internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
 {
     public static readonly PowerModeBackend Instance = new();
 
@@ -45,42 +43,19 @@ internal sealed partial class PowerModeBackend : SnapshotSource<PowerModeSnapsho
     }
 
     /// <summary>The callback runs once immediately with the current mode, then on each change.</summary>
-    private static unsafe void Listen()
-    {
-        try
-        {
-            _ = PowerRegisterForEffectivePowerModeNotifications(EffectivePowerModeV2, &OnEffectivePowerModeChanged, 0, out _);
-        }
-        catch (EntryPointNotFoundException)
-        {
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
-    private static void OnEffectivePowerModeChanged(int mode, nint context) =>
-        NativeCallback.Guard(Log.Default, "power", () =>
+    private static void Listen() =>
+        PowerMode.ListenEffective(mode => NativeCallback.Guard(Log.Default, "power", () =>
         {
             Volatile.Write(ref _effective, mode);
             Instance.Refresh();
-        });
+        }));
 
     protected override Task<PowerModeSnapshot> ReadAsync()
     {
         var effective = EffectiveFrom(Volatile.Read(ref _effective));
-        try
-        {
-            Guid guid;
-            var hr = OnBattery()
-                ? PowerGetUserConfiguredDCPowerMode(out guid)
-                : PowerGetUserConfiguredACPowerMode(out guid);
-            if (hr != 0)
-                return Task.FromResult(new PowerModeSnapshot(true, PowerModeLevel.Balanced, effective, false));
-            return Task.FromResult(new PowerModeSnapshot(true, FromGuid(guid), effective, true));
-        }
-        catch (EntryPointNotFoundException)
-        {
+        if (PowerMode.GetUserConfigured(OnBattery(), out var guid) != 0)
             return Task.FromResult(new PowerModeSnapshot(true, PowerModeLevel.Balanced, effective, false));
-        }
+        return Task.FromResult(new PowerModeSnapshot(true, FromGuid(guid), effective, true));
     }
 
     /// <summary>
@@ -91,18 +66,7 @@ internal sealed partial class PowerModeBackend : SnapshotSource<PowerModeSnapsho
     {
         if (!Enum.IsDefined(mode))
             return 87;
-        var guid = ToGuid(mode);
-        uint result;
-        try
-        {
-            result = OnBattery()
-                ? PowerSetUserConfiguredDCPowerMode(in guid)
-                : PowerSetUserConfiguredACPowerMode(in guid);
-        }
-        catch (EntryPointNotFoundException)
-        {
-            result = 127;
-        }
+        var result = PowerMode.SetUserConfigured(OnBattery(), ToGuid(mode));
         Refresh();
         return result;
     }
@@ -131,22 +95,4 @@ internal sealed partial class PowerModeBackend : SnapshotSource<PowerModeSnapsho
         var status = default(SYSTEM_POWER_STATUS);
         return Win32.GetSystemPowerStatus(out status) && status.ACLineStatus == 0;
     }
-
-    private const uint EffectivePowerModeV2 = 2;
-
-    [LibraryImport("powrprof.dll")]
-    private static partial uint PowerGetUserConfiguredACPowerMode(out Guid powerModeGuid);
-
-    [LibraryImport("powrprof.dll")]
-    private static partial uint PowerGetUserConfiguredDCPowerMode(out Guid powerModeGuid);
-
-    [LibraryImport("powrprof.dll")]
-    private static partial uint PowerSetUserConfiguredACPowerMode(in Guid powerModeGuid);
-
-    [LibraryImport("powrprof.dll")]
-    private static partial uint PowerSetUserConfiguredDCPowerMode(in Guid powerModeGuid);
-
-    [LibraryImport("powrprof.dll")]
-    private static unsafe partial int PowerRegisterForEffectivePowerModeNotifications(
-        uint version, delegate* unmanaged[Stdcall]<int, nint, void> callback, nint context, out nint registrationHandle);
 }

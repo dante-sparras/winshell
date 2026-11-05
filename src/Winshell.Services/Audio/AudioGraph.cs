@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Windows.Win32.Media.Audio;
 using Winshell.Native;
 
 namespace Winshell.Audio;
@@ -29,7 +30,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         _log = log;
         try
         {
-            _enumerator = CoreAudio.Create<IMMDeviceEnumerator>(CoreAudio.MMDeviceEnumeratorClsid);
+            _enumerator = CoreAudio.CreateEnumerator();
             _notifications = new DeviceNotifications(this);
             _enumerator.RegisterEndpointNotificationCallback(_notifications);
             Sync();
@@ -83,9 +84,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
     {
         try
         {
-            var policy = CoreAudio.Create<IPolicyConfig>(CoreAudio.PolicyConfigClsid);
-            Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(node.DeviceId, ERole.Console));
-            Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(node.DeviceId, ERole.Multimedia));
+            CoreAudio.SetDefaultEndpoint(node.DeviceId);
         }
         catch (Exception e) when (e is COMException or InvalidCastException)
         {
@@ -139,9 +138,9 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         if (_enumerator is null)
             return;
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var flow in new[] { EDataFlow.Render, EDataFlow.Capture })
+        foreach (var flow in new[] { EDataFlow.eRender, EDataFlow.eCapture })
         {
-            _enumerator.EnumAudioEndpoints(flow, CoreAudio.DeviceStateActive, out var devices);
+            _enumerator.EnumAudioEndpoints(flow, DEVICE_STATE.DEVICE_STATE_ACTIVE, out var devices);
             devices.GetCount(out var count);
             for (uint i = 0; i < count; i++)
             {
@@ -152,7 +151,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
                     continue;
                 try
                 {
-                    var node = new EndpointNode(this, device, id, flow == EDataFlow.Render);
+                    var node = new EndpointNode(this, device, id, flow == EDataFlow.eRender);
                     _endpoints[id] = node;
                     AddNode(node);
                     node.StartSessions();
@@ -177,8 +176,8 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
 
     private void ReadDefaults()
     {
-        var playback = DefaultOf(EDataFlow.Render);
-        var recording = DefaultOf(EDataFlow.Capture);
+        var playback = DefaultOf(EDataFlow.eRender);
+        var recording = DefaultOf(EDataFlow.eCapture);
         if (playback == DefaultPlayback && recording == DefaultRecording)
             return;
         DefaultPlayback = playback;
@@ -193,7 +192,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
 
     private EndpointNode? DefaultOf(EDataFlow flow)
     {
-        if (_enumerator is null || _enumerator.GetDefaultAudioEndpoint(flow, ERole.Console, out var device) != 0)
+        if (_enumerator is null || _enumerator.GetDefaultAudioEndpoint(flow, ERole.eConsole, out var device) != 0)
             return null;
         device.GetId(out var id);
         return _endpoints.GetValueOrDefault(id);
@@ -248,7 +247,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
 
         public void OnDefaultDeviceChanged(EDataFlow flow, ERole role, string? defaultDeviceId)
         {
-            if (role == ERole.Console)
+            if (role == ERole.eConsole)
                 graph.RequestSync();
         }
 

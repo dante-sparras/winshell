@@ -1,0 +1,10 @@
+EDataFlow
+ERole
+AudioSessionState
+DEVICE_STATE
+CLSCTX
+AUDCLNT_SHAREMODE
+MMDeviceEnumerator
+SHLoadIndirectString
+CoMarshalInterThreadInterfaceInStream
+CoGetInterfaceAndReleaseStream

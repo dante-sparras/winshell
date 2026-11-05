@@ -1,43 +1,19 @@
 using System.Runtime.InteropServices;
-using Winshell.Native;
+using Windows.Win32;
+using Windows.Win32.Media.Audio;
+using Windows.Win32.System.Com;
 
-namespace Winshell.Audio;
+namespace Winshell.Native;
 
-// The Windows Core Audio COM interfaces the audio service uses, declared for classic COM interop. Methods the
-// service never calls keep their place in the vtable with a placeholder signature.
+// The Windows Core Audio COM interfaces the audio service uses, declared for classic COM interop: the service
+// implements the notification interfaces, and CsWin32 generates these only as unmanaged structs. Methods the service
+// never calls keep their place in the vtable with a placeholder signature.
 
-internal enum EDataFlow
+/// <summary>Creates, activates and releases the Windows Core Audio objects the audio service uses.</summary>
+internal static class CoreAudio
 {
-    Render = 0,
-    Capture = 1,
-    All = 2,
-}
-
-internal enum ERole
-{
-    Console = 0,
-    Multimedia = 1,
-    Communications = 2,
-}
-
-internal enum AudioSessionState
-{
-    Inactive = 0,
-    Active = 1,
-    Expired = 2,
-}
-
-internal static partial class CoreAudio
-{
-    public const uint DeviceStateActive = 1;
-    public const uint ClsctxAll = 0x17;
-
-    public static readonly Guid MMDeviceEnumeratorClsid = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
-    public static readonly Guid PolicyConfigClsid = new("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
-    public static readonly Guid AudioEndpointVolumeIid = new("5CDF2C82-841E-4546-9722-0CF74078229A");
-    public static readonly Guid AudioMeterInformationIid = new("C02216F6-8C67-4B5B-9D00-D008E73E0064");
-    public static readonly Guid AudioSessionManager2Iid = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
-    public static readonly Guid AudioClientIid = new("1CB9AD4C-DBFA-4C32-B178-C2F568A703B2");
+    /// <summary>The class of <see cref="IPolicyConfig"/>, which Windows does not document.</summary>
+    private static readonly Guid PolicyConfigClsid = new("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
 
     public static readonly PROPERTYKEY DeviceFriendlyName = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
     public static readonly PROPERTYKEY DeviceDescription = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 2);
@@ -45,13 +21,57 @@ internal static partial class CoreAudio
     public static readonly PROPERTYKEY EndpointFormFactor = new(new Guid("1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E"), 0);
     public static readonly PROPERTYKEY EngineDeviceFormat = new(new Guid("F19F064D-082C-4E27-BC73-6882A1BB8E4C"), 0);
 
-    [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
-    public static partial int SHLoadIndirectString(string source, [Out] char[] output, int outputLength, nint reserved);
+    /// <summary>The device enumerator. Throws <see cref="COMException"/> when Windows audio is not available.</summary>
+    public static IMMDeviceEnumerator CreateEnumerator() => Create<IMMDeviceEnumerator>(typeof(MMDeviceEnumerator).GUID);
 
-    public static T Create<T>(Guid clsid)
+    /// <summary>
+    /// Makes a device the Windows default for the console and multimedia roles. Throws <see cref="COMException"/>
+    /// when Windows refuses, or <see cref="InvalidCastException"/> when this Windows has no policy interface.
+    /// </summary>
+    public static void SetDefaultEndpoint(string deviceId)
     {
-        var type = Type.GetTypeFromCLSID(clsid, true)!;
-        return (T)Activator.CreateInstance(type)!;
+        var policy = Create<IPolicyConfig>(PolicyConfigClsid);
+        try
+        {
+            Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(deviceId, ERole.eConsole));
+            Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(deviceId, ERole.eMultimedia));
+        }
+        finally
+        {
+            Release(policy);
+        }
+    }
+
+    /// <summary>One of a device's interfaces, such as its endpoint volume.</summary>
+    public static T Activate<T>(IMMDevice device)
+    {
+        var iid = typeof(T).GUID;
+        device.Activate(ref iid, CLSCTX.CLSCTX_ALL, 0, out var obj);
+        return (T)obj;
+    }
+
+    /// <summary>
+    /// Opens a shared recording stream on a device and starts it, or returns null when Windows refuses. Stop the
+    /// stream and release it to close it.
+    /// </summary>
+    public static IAudioClient? StartSharedStream(IMMDevice device)
+    {
+        var client = Activate<IAudioClient>(device);
+        if (client.GetMixFormat(out var format) == 0)
+        {
+            try
+            {
+                // A 100 ms buffer. Nothing reads it; overruns are harmless.
+                if (client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, 0, 1_000_000, 0, format, 0) == 0 && client.Start() == 0)
+                    return client;
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(format);
+            }
+        }
+        Release(client);
+        return null;
     }
 
     /// <summary>Releases a COM object's callable wrapper now, not when the GC finds it. Does nothing for null.</summary>
@@ -61,23 +81,20 @@ internal static partial class CoreAudio
             Marshal.FinalReleaseComObject(comObject);
     }
 
-    public static T Activate<T>(IMMDevice device, Guid iid)
-    {
-        device.Activate(ref iid, ClsctxAll, 0, out var obj);
-        return (T)obj;
-    }
-
     /// <summary>Resolves a string like <c>@%SystemRoot%\System32\AudioSrv.Dll,-202</c> to its text.</summary>
     public static string LoadIndirectString(string text)
     {
         if (!text.StartsWith('@'))
             return text;
         var buffer = new char[512];
-        return SHLoadIndirectString(text, buffer, buffer.Length, 0) == 0 ? new string(buffer).TrimEnd('\0') : "";
+        return PInvoke.SHLoadIndirectString(text, buffer).Value == 0 ? new string(buffer).TrimEnd('\0') : "";
     }
 
-    /// <summary>The full path of a process's program, or null when the process cannot be opened or the name cannot be read.</summary>
-    public static string? ProcessImagePath(uint processId) => ProcessImage.TryRead(processId);
+    private static T Create<T>(Guid clsid)
+    {
+        var type = Type.GetTypeFromCLSID(clsid, true)!;
+        return (T)Activator.CreateInstance(type)!;
+    }
 }
 
 [ComImport]
@@ -85,7 +102,7 @@ internal static partial class CoreAudio
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IMMDeviceEnumerator
 {
-    void EnumAudioEndpoints(EDataFlow flow, uint stateMask, out IMMDeviceCollection devices);
+    void EnumAudioEndpoints(EDataFlow flow, DEVICE_STATE stateMask, out IMMDeviceCollection devices);
 
     [PreserveSig]
     int GetDefaultAudioEndpoint(EDataFlow flow, ERole role, out IMMDevice device);
@@ -113,7 +130,7 @@ internal interface IMMDeviceCollection
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IMMDevice
 {
-    void Activate(ref Guid iid, uint clsCtx, nint activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
+    void Activate(ref Guid iid, CLSCTX clsCtx, nint activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
 
     void OpenPropertyStore(uint access, out IPropertyStore properties);
 
@@ -200,7 +217,7 @@ internal interface IAudioMeterInformation
 internal interface IAudioClient
 {
     [PreserveSig]
-    int Initialize(int shareMode, uint streamFlags, long bufferDuration, long periodicity, nint format, nint sessionGuid);
+    int Initialize(AUDCLNT_SHAREMODE shareMode, uint streamFlags, long bufferDuration, long periodicity, nint format, nint sessionGuid);
 
     [PreserveSig]
     int GetBufferSize(out uint frames);
@@ -212,7 +229,7 @@ internal interface IAudioClient
     int GetCurrentPadding(out uint frames);
 
     [PreserveSig]
-    int IsFormatSupported(int shareMode, nint format, out nint closest);
+    int IsFormatSupported(AUDCLNT_SHAREMODE shareMode, nint format, out nint closest);
 
     [PreserveSig]
     int GetMixFormat(out nint format);

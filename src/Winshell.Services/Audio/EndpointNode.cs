@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Windows.Win32.Media.Audio;
 using Winshell.Native;
 
 namespace Winshell.Audio;
@@ -12,7 +13,7 @@ internal sealed class EndpointNode : AudioGraphNode
     private readonly VolumeNotifications _volumeNotifications;
     private IAudioSessionManager2? _sessionManager;
     private SessionNotifications? _sessionNotifications;
-    private IAudioMeterInformation? _meter;
+    private Native.IAudioMeterInformation? _meter;
     private IAudioClient? _keepAlive;
     private int _keepAliveCount;
     private int _refreshPending;
@@ -41,7 +42,7 @@ internal sealed class EndpointNode : AudioGraphNode
         };
         var format = PropertyStore.ReadBlob(store, CoreAudio.EngineDeviceFormat);
 
-        _volume = CoreAudio.Activate<IAudioEndpointVolume>(device, CoreAudio.AudioEndpointVolumeIid);
+        _volume = CoreAudio.Activate<IAudioEndpointVolume>(device);
         _volume.GetChannelCount(out var channels);
         Channels = ChannelLayout.FromFormat(format, (int)channels);
         ReadVolume();
@@ -61,12 +62,13 @@ internal sealed class EndpointNode : AudioGraphNode
                 return null;
             try
             {
-                return _meter ??= CoreAudio.Activate<IAudioMeterInformation>(_device, CoreAudio.AudioMeterInformationIid);
+                _meter ??= CoreAudio.Activate<Native.IAudioMeterInformation>(_device);
             }
             catch (COMException)
             {
                 return null;
             }
+            return new WindowsAudioMeter(_meter);
         }
     }
 
@@ -109,21 +111,7 @@ internal sealed class EndpointNode : AudioGraphNode
         {
             try
             {
-                var client = CoreAudio.Activate<IAudioClient>(_device, CoreAudio.AudioClientIid);
-                if (client.GetMixFormat(out var format) == 0)
-                {
-                    // Shared mode, a 100 ms buffer. Nothing reads it; overruns are harmless.
-                    var ok = client.Initialize(0, 0, 1_000_000, 0, format, 0) == 0 && client.Start() == 0;
-                    Marshal.FreeCoTaskMem(format);
-                    if (ok)
-                        _keepAlive = client;
-                    else
-                        CoreAudio.Release(client);
-                }
-                else
-                {
-                    CoreAudio.Release(client);
-                }
+                _keepAlive = CoreAudio.StartSharedStream(_device);
             }
             catch (COMException)
             {
@@ -180,7 +168,7 @@ internal sealed class EndpointNode : AudioGraphNode
     {
         try
         {
-            _sessionManager = CoreAudio.Activate<IAudioSessionManager2>(_device, CoreAudio.AudioSessionManager2Iid);
+            _sessionManager = CoreAudio.Activate<IAudioSessionManager2>(_device);
             // Windows only reports new sessions once the session list has been read.
             _sessionManager.GetSessionEnumerator(out var sessions);
             _sessionNotifications = new SessionNotifications(this);
@@ -209,7 +197,7 @@ internal sealed class EndpointNode : AudioGraphNode
         control.GetProcessId(out var processId);
         // A recording device's System Sounds session records nothing, and this process's own session there is
         // the stream KeepRunning opens to make the meter work.
-        if (state == AudioSessionState.Expired
+        if (state == AudioSessionState.AudioSessionStateExpired
             || (!IsPlayback && (control.IsSystemSoundsSession() == 0 || processId == Environment.ProcessId)))
             return;
         SessionNode session;

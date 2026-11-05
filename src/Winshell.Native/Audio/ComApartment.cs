@@ -1,24 +1,24 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.System.Com;
 
-namespace Winshell.Audio;
+namespace Winshell.Native;
 
 /// <summary>
 /// Moves a COM object onto the thread that will use it. Core Audio callbacks arrive on the engine's
 /// thread, and the shell reads those objects on its own thread.
 /// </summary>
-internal static partial class ComApartment
+internal static unsafe class ComApartment
 {
-    private static readonly Guid IUnknown = new("00000000-0000-0000-C000-000000000046");
-
     /// <summary>A stream the receiving thread releases by restoring it. The caller still owns <paramref name="comObject"/>.</summary>
     public static nint Capture(object comObject)
     {
         var unknown = Marshal.GetIUnknownForObject(comObject);
         try
         {
-            var iid = IUnknown;
-            Marshal.ThrowExceptionForHR(CoMarshalInterThreadInterfaceInStream(ref iid, unknown, out var stream));
-            return stream;
+            IStream* stream;
+            PInvoke.CoMarshalInterThreadInterfaceInStream(typeof(IUnknown).GUID, (IUnknown*)unknown, &stream).ThrowOnFailure();
+            return (nint)stream;
         }
         finally
         {
@@ -29,21 +29,14 @@ internal static partial class ComApartment
     /// <summary>The object on this thread. Releases <paramref name="stream"/>, including when the restore fails.</summary>
     public static object Restore(nint stream)
     {
-        var iid = IUnknown;
-        Marshal.ThrowExceptionForHR(CoGetInterfaceAndReleaseStream(stream, ref iid, out var unknown));
+        PInvoke.CoGetInterfaceAndReleaseStream((IStream*)stream, out IUnknown* unknown).ThrowOnFailure();
         try
         {
-            return Marshal.GetObjectForIUnknown(unknown);
+            return Marshal.GetObjectForIUnknown((nint)unknown);
         }
         finally
         {
-            Marshal.Release(unknown);
+            Marshal.Release((nint)unknown);
         }
     }
-
-    [LibraryImport("ole32")]
-    private static partial int CoMarshalInterThreadInterfaceInStream(ref Guid iid, nint unknown, out nint stream);
-
-    [LibraryImport("ole32")]
-    private static partial int CoGetInterfaceAndReleaseStream(nint stream, ref Guid iid, out nint unknown);
 }

@@ -115,24 +115,11 @@ internal sealed class FakeMeter(params float[] peaks) : IAudioMeterInformation
 
     public int Reads { get; private set; }
 
-    public int GetPeakValue(out float peak)
-    {
-        peak = Peaks.Max();
-        return 0;
-    }
-
-    public int GetMeteringChannelCount(out uint count)
+    public float[] ReadPeaks()
     {
         Reads++;
         if (Gone)
             throw new COMException("the device is gone");
-        count = (uint)Peaks.Length;
-        return 0;
-    }
-
-    public int GetChannelsPeakValues(uint count, float[] peaks)
-    {
-        Peaks.CopyTo(peaks, 0);
-        return 0;
+        return [.. Peaks];
     }
 }
