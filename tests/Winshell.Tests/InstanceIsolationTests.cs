@@ -115,17 +115,17 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
 
     private int Show(Process process)
     {
-        var (code, _, error) = WinshellCli.Run(["ipc", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "show"], ("WINSHELL_LOCAL_DIR", Local));
-        Assert.True(code == 0, error);
-        return code;
+        var result = WinshellCli.Run(["ipc", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "show"], ("WINSHELL_LOCAL_DIR", Local));
+        result.AssertExitCode(0);
+        return result.Code;
     }
 
     /// <summary>Runs the winshell CLI and returns what it printed.</summary>
     private string Winshell(params string[] args)
     {
-        var (code, output, error) = WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Local));
-        Assert.True(code == 0, $"winshell {string.Join(' ', args)} exited with {code}: {error}");
-        return output;
+        var result = WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Local));
+        result.AssertExitCode(0);
+        return result.Output;
     }
 
     public void Dispose()

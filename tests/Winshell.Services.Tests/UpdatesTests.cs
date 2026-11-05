@@ -419,15 +419,7 @@ public sealed class UpdatesTests : IDisposable
         File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
         var junction = Path.Combine(staged, "linked");
         // mklink prints a line. This process's own output carries xUnit's results, and a line in the middle loses one.
-        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        info.ArgumentList.Add("/c");
-        info.ArgumentList.Add("mklink");
-        info.ArgumentList.Add("/J");
-        info.ArgumentList.Add(junction);
-        info.ArgumentList.Add(outside);
-        using var link = Process.Start(info)!;
-        link.WaitForExit();
-        Assert.Equal(0, link.ExitCode);
+        ChildProcess.Run("cmd.exe", "/c", "mklink", "/J", junction, outside).AssertExitCode(0);
         try
         {
             var error = UpdateInstall.Apply(staged, InstallDir);

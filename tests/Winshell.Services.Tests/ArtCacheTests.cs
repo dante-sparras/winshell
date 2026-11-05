@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using Winshell.Media;
@@ -24,12 +23,7 @@ public class ArtCacheTests
         var link = linkedRoot ? Path.Combine(directory, "linked-cache") : Path.Combine(cache, "1234");
         try
         {
-            var start = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            foreach (var argument in new[] { "/c", "mklink", "/J", link, elsewhere })
-                start.ArgumentList.Add(argument);
-            using var command = Process.Start(start)!;
-            command.WaitForExit();
-            Assert.Equal(0, command.ExitCode);
+            ChildProcess.Run("cmd.exe", "/c", "mklink", "/J", link, elsewhere).AssertExitCode(0);
             Assert.NotNull(new DirectoryInfo(link).LinkTarget);
 
             ArtCache.CleanOld(linkedRoot ? link : cache);

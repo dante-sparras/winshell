@@ -33,16 +33,16 @@ public sealed class ConfigPathTests : IDisposable
         Directory.CreateDirectory(config);
 
         var help = Run(config, "--help");
-        Assert.Equal(0, help.Code);
+        help.AssertExitCode(0);
         Assert.Contains(config, help.Output, StringComparison.OrdinalIgnoreCase);
 
         var missing = Run(config, "-c", "missing");
-        Assert.Equal(1, missing.Code);
+        missing.AssertExitCode(1);
         Assert.Contains(config, missing.Error, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("missing", missing.Error, StringComparison.Ordinal);
     }
 
-    private static (int Code, string Output, string Error) Run(string configDir, params string[] args) =>
+    private static ChildProcess Run(string configDir, params string[] args) =>
         WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configDir));
 
     public void Dispose()

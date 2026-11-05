@@ -71,7 +71,7 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
     [Fact]
     public void Daemonize_leaves_the_mutex_to_the_child()
     {
-        Assert.Equal(0, ProbeShell.Detach(_config, _local, ["--no-duplicate", "-d"]));
+        ProbeShell.Detach(_config, _local, ["--no-duplicate", "-d"]).AssertExitCode(0);
 
         Wait.Until(() => Listed().Any(i => i.GetProperty("shellId").GetString() == "probe"), "the background shell");
         var pid = Listed().Single(i => i.GetProperty("shellId").GetString() == "probe").GetProperty("pid").GetInt32();
@@ -104,7 +104,7 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
         Assert.True(process.WaitForExit(20_000));
         // Without a timeout this waits for the output to be read to its end.
         process.WaitForExit();
-        Assert.Equal(0, process.ExitCode);
+        ChildProcess.Exited("The probe", process, _printed[process.Id]).AssertExitCode(0);
         Assert.Equal("", _printed[process.Id].ToString());
     }
 
@@ -133,12 +133,12 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
     private List<JsonElement> Listed()
     {
         var result = Run("list", "--json");
-        Assert.Equal(0, result.Code);
+        result.AssertExitCode(0);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) =>
+    private ChildProcess Run(params string[] args) =>
         WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
 
     public void Dispose()

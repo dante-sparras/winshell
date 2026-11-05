@@ -129,9 +129,11 @@ public sealed class DevCommandTests : IDisposable
 
     private (int Code, string Text) Value()
     {
-        var (code, output, _) = WinshellCli.Run(["ipc", "call", "probe", "value"], Folders);
-        return (code, output.Trim());
+        var result = CallValue();
+        return (result.Code, result.Output.Trim());
     }
+
+    private ChildProcess CallValue() => WinshellCli.Run(["ipc", "call", "probe", "value"], Folders);
 
     private string InstanceId()
     {
@@ -197,20 +199,20 @@ public sealed class DevCommandTests : IDisposable
     {
         File.WriteAllText(Path.Combine(Project, "Dev.csproj") + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
 
-        var (code, _, error) = WinshellCli.Run(["dev", "-p", Project], Folders);
+        var result = WinshellCli.Run(["dev", "-p", Project], Folders);
 
-        Assert.Equal(1, code);
-        Assert.Contains("Dev.csproj", error, StringComparison.Ordinal);
+        result.AssertExitCode(1);
+        Assert.Contains("Dev.csproj", result.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(Project, "obj")), "dotnet ran on a downloaded project.");
     }
 
     [Fact]
     public void With_no_project_it_says_how_to_make_one()
     {
-        var (code, _, error) = WinshellCli.Run(["dev"], Folders);
+        var result = WinshellCli.Run(["dev"], Folders);
 
-        Assert.Equal(1, code);
-        Assert.Contains("dotnet new winshell", error, StringComparison.Ordinal);
+        result.AssertExitCode(1);
+        Assert.Contains("dotnet new winshell", result.Error, StringComparison.Ordinal);
     }
 
     [Fact(Timeout = 170_000)]
@@ -277,7 +279,9 @@ public sealed class DevCommandTests : IDisposable
 
         Mark("""=> "broken" """);
         Wait.Until(() => Printed("error CS1002"), "the compile error");
-        Assert.Equal((0, "two"), Value());
+        var value = CallValue();
+        value.AssertExitCode(0);
+        Assert.Equal("two", value.Output.Trim());
         Wait.Until(() => WinshellCli.Run(["log", "-t", "20"], Folders).Output.Contains("Your configuration did not build", StringComparison.Ordinal), "the notice");
 
         Mark("""=> "three";""");

@@ -77,13 +77,13 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
 
             Assert.Equal(shellId, Listed(folders).Single(row => row.GetProperty("pid").GetInt32() == process.Id).GetProperty("shellId").GetString());
             var log = CliRun(["log", "--pid", pid], folders);
-            Assert.Equal(0, log.Code);
+            log.AssertExitCode(0);
             Assert.Contains($"Winshell {templates.Version} on Windows", log.Output, StringComparison.Ordinal);
 
             var killed = CliRun(["kill", "--pid", pid], folders);
-            Assert.Equal(0, killed.Code);
+            killed.AssertExitCode(0);
             Wait.Until(() => process.HasExited, "winshell kill to stop the shell");
-            Assert.Equal(0, process.ExitCode);
+            ChildProcess.Exited("The packed shell", process, output).AssertExitCode(0);
         }
         finally
         {
@@ -133,25 +133,21 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     private static List<JsonElement> Listed((string Name, string Value)[] environment)
     {
         var result = CliRun(["list", "--json"], environment);
-        Assert.Equal(0, result.Code);
+        result.AssertExitCode(0);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(row => row.Clone()).ToList();
     }
 
-    private static (int Code, string Output, string Error) CliRun(IReadOnlyList<string> args, (string Name, string Value)[] environment)
+    private static ChildProcess CliRun(IReadOnlyList<string> args, (string Name, string Value)[] environment)
     {
         Assert.True(File.Exists(Cli), $"No CLI at {Cli}");
         return Command(Cli, args, environment);
     }
 
-    private static (int Code, string Output, string Error) Command(string file, IReadOnlyList<string> args, (string Name, string Value)[]? environment)
+    private static ChildProcess Command(string file, IReadOnlyList<string> args, (string Name, string Value)[]? environment)
     {
         var info = new ProcessStartInfo(file)
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
@@ -160,21 +156,7 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
         if (environment is not null)
             foreach (var (name, value) in environment)
                 info.Environment[name] = value;
-        using var process = Process.Start(info)!;
-        var output = "";
-        var error = "";
-        var readOutput = new Thread(() => output = process.StandardOutput.ReadToEnd()) { IsBackground = true };
-        var readError = new Thread(() => error = process.StandardError.ReadToEnd()) { IsBackground = true };
-        readOutput.Start();
-        readError.Start();
-        if (!process.WaitForExit(TimeSpan.FromMinutes(2)))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            Assert.Fail($"{file} {string.Join(' ', args)} did not exit");
-        }
-        Assert.True(readOutput.Join(TimeSpan.FromMinutes(1)) && readError.Join(TimeSpan.FromMinutes(1)));
-        return (process.ExitCode, output, error);
+        return ChildProcess.Run(info, TimeSpan.FromMinutes(2));
     }
 }
 
@@ -203,7 +185,7 @@ public sealed class PackedTemplates : IDisposable
         // the SDK's first run in a new home appends that home's tools folder to the user PATH.
         var hive = Path.Combine(_work, "hive");
         var install = DotnetNew(hive, "install", templates);
-        Assert.True(install.ExitCode == 0, install.Output);
+        install.AssertExitCode(0);
         SmallProject = Instantiate(hive, packages, "winshell");
     }
 
@@ -244,7 +226,7 @@ public sealed class PackedTemplates : IDisposable
     {
         var folder = Path.Combine(_work, template);
         var created = DotnetNew(hive, template, "-n", "PackedShell", "-o", folder);
-        Assert.True(created.ExitCode == 0, created.Output);
+        created.AssertExitCode(0);
         var project = Assert.Single(Directory.GetFiles(folder, "*.csproj"));
         File.WriteAllText(Path.Combine(folder, "nuget.config"), $"""
             <?xml version="1.0" encoding="utf-8"?>
@@ -259,33 +241,15 @@ public sealed class PackedTemplates : IDisposable
         return project;
     }
 
-    private static CommandResult DotnetNew(string hive, params string[] args)
+    private static ChildProcess DotnetNew(string hive, params string[] args)
     {
-        var start = new ProcessStartInfo("dotnet")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var start = new ProcessStartInfo("dotnet");
         start.ArgumentList.Add("new");
         foreach (var arg in args)
             start.ArgumentList.Add(arg);
         start.ArgumentList.Add("--debug:custom-hive");
         start.ArgumentList.Add(hive);
-        using var process = Process.Start(start)!;
-        var output = "";
-        var error = "";
-        var readOutput = new Thread(() => output = process.StandardOutput.ReadToEnd()) { IsBackground = true };
-        var readError = new Thread(() => error = process.StandardError.ReadToEnd()) { IsBackground = true };
-        readOutput.Start();
-        readError.Start();
-        if (!process.WaitForExit(TimeSpan.FromMinutes(5)) || !readOutput.Join(TimeSpan.FromMinutes(1)) || !readError.Join(TimeSpan.FromMinutes(1)))
-        {
-            process.Kill(entireProcessTree: true);
-            return new CommandResult(-1, "dotnet did not exit");
-        }
-        return new CommandResult(process.ExitCode, output + error);
+        return ChildProcess.Run(start, TimeSpan.FromMinutes(5));
     }
 
     private static void AssertPackage(string nupkg, string version)

@@ -19,7 +19,7 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
 
         var result = Run("kill", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
 
-        Assert.Equal(0, result.Code);
+        result.AssertExitCode(0);
         Assert.Equal("", result.Error);
         Assert.StartsWith("Killed ", result.Output, StringComparison.Ordinal);
         Assert.True(process.HasExited);
@@ -30,7 +30,7 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
     {
         var result = Run("kill", "--force", "--pid", "0");
 
-        Assert.Equal(1, result.Code);
+        result.AssertExitCode(1);
         Assert.Equal("", result.Output);
         Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
@@ -50,7 +50,7 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
         {
             var result = Run("kill", "--force", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
 
-            Assert.Equal(0, result.Code);
+            result.AssertExitCode(0);
             Assert.True(process.HasExited);
             Assert.False(child.HasExited);
         }
@@ -68,7 +68,7 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
         return process;
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) =>
+    private ChildProcess Run(params string[] args) =>
         WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
 
     public void Dispose()

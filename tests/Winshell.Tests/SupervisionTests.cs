@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -14,6 +15,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
+    private readonly StringBuilder _printed = new();
     private readonly bool _taskbarHidden = ExplorerTaskbarRecovery.AnyHidden();
 
     public SupervisionTests()
@@ -48,27 +50,31 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         Assert.Equal(ProbeShell.Program, row.GetProperty("configPath").GetString(), ignoreCase: true);
 
         var log = Cli("log", "--pid", pid);
-        Assert.Equal(0, log.Code);
+        log.AssertExitCode(0);
         Assert.Contains("Shell ID: \"probe\"", log.Output, StringComparison.Ordinal);
 
         var show = Cli("ipc", "--pid", pid, "show");
-        Assert.Equal((0, ""), (show.Code, show.Error));
+        show.AssertExitCode(0);
+        Assert.Equal("", show.Error);
         var call = Cli("ipc", "--pid", pid, "call", "nothing", "open");
-        Assert.Equal((1, "Target not found: nothing."), (call.Code, call.Error.Trim()));
+        call.AssertExitCode(1);
+        Assert.Equal("Target not found: nothing.", call.Error.Trim());
 
         var killed = Cli("kill", "--pid", pid);
-        Assert.Equal((0, ""), (killed.Code, killed.Error));
+        killed.AssertExitCode(0);
+        Assert.Equal("", killed.Error);
         Assert.StartsWith("Killed ", killed.Output, StringComparison.Ordinal);
         Assert.True(process.HasExited);
-        Assert.Equal(0, process.ExitCode);
+        // The shell writes to the supervisor's output, so what it printed is there.
+        ChildProcess.Exited("The probe", process, _printed).AssertExitCode(0);
         Assert.Empty(Listed());
         // A kill was asked for, so winshell run ends with the shell and does not start it again.
         Wait.Until(() => run.HasExited, "winshell run to end with its shell");
-        Assert.Equal(0, run.ExitCode);
+        ChildProcess.Exited("winshell run", run, _printed).AssertExitCode(0);
 
         // A clean exit keeps the record, marked exited, so the log can still be found.
         var stopped = Cli("log");
-        Assert.Equal(0, stopped.Code);
+        stopped.AssertExitCode(0);
         Assert.Contains("Showing the log of stopped instance", stopped.Error, StringComparison.Ordinal);
     }
 
@@ -82,16 +88,16 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
     {
         File.WriteAllText(Path.Combine(_dir, "config", ProbeShell.CrashMarker), "");
 
-        var (code, output, error) = Cli("run", "--no-build", "-p", Project);
+        var result = Cli("run", "--no-build", "-p", Project);
 
-        Assert.Equal(1, code);
+        result.AssertExitCode(1);
         var report = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_dir, "local", "crashes"))));
         Assert.Contains("Winshell closed: yes", report, StringComparison.Ordinal);
         Assert.Contains("Where: Winshell", report, StringComparison.Ordinal);
         Assert.Contains("Shell id: probe", report, StringComparison.Ordinal);
         Assert.Contains("The probe was asked to crash as it started.", report, StringComparison.Ordinal);
-        Assert.Contains("Shell ID: \"probe\"", error + output, StringComparison.Ordinal);
-        Assert.DoesNotContain("ObjectDisposedException", error + output, StringComparison.Ordinal);
+        Assert.Contains("Shell ID: \"probe\"", result.Error + result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("ObjectDisposedException", result.Error + result.Output, StringComparison.Ordinal);
         // The crash and its report are in the log, written before the log file closed.
         var logged = File.ReadAllText(LogLine().Match(report).Groups["path"].Value);
         Assert.Contains("FATAL: Winshell crashed: System.InvalidOperationException", logged, StringComparison.Ordinal);
@@ -143,10 +149,10 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         {
             var killed = Cli("kill", "--force", "--pid", shell.ToString(CultureInfo.InvariantCulture));
 
-            Assert.Equal(0, killed.Code);
+            killed.AssertExitCode(0);
             Wait.Until(() => run.HasExited, "winshell run to end with its shell");
             // The exit code of the end --force gave it.
-            Assert.Equal(-1, run.ExitCode);
+            ChildProcess.Exited("winshell run", run, _printed).AssertExitCode(-1);
             Assert.Empty(Listed());
         }
         finally
@@ -164,9 +170,17 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
             info.Environment[name] = value;
         var run = Process.Start(info)!;
         _started.Add(run);
-        // Read the output so the supervisor never blocks on a full pipe.
-        run.ErrorDataReceived += (_, _) => { };
-        run.OutputDataReceived += (_, _) => { };
+        // Read the output so the supervisor never blocks on a full pipe, and keep it for a wrong exit code to show.
+        void Print(object sender, DataReceivedEventArgs e)
+        {
+            if (e.Data is not null)
+            {
+                lock (_printed)
+                    _printed.AppendLine(e.Data);
+            }
+        }
+        run.ErrorDataReceived += Print;
+        run.OutputDataReceived += Print;
         run.BeginErrorReadLine();
         run.BeginOutputReadLine();
         return run;
@@ -188,7 +202,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         return listed.RootElement.EnumerateArray().Select(row => row.Clone()).ToList();
     }
 
-    private (int Code, string Output, string Error) Cli(params string[] args) => WinshellCli.Run(args, Folders);
+    private ChildProcess Cli(params string[] args) => WinshellCli.Run(args, Folders);
 
     public void Dispose()
     {

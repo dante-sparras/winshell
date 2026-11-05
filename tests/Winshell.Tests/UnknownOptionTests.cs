@@ -29,14 +29,14 @@ public class UnknownOptionTests
     {
         var missing = Path.Combine(Path.GetTempPath(), "winshell-unknown-option-missing");
         var args = command.Replace("{missing}", missing, StringComparison.Ordinal).Split(' ');
-        var (code, output, err) = Run(args);
+        var result = Run(args);
 
-        Assert.Equal(2, code);
-        Assert.Equal("", output);
-        Assert.Equal(error + Environment.NewLine, err);
+        result.AssertExitCode(2);
+        Assert.Equal("", result.Output);
+        Assert.Equal(error + Environment.NewLine, result.Error);
     }
 
-    private static (int Code, string Output, string Error) Run(string[] args) =>
+    private static ChildProcess Run(string[] args) =>
         WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-unknown-option-absent")));

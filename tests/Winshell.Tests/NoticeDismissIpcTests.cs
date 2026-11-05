@@ -23,21 +23,21 @@ public sealed class NoticeDismissIpcTests : IDisposable, IClassFixture<ProbeBuil
         var dismissed = Run("ipc", "--pid", pid, "call", "notice", "dismiss");
         Assert.Equal("", dismissed.Error);
         Assert.Equal("", dismissed.Output.Trim());
-        Assert.Equal(0, dismissed.Code);
+        dismissed.AssertExitCode(0);
         Assert.False(process.HasExited);
 
         var extra = Run("ipc", "--pid", pid, "call", "notice", "dismiss", "now");
-        Assert.Equal(1, extra.Code);
+        extra.AssertExitCode(1);
         Assert.Contains("Function notice.dismiss takes 0 arguments, 1 given.", extra.Error, StringComparison.Ordinal);
         Assert.False(process.HasExited);
 
         var other = Run("ipc", "--pid", pid, "call", "notice", "open");
-        Assert.Equal(1, other.Code);
+        other.AssertExitCode(1);
         Assert.Contains("Target not found: notice.", other.Error, StringComparison.Ordinal);
         Assert.False(process.HasExited);
     }
 
-    private (int Code, string Output, string Error) Run(params string[] args) =>
+    private ChildProcess Run(params string[] args) =>
         WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
 
     public void Dispose()
