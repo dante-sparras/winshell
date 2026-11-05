@@ -7,7 +7,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- The project file's name is not a legal namespace, and the XAML compiler uses this. -->
     <RootNamespace>Winshell.DefaultShell</RootNamespace>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
