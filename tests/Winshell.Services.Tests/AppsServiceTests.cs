@@ -4,53 +4,55 @@ using Winshell.Apps;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// The Start menu's list, over a catalog of the test's own: its packaged apps are a list here and its folder is a
-/// temporary one, so nothing reads this PC's Start menu and nothing is launched.
+/// The Start menu's list over a fake backend, which supplies the scans and the launch outcomes, so nothing reads this
+/// PC's Start menu and nothing is launched. Jump lists and recent documents read the test's own reader and folder.
 /// </summary>
 public sealed class AppsServiceTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "winshell-apps-tests", Guid.NewGuid().ToString("N"));
     private readonly ManualEventLoop _loop = new();
-    private readonly AppCatalog _catalog;
-    private IReadOnlyList<AppRecord> _packaged = [];
-    private Dictionary<string, AppUsage> _usage = new(StringComparer.OrdinalIgnoreCase);
+    private readonly FakeBackend _backend = new();
+    private readonly List<string> _warnings = [];
+    private readonly Log _log;
 
     public AppsServiceTests()
     {
         Directory.CreateDirectory(_folder);
-        _catalog = new AppCatalog([_folder], () => _packaged, () => _usage, TimeSpan.Zero, false);
+        _log = new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") };
     }
 
-    public void Dispose()
-    {
-        _catalog.Dispose();
-        Directory.Delete(_folder, recursive: true);
-    }
+    public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     private static AppRecord App(string name, bool hidden = false) => AppIndex.Packaged($"{name}!App", name, "")! with { Hidden = hidden };
 
-    private async Task<AppsService> Start(TimeProvider? time = null)
+    /// <summary>A shortcut as a scan of a Programs folder lists it.</summary>
+    private static AppRecord Shortcut(string name) => new(
+        $"Accessories/{name}", name, "", $@"C:\Menu\{name}.lnk", $@"C:\Tools\{name}.exe", "", $"{name}.exe",
+        @"C:\Users\Me", name.ToLowerInvariant(), ["Accessories"], false, false, $@"C:\Menu\{name}.lnk");
+
+    private static Dictionary<string, AppUsage> Usage(params (string Id, AppUsage Usage)[] rows) =>
+        rows.ToDictionary(row => row.Id, row => row.Usage, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A service over a backend whose first scan already found <paramref name="apps"/>, in name order as a scan lists them.</summary>
+    private AppsService Start(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null, TimeProvider? time = null)
     {
-        var apps = new AppsService(_loop, Log.Default, _catalog, time);
-        await _catalog.Ready.WaitAsync(TestContext.Current.CancellationToken);
-        _loop.Process();
-        return apps;
+        _backend.Snapshot = new AppSnapshot(apps, usage ?? Usage());
+        return new AppsService(_loop, _log, _backend, time);
     }
 
-    /// <summary>Touches the watched folder, so the catalog reads the lists again.</summary>
-    private async Task Rescan(Func<bool> done)
+    /// <summary>A later scan, reported as the scan thread reports it and applied on the loop.</summary>
+    private void Scan(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null)
     {
-        await File.WriteAllTextAsync(Path.Combine(_folder, Guid.NewGuid().ToString("N")), "", TestContext.Current.CancellationToken);
-        await Wait.UntilAsync(done, "the catalog to scan again", _loop.Process);
+        _backend.Show(new AppSnapshot(apps, usage ?? Usage()));
+        _loop.Process();
     }
 
     private static List<string> Names(IEnumerable<AppEntry> entries) => entries.Select(entry => entry.Name).ToList();
 
     [Fact]
-    public async Task Hidden_apps_stay_out_of_the_lists_and_can_still_be_found()
+    public void Hidden_apps_stay_out_of_the_lists_and_can_still_be_found()
     {
-        _packaged = [App("Zeta"), App("Alpha"), App("Uninstall", hidden: true)];
-        using var apps = await Start();
+        using var apps = Start([App("Alpha"), App("Uninstall", hidden: true), App("Zeta")]);
 
         Assert.Equal(["Alpha", "Zeta"], Names(apps.Apps));
         Assert.Equal("Uninstall", apps.ById("Uninstall!App")?.Name);
@@ -63,36 +65,35 @@ public sealed class AppsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task An_app_that_stays_is_the_same_object_and_an_app_that_goes_leaves_every_list()
+    public void An_app_that_stays_is_the_same_object_and_an_app_that_goes_leaves_every_list()
     {
-        _packaged = [App("Alpha"), App("Beta")];
-        _usage = new(StringComparer.OrdinalIgnoreCase) { ["Beta!App"] = new AppUsage(3, 1000) };
-        using var apps = await Start();
+        var usage = Usage(("Beta!App", new AppUsage(3, 1000)));
+        using var apps = Start([App("Alpha"), App("Beta")], usage);
         var alpha = apps.ById("Alpha!App")!;
         var beta = apps.ById("Beta!App")!;
         Assert.Equal(["Beta"], Names(apps.Recent));
         Assert.Equal(["Beta"], Names(apps.Frequent));
 
-        _packaged = [App("Alpha")];
-        await Rescan(() => apps.Apps.Count == 1);
+        Scan([App("Alpha")], usage);
 
         Assert.Same(alpha, Assert.Single(apps.Apps));
         Assert.Empty(apps.Recent);
         Assert.Empty(apps.Frequent);
         Assert.Null(apps.ById("Beta!App"));
-        Assert.Null(beta.Launched);
+
+        // A launch from the entry that left is not counted when the app comes back.
+        beta.Launch();
+        _loop.Process();
+        Scan([App("Alpha"), App("Beta")], usage);
+        Assert.Equal(3, apps.ById("Beta!App")!.RunCount);
     }
 
     [Fact]
-    public async Task The_use_of_an_app_orders_recent_and_frequent()
+    public void The_use_of_an_app_orders_recent_and_frequent()
     {
-        _packaged = [App("Alpha"), App("Beta")];
-        _usage = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Alpha!App"] = new AppUsage(1, 2000),
-            ["Beta!App"] = new AppUsage(5, 1000),
-        };
-        using var apps = await Start();
+        using var apps = Start(
+            [App("Alpha"), App("Beta")],
+            Usage(("Alpha!App", new AppUsage(1, 2000)), ("Beta!App", new AppUsage(5, 1000))));
 
         Assert.Equal(["Alpha", "Beta"], Names(apps.Recent));
         Assert.Equal(["Beta", "Alpha"], Names(apps.Frequent));
@@ -101,18 +102,18 @@ public sealed class AppsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task A_launch_counts_as_a_use_at_once()
+    public void A_shortcut_opens_with_its_start_in_folder_and_counts_as_a_use_at_once()
     {
-        var alpha = App("Alpha");
+        var notepad = Shortcut("Notepad");
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 12, 0, 0, TimeSpan.Zero));
-        _packaged = [alpha];
-        using var apps = await Start(time);
-        var entry = apps.ById(alpha.Id)!;
+        using var apps = Start([notepad], time: time);
+        var entry = apps.ById(notepad.Id)!;
         var changes = new List<string>();
         ((INotifyPropertyChanged)entry).PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
 
-        entry.Launched!(alpha);
+        entry.Launch();
 
+        Assert.Equal([@"shortcut C:\Menu\Notepad.lnk in C:\Users\Me"], _backend.Opened);
         Assert.Equal(1, entry.RunCount);
         Assert.Equal(time.GetUtcNow().ToUnixTimeMilliseconds(), entry.LastUsed);
         Assert.Equal([nameof(AppEntry.RunCount), nameof(AppEntry.LastUsed)], changes);
@@ -120,17 +121,58 @@ public sealed class AppsServiceTests : IDisposable
         Assert.Same(entry, Assert.Single(apps.Frequent));
     }
 
-    [Fact]
-    public async Task A_disposed_service_stops_following_the_catalog()
+    [Fact(Timeout = 30_000)]
+    public async Task A_packaged_launch_returns_before_activation_and_falls_back_on_the_loop()
     {
-        _packaged = [App("Alpha")];
-        var apps = await Start();
-        var seen = 0;
-        _catalog.Changed += () => seen++;
+        using var apps = Start([App("Alpha")]);
+        var entry = apps.ById("Alpha!App")!;
+        // Like the real backend's, its continuations run on the thread that completes it.
+        var activation = new TaskCompletionSource<string?>();
+        _backend.Activation = activation.Task;
+
+        // Activation is still running. A launch that waited for it would never finish.
+        await Task.Run(entry.Launch, TestContext.Current.CancellationToken).WaitAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(["activate Alpha!App"], _backend.Opened);
+
+        // The outcome waits for the loop, so nothing has happened yet.
+        activation.SetResult("not registered");
+        Assert.Empty(_warnings);
+        Assert.Equal(["activate Alpha!App"], _backend.Opened);
+        Assert.Equal(0, entry.RunCount);
+
+        _loop.Process();
+        Assert.Equal(["apps: Failed to launch Alpha: not registered"], _warnings);
+        Assert.Equal(["activate Alpha!App", "apps folder Alpha!App"], _backend.Opened);
+        Assert.Equal(Environment.CurrentManagedThreadId, _backend.AppsFolderThread);
+        Assert.Equal(1, entry.RunCount);
+    }
+
+    [Theory]
+    [InlineData(false, new[] { "apps: Failed to launch Alpha: no such file" })]
+    [InlineData(true, new[] { "apps: Failed to launch Alpha: not registered", "apps: Failed to launch Alpha: no such file" })]
+    public void A_launch_that_opens_nothing_is_logged_and_not_counted(bool packaged, string[] warnings)
+    {
+        var alpha = packaged ? App("Alpha") : Shortcut("Alpha");
+        using var apps = Start([alpha]);
+        _backend.Activation = Task.FromResult<string?>("not registered");
+        _backend.ShortcutError = "no such file";
+        _backend.AppsFolderError = "no such file";
+
+        apps.ById(alpha.Id)!.Launch();
+        _loop.Process();
+
+        Assert.Equal(warnings, _warnings);
+        Assert.Equal(0, apps.ById(alpha.Id)!.RunCount);
+        Assert.Empty(apps.Recent);
+    }
+
+    [Fact]
+    public void A_disposed_service_stops_following_the_backend()
+    {
+        var apps = Start([App("Alpha")]);
 
         apps.Dispose();
-        _packaged = [];
-        await Rescan(() => seen > 0);
+        Scan([]);
 
         Assert.Single(apps.Apps);
     }
@@ -221,6 +263,53 @@ public sealed class AppsServiceTests : IDisposable
         {
             Asked.Add(appUserModelId);
             return Result[appUserModelId];
+        }
+    }
+
+    /// <summary>Supplies the scans and the launch outcomes. It opens nothing and records what it was asked to open.</summary>
+    private sealed class FakeBackend : IAppsBackend
+    {
+        public event Action? Changed;
+
+        public AppSnapshot Snapshot { get; set; } = AppSnapshot.Empty;
+
+        public Task<string?> Activation { get; set; } = Task.FromResult<string?>(null);
+
+        public string? ShortcutError { get; set; }
+
+        public string? AppsFolderError { get; set; }
+
+        public List<string> Opened { get; } = [];
+
+        public int? AppsFolderThread { get; private set; }
+
+        public void Show(AppSnapshot snapshot)
+        {
+            Snapshot = snapshot;
+            Changed?.Invoke();
+        }
+
+        public void Start()
+        {
+        }
+
+        public string? OpenShortcut(string path, string startIn)
+        {
+            Opened.Add($"shortcut {path} in {startIn}");
+            return ShortcutError;
+        }
+
+        public Task<string?> ActivateAsync(string appUserModelId, string arguments)
+        {
+            Opened.Add($"activate {appUserModelId}");
+            return Activation;
+        }
+
+        public string? OpenAppsFolder(string appUserModelId)
+        {
+            Opened.Add($"apps folder {appUserModelId}");
+            AppsFolderThread = Environment.CurrentManagedThreadId;
+            return AppsFolderError;
         }
     }
 }

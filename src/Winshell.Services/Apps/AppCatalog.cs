@@ -40,10 +40,10 @@ internal sealed class AppSnapshot
 }
 
 /// <summary>
-/// The Start menu for one set of folders. The process shares <see cref="Shared"/>, which watches the real Programs
-/// folders and package install. A test builds its own and points it at a temporary folder.
+/// The Start menu for one set of folders, and how its apps open. The process shares <see cref="Shared"/>, which
+/// watches the real Programs folders and package install. A test builds its own and points it at a temporary folder.
 /// </summary>
-internal sealed class AppCatalog : IDisposable
+internal sealed class AppCatalog : IAppsBackend, IDisposable
 {
     public static IReadOnlyList<string> ProgramsFolders() =>
     [
@@ -314,6 +314,58 @@ internal sealed class AppCatalog : IDisposable
             return new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
         }
     }
+
+    public string? OpenShortcut(string path, string startIn)
+    {
+        try
+        {
+            var start = new ProcessStartInfo(path) { UseShellExecute = true };
+            if (startIn.Length > 0 && Directory.Exists(startIn))
+                start.WorkingDirectory = startIn;
+            using var _ = Process.Start(start);
+            return null;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return e.Message;
+        }
+    }
+
+    /// <summary>Activates on its own STA thread, which <see cref="AppActivation"/> requires, and returns at once.</summary>
+    public Task<string?> ActivateAsync(string appUserModelId, string arguments)
+    {
+        // Continuations run on this thread, so the launch posts its outcome without waiting for a pool worker.
+        var done = new TaskCompletionSource<string?>();
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                AppActivation.Activate(appUserModelId, arguments);
+                done.SetResult(null);
+            }
+            catch (Exception e)
+            {
+                done.SetResult(e.Message);
+            }
+        });
+        thread.IsBackground = true;
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return done.Task;
+    }
+
+    public string? OpenAppsFolder(string appUserModelId)
+    {
+        try
+        {
+            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId) { UseShellExecute = true });
+            return null;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return e.Message;
+        }
+    }
 }
 
 /// <summary>Packaged and unpackaged apps Windows shows in Start, from PackageManager.</summary>
@@ -349,84 +401,5 @@ internal static class PackagedApps
             }
         }
         return result;
-    }
-}
-
-/// <summary>Opens an app the way Start does: a shortcut through the shell, a packaged app by its AppUserModelID.</summary>
-internal static class AppLaunch
-{
-    public static bool Shortcut(string path, string startIn, Action<string> warn)
-    {
-        try
-        {
-            var start = new ProcessStartInfo(path) { UseShellExecute = true };
-            if (startIn.Length > 0 && Directory.Exists(startIn))
-                start.WorkingDirectory = startIn;
-            using var _ = Process.Start(start);
-            return true;
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            warn(e.Message);
-            return false;
-        }
-    }
-
-    public static void Packaged(string appUserModelId, string arguments, IEventLoop loop, Action<string> warn, Action started) =>
-        Packaged(() => Activate(appUserModelId, arguments), () => OpenAppsFolder(appUserModelId), loop, warn, started);
-
-    /// <summary>
-    /// Runs <paramref name="activate"/> on its own STA thread and returns at once: activation returns only after
-    /// the app is up, seconds on a cold start. Its outcome, and the <paramref name="fallback"/> when it failed,
-    /// run on the loop. Each returns an error, or null when the app started.
-    /// </summary>
-    internal static void Packaged(Func<string?> activate, Func<string?> fallback, IEventLoop loop, Action<string> warn, Action started)
-    {
-        var thread = new Thread(() =>
-        {
-            var error = activate();
-            loop.Post(() =>
-            {
-                if (error is not null)
-                {
-                    warn(error);
-                    if (fallback() is { } failed)
-                    {
-                        warn(failed);
-                        return;
-                    }
-                }
-                started();
-            });
-        });
-        thread.IsBackground = true;
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-    }
-
-    private static string? Activate(string appUserModelId, string arguments)
-    {
-        try
-        {
-            AppActivation.Activate(appUserModelId, arguments ?? "");
-            return null;
-        }
-        catch (Exception e)
-        {
-            return e.Message;
-        }
-    }
-
-    private static string? OpenAppsFolder(string appUserModelId)
-    {
-        try
-        {
-            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId) { UseShellExecute = true });
-            return null;
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            return e.Message;
-        }
     }
 }
