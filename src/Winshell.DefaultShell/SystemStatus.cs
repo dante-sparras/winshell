@@ -77,12 +77,6 @@ public sealed class SystemStatus : ObservableObject
     private readonly List<WifiNetwork> _networks = [];
     private NetworkDevice? _wifi;
     private AudioNode? _output;
-    private string _networkGlyph = "";
-    private string _networkTrackGlyph = "";
-    private string _wifiName = "";
-    private string _volumeGlyph = "";
-    private string _batteryGlyph = "";
-    private bool _hasBattery;
 
     public SystemStatus(NetworkingService networking, AudioService audio, PowerService power, PowerModeService powerMode)
     {
@@ -100,42 +94,18 @@ public sealed class SystemStatus : ObservableObject
         PublishBattery();
     }
 
-    public string NetworkGlyph
-    {
-        get => _networkGlyph;
-        private set => Set(ref _networkGlyph, value);
-    }
+    public string NetworkGlyph { get; private set => Set(ref field, value); } = "";
 
-    public string NetworkTrackGlyph
-    {
-        get => _networkTrackGlyph;
-        private set => Set(ref _networkTrackGlyph, value);
-    }
+    public string NetworkTrackGlyph { get; private set => Set(ref field, value); } = "";
 
     /// <summary>The connected network's name, or empty when Wi-Fi is not on a network.</summary>
-    public string WifiName
-    {
-        get => _wifiName;
-        private set => Set(ref _wifiName, value);
-    }
+    public string WifiName { get; private set => Set(ref field, value); } = "";
 
-    public string VolumeGlyph
-    {
-        get => _volumeGlyph;
-        private set => Set(ref _volumeGlyph, value);
-    }
+    public string VolumeGlyph { get; private set => Set(ref field, value); } = "";
 
-    public bool HasBattery
-    {
-        get => _hasBattery;
-        private set => Set(ref _hasBattery, value);
-    }
+    public bool HasBattery { get; private set => Set(ref field, value); }
 
-    public string BatteryGlyph
-    {
-        get => _batteryGlyph;
-        private set => Set(ref _batteryGlyph, value);
-    }
+    public string BatteryGlyph { get; private set => Set(ref field, value); } = "";
 
     private void OnNetworking(object? sender, PropertyChangedEventArgs e)
     {

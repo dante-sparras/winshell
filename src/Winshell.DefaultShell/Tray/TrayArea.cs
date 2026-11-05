@@ -15,9 +15,6 @@ public sealed class TrayArea : ObservableObject
 {
     private readonly SystemTray _tray;
     private readonly UpdatesService _updates;
-    private bool _hasOverflow;
-    private bool _updateReady;
-    private string _updateLabel = "";
 
     public TrayArea(SystemTray tray, SystemStatus status, UpdatesService updates, WinlandMenu? winland = null)
     {
@@ -47,23 +44,11 @@ public sealed class TrayArea : ObservableObject
     /// <summary>Icons that open from the chevron, in the same order.</summary>
     public ObservableCollection<SystemTrayItem> Hidden { get; } = [];
 
-    public bool HasOverflow
-    {
-        get => _hasOverflow;
-        private set => Set(ref _hasOverflow, value);
-    }
+    public bool HasOverflow { get; private set => Set(ref field, value); }
 
-    public bool UpdateReady
-    {
-        get => _updateReady;
-        private set => Set(ref _updateReady, value);
-    }
+    public bool UpdateReady { get; private set => Set(ref field, value); }
 
-    public string UpdateLabel
-    {
-        get => _updateLabel;
-        private set => Set(ref _updateLabel, value);
-    }
+    public string UpdateLabel { get; private set => Set(ref field, value); } = "";
 
     /// <summary>The update icon was clicked. Nothing opens.</summary>
     public event EventHandler? UpdatesRequested;
