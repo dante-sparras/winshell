@@ -1,5 +1,4 @@
 using Winshell.Native;
-using Winshell.Notifications;
 
 namespace Winshell.Diagnostics;
 
@@ -46,8 +45,6 @@ internal sealed class DoctorFacts : IDoctorFacts
     public IReadOnlyList<string> CompatibilityLayers(string exePath) => DoctorProbe.CompatibilityLayers(exePath);
 
     public string ResolveLinks(string path) => DoctorProbe.ResolveLinks(path);
-
-    public string NotificationAccess() => NotificationListenerAccess.Read().ToString();
 
     public DoctorCrashes.CrashFolderRead ReadCrashReports(string folder) => DoctorProbe.ReadCrashReports(folder);
 

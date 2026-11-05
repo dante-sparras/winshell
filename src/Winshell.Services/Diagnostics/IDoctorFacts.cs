@@ -36,8 +36,6 @@ internal interface IDoctorFacts
 
     string ResolveLinks(string path);
 
-    string NotificationAccess();
-
     DoctorCrashes.CrashFolderRead ReadCrashReports(string folder);
 
     DoctorCrashes.CrashPeek PeekCrash(string path);
