@@ -22,6 +22,7 @@ internal sealed class HostWindow : IDisposable
         Kind = kind;
         Client = client;
         Presentation = new HostPresentation(this, platform);
+        Focus = new WindowFocus(kind, new HostFocusEffects(this, platform));
         Messages = new HostMessages(this, platform, dismissMenu);
         var (style, exStyle) = Styles(kind);
         _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage);
@@ -55,14 +56,16 @@ internal sealed class HostWindow : IDisposable
 
     internal HostMessages Messages { get; }
 
+    /// <summary>Whether the window takes the keyboard, and what follows from it.</summary>
+    internal WindowFocus Focus { get; }
+
     /// <summary>Whether the window has started letting go of its parts. <see cref="Handle"/> turns 0 once it has let go of the window too.</summary>
     internal bool Released { get; private set; }
 
     internal static (uint Style, uint ExStyle) Styles(WindowKind kind) => kind switch
     {
-        WindowKind.Floating => (Win32.WS_OVERLAPPEDWINDOW | Win32.WS_CLIPCHILDREN, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_APPWINDOW),
-        WindowKind.Popup => (Win32.WS_POPUP, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE),
-        _ => (Win32.WS_POPUP, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE),
+        WindowKind.Floating => (Win32.WS_OVERLAPPEDWINDOW | Win32.WS_CLIPCHILDREN, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_APPWINDOW | WindowFocus.StartingExStyle(kind)),
+        _ => (Win32.WS_POPUP, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | WindowFocus.StartingExStyle(kind)),
     };
 
     private nint? OnWindowMessage(WindowMessage message)

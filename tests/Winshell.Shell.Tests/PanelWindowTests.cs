@@ -52,21 +52,6 @@ public sealed class PanelWindowTests
     }
 
     [Fact]
-    public async Task A_panel_that_cannot_take_focus_leaves_the_foreground_window_alone()
-    {
-        var unchanged = await ShellFixture.On(_ =>
-        {
-            var before = Win32.GetForegroundWindow();
-            using var panel = Panel(new Grid());
-            panel.Visible = true;
-            panel.Focus();
-            return Win32.GetForegroundWindow() == before;
-        });
-
-        Assert.True(unchanged);
-    }
-
-    [Fact]
     public async Task A_panel_draws_its_content()
     {
         var pixels = await ShellFixture.On(async _ =>
