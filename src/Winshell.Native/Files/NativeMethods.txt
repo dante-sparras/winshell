@@ -1,0 +1,7 @@
+FindFirstFileW
+FindClose
+GetFileInformationByHandle
+ReadDirectoryChangesW
+GetOverlappedResult
+CancelIoEx
+FILE_NOTIFY_INFORMATION

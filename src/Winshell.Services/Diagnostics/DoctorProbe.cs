@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
@@ -14,7 +13,7 @@ namespace Winshell.Diagnostics;
 /// Reads what <see cref="Doctor"/> checks from this PC. Everything here only reads: the registry, files, windows,
 /// screens and processes. <see cref="CanWrite"/> makes one empty file and removes it again.
 /// </summary>
-internal static unsafe partial class DoctorProbe
+internal static class DoctorProbe
 {
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string LayersKey = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
@@ -44,13 +43,6 @@ internal static unsafe partial class DoctorProbe
         {
             return false;
         }
-    }
-
-    /// <summary>Whether a contrast theme is on, the same read the theme uses.</summary>
-    public static bool ContrastThemeOn()
-    {
-        var hc = new HIGHCONTRASTW { cbSize = (uint)sizeof(HIGHCONTRASTW) };
-        return Win32.SystemParametersInfoW(Win32.SPI_GETHIGHCONTRAST, hc.cbSize, &hc, 0) && (hc.dwFlags & Win32.HCF_HIGHCONTRASTON) != 0;
     }
 
     private static object? CurrentVersionValue(string name)
@@ -152,44 +144,12 @@ internal static unsafe partial class DoctorProbe
     /// Whether a process runs as administrator. A process this account may not even ask is one: a non-elevated
     /// account can always read the token of its own non-elevated processes.
     /// </summary>
-    public static bool IsElevated(int pid)
-    {
-        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
-        if (process == 0)
-            return false;
-        try
-        {
-            if (!Win32.OpenProcessToken(process, Win32.TOKEN_QUERY, out var token))
-                return Marshal.GetLastPInvokeError() == Win32.ERROR_ACCESS_DENIED && !Environment.IsPrivilegedProcess;
-            try
-            {
-                int elevated;
-                return Win32.GetTokenInformation(token, 20 /* TokenElevation */, &elevated, sizeof(int), out _) && elevated != 0;
-            }
-            finally
-            {
-                Win32.CloseHandle(token);
-            }
-        }
-        finally
-        {
-            Win32.CloseHandle(process);
-        }
-    }
+    public static bool IsElevated(int pid) =>
+        ProcessElevation.TryRead((uint)pid, out var tokenDenied) ?? (tokenDenied && !Environment.IsPrivilegedProcess);
 
     public static IReadOnlyList<DoctorScreens.MonitorFacts> Monitors() => Screens.Enumerate()
         .Select(m => new DoctorScreens.MonitorFacts(m.Info.Name, m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom, m.Work.Left, m.Work.Top, m.Work.Right, m.Work.Bottom, m.Scale))
         .ToList();
-
-    [ThreadStatic]
-    private static List<nint>? _windows;
-
-    [UnmanagedCallersOnly]
-    private static int CollectWindow(nint hwnd, nint data)
-    {
-        _windows?.Add(hwnd);
-        return 1;
-    }
 
     /// <summary>
     /// The visible top-level windows that are not minimized or cloaked: where an app bar would be. Explorer keeps
@@ -197,19 +157,13 @@ internal static unsafe partial class DoctorProbe
     /// </summary>
     public static IReadOnlyList<DoctorScreens.WindowFacts> EdgeWindows()
     {
-        _windows = [];
-        Win32.EnumWindows(&CollectWindow, 0);
-        var handles = _windows;
-        _windows = null;
         var result = new List<DoctorScreens.WindowFacts>();
-        var name = stackalloc char[256];
-        foreach (var hwnd in handles!)
+        foreach (var hwnd in TopLevelWindows.List())
         {
             if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || NativeMethods.IsCloaked(hwnd) || !Win32.GetWindowRect(hwnd, out var rect))
                 continue;
-            var length = Win32.GetClassNameW(hwnd, name, 256);
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
-            result.Add(new DoctorScreens.WindowFacts(new string(name, 0, Math.Max(0, length)), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
+            result.Add(new DoctorScreens.WindowFacts(TopLevelWindows.ClassName(hwnd), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
         }
         return result;
     }
@@ -226,9 +180,6 @@ internal static unsafe partial class DoctorProbe
             return "";
         }
     }
-
-    /// <summary>Whether this process is per-monitor DPI aware, version 2, as its manifest asks unless Windows overrides it.</summary>
-    public static bool PerMonitorV2() => AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     /// <summary>The compatibility settings Windows keeps for this executable, for this user and for the PC.</summary>
     public static IReadOnlyList<string> CompatibilityLayers(string exePath)
@@ -328,11 +279,4 @@ internal static unsafe partial class DoctorProbe
             return new(null, $"{path}: {e.Message}");
         }
     }
-
-    [LibraryImport("user32.dll")]
-    private static partial nint GetThreadDpiAwarenessContext();
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AreDpiAwarenessContextsEqual(nint a, nint b);
 }

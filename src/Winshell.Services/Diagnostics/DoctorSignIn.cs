@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 using Winshell.Session;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
@@ -11,31 +10,10 @@ internal static class DoctorSignIn
     /// <summary>The <c>winshell.exe</c> a sign-in command starts: after <c>conhost.exe --headless</c>, as Winshell writes it, or first.</summary>
     internal static string? ExeOf(string command)
     {
-        var args = SplitCommand(command);
+        var args = CommandLine.Split(command);
         if (args.Length >= 3 && Path.GetFileName(args[0]).Equals("conhost.exe", StringComparison.OrdinalIgnoreCase) && args[1] == "--headless")
             return args[2];
         return args.Length > 0 ? args[0] : null;
-    }
-
-    /// <summary>A command line split as Windows splits it.</summary>
-    private static unsafe string[] SplitCommand(string command)
-    {
-        if (string.IsNullOrWhiteSpace(command))
-            return [];
-        var argv = Win32.CommandLineToArgvW(command, out var count);
-        if (argv == 0)
-            return [];
-        try
-        {
-            var args = new string[count];
-            for (var i = 0; i < count; i++)
-                args[i] = Marshal.PtrToStringUni(((nint*)argv)[i]) ?? "";
-            return args;
-        }
-        finally
-        {
-            Win32.LocalFree(argv);
-        }
     }
 
     /// <param name="command">The command line of the sign-in entry, or null when there is none.</param>

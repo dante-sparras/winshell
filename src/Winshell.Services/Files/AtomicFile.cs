@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text;
-using Microsoft.Win32.SafeHandles;
+using Winshell.Native;
 
 namespace Winshell;
 
@@ -10,11 +9,8 @@ namespace Winshell;
 /// How a text file is saved. A temporary file goes down beside it and is flushed to disk, then replaces it, so a crash
 /// leaves the old file or the new one. A symbolic link stays a link, and a hard link is written in place.
 /// </summary>
-internal static partial class AtomicFile
+internal static class AtomicFile
 {
-    private const uint FileAttributeReparsePoint = 0x400;
-    private static readonly nint InvalidFindHandle = -1;
-
     /// <summary>
     /// A hand save landed during this write when the destination changed after the write started and is not the
     /// text about to be put down. <paramref name="diskAtStart"/> null means the file was missing.
@@ -164,7 +160,7 @@ internal static partial class AtomicFile
     {
         var full = Path.GetFullPath(path);
         // FindFirstFile reports the link itself. GetAttributes follows it, so it cannot tell a link from its target.
-        if (TryReparsePoint(full, out var reparse) && !reparse)
+        if (FileLinks.TryReparsePoint(full, out var reparse) && !reparse)
             return full;
         try
         {
@@ -197,82 +193,11 @@ internal static partial class AtomicFile
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            if (!GetFileInformationByHandle(stream.SafeFileHandle, out var info))
-                return 1;
-            return (int)info.NumberOfLinks;
+            return FileLinks.Count(stream.SafeFileHandle) ?? 1;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return 1;
         }
-    }
-
-    /// <summary>
-    /// True when <paramref name="full"/> could be queried. <paramref name="reparse"/> is true for a symbolic link
-    /// and false for a normal file or a hard link. A missing file returns false.
-    /// </summary>
-    private static bool TryReparsePoint(string full, out bool reparse)
-    {
-        reparse = false;
-        var handle = FindFirstFileW(full, out var data);
-        if (handle == InvalidFindHandle)
-            return false;
-        try
-        {
-            reparse = (data.FileAttributes & FileAttributeReparsePoint) != 0;
-            return true;
-        }
-        finally
-        {
-            FindClose(handle);
-        }
-    }
-
-    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial nint FindFirstFileW(string fileName, out Win32FindData data);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool FindClose(nint handle);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct FileTime
-    {
-        public uint Low;
-        public uint High;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private unsafe struct Win32FindData
-    {
-        public uint FileAttributes;
-        public FileTime CreationTime;
-        public FileTime LastAccessTime;
-        public FileTime LastWriteTime;
-        public uint FileSizeHigh;
-        public uint FileSizeLow;
-        public uint Reserved0;
-        public uint Reserved1;
-        public fixed char FileName[260];
-        public fixed char AlternateFileName[14];
-    }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetFileInformationByHandle(SafeFileHandle hFile, out ByHandleFileInformation lpFileInformation);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ByHandleFileInformation
-    {
-        public uint FileAttributes;
-        public FileTime CreationTime;
-        public FileTime LastAccessTime;
-        public FileTime LastWriteTime;
-        public uint VolumeSerialNumber;
-        public uint FileSizeHigh;
-        public uint FileSizeLow;
-        public uint NumberOfLinks;
-        public uint FileIndexHigh;
-        public uint FileIndexLow;
     }
 }

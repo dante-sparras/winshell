@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using Winshell.Native;
 using Winshell.Updates;
 using System.Net;
 using System.Security.Cryptography;
@@ -528,11 +529,11 @@ public sealed class UpdatesTests : IDisposable
             stream.WriteByte((byte)(b ^ 0xFF));
         }
 
-        Assert.Null(UpdateSignature.Signer(unsigned));
-        Assert.Null(UpdateSignature.Signer(tampered));
-        Assert.Null(UpdateSignature.Signer(Path.Combine(_root, "missing.dll")));
+        Assert.Null(Authenticode.Signer(unsigned));
+        Assert.Null(Authenticode.Signer(tampered));
+        Assert.Null(Authenticode.Signer(Path.Combine(_root, "missing.dll")));
         // The .NET runtime's own files carry an embedded Authenticode signature, not a catalog one.
-        Assert.Contains("O=Microsoft Corporation", UpdateSignature.Signer(typeof(object).Assembly.Location), StringComparison.Ordinal);
+        Assert.Contains("O=Microsoft Corporation", Authenticode.Signer(typeof(object).Assembly.Location), StringComparison.Ordinal);
     }
 
     /// <summary>The release version the test assembly carries, which stands in for a release's <c>winshell.exe</c>.</summary>

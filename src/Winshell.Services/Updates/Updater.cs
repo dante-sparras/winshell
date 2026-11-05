@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Winshell.Native;
 
 namespace Winshell.Updates;
 
@@ -223,7 +224,7 @@ internal sealed class Updater : IDisposable
                 return;
             }
             _log.Info("updates", $"Winshell {version} is ready. It applies when Winshell next starts.");
-            if (UpdateSignature.Signer(Path.Combine(_installDir, "winshell.exe")) is null)
+            if (Authenticode.Signer(Path.Combine(_installDir, "winshell.exe")) is null)
                 _log.Info("updates", "This winshell.exe is not signed, so the update's signature is not checked, only its SHA-256.");
             Set(new UpdateState(UpdateStatus.Ready, version, ""));
         }
@@ -411,18 +412,7 @@ internal sealed class Updater : IDisposable
 }
 
 /// <summary>Whether this process runs with an MSIX package identity.</summary>
-internal static partial class Packaging
+internal static class Packaging
 {
-    private const int AppModelErrorNoPackage = 15700;
-
-    public static bool IsPackaged { get; } = Check();
-
-    private static unsafe bool Check()
-    {
-        uint length = 0;
-        return GetCurrentPackageFullName(ref length, null) != AppModelErrorNoPackage;
-    }
-
-    [LibraryImport("kernel32.dll")]
-    private static unsafe partial int GetCurrentPackageFullName(ref uint packageFullNameLength, char* packageFullName);
+    public static bool IsPackaged { get; } = PackageIdentity.Exists();
 }
