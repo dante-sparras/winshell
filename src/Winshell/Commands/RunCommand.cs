@@ -81,7 +81,7 @@ internal static class RunCommand
         var program = new ProcessStartInfo(project.Program) { UseShellExecute = false };
         foreach (var a in ProgramArguments(options))
             program.ArgumentList.Add(a);
-        return Supervise(program, System.IO.Path.GetDirectoryName(project.Program));
+        return Supervise(program, project);
     }
 
     /// <summary>
@@ -132,13 +132,17 @@ internal static class RunCommand
 
     /// <summary>
     /// Runs the shell <paramref name="shell"/> starts under a <see cref="ShellSupervisor"/>, and returns its last exit code.
-    /// A dialog about a start that failed can offer <paramref name="folder"/>.
+    /// <paramref name="project"/> is the configuration project whose program that is, or null for the default shell.
     /// </summary>
-    private static int Supervise(ProcessStartInfo shell, string? folder)
+    private static int Supervise(ProcessStartInfo shell, ConfigurationProject? project)
     {
         IShellChild? Start()
         {
-            var child = ShellProcess.Start(shell, folder);
+            // A reload builds beside a program that still runs, in bin\shell.next, so each start runs the last build. A
+            // dialog about a start that failed offers its folder.
+            if (project is not null)
+                shell.FileName = project.Program;
+            var child = ShellProcess.Start(shell, project is null ? null : System.IO.Path.GetDirectoryName(shell.FileName));
             // The shell reports a failed update once. A shell started again after a crash does not repeat it.
             shell.Environment.Remove(UpdateFailureVariable);
             return child;

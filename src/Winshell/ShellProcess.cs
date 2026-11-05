@@ -8,17 +8,28 @@ internal sealed class ShellProcess : IShellChild
 {
     private readonly Process _process;
     private readonly EventWaitHandle _stopAsked;
+    private readonly EventWaitHandle _reloadAsked;
 
     private ShellProcess(Process process)
     {
         _process = process;
-        _stopAsked = new EventWaitHandle(false, EventResetMode.ManualReset, StopAskedEventName(process.Id));
+        _stopAsked = new EventWaitHandle(false, EventResetMode.ManualReset, AskedEventName(Asked.Stop, process.Id));
+        _reloadAsked = new EventWaitHandle(false, EventResetMode.ManualReset, AskedEventName(Asked.Reload, process.Id));
         Exited = ExitAsync();
+    }
+
+    /// <summary>What <c>winshell kill</c> or <c>winshell reload</c> asked of a shell, for its supervisor to read when it exits.</summary>
+    internal enum Asked
+    {
+        Stop,
+        Reload,
     }
 
     public Task<int> Exited { get; }
 
     public bool StopAsked => _stopAsked.WaitOne(0);
+
+    public bool ReloadAsked => _reloadAsked.WaitOne(0);
 
     /// <summary>Starts the shell, or says why it did not start and returns null. A dialog can offer <paramref name="folder"/>.</summary>
     public static ShellProcess? Start(ProcessStartInfo info, string? folder)
@@ -36,20 +47,23 @@ internal sealed class ShellProcess : IShellChild
     }
 
     /// <summary>
-    /// Tells the supervisor of the shell with this process id, when it has one, that a stop was asked for, so a crash on
-    /// the way out is not started again. False takes that back when the shell did not stop after all.
+    /// Tells the supervisor of the shell with this process id, when it has one, what was asked of the shell before it is
+    /// asked to quit: a stop, so a crash on the way out is not started again, or a reload, so the shell starts again at
+    /// once. False for <paramref name="asked"/> takes that back when the shell did not quit after all. Returns whether the
+    /// shell has a supervisor.
     /// </summary>
-    internal static void TellSupervisor(int pid, bool stopAsked)
+    internal static bool TellSupervisor(int pid, Asked what, bool asked)
     {
-        if (!EventWaitHandle.TryOpenExisting(StopAskedEventName(pid), out var asked))
-            return;
-        using (asked)
+        if (!EventWaitHandle.TryOpenExisting(AskedEventName(what, pid), out var handle))
+            return false;
+        using (handle)
         {
-            if (stopAsked)
-                asked.Set();
+            if (asked)
+                handle.Set();
             else
-                asked.Reset();
+                handle.Reset();
         }
+        return true;
     }
 
     /// <summary>
@@ -92,10 +106,12 @@ internal sealed class ShellProcess : IShellChild
     public void Dispose()
     {
         _stopAsked.Dispose();
+        _reloadAsked.Dispose();
         _process.Dispose();
     }
 
-    private static string StopAskedEventName(int pid) => $@"Local\winshell-stop-asked-{pid}";
+    private static string AskedEventName(Asked what, int pid) =>
+        what == Asked.Stop ? $@"Local\winshell-stop-asked-{pid}" : $@"Local\winshell-reload-asked-{pid}";
 
     private async Task<int> ExitAsync()
     {
