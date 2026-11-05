@@ -10,7 +10,11 @@
     <AdditionalFiles Include="**\NativeMethods.txt" Exclude="NativeMethods.txt;bin\**;obj\**" />
     <InternalsVisibleTo Include="Winshell.Services" />
     <InternalsVisibleTo Include="Winshell.Shell" />
+    <!-- The test projects. Each compiles tests/TestSupport, whose parent process watch calls what Testing/NativeMethods.txt generates. -->
+    <InternalsVisibleTo Include="Winshell.DefaultShell.Tests" />
+    <InternalsVisibleTo Include="Winshell.Package.Tests" />
     <InternalsVisibleTo Include="Winshell.Services.Tests" />
     <InternalsVisibleTo Include="Winshell.Shell.Tests" />
+    <InternalsVisibleTo Include="Winshell.Tests" />
   </ItemGroup>
 </Project>

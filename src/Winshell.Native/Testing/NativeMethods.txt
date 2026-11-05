@@ -1,0 +1,6 @@
+// For tests only: no .NET API reads a parent process id or sends a console a Ctrl+Break.
+CreateToolhelp32Snapshot
+Process32FirstW
+Process32NextW
+GenerateConsoleCtrlEvent
+GetConsoleProcessList

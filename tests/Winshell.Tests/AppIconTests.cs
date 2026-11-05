@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using Winshell.Native;
 
 namespace Winshell.Tests;
 
@@ -20,25 +20,9 @@ public class AppIconTests
     public void The_executable_embeds_the_application_icon()
     {
         var exe = Path.Combine(AppContext.BaseDirectory, "winshell.exe");
-        // LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE. The file is not executed.
-        var module = LoadLibraryExW(exe, 0, 0x22);
-        Assert.NotEqual(0, module);
-        try
-        {
-            var names = new List<nint>();
-            var callback = new EnumResNameProc((_, _, name, _) =>
-            {
-                names.Add(name);
-                return true;
-            });
-            // RT_GROUP_ICON is 14. The C# compiler stores ApplicationIcon as 32512, Win32.IDI_APPLICATION.
-            Assert.True(EnumResourceNamesW(module, 14, callback, 0));
-            Assert.Contains((nint)32512, names);
-        }
-        finally
-        {
-            FreeLibrary(module);
-        }
+        // The C# compiler stores ApplicationIcon as icon group 32512, Win32.IDI_APPLICATION.
+        using var icon = OwnedIcon.Load(exe, Win32.IDI_APPLICATION, "", 32);
+        Assert.NotNull(icon);
     }
 
     private static int[] SizesIn(byte[] bytes)
@@ -74,16 +58,4 @@ public class AppIconTests
         Assert.Equal(1, BitConverter.ToUInt16(bytes, 2));
         return BitConverter.ToUInt16(bytes, 4);
     }
-
-
-    private delegate bool EnumResNameProc(nint module, nint type, nint name, nint param);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern nint LoadLibraryExW(string file, nint reserved, uint flags);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool EnumResourceNamesW(nint module, nint type, EnumResNameProc proc, nint param);
-
-    [DllImport("kernel32.dll")]
-    private static extern bool FreeLibrary(nint module);
 }
