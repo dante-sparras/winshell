@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Winshell.Native;
 
-internal static partial class ShellItemName
+internal static class ShellItemName
 {
     /// <summary>
     /// The name the shell shows for the item at <paramref name="parsingName"/>, such as
@@ -10,7 +10,7 @@ internal static partial class ShellItemName
     /// </summary>
     internal static string? Find(string parsingName)
     {
-        if (SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItem).GUID, out var pointer) < 0 || pointer == 0)
+        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItem).GUID, out var pointer) < 0 || pointer == 0)
             return null;
         IShellItem? item = null;
         try
@@ -25,11 +25,4 @@ internal static partial class ShellItemName
             Marshal.Release(pointer);
         }
     }
-
-    /// <summary>
-    /// Handwritten: CsWin32's declaration takes an <c>IBindCtx</c>, whose generated monikers use the banned
-    /// <c>System.Runtime.InteropServices.ComTypes.FILETIME</c>.
-    /// </summary>
-    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial int SHCreateItemFromParsingName(string path, nint bindContext, in Guid iid, out nint item);
 }

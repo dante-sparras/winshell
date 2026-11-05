@@ -12,9 +12,6 @@ internal static class ShellLink
 {
     private static readonly Guid ClsidShellLink = new("00021401-0000-0000-C000-000000000046");
 
-    /// <summary>System.AppUserModel.ID, the id a shortcut gives the app it starts.</summary>
-    private static readonly PROPERTYKEY AppUserModelId = new(PInvoke.PKEY_AppUserModel_ID.fmtid, PInvoke.PKEY_AppUserModel_ID.pid);
-
     public static ShellLinkInfo? Read(string path)
     {
         object? link = null;
@@ -40,7 +37,7 @@ internal static class ShellLink
             buffer.Clear();
             shell.GetDescription(buffer, buffer.Capacity);
             var description = buffer.ToString();
-            var aumid = link is IPropertyStore store ? PropertyStore.ReadString(store, AppUserModelId) ?? "" : "";
+            var aumid = link is IPropertyStore store ? PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? "" : "";
             return new ShellLinkInfo(target, arguments, workingDirectory, icon, iconIndex, description, aumid);
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException or ArgumentException or InvalidCastException)

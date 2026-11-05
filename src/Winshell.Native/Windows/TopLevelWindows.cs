@@ -86,8 +86,13 @@ internal static unsafe class TopLevelWindows
     internal static nint RootOf(nint hwnd) => Win32.GetAncestor(hwnd, (uint)GET_ANCESTOR_FLAGS.GA_ROOT);
 
     /// <summary>The window's visible frame in screen pixels, without the invisible resize borders.</summary>
-    internal static bool TryFrameBounds(nint hwnd, out RECT frame) =>
-        Win32.DwmGetWindowRect(hwnd, (int)DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, out frame, sizeof(RECT)) == 0;
+    internal static bool TryFrameBounds(nint hwnd, out RECT frame)
+    {
+        RECT bounds = default;
+        var ok = PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, &bounds, (uint)sizeof(RECT)).Value == 0;
+        frame = bounds;
+        return ok;
+    }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
     internal static void Close(nint hwnd) => Win32.PostMessageW(hwnd, Win32.WM_SYSCOMMAND, (nint)PInvoke.SC_CLOSE, 0);

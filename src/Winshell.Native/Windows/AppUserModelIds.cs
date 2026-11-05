@@ -16,9 +16,6 @@ internal static unsafe class AppUserModelIds
     /// </summary>
     internal const int MaxCharacters = (int)PInvoke.APPLICATION_USER_MODEL_ID_MAX_LENGTH;
 
-    /// <summary>System.AppUserModel.ID, the property a window sets.</summary>
-    private static readonly PROPERTYKEY Key = new(PInvoke.PKEY_AppUserModel_ID.fmtid, PInvoke.PKEY_AppUserModel_ID.pid);
-
     /// <summary>One <c>GetApplicationUserModelId</c> call. <see cref="Query.Length"/> counts wide characters and includes the terminating null.</summary>
     internal readonly record struct Query(WIN32_ERROR Code, uint Length);
 
@@ -34,7 +31,7 @@ internal static unsafe class AppUserModelIds
             var store = (IPropertyStore)Marshal.GetObjectForIUnknown((nint)pointer);
             try
             {
-                return PropertyStore.ReadString(store, Key) ?? "";
+                return PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? "";
             }
             finally
             {

@@ -5,7 +5,7 @@ using Windows.Win32.UI.Shell;
 namespace Winshell.Native;
 
 /// <summary>The icons the Windows shell shows for its items: programs, files and packaged apps.</summary>
-internal static unsafe partial class ShellItemImage
+internal static unsafe class ShellItemImage
 {
     private const SIIGBF IconFlags = SIIGBF.SIIGBF_ICONONLY | SIIGBF.SIIGBF_BIGGERSIZEOK | SIIGBF.SIIGBF_SCALEUP;
 
@@ -16,7 +16,7 @@ internal static unsafe partial class ShellItemImage
     /// </summary>
     internal static (int Width, int Height, byte[] Bgra)? Icon(string parsingName, int size)
     {
-        if (SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItemImageFactory).GUID, out var pointer) < 0 || pointer == 0)
+        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItemImageFactory).GUID, out var pointer) < 0 || pointer == 0)
             return null;
         IShellItemImageFactory? factory = null;
         try
@@ -71,11 +71,4 @@ internal static unsafe partial class ShellItemImage
         [PreserveSig]
         int GetImage(SIZE size, SIIGBF flags, out nint bitmap);
     }
-
-    /// <summary>
-    /// Handwritten: CsWin32's declaration takes an <c>IBindCtx</c>, whose generated monikers use the banned
-    /// <c>System.Runtime.InteropServices.ComTypes.FILETIME</c>.
-    /// </summary>
-    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial int SHCreateItemFromParsingName(string path, nint bindContext, in Guid iid, out nint item);
 }

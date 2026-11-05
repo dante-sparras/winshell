@@ -9,6 +9,9 @@ internal static partial class PropertyStore
     private const ushort VtLpwstr = 31;
     private const ushort VtBlob = 65;
 
+    /// <summary>System.AppUserModel.ID: the id a window sets, or a shortcut gives the app it starts.</summary>
+    public static readonly PROPERTYKEY AppUserModelId = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+
     /// <summary>A string value, or null when the store has none of that key or holds another type.</summary>
     public static string? ReadString(IPropertyStore store, in PROPERTYKEY key)
     {
