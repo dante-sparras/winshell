@@ -29,8 +29,7 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public bool SelfContained(string exePath) => DoctorProbe.SelfContained(exePath);
 
-    public IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot) =>
-        DoctorProbe.UserConfigProblems(configFile, configRoot, localRoot);
+    public string? PreferencesProblem(string configRoot) => DoctorProbe.PreferencesProblem(configRoot);
 
     public bool CanWrite(string folder) => DoctorProbe.CanWrite(folder);
 

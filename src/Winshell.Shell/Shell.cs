@@ -30,9 +30,8 @@ public sealed record ShellOptions
     public string? CacheDir { get; init; }
 
     /// <summary>
-    /// The updater <c>winshell.exe</c> passes when it runs this shell in-process. Installing a download stays in
-    /// <c>winshell.exe</c>, before the shell starts. Restart then starts this program again with <c>--after</c>.
-    /// A configuration's own program leaves this null.
+    /// The updater <see cref="Shell.Updates"/> follows. A configuration's own program leaves this null. Restart starts
+    /// this program again with <c>--after</c>.
     /// </summary>
     internal Updater? Updater { get; init; }
 }

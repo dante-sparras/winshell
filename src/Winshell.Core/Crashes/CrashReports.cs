@@ -13,7 +13,7 @@ namespace Winshell;
 /// </summary>
 internal sealed record CrashReport(string Path, string Where, Exception Error, bool Fatal)
 {
-    /// <summary>What failed, as a sentence names it: "the taskbar", "Winshell Settings", "a window". Empty when it is not a window.</summary>
+    /// <summary>What failed, as a sentence names it: "the taskbar", "a window". Empty when it is not a window.</summary>
     public string Subject { get; init; } = "";
 
     /// <summary>What Winshell did about it, such as "Winshell opens it again in 1 second." Empty when nothing.</summary>

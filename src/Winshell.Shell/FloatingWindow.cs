@@ -2,7 +2,7 @@ using Windows.Foundation;
 
 namespace Winshell;
 
-/// <summary>A normal window with a title bar, as Winshell Settings is.</summary>
+/// <summary>A normal window with a title bar.</summary>
 public sealed class FloatingWindow : ShellWindow
 {
     private string _title = "";

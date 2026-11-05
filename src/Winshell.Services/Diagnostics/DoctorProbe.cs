@@ -56,47 +56,16 @@ internal static class DoctorProbe
     }
 
     /// <summary>
-    /// Why <c>preferences.toml</c>, <c>launcher.toml</c> or <c>quick-settings.toml</c> cannot be loaded, at the paths
-    /// the shell that would run reads them from. A missing file is left out.
+    /// Why <c>preferences.toml</c> in <paramref name="configRoot"/>, where the configuration guide keeps a shell's
+    /// preferences, cannot be loaded, or null when it is missing or loads.
     /// </summary>
-    public static IReadOnlyList<string> UserConfigProblems(string? configFile, string configRoot, string localRoot)
-    {
-        var paths = new List<string?>();
-        if (!string.IsNullOrEmpty(configRoot))
-        {
-            paths.Add(Path.Combine(configRoot, "preferences.toml"));
-            paths.Add(Path.Combine(configRoot, "launcher.toml"));
-        }
-        if (!string.IsNullOrEmpty(localRoot))
-            paths.Add(Path.Combine(localRoot, "state", "by-shell", ShellIdOf(configFile, configRoot), "quick-settings.toml"));
-        var problems = new List<string>();
-        foreach (var path in paths)
-        {
-            if (UserFileProblem(path) is { Length: > 0 } problem)
-                problems.Add(problem);
-        }
-        return problems;
-    }
-
-    private static string ShellIdOf(string? configFile, string configRoot)
-    {
-        if (configFile is null || !configFile.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            return "winshell-default";
-        try
-        {
-            var project = ConfigurationProject.Find(configFile, null, configRoot, out _);
-            return project is null ? "winshell-default" : ShellIdentity.DefaultId(project.Program, configRoot);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return "winshell-default";
-        }
-    }
+    public static string? PreferencesProblem(string configRoot) =>
+        string.IsNullOrEmpty(configRoot) ? null : UserFileProblem(Path.Combine(configRoot, "preferences.toml"));
 
     /// <summary>Why this file cannot be loaded, or null when it is missing or loads.</summary>
-    private static string? UserFileProblem(string? path)
+    private static string? UserFileProblem(string path)
     {
-        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        if (!File.Exists(path))
             return null;
         string text;
         try

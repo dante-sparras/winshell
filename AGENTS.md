@@ -6,7 +6,7 @@ A desktop shell toolkit for Windows 11. A configuration is a .NET project that b
 
 - Windows 11. Projects target `net10.0-windows10.0.22621.0`. The template package targets `net10.0`.
 - .NET 10 SDK, pinned in `global.json`. `Directory.Build.props` treats warnings as errors.
-- C# and WinUI 3. `winshell.exe` runs the default shell and builds a configuration.
+- C# and WinUI 3. `winshell.exe` builds and supervises a configuration. Winshell ships no shell of its own.
 - xUnit v3 for `tests/`, through VSTest.
 - PowerShell 7 for `scripts/`. `scripts/install.ps1` and `scripts/uninstall.ps1` also run on Windows PowerShell 5.1.
 
@@ -40,7 +40,7 @@ Many agents work on this repo at once.
 
 - Writing, changing or reviewing a test? It must pass the installed `test-audit` skill's gate and [Where a test belongs](CONTRIBUTING.md#where-a-test-belongs).
 - Before every push, run the [checks for the change](docs/development.md#checks-by-change). Prose-only changes need `pwsh -NoProfile scripts/check.ps1 -Lint`. Pages containing or removing C# examples, and generated reference pages, also need the targeted `DocsTests` command there. Other changes need `pwsh scripts/check.ps1`: build with 0 warnings, formatting, fast .NET tests and PowerShell tooling tests, with no window opened.
-- Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/check.ps1 -Tier Slow`, following [the live UI procedure](docs/development.md#live-ui-with-winland-running). `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from each template and runs it; the main stage leaves it out. The Package workflow runs it, not required, on PRs that change `templates/` or the release files.
+- Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/check.ps1 -Tier Slow`, following [the live UI procedure](docs/development.md#live-ui-with-winland-running). `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from the template and runs it; the main stage leaves it out. The Package workflow runs it, not required, on PRs that change `templates/` or the release files.
 - CI runs the remaining checks, so leave `package.ps1` and arm64 to it. The required `ci` job checks Markdown links offline and selects prose-only, compiled-documentation or full checks on PRs and pushes to `main`. The required `slow` job skips documentation-only changes. The ruleset also requires `installer`, `actionlint`, `pr-title` and `pr-rules`.
 - After changing Markdown or workflows, run `pwsh -NoProfile scripts/check.ps1 -Lint` immediately. If you touched `scripts/`, `tests/Scripts/` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
 - Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
@@ -55,7 +55,7 @@ Many agents work on this repo at once.
 
 Before running slow tests, a shell, or packaging that opens windows, follow [Live UI with Winland running](docs/development.md#live-ui-with-winland-running). Run one live session at a time, use an unused monitor, and restore it in `finally`. With one monitor, ask before changing the user's workspace.
 
-For a visual change, follow [See what you changed](docs/development.md#see-what-you-changed): inspect the running shell, view its screenshot, and check the tree.
+For a visual change, follow [See what you changed](docs/development.md#see-what-you-changed): run a shell built from the `winshell` template, or the probe shell, with the change, inspect it, view its screenshot, and check the tree.
 
 ## Agent skills
 

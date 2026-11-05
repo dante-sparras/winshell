@@ -36,8 +36,8 @@ body:
         Paths or globs, tests included. Name a shared file, such as a Directory.*.props, global.json or winshell.slnx, only if the task
         must change it; one pull request at a time changes those.
       placeholder: |
-        src/Winshell.DefaultShell/Taskbar/**
-        tests/Winshell.DefaultShell.Tests/Taskbar*Tests.cs
+        src/Winshell.Services/Tray/**
+        tests/Winshell.Services.Tests/*Tray*Tests.cs
     validations:
       required: true
 
@@ -51,11 +51,6 @@ body:
         - cli (src/Winshell)
         - services (src/Winshell.Services)
         - shell (src/Winshell.Shell)
-        - default-shell (src/Winshell.DefaultShell root files, DesktopChords)
-        - taskbar (default shell Taskbar, TaskPreview, Tray)
-        - start (default shell Start)
-        - quick-settings (default shell QuickSettings, NotificationCenter, OnScreenDisplay)
-        - winshell-settings (default shell Settings, preferences)
         - build (scripts/, .github/, packaging/, templates/, src/Winshell.Package, tests/TestSupport, shared build files)
         - docs (docs/ and root Markdown alone)
     validations:

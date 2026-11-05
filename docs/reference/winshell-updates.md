@@ -1,6 +1,6 @@
 # Winshell.Updates
 
-A portable Winshell checking GitHub Releases and installing a download. Reach it from `Shell.Current.Updates`. A configuration's own program does not use the updater `winshell.exe` passes in.
+Winshell's own updates. Reach them from `Shell.Current.Updates`. A configuration's own program does not update Winshell. Update it with `install.ps1`, winget or the Store.
 
 <!-- generated below: dotnet run scripts/generate-reference.cs -->
 
@@ -19,7 +19,7 @@ Where an update is, as UpdatesService.Status reports it.
 
 ## UpdatesService
 
-Winshell's own updates. A portable Winshell from GitHub Releases checks its releases, downloads a newer one and applies it when it next starts. A build from source, a packaged Winshell and a winget install never update themselves; Available is false for them.
+Winshell's own updates. A configuration's own program does not update Winshell, so Available is false there. A downloaded update that is already staged still goes in place the next time `winshell run` starts a shell.
 
 Has the members of [ObservableObject](winshell.md#observableobject).
 

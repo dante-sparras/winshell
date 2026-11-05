@@ -20,7 +20,6 @@
     <InternalsVisibleTo Include="Winshell" />
     <InternalsVisibleTo Include="Winshell.Services.Tests" />
     <InternalsVisibleTo Include="Winshell.Tests" />
-    <InternalsVisibleTo Include="Winshell.DefaultShell.Tests" />
     <InternalsVisibleTo Include="Winshell.Package.Tests" />
   </ItemGroup>
 </Project>

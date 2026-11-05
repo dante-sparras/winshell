@@ -24,15 +24,15 @@ internal static class DoctorSignIn
     {
         resolve ??= path => path;
         if (command is null)
-            return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on.");
+            return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. install.ps1 -AutoStart turns that on.");
         var exe = ExeOf(command);
         if (exe is null || !exists(exe))
-            return new("signIn", "Sign-in", CheckStatus.Fail, $"The sign-in entry starts {exe ?? command}, which is not there.", "Turn Run Winshell when I sign in off and on again in Winshell Settings > Startup.");
+            return new("signIn", "Sign-in", CheckStatus.Fail, $"The sign-in entry starts {exe ?? command}, which is not there.", "Install Winshell again with -AutoStart.");
         var started = resolve(Path.GetFullPath(exe));
         var here = resolve(Path.GetFullPath(thisExe));
         // Start launches winshellw.exe. Sign-in runs the winshell.exe beside it. They are one install.
         if (!string.Equals(started, here, StringComparison.OrdinalIgnoreCase) && !SameInstall(started, here))
-            return new("signIn", "Sign-in", CheckStatus.Warn, $"The sign-in entry starts another winshell.exe: {exe}.", "Turn Run Winshell when I sign in on in Winshell Settings > Startup, from the Winshell you use.");
+            return new("signIn", "Sign-in", CheckStatus.Warn, $"The sign-in entry starts another winshell.exe: {exe}.", "Install Winshell again with -AutoStart, so the entry starts the one you use.");
         if (turnedOff)
             return new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup.");
         return new("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in");
@@ -52,7 +52,7 @@ internal static class DoctorSignIn
                 new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup."),
             StartupTaskState.DisabledByPolicy =>
                 new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Windows policy turned it off.", "A Windows policy controls this. Startup apps in Settings cannot turn it on."),
-            _ => new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on."),
+            _ => new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Turn it on in Settings > Apps > Startup."),
         };
     }
 

@@ -91,7 +91,7 @@ internal sealed partial class ConfigurationProject
     /// <summary>
     /// The project to run: <paramref name="path"/>, a project or a folder holding one; or a named folder in
     /// <paramref name="root"/>; or else the one in <paramref name="root"/>, then its <c>default</c> folder, then its only
-    /// folder with a project. Null with no error when there is none, so Winshell runs its default shell.
+    /// folder with a project. Null with no error when there is none, so nothing runs.
     /// </summary>
     public static ConfigurationProject? Find(string? path, string? name, string root, out string? error)
     {

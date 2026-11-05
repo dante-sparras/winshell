@@ -2,7 +2,7 @@ namespace Winshell;
 
 internal static class ConfigurationSelection
 {
-    /// <summary>The project <c>run</c> would start, or null when the default shell runs. A reason means it cannot choose.</summary>
+    /// <summary>The project <c>run</c> would start, or null when there is none. A reason means it cannot choose.</summary>
     internal static ConfigurationProject? FindProject(CliOptions options, out string? error)
     {
         try

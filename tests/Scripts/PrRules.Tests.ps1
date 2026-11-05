@@ -6,7 +6,7 @@ BeforeAll {
 Describe 'Get-PrProblem' {
     It 'asks nothing of a build, ci, docs or refactor change' {
         foreach ($title in 'build: x', 'ci: x', 'docs: x', 'refactor!: x', 'chore(main): release 0.8.0', 'test: x', 'Revert "fix: x"') {
-            Get-PrProblem -Title $title -Body '' -Files @('src/Winshell/Program.cs', 'src/Winshell.DefaultShell/StartView.xaml') | Should -BeNullOrEmpty -Because $title
+            Get-PrProblem -Title $title -Body '' -Files @('src/Winshell/Program.cs', 'src/Winshell.Shell/Panel.xaml') | Should -BeNullOrEmpty -Because $title
         }
     }
 
@@ -66,7 +66,7 @@ Describe 'Get-PrProblem' {
     }
 
     It 'wants a picture of a change to XAML' {
-        Get-PrProblem -Title 'feat: x' -Body 'Words.' -Files @('src/Winshell.DefaultShell/StartView.xaml') | Should -Match 'screenshot'
+        Get-PrProblem -Title 'feat: x' -Body 'Words.' -Files @('src/Winshell.Shell/Panel.xaml') | Should -Match 'screenshot'
     }
 
     It 'takes a picture, or a reason there is none' {

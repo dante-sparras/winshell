@@ -1,6 +1,6 @@
 # Winshell.Diagnostics
 
-The checks `winshell doctor` prints and Winshell Settings' About page shows.
+The checks `winshell doctor` prints, which a shell can also run for itself.
 
 <!-- generated below: dotnet run scripts/generate-reference.cs -->
 
@@ -20,7 +20,7 @@ Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry 
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ForThisProcess(string configRoot)` | IReadOnlyList of [DoctorCheck](#doctorcheck), static | Every check, for the shell running in this process. A configuration project's program is checked in its own folder. The default shell is checked in configRoot. Nothing is built. |
+| `ForThisProcess(string configRoot)` | IReadOnlyList of [DoctorCheck](#doctorcheck), static | Every check, for the shell running in this process. A configuration project's program is checked in its own folder. Any other program is checked in configRoot. Nothing is built. |
 | `StatusName([CheckStatus](#checkstatus) status)` | string, static | The status as `winshell doctor` writes it: `pass`, `warn` or `fail`. |
 
 ## DoctorCheck

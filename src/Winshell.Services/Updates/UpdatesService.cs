@@ -1,9 +1,9 @@
 namespace Winshell.Updates;
 
 /// <summary>
-/// Winshell's own updates. A portable Winshell from GitHub Releases checks its releases, downloads a newer one and
-/// applies it when it next starts. A build from source, a packaged Winshell and a winget install never update
-/// themselves; <see cref="Available"/> is false for them.
+/// Winshell's own updates. A configuration's own program does not update Winshell, so <see cref="Available"/> is false
+/// there. A downloaded update that is already staged still goes in place the next time <c>winshell run</c> starts a
+/// shell.
 /// </summary>
 public sealed class UpdatesService : ObservableObject, IDisposable
 {

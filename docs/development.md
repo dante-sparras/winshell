@@ -35,9 +35,9 @@ cd winshell
 dotnet publish src\Winshell -c Release -o "$env:LOCALAPPDATA\winshell-dev"
 ```
 
-That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder the PowerShell installer uses. Add that folder to your `PATH` to run `winshell` from anywhere. Like a release, the build carries its own .NET runtime. Unlike one, it does not update itself.
+That puts `winshell.exe` in `%LOCALAPPDATA%\winshell-dev`, away from the folder the PowerShell installer uses. Add that folder to your `PATH` to run `winshell` from anywhere. Like a release, the build carries its own .NET runtime.
 
-To update a source build, close Winshell, pull the newer source and publish it over the same folder. To uninstall one, turn off **Run Winshell when I sign in** in Winshell Settings if you turned it on, close Winshell, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
+To update a source build, close Winshell, pull the newer source and publish it over the same folder. To uninstall one, close Winshell, delete the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` if your shell set it, and delete its folder. Your configuration is in `%APPDATA%\winshell`, and logs, state and crash reports are in `%LOCALAPPDATA%\winshell`; delete them too if you don't want to keep them.
 
 ## Agent skills
 
@@ -108,8 +108,8 @@ CI uses `scripts/ci-changes.ps1` to make the same selection for PRs and pushes t
 | `pwsh scripts/check.ps1 [-Tier Fast\|Slow\|All] [-Seed <seed>] [-NoBuild]` | Builds with warnings as errors, verifies formatting and runs fast .NET tests plus every PowerShell 7 suite in `tests/Scripts/`. Fast is the default and opens no windows. `-Tier Slow` runs only the tests that open windows, without formatting or Pester; `All` runs both tiers and Pester. `-Seed` replays the randomized .NET test order. `-NoBuild` uses an existing build. Missing Pester 5.6.1 fails with an installation command; it is never silently skipped or downloaded. The packed shell tests (`Category=Package`) are separate. |
 | `pwsh -NoProfile scripts/check.ps1 -Lint` | Runs the existing offline Markdown link/fragment check, actionlint and offline zizmor, stopping on the first failure. Run immediately after Markdown or workflow edits. Needs the [pinned lint tools](#local-lint-setup) on PATH; does not build, run tests, require Pester, or download tools. |
 | `pwsh scripts/ci-changes.ps1 -Files <json> [-MaxFiles <limit>] [-Draft]` | Classifies GitHub changed-file JSON from the checkout root and prints the flags used by `ci.yml`. PR file lists have a 3000-file limit; push comparisons have a 300-file limit. CI fetches this input; local contributors normally choose the checks above directly. |
-| `pwsh scripts/pack.ps1` | Packs the `Winshell` library a configuration references, and the `Winshell.Templates` package, into `artifacts/packages/`. The library carries `Winshell.Native`, `Winshell.Core`, `Winshell.Services` and `Winshell.Shell`, and depends on `Microsoft.WindowsAppSDK.WinUI` and `Microsoft.WindowsAppSDK.Foundation` at the versions in `Directory.Packages.props`; the templates reference only `Winshell` and get WindowsAppSDK through it. CsWin32 generates Native's declarations at build time and is not a package consumer dependency. The template package is `dotnet new winshell` (one panel) and `dotnet new winshell-default` (the default shell, generated from `src/Winshell.DefaultShell` and `templates/winshell-default/Program.cs` when this runs). Neither package is published. The Package workflow runs the `Category=Package` tests, which call this, on PRs that change the templates. `-Out` chooses the folder and `-Version` overrides the release from `.release-please-manifest.json`. |
-| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained, trimmed, ReadyToRun `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, starts the default shell from that zip and opens Winshell Settings, so with Winland running use the [live UI procedure](#live-ui-with-winland-running), and matches the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
+| `pwsh scripts/pack.ps1` | Packs the `Winshell` library a configuration references, and the `Winshell.Templates` package, into `artifacts/packages/`. The library carries `Winshell.Native`, `Winshell.Core`, `Winshell.Services` and `Winshell.Shell`, and depends on `Microsoft.WindowsAppSDK.WinUI` and `Microsoft.WindowsAppSDK.Foundation` at the versions in `Directory.Packages.props`; the template references only `Winshell` and gets WindowsAppSDK through it. CsWin32 generates Native's declarations at build time and is not a package consumer dependency. The template package is `dotnet new winshell`, one panel. Neither package is published. The Package workflow runs the `Category=Package` tests, which call this, on PRs that change the templates. `-Out` chooses the folder and `-Version` overrides the release from `.release-please-manifest.json`. |
+| `pwsh scripts/package.ps1` | Builds what a release ships into `artifacts/`, then checks it: a self-contained, trimmed, ReadyToRun `winshell-<version>-win-x64.zip` and `-win-arm64.zip`, `SHA256SUMS.txt`, and the winget manifests in `winget/<version>/` and `winget-manifests.zip`. The same commit packs to the same bytes. The check matches the checksums, the architecture of each zip's binaries, the version the x64 `winshell.exe` reports, that every `winshell doctor` check runs from that zip, and matches the manifests against the validator the pinned `wingetcreate` uses, downloaded from NuGet into `artifacts/tools/`. It also packs `winshell-<version>.msixbundle` for the Microsoft Store and checks each architecture's identity, version and executables; that needs `makeappx.exe` from the Windows SDK. `-Publish`, `-Pack` and `-Verify` run one step. `-Version` overrides the release from `.release-please-manifest.json`, `-Tag v1.2.3` stops unless the checkout is that release, `-Runtime` picks `win-x64`, `win-arm64` or both, `-Out` the folder. `-IdentityName`, `-Publisher` and `-PublisherDisplayName` give the Store package the identity Partner Center reserved; without them it has a test identity. |
 | `pwsh scripts/install.ps1` | Installs the portable build for the current user from a GitHub release into `%LOCALAPPDATA%\Programs\winshell\bin`, adds that folder to the user PATH, and creates a Start menu shortcut. `-Version x.y.z` picks a release; `-AutoStart` registers sign-in. Under `irm \| iex` those are `WINSHELL_VERSION` and `WINSHELL_AUTOSTART`. A leftover `bin.old` folder is removed on a later install once nothing from that install is running. It also deletes a staged update in `%LOCALAPPDATA%\winshell\updates`, so that copy cannot replace this install on the next start. If a Microsoft Store copy is also installed, it says so and still finishes, because that copy's WindowsApps alias usually comes first on PATH. `irm \| iex`, and running the file with the call operator, also add that folder to the current window's PATH and tell you to run `winshell`. This command starts a process that exits, so it tells you to open a new terminal. The Package workflow uploads this script next to the zip. See the [README](https://github.com/enpaze/winshell/blob/main/README.md#install-with-powershell). |
 | `pwsh scripts/uninstall.ps1` | Removes that install folder, that PATH entry, that shortcut, that sign-in entry, and a staged update in `%LOCALAPPDATA%\winshell\updates`. It leaves `%APPDATA%\winshell`. Logs and state stay in `%LOCALAPPDATA%\winshell`. Under `irm \| iex` it also removes that folder from the current window's PATH and leaves every other entry. The Package workflow uploads this script next to `install.ps1`. |
 | `dotnet run scripts/render-logo.cs` | Renders `packaging/logo.svg` into the package's PNGs (the manifest sizes, their scale-125, scale-150, and scale-200 variants, and the unplated target sizes), the Store listing's PNG, and `packaging/winshell.ico`. Commit them after changing the logo. |
@@ -121,7 +121,7 @@ CI uses `scripts/ci-changes.ps1` to make the same selection for PRs and pushes t
 | `pwsh scripts/install-skills.ps1` | Installs every skill in `skills-lock.json` for Codex and Claude Code, each at its pinned ref, as copies. See [Agent skills](#agent-skills). |
 | `npx -y skills@1.7.4 update -p` | Update the unpinned agent skills. Pinned ones (with a `ref` in `skills-lock.json`) change only when re-added with a newer `#<sha>`. |
 
-Before every push, run the [checks for the change](#checks-by-change), then its focused checks. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and templates, builds each shell and runs it; it is slow and separate. The Package workflow runs it on PRs that change `templates/`, `src/Winshell.Package/`, `Directory.Packages.props` or the release files, excluding Markdown-only changes; it is not required. The required `ci` job always checks local Markdown links and selects the relevant tests. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title` and `pr-rules`. Tests of sliding and fading surfaces need Windows "Animation effects" on, which CI enables.
+Before every push, run the [checks for the change](#checks-by-change), then its focused checks. `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs the library and the template, builds a shell from it and runs it; it is slow and separate. The Package workflow runs it on PRs that change `templates/`, `src/Winshell.Package/`, `Directory.Packages.props` or the release files, excluding Markdown-only changes; it is not required. The required `ci` job always checks local Markdown links and selects the relevant tests. The ruleset also requires `slow`, `installer`, `actionlint`, `pr-title` and `pr-rules`.
 
 `check.ps1` requires Pester 5.6.1 and runs the PowerShell 7 suites. CI installs hash-verified modules through `.github/actions/powershell`; the installer job additionally runs the combined installer/uninstaller tests on Windows PowerShell 5.1. Workflow and link checks remain separate:
 
@@ -161,7 +161,7 @@ Run `pwsh -NoProfile scripts/check.ps1 -Lint` from the repo root. T3 Code also e
 dotnet test tests/Winshell.Core.Tests --filter FullyQualifiedName~DirectoryWatchTests
 ```
 
-`--filter` takes a class or a test name. `Winshell.Architecture.Tests`, `Winshell.Core.Tests`, `Winshell.Services.Tests` and `Winshell.DefaultShell.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Shell.Tests` and `Winshell.Tests` put windows and shells on your desktop.
+`--filter` takes a class or a test name. `Winshell.Architecture.Tests`, `Winshell.Core.Tests` and `Winshell.Services.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Shell.Tests` and `Winshell.Tests` put windows and shells on your desktop.
 
 ## Live UI with Winland running
 
@@ -191,25 +191,26 @@ winland reload
 
 ## See what you changed
 
-`winshell inspect` is how to verify a visual change. It reads the running shell from inside, so it needs no mouse and no keyboard, and it does not move the user's pointer or focus.
+`winshell inspect` is how to verify a visual change. It reads a running shell from inside, so it needs no mouse and no keyboard, and it does not move the user's pointer or focus. Winshell has no shell of its own, so run one that shows the change: a project made with `dotnet new winshell`, as the [configuration guide](configuration.md#create-one) shows, with the change in it. A test can start the probe shell in `tests/Winshell.Tests/ProbeShell.cs` instead. Run it under "Live UI with Winland running", with private `WINSHELL_CONFIG_DIR` and `WINSHELL_LOCAL_DIR`, and pass `--pid`:
 
 ```powershell
-winshell inspect tree                                # every open window's elements, sizes and values, as JSON
-winshell inspect screenshot out.png TaskbarView      # a window as a PNG, which you can then read
-winshell inspect click StartButton TaskbarView       # activate an element in a window through its automation peer
+winshell run -d -p .\MyShell                                  # build and start the shell
+winshell inspect --pid <pid> tree                             # every open window's elements, sizes and values, as JSON
+winshell inspect --pid <pid> screenshot out.png PanelView     # a window as a PNG, which you can then read
+winshell inspect --pid <pid> click <name> PanelView           # activate a named element in a window through its automation peer
 ```
 
-Look at the screenshot, and check values in the tree rather than trusting that the code ran. The tree marks the element keyboard focus is on with `"focused": true`. A name finds only elements that are not collapsed, as Narrator does, so a control kept collapsed beside a visible twin does not make the name ambiguous. Open what a test or run needs under "Live UI with Winland running". For a shell of your own, run it with private `WINSHELL_CONFIG_DIR` and `WINSHELL_LOCAL_DIR`, and pass `--pid`.
+`winshell list` shows the process id. Look at the screenshot, and check values in the tree rather than trusting that the code ran. The tree marks the element keyboard focus is on with `"focused": true`. A name finds only elements that are not collapsed, as Narrator does, so a control kept collapsed beside a visible twin does not make the name ambiguous.
 
 `winshell inspect hover` shows a control's hover look only: a `PointerEntered` handler needs a real pointer, or a method of its own that a test can call.
 
 ## Run the shell from source
 
 ```powershell
-dotnet run --project src/Winshell -- run
+dotnet run --project src/Winshell -- run -p ..\MyShell
 ```
 
-That runs the default shell in a child process and supervises it. `-p` is a configuration project: a folder with a `.csproj`, or the project file. `--no-build` starts the last build and does not compile. From another terminal:
+That builds the configuration project and runs it in a child process that it supervises. `-p` names the project: a folder with a `.csproj`, or the project file. `--no-build` starts the last build and does not compile. From another terminal:
 
 ```powershell
 dotnet run --project src/Winshell -- list
@@ -224,9 +225,7 @@ A running shell reads these. None is needed to build or test.
 | Variable | What it does |
 | --- | --- |
 | `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. |
-| `WINSHELL_LOCAL_DIR` | Folder used instead of `%LOCALAPPDATA%\winshell` for cache, state, data, the default shell, instance logs, crash reports and downloaded updates. A child process inherits it. |
-
-`winshell run` sets `WINSHELL_SUPERVISED`, and `WINSHELL_UPDATE_FAILURE` when an update did not install, on the process that runs the default shell for it. That process clears both. Never set them.
+| `WINSHELL_LOCAL_DIR` | Folder used instead of `%LOCALAPPDATA%\winshell` for cache, state, data, instance logs, crash reports and downloaded updates. A child process inherits it. |
 
 ### Installer
 
@@ -250,10 +249,7 @@ A running shell reads these. None is needed to build or test.
 | Instance logs | `%LOCALAPPDATA%\winshell\run\<id>\log.txt` |
 | Crash reports | `%LOCALAPPDATA%\winshell\crashes`, one `crash-<UTC time>Z-<process>-<where>.txt` each. Nothing is sent anywhere. A window whose native window cannot be made or placed, or throws while drawing or handling input, writes one, closes, and opens again after 1, 2, 4, 8 and 16 seconds; a sixth failure within five minutes leaves it closed until the next reload. A frame the graphics device cannot draw is skipped and reported once per window. Work on the event loop that throws, or a background task that fails, writes one per exception and stack, and a crash that ends the process writes one before the log closes. A report holds the last 40 log lines. It takes out the passwords, tokens, keys and URL queries Winshell recognizes. The newest 50 reports are kept by their UTC time; only files named and headed as reports are deleted, and nothing is deleted when the folder is a link or junction. |
 | Downloaded updates | `%LOCALAPPDATA%\winshell\updates\<version>`, until the next start installs them. `install.ps1` and `uninstall.ps1` delete this folder. See [Winshell updates](reference/winshell-updates.md) |
-| Winshell Settings choices | `preferences.toml` in the user configurations folder; see [the default shell](reference/default-shell.md#winshell-settings) |
-| Start pins | `launcher.toml` in the user configurations folder |
-| Quick settings tiles | `quick-settings.toml` in the default shell's state folder |
-| Run at sign-in | An unpackaged Winshell writes the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only when a shell sets `Startup.runAtSignIn`. It runs this `winshell.exe` under `conhost.exe --headless`, so no console window opens. A failure before the shell starts shows a dialog. The entry uses the arguments the shell was started with and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. `winshell.exe` and `winshellw.exe` in the same folder are one install: an entry for either reads as this Winshell. An entry that starts a Winshell in another folder, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. A packaged Winshell does not write that value. It enables the package's `windows.startupTask` (task id `Winshell`, declared off) which starts `winshellw.exe --no-duplicate`. Windows owns that launch, so a Store update does not leave a path, and `registeredElsewhere` stays false. |
+| Run at sign-in | An unpackaged Winshell writes the `Winshell` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` when `install.ps1 -AutoStart` runs, which starts `winshell.exe`, or when a shell sets `Startup.runAtSignIn`, which starts that shell's program. It runs under `conhost.exe --headless`, so no console window opens. A failure before the shell starts shows a dialog. The entry uses the arguments the shell was started with, `--no-build` and `--no-duplicate`. A `--path` is made absolute. Environment variables are not copied: `WINSHELL_CONFIG_DIR` applies at sign-in only when it is set for the user. Windows' Startup apps page can turn the entry off; Winshell reads that and never changes it. `winshell.exe` and `winshellw.exe` in the same folder are one install: an entry for either reads as this Winshell. An entry that starts a Winshell in another folder, or other arguments, reads as `Startup.registeredElsewhere`, and setting `runAtSignIn` rewrites it for this one. A packaged Winshell does not write that value. It enables the package's `windows.startupTask` (task id `Winshell`, declared off) which starts `winshellw.exe --no-build --no-duplicate`. Windows owns that launch, so a Store update does not leave a path, and `registeredElsewhere` stays false. |
 
 ## Releasing
 
@@ -286,7 +282,7 @@ The Store package is not published. Publishing waits on Partner Center setup: th
 
 The Package workflow also builds `winshell-<version>.msixbundle` (x64 and arm64) from `packaging/msix/AppxManifest.xml` and keeps it as the run's `store-package` artifact. It is not attached to the release: it is unsigned, and the Store signs it. Each run also test-signs the x64 package with a certificate only that runner trusts, installs it there and runs the `winshell` alias.
 
-- The Store build reads and writes the same `%APPDATA%\winshell` config folder as every other build. The manifest turns off file and registry write virtualization (`unvirtualizedResources`), so those writes are the real ones. Sign-in is the package's startup task, declared off, not the user's `Run` key: Windows starts `winshellw.exe --no-duplicate`, which keeps working after a Store update. The package declares `userNotificationListener`, `wiFiControl`, `bluetooth`, `location` and `radios`. Start runs `winshellw.exe --no-duplicate`, so a second click starts no second shell; `winshellw.exe` is a copy of `winshell.exe` that opens no console, made when the build is published, and the portable zips have it too. `winshell` in a terminal is the command line.
+- The Store build reads and writes the same `%APPDATA%\winshell` config folder as every other build. The manifest turns off file and registry write virtualization (`unvirtualizedResources`), so those writes are the real ones. Sign-in is the package's startup task, declared off, not the user's `Run` key: Windows starts `winshellw.exe --no-build --no-duplicate`, which keeps working after a Store update. The package declares `userNotificationListener`, `wiFiControl`, `bluetooth`, `location` and `radios`. Start runs `winshellw.exe --no-duplicate`, so a second click starts no second shell; `winshellw.exe` is a copy of `winshell.exe` that opens no console, made when the build is published, and the portable zips have it too. `winshell` in a terminal is the command line.
 - The Store takes no 0 as the first part of a package version and installs the highest, so Winshell x.y.z is package version (x+1).y.z.0.
 - The repository variables `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER` and `MSIX_PUBLISHER_DISPLAY_NAME` are the identity Partner Center shows under **Product identity**. Without them, the package is `Winshell.Test` by `CN=Winshell Test`, which the Store refuses.
 - To submit a release:
@@ -349,24 +345,22 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 │   ├── signpath/                    # The artifact configuration SignPath signs releases with
 │   └── store/                       # The Store listing text and its app tile
 ├── scripts/                         # Check, test, pack, package, install and release scripts; docs/development.md lists them
-├── templates/                       # dotnet new winshell and winshell-default; the default shell is generated at pack time
+├── templates/                       # dotnet new winshell
 ├── src/
 │   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
-│   ├── Winshell/                    # winshell.exe: the CLI, and the process that runs the default shell
+│   ├── Winshell/                    # winshell.exe: the CLI, which builds and supervises a configuration
 │   ├── Winshell.Native/             # Shared Win32/COM declarations, process/hook support and session locking; migration in progress
 │   ├── Winshell.Core/               # The event loop, the log, ObservableObject, TOML files, crash reports, and the file helpers they use
 │   ├── Winshell.Services/           # Windows services, instances, and the control pipe
 │   ├── Winshell.Shell/              # Shell.Run and WinUI windows
-│   ├── Winshell.DefaultShell/       # The default shell, in XAML and C#
 │   └── Winshell.Package/            # Packs Native, Core, Services and Shell as the single Winshell package
 ├── tests/
 │   ├── Winshell.Architecture.Tests/ # The layer and feature backend boundaries, and no hand-written unsafe code in WinUI projects
 │   ├── Winshell.Core.Tests/         # The shared infrastructure: the event loop, the log, TOML files, crash reports and file helpers
-│   ├── Winshell.DefaultShell.Tests/ # The default shell's logic, with no window
 │   ├── Winshell.Services.Tests/     # The services, with no window
 │   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
-│   ├── Winshell.Package.Tests/      # Packs the templates and runs each shell; Category=Package, left out of the main run
+│   ├── Winshell.Package.Tests/      # Packs the template and runs its shell; Category=Package, left out of the main run
 │   ├── Scripts/                     # PowerShell tooling tests and their fixtures
 │   ├── TestSupport/                 # Source files every test project links instead of copying
 │   └── Directory.Build.props        # What every test project shares

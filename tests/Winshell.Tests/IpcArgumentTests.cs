@@ -66,22 +66,4 @@ public class IpcArgumentTests
         Assert.Equal("ipc", CliParser.FirstCommand(["ipc", "--", "call"]));
         Assert.Equal("kill", CliParser.FirstCommand(["-c", "work", "kill"]));
     }
-
-    [Fact]
-    public void After_stays_an_argument_of_a_call_and_still_leaves_a_restart()
-    {
-        var call = new[] { "ipc", "call", "notes", "add", "--after", "5" };
-        var kept = CliParser.WithoutAfter(call, out var callAfter);
-        Assert.Null(callAfter);
-        Assert.Equal(call, kept);
-
-        var restart = CliParser.WithoutAfter(["-c", "bar", "--after", "4242", "-n"], out var restartAfter);
-        Assert.Equal(4242, restartAfter);
-        Assert.Equal(["-c", "bar", "-n"], restart);
-
-        var dashed = new[] { "log", "--", "--after", "5" };
-        var dashedKept = CliParser.WithoutAfter(dashed, out var dashedAfter);
-        Assert.Null(dashedAfter);
-        Assert.Equal(dashed, dashedKept);
-    }
 }

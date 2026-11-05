@@ -112,7 +112,7 @@ jobs:
           retention-days: 1
 
   templates:
-    # Packs the library and the templates, builds a shell from each and runs it. A PR only: a release builds the same
+    # Packs the library and the template, builds a shell from it and runs it. A PR only: a release builds the same
     # packages above, and these tests open windows. A PR that bumps a pin in Directory.Packages.props shows here if a new
     # project can no longer restore.
     if: github.event_name == 'pull_request'

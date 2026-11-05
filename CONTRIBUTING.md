@@ -11,10 +11,9 @@ Every new or changed test passes the authoring gate of the `test-audit` skill, w
 | `Winshell.Architecture.Tests` | The boundaries of [the architecture](docs/architecture.md#architecture-proof): layers, feature backends, and no hand-written unsafe code in WinUI projects |
 | `Winshell.Core.Tests` | The shared infrastructure: the event loop, the log, TOML files, crash reports and file helpers |
 | `Winshell.Services.Tests` | A service against a fake of its Windows backend, on a real `EventQueue` |
-| `Winshell.DefaultShell.Tests` | The default shell's models, with no window |
 | `Winshell.Shell.Tests` | A real shell with real windows |
 | `Winshell.Tests` | `winshell.exe` and shell programs as separate processes |
-| `Winshell.Package.Tests` | The packed library and templates, `Category=Package` |
+| `Winshell.Package.Tests` | The packed library and template, `Category=Package` |
 
 A regression test goes red before the fix for the intended reason and green after it; say so in the PR, or say why you couldn't show it. One bug gets one test at its owner, however many layers it crossed. A test needs no `internal` member, constructor overload, flag or hook that production code doesn't use.
 
@@ -30,7 +29,7 @@ A test waits on a real signal: an event, a task's completion, or a fake clock.
 - **Time comes through a `TimeProvider`.** `DateTime.Now`, `Stopwatch` and their relatives don't build in `src/`. A test passes a `FakeTimeProvider`, given a UTC time. `TimeProvider.System` is for what only real time can drive: a file's write time, a Windows object, the CLI's own process.
 - **Use the real desktop only in a `Category=Slow` test.** A fast test depends on no window, running app, device or setting of the PC it runs on. `Wait.Until` is for what really gives no signal: another process, or a window.
 - **Don't depend on a free thread pool worker.** A busy pool can hold back queued work for seconds, so anything that has to happen on time needs its own thread.
-- **Test the default shell's logic without a window.** Its view models are plain C#, tested in `Winshell.DefaultShell.Tests`. A test class that opens a WinUI window or starts `winshell.exe` carries `[Trait("Category", "Slow")]`.
+- **Mark what opens a window.** A test class that opens a WinUI window or starts `winshell.exe` carries `[Trait("Category", "Slow")]`.
 
 Nothing retries a test and nothing sets one aside. A test that fails sometimes is a bug in the test or in Winshell, so find the cause and fix it, on `main` as much as in a PR. Tests are built so that they can't flake:
 

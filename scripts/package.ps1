@@ -7,15 +7,15 @@
 #   pwsh scripts/package.ps1 -Verify          only checks what artifacts/ already has
 #
 # Publishing is a self-contained, trimmed ReadyToRun build of src/Winshell for each runtime, so no .NET install is needed
-# and sign-in does less JIT work. It names -Repository as where the build is released, so it updates itself from
-# that repository's GitHub Releases.
+# and sign-in does less JIT work. It names -Repository as where the build is released, so it puts an update from that
+# repository's GitHub Releases that is staged already in place.
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
 # and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
 # from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
 # makeappx.exe from the Windows SDK. The same files pack to the same bytes: entries are in ordinal path order and dated
 # the day of the commit, which is also the manifests' ReleaseDate.
 # Verifying checks the checksums, that each zip's binaries are for its architecture, that the x64 winshell.exe runs,
-# reports the version, starts the default shell and opens Winshell Settings, and that the manifests pass the validator
+# reports the version, runs every winshell doctor check, and that the manifests pass the validator
 # wingetcreate runs before it submits them.
 param(
     [switch] $Publish,
@@ -99,38 +99,23 @@ function New-Zip([string] $dir, [string] $zip) {
     } finally { $stream.Dispose() }
 }
 
-# Starts the default shell from an unpacked zip, on folders of its own, and opens Winshell Settings. A file a release
-# left out or cut fails only here, because tests run the build and not the zip.
-function Test-DefaultShell([string] $exe, [string] $work) {
+# Runs winshell doctor from an unpacked zip, on folders of its own. A library a check uses that the release left out or
+# cut makes that check say it could not check, and fails only here, because tests run the build and not the zip.
+function Test-Doctor([string] $exe, [string] $work) {
     $config = Join-Path $work 'config'
     $local = Join-Path $work 'local'
     New-Item -ItemType Directory -Force -Path $config, $local | Out-Null
     $env:WINSHELL_CONFIG_DIR = $config
     $env:WINSHELL_LOCAL_DIR = $local
-    $info = [Diagnostics.ProcessStartInfo]::new($exe)
-    $info.UseShellExecute = $false
-    $info.CreateNoWindow = $true
-    $info.ArgumentList.Add('run')
-    $shell = [Diagnostics.Process]::Start($info)
     try {
-        $deadline = [DateTime]::UtcNow.AddSeconds(60)
-        do {
-            if ($shell.HasExited) { throw "The default shell exited with $($shell.ExitCode) as it started." }
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'The default shell did not start in 60 seconds.' }
-            Start-Sleep -Milliseconds 250
-            $targets = @(& $exe ipc show 2>$null)
-        } until ($targets -match 'target settings')
-        & $exe ipc call settings open about
-        if ($LASTEXITCODE -ne 0) { throw "Winshell Settings did not open: winshell ipc exited with $LASTEXITCODE." }
-        Start-Sleep -Seconds 2
-        if ($shell.HasExited) { throw "The default shell exited with $($shell.ExitCode) after Winshell Settings opened." }
-        $crashes = @(Get-ChildItem -LiteralPath (Join-Path $local 'crashes') -File -ErrorAction SilentlyContinue)
-        if ($crashes.Count -gt 0) { throw "The default shell wrote a crash report: $(Get-Content -LiteralPath $crashes[0].FullName -Raw)" }
+        $report = & $exe doctor --json
+        # 1 is a check that failed on this PC, which the release cannot help.
+        if ($LASTEXITCODE -notin 0, 1) { throw "winshell doctor exited with $LASTEXITCODE." }
+        $checks = @(($report -join "`n" | ConvertFrom-Json).checks)
+        if ($checks.Count -eq 0) { throw 'winshell doctor printed no checks.' }
+        $broken = @($checks | Where-Object { $_.message -like 'Could not check*' })
+        if ($broken.Count -gt 0) { throw "winshell doctor could not run its $($broken[0].id) check: $($broken[0].message)" }
     } finally {
-        if (-not $shell.HasExited) {
-            & $exe kill | Out-Null
-            if (-not $shell.WaitForExit(10000)) { $shell.Kill() }
-        }
         Remove-Item -LiteralPath Env:WINSHELL_CONFIG_DIR, Env:WINSHELL_LOCAL_DIR
     }
 }
@@ -165,8 +150,8 @@ if ($Publish) {
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
         # Debugger helpers and symbols are not part of the install, and neither is what nothing in Winshell loads: WebView2,
         # the other garbage collectors, and HTTP/3. The .mui files are: without them WinUI ends the process, with no crash
-        # report, when a control asks for one of its strings. So is Microsoft.UI.Xaml.Phone.dll, whatever its name says:
-        # Winshell Settings does not open without it.
+        # report, when a control asks for one of its strings. So is Microsoft.UI.Xaml.Phone.dll, whatever its name says,
+        # which WinUI's controls load.
         Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object {
             $_.Extension -eq '.pdb' -or $_.Name -eq 'createdump.exe' -or $_.Name -eq 'mscordbi.dll' -or
             $_.Name -like 'mscordaccore*' -or $_.Name -like 'Microsoft.DiaSymReader.Native.*.dll' -or
@@ -265,10 +250,10 @@ PackageUrl: https://github.com/$Repository
 License: MIT
 LicenseUrl: https://github.com/$Repository/blob/main/LICENSE
 Copyright: Copyright (c) Dante Sparrås
-ShortDescription: A desktop shell for Windows 11.
+ShortDescription: A toolkit for writing a desktop shell for Windows 11.
 Description: |-
-  Winshell runs a Windows 11 taskbar, Start, quick settings, a notification center and on-screen displays out of the box.
-  Preferences change most of it, and a .NET project can replace it with a shell of your own.
+  Winshell is a toolkit for writing your own desktop shell for Windows 11 as a .NET project. Installing it adds no
+  taskbar: winshell builds and runs the shell you write.
 Moniker: winshell
 Tags:
   - desktop
@@ -316,7 +301,7 @@ if ($Verify) {
     }
     $machines = @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }
     # What SignPath signs: the binaries built from this repository. The runtime and libraries keep their publishers' signatures.
-    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Native.dll', 'Winshell.Core.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll', 'Winshell.DefaultShell.dll'
+    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Native.dll', 'Winshell.Core.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll'
     $verifyRoot = Join-Path $Out 'verify'
     foreach ($rid in $Runtime) {
         $name = "winshell-$Version-$rid.zip"
@@ -351,8 +336,8 @@ if ($Verify) {
                 throw "The x64 winshell.exe reported '$reported', not version $Version"
             }
             Write-Output "$name runs: $reported"
-            Test-DefaultShell (Join-Path $dir 'winshell.exe') (Join-Path $verifyRoot 'shell')
-            Write-Output "$name starts the default shell and opens Winshell Settings"
+            Test-Doctor (Join-Path $dir 'winshell.exe') (Join-Path $verifyRoot 'doctor')
+            Write-Output "$name runs every winshell doctor check"
         }
         # The product name and version SignPath's artifact configuration requires of each binary it signs.
         foreach ($binary in $ownBinaries) {

@@ -12,7 +12,6 @@ public class OsMinimumTests
         var root = Repo.Root;
         AssertPlatform(Path.Combine(root, "src", "Winshell", "Winshell.csproj"));
         AssertPlatform(Path.Combine(root, "src", "Winshell.Shell", "Winshell.Shell.csproj"));
-        AssertPlatform(Path.Combine(root, "src", "Winshell.DefaultShell", "Winshell.DefaultShell.csproj"));
         AssertPlatform(Path.Combine(root, "src", "Winshell.Services", "Winshell.Services.csproj"));
         AssertPlatform(Path.Combine(root, "tests", "Winshell.Tests", "Winshell.Tests.csproj"));
 

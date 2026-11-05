@@ -48,6 +48,32 @@ public class CliRunCommandTests
         Assert.Contains("No .csproj", error, StringComparison.Ordinal);
     }
 
+    /// <summary>The sign-in entry passes <c>--no-build --no-duplicate</c>, and the Start tile <c>--no-duplicate</c>.</summary>
+    [Theory]
+    [InlineData("run")]
+    [InlineData("--no-build --no-duplicate")]
+    [InlineData("--no-duplicate")]
+    public void Run_with_no_configuration_exits_0_says_nothing_and_starts_nothing(string args)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(root, "config");
+        var local = Path.Combine(root, "local");
+        Directory.CreateDirectory(config);
+        Directory.CreateDirectory(local);
+        try
+        {
+            var (code, output, error) = WinshellCli.Run(args.Split(' '), ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
+
+            Assert.Equal((0, "", ""), (code, output, error));
+            var listed = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
+            Assert.Equal((0, "[]"), (listed.Code, listed.Output.Trim()));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void No_duplicate_exits_quietly_before_building_when_the_project_already_runs()
     {

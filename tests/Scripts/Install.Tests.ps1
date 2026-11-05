@@ -130,7 +130,7 @@ Describe 'install.ps1 and uninstall.ps1' {
         $link = (New-Object -ComObject WScript.Shell).CreateShortcut($p.Shortcut)
         $link.TargetPath | Should -Be (Join-Path $p.Bin 'winshellw.exe')
         $link.Arguments | Should -Be '--no-duplicate'
-        Get-Text $p.SignIn | Should -Be "$env:SystemRoot\System32\conhost.exe --headless `"$($p.Bin)\winshell.exe`" --no-duplicate"
+        Get-Text $p.SignIn | Should -Be "$env:SystemRoot\System32\conhost.exe --headless `"$($p.Bin)\winshell.exe`" --no-build --no-duplicate"
         $result.Output | Should -Match 'Winshell 0\.6\.0 is installed\. Open a new terminal and run winshell\.'
     }
 
