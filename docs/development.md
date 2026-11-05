@@ -85,6 +85,8 @@ Install the extension once with `gh extension install github/gh-stack`.
 
 For automation without the interactive editor, create each PR with `gh pr create --base <parent-branch> --head <branch> --title <title> --body-file <file>`, using `main` for the bottom layer. Then link the PRs in bottom-to-top order with `gh stack link <bottom-pr> <next-pr> ...`. To extend an existing stack, use `gh stack link <stack-number> <new-pr>`.
 
+After the merge, confirm each layer's issue is closed with `gh issue view <issue> --json state --jq .state`. GitHub sometimes leaves one open; `close-fixed-issues` closes it a minute or so later. If it stays `OPEN`, close it with `gh issue close <issue> --comment "Fixed by #<pr>."`.
+
 ## Checks by change
 
 Choose checks from the complete change against the PR's base, including renamed and deleted files. Run them again after rebasing.
@@ -129,6 +131,7 @@ Before every push, run the [checks for the change](#checks-by-change), then its 
 | --- | --- | --- |
 | `installer` | PRs and pushes to `main` that change `scripts/`, `tests/Scripts/` or workflows/actions. | Windows PowerShell 5.1 runs `tests/Scripts/Install.Tests.ps1` with Pester 5.6.1 against temporary profiles and releases served on loopback. PowerShell 7 tooling suites run once in `ci`. |
 | `slow` | Non-draft PRs and pushes to `main` that change more than docs or Markdown, in `ci.yml` | `pwsh scripts/check.ps1 -Tier Slow`, under [Live UI with Winland running](#live-ui-with-winland-running). |
+| `close-fixed-issues` | Every merged pull request, in `close-fixed-issues.yml`. Not required. | Nothing to run. Once the merge commit is on `main`, it closes each issue the pull request fixes that GitHub left open, with a comment naming the pull request. |
 | `pr-size` | Every pull request, from `pr-size.yml` on the base branch. Not required. | Nothing to run. It labels the pull request `size:XS` to `size:XL`, as "PR description" in `CONTRIBUTING.md` says. |
 | `trim-caches` | Every push to `main`, after `ci`, in `ci.yml` | Nothing to run. It deletes all but the two newest CodeQL databases of each language from the Actions cache, which would otherwise pass the 10 GB GitHub keeps. |
 | `links` | Pushes to `main` that change docs or Markdown, and every Monday, in `links.yml` | lychee 0.24.2 over `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `GLOSSARY.md` and `.github/*.md`, excluding `docs/agents`. |
