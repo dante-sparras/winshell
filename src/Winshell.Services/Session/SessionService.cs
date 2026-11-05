@@ -1,5 +1,3 @@
-using Winshell.Native;
-
 namespace Winshell.Session;
 
 /// <summary>
@@ -9,12 +7,12 @@ namespace Winshell.Session;
 public sealed class SessionService
 {
     private readonly Log _log;
-    private readonly IWorkstationLock _locker;
+    private readonly ISessionBackend _backend;
 
-    internal SessionService(Log log, IWorkstationLock? locker = null)
+    internal SessionService(Log log, ISessionBackend? backend = null)
     {
         _log = log;
-        _locker = locker ?? WindowsWorkstationLock.Instance;
+        _backend = backend ?? new SessionBackend();
     }
 
     /// <summary>
@@ -23,22 +21,9 @@ public sealed class SessionService
     /// </summary>
     public bool Lock()
     {
-        if (_locker.Lock())
+        if (_backend.Lock())
             return true;
         _log.Warn("session", "Windows did not lock the session.");
         return false;
     }
-}
-
-/// <summary>Locks the Windows session. Tests use a fake, so they never lock the PC.</summary>
-internal interface IWorkstationLock
-{
-    bool Lock();
-}
-
-internal sealed class WindowsWorkstationLock : IWorkstationLock
-{
-    public static readonly WindowsWorkstationLock Instance = new();
-
-    public bool Lock() => Workstation.Lock();
 }
