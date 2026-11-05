@@ -55,11 +55,6 @@ function Publish-WinshellRelease {
             throw "$($file.Name) is missing or has a different digest. $Tag remains a draft."
         }
     }
-    if ($env:SIGNPATH_ORGANIZATION_ID -and $uploaded.body -notmatch 'Code signing policy') {
-        $notes = "$($uploaded.body)`n`n[Code signing policy](https://github.com/$Repository/blob/main/docs/code-signing-policy.md)"
-        gh release edit $Tag --repo $Repository --notes $notes
-        if ($LASTEXITCODE -ne 0) { throw "Could not update the draft's signing notes. $Tag remains a draft." }
-    }
     gh release edit $Tag --repo $Repository --draft=false
     if ($LASTEXITCODE -ne 0) { throw "Could not publish $Tag. Its uploaded files remain on the draft." }
 }

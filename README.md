@@ -14,7 +14,7 @@ Winshell runs on Windows 11. The portable zip and the PowerShell command install
 
 A release's [GitHub release page](https://github.com/enpaze/winshell/releases) carries a self-contained build, which needs no .NET install: `winshell-<version>-win-x64.zip` and `winshell-<version>-win-arm64.zip`, with `SHA256SUMS.txt` for their hashes. The zip is about 48 MB. Unzip one into a folder of its own and run `winshellw.exe`, which starts Winshell with no console window, or `.\winshell run` from a terminal in that folder. That build updates itself from GitHub Releases, and the default shell updates with it. A build from source does not, and neither does a shell you built yourself.
 
-Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned. See the [code signing policy](docs/code-signing-policy.md).
+Releases will be signed through SignPath Foundation once its project for Winshell is approved. Until then a published zip is unsigned.
 
 ### Install with PowerShell
 

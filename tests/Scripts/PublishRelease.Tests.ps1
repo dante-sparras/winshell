@@ -1,15 +1,9 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '../../scripts/publish-release.ps1')
-    $script:OriginalSigningOrganization = $env:SIGNPATH_ORGANIZATION_ID
-}
-
-AfterAll {
-    $env:SIGNPATH_ORGANIZATION_ID = $script:OriginalSigningOrganization
 }
 
 Describe 'Publishing a complete draft release' {
     BeforeEach {
-        $env:SIGNPATH_ORGANIZATION_ID = $null
         $script:Directory = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $script:Directory | Out-Null
         $script:Names = @('winshell-0.6.1-win-x64.zip', 'winshell-0.6.1-win-arm64.zip', 'SHA256SUMS.txt', 'winget-manifests.zip', 'install.ps1', 'uninstall.ps1')
@@ -42,7 +36,6 @@ Describe 'Publishing a complete draft release' {
                 return
             }
             if ($args -contains '--draft=false') { $script:Draft = $false; return }
-            if ($args -contains '--notes') { return }
             throw "Unexpected GitHub command: $args"
         }
     }
@@ -77,14 +70,6 @@ Describe 'Publishing a complete draft release' {
         $script:Draft = $false
         Publish-WinshellRelease -Tag v0.6.1 -PackageDirectory $script:Directory -Repository owner/repo
         $script:Calls.Count | Should -Be 1
-    }
-
-    It 'adds the signing policy while the release is still a draft' {
-        $env:SIGNPATH_ORGANIZATION_ID = 'test-organization'
-        Publish-WinshellRelease -Tag v0.6.1 -PackageDirectory $script:Directory -Repository owner/repo
-        $script:Calls[-2] | Should -Match '--notes'
-        $script:Calls[-2] | Should -Match 'Code signing policy'
-        $script:Calls[-1] | Should -Match '--draft=false'
     }
 
     It 'leaves a draft alone if a local asset is missing' {
