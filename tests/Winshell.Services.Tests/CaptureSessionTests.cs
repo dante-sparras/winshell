@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Windows.Foundation;
 using Winshell.Capture;
+using Winshell.Native;
 using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
@@ -330,16 +331,14 @@ public sealed class CaptureSessionTests
         var source = new byte[] { 1, 2, 3, 4, 99, 99, 99, 99, 5, 6, 7, 8, 99, 99, 99, 99 };
         var destination = new byte[12];
         var from = GCHandle.Alloc(source, GCHandleType.Pinned);
-        var to = GCHandle.Alloc(destination, GCHandleType.Pinned);
         try
         {
-            WindowsCaptureBackend.CopyRows(from.AddrOfPinnedObject(), 8, to.AddrOfPinnedObject(), 6, 1, 2);
+            CaptureInterop.CopyRows(from.AddrOfPinnedObject(), 8, destination, 6, 1, 2);
             Assert.Equal(new byte[] { 1, 2, 3, 4, 0, 0, 5, 6, 7, 8, 0, 0 }, destination);
         }
         finally
         {
             from.Free();
-            to.Free();
         }
     }
 

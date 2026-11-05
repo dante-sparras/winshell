@@ -1,17 +1,19 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Winshell.Native;
-using Winshell.Windows;
+using Windows.Win32;
 
-namespace Winshell.Apps;
+namespace Winshell.Native;
 
 /// <summary>What a <c>.lnk</c> shortcut holds.</summary>
 internal sealed record ShellLinkInfo(string Target, string Arguments, string WorkingDirectory, string IconLocation, int IconIndex, string Description, string AppUserModelId);
 
 /// <summary>Reads <c>.lnk</c> files with the shell's own ShellLink object.</summary>
-internal static partial class ShellLink
+internal static class ShellLink
 {
     private static readonly Guid ClsidShellLink = new("00021401-0000-0000-C000-000000000046");
+
+    /// <summary>System.AppUserModel.ID, the id a shortcut gives the app it starts.</summary>
+    private static readonly PROPERTYKEY AppUserModelId = new(PInvoke.PKEY_AppUserModel_ID.fmtid, PInvoke.PKEY_AppUserModel_ID.pid);
 
     public static ShellLinkInfo? Read(string path)
     {
@@ -38,7 +40,7 @@ internal static partial class ShellLink
             buffer.Clear();
             shell.GetDescription(buffer, buffer.Capacity);
             var description = buffer.ToString();
-            var aumid = link is IPropertyStore store ? PropertyStore.ReadString(store, NativeMethods.AppUserModelId) ?? "" : "";
+            var aumid = link is IPropertyStore store ? PropertyStore.ReadString(store, AppUserModelId) ?? "" : "";
             return new ShellLinkInfo(target, arguments, workingDirectory, icon, iconIndex, description, aumid);
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException or ArgumentException or InvalidCastException)
@@ -52,6 +54,10 @@ internal static partial class ShellLink
         }
     }
 
+    /// <summary>
+    /// IPersistFile, for the same object as the shared <see cref="IShellLinkW"/>. CsWin32's struct form cannot be
+    /// cast from that runtime-callable wrapper.
+    /// </summary>
     [ComImport]
     [Guid("0000010b-0000-0000-C000-000000000046")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

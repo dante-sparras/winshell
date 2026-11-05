@@ -1,141 +1,23 @@
-using System.Runtime.InteropServices;
-using System.Text;
 using Winshell.Native;
 
 namespace Winshell.Apps;
 
 /// <summary>
-/// Reads another app's recent and frequent documents through <c>IApplicationDocumentLists</c>. That is the list
-/// Windows will give. Pinned jump-list items and custom tasks are not read: <c>ICustomDestinationList</c> opens a
-/// list so the caller can replace it, and Windows does not give another app's pinned list to a reader. This type
-/// calls <c>SetAppID</c> and <c>GetList</c> only. It does not launch a destination or write the list.
-/// The shell's UI thread is an STA, which this in-process class requires. A failed read is
-/// <see cref="JumpListRead.Missing"/>, and the menu says the list cannot be read.
+/// Reads another app's recent and frequent documents. That is the list Windows will give. Pinned jump-list items
+/// and custom tasks are not read: <c>ICustomDestinationList</c> opens a list so the caller can replace it, and
+/// Windows does not give another app's pinned list to a reader. The shell's UI thread is an STA, which
+/// <see cref="DocumentLists"/> requires. A failed read is <see cref="JumpListRead.Missing"/>, and the menu says the
+/// list cannot be read.
 /// </summary>
 internal sealed class WindowsJumpListReader : IJumpListReader
 {
     public static readonly WindowsJumpListReader Instance = new();
 
-    private static readonly Guid Clsid = new("86bec222-30f2-47e0-9f25-60d11cd75c28");
-    private const uint Recent = 0;
-    private const uint Frequent = 1;
-
     public JumpListRead Read(string appUserModelId)
     {
         if (string.IsNullOrWhiteSpace(appUserModelId))
             return JumpListRead.Missing;
-        var iid = typeof(IApplicationDocumentLists).GUID;
-        var hr = Win32.CoCreateInstance(in Clsid, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
-        if (hr < 0 || pointer == 0)
-            return JumpListRead.Missing;
-        IApplicationDocumentLists lists;
-        try
-        {
-            lists = (IApplicationDocumentLists)Marshal.GetObjectForIUnknown(pointer);
-        }
-        catch (InvalidCastException)
-        {
-            return JumpListRead.Missing;
-        }
-        finally
-        {
-            Marshal.Release(pointer);
-        }
-        try
-        {
-            if (lists.SetAppID(appUserModelId) < 0)
-                return JumpListRead.Missing;
-            return JumpListRead.From(Category(lists, Recent), Category(lists, Frequent));
-        }
-        finally
-        {
-            Marshal.ReleaseComObject(lists);
-        }
-    }
-
-    private static IReadOnlyList<string>? Category(IApplicationDocumentLists lists, uint kind)
-    {
-        var arrayId = typeof(INameArray).GUID;
-        if (lists.GetList(kind, JumpListRead.PerCategory, in arrayId, out var array) < 0 || array is null)
-            return null;
-        try
-        {
-            if (array.GetCount(out var count) < 0)
-                return null;
-            var names = new List<string>();
-            var itemId = typeof(IShellItem).GUID;
-            var linkId = typeof(IShellLinkW).GUID;
-            for (uint i = 0; i < count && names.Count < JumpListRead.PerCategory; i++)
-            {
-                var name = NameAt(array, i, itemId, linkId);
-                if (!string.IsNullOrWhiteSpace(name))
-                    names.Add(name);
-            }
-            return names;
-        }
-        finally
-        {
-            Marshal.ReleaseComObject(array);
-        }
-    }
-
-    /// <summary>The name the jump list shows. A shell link that is not a shell item contributes its file name.</summary>
-    private static string? NameAt(INameArray array, uint index, Guid itemId, Guid linkId)
-    {
-        if (array.GetAt(index, in itemId, out var item) >= 0 && item is not null)
-        {
-            try
-            {
-                if (item is IShellItem shell && shell.GetDisplayName(0, out var name) >= 0 && !string.IsNullOrWhiteSpace(name))
-                    return name;
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(item);
-            }
-        }
-        if (array.GetAt(index, in linkId, out var link) >= 0 && link is not null)
-        {
-            try
-            {
-                if (link is IShellLinkW shellLink)
-                {
-                    var buffer = new StringBuilder(1024);
-                    shellLink.GetPath(buffer, buffer.Capacity, 0, 0);
-                    var file = Path.GetFileName(buffer.ToString());
-                    return string.IsNullOrWhiteSpace(file) ? null : file;
-                }
-            }
-            catch (COMException)
-            {
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(link);
-            }
-        }
-        return null;
-    }
-
-    [ComImport]
-    [Guid("3c594f9f-9f30-47a1-979a-c9e83d3d0a06")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IApplicationDocumentLists
-    {
-        [PreserveSig]
-        int SetAppID([MarshalAs(UnmanagedType.LPWStr)] string appId);
-
-        [PreserveSig]
-        int GetList(uint listType, uint count, in Guid iid, [MarshalAs(UnmanagedType.Interface)] out INameArray? array);
-    }
-
-    [ComImport]
-    [Guid("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface INameArray
-    {
-        [PreserveSig] int GetCount(out uint count);
-
-        [PreserveSig] int GetAt(uint index, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object? item);
+        var (recent, frequent) = DocumentLists.Read(appUserModelId, JumpListRead.PerCategory);
+        return JumpListRead.From(recent, frequent);
     }
 }

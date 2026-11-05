@@ -1,0 +1,2 @@
+PKEY_AppUserModel_ID
+SHGetKnownFolderPath

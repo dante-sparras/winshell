@@ -107,7 +107,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 RecreatePool(size, cursor);
                 return ready;
             }
-            using var texture = CaptureInterop.GetTexture(latest.Surface);
+            using var texture = new ID3D11Texture2D(CaptureInterop.GetDxgiInterface(latest.Surface, typeof(ID3D11Texture2D).GUID));
             var desc = texture.Description;
             if (desc.Width < size.Width || desc.Height < size.Height)
                 return ready;
@@ -135,7 +135,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         }
     }
 
-    private unsafe PixelImage? Readback()
+    private PixelImage? Readback()
     {
         var result = _context!.Map(_staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.DoNotWait, out var mapped);
         if (result.Code == unchecked((int)0x887a000a)) // DXGI_ERROR_WAS_STILL_DRAWING
@@ -145,20 +145,10 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         try
         {
             var pixels = new byte[checked(_size.Width * _size.Height * 4)];
-            fixed (byte* destination = pixels)
-                CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), (nint)destination, _size.Width * 4, _size.Width, _size.Height);
+            CaptureInterop.CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), pixels, _size.Width * 4, _size.Width, _size.Height);
             return new PixelImage(_size.Width, _size.Height, pixels, premultiplied: true);
         }
         finally { _context.Unmap(_staging!, 0); }
-    }
-
-    internal static unsafe void CopyRows(nint source, int sourcePitch, nint destination, int destinationPitch, int width, int height)
-    {
-        var bytes = checked(width * 4);
-        if (width <= 0 || height <= 0 || sourcePitch < bytes || destinationPitch < bytes)
-            throw new ArgumentOutOfRangeException(nameof(width));
-        for (var row = 0; row < height; row++)
-            Buffer.MemoryCopy((byte*)source + (long)row * sourcePitch, (byte*)destination + (long)row * destinationPitch, destinationPitch, bytes);
     }
 
     private void RecreatePool(SizeInt32 size, bool cursor)
@@ -252,62 +242,4 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             }
         }
     }
-}
-
-/// <summary>The desktop capture and DXGI WinRT bridges. Every ABI pointer has one explicit release.</summary>
-internal static unsafe partial class CaptureInterop
-{
-    public static GraphicsCaptureItem CreateItem(nint window, nint monitor)
-    {
-        const string className = "Windows.Graphics.Capture.GraphicsCaptureItem";
-        Marshal.ThrowExceptionForHR(WindowsCreateString(className, className.Length, out var name));
-        nint factory = 0;
-        nint item = 0;
-        try
-        {
-            var interopId = new Guid("3628e81b-3cac-4c60-b7f4-23ce0e0c3356");
-            Marshal.ThrowExceptionForHR(RoGetActivationFactory(name, in interopId, out factory));
-            var itemId = new Guid("79c3f95b-31f7-4ec2-a464-632ef5d30760");
-            var table = *(nint**)factory;
-            var create = (delegate* unmanaged[Stdcall]<nint, nint, Guid*, nint*, int>)table[window != 0 ? 3 : 4];
-            Marshal.ThrowExceptionForHR(create(factory, window != 0 ? window : monitor, &itemId, &item));
-            return WinRT.MarshalInspectable<GraphicsCaptureItem>.FromAbi(item);
-        }
-        finally
-        {
-            if (item != 0) Marshal.Release(item);
-            if (factory != 0) Marshal.Release(factory);
-            _ = Win32.WindowsDeleteString(name);
-        }
-    }
-
-    public static IDirect3DDevice CreateDevice(nint dxgi)
-    {
-        Marshal.ThrowExceptionForHR(CreateDirect3D11DeviceFromDXGIDevice(dxgi, out var pointer));
-        try { return WinRT.MarshalInspectable<IDirect3DDevice>.FromAbi(pointer); }
-        finally { Marshal.Release(pointer); }
-    }
-
-    public static ID3D11Texture2D GetTexture(IDirect3DSurface surface)
-    {
-        using var marshaler = WinRT.MarshalInspectable<IDirect3DSurface>.CreateMarshaler(surface);
-        var accessId = new Guid("a9b3d012-3df2-4ee3-b8d1-8695f457d3c1");
-        Marshal.ThrowExceptionForHR(Marshal.QueryInterface(marshaler.ThisPtr, in accessId, out var access));
-        try
-        {
-            var textureId = typeof(ID3D11Texture2D).GUID;
-            nint texture = 0;
-            var get = (delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)(*(nint**)access)[3];
-            Marshal.ThrowExceptionForHR(get(access, &textureId, &texture));
-            return new ID3D11Texture2D(texture);
-        }
-        finally { Marshal.Release(access); }
-    }
-
-    [LibraryImport("combase.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial int WindowsCreateString(string source, int length, out nint value);
-    [LibraryImport("combase.dll")]
-    private static partial int RoGetActivationFactory(nint name, in Guid iid, out nint factory);
-    [LibraryImport("d3d11.dll")]
-    private static partial int CreateDirect3D11DeviceFromDXGIDevice(nint device, out nint result);
 }
