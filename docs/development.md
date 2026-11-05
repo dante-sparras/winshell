@@ -161,7 +161,7 @@ Run `pwsh -NoProfile scripts/check.ps1 -Lint` from the repo root. T3 Code also e
 dotnet test tests/Winshell.Core.Tests --filter FullyQualifiedName~DirectoryWatchTests
 ```
 
-`--filter` takes a class or a test name. `Winshell.Core.Tests`, `Winshell.Services.Tests` and `Winshell.DefaultShell.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Shell.Tests` and `Winshell.Tests` put windows and shells on your desktop.
+`--filter` takes a class or a test name. `Winshell.Architecture.Tests`, `Winshell.Core.Tests`, `Winshell.Services.Tests` and `Winshell.DefaultShell.Tests` don't open shell windows, so they're safe to run while you work. `Winshell.Shell.Tests` and `Winshell.Tests` put windows and shells on your desktop.
 
 ## Live UI with Winland running
 
@@ -362,6 +362,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 │   ├── Winshell.DefaultShell/       # The default shell, in XAML and C#
 │   └── Winshell.Package/            # Packs Native, Core, Services and Shell as the single Winshell package
 ├── tests/
+│   ├── Winshell.Architecture.Tests/ # The layer and feature backend boundaries, and no hand-written unsafe code in WinUI projects
 │   ├── Winshell.Core.Tests/         # The shared infrastructure: the event loop, the log, TOML files, crash reports and file helpers
 │   ├── Winshell.DefaultShell.Tests/ # The default shell's logic, with no window
 │   ├── Winshell.Services.Tests/     # The services, with no window

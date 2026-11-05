@@ -1,6 +1,6 @@
 # Architecture
 
-Winshell is a modular monolith: one program, with assembly boundaries for shared infrastructure and folder boundaries for service features. These are the decided target rules. The migration below introduces them in independently buildable steps; the build enforces the [sealed interop](#sealed-interop) boundary, and the other boundaries are not all enforced yet.
+Winshell is a modular monolith: one program, with assembly boundaries for shared infrastructure and folder boundaries for service features. These are the decided target rules. The migration below introduces them in independently buildable steps; the build enforces the [sealed interop](#sealed-interop) boundary, and the [architecture tests](#architecture-proof) enforce the layers and feature backends.
 
 ## Dependency direction
 
@@ -67,9 +67,17 @@ Remove the orphan Qml, Runtime and Platform.Windows `bin`/`obj` trees. Verify ea
 
 ## Architecture proof
 
-Add `Winshell.Architecture.Tests` to the normal fast checks. Use NetArchTest or project-reference and compiled dependency guards to enforce downward dependencies and prevent cross-feature backend use. Guard the actual project graph and backend consumers, including implementations, rather than maintaining a list of expected source files. A renamed or newly added backend must still be covered.
+`Winshell.Architecture.Tests` runs in the fast checks. Each boundary has one guard:
 
-The compiler/analyzer owns the interop ban; architecture tests own the assembly and feature boundaries, and check that hand-written sources in WinUI projects contain no unsafe code. Scan the source files, not the compiled assemblies, where CsWinRT's generated unsafe code looks the same. Demonstrate that each guard rejects a representative forbidden dependency or declaration, then remove that violation. Do not add production hooks solely to exercise the guards.
+| Boundary | Guard |
+| --- | --- |
+| Interop outside Native: interop attributes, `NativeLibrary` and `Marshal.GetDelegateForFunctionPointer` | The build: RS0030 from `BannedSymbols.Interop.txt`, added by `Directory.Build.targets` |
+| Unsafe code outside Native, in a project without WinUI | The build: CS0227, since `Directory.Build.targets` turns `AllowUnsafeBlocks` off |
+| Hand-written unsafe code in a WinUI project | `WinUISourceTests`: parses the C# files of each `UseWinUI` project in `winshell.slnx`, outside `bin` and `obj`, and the files it links, for `unsafe`, `fixed` and pointer types |
+| Layer order | `LayerTests`: each layer's project references and its compiled assembly's Winshell references name only layers below it. Restore also rejects an upward project reference that closes a cycle (NU1108); the test catches the rest, such as a reference to a project outside the layers or to a built DLL |
+| Feature backends | `FeatureBackendTests`: in the compiled Services, Shell and DefaultShell, only types in an `I*Backend` interface's own namespace in Services, such as `Winshell.Session`, name the interface or a type that implements it, in a declaration, signature or method body |
+
+The tests read the project files and the compiled assemblies, never a list of expected files, so a new project, reference or backend is covered without editing them; only a new layer is added to `LayerTests`' list. The CLI, `src/Winshell`, composes the layers and is outside these guards. A WinUI project's assembly can't tell CsWinRT's generated unsafe code from ours, so that guard reads the sources. Show that a new or changed guard rejects a representative forbidden dependency or declaration, then remove that violation. Do not add production hooks solely to exercise the guards.
 
 Tests follow the installed `test-audit` skill's gate, [where a test belongs](../CONTRIBUTING.md#where-a-test-belongs) and the [test rules](../CONTRIBUTING.md#write-tests-that-dont-flake). Never weaken a test, skip a failure or add flaky retries. Use fake clocks and real completion signals. A refactor that retains behavior retains its existing proof.
 
