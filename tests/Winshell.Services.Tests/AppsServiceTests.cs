@@ -131,13 +131,17 @@ public sealed class AppsServiceTests : IDisposable
         // Like the real backend's, its continuations run on the thread that completes it.
         var activation = new TaskCompletionSource<string?>();
         _backend.Activation = activation.Task;
+        var posts = 0;
+        _loop.Woken += () => Interlocked.Increment(ref posts);
 
-        // Activation is still running. A launch that waited for it would never finish.
+        // Activation is still running. A launch that waited for it would never finish, and nothing reaches the loop yet.
         await Task.Run(entry.Launch, TestContext.Current.CancellationToken).WaitAsync(TestContext.Current.CancellationToken);
         Assert.Equal(["activate Alpha!App"], _backend.Opened);
+        Assert.Equal(0, Volatile.Read(ref posts));
 
-        // The outcome waits for the loop, so nothing has happened yet.
+        // The outcome is posted to the loop, so nothing has happened yet.
         activation.SetResult("not registered");
+        Assert.Equal(1, Volatile.Read(ref posts));
         Assert.Empty(_warnings);
         Assert.Equal(["activate Alpha!App"], _backend.Opened);
         Assert.Equal(0, entry.RunCount);
