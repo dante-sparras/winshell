@@ -91,7 +91,7 @@ public sealed class AppIndexTests
         var calc = Assert.Single(apps, app => app.Packaged);
         Assert.Equal(packaged.Id, calc.Id);
         Assert.Contains(apps, app => app.Id == "Accessories/Editor");
-        // Shortcuts come first in, so the list is in name order only when it is sorted.
+        // Combine gets the shortcuts first, so the packaged Calculator leads only because the result is sorted by name.
         Assert.Equal([packaged.Id, "Accessories/Editor"], apps.Select(app => app.Id));
     }
 

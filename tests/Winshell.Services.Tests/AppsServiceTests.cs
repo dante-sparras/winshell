@@ -33,11 +33,13 @@ public sealed class AppsServiceTests : IDisposable
     private static Dictionary<string, AppUsage> Usage(params (string Id, AppUsage Usage)[] rows) =>
         rows.ToDictionary(row => row.Id, row => row.Usage, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>A service over a backend whose first scan already found <paramref name="apps"/>, in name order as a scan lists them.</summary>
+    /// <summary>A service over a backend whose first scan finds <paramref name="apps"/>, in name order as a scan lists them.</summary>
     private AppsService Start(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null, TimeProvider? time = null)
     {
-        _backend.Snapshot = new AppSnapshot(apps, usage ?? Usage());
-        return new AppsService(_loop, _log, _backend, time);
+        _backend.FirstScan = new AppSnapshot(apps, usage ?? Usage());
+        var service = new AppsService(_loop, _log, _backend, time);
+        _loop.Process();
+        return service;
     }
 
     /// <summary>A later scan, reported as the scan thread reports it and applied on the loop.</summary>
@@ -271,7 +273,10 @@ public sealed class AppsServiceTests : IDisposable
     {
         public event Action? Changed;
 
-        public AppSnapshot Snapshot { get; set; } = AppSnapshot.Empty;
+        public AppSnapshot Snapshot { get; private set; } = AppSnapshot.Empty;
+
+        /// <summary>What the scan that <see cref="Start"/> begins finds. Like a new catalog, the backend is empty until then.</summary>
+        public AppSnapshot FirstScan { get; set; } = AppSnapshot.Empty;
 
         public Task<string?> Activation { get; set; } = Task.FromResult<string?>(null);
 
@@ -289,9 +294,7 @@ public sealed class AppsServiceTests : IDisposable
             Changed?.Invoke();
         }
 
-        public void Start()
-        {
-        }
+        public void Start() => Show(FirstScan);
 
         public string? OpenShortcut(string path, string startIn)
         {

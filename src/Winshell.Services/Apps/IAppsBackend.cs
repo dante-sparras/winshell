@@ -17,7 +17,8 @@ internal interface IAppsBackend
 
     /// <summary>
     /// Activates a packaged app and returns at once. The task completes once the app is up, seconds on a cold start,
-    /// with null or the error. It does not fault.
+    /// with null or the error. It does not fault, and it completes on the activation's own thread, where a continuation
+    /// can run without waiting for a pool worker.
     /// </summary>
     Task<string?> ActivateAsync(string appUserModelId, string arguments);
 
