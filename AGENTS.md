@@ -20,9 +20,10 @@ Many agents work on this repo at once.
 - Next, before any other work, install the agent skills with `pwsh scripts/install-skills.ps1` ([Agent skills](docs/development.md#agent-skills)). Use the installed skills, such as `test-audit`; never read a skill from a copy of its source.
 - One task is one thread, one issue, one worktree, one branch and one small PR. If the task has no issue, file one with the fields of the Agent task form in `.github/ISSUE_TEMPLATE/agent_task.yml` and its `area:*` labels.
 - Name the branch `agent/<tool>/<issue#>-<slug>`, such as `agent/claude/123-tray-overflow`, and put `Fixes #<issue#>` in the PR body.
-- Run tasks side by side, and assign them to parallel threads, only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch.
+- Run tasks side by side, and assign them to parallel threads, only when their areas and files don't overlap. `gh pr list --json number,headRefName,files` shows what open PRs touch. A task that runs the slow tier or opens a window also needs the one [live session](#live-ui-with-winland-running), so those tasks run one at a time even when their files don't overlap.
 - One PR at a time changes a shared file: a `Directory.*` build file such as `Directory.Packages.props` or `Directory.Build.targets`, `global.json`, `nuget.config`, `.editorconfig`, `winshell.slnx`, `src/BannedSymbols.txt`, `BannedSymbols.Interop.txt`, `tests/TestSupport/`, a lockfile, or a type more than one module uses.
 - Prefer a stack of small, focused PRs for related work, using `gh stack` (`gh extension install github/gh-stack`). Each layer still owns its issue and worktree; follow the [PR stack workflow](docs/development.md#pull-request-stacks).
+- A lead thread with several tasks keeps a one-screen checklist on its tracking issue: merged PRs, open PRs, the next slice, and each child's worktree path. Whoever picks the work up reads that first.
 
 ### Conflicts and merging
 
@@ -32,7 +33,7 @@ Many agents work on this repo at once.
 2. Resolve each conflict by intent: find the PR that changed the same code with `git log --oneline <your-branch>..origin/main -- <file>`, read it, and keep both behaviors. Taking "ours" or "theirs" wholesale is never a resolution.
 3. If both sides change the same behavior, run `git rebase --abort`, comment on your PR naming the other PR and the collision, and escalate to the lead thread, or to the user if there is none, instead of guessing.
 4. Run the [checks for the change](docs/development.md#checks-by-change) again before you push, even after a clean rebase: it can still break logic.
-5. You own the PR until it merges: fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`. For a standalone PR, enable auto-merge with `gh pr merge <number> --squash --auto`. A delegated agent hands its PR to the lead thread once auto-merge is on, or once every layer of its stack is open, and the lead sees it to `MERGED`.
+5. You own the PR until it merges: fix every failing check, re-run a cancelled one with `gh run rerun <run-id>`, and confirm `gh pr view <number> --json state --jq .state` prints `MERGED`. For a standalone PR, enable auto-merge with `gh pr merge <number> --squash --auto`. A delegated agent hands its PR to the lead thread once auto-merge is on, or once every layer of its stack is open, and the lead sees it to `MERGED`. Whoever sees it to `MERGED` then removes the task's worktree and local branch. Keep `release-please--branches--main`: it is the release bot's branch, and deleting it closes the open release PR.
 6. For a stack, wait until every PR meets its merge requirements, then merge the whole stack with `gh stack merge <stack-number> --squash` as one operation to avoid intermediate rebases and repeated CI runs.
 
 ## Before you finish
@@ -42,7 +43,7 @@ Many agents work on this repo at once.
 - Changed what `[Trait("Category", "Slow")]` tests cover? Run them too: `pwsh scripts/check.ps1 -Tier Slow`, following [the live UI procedure](docs/development.md#live-ui-with-winland-running). `dotnet test .\tests\Winshell.Package.Tests --filter Category=Package` packs a shell from the template and runs it; the main stage leaves it out. The Package workflow runs it, not required, on PRs that change `templates/` or the release files.
 - CI runs the remaining checks, so leave `package.ps1` and arm64 to it. The required `ci` job checks Markdown links offline and selects prose-only, compiled-documentation or full checks on PRs and pushes to `main`. The required `slow` job skips documentation-only changes. The ruleset also requires `installer`, `actionlint`, `pr-title` and `pr-rules`.
 - After changing Markdown or workflows, run `pwsh -NoProfile scripts/check.ps1 -Lint` immediately. If you touched `scripts/`, `tests/Scripts/` or `.github/`, also run the jobs [docs/development.md](docs/development.md#commands) lists for that change.
-- Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file and the test-audit gate. Fix what it finds and review again, until it finds nothing.
+- Before opening a PR, get a fresh review: a subagent, or a second pass of your own, reads the diff against this file, [docs/architecture.md](docs/architecture.md) and the installed `test-audit` skill. Fix what it finds and review again, until it finds nothing.
 - Title the PR and fill in the PR template as [CONTRIBUTING.md](CONTRIBUTING.md#open-a-pr) describes. The `pr-rules` job holds each type of PR to its proof: a `fix` adds a test that failed before the fix, a `perf` gives before and after numbers, and a XAML change shows a `winshell inspect` screenshot.
 - Say what you couldn't verify.
 - Changed a public member of `Winshell.Shell`, `Winshell.Services` or `Winshell.Core`? Update its `///` comment, run `dotnet run scripts/generate-reference.cs`, and commit the pages it writes.
@@ -58,7 +59,7 @@ For a visual change, follow [See what you changed](docs/development.md#see-what-
 
 ## Agent skills
 
-Install the skills first in every session, as described in [Development](docs/development.md#agent-skills). `skills-lock.json` pins each one to its source; the installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git.
+`skills-lock.json` pins each skill to its source; the installed copies in `.agents/skills/` and `.claude/skills/` are ignored by Git. [Development](docs/development.md#agent-skills) covers installing and updating them.
 
 ### Issue tracker
 
