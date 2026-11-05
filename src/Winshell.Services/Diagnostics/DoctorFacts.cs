@@ -46,8 +46,6 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public string ResolveLinks(string path) => DoctorProbe.ResolveLinks(path);
 
-    public string NotificationAccess() => DoctorProbe.NotificationAccess();
-
     public DoctorCrashes.CrashFolderRead ReadCrashReports(string folder) => DoctorProbe.ReadCrashReports(folder);
 
     public DoctorCrashes.CrashPeek PeekCrash(string path) => DoctorProbe.PeekCrash(path);

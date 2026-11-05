@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Winshell.Notifications;
 using Winshell.Session;
 using Winshell.Updates;
 
@@ -92,7 +93,7 @@ public static class Doctor
             Guard("signIn", "Sign-in", () => Packaging.IsPackaged
                 ? DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State)
                 : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(), context.ExePath, File.Exists, facts.ResolveLinks)),
-            Guard("notifications", "Notifications", () => Notifications(facts.NotificationAccess())),
+            Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes", () => DoctorCrashes.CrashesIn(facts.ReadCrashReports(context.CrashRoot), now, facts.PeekCrash)),
         ];

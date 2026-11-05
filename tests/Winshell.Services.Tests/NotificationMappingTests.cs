@@ -18,7 +18,7 @@ public sealed class NotificationMappingTests
     [InlineData(UserNotificationListenerAccessStatus.Denied, NotificationAccessStatus.Denied)]
     [InlineData(UserNotificationListenerAccessStatus.Unspecified, NotificationAccessStatus.Unspecified)]
     public void Native_access_mapping_preserves_prompt_results(UserNotificationListenerAccessStatus native, NotificationAccessStatus expected) =>
-        Assert.Equal(expected, WindowsNotificationBackend.MapAccess(native));
+        Assert.Equal(expected, NotificationListenerAccess.Map(native));
 
     [Fact]
     public async Task Native_read_is_safe_without_prompting_or_changing_settings()
