@@ -1,3 +1,5 @@
+using Winshell.Updates;
+
 namespace Winshell.Session;
 
 /// <summary>
@@ -19,6 +21,21 @@ public sealed class StartupService : ObservableObject
         _log = log;
         _registry = registry;
         Refresh();
+    }
+
+    /// <summary>
+    /// The service the running shell uses: the package's startup task when packaged, else the <c>Run</c> value for this
+    /// process's command. Tests construct the service with a fake instead.
+    /// </summary>
+    internal static StartupService ForThisProcess(Log log) => new(log, RegistryForThisProcess());
+
+    private static IStartupRegistry? RegistryForThisProcess()
+    {
+        if (Packaging.IsPackaged)
+            return WindowsStartupTasks.Open() is { } task ? new StartupTaskRegistry(task) : null;
+        return Environment.ProcessPath is { } exe
+            ? new WindowsStartupRegistry(WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)))
+            : null;
     }
 
     /// <summary>Whether this shell can register itself: false when it does not run as <c>winshell.exe</c>.</summary>
