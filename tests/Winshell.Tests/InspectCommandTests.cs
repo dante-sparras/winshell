@@ -4,13 +4,12 @@ using System.Text.Json;
 
 namespace Winshell.Tests;
 
-/// <summary>The real <c>winshell inspect</c> against the real default shell, over the control pipe.</summary>
-[Collection(DefaultShellCollection.Name)]
+/// <summary>The real <c>winshell inspect</c> against the probe's panel, over the control pipe.</summary>
 [Trait("Category", "Slow")]
-public sealed class InspectCommandTests : IDisposable
+public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
-    private readonly Process _run;
+    private readonly Process _shell;
     private readonly string _pid;
 
     private (string, string)[] Folders =>
@@ -23,27 +22,20 @@ public sealed class InspectCommandTests : IDisposable
     {
         Directory.CreateDirectory(Path.Combine(_dir, "config"));
         Directory.CreateDirectory(Path.Combine(_dir, "local"));
-        // The Win key belongs to the desktop this runs on.
-        File.WriteAllText(Path.Combine(_dir, "config", "preferences.toml"), "startHotkey = \"\"\n");
-        var info = WinshellCli.StartInfo(["run"]);
-        foreach (var (name, value) in Folders)
-            info.Environment[name] = value;
-        _run = Process.Start(info)!;
-        // winshell run supervises the shell, which runs in a child process.
-        var shell = 0;
-        Wait.Until(() => (shell = ListedPid()) != 0, "the shell in winshell list");
-        _pid = shell.ToString(CultureInfo.InvariantCulture);
-        Wait.Until(() => Run("tree").Output.Contains("TaskbarView", StringComparison.Ordinal), "the taskbar in the tree");
+        File.WriteAllText(Path.Combine(_dir, "config", ProbeShell.WindowMarker), "");
+        _shell = ProbeShell.Start(Path.Combine(_dir, "config"), Path.Combine(_dir, "local"));
+        _pid = _shell.Id.ToString(CultureInfo.InvariantCulture);
+        Wait.Until(() => Run("tree").Output.Contains("ProbePage", StringComparison.Ordinal), "the panel in the tree");
     }
 
     public void Dispose()
     {
-        if (!_run.HasExited)
+        if (!_shell.HasExited)
         {
-            _run.Kill(entireProcessTree: true);
-            _run.WaitForExit();
+            _shell.Kill();
+            _shell.WaitForExit();
         }
-        _run.Dispose();
+        _shell.Dispose();
         Wait.Until(Removed, "the test folder to be free");
     }
 
@@ -63,46 +55,39 @@ public sealed class InspectCommandTests : IDisposable
     private (int Code, string Output, string Error) Run(params string[] args) =>
         WinshellCli.Run(["inspect", "--pid", _pid, .. args], Folders);
 
-    /// <summary>The one shell <c>winshell list</c> shows, or 0 before it does.</summary>
-    private int ListedPid()
-    {
-        using var listed = JsonDocument.Parse(WinshellCli.Run(["list", "--json"], Folders).Output);
-        return listed.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).SingleOrDefault();
-    }
-
     private static int Count(string tree, string type) =>
         JsonDocument.Parse(tree).RootElement.EnumerateArray().Count(window => window.GetProperty("content").GetProperty("type").GetString() == type);
 
     [Fact]
-    public void The_tree_is_json_and_names_the_taskbar_and_its_start_button()
+    public void The_tree_is_json_and_names_the_panel_and_its_button()
     {
         var (code, output, error) = Run("tree");
 
         Assert.Equal("", error);
         Assert.Equal(0, code);
-        Assert.True(Count(output, "TaskbarView") >= 1);
-        Assert.Contains("\"name\": \"StartButton\"", output, StringComparison.Ordinal);
+        Assert.Equal(1, Count(output, "ProbePage"));
+        Assert.Contains("\"name\": \"Open\"", output, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A_click_opens_start_and_the_tree_shows_it()
+    public void A_click_opens_the_popup_and_the_tree_shows_it()
     {
-        Assert.Equal(0, Count(Run("tree").Output, "StartView"));
+        Assert.Equal(0, Count(Run("tree").Output, "ProbePopup"));
 
-        // Each display can have a taskbar, so the window says which StartButton.
-        var (code, output, error) = Run("click", "StartButton", "TaskbarView");
+        // The window is named as well as the element, as a shell with a bar on each display must.
+        var (code, output, error) = Run("click", "Open", "ProbePage");
 
         Assert.Equal("", error);
-        Assert.Equal((0, "Clicked StartButton"), (code, output.Trim()));
-        Wait.Until(() => Count(Run("tree").Output, "StartView") == 1, "Start to open");
+        Assert.Equal((0, "Clicked Open"), (code, output.Trim()));
+        Wait.Until(() => Count(Run("tree").Output, "ProbePopup") == 1, "the popup to open");
     }
 
     [Fact]
-    public void A_screenshot_writes_a_png_of_the_bar_at_a_path_relative_to_the_caller()
+    public void A_screenshot_writes_a_png_of_the_window()
     {
-        var file = Path.Combine(_dir, "bar.png");
+        var file = Path.Combine(_dir, "panel.png");
 
-        var (code, output, error) = Run("screenshot", file, "TaskbarView");
+        var (code, output, error) = Run("screenshot", file, "ProbePage");
 
         Assert.Equal("", error);
         Assert.Equal(0, code);

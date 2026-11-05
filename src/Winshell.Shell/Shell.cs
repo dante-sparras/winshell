@@ -259,10 +259,6 @@ public sealed partial class Shell : IDisposable
                         };
                         configuration.Start(shell);
                         ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
-#if DEBUG
-                        if (Environment.GetEnvironmentVariable(ShellInstance.TestCrashVariable) is { Length: > 0 })
-                            throw new InvalidOperationException($"{ShellInstance.TestCrashVariable} asked Winshell to crash as it started.");
-#endif
                     }
                     catch (Exception e) when (e is not OutOfMemoryException)
                     {

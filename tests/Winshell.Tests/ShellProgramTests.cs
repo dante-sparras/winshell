@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Winshell.Tests;
 
@@ -12,48 +11,10 @@ namespace Winshell.Tests;
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
 [Trait("Category", "Slow")]
-public sealed partial class ShellProgramTests : IDisposable
+public sealed class ShellProgramTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
-
-    [GeneratedRegex(@"^Log: (?<path>.+), last \d+ lines\r?$", RegexOptions.Multiline)]
-    private static partial Regex LogLine();
-
-    [Fact]
-    public void List_log_ipc_and_kill_reach_the_program()
-    {
-        var (run, process) = Start();
-        var pid = process.Id.ToString(CultureInfo.InvariantCulture);
-
-        var row = Info(process);
-        Assert.Equal("winshell-default", row.GetProperty("shellId").GetString());
-        Assert.Equal(WinshellCli.Exe, row.GetProperty("configPath").GetString(), ignoreCase: true);
-
-        var log = Run("log", "--pid", pid);
-        Assert.Equal(0, log.Code);
-        Assert.Contains("Shell ID: \"winshell-default\"", log.Output, StringComparison.Ordinal);
-
-        var show = Run("ipc", "--pid", pid, "show");
-        Assert.Equal((0, ""), (show.Code, show.Error));
-        var call = Run("ipc", "--pid", pid, "call", "nothing", "open");
-        Assert.Equal((1, "Target not found: nothing."), (call.Code, call.Error.Trim()));
-
-        var killed = Run("kill", "--pid", pid);
-        Assert.Equal((0, ""), (killed.Code, killed.Error));
-        Assert.StartsWith("Killed ", killed.Output, StringComparison.Ordinal);
-        Assert.True(process.HasExited);
-        Assert.Equal(0, process.ExitCode);
-        Assert.Empty(Listed());
-        // A kill was asked for, so winshell run ends with the shell and does not start it again.
-        Wait.Until(() => run.HasExited, "winshell run to end with its shell");
-        Assert.Equal(0, run.ExitCode);
-
-        // A clean exit keeps the record, marked exited, so the log can still be found.
-        var stopped = Run("log");
-        Assert.Equal(0, stopped.Code);
-        Assert.Contains("Showing the log of stopped instance", stopped.Error, StringComparison.Ordinal);
-    }
 
     [Fact]
     public void A_shell_with_the_desktop_chords_on_keeps_running()
@@ -103,37 +64,6 @@ public sealed partial class ShellProgramTests : IDisposable
         var duplicate = Launch(["--no-duplicate"]);
         Wait.Until(() => duplicate.HasExited, "a duplicate of the new shell to exit");
         Assert.Equal(next.GetProperty("id").GetString(), Assert.Single(Listed()).GetProperty("id").GetString());
-    }
-
-    /// <summary>
-    /// A crash after the config loaded, as an exception escaping the loop would be: one fatal report, written before
-    /// the log closes, and reporting it again as the process ends throws nothing. The report goes to a temp folder
-    /// through <c>WINSHELL_TEST_CRASH</c>, never to the user's crash folder.
-    /// </summary>
-    [Fact]
-    public void A_crash_as_the_shell_starts_writes_one_report_and_leaves_no_running_instance()
-    {
-        var crashes = Path.Combine(_dir, "crashes");
-
-        var (code, output, error) = WinshellCli.Run(["run"], [.. Folders, ("WINSHELL_TEST_CRASH", crashes)]);
-
-        Assert.Equal(1, code);
-        var report = File.ReadAllText(Assert.Single(Directory.GetFiles(crashes)));
-        Assert.Contains("Winshell closed: yes", report, StringComparison.Ordinal);
-        Assert.Contains("Where: Winshell", report, StringComparison.Ordinal);
-        Assert.Contains("Shell id: winshell-default", report, StringComparison.Ordinal);
-        Assert.Contains("asked Winshell to crash as it started", report, StringComparison.Ordinal);
-        Assert.Contains("Shell ID: \"winshell-default\"", error + output, StringComparison.Ordinal);
-        Assert.DoesNotContain("ObjectDisposedException", error + output, StringComparison.Ordinal);
-        // The crash and its report are in the log, written before the log file closed.
-        var logged = File.ReadAllText(LogLine().Match(report).Groups["path"].Value);
-        Assert.Contains("FATAL: Winshell crashed: System.InvalidOperationException", logged, StringComparison.Ordinal);
-        Assert.Contains("Wrote a crash report to", logged, StringComparison.Ordinal);
-        Assert.Empty(Listed());
-
-        // Its shell id is free again, with no mutex or record left behind.
-        var next = Start("--no-duplicate").Shell;
-        Assert.False(next.HasExited);
     }
 
     /// <summary><c>winshell run -d</c> leaves the default shell to a child and returns, so the child holds the shell id.</summary>
@@ -197,8 +127,6 @@ public sealed partial class ShellProgramTests : IDisposable
         ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")),
         ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
     ];
-
-    private JsonElement Info(Process process) => Listed().Single(i => i.GetProperty("pid").GetInt32() == process.Id);
 
     private List<JsonElement> Listed()
     {

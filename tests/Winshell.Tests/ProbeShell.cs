@@ -6,9 +6,10 @@ using System.Text.Json;
 namespace Winshell.Tests;
 
 /// <summary>
-/// A real program with no windows, shell id <c>probe</c> unless a test names another, built once into <c>bin\shell</c>.
-/// Tests of instances start it, so they hold no taskbar and no screen edge unless a test puts <see cref="HideTaskbarMarker"/>
-/// in its config folder. A class that starts it has the
+/// A real program, shell id <c>probe</c> unless a test names another, built once into <c>bin\shell</c>. Tests of
+/// instances start it, so they hold no taskbar, no screen edge and no window unless a test puts
+/// <see cref="HideTaskbarMarker"/> or <see cref="WindowMarker"/> in its config folder. Its <c>probe.note</c> function,
+/// which takes a string, is there for <c>winshell ipc</c> to list. A class that starts it has the
 /// <see cref="ProbeBuild"/> fixture. Nothing changes that build once it is made: a test that edits and rebuilds a probe
 /// builds one of its own with <see cref="Build"/>.
 /// </summary>
@@ -211,17 +212,61 @@ internal static class ProbeShell
     /// <summary>A file whose presence in the config folder makes the probe hide Explorer's taskbar, and then delete the file.</summary>
     internal const string HideTaskbarMarker = "probe-hide-taskbar";
 
+    /// <summary>
+    /// A file whose presence in the config folder makes the probe delete the file and then throw from its configuration's
+    /// Start, as a configuration that crashes as it starts would.
+    /// </summary>
+    internal const string CrashMarker = "probe-crash";
+
+    /// <summary>
+    /// A file whose presence in the config folder makes the probe show a small panel, a <c>ProbePage</c> at the top left of
+    /// the primary screen, whose button <c>Open</c> shows a popup, a <c>ProbePopup</c>. Neither reserves an edge.
+    /// </summary>
+    internal const string WindowMarker = "probe-window";
+
     private const string Source =
         $$"""
         using Winshell;
 
         using System.Diagnostics;
+        using Microsoft.UI.Xaml.Controls;
+        using Windows.Foundation;
+
+        public sealed class ProbePage : StackPanel;
+
+        public sealed class ProbePopup : StackPanel;
 
         internal sealed class Bare : ShellConfiguration
         {
             public override void Start(Shell shell)
             {
+                shell.Ipc.Handle("probe", "note", (string text) => { });
                 var config = Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR");
+                // A test that puts {{CrashMarker}} there gets a shell that crashes as it starts, once.
+                if (config is not null && File.Exists(Path.Combine(config, "{{CrashMarker}}")))
+                {
+                    File.Delete(Path.Combine(config, "{{CrashMarker}}"));
+                    throw new InvalidOperationException("The probe was asked to crash as it started.");
+                }
+                // A test that puts {{WindowMarker}} there gets a panel whose button opens a popup.
+                if (config is not null && File.Exists(Path.Combine(config, "{{WindowMarker}}")))
+                {
+                    var popup = new PopupWindow { Content = new ProbePopup { Children = { new TextBlock { Text = "Opened" } } } };
+                    var open = new Button { Name = "Open", Content = "Open" };
+                    var panel = new PanelWindow
+                    {
+                        Anchors = Edges.Top | Edges.Left,
+                        Width = 160,
+                        Height = 60,
+                        Content = new ProbePage { Children = { open } },
+                        Visible = true,
+                    };
+                    open.Click += (_, _) =>
+                    {
+                        popup.Rect = new Rect(panel.Origin.X, panel.Origin.Y + panel.ActualHeight, 160, 60);
+                        popup.Visible = true;
+                    };
+                }
                 // A test that puts {{HideTaskbarMarker}} there gets a shell that hides Explorer's taskbar once.
                 if (config is not null && File.Exists(Path.Combine(config, "{{HideTaskbarMarker}}")))
                 {

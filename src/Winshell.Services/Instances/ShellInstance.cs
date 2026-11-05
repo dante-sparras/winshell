@@ -11,12 +11,6 @@ namespace Winshell;
 /// </summary>
 internal sealed class ShellInstance
 {
-    /// <summary>
-    /// Read only by the crash report tests, and only in a Debug build: crash reports go to this folder, and the shell
-    /// crashes once it has started, so a test sees the report a real crash writes. A Release build ignores the variable.
-    /// </summary>
-    internal const string TestCrashVariable = "WINSHELL_TEST_CRASH";
-
     private readonly object _logGate = new();
     private readonly InstanceLog _file;
     private readonly string _dir;
@@ -35,7 +29,7 @@ internal sealed class ShellInstance
         LogPath = Path.Combine(dir, "log.txt");
         Pipe = $"winshell-{id}";
         _file = new InstanceLog(LogPath);
-        Crashes = new CrashReports(CrashFolder()) { ConfigPath = configPath, LogPath = LogPath, Log = log };
+        Crashes = new CrashReports(ShellLocations.CrashRoot) { ConfigPath = configPath, LogPath = LogPath, Log = log };
     }
 
     public string Id { get; }
@@ -232,14 +226,5 @@ internal sealed class ShellInstance
             _logClosed = true;
             _file.Dispose();
         }
-    }
-
-    private static string CrashFolder()
-    {
-#if DEBUG
-        if (Environment.GetEnvironmentVariable(TestCrashVariable) is { Length: > 0 } folder)
-            return folder;
-#endif
-        return ShellLocations.CrashRoot;
     }
 }
