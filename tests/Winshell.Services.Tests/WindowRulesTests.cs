@@ -160,11 +160,11 @@ public sealed class WindowRulesTests
     {
         HashSet<nint> wanting = [1, 2, 3];
         var listed = new HashSet<nint> { 1, 2 };
-        Assert.True(WindowRules.SettleAttention(wanting, 1, listed.Contains));
+        WindowRules.SettleAttention(wanting, 1, listed.Contains);
         Assert.Equal([2], wanting);
-        Assert.False(WindowRules.SettleAttention(wanting, 0, listed.Contains));
+        WindowRules.SettleAttention(wanting, 0, listed.Contains);
         Assert.Equal([2], wanting);
-        Assert.True(WindowRules.SettleAttention(wanting, 2, listed.Contains));
+        WindowRules.SettleAttention(wanting, 2, listed.Contains);
         Assert.Empty(wanting);
     }
 

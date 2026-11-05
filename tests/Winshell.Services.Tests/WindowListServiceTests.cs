@@ -53,7 +53,7 @@ public sealed class WindowListServiceTests
     }
 
     [Fact]
-    public void Changes_before_the_loop_turns_are_read_once_with_the_last_value()
+    public void Title_changes_before_the_loop_turns_raise_Title_once_with_the_last_value()
     {
         _windows.Show(1, "First");
         using var list = Start();
@@ -161,9 +161,11 @@ public sealed class WindowListServiceTests
         Assert.Equal("chrome", program.AppId);
         Assert.Equal(chrome, program.Icon);
 
-        _windows.Show(2, FakeWindowBackend.Window() with { AppUserModelId = Terminal, Executable = chrome });
+        _windows.Show(1, FakeWindowBackend.Window() with { PackageAppId = "Other_8wekyb3d8bbwe!App" });
+        _windows.Show(2, FakeWindowBackend.Window() with { AppUserModelId = Terminal });
         _loop.Process();
 
+        Assert.Equal(Terminal, packaged.AppId);
         Assert.Equal(Terminal, program.AppId);
         Assert.Equal(@"shell:AppsFolder\" + Terminal, program.Icon);
         Assert.Equal(chrome, program.Executable);

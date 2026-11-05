@@ -109,13 +109,12 @@ public sealed class WindowListService : ObservableObject, IDisposable
         _flushPosted = false;
         if (_disposed)
             return;
-        // A read can pump once the UI thread is STA. Take only the windows marked so far, so a window marked during
-        // a read waits for the flush its event posts.
-        var pending = _dirty.ToArray();
-        _dirty.Clear();
+        // A read can pump once the UI thread is STA. Take only the windows marked so far, each just before it is read,
+        // so a window marked during a read waits for the flush its event posts.
         var added = new List<AppWindow>();
-        foreach (var hwnd in pending)
+        foreach (var hwnd in _dirty.ToArray())
         {
+            _dirty.Remove(hwnd);
             var info = Read(hwnd);
             _byHwnd.TryGetValue(hwnd, out var window);
             if (info is null)

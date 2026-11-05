@@ -65,10 +65,17 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public nint RootOf(nint hwnd) => hwnd;
 
+    /// <summary>The shown window, with the package id and program path left out when they were not asked for.</summary>
     public WindowRead? Read(nint hwnd, bool package, bool executable)
     {
         Reading?.Invoke(hwnd);
-        return Shown.GetValueOrDefault(hwnd);
+        if (Shown.GetValueOrDefault(hwnd) is not { } read)
+            return null;
+        return read with
+        {
+            PackageAppId = package && read.AppUserModelId.Length == 0 ? read.PackageAppId : null,
+            Executable = executable ? read.Executable : null,
+        };
     }
 
     public ScreenInfo? Screen(string deviceName) => Screens.GetValueOrDefault(deviceName);
