@@ -4,32 +4,31 @@ namespace Winshell.Tray;
 
 /// <summary>Sends an app the clicks on its notification area icon, the way Explorer sends them.</summary>
 /// <param name="loop">The loop the pointer is put back on.</param>
-/// <param name="letAppTakeForeground">
-/// Lets the app with this window and process id take the foreground; <see cref="TrayHost"/> passes
-/// <see cref="LetAppTakeForeground"/>.
-/// </param>
-internal sealed class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTakeForeground) : IDisposable
+/// <param name="backend">The apps' windows, processes and the pointer.</param>
+internal sealed class TrayClicker(IEventLoop loop, ITrayBackend backend) : IDisposable
 {
-    private static readonly uint? ShellIntegrity = ProcessIntegrity.TryRead((uint)Environment.ProcessId);
-
-    private readonly TrayCursor _cursor = new(loop, CursorPosition, point => Cursor.MoveTo(point.X, point.Y));
+    private readonly uint? _shellIntegrity = backend.IntegrityOf((uint)Environment.ProcessId);
+    private readonly TrayCursor _cursor = new(loop, () => backend.Cursor, backend.MoveCursor);
 
     public void Dispose() => _cursor.Dispose();
 
     public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at)
     {
-        if (!Win32.IsWindow(icon.Window) || icon.CallbackMessage == 0)
+        var pid = backend.ProcessOf(icon.Window);
+        if (pid == 0 || icon.CallbackMessage == 0)
             return;
-        Win32.GetWindowThreadProcessId(icon.Window, out var pid);
-        if (!MayClick(ShellIntegrity, ProcessIntegrity.TryRead(pid)))
+        if (!MayClick(_shellIntegrity, backend.IntegrityOf(pid)))
             return;
-        var point = at ?? CursorPosition();
+        var point = at ?? backend.Cursor;
         // Apps read the cursor when they open a menu, and many ignore the point in the message.
         if (at is { } target)
             _cursor.Place(target);
-        letAppTakeForeground(icon.Window, pid);
+        backend.LetAppTakeForeground(icon.Window, pid);
         foreach (var message in TrayProtocol.ClickMessages(click, icon.Version))
-            Send(icon, message, point);
+        {
+            var (wParam, lParam) = TrayProtocol.Callback(icon.Version, icon.Id, message, point.X, point.Y);
+            backend.Notify(icon.Window, icon.CallbackMessage, wParam, lParam);
+        }
     }
 
     /// <summary>
@@ -39,41 +38,4 @@ internal sealed class TrayClicker(IEventLoop loop, Action<nint, uint> letAppTake
     /// kept out, so it clicks no app above medium integrity, nor one whose level it cannot read.
     /// </summary>
     internal static bool MayClick(uint? shell, uint? app) => shell <= ProcessIntegrity.Medium || app <= ProcessIntegrity.Medium;
-
-    /// <summary>
-    /// Lets the app take the foreground for its menu or window. Nothing is activated for it, so the window the user
-    /// works in keeps the keyboard when the app shows nothing.
-    /// </summary>
-    internal static void LetAppTakeForeground(nint window, uint pid)
-    {
-        // A click on a shell window is input this process just received, which lets it pass the right on.
-        if (TrayApp.AllowForeground(pid))
-            return;
-        // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
-        var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
-        var thread = Win32.GetCurrentThreadId();
-        var attached = foregroundThread != 0 && foregroundThread != thread && Win32.AttachThreadInput(foregroundThread, thread, true);
-        try
-        {
-            Win32.SetForegroundWindow(window);
-            TrayApp.AllowForeground(pid);
-        }
-        finally
-        {
-            if (attached)
-                Win32.AttachThreadInput(foregroundThread, thread, false);
-        }
-    }
-
-    private static void Send(TrayIcon icon, uint message, (int X, int Y) point)
-    {
-        var (wParam, lParam) = TrayProtocol.Callback(icon.Version, icon.Id, message, point.X, point.Y);
-        TrayApp.Notify(icon.Window, icon.CallbackMessage, wParam, lParam);
-    }
-
-    private static (int X, int Y) CursorPosition()
-    {
-        Win32.GetCursorPos(out var p);
-        return (p.X, p.Y);
-    }
 }

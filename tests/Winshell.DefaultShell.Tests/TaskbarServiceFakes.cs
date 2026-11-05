@@ -137,28 +137,110 @@ internal sealed class FakePlayback : AudioGraphNode
     public void SetAudio(float volume, bool muted) => ApplyAudio([volume], muted);
 }
 
-/// <summary>The notification area without the session mutex or the Shell_TrayWnd window.</summary>
-internal sealed class FakeTrayHost : ITrayHost
+/// <summary>An app's icon in <see cref="FakeTrayBackend"/>: the window it was added for, and the GUID that names it.</summary>
+internal sealed record FakeTrayIcon(nint Window, Guid Guid);
+
+/// <summary>
+/// The notification area without the session mutex or the Shell_TrayWnd window. A test plays the apps that add icons
+/// and Windows' choices for which icons the taskbar shows.
+/// </summary>
+internal sealed class FakeTrayBackend : ITrayBackend
 {
-    public IReadOnlyCollection<TrayIcon> Icons => [];
+    private readonly Dictionary<nint, (int ProcessId, string Program)> _windows = [];
+    private readonly List<TrayIconSetting> _settings = [];
+    private Func<NotifyIconCall, bool>? _apply;
+    private nint _nextWindow = 0x100;
 
-    public event Action<TrayIcon>? Added;
+#pragma warning disable CS0067 // SystemTray subscribes. These tests play no Explorer.
+    public event Action? TaskbarCreated;
 
-    public event Action<TrayIcon>? Changed;
-
-    public event Action<TrayIcon>? Removed;
-
-#pragma warning disable CS0067 // SystemTray subscribes. These tests do not raise a balloon.
-    public event Action<TrayIcon, string, string, uint>? Balloon;
+    public event Action? ExplorerInFront;
 #pragma warning restore CS0067
 
-    public void Add(TrayIcon icon) => Added?.Invoke(icon);
+    public event Action? SettingsChanged;
 
-    public void Change(TrayIcon icon) => Changed?.Invoke(icon);
+    public nint Explorer => 0;
 
-    public void Remove(TrayIcon icon) => Removed?.Invoke(icon);
+    public (int X, int Y) Cursor => (0, 0);
 
-    public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at)
+    /// <summary>An app adds an icon for a window of its own, by GUID, and Windows shows it on the bar or in the flyout.</summary>
+    /// <param name="program">The program behind the window, or empty when it cannot be read.</param>
+    public FakeTrayIcon Add(string program = "", int processId = 0, string tip = "", bool onBar = false, bool hidden = false)
+    {
+        var icon = new FakeTrayIcon(_nextWindow++, Guid.NewGuid());
+        _windows[icon.Window] = (processId, program);
+        if (onBar)
+            Move(icon, onBar);
+        Send(new NotifyIconCall
+        {
+            Message = TrayProtocol.Add,
+            Window = icon.Window,
+            Id = 1,
+            Guid = icon.Guid,
+            Flags = TrayProtocol.NIF_GUID | TrayProtocol.NIF_TIP | TrayProtocol.NIF_STATE,
+            Tip = tip,
+            State = hidden ? TrayProtocol.NIS_HIDDEN : 0,
+            StateMask = TrayProtocol.NIS_HIDDEN,
+        });
+        return icon;
+    }
+
+    /// <summary>The user moves an icon onto the bar or into the hidden icons flyout in Settings.</summary>
+    public void Move(FakeTrayIcon icon, bool onBar)
+    {
+        _settings.RemoveAll(setting => setting.Guid == icon.Guid);
+        _settings.Add(new TrayIconSetting(icon.Guid, "", null, onBar));
+        SettingsChanged?.Invoke();
+    }
+
+    public void Remove(FakeTrayIcon icon) =>
+        Send(new NotifyIconCall { Message = TrayProtocol.Delete, Window = icon.Window, Id = 1, Guid = icon.Guid, Flags = TrayProtocol.NIF_GUID });
+
+    private void Send(NotifyIconCall call) => (_apply ?? throw new InvalidOperationException("The tray has not opened its window."))(call);
+
+    public bool TryOwn() => true;
+
+    public bool Open(Func<NotifyIconCall, bool> apply)
+    {
+        _apply = apply;
+        return true;
+    }
+
+    public void Close() => _apply = null;
+
+    public void Dispose()
+    {
+    }
+
+    public void Raise()
+    {
+    }
+
+    public bool Lower() => false;
+
+    public void Broadcast()
+    {
+    }
+
+    public IReadOnlyList<TrayIconSetting> ReadSettings() => [.. _settings];
+
+    public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon) => (null, null);
+
+    public uint ProcessOf(nint window) => (uint)_windows.GetValueOrDefault(window).ProcessId;
+
+    public string ProgramOf(nint window) => _windows.GetValueOrDefault(window).Program ?? "";
+
+    public uint? IntegrityOf(uint processId) => null;
+
+    public void MoveCursor((int X, int Y) point)
+    {
+    }
+
+    public void LetAppTakeForeground(nint window, uint processId)
+    {
+    }
+
+    public void Notify(nint window, uint message, nint wParam, nint lParam)
     {
     }
 }

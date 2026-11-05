@@ -3,15 +3,33 @@ using Winshell.Tray;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>The tray over a fake host. Nothing here touches the real notification area.</summary>
+/// <summary>
+/// The tray's policy over a fake backend, on a real event queue with a fake clock. Nothing here touches the real
+/// notification area.
+/// </summary>
 public sealed class SystemTrayTests
 {
+    private const nint App = 0x100;
     private readonly ManualEventLoop _loop = new();
-    private readonly FakeHost _host = new();
+    private readonly FakeTrayBackend _backend = new() { Cursor = (5, 6) };
 
-    private SystemTray Tray() => new(_loop, Log.Default, _host);
+    public SystemTrayTests() => _backend.Windows[App] = 42;
 
-    private static TrayIcon Icon(string key = "a", bool hidden = false) => new() { Key = key, Tip = "Tip", Hidden = hidden };
+    private int Broadcasts => _backend.Calls.Count(call => call == "broadcast");
+
+    private SystemTray Tray()
+    {
+        var tray = new SystemTray(_loop, Log.Default, _backend);
+        _loop.Process();
+        return tray;
+    }
+
+    private static NotifyIconCall Call(uint message, uint flags = 0) => new() { Message = message, Flags = flags, Window = App, Id = 1 };
+
+    private static NotifyIconCall Add() => Call(TrayProtocol.Add, TrayProtocol.NIF_TIP) with { Tip = "Tip" };
+
+    private static NotifyIconCall Hide(bool hidden) =>
+        Call(TrayProtocol.Modify, TrayProtocol.NIF_STATE) with { State = hidden ? TrayProtocol.NIS_HIDDEN : 0, StateMask = TrayProtocol.NIS_HIDDEN };
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -21,52 +39,38 @@ public sealed class SystemTrayTests
     }
 
     [Fact]
-    public void Icons_the_host_already_has_are_listed()
-    {
-        _host.Known.Add(Icon("a"));
-        _host.Known.Add(Icon("b", hidden: true));
-
-        using var tray = Tray();
-
-        Assert.Equal("a", Assert.Single(tray.Items).Id);
-    }
-
-    [Fact]
     public void An_icon_keeps_its_item_and_only_what_differs_changes()
     {
         using var tray = Tray();
-        var icon = Icon();
-        _host.Add(icon);
+        _backend.Send(Add());
         var item = tray.Items[0];
         var changes = Watch(item);
 
-        icon.Tip = "Changed";
-        icon.Image = new PixelImage(1, 1, new byte[4]);
-        _host.Change(icon);
-        _host.Change(icon);
+        var image = new PixelImage(1, 1, new byte[4]);
+        _backend.Images[0x42] = image;
+        var change = Call(TrayProtocol.Modify, TrayProtocol.NIF_TIP | TrayProtocol.NIF_ICON) with { Tip = "Changed", Icon = 0x42 };
+        _backend.Send(change);
+        _backend.Send(change);
 
         Assert.Same(item, Assert.Single(tray.Items));
         Assert.Equal([nameof(SystemTrayItem.Icon), nameof(SystemTrayItem.Tooltip)], changes);
         Assert.Equal("Changed", item.Tooltip);
-        Assert.Same(icon.Image, item.Icon);
+        Assert.Same(image, item.Icon);
     }
 
     [Fact]
     public void An_icon_the_app_hides_leaves_the_list_until_it_shows_it_again()
     {
         using var tray = Tray();
-        var icon = Icon();
-        _host.Add(icon);
+        _backend.Send(Add());
 
-        icon.Hidden = true;
-        _host.Change(icon);
+        _backend.Send(Hide(true));
         Assert.Empty(tray.Items);
 
-        icon.Hidden = false;
-        _host.Change(icon);
+        _backend.Send(Hide(false));
         Assert.Single(tray.Items);
 
-        _host.Remove(icon);
+        _backend.Send(Call(TrayProtocol.Delete));
         Assert.Empty(tray.Items);
     }
 
@@ -75,7 +79,7 @@ public sealed class SystemTrayTests
     {
         using var tray = Tray();
         var ready = 0;
-        _host.Add(Icon());
+        _backend.Send(Add());
         tray.Items[0].Ready += () => ready++;
 
         _loop.Process();
@@ -92,41 +96,70 @@ public sealed class SystemTrayTests
     public void A_balloon_reaches_its_item(uint flags, BalloonIcon expected)
     {
         using var tray = Tray();
-        var icon = Icon();
-        _host.Add(icon);
+        _backend.Send(Add());
         var balloons = new List<(string, string, BalloonIcon)>();
         tray.Items[0].Balloon += (title, message, kind) => balloons.Add((title, message, kind));
 
-        _host.ShowBalloon(icon, "Title", "Message", flags);
+        _backend.Send(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with { InfoTitle = "Title", Info = "Message", InfoFlags = flags });
 
         Assert.Equal(("Title", "Message", expected), Assert.Single(balloons));
     }
 
     [Fact]
-    public void Clicks_reach_the_host_with_the_point_they_name()
+    public void Clicks_reach_the_app_with_the_point_they_name()
     {
         using var tray = Tray();
-        _host.Add(Icon());
+        _backend.Send(Call(TrayProtocol.Add, TrayProtocol.NIF_MESSAGE) with { CallbackMessage = 0x8001 });
+        // From version 4 on, each callback carries the point.
+        _backend.Send(Call(TrayProtocol.SetVersion) with { TimeoutOrVersion = TrayProtocol.Version4 });
         var item = tray.Items[0];
 
-        item.Click();
-        item.DoubleClick();
-        item.MiddleClick();
-        item.Display();
-        item.Display(10, 20);
-        item.Menu.Display();
-        item.Menu.Display(30, 40);
+        Action[] clicks =
+        [
+            item.Click,
+            item.DoubleClick,
+            item.MiddleClick,
+            item.Display,
+            () => item.Display(10, 20),
+            item.Menu.Display,
+            () => item.Menu.Display(30, 40),
+        ];
 
         Assert.Equal(
         [
-            (TrayClick.Left, null),
-            (TrayClick.Double, null),
-            (TrayClick.Middle, null),
-            (TrayClick.Menu, null),
-            (TrayClick.Menu, (10, 20)),
-            (TrayClick.Menu, null),
-            (TrayClick.Menu, (30, 40)),
-        ], _host.Clicks);
+            "201 202 400 at 5,6",
+            "201 202 400 203 202 400 at 5,6",
+            "207 208 at 5,6",
+            "204 205 7b at 5,6",
+            "204 205 7b at 10,20",
+            "204 205 7b at 5,6",
+            "204 205 7b at 30,40",
+        ], clicks.Select(Clicked));
+    }
+
+    /// <summary>The mouse messages a click sent the app, and the point the first one carried.</summary>
+    private string Clicked(Action click)
+    {
+        _backend.Notified.Clear();
+        click();
+        var point = _backend.Notified[0].WParam;
+        return $"{string.Join(" ", _backend.Notified.Select(sent => $"{sent.LParam & 0xffff:x}"))} at {point & 0xffff},{point >> 16}";
+    }
+
+    [Fact]
+    public void A_system_message_is_never_an_icons_callback()
+    {
+        using var tray = Tray();
+        _backend.Send(Call(TrayProtocol.Add, TrayProtocol.NIF_MESSAGE) with { CallbackMessage = 0x8001 });
+        tray.Items[0].Click();
+        Assert.All(_backend.Notified, sent => Assert.Equal(0x8001u, sent.Message));
+        Assert.NotEmpty(_backend.Notified);
+
+        // WM_CLOSE: any app could name it for any window, and a click would close that window.
+        _backend.Send(Call(TrayProtocol.Modify, TrayProtocol.NIF_MESSAGE) with { CallbackMessage = 0x0010 });
+        _backend.Notified.Clear();
+        tray.Items[0].Click();
+        Assert.Empty(_backend.Notified);
     }
 
     [Fact]
@@ -134,28 +167,131 @@ public sealed class SystemTrayTests
     {
         using var tray = Tray();
         var image = new PixelImage(1, 1, new byte[4]);
-        var icon = Icon();
-        icon.Image = image;
-        _host.Add(icon);
+        _backend.Images[0x42] = image;
+        _backend.Send(Call(TrayProtocol.Add, TrayProtocol.NIF_ICON) with { Icon = 0x42 });
 
         Assert.Same(image, tray.Items[0].IconAt(32));
     }
 
     [Fact]
-    public void A_disposed_tray_stops_following_the_host()
+    public void Windows_settings_move_an_icon_onto_the_taskbar()
+    {
+        const string program = @"C:\Apps\sync.exe";
+        _backend.Programs[App] = program;
+        using var tray = Tray();
+        _backend.Send(Add());
+        Assert.True(tray.Items[0].Overflow);
+
+        _backend.Settings.Add(new TrayIconSetting(Guid.Empty, program, 1, Promoted: true));
+        _backend.SignalSettingsChanged();
+
+        Assert.False(tray.Items[0].Overflow);
+    }
+
+    [Fact]
+    public void A_tray_waits_for_the_instance_that_has_the_notification_area_and_takes_over_when_it_exits()
+    {
+        _backend.Taken = true;
+        using var tray = Tray();
+        Assert.False(_backend.IsOpen);
+        _loop.Advance(TimeSpan.FromSeconds(1));
+        Assert.False(_backend.IsOpen);
+        Assert.Equal(0, Broadcasts);
+
+        _backend.Taken = false;
+        _loop.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(_backend.IsOpen);
+        Assert.Equal(1, Broadcasts);
+    }
+
+    [Fact]
+    public void An_active_tray_has_no_half_second_poll()
+    {
+        using var tray = Tray();
+        Assert.True(_backend.IsOpen);
+        Assert.Equal(TimeSpan.FromSeconds(30), _loop.NextDue - _loop.Now);
+    }
+
+    [Fact]
+    public void An_icon_whose_window_is_gone_leaves_at_the_next_check()
+    {
+        using var tray = Tray();
+        _backend.Send(Add());
+        // The app ended without removing its icon.
+        _backend.Windows.Remove(App);
+
+        _loop.Advance(TimeSpan.FromSeconds(29));
+        Assert.Single(tray.Items);
+        _loop.Advance(TimeSpan.FromSeconds(1));
+        Assert.Empty(tray.Items);
+    }
+
+    [Fact]
+    public void Explorer_coming_to_the_front_raises_the_tray_without_waiting_for_a_timer()
+    {
+        using var tray = Tray();
+        _backend.Calls.Clear();
+
+        _backend.SignalExplorerInFront();
+
+        Assert.Equal(["raise"], _backend.Calls);
+    }
+
+    [Fact]
+    public void A_restarted_explorer_is_answered_once()
+    {
+        using var tray = Tray();
+        Assert.Equal(1, Broadcasts);
+
+        // Its own broadcast comes back to it, and Explorer's taskbar is the one it already answered.
+        _backend.SignalTaskbarCreated();
+        _loop.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, Broadcasts);
+
+        // Explorer ends, and a new one makes a new taskbar and asks apps to add their icons.
+        _backend.Explorer = 0;
+        _loop.Advance(TimeSpan.FromSeconds(1));
+        _backend.Explorer = 0x600;
+        _backend.SignalTaskbarCreated();
+        Assert.Equal(1, Broadcasts);
+        _loop.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(2, Broadcasts);
+
+        // That answer comes back too, and is not answered.
+        _backend.SignalTaskbarCreated();
+        _loop.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, Broadcasts);
+    }
+
+    [Fact]
+    public void App_bar_requests_of_this_process_find_Explorers_taskbar_first_and_the_tray_then_returns_to_the_front()
+    {
+        using var tray = Tray();
+        _backend.Calls.Clear();
+
+        using (SystemTray.ExplorerFirst())
+            Assert.Equal(["lower"], _backend.Calls);
+
+        Assert.Equal(["lower", "raise"], _backend.Calls);
+    }
+
+    [Fact]
+    public void A_disposed_tray_gives_the_notification_area_up_and_stops_following_it()
     {
         var tray = Tray();
-        _host.Add(Icon("a"));
+        _backend.Send(Add());
         var ready = 0;
         tray.Items[0].Ready += () => ready++;
+        _backend.Calls.Clear();
 
         tray.Dispose();
-        _host.Add(Icon("b"));
-        _loop.Process();
+        _loop.Advance(TimeSpan.FromSeconds(30));
 
         Assert.Single(tray.Items);
         Assert.Equal(0, ready);
-        Assert.Equal(0, _host.Listeners);
+        Assert.False(_backend.IsOpen);
+        // The window went first, then apps were asked to add their icons to whichever taskbar window is first now.
+        Assert.Equal(["close", "broadcast", "dispose"], _backend.Calls);
     }
 
     [Fact]
@@ -167,35 +303,5 @@ public sealed class SystemTrayTests
         Assert.Equal(32, image.Width);
         Assert.Equal(32 * 32 * 4, image.Bgra.Length);
         Assert.False(image.Premultiplied);
-    }
-
-    private sealed class FakeHost : ITrayHost
-    {
-        public List<TrayIcon> Known { get; } = [];
-
-        public List<(TrayClick Click, (int X, int Y)? At)> Clicks { get; } = [];
-
-        public int Listeners => (Added?.GetInvocationList().Length ?? 0) + (Changed?.GetInvocationList().Length ?? 0)
-            + (Removed?.GetInvocationList().Length ?? 0) + (Balloon?.GetInvocationList().Length ?? 0);
-
-        public IReadOnlyCollection<TrayIcon> Icons => Known;
-
-        public event Action<TrayIcon>? Added;
-
-        public event Action<TrayIcon>? Changed;
-
-        public event Action<TrayIcon>? Removed;
-
-        public event Action<TrayIcon, string, string, uint>? Balloon;
-
-        public void Add(TrayIcon icon) => Added?.Invoke(icon);
-
-        public void Change(TrayIcon icon) => Changed?.Invoke(icon);
-
-        public void Remove(TrayIcon icon) => Removed?.Invoke(icon);
-
-        public void ShowBalloon(TrayIcon icon, string title, string message, uint flags) => Balloon?.Invoke(icon, title, message, flags);
-
-        public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at) => Clicks.Add((click, at));
     }
 }

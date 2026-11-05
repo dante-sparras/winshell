@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 using Winshell.Tray;
 
@@ -23,41 +22,22 @@ public sealed class TrayClickerTests
         Assert.True(TrayClicker.MayClick(medium, medium));
     }
 
-    [Fact]
-    public void A_click_hands_over_the_foreground_then_reaches_the_app_only_when_this_process_may_click_it()
+    [Theory]
+    [InlineData(ProcessIntegrity.Medium, true)]
+    [InlineData(0x3000u, false)]
+    public void A_click_hands_over_the_foreground_then_reaches_the_app_only_when_this_process_may_click_it(uint shell, bool clicks)
     {
-        // The app is this test process: medium on a developer's desktop, elevated on CI. Its window is message-only,
-        // so nothing else can find it.
-        var app = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
-        Assert.NotEqual(0, app);
-        var seen = new List<string>();
-        WindowProc record = (hwnd, msg, wParam, lParam) =>
-        {
-            if (msg == 0x8001)
-                seen.Add($"callback {lParam:X}");
-            return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
-        };
-        var previous = Win32.SetWindowLongPtr(app, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(record));
-        // The real handoff joins the user's foreground thread, so a recorder stands in for it.
-        using var clicker = new TrayClicker(new ManualEventLoop(), (window, pid) => seen.Add($"foreground {window} {pid}"));
-        try
-        {
-            clicker.Click(new TrayIcon { Key = "app", Window = app, Id = 1, CallbackMessage = 0x8001 }, TrayClick.Left, null);
-        }
-        finally
-        {
-            Win32.SetWindowLongPtr(app, GWLP_WNDPROC, previous);
-            Win32.DestroyWindow(app);
-            GC.KeepAlive(record);
-        }
+        // The app is elevated, and so is the shell in the second case.
+        const nint app = 0x100;
+        var backend = new FakeTrayBackend { Windows = { [app] = 42 }, Integrities = { [42] = 0x3000, [(uint)Environment.ProcessId] = shell } };
+        using var clicker = new TrayClicker(new ManualEventLoop(), backend);
+
+        clicker.Click(new TrayIcon { Key = "app", Window = app, Id = 1, CallbackMessage = 0x8001 }, TrayClick.Left, null);
 
         // An app before version 4 is told the mouse message: WM_LBUTTONDOWN, then WM_LBUTTONUP.
-        var own = ProcessIntegrity.TryRead((uint)Environment.ProcessId);
-        string[] expected = TrayClicker.MayClick(own, own) ? [$"foreground {app} {Environment.ProcessId}", "callback 201", "callback 202"] : [];
-        Assert.Equal(expected, seen);
+        string[] calls = clicks ? ["foreground 100 42", "notify", "notify"] : [];
+        (nint, uint, nint, nint)[] sent = clicks ? [(app, 0x8001, 1, 0x201), (app, 0x8001, 1, 0x202)] : [];
+        Assert.Equal(calls, backend.Calls);
+        Assert.Equal(sent, backend.Notified);
     }
-
-    private delegate nint WindowProc(nint hwnd, uint msg, nint wParam, nint lParam);
-
-    private const int GWLP_WNDPROC = -4;
 }

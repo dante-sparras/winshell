@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 
@@ -25,36 +26,140 @@ public enum BalloonIcon
 /// </summary>
 public sealed class SystemTray : ObservableObject, IDisposable
 {
+    // The trays of this process with the notification area window open.
+    private static readonly ConcurrentDictionary<SystemTray, byte> Opened = new();
+
     private readonly IEventLoop _loop;
-    private readonly ITrayHost _host;
-    private readonly TrayHost? _owned;
+    private readonly Log _log;
+    private readonly ITrayBackend _backend;
+    private readonly TrayIcons _icons;
+    private readonly TrayClicker _clicker;
     private readonly Dictionary<string, SystemTrayItem> _items = [];
+    private bool _open;
+    private bool _waiting;
+    private nint _answered;
+    private IDisposable? _timer;
+    private IDisposable? _answer;
     private bool _disposed;
 
-    internal SystemTray(IEventLoop loop, Log log, ITrayHost? host = null)
+    internal SystemTray(IEventLoop loop, Log log, ITrayBackend? backend = null)
     {
         _loop = loop;
-        _owned = host is null ? new TrayHost(loop, log, TrayNames.Session, TrayHost.BroadcastTaskbarCreated) : null;
-        _host = host ?? _owned!;
-        // The host raises these on the loop's thread.
-        _host.Added += OnChanged;
-        _host.Changed += OnChanged;
-        _host.Removed += OnRemoved;
-        _host.Balloon += OnBalloon;
-        foreach (var icon in _host.Icons)
-            OnChanged(icon);
-        if (_owned is not null)
-            loop.Post(StartHost);
+        _log = log;
+        _backend = backend ?? new TrayBackend(loop, log, TrayNames.Session);
+        _icons = new TrayIcons(_backend.ReadIcon, OwnerOf);
+        _clicker = new TrayClicker(loop, _backend);
+        _icons.Added += OnChanged;
+        _icons.Changed += OnChanged;
+        _icons.Removed += OnRemoved;
+        _icons.Balloon += OnBalloon;
+        // The backend raises these on the loop's thread.
+        _backend.TaskbarCreated += OnTaskbarCreated;
+        _backend.ExplorerInFront += _backend.Raise;
+        _backend.SettingsChanged += UseSettings;
+        loop.Post(Start);
     }
 
     /// <summary>The icons apps show, in the order they were added. Empty while another instance has the tray.</summary>
     public ObservableCollection<SystemTrayItem> Items { get; } = [];
 
-    private void StartHost()
+    /// <summary>
+    /// Puts Explorer's taskbar in front of this process's trays until disposed, so an app bar request this process
+    /// sends reaches Explorer itself. When the first <c>Shell_TrayWnd</c> belongs to the calling process,
+    /// <c>SHAppBarMessage</c> passes the rectangle by an address in that process, which Explorer cannot use once a tray
+    /// passes the message on: <c>ABM_QUERYPOS</c> and <c>ABM_SETPOS</c> then do nothing, and the work area stays as it was.
+    /// </summary>
+    internal static IDisposable ExplorerFirst() => new Restore([.. Opened.Keys.Where(tray => tray._backend.Lower())]);
+
+    private sealed class Restore(List<SystemTray> trays) : IDisposable
     {
-        if (!_disposed)
-            _owned!.Start();
+        public void Dispose()
+        {
+            foreach (var tray in trays)
+            {
+                if (Opened.ContainsKey(tray))
+                    tray._backend.Raise();
+            }
+        }
     }
+
+    /// <summary>Becomes the notification area, or waits for the instance that has it to exit.</summary>
+    private void Start()
+    {
+        _timer = null;
+        if (_disposed)
+            return;
+        if (!_backend.TryOwn())
+        {
+            if (!_waiting)
+                _log.Info("tray", "Another winshell instance is the notification area; this one takes over when it exits");
+            _waiting = true;
+            _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), Start);
+            return;
+        }
+        _waiting = false;
+        if (!_backend.Open(_icons.Apply))
+        {
+            _backend.Close();
+            _log.Warn("tray", "Could not create the notification area window; the system tray stays empty");
+            return;
+        }
+        _open = true;
+        Opened[this] = 0;
+        _answered = _backend.Explorer;
+        UseSettings();
+        KeepInFront();
+        // Every app adds its icons again, now to this window.
+        _backend.Broadcast();
+    }
+
+    private void UseSettings() => _icons.UseSettings(_backend.ReadSettings());
+
+    /// <summary>
+    /// Drops icons of apps that ended without removing them, and checks the taskbar order as a fallback for a
+    /// missing signal. Explorer coming in front normally raises the window at once, without a timer.
+    /// </summary>
+    private void KeepInFront()
+    {
+        try
+        {
+            _backend.Raise();
+            foreach (var icon in _icons.Icons.ToArray())
+            {
+                if (_backend.ProcessOf(icon.Window) == 0)
+                    _icons.Remove(icon.Key);
+            }
+        }
+        finally
+        {
+            if (_open)
+                _timer = _loop.Schedule(TimeSpan.FromSeconds(30), KeepInFront);
+        }
+    }
+
+    /// <summary>
+    /// Explorer broadcasts <c>TaskbarCreated</c> when it makes a new taskbar: after a restart, a crash or an update.
+    /// Apps then add their icons to whichever taskbar window is first, which can be Explorer's new one. The window
+    /// gets back in front and asks once more a moment later, so every app registers through it. A broadcast while
+    /// Explorer's taskbar is the one already answered is not answered: this tray's own, or another tray's.
+    /// </summary>
+    private void OnTaskbarCreated()
+    {
+        _backend.Raise();
+        var explorer = _backend.Explorer;
+        if (explorer == 0 || explorer == _answered)
+            return;
+        _answered = explorer;
+        _log.Info("tray", "Explorer made a new taskbar; asking apps to add their icons again");
+        _answer?.Dispose();
+        _answer = _loop.Schedule(TimeSpan.FromSeconds(1), () =>
+        {
+            _answer = null;
+            _backend.Broadcast();
+        });
+    }
+
+    private (int ProcessId, string ProgramPath) OwnerOf(nint window) => ((int)_backend.ProcessOf(window), _backend.ProgramOf(window));
 
     private void OnChanged(TrayIcon icon)
     {
@@ -68,7 +173,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
         }
         if (icon.Hidden)
             return;
-        item = new SystemTrayItem(_host, icon);
+        item = new SystemTrayItem(_clicker, icon);
         _items[icon.Key] = item;
         Items.Add(item);
         _loop.Post(() =>
@@ -98,11 +203,18 @@ public sealed class SystemTray : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        _host.Added -= OnChanged;
-        _host.Changed -= OnChanged;
-        _host.Removed -= OnRemoved;
-        _host.Balloon -= OnBalloon;
-        _owned?.Dispose();
+        _timer?.Dispose();
+        _answer?.Dispose();
+        _timer = _answer = null;
+        _clicker.Dispose();
+        Opened.TryRemove(this, out _);
+        // The window goes, the next instance may take over, and apps are asked to add their icons again to whichever
+        // taskbar window is first now.
+        _backend.Close();
+        if (_open)
+            _backend.Broadcast();
+        _open = false;
+        _backend.Dispose();
     }
 }
 
@@ -112,15 +224,15 @@ public sealed class SystemTray : ObservableObject, IDisposable
 /// </summary>
 public sealed class SystemTrayItem : ObservableObject
 {
-    private readonly ITrayHost _host;
+    private readonly TrayClicker _clicker;
     private readonly TrayIcon _icon;
     private PixelImage? _image;
     private string _tooltip;
     private bool _overflow;
 
-    internal SystemTrayItem(ITrayHost host, TrayIcon icon)
+    internal SystemTrayItem(TrayClicker clicker, TrayIcon icon)
     {
-        _host = host;
+        _clicker = clicker;
         _icon = icon;
         _image = icon.Image;
         _tooltip = icon.Tip;
@@ -185,19 +297,19 @@ public sealed class SystemTrayItem : ObservableObject
     }
 
     /// <summary>A left click at the cursor, which most apps answer by showing their window.</summary>
-    public void Click() => _host.Click(_icon, TrayClick.Left, null);
+    public void Click() => _clicker.Click(_icon, TrayClick.Left, null);
 
     /// <summary>A double click at the cursor, which many older apps need before they show their window.</summary>
-    public void DoubleClick() => _host.Click(_icon, TrayClick.Double, null);
+    public void DoubleClick() => _clicker.Click(_icon, TrayClick.Double, null);
 
     /// <summary>A middle click at the cursor. What it does is up to the app.</summary>
-    public void MiddleClick() => _host.Click(_icon, TrayClick.Middle, null);
+    public void MiddleClick() => _clicker.Click(_icon, TrayClick.Middle, null);
 
     /// <summary>A right click, which asks the app to open its menu at the cursor.</summary>
-    public void Display() => _host.Click(_icon, TrayClick.Menu, null);
+    public void Display() => _clicker.Click(_icon, TrayClick.Menu, null);
 
     /// <summary>A right click, which asks the app to open its menu at a point on the virtual desktop, in physical pixels.</summary>
-    public void Display(int x, int y) => _host.Click(_icon, TrayClick.Menu, (x, y));
+    public void Display(int x, int y) => _clicker.Click(_icon, TrayClick.Menu, (x, y));
 
     internal void Refresh()
     {

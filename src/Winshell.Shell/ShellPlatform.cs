@@ -122,7 +122,7 @@ internal sealed class ShellPlatform : IDisposable
     public SystemBackdropTheme BackdropTheme => IsDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
     /// <summary>Puts the tray windows behind Explorer's while an app bar changes.</summary>
-    internal static IDisposable ExplorerFirst() => Winshell.Tray.TrayHost.ExplorerFirst();
+    internal static IDisposable ExplorerFirst() => Winshell.Tray.SystemTray.ExplorerFirst();
 
     public event Action? ThemeChanged;
 

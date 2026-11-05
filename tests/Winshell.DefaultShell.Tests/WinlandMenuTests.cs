@@ -15,7 +15,7 @@ public sealed class WinlandMenuTests : IDisposable
 
     private readonly ManualEventLoop _loop = new();
     private readonly FakeWinlandLink _link = new() { ProcessId = WinlandProcess };
-    private readonly FakeTrayHost _host = new();
+    private readonly FakeTrayBackend _backend = new();
     private readonly HashSet<string> _existing = [];
     private readonly List<string> _opened = [];
     private WinlandService? _winland;
@@ -33,18 +33,18 @@ public sealed class WinlandMenuTests : IDisposable
     private WinlandMenu Menu { get; }
 
     /// <summary>A tray whose icons are noticed as the shell's tray area notices them, so the menu follows the pipe.</summary>
-    private SystemTray Tray(params TrayIcon[] icons)
+    private SystemTray Tray(params (string Program, int ProcessId)[] icons)
     {
-        var tray = new SystemTray(_loop, new Log { Sink = static (_, _, _) => { } }, _host);
-        foreach (var icon in icons)
-            _host.Add(icon);
+        var tray = new SystemTray(_loop, new Log { Sink = static (_, _, _) => { } }, _backend);
+        _loop.Process();
+        foreach (var (program, processId) in icons)
+            _backend.Add(program, processId);
         foreach (var item in tray.Items)
             Menu.Notice(item);
         return tray;
     }
 
-    private static TrayIcon WinlandIcon(string key = "winland", int process = WinlandProcess) =>
-        new() { Key = key, ProgramPath = Winland, ProcessId = process };
+    private static (string Program, int ProcessId) WinlandIcon(int process = WinlandProcess) => (Winland, process);
 
     [Theory]
     [InlineData(LogFile, true, new[] { "Reload R", "Edit config E", "Open log L", "Quit Q" })]
@@ -94,9 +94,9 @@ public sealed class WinlandMenuTests : IDisposable
         // Two Winlands from one program, each on its own pipe: only the one this shell follows is drawn here.
         using var tray = Tray(
             WinlandIcon(),
-            WinlandIcon("second", WinlandProcess + 1),
-            new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe", ProcessId = 900 },
-            new TrayIcon { Key = "unknown" });
+            WinlandIcon(WinlandProcess + 1),
+            (@"C:\Program Files\Other\other.exe", 900),
+            ("", 0));
 
         Assert.Equal([true, false, false, false], tray.Items.Select(Menu.Owns));
 
@@ -119,13 +119,13 @@ public sealed class WinlandMenuTests : IDisposable
     public void Winlands_pipe_is_followed_only_once_an_icon_of_winland_exe_appears()
     {
         using var tray = Tray(
-            new TrayIcon { Key = "other", ProgramPath = @"C:\Program Files\Other\other.exe", ProcessId = WinlandProcess },
-            new TrayIcon { Key = "unknown" });
+            (@"C:\Program Files\Other\other.exe", WinlandProcess),
+            ("", 0));
 
         Assert.All(tray.Items, item => Assert.False(Menu.Owns(item)));
         Assert.Equal(0, _services);
 
-        _host.Add(WinlandIcon());
+        _backend.Add(Winland, WinlandProcess);
         Menu.Notice(tray.Items[2]);
         Menu.Notice(tray.Items[2]);
 
