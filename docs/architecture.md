@@ -33,6 +33,8 @@ Keep allocation and release together: handles, COM objects, buffers and callback
 
 The build enforces this in the root `Directory.Build.targets`, for every project except Native. It adds `BannedSymbols.Interop.txt`, so `DllImport`, `LibraryImport`, `ComImport`, `GeneratedComInterface` and `GeneratedComClass` fail with RS0030. It forces `AllowUnsafeBlocks` off, so unsafe code fails with CS0227. It runs after each project file, so setting `AllowUnsafeBlocks` there has no effect. A new project under `src/` or `tests/` is covered without edits. Native keeps the clock ban the other `src/` projects have. Do not exempt a consumer, suppress the diagnostics or exclude generated consumer code to bypass the boundary.
 
+A project with `UseWinUI` keeps unsafe compilation, because CsWinRT generates its trim-safe marshalling for collections passed to WinUI only when unsafe code is allowed. Hand-written unsafe code there is still forbidden, and the [architecture tests](#architecture-proof) will check hand-written sources for it. The interop ban applies to WinUI projects too.
+
 The one exception is the Windows App SDK's `UndockedRegFreeWinRT-AutoInitializer.cs`, which its package adds to each self-contained WinUI executable. It is package startup code we don't own, not our interop, so only that file, matched by its path in the NuGet package folder, drops the ban. Any `[DllImport]` of ours in the same project still fails.
 
 ## Services and feature ownership
