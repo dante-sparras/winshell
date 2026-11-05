@@ -49,7 +49,7 @@ internal sealed record DoctorContext(
 /// </summary>
 public static class Doctor
 {
-    // Each check reads what it needs through IDoctorFacts and judges it in code of its own, so the judging is tested without the PC.
+    // Each check reads what it needs, mostly through IDoctorFacts, and judges it in code of its own, so the judging is tested without the PC.
     internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
@@ -90,8 +90,8 @@ public static class Doctor
             Guard("appBars", "App bars", () => DoctorScreens.AppBars(facts.Monitors(), facts.EdgeWindows())),
             Guard("dpi", "DPI", () => DoctorScreens.Dpi(facts.PerMonitorV2(), facts.CompatibilityLayers(context.ExePath), facts.Monitors())),
             Guard("signIn", "Sign-in", () => Packaging.IsPackaged
-                ? DoctorSignIn.SignIn(SignInEntry.TaskState())
-                : DoctorSignIn.SignIn(facts.RunEntry(), facts.RunEntryTurnedOff(), context.ExePath, File.Exists, facts.ResolveLinks)),
+                ? DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State)
+                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(), context.ExePath, File.Exists, facts.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(facts.NotificationAccess())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes", () => DoctorCrashes.CrashesIn(facts.ReadCrashReports(context.CrashRoot), now, facts.PeekCrash)),

@@ -34,10 +34,6 @@ internal interface IDoctorFacts
 
     IReadOnlyList<string> CompatibilityLayers(string exePath);
 
-    string? RunEntry();
-
-    bool RunEntryTurnedOff();
-
     string ResolveLinks(string path);
 
     string NotificationAccess();

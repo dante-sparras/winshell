@@ -27,9 +27,9 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
 {
     public string Command => command;
 
-    public bool IsRegistered() => Try(() => SignInEntry.Command(runKey) is not null);
+    public bool IsRegistered() => Try(() => SignInEntry.RegisteredCommand(runKey) is not null);
 
-    public bool PointsElsewhere() => Try(() => SignInEntry.Command(runKey) is { } value && !SameSignInCommand(value, command));
+    public bool PointsElsewhere() => Try(() => SignInEntry.RegisteredCommand(runKey) is { } value && !SameSignInCommand(value, command));
 
     public bool TurnedOffInWindows() => Try(() => SignInEntry.TurnedOffInWindows(approvedKey));
 
@@ -198,8 +198,8 @@ internal interface IStartupTask
 }
 
 /// <summary>
-/// The real <c>StartupTask</c> for task id <c>Winshell</c>. Only a packaged process calls <see cref="Open"/>, and
-/// that call has no test: it would need an installed package and would change that package's sign-in.
+/// The real <c>StartupTask</c> that <see cref="SignInEntry.OpenTask"/> reads. Enabling or disabling it has no test:
+/// that would change an installed package's sign-in.
 /// </summary>
 internal static class WindowsStartupTasks
 {

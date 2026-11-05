@@ -20,7 +20,7 @@ internal static class SignInEntry
     public const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
     /// <summary>The command the <c>Run</c> value starts, or null when there is none.</summary>
-    public static string? Command(string runKey = RunKey)
+    public static string? RegisteredCommand(string runKey = RunKey)
     {
         using var key = Registry.CurrentUser.OpenSubKey(runKey);
         return key?.GetValue(Name) as string;
@@ -52,7 +52,4 @@ internal static class SignInEntry
             return null;
         }
     }
-
-    /// <summary>The state of the package's startup task, or null when there is none.</summary>
-    public static StartupTaskState? TaskState() => OpenTask()?.State;
 }
