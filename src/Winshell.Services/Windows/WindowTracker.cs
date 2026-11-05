@@ -29,33 +29,46 @@ internal readonly record struct WindowIdentity(
 
 /// <summary>
 /// The windows the taskbar and Alt+Tab show, for the whole process, kept current by WinEvent hooks set on the UI
-/// thread. Events are gathered and read once per turn of the loop, then <see cref="Changed"/> is raised.
+/// thread. Events are gathered and read once per turn of the loop, then <see cref="Changed"/> is raised. Which
+/// desktop a window is on uses the supported desktop API.
 /// </summary>
-internal static class WindowTracker
+internal sealed class WindowTracker : IWindowSource
 {
-    private static readonly Dictionary<nint, WindowInfo> Tracked = [];
-    private static readonly Dictionary<nint, WindowIdentity> Identities = [];
-    private static readonly HashSet<nint> Dirty = [];
-    private static readonly HashSet<nint> Flashed = [];
-    private static readonly HashSet<nint> Wanting = [];
-    private static readonly List<WinEventHook> Hooks = [];
-    private static IEventLoop? _loop;
-    private static bool _flushPosted;
-    private static bool _foregroundDirty;
+    public static readonly WindowTracker Instance = new();
+
+    private readonly Dictionary<nint, WindowInfo> _tracked = [];
+    private readonly Dictionary<nint, WindowIdentity> _identities = [];
+    private readonly HashSet<nint> _dirty = [];
+    private readonly HashSet<nint> _flashed = [];
+    private readonly HashSet<nint> _wanting = [];
+    private readonly List<WinEventHook> _hooks = [];
+    private IEventLoop? _loop;
+    private bool _flushPosted;
+    private bool _foregroundDirty;
+
+    private WindowTracker()
+    {
+    }
 
     /// <summary>Raised on the UI thread after windows came, went or changed, or the foreground moved.</summary>
-    public static event Action? Changed;
+    public event Action? Changed;
 
-    public static IReadOnlyDictionary<nint, WindowInfo> Windows => Tracked;
+    public IReadOnlyDictionary<nint, WindowInfo> Windows => _tracked;
 
     /// <summary>The tracked window that has the foreground, or owns the window that has it. Zero when none.</summary>
-    public static nint Active { get; private set; }
+    public nint Active { get; private set; }
 
     /// <summary>Whether the window flashed to ask for attention and has not been activated since.</summary>
-    public static bool WantsAttention(nint hwnd) => Wanting.Contains(hwnd);
+    public bool WantsAttention(nint hwnd) => _wanting.Contains(hwnd);
+
+    public ScreenInfo? Screen(string deviceName) => Screens.Find(deviceName)?.Info;
+
+    public string DesktopId(nint hwnd) => WindowDesktop.IdOf(hwnd);
+
+    public bool MoveToDesktop(nint hwnd, Guid desktop) => WindowDesktop.Move(hwnd, desktop);
 
     /// <summary>Sets the hooks and reads the open windows, once. Must run on the UI thread, which pumps messages.</summary>
-    public static void EnsureStarted(IEventLoop loop, Log log)
+    public void Start(IEventLoop loop, Log log)
     {
         if (_loop is not null)
             return;
@@ -71,7 +84,7 @@ internal static class WindowTracker
         foreach (var (min, max) in ranges)
         {
             if (WinEventHook.Start(min, max, OnWinEvent) is { } hook)
-                Hooks.Add(hook);
+                _hooks.Add(hook);
             else
                 log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
@@ -80,17 +93,17 @@ internal static class WindowTracker
         if (!ShellHookWindow.Start(OnShellHook))
             log.Warn("windows", "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
         foreach (var hwnd in TopLevelWindows.List())
-            Dirty.Add(hwnd);
+            _dirty.Add(hwnd);
         _foregroundDirty = true;
         Flush();
     }
 
-    private static void OnShellHook(nint code, nint hwnd) =>
+    private void OnShellHook(nint code, nint hwnd) =>
         NativeCallback.Guard(Log.Default, "windows", () =>
         {
             if (WindowRules.IsFlash(code) && hwnd != 0)
             {
-                Flashed.Add(hwnd);
+                _flashed.Add(hwnd);
                 if (!_flushPosted && _loop is not null)
                 {
                     _flushPosted = true;
@@ -99,21 +112,21 @@ internal static class WindowTracker
             }
         });
 
-    private static void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
+    private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
         NativeCallback.Guard(Log.Default, "windows", () => Mark(eventType, hwnd, idObject, idChild));
 
-    private static void Mark(uint eventType, nint hwnd, int idObject, int idChild)
+    private void Mark(uint eventType, nint hwnd, int idObject, int idChild)
     {
         // Windows reports no move of a window on its own, so maximizing, restoring and moving to another monitor
         // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
         if (eventType == Win32.EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
             return;
         var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && TopLevelWindows.RootOf(hwnd) == hwnd;
-        var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, Tracked.ContainsKey(hwnd), isRoot);
+        var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, _tracked.ContainsKey(hwnd), isRoot);
         if (!marksWindow && !WindowRules.MarksForeground(eventType))
             return;
         if (marksWindow)
-            Dirty.Add(hwnd);
+            _dirty.Add(hwnd);
         if (WindowRules.MarksForeground(eventType))
             _foregroundDirty = true;
         if (!_flushPosted && _loop is not null)
@@ -123,27 +136,27 @@ internal static class WindowTracker
         }
     }
 
-    private static void Flush()
+    private void Flush()
     {
         _flushPosted = false;
         // Describe can pump once the UI thread is STA. Drop only the hwnds this pass already saw,
         // so a window marked during that call stays for the flush OnWinEvent already posted.
-        var pending = Dirty.ToArray();
+        var pending = _dirty.ToArray();
         foreach (var hwnd in pending)
-            Dirty.Remove(hwnd);
+            _dirty.Remove(hwnd);
         var changed = false;
         foreach (var hwnd in pending)
         {
-            Tracked.TryGetValue(hwnd, out var old);
+            _tracked.TryGetValue(hwnd, out var old);
             var info = IsTaskbarWindow(hwnd) ? Describe(hwnd) : null;
             if (info is null)
             {
-                changed |= Tracked.Remove(hwnd);
-                Identities.Remove(hwnd);
+                changed |= _tracked.Remove(hwnd);
+                _identities.Remove(hwnd);
             }
             else if (info != old)
             {
-                Tracked[hwnd] = info;
+                _tracked[hwnd] = info;
                 changed = true;
             }
         }
@@ -157,30 +170,30 @@ internal static class WindowTracker
                 changed = true;
             }
         }
-        if (!Tracked.ContainsKey(Active) && Active != 0)
+        if (!_tracked.ContainsKey(Active) && Active != 0)
         {
             Active = 0;
             changed = true;
         }
         // A dialog that flashes asks for the window that owns it. The window in front already has the user.
-        foreach (var hwnd in Flashed)
+        foreach (var hwnd in _flashed)
         {
             var wanting = ActiveOf(hwnd);
             if (wanting != 0 && wanting != Active)
-                changed |= Wanting.Add(wanting);
+                changed |= _wanting.Add(wanting);
         }
-        Flashed.Clear();
-        changed |= WindowRules.SettleAttention(Wanting, Active, Tracked.ContainsKey);
+        _flashed.Clear();
+        changed |= WindowRules.SettleAttention(_wanting, Active, _tracked.ContainsKey);
         if (changed)
             Changed?.Invoke();
     }
 
-    private static nint ActiveOf(nint foreground)
+    private nint ActiveOf(nint foreground)
     {
         var hwnd = foreground == 0 ? 0 : TopLevelWindows.RootOf(foreground);
         for (var depth = 0; hwnd != 0 && depth < 16; depth++)
         {
-            if (Tracked.ContainsKey(hwnd))
+            if (_tracked.ContainsKey(hwnd))
                 return hwnd;
             hwnd = Win32.GetWindow(hwnd, Win32.GW_OWNER);
         }
@@ -211,7 +224,7 @@ internal static class WindowTracker
             TopLevelWindows.IsCloaked(hwnd)));
     }
 
-    private static WindowInfo Describe(nint hwnd)
+    private WindowInfo Describe(nint hwnd)
     {
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
@@ -225,7 +238,7 @@ internal static class WindowTracker
             var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
             fullscreen = WindowRules.CoversMonitor(style, rect, mi.Bounds);
         }
-        Identities.TryGetValue(hwnd, out var previous);
+        _identities.TryGetValue(hwnd, out var previous);
         // The property can arrive after the window is first shown. Read it every time. The package id and the
         // program path do not change, so each is read once.
         var property = AppUserModelIds.OfWindow(hwnd);
@@ -237,7 +250,7 @@ internal static class WindowTracker
         }
         string? executable = previous.Executable is { Length: > 0 } ? null : ExePath(hwnd);
         var identity = Resolve(previous, property, package, executable);
-        Identities[hwnd] = identity;
+        _identities[hwnd] = identity;
         var owner = Win32.GetWindow(hwnd, Win32.GW_OWNER);
         return new WindowInfo(hwnd, TopLevelWindows.Title(hwnd), identity.AppId, identity.Executable, identity.Icon, owner, maximized, minimized, fullscreen, device);
     }
@@ -272,7 +285,7 @@ internal static class WindowTracker
     /// and a maximized window is maximized again on the monitor it lands on. The shell is per-monitor aware, so the
     /// rectangle and the placement use the same pixels.
     /// </summary>
-    public static void MoveToMonitor(nint hwnd, string deviceName)
+    public void MoveToMonitor(nint hwnd, string deviceName)
     {
         if (deviceName.Length == 0 || !Win32.IsWindow(hwnd))
             return;
@@ -319,7 +332,7 @@ internal static class WindowTracker
     /// Brings a window to the front and focuses it. Windows lets a program take the foreground only in some cases, so
     /// when asking fails, Winshell attaches to the foreground thread's input, and as a last resort taps an unassigned key.
     /// </summary>
-    public static void Activate(nint hwnd)
+    public void Activate(nint hwnd)
     {
         if (Win32.IsIconic(hwnd))
             TopLevelWindows.Restore(hwnd);
@@ -349,9 +362,9 @@ internal static class WindowTracker
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
-    public static void Close(nint hwnd) => TopLevelWindows.Close(hwnd);
+    public void Close(nint hwnd) => TopLevelWindows.Close(hwnd);
 
-    public static void SetMaximized(nint hwnd, bool maximized)
+    public void SetMaximized(nint hwnd, bool maximized)
     {
         if (maximized)
             TopLevelWindows.Maximize(hwnd);
@@ -359,7 +372,7 @@ internal static class WindowTracker
             TopLevelWindows.Restore(hwnd);
     }
 
-    public static void SetMinimized(nint hwnd, bool minimized)
+    public void SetMinimized(nint hwnd, bool minimized)
     {
         if (minimized)
             TopLevelWindows.Minimize(hwnd);

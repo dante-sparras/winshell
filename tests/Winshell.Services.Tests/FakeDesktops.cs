@@ -3,7 +3,7 @@ using Winshell.Windows;
 namespace Winshell.Services.Tests;
 
 /// <summary>Virtual desktops a test changes by hand, so no real desktop is switched, added or removed.</summary>
-internal sealed class FakeDesktops : IVirtualDesktopSource
+internal sealed class FakeDesktops : IVirtualDesktopBackend
 {
     public static FakeDesktops Holding(Guid current, params Guid[] ids)
     {
@@ -22,6 +22,13 @@ internal sealed class FakeDesktops : IVirtualDesktopSource
     public List<string> Calls { get; } = [];
 
     public bool FailRead { get; set; }
+
+    public event Action? Switched;
+
+    public bool StartWatching() => true;
+
+    /// <summary>Reports a switch the way Windows does, without changing <see cref="Current"/>.</summary>
+    public void Switch() => Switched?.Invoke();
 
     public string ListStamp => string.Join(",", Items.Select(item => item.Id));
 

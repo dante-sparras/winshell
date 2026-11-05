@@ -95,6 +95,34 @@ public sealed class VirtualDesktopsServiceTests
     }
 
     [Fact]
+    public void A_switch_Windows_reports_reads_the_list_once_on_the_next_turn()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var source = FakeDesktops.Holding(first, first, second);
+        using var desktops = Start(source);
+        var reads = source.Calls.Count;
+
+        source.Current = second;
+        source.Switch();
+        source.Switch();
+        Assert.Same(desktops.Desktops[0], desktops.Current);
+
+        _loop.Process();
+
+        Assert.Same(desktops.Desktops[1], desktops.Current);
+        Assert.True(desktops.Desktops[1].Current);
+        Assert.Equal(reads + 1, source.Calls.Count);
+
+        source.Current = first;
+        source.Switch();
+        _loop.Process();
+
+        Assert.Same(desktops.Desktops[0], desktops.Current);
+        Assert.Equal(reads + 2, source.Calls.Count);
+    }
+
+    [Fact]
     public void An_unknown_build_does_not_read_or_change_desktops_or_poll()
     {
         var source = FakeDesktops.Holding(Guid.NewGuid());
@@ -158,6 +186,7 @@ public sealed class VirtualDesktopsServiceTests
 
         desktops.Dispose();
         source.Items.Clear();
+        source.Switch();
         _loop.Advance(VirtualDesktopsService.RereadInterval);
 
         Assert.Equal(reads, source.Calls.Count);

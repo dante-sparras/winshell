@@ -9,39 +9,38 @@ namespace Winshell.Windows;
 /// </summary>
 public sealed class VirtualDesktopsService : ObservableObject, IDisposable
 {
-    /// <summary>How often <see cref="IVirtualDesktopSource.ListStamp"/> is checked. Windows signals a switch, not an add or a remove.</summary>
+    /// <summary>How often <see cref="IVirtualDesktopBackend.ListStamp"/> is checked. Windows signals a switch, not an add or a remove.</summary>
     internal static readonly TimeSpan RereadInterval = TimeSpan.FromSeconds(1);
 
     private readonly IEventLoop _loop;
-    private readonly IVirtualDesktopSource _source;
+    private readonly IVirtualDesktopBackend _backend;
     private readonly Log _log;
     private readonly bool _contractSupported;
     private VirtualDesktop? _current;
     private bool _supported;
     private bool _proved;
     private bool _disposed;
+    private bool _switchPosted;
     private string _reason = "";
     private string _stamp = "";
     private IDisposable? _reread;
 
-    internal VirtualDesktopsService(IEventLoop loop, Log log, IVirtualDesktopSource? source = null)
+    internal VirtualDesktopsService(IEventLoop loop, Log log, IVirtualDesktopBackend? backend = null)
     {
         _loop = loop;
         _log = log;
-        _source = source ?? VirtualDesktopBroker.Shared;
-        _contractSupported = _source.Contract.Supported;
+        _backend = backend ?? VirtualDesktopBackend.Shared;
+        _contractSupported = _backend.Contract.Supported;
         if (!_contractSupported)
         {
-            _reason = _source.Contract.Reason;
+            _reason = _backend.Contract.Reason;
             return;
         }
-        if (source is null)
-        {
-            DesktopSwitchWatch.Ensure(loop, log);
-            DesktopSwitchWatch.Fired += OnSwitched;
-        }
+        _backend.Switched += OnSwitched;
+        if (!_backend.StartWatching())
+            log.Warn("desktops", "SetWinEventHook failed for a desktop switch; the list updates only after Winshell changes a desktop");
         Refresh();
-        _stamp = _source.ListStamp;
+        _stamp = _backend.ListStamp;
         ScheduleRead();
     }
 
@@ -69,7 +68,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     {
         if (!CanChange("switch") || desktop is null || !Guid.TryParse(desktop.Id, out var id))
             return;
-        if (!_source.SwitchTo(id))
+        if (!_backend.SwitchTo(id))
         {
             _log.Warn("desktops", "The desktop did not change.");
             return;
@@ -83,7 +82,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     {
         if (!CanChange("create a desktop"))
             return null;
-        if (_source.Create() is not { } id)
+        if (_backend.Create() is not { } id)
         {
             _log.Warn("desktops", "The desktop was not created.");
             return null;
@@ -105,7 +104,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
             _log.Warn("desktops", "The last virtual desktop cannot be removed.");
             return;
         }
-        if (!Guid.TryParse(desktop.Id, out var id) || !Guid.TryParse(Desktops[fallback].Id, out var fallbackId) || !_source.Remove(id, fallbackId))
+        if (!Guid.TryParse(desktop.Id, out var id) || !Guid.TryParse(Desktops[fallback].Id, out var fallbackId) || !_backend.Remove(id, fallbackId))
         {
             _log.Warn("desktops", "The desktop was not removed.");
             return;
@@ -115,7 +114,18 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
 
     internal VirtualDesktop? Find(string id) => Desktops.FirstOrDefault(desktop => desktop.Id == id);
 
-    private void OnSwitched() => _loop.Post(Refresh);
+    // Read the list once for all the switches Windows reports in one turn.
+    private void OnSwitched()
+    {
+        if (_switchPosted)
+            return;
+        _switchPosted = true;
+        _loop.Post(() =>
+        {
+            _switchPosted = false;
+            Refresh();
+        });
+    }
 
     private void ScheduleRead() => _reread = _loop.Schedule(RereadInterval, ReadAgain);
 
@@ -123,7 +133,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     {
         if (_disposed)
             return;
-        var stamp = _source.ListStamp;
+        var stamp = _backend.ListStamp;
         if (stamp != _stamp)
         {
             _stamp = stamp;
@@ -136,7 +146,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     {
         if (_disposed || !_contractSupported)
             return;
-        if (!_source.TryRead(out var records, out var current, out var error))
+        if (!_backend.TryRead(out var records, out var current, out var error))
         {
             _log.Warn("desktops", error);
             if (_proved)
@@ -182,7 +192,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
         _disposed = true;
         _reread?.Dispose();
         _reread = null;
-        DesktopSwitchWatch.Fired -= OnSwitched;
+        _backend.Switched -= OnSwitched;
     }
 
     private readonly record struct DesktopRow(string Id, string Name, int Index);

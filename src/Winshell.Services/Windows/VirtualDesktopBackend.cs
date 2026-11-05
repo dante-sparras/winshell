@@ -4,10 +4,16 @@ using Winshell.Native;
 
 namespace Winshell.Windows;
 
-/// <summary>Reads and changes virtual desktops. Tests use a stand-in; the shell uses <see cref="VirtualDesktopBroker"/>.</summary>
-internal interface IVirtualDesktopSource
+/// <summary>Reads and changes virtual desktops. Tests use a stand-in; the shell uses <see cref="VirtualDesktopBackend"/>.</summary>
+internal interface IVirtualDesktopBackend
 {
     DesktopContract Contract { get; }
+
+    /// <summary>Windows switched virtual desktop. Raised on the thread that first called <see cref="StartWatching"/>.</summary>
+    event Action? Switched;
+
+    /// <summary>Starts raising <see cref="Switched"/>. False when Windows will not report a switch.</summary>
+    bool StartWatching();
 
     /// <summary>Changes when a desktop is added or removed. Reading it makes no call into Explorer.</summary>
     string ListStamp { get; }
@@ -55,11 +61,20 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
 /// The virtual desktops through Explorer's internal manager, on a known build. The internal table gained
 /// <c>SwitchDesktopAndMoveForegroundView</c> in Windows 11 24H2 (build 26100); 23H2 uses the same interface id and
 /// different slots, so <see cref="DesktopContract"/> refuses every other build. A failed read never calls create,
-/// switch or remove. Which desktop a window is on is <see cref="WindowDesktop"/>'s.
+/// switch or remove. Which desktop a window is on is <see cref="WindowDesktop"/>'s. The switch hook stays for the
+/// process, the same way the window list's hooks do.
 /// </summary>
-internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
+internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 {
-    public static VirtualDesktopBroker Shared { get; } = new();
+    public static VirtualDesktopBackend Shared { get; } = new();
+
+    private WinEventHook? _hook;
+
+    private VirtualDesktopBackend()
+    {
+    }
+
+    public event Action? Switched;
 
     public DesktopContract Contract
     {
@@ -73,6 +88,15 @@ internal sealed class VirtualDesktopBroker : IVirtualDesktopSource
                 $"Windows {version} is outside the virtual desktop method table Winshell knows ({DesktopContract.OldestBuild} through {DesktopContract.NewestBuild}).");
         }
     }
+
+    public bool StartWatching()
+    {
+        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent);
+        return _hook is not null;
+    }
+
+    private void OnEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
+        NativeCallback.Guard(Log.Default, "desktops", () => Switched?.Invoke());
 
     public string ListStamp =>
         Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops", "VirtualDesktopIDs", null) is byte[] ids

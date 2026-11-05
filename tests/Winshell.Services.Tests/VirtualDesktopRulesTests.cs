@@ -51,11 +51,11 @@ public sealed class VirtualDesktopRulesTests
         var contract = DesktopContract.ForBuild(version.Build);
         if (!contract.Supported)
         {
-            Assert.Contains($"{version.Build}", VirtualDesktopBroker.Shared.Contract.Reason, StringComparison.Ordinal);
+            Assert.Contains($"{version.Build}", VirtualDesktopBackend.Shared.Contract.Reason, StringComparison.Ordinal);
             return;
         }
 
-        var read = VirtualDesktopBroker.Shared.TryRead(out var desktops, out var current, out var error);
+        var read = VirtualDesktopBackend.Shared.TryRead(out var desktops, out var current, out var error);
         if (!read)
         {
             Assert.StartsWith("unavailable:", error, StringComparison.Ordinal);
@@ -69,7 +69,7 @@ public sealed class VirtualDesktopRulesTests
         if (foreground.Length > 0)
             Assert.True(Guid.TryParse(foreground, out _));
 
-        using var service = new VirtualDesktopsService(new ManualEventLoop(), new Log(), VirtualDesktopBroker.Shared);
+        using var service = new VirtualDesktopsService(new ManualEventLoop(), new Log(), VirtualDesktopBackend.Shared);
         Assert.True(service.Supported);
         Assert.Equal(desktops.Count, service.Desktops.Count);
         Assert.All(service.Desktops, row => Assert.False(string.IsNullOrWhiteSpace(row.Name)));
