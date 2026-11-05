@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Win32;
-using Windows.UI.Notifications.Management;
 using Winshell.Native;
-using Winshell.Notifications;
 
 namespace Winshell.Diagnostics;
 
@@ -208,19 +206,6 @@ internal static class DoctorProbe
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return path;
-        }
-    }
-
-    /// <summary>Whether Windows lets this process read notifications, asked without a prompt.</summary>
-    public static string NotificationAccess()
-    {
-        try
-        {
-            return WindowsNotificationBackend.MapAccess(UserNotificationListener.Current.GetAccessStatus()).ToString();
-        }
-        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
-        {
-            return "Unavailable";
         }
     }
 

@@ -1,4 +1,5 @@
 using Winshell.Native;
+using Winshell.Notifications;
 
 namespace Winshell.Diagnostics;
 
@@ -46,7 +47,7 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public string ResolveLinks(string path) => DoctorProbe.ResolveLinks(path);
 
-    public string NotificationAccess() => DoctorProbe.NotificationAccess();
+    public string NotificationAccess() => NotificationListenerAccess.Read().ToString();
 
     public DoctorCrashes.CrashFolderRead ReadCrashReports(string folder) => DoctorProbe.ReadCrashReports(folder);
 

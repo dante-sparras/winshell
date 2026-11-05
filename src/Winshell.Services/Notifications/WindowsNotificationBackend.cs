@@ -30,7 +30,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     private IReadOnlyList<IncomingToast> _toasts = [];
 
     public async Task<NotificationAccessStatus> RequestAccessAsync() =>
-        MapAccess(await UserNotificationListener.Current.RequestAccessAsync());
+        NotificationListenerAccess.Map(await UserNotificationListener.Current.RequestAccessAsync());
 
     public async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
     {
@@ -41,7 +41,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         try
         {
             var listener = UserNotificationListener.Current;
-            var access = MapAccess(listener.GetAccessStatus());
+            var access = NotificationListenerAccess.Map(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
             {
                 _changes.Change();
@@ -52,7 +52,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast).AsTask(cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             // Access may be revoked while the asynchronous read is in progress.
-            access = MapAccess(listener.GetAccessStatus());
+            access = NotificationListenerAccess.Map(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
             {
                 _changes.Change();
@@ -124,13 +124,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             return null;
         }
     }
-
-    internal static NotificationAccessStatus MapAccess(UserNotificationListenerAccessStatus access) => access switch
-    {
-        UserNotificationListenerAccessStatus.Allowed => NotificationAccessStatus.Allowed,
-        UserNotificationListenerAccessStatus.Denied => NotificationAccessStatus.Denied,
-        _ => NotificationAccessStatus.Unspecified,
-    };
 
     internal static IncomingToast ReadToast(UserNotification notification)
     {
