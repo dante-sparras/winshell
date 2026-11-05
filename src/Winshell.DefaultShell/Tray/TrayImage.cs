@@ -3,7 +3,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Winshell.DefaultShell.Taskbar;
 
-/// <summary>A tray icon's pixels as a WinUI bitmap. The icon is straight alpha; the bitmap is premultiplied.</summary>
+/// <summary>An icon's pixels as a WinUI bitmap, which is premultiplied. A tray icon is straight alpha.</summary>
 internal static class TrayImage
 {
     public static WriteableBitmap? Bitmap(PixelImage? image)

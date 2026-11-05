@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Winshell.Native;
@@ -7,67 +6,48 @@ namespace Winshell;
 
 /// <summary>
 /// Closes XAML flyouts on a click outside them. WinUI closes a flyout when its window loses activation, and a panel
-/// that never activates has none to lose. A flyout shows in a window of its own, so a WinEvent hook on this process
-/// notices it, and only then does a mouse hook run, until no flyout is open.
+/// that never activates has none to lose. A flyout shows in a window of its own, so a WinEvent hook notices this
+/// process's, and only then does a mouse hook run, until no flyout is open.
 /// </summary>
-internal sealed unsafe class FlyoutDismissal : IDisposable
+internal sealed class FlyoutDismissal : IDisposable
 {
     private const string PopupClass = "Microsoft.UI.Content.PopupWindowSiteBridge";
 
-    private static FlyoutDismissal? _current;
-
     private readonly ShellPlatform _platform;
-    private readonly nint _watch;
-    private HookThread? _mouse;
+    private readonly WinEventHook? _watch;
+    private IDisposable? _mouse;
 
     public FlyoutDismissal(ShellPlatform platform)
     {
         _platform = platform;
-        _current = this;
-        _watch = Win32.SetWinEventHook(Win32.EVENT_OBJECT_SHOW, Win32.EVENT_OBJECT_SHOW, 0, &OnWinEvent, (uint)Environment.ProcessId, 0, Win32.WINEVENT_OUTOFCONTEXT);
+        _watch = WinEventHook.Start(Win32.EVENT_OBJECT_SHOW, OnWinEvent);
     }
 
     /// <summary>The mouse hook is running, so a flyout is open.</summary>
     internal bool Watching => _mouse is not null;
 
-    [UnmanagedCallersOnly]
-    private static void OnWinEvent(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    private void OnWinEvent(uint evt, nint hwnd, int idObject, int idChild)
     {
-        if (idObject != 0 || _current is not { } self || !IsPopupWindow(hwnd))
+        if (idObject != 0 || !IsPopupWindow(hwnd))
             return;
-        NativeCallback.Guard(self._platform.Log, "shell", () => self._platform.Loop.Post(self.StartWatching));
+        NativeCallback.Guard(_platform.Log, "shell", () => _platform.Loop.Post(StartWatching));
     }
 
-    private static bool IsPopupWindow(nint hwnd)
-    {
-        Span<char> name = stackalloc char[64];
-        fixed (char* chars = name)
-        {
-            var length = Win32.GetClassNameW(hwnd, chars, name.Length);
-            return length > 0 && name[..length].SequenceEqual(PopupClass);
-        }
-    }
+    /// <summary>A flyout's window in this process. The hook sees every process's windows.</summary>
+    private static bool IsPopupWindow(nint hwnd) =>
+        Win32.GetWindowThreadProcessId(hwnd, out var process) != 0 && process == Environment.ProcessId
+        && TopLevelWindows.ClassName(hwnd) == PopupClass;
 
-    internal void StartWatching() => _mouse ??= HookThread.Start(Win32.WH_MOUSE_LL, &MouseHook, "Winshell flyout mouse hook");
+    internal void StartWatching() => _mouse ??= LowLevelMouse.Start(OnPress);
 
     private void StopWatching()
     {
-        _mouse?.Stop();
+        _mouse?.Dispose();
         _mouse = null;
     }
 
-    // The procedure runs on the hook thread, so it only reads the click and posts the rest to the loop.
-    [UnmanagedCallersOnly]
-    private static nint MouseHook(int code, nint wParam, nint lParam)
-    {
-        if (code >= 0 && _current is { } self
-            && (uint)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN or Win32.WM_XBUTTONDOWN)
-        {
-            var pt = ((MSLLHOOKSTRUCT*)lParam)->pt;
-            NativeCallback.Guard(self._platform.Log, "shell", () => self._platform.Loop.Post(() => self.Click(pt)));
-        }
-        return Win32.CallNextHookEx(0, code, wParam, lParam);
-    }
+    // This runs on the hook thread, so it only posts the click to the loop.
+    private void OnPress(POINT pt) => NativeCallback.Guard(_platform.Log, "shell", () => _platform.Loop.Post(() => Click(pt)));
 
     /// <summary>Closes every open flyout the click landed outside of, and stops watching once none is left.</summary>
     internal void Click(POINT pt)
@@ -99,9 +79,7 @@ internal sealed unsafe class FlyoutDismissal : IDisposable
 
     public void Dispose()
     {
-        if (_watch != 0)
-            Win32.UnhookWinEvent(_watch);
+        _watch?.Dispose();
         StopWatching();
-        _current = null;
     }
 }

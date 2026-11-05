@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -16,10 +15,9 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>The native window behind a shell window, with a XAML island where its content goes.</summary>
-internal sealed unsafe class HostWindow : IDisposable
+internal sealed class HostWindow : IDisposable
 {
     private const string ClassName = Diagnostics.DoctorScreens.WinshellClass;
-    private static bool _registered;
 
     private readonly ShellPlatform _platform;
     private readonly WindowKind _kind;
@@ -28,7 +26,7 @@ internal sealed unsafe class HostWindow : IDisposable
     private readonly IHostClient _client;
     private readonly AppBar? _appBar;
     private readonly FloatingFrame? _frame;
-    private GCHandle _self;
+    private readonly NativeWindow _window;
     private DesktopWindowXamlSource? _xaml;
     private SystemBackdropConfiguration? _backdropConfig;
     private ISystemBackdropControllerWithTargets? _backdropController;
@@ -48,17 +46,13 @@ internal sealed unsafe class HostWindow : IDisposable
         _kind = kind;
         _client = client;
         _dismissMenu = dismissMenu;
-        Register();
         var (style, exStyle) = Styles(kind);
-        Handle = Win32.CreateWindowExW(exStyle, ClassName, "", style, 0, 0, 1, 1, 0, 0, Win32.GetModuleHandleW(null), 0);
-        if (Handle == 0)
-            throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
+        _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage);
+        Handle = _window.Handle;
         if (kind == WindowKind.Panel)
             _appBar = new AppBar(Handle, platform, PlacePanel);
         else if (kind == WindowKind.Floating)
             _frame = new FloatingFrame(this, platform);
-        _self = GCHandle.Alloc(this);
-        Win32.SetWindowLongPtr(Handle, Win32.GWLP_USERDATA, GCHandle.ToIntPtr(_self));
         // A window that could not be finished is destroyed here; its client never gets it to dispose.
         try
         {
@@ -164,56 +158,20 @@ internal sealed unsafe class HostWindow : IDisposable
         _ => (Win32.WS_POPUP, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE),
     };
 
-    private static void Register()
+    private nint? OnWindowMessage(uint msg, nint wParam, nint lParam)
     {
-        if (_registered)
-            return;
-        fixed (char* name = ClassName)
+        // A window that threw handles nothing more; its client is making another.
+        if (_failed)
+            return null;
+        try
         {
-            var wc = new WNDCLASSEXW
-            {
-                cbSize = (uint)sizeof(WNDCLASSEXW),
-                style = Win32.CS_DBLCLKS,
-                lpfnWndProc = &WndProc,
-                hInstance = Win32.GetModuleHandleW(null),
-                hIcon = AppIcon(Win32.GetSystemMetrics(Win32.SM_CXICON), Win32.GetSystemMetrics(Win32.SM_CYICON)),
-                hIconSm = AppIcon(Win32.GetSystemMetrics(Win32.SM_CXSMICON), Win32.GetSystemMetrics(Win32.SM_CYSMICON)),
-                hCursor = Win32.LoadCursorW(0, Win32.IDC_ARROW),
-                lpszClassName = name,
-            };
-            Win32.RegisterClassExW(wc);
+            return OnMessage(msg, wParam, lParam);
         }
-        _registered = true;
-    }
-
-    /// <summary>
-    /// The logo embedded in winshell.exe. The C# compiler stores <c>ApplicationIcon</c> as icon group 32512.
-    /// Panels and popups share this class and are tool windows, so the icon shows on a floating window.
-    /// </summary>
-    private static nint AppIcon(int width, int height) =>
-        Win32.LoadImageW(Win32.GetModuleHandleW(null), Win32.IDI_APPLICATION, Win32.IMAGE_ICON, width, height, 0);
-
-    [UnmanagedCallersOnly]
-    private static nint WndProc(nint hwnd, uint msg, nint wParam, nint lParam)
-    {
-        var data = Win32.GetWindowLongPtr(hwnd, Win32.GWLP_USERDATA);
-        if (data != 0 && GCHandle.FromIntPtr(data).Target is HostWindow window)
+        catch (Exception e)
         {
-            // A window that threw handles nothing more; its client is making another.
-            if (!window._failed)
-            {
-                try
-                {
-                    if (window.OnMessage(msg, wParam, lParam) is { } result)
-                        return result;
-                }
-                catch (Exception e)
-                {
-                    window.Fail(e);
-                }
-            }
+            Fail(e);
+            return null;
         }
-        return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
     // Placement
@@ -567,7 +525,7 @@ internal sealed unsafe class HostWindow : IDisposable
                     if (!_placing)
                         Scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
                     if (_frame is { } frame)
-                        frame.OnDpiChanged(*(RECT*)lParam, _placing);
+                        frame.OnDpiChanged(NativeWindow.SuggestedRect(lParam), _placing);
                     else if (!_placing)
                     {
                         // A panel or popup only changes DPI on its own when its monitor's scale changes: place it again from its logical size.
@@ -595,7 +553,7 @@ internal sealed unsafe class HostWindow : IDisposable
                 FocusContent();
                 return null;
             case Win32.WM_GETMINMAXINFO when _frame is { } frame:
-                return frame.OnGetMinMaxInfo((MINMAXINFO*)lParam);
+                return frame.OnGetMinMaxInfo(ref NativeWindow.MinMaxInfo(lParam));
             case Win32.WM_CLOSE:
                 _client.OnClosed();
                 SetVisible(false);
@@ -649,16 +607,8 @@ internal sealed unsafe class HostWindow : IDisposable
         _root.Children.Clear();
         _xaml?.Dispose();
         _xaml = null;
-        var h = Handle;
         Handle = 0;
-        if (h != 0)
-        {
-            Win32.SetWindowLongPtr(h, Win32.GWLP_USERDATA, 0);
-            if (destroyWindow)
-                Win32.DestroyWindow(h);
-        }
-        if (_self.IsAllocated)
-            _self.Free();
+        _window.Release(destroyWindow);
         _platform.Forget(this);
     }
 }

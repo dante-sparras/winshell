@@ -1,10 +1,9 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell;
 
 /// <summary>Ends the Win32 menus other apps have open, as a click outside a menu does.</summary>
-internal static partial class NativeMenu
+internal static class NativeMenu
 {
     private const uint CancelMode = 0x001F;
 
@@ -16,12 +15,12 @@ internal static partial class NativeMenu
     {
         foreach (var thread in MenuThreads())
         {
-            var info = new GuiThreadInfo { Size = (uint)Marshal.SizeOf<GuiThreadInfo>() };
-            if (!GetGUIThreadInfo(thread, ref info) || info.MenuOwner == 0)
+            var owner = GuiThread.MenuOwner(thread);
+            if (owner == 0)
                 continue;
             // Finish cancellation before a button forwards another tray callback, but never let a hung app hold up
             // the shell.
-            Win32.SendMessageTimeoutW(info.MenuOwner, CancelMode, 0, 0, Win32.SMTO_ABORTIFHUNG | Win32.SMTO_BLOCK, 200, out _);
+            Win32.SendMessageTimeoutW(owner, CancelMode, 0, 0, Win32.SMTO_ABORTIFHUNG | Win32.SMTO_BLOCK, 200, out _);
         }
     }
 
@@ -38,17 +37,4 @@ internal static partial class NativeMenu
         }
         return threads;
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct GuiThreadInfo
-    {
-        public uint Size;
-        public uint Flags;
-        public nint Active, Focus, Capture, MenuOwner, MoveSize, Caret;
-        public int Left, Top, Right, Bottom;
-    }
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
 }

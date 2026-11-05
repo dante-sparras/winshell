@@ -182,9 +182,5 @@ internal sealed class ShellNotices : IDisposable
         });
     }
 
-    internal static unsafe TimeSpan ReadCrashTimeout()
-    {
-        uint seconds = 0;
-        return Win32.SystemParametersInfoW(Win32.SPI_GETMESSAGEDURATION, 0, &seconds, 0) ? CrashTimeoutFor(seconds) : CrashTimeout;
-    }
+    internal static TimeSpan ReadCrashTimeout() => MessageDuration.Seconds() is { } seconds ? CrashTimeoutFor(seconds) : CrashTimeout;
 }

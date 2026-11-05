@@ -3,6 +3,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
+using Windows.Win32;
+using Windows.Win32.Foundation;
 using Winshell.Native;
 
 namespace Winshell.ShellTests;
@@ -136,16 +138,10 @@ public sealed class WindowKindTests
         Assert.Equal((true, false), watched);
     }
 
-    private static unsafe string Win32Title(nint hwnd)
+    private static string Win32Title(nint hwnd)
     {
         Span<char> text = stackalloc char[64];
-        fixed (char* chars = text)
-        {
-            var length = GetWindowTextW(hwnd, chars, text.Length);
-            return new string(text[..length]);
-        }
+        var length = PInvoke.GetWindowText((HWND)hwnd, text);
+        return new string(text[..length]);
     }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern unsafe int GetWindowTextW(nint hwnd, char* text, int length);
 }
