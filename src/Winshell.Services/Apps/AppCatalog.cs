@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using global::Windows.ApplicationModel;
 using global::Windows.Management.Deployment;
+using Winshell.Native;
 
 namespace Winshell.Apps;
 
@@ -405,24 +406,14 @@ internal static class AppLaunch
 
     private static string? Activate(string appUserModelId, string arguments)
     {
-        object? created = null;
         try
         {
-            var type = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"));
-            created = type is null ? null : Activator.CreateInstance(type);
-            if (created is not IApplicationActivationManager manager)
-                return "The activation manager is not available.";
-            manager.ActivateApplication(appUserModelId, arguments ?? "", 0, out _);
+            AppActivation.Activate(appUserModelId, arguments ?? "");
             return null;
         }
         catch (Exception e)
         {
             return e.Message;
-        }
-        finally
-        {
-            if (created is not null && Marshal.IsComObject(created))
-                Marshal.ReleaseComObject(created);
         }
     }
 
@@ -437,13 +428,5 @@ internal static class AppLaunch
         {
             return e.Message;
         }
-    }
-
-    [ComImport]
-    [Guid("2e941141-7f97-4756-ba1d-9decde894a3d")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IApplicationActivationManager
-    {
-        void ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appUserModelId, [MarshalAs(UnmanagedType.LPWStr)] string arguments, int options, out uint processId);
     }
 }

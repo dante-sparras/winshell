@@ -1,10 +1,8 @@
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Capture;
 
-internal static partial class CaptureClipboard
+internal static class CaptureClipboard
 {
     /// <summary>A top-down BITMAPV5HEADER followed by straight-alpha BGRA pixels, including explicit channel masks.</summary>
     internal static byte[] EncodeDib(PixelImage image)
@@ -30,36 +28,5 @@ internal static partial class CaptureClipboard
         return stream.ToArray();
     }
 
-    public static void Copy(PixelImage image, nint owner)
-    {
-        var dib = EncodeDib(image);
-        var memory = Win32.GlobalAlloc(Win32.GMEM_MOVEABLE, (nuint)dib.Length);
-        if (memory == 0)
-            throw new Win32Exception();
-        try
-        {
-            var pointer = Win32.GlobalLock(memory);
-            if (pointer == 0)
-                throw new Win32Exception();
-            try { Marshal.Copy(dib, 0, pointer, dib.Length); }
-            finally { Win32.GlobalUnlock(memory); }
-            if (!Win32.OpenClipboard(owner))
-                throw new Win32Exception();
-            try
-            {
-                if (!Win32.EmptyClipboard() || Win32.SetClipboardData(17, memory) == 0) // CF_DIBV5
-                    throw new Win32Exception();
-                memory = 0; // The clipboard owns the allocation now.
-            }
-            finally { Win32.CloseClipboard(); }
-        }
-        finally
-        {
-            if (memory != 0)
-                GlobalFree(memory);
-        }
-    }
-
-    [LibraryImport("kernel32.dll")]
-    private static partial nint GlobalFree(nint memory);
+    public static void Copy(PixelImage image, nint owner) => ClipboardImage.SetDibV5(EncodeDib(image), owner);
 }

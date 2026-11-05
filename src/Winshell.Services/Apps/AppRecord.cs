@@ -1,3 +1,5 @@
+using Winshell.Native;
+
 namespace Winshell.Apps;
 
 /// <summary>One app the Start menu lists: a shortcut or a packaged app.</summary>

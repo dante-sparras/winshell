@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using Winshell.Native;
 
 namespace Winshell.Apps;
 
@@ -33,7 +33,7 @@ internal readonly record struct AppUsage(int RunCount, long LastUsedUnixMillisec
 /// Recent and frequent use as Windows records it: FeatureUsage launch and switch counts, and UserAssist run count
 /// and last run. The higher of the two FeatureUsage counts is kept, so a launch is not added to a switch.
 /// </summary>
-internal static partial class AppUsageReader
+internal static class AppUsageReader
 {
     private const string FeatureUsage = @"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage";
     private const string UserAssist = @"Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist";
@@ -90,8 +90,7 @@ internal static partial class AppUsageReader
         var end = path.IndexOf('}');
         if (end <= 0 || !Guid.TryParse(path[..(end + 1)], out var id))
             return path;
-        var folder = KnownFolder(id);
-        if (folder.Length == 0)
+        if (KnownFolder.Find(id) is not { Length: > 0 } folder)
             return path;
         var rest = path[(end + 1)..].TrimStart('\\', '/');
         return rest.Length == 0 ? folder : Path.Combine(folder, rest);
@@ -217,22 +216,4 @@ internal static partial class AppUsageReader
         }
         return entries;
     }
-
-    private static string KnownFolder(Guid id)
-    {
-        var folder = id;
-        if (SHGetKnownFolderPath(in folder, 0, 0, out var path) != 0 || path == 0)
-            return "";
-        try
-        {
-            return Marshal.PtrToStringUni(path) ?? "";
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(path);
-        }
-    }
-
-    [LibraryImport("shell32.dll")]
-    private static partial int SHGetKnownFolderPath(in Guid rfid, uint dwFlags, nint hToken, out nint ppszPath);
 }

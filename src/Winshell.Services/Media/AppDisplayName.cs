@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Media;
@@ -25,25 +24,8 @@ internal static class AppDisplayName
     private static bool IsProgram(string appId) => appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The name the Start menu shows for an AppUserModelID.</summary>
-    private static string? StartMenuName(string appId)
-    {
-        if (appId.Length == 0)
-            return null;
-        var iid = typeof(IShellItem).GUID;
-        if (SHCreateItemFromParsingName($"shell:AppsFolder\\{appId}", 0, ref iid, out var item) != 0)
-            return null;
-        try
-        {
-            return item.GetDisplayName(0, out var name) == 0 ? name : null;
-        }
-        finally
-        {
-            Marshal.ReleaseComObject(item);
-        }
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHCreateItemFromParsingName(string path, nint bindContext, ref Guid iid, out IShellItem item);
+    private static string? StartMenuName(string appId) =>
+        appId.Length == 0 ? null : ShellItemName.Find($"shell:AppsFolder\\{appId}");
 
     private static string? ProgramDescription(string processName)
     {
