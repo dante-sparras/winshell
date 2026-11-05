@@ -40,6 +40,18 @@ dotnet_diagnostic.CA1711.severity = none
 dotnet_diagnostic.CA2201.severity = none
 # An array in a test is read once, next to what it checks.
 dotnet_diagnostic.CA1861.severity = none
+# A test that blocks on a task, or drops one, deadlocks or misses its failure only sometimes.
+dotnet_diagnostic.xUnit1030.severity = error
+dotnet_diagnostic.xUnit1031.severity = error
+dotnet_diagnostic.xUnit1048.severity = error
+dotnet_diagnostic.xUnit1051.severity = error
+dotnet_diagnostic.VSTHRD002.severity = error
+dotnet_diagnostic.VSTHRD100.severity = error
+dotnet_diagnostic.VSTHRD101.severity = error
+dotnet_diagnostic.VSTHRD110.severity = error
+dotnet_diagnostic.CS4014.severity = error
+# A test has no reason to leave xUnit's synchronization context.
+dotnet_diagnostic.CA2007.severity = none
 
 [{*.go,Makefile,*.mk}]
 indent_style = tab
