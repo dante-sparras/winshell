@@ -194,7 +194,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     /// <summary>The native window failed. It was rebuilt with the same content.</summary>
     public event Action<Exception>? Failed;
 
-    /// <summary>Takes the keyboard, if this kind of window may.</summary>
+    /// <summary>Takes the keyboard, if this kind of window may. A panel takes it only while focusable, and a popup only while it grabs focus.</summary>
     public void Focus() => _host?.Presentation.SetKeyboardFocus(true);
 
     /// <summary>Puts the window above the others at its level, without focusing it.</summary>

@@ -165,7 +165,7 @@ Has the members of [ShellWindow](#shellwindow).
 | Member | Type | Description |
 | --- | --- | --- |
 | `PopupWindow()` | constructor | A hidden popup of the running shell, 100 by 100 at the virtual desktop's origin until Rect is set. |
-| `GrabFocus` | bool | Takes the keyboard while shown. A click outside the popup and its open flyouts, or Esc, then dismisses it. |
+| `GrabFocus` | bool | Takes the keyboard while shown. Focus does nothing unless this is set. A click outside the popup and its open flyouts, or Esc, then dismisses it. |
 | `Rect` | Rect | Where the popup sits, in logical pixels on the virtual desktop. |
 | `Dismissed` | Action | A click outside the popup and its open flyouts, or Esc, dismissed it. It is hidden. |
 
@@ -307,7 +307,7 @@ Has the members of [ObservableObject](#observableobject).
 | `Closed` | Action | The user closed the window. It is hidden, and can be shown again. |
 | `Failed` | Action of Exception | The native window failed. It was rebuilt with the same content. |
 | `Dispose()` | void | Closes the window for good and releases its native window. It can't be shown again. |
-| `Focus()` | void | Takes the keyboard, if this kind of window may. |
+| `Focus()` | void | Takes the keyboard, if this kind of window may. A panel takes it only while focusable, and a popup only while it grabs focus. |
 | `MapToScreen(double x, double y)` | (int, int) | A point in logical window coordinates, in physical pixels on the virtual desktop. |
 | `Raise()` | void | Puts the window above the others at its level, without focusing it. |
 | `StartSystemMove()` | void | Lets the user move the window by dragging, as a title bar does. Call it when a pointer button goes down. |
