@@ -32,7 +32,7 @@ internal static class IpcClient
             // A failed response is already a sentence for the user, whichever side wrote it.
             if (response.Ok && IpcProtocol.ShellRefusal(response.Protocol) is { } mismatch)
                 throw new IOException(mismatch);
-            if (response.Ok && request.Op != "kill" && IpcProtocol.ReleaseRefusal(response.Winshell, ProductVersion.Current.Text) is { } release)
+            if (response.Ok && IpcOps.ChecksRelease(request.Op) && IpcProtocol.ReleaseRefusal(response.Winshell, ProductVersion.Current.Text) is { } release)
                 throw new IOException(release);
             yield return response;
         }

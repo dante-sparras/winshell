@@ -49,7 +49,7 @@ internal static class ReloadCommand
         }
         // Any other shell hands over to a process it starts itself. A handover starts the program the build left, which is
         // not always the one this instance runs.
-        var answer = await InstanceCall.AskAsync(info, new IpcRequest("reload", Args: project is null ? null : [project.Program]));
+        var answer = await InstanceCall.AskAsync(info, IpcRequest.ForReload(project?.Program));
         if (Failure(info, answer) is { } refusal)
         {
             Console.Error.WriteLine(refusal);
@@ -67,7 +67,7 @@ internal static class ReloadCommand
     {
         try
         {
-            await foreach (var response in IpcClient.Request(info.Pipe, new IpcRequest("build-error", Args: [error, projectFile])))
+            await foreach (var response in IpcClient.Request(info.Pipe, IpcRequest.ForBuild(error, projectFile)))
             {
                 if (!response.Ok)
                     Console.Error.WriteLine($"Instance {info.Id} could not show the notice: {response.Error}");

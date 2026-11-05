@@ -14,7 +14,7 @@ internal static class InspectCommand
         }
         // The shell writes the file, so a relative path must mean what it means here.
         var rest = args.Skip(1).Select((arg, i) => args[0] == "screenshot" && i == 0 ? Path.GetFullPath(arg) : arg).ToList();
-        var answer = await InstanceCall.AskAsync(info, new IpcRequest("inspect", args[0], Args: rest));
+        var answer = await InstanceCall.AskAsync(info, IpcRequest.ForInspect(args[0], rest));
         if (answer.Response is not { } response)
         {
             Console.Error.WriteLine(answer.Failure);

@@ -182,7 +182,7 @@ public sealed class ShellInstanceTests
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
-        var response = await Pumping(loop, () => Ask(pipe, new IpcRequest("kill")));
+        var response = await Pumping(loop, () => Ask(pipe, IpcRequest.ForKill()));
 
         Assert.True(response.Ok);
         await Wait.UntilAsync(() => control.Quits == 1, "the quit", () => loop.RunDue());
@@ -195,7 +195,7 @@ public sealed class ShellInstanceTests
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
-        var response = await Pumping(loop, () => Ask(pipe, new IpcRequest("reload")));
+        var response = await Pumping(loop, () => Ask(pipe, IpcRequest.ForReload()));
 
         Assert.True(response.Ok);
         await Wait.UntilAsync(() => control.Answered == 1, "what follows the reload", () => loop.RunDue());
@@ -208,7 +208,7 @@ public sealed class ShellInstanceTests
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
-        var response = await Pumping(loop, () => Ask(pipe, new IpcRequest("reload")));
+        var response = await Pumping(loop, () => Ask(pipe, IpcRequest.ForReload()));
 
         Assert.Equal((false, "It did not start."), (response.Ok, response.Error));
         loop.RunDue();
@@ -222,12 +222,12 @@ public sealed class ShellInstanceTests
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
-        var response = await Pumping(loop, () => Ask(pipe, new IpcRequest("build-error", Args: ["Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"])));
-        var refused = await Pumping(loop, () => Ask(pipe, new IpcRequest("build-error", Args: ["only one"])));
+        var response = await Pumping(loop, () => Ask(pipe, IpcRequest.ForBuild("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj")));
+        var refused = await Pumping(loop, () => Ask(pipe, new IpcRequest(IpcOps.Build, Args: ["only one"])));
 
         Assert.True(response.Ok);
         Assert.Equal(("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"), (control.BuildError, control.BuildProject));
-        Assert.Equal((false, "build-error takes the error and the project file."), (refused.Ok, refused.Error));
+        Assert.Equal((false, "build takes the error and the project file."), (refused.Ok, refused.Error));
         Assert.Equal(0, control.Quits);
     }
 
@@ -269,7 +269,7 @@ public sealed class ShellInstanceTests
         await using var shell = IpcServer.OpenFirst(pipe);
         var answering = AnswerOnce(shell, """{"ok":true,"value":"old","error":null}""");
 
-        var response = await Ask(pipe, new IpcRequest("show"));
+        var response = await Ask(pipe, IpcRequest.ForShow(false));
 
         Assert.Equal((true, "old"), (response.Ok, response.Value));
         var request = JsonSerializer.Deserialize(await answering, IpcJson.Default.IpcRequest)!;
@@ -318,9 +318,11 @@ public sealed class ShellInstanceTests
         var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
         var answering = AnswerOnce(shell, $$"""{"ok":true,"winshell":"{{other}}"}""");
 
-        await Ask(pipe, new IpcRequest("kill"));
+        await Ask(pipe, IpcRequest.ForKill());
 
-        await answering;
+        // Kill must reach a shell of any release, so the line is pinned in full: an older shell has to read every field of it.
+        var version = JsonSerializer.Serialize(ProductVersion.Current.Text);
+        Assert.Equal($$"""{"op":"kill","target":null,"name":null,"args":null,"protocol":{{IpcProtocol.Current}},"winshell":{{version}}}""", await answering);
     }
 
     [Fact]
@@ -348,7 +350,7 @@ public sealed class ShellInstanceTests
         var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
         var answering = AnswerOnce(shell, $$"""{"ok":true,"winshell":"{{other}}"}""");
 
-        var error = await Assert.ThrowsAsync<IOException>(() => Ask(pipe, new IpcRequest("show")));
+        var error = await Assert.ThrowsAsync<IOException>(() => Ask(pipe, IpcRequest.ForShow(false)));
 
         Assert.Equal(IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text), error.Message);
         await answering;

@@ -131,7 +131,7 @@ internal static class DevSession
     {
         if (ShellOf(project) is not { } shell)
             return;
-        var request = new IpcRequest("build-error", Args: [notice, project.ProjectFile]);
+        var request = IpcRequest.ForBuild(notice, project.ProjectFile);
         try
         {
             await foreach (var response in IpcClient.Request(shell.Pipe, request))
