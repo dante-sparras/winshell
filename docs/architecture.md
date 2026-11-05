@@ -15,7 +15,7 @@ A project may reference a lower layer directly when it needs that layer's contra
 | Owner | Responsibility |
 | --- | --- |
 | `Winshell.Native` | Native declarations, COM contracts, unsafe interop, marshaling, native resource ownership and safe managed operations. |
-| `Winshell.Core` | `IEventLoop`/`EventQueue`, `Log`, `ObservableObject`, TOML and Crashes. Shared infrastructure has no dependency on a service feature or WinUI. |
+| `Winshell.Core` | `IEventLoop`/`EventQueue`, `Log`, `ObservableObject`, TOML and Crashes, with the file and version helpers they use. Shared infrastructure has no dependency on a service feature or WinUI. |
 | `Winshell.Services` | One assembly of feature folders. Services apply policy and publish state on the event loop; feature backends perform platform work. |
 | `Winshell.Shell` | WinUI hosting, window lifecycle and composition through the existing public Shell API. |
 | `Winshell.DefaultShell` | The default desktop's views, models and preferences. |
@@ -59,7 +59,7 @@ The supervisor owns Explorer taskbar recovery independently of the child. Restor
 
 ## Distribution and configuration
 
-Keep one `Winshell` library NuGet package. Include Native and Core alongside Shell and Services as those assemblies are introduced; a configuration must not acquire references to separately published module packages. The existing template package remains the delivery mechanism for `dotnet new` templates. Keep package and template contracts covered as assembly ownership changes.
+Keep one `Winshell` library NuGet package. It carries Native, Core, Services and Shell; a configuration must not acquire references to separately published module packages. The existing template package remains the delivery mechanism for `dotnet new` templates. Keep package and template contracts covered as assembly ownership changes.
 
 User configuration stays TOML. Keep its file format, defaults and semantics through the refactor. Do not add a second configuration system or compatibility layer.
 

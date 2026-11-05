@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Winshell.Native/Winshell.Native.csproj" />
+    <Project Path="src/Winshell.Core/Winshell.Core.csproj" />
     <Project Path="src/Winshell.Services/Winshell.Services.csproj" />
     <Project Path="src/Winshell.Shell/Winshell.Shell.csproj" />
     <Project Path="src/Winshell.DefaultShell/Winshell.DefaultShell.csproj" />
@@ -11,6 +12,7 @@
     <Project Path="templates/Winshell.Templates.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Winshell.Core.Tests/Winshell.Core.Tests.csproj" />
     <Project Path="tests/Winshell.DefaultShell.Tests/Winshell.DefaultShell.Tests.csproj" />
     <Project Path="tests/Winshell.Services.Tests/Winshell.Services.Tests.csproj" />
     <Project Path="tests/Winshell.Shell.Tests/Winshell.Shell.Tests.csproj" />

@@ -1,7 +1,7 @@
 // Writes the reference pages, docs/reference/winshell*.md: a page per namespace of the Winshell package, from the
-// public types of Winshell.Shell and Winshell.Services and their /// comments. A page keeps what is above its
-// marker line, and this writes everything below it. Run it after changing a public member, and commit the pages
-// it writes. DocsTests compiles this file and fails when a committed page is not what it writes.
+// public types of Winshell.Shell, Winshell.Services and Winshell.Core and their /// comments. A page keeps what is
+// above its marker line, and this writes everything below it. Run it after changing a public member, and commit the
+// pages it writes. DocsTests compiles this file and fails when a committed page is not what it writes.
 //
 //   dotnet run scripts/generate-reference.cs
 #:property PublishAot=false
@@ -37,9 +37,9 @@ foreach (var file in Winshell.Docs.ReferencePages.Stale(folder, pages))
 namespace Winshell.Docs
 {
     /// <summary>
-    /// The reference pages of Winshell.Shell and Winshell.Services. A page has a section for each included type: the
-    /// public types of a <c>Winshell</c> namespace, and the public types their members use. A section lists the
-    /// public members the type declares, with their /// comments.
+    /// The reference pages of Winshell.Shell, Winshell.Services and Winshell.Core. A page has a section for each
+    /// included type: the public types of a <c>Winshell</c> namespace, and the public types their members use. A
+    /// section lists the public members the type declares, with their /// comments.
     /// </summary>
     internal static partial class ReferencePages
     {
@@ -50,12 +50,11 @@ namespace Winshell.Docs
         /// <summary>Each page's text by file name, with the top of the page that is in <paramref name="folder"/>.</summary>
         public static SortedDictionary<string, string> Generate(string folder)
         {
-            var shell = typeof(Shell).Assembly;
-            var services = typeof(ShellIpc).Assembly;
-            var docs = Docs(shell).Concat(Docs(services)).DistinctBy(pair => pair.Key).ToDictionary(StringComparer.Ordinal);
-            var included = Included(shell, services);
+            Assembly[] assemblies = [typeof(Shell).Assembly, typeof(ShellIpc).Assembly, typeof(IEventLoop).Assembly];
+            var docs = assemblies.SelectMany(Docs).DistinctBy(pair => pair.Key).ToDictionary(StringComparer.Ordinal);
+            var included = Included(assemblies);
             var pages = new SortedDictionary<string, string>(StringComparer.Ordinal);
-            // Every included type is in a namespace: the seeds are, and so is every public type of the two assemblies.
+            // Every included type is in a namespace: the seeds are, and so is every public type of the assemblies.
             foreach (var group in included.GroupBy(type => type.Namespace!))
             {
                 var file = FileName(group.Key);
@@ -360,13 +359,13 @@ namespace Winshell.Docs
         }
 
         /// <summary>
-        /// The public types of a <c>Winshell</c> namespace in either assembly, their public nested types, and the public
-        /// types of either assembly that their members, constructors and base types use.
+        /// The public types of a <c>Winshell</c> namespace in the assemblies, their public nested types, and the public
+        /// types of the assemblies that their members, constructors and base types use.
         /// </summary>
-        public static HashSet<Type> Included(Assembly shell, Assembly services)
+        public static HashSet<Type> Included(Assembly[] assemblies)
         {
             var included = new HashSet<Type>();
-            foreach (var type in shell.GetExportedTypes().Concat(services.GetExportedTypes()).Where(type => type.IsPublic && !type.IsNested))
+            foreach (var type in assemblies.SelectMany(assembly => assembly.GetExportedTypes()).Where(type => type.IsPublic && !type.IsNested))
             {
                 if (type.Namespace is "Winshell" || type.Namespace?.StartsWith("Winshell.", StringComparison.Ordinal) == true)
                     included.Add(type);
@@ -382,7 +381,7 @@ namespace Winshell.Docs
                 }
                 foreach (var related in Related(type))
                 {
-                    if (related.Assembly != shell && related.Assembly != services)
+                    if (!assemblies.Contains(related.Assembly))
                         continue;
                     if (related.IsGenericParameter || related.Name.StartsWith('<') || related.IsByRef || related.IsPointer)
                         continue;

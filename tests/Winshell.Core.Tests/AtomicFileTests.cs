@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>A save follows a symbolic link, writes through a hard link, and loses to a hand edit that lands during the replace.</summary>
 public sealed class AtomicFileTests

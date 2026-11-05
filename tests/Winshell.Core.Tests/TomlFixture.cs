@@ -1,4 +1,4 @@
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>What a <see cref="TomlFile"/> test runs in: a temporary folder, a loop only the test turns, and a log it can read.</summary>
 internal sealed class TomlFixture : IDisposable

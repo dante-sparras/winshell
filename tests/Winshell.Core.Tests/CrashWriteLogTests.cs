@@ -1,5 +1,5 @@
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>A crash report that cannot be written, and a handler that throws, are logged instead of dropped.</summary>
 public sealed class CrashWriteLogTests : IDisposable

@@ -1,6 +1,6 @@
 using Tomlyn.Parsing;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary><see cref="TomlDocument"/> reads a file's text as plain values and edits one key, leaving the rest of the text.</summary>
 public sealed class TomlDocumentTests

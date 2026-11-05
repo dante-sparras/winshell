@@ -25,7 +25,7 @@
          nobody sees on so small a heap. Together they cost a third of an idle shell's CPU. -->
     <TieredPGO>false</TieredPGO>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
-    <!-- Winshell.Shell and Winshell.Services write XML doc files for the reference pages. A release does not ship them. -->
+    <!-- Winshell.Shell, Winshell.Services and Winshell.Core write XML doc files for the reference pages. A release does not ship them. -->
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
   </PropertyGroup>
   <!-- A release is trimmed. Partial leaves Winshell's own assemblies whole, which the TOML files and the IPC handlers

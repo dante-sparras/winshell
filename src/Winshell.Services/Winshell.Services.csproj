@@ -5,12 +5,12 @@
     <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Winshell.Core\Winshell.Core.csproj" />
     <ProjectReference Include="..\Winshell.Native\Winshell.Native.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.SystemEvents" />
     <PackageReference Include="System.Management" />
-    <PackageReference Include="Tomlyn" />
     <PackageReference Include="Vortice.Direct3D11" />
     <PackageReference Include="Vortice.DXGI" />
   </ItemGroup>

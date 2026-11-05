@@ -1,4 +1,4 @@
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 /// <summary>A <see cref="TomlFile"/> follows a file changed by something else, on its loop.</summary>
 public sealed class TomlFileWatchTests

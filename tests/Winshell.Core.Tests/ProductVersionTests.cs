@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Winshell.Services.Tests;
+namespace Winshell.Core.Tests;
 
 public class ProductVersionTests
 {

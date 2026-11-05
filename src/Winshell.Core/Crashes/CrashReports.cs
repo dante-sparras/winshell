@@ -41,7 +41,7 @@ internal sealed partial class CrashReports(string folder)
     private readonly object _lock = new();
     private readonly HashSet<string> _reported = [];
 
-    /// <summary>The folder reports go to: <see cref="ShellLocations.CrashRoot"/> for <c>winshell.exe</c>.</summary>
+    /// <summary>The folder reports go to: <c>ShellLocations.CrashRoot</c> for <c>winshell.exe</c>.</summary>
     public string Folder { get; } = Path.GetFullPath(folder);
 
     /// <summary>How many reports the folder keeps. Writing one deletes the oldest beyond this.</summary>
