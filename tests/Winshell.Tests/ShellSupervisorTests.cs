@@ -1,15 +1,15 @@
 namespace Winshell.Tests;
 
 /// <summary>
-/// The supervisor's policy against fake shells and a fake clock. Supervision starts on a pool thread, which captures no
-/// synchronization context, so an exit, a stop or a clock step runs the supervisor on the test's thread up to its next wait.
+/// The supervisor's policy against fake shells and a fake clock. Supervision runs on a pool thread, so a test waits for a
+/// shell to start, for the supervisor to wait on the clock, or for supervision to end before it acts or asserts.
 /// </summary>
 public sealed class ShellSupervisorTests
 {
     private const int AccessViolation = -1073741819;
     private static readonly TimeSpan Tick = TimeSpan.FromTicks(1);
 
-    private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 11, 5, 12, 0, 0, TimeSpan.Zero));
+    private readonly Clock _time = new();
     private readonly Shells _shells = new();
 
     [Fact]
@@ -19,6 +19,7 @@ public sealed class ShellSupervisorTests
         var first = await _shells.Started(1);
 
         first.Exit(AccessViolation);
+        await _time.Waiting();
         Assert.Equal(["start", "restore"], _shells.Events);
         _time.Advance(TimeSpan.FromSeconds(1) - Tick);
         Assert.Equal(["start", "restore"], _shells.Events);
@@ -39,6 +40,7 @@ public sealed class ShellSupervisorTests
         for (var i = 0; i < waits.Length; i++)
         {
             (await _shells.Started(i + 1)).Exit(AccessViolation);
+            await _time.Waiting();
             _time.Advance(TimeSpan.FromSeconds(waits[i]) - Tick);
             Assert.Equal(i + 1, _shells.Count);
             _time.Advance(Tick);
@@ -56,13 +58,16 @@ public sealed class ShellSupervisorTests
     {
         var run = Supervise(CancellationToken.None);
         (await _shells.Started(1)).Exit(AccessViolation);
+        await _time.Waiting();
         _time.Advance(TimeSpan.FromSeconds(1));
         (await _shells.Started(2)).Exit(AccessViolation);
+        await _time.Waiting();
         _time.Advance(TimeSpan.FromSeconds(2));
         var third = await _shells.Started(3);
 
         _time.Advance(TimeSpan.FromMinutes(1));
         third.Exit(AccessViolation);
+        await _time.Waiting();
         _time.Advance(TimeSpan.FromSeconds(1) - Tick);
         Assert.Equal(3, _shells.Count);
         _time.Advance(Tick);
@@ -143,6 +148,7 @@ public sealed class ShellSupervisorTests
         using var stop = new CancellationTokenSource();
         var run = Supervise(stop.Token);
         (await _shells.Started(1)).Exit(AccessViolation);
+        await _time.Waiting();
 
         await stop.CancelAsync();
 
@@ -168,6 +174,22 @@ public sealed class ShellSupervisorTests
     {
         var supervisor = new ShellSupervisor(_shells.Start, () => _shells.TaskbarHidden, _shells.Restore, _time);
         return Task.Run(() => supervisor.RunAsync(stop), TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>A fake clock that tells when the supervisor waits on it.</summary>
+    private sealed class Clock() : FakeTimeProvider(new DateTimeOffset(2026, 11, 5, 12, 0, 0, TimeSpan.Zero))
+    {
+        private readonly SemaphoreSlim _waits = new(0);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            _waits.Release();
+            return timer;
+        }
+
+        /// <summary>Completes once the supervisor has handled an exit and waits to start the next shell.</summary>
+        public Task Waiting() => _waits.WaitAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>What the supervisor started, stopped and restored, in order.</summary>
