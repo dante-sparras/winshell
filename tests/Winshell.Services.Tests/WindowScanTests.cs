@@ -24,7 +24,7 @@ public sealed class WindowScanTests
 
         try
         {
-            var shows = await Task.Run(() => WindowTracker.IsTaskbarWindow(window), TestContext.Current.CancellationToken)
+            var shows = await Task.Run(() => WindowBackend.IsTaskbarWindow(window), TestContext.Current.CancellationToken)
                 .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
             Assert.False(shows);

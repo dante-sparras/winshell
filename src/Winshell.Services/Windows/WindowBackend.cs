@@ -3,63 +3,97 @@ using Winshell.Input;
 
 namespace Winshell.Windows;
 
-/// <summary>What Winshell knows about one window on the taskbar.</summary>
-internal sealed record WindowInfo(
-    nint Hwnd,
+/// <summary>
+/// One read of a window the taskbar shows. <see cref="AppUserModelId"/> is the id the window set, read every time.
+/// <see cref="PackageAppId"/> and <see cref="Executable"/> are null when they were not read.
+/// </summary>
+internal sealed record WindowRead(
     string Title,
-    string AppId,
-    string Executable,
-    string Icon,
-    nint Owner,
     bool Maximized,
     bool Minimized,
     bool Fullscreen,
-    string Monitor);
+    string Monitor,
+    string AppUserModelId,
+    string? PackageAppId,
+    string? Executable);
 
 /// <summary>
-/// The app id kept for a window between reads. <see cref="PackageKnown"/> is true once the process package has been
-/// asked, including when it has none.
+/// The other programs' windows in Win32, for a <see cref="WindowListService"/>. Tests use a stand-in, so no real
+/// window is read or moved. The shell uses <see cref="WindowBackend"/>.
 /// </summary>
-internal readonly record struct WindowIdentity(
-    string AppId,
-    string Executable,
-    string Icon,
-    string PackageAppId,
-    bool PackageKnown);
-
-/// <summary>
-/// The windows the taskbar and Alt+Tab show, for the whole process, kept current by WinEvent hooks set on the UI
-/// thread. Events are gathered and read once per turn of the loop, then <see cref="Changed"/> is raised. Which
-/// desktop a window is on uses the supported desktop API.
-/// </summary>
-internal sealed class WindowTracker : IWindowSource
+internal interface IWindowBackend
 {
-    public static readonly WindowTracker Instance = new();
+    /// <summary>A WinEvent: its type, window, object id and child id. Raised on the thread that called <see cref="Start"/>.</summary>
+    event Action<uint, nint, int, int>? WinEvent;
 
-    private readonly Dictionary<nint, WindowInfo> _tracked = [];
-    private readonly Dictionary<nint, WindowIdentity> _identities = [];
-    private readonly HashSet<nint> _dirty = [];
-    private readonly HashSet<nint> _flashed = [];
-    private readonly HashSet<nint> _wanting = [];
-    private readonly List<WinEventHook> _hooks = [];
-    private IEventLoop? _loop;
-    private bool _flushPosted;
-    private bool _foregroundDirty;
+    /// <summary>A window flashed to ask for attention. Raised on the thread that called <see cref="Start"/>.</summary>
+    event Action<nint>? Flashed;
 
-    private WindowTracker()
+    /// <summary>The window that has the foreground. Zero when none.</summary>
+    nint Foreground { get; }
+
+    /// <summary>Starts raising <see cref="WinEvent"/> and <see cref="Flashed"/>, once. The thread must pump messages.</summary>
+    void Start(Log log);
+
+    /// <summary>The top-level windows, in z-order.</summary>
+    IReadOnlyList<nint> TopLevel();
+
+    /// <summary>The window that owns this one. Zero when none.</summary>
+    nint OwnerOf(nint hwnd);
+
+    /// <summary>The top-level window this window is in, or the window itself.</summary>
+    nint RootOf(nint hwnd);
+
+    /// <summary>
+    /// Reads a window when the taskbar shows it, or null. The process package is read only when
+    /// <paramref name="package"/> is true and the window set no id. The program path is read only when
+    /// <paramref name="executable"/> is true.
+    /// </summary>
+    WindowRead? Read(nint hwnd, bool package, bool executable);
+
+    /// <summary>The connected monitor with this device name, or null.</summary>
+    ScreenInfo? Screen(string deviceName);
+
+    string DesktopId(nint hwnd);
+
+    bool MoveToDesktop(nint hwnd, Guid desktop);
+
+    void Activate(nint hwnd);
+
+    void Close(nint hwnd);
+
+    void SetMaximized(nint hwnd, bool maximized);
+
+    void SetMinimized(nint hwnd, bool minimized);
+
+    void MoveToMonitor(nint hwnd, string deviceName);
+}
+
+/// <summary>
+/// The windows through Win32. The WinEvent hooks and the shell hook window are set on the UI thread and stay for the
+/// process, the same way the desktop switch hook does. Which desktop a window is on uses the supported desktop API.
+/// </summary>
+internal sealed class WindowBackend : IWindowBackend
+{
+    public static WindowBackend Shared { get; } = new();
+
+    private bool _started;
+
+    private WindowBackend()
     {
     }
 
-    /// <summary>Raised on the UI thread after windows came, went or changed, or the foreground moved.</summary>
-    public event Action? Changed;
+    public event Action<uint, nint, int, int>? WinEvent;
 
-    public IReadOnlyDictionary<nint, WindowInfo> Windows => _tracked;
+    public event Action<nint>? Flashed;
 
-    /// <summary>The tracked window that has the foreground, or owns the window that has it. Zero when none.</summary>
-    public nint Active { get; private set; }
+    public nint Foreground => Win32.GetForegroundWindow();
 
-    /// <summary>Whether the window flashed to ask for attention and has not been activated since.</summary>
-    public bool WantsAttention(nint hwnd) => _wanting.Contains(hwnd);
+    public IReadOnlyList<nint> TopLevel() => TopLevelWindows.List();
+
+    public nint OwnerOf(nint hwnd) => Win32.GetWindow(hwnd, Win32.GW_OWNER);
+
+    public nint RootOf(nint hwnd) => TopLevelWindows.RootOf(hwnd);
 
     public ScreenInfo? Screen(string deviceName) => Screens.Find(deviceName)?.Info;
 
@@ -67,12 +101,11 @@ internal sealed class WindowTracker : IWindowSource
 
     public bool MoveToDesktop(nint hwnd, Guid desktop) => WindowDesktop.Move(hwnd, desktop);
 
-    /// <summary>Sets the hooks and reads the open windows, once. Must run on the UI thread, which pumps messages.</summary>
-    public void Start(IEventLoop loop, Log log)
+    public void Start(Log log)
     {
-        if (_loop is not null)
+        if (_started)
             return;
-        _loop = loop;
+        _started = true;
         (uint Min, uint Max)[] ranges =
         [
             (Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND),
@@ -83,122 +116,26 @@ internal sealed class WindowTracker : IWindowSource
         ];
         foreach (var (min, max) in ranges)
         {
-            if (WinEventHook.Start(min, max, OnWinEvent) is { } hook)
-                _hooks.Add(hook);
-            else
+            if (WinEventHook.Start(min, max, OnWinEvent) is null)
                 log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         }
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
         // window flashes.
         if (!ShellHookWindow.Start(OnShellHook))
             log.Warn("windows", "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
-        foreach (var hwnd in TopLevelWindows.List())
-            _dirty.Add(hwnd);
-        _foregroundDirty = true;
-        Flush();
     }
 
     private void OnShellHook(nint code, nint hwnd) =>
         NativeCallback.Guard(Log.Default, "windows", () =>
         {
             if (WindowRules.IsFlash(code) && hwnd != 0)
-            {
-                _flashed.Add(hwnd);
-                if (!_flushPosted && _loop is not null)
-                {
-                    _flushPosted = true;
-                    _loop.Post(Flush);
-                }
-            }
+                Flashed?.Invoke(hwnd);
         });
 
     private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
-        NativeCallback.Guard(Log.Default, "windows", () => Mark(eventType, hwnd, idObject, idChild));
+        NativeCallback.Guard(Log.Default, "windows", () => WinEvent?.Invoke(eventType, hwnd, idObject, idChild));
 
-    private void Mark(uint eventType, nint hwnd, int idObject, int idChild)
-    {
-        // Windows reports no move of a window on its own, so maximizing, restoring and moving to another monitor
-        // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
-        if (eventType == Win32.EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
-            return;
-        var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && TopLevelWindows.RootOf(hwnd) == hwnd;
-        var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, _tracked.ContainsKey(hwnd), isRoot);
-        if (!marksWindow && !WindowRules.MarksForeground(eventType))
-            return;
-        if (marksWindow)
-            _dirty.Add(hwnd);
-        if (WindowRules.MarksForeground(eventType))
-            _foregroundDirty = true;
-        if (!_flushPosted && _loop is not null)
-        {
-            _flushPosted = true;
-            _loop.Post(Flush);
-        }
-    }
-
-    private void Flush()
-    {
-        _flushPosted = false;
-        // Describe can pump once the UI thread is STA. Drop only the hwnds this pass already saw,
-        // so a window marked during that call stays for the flush OnWinEvent already posted.
-        var pending = _dirty.ToArray();
-        foreach (var hwnd in pending)
-            _dirty.Remove(hwnd);
-        var changed = false;
-        foreach (var hwnd in pending)
-        {
-            _tracked.TryGetValue(hwnd, out var old);
-            var info = IsTaskbarWindow(hwnd) ? Describe(hwnd) : null;
-            if (info is null)
-            {
-                changed |= _tracked.Remove(hwnd);
-                _identities.Remove(hwnd);
-            }
-            else if (info != old)
-            {
-                _tracked[hwnd] = info;
-                changed = true;
-            }
-        }
-        if (_foregroundDirty)
-        {
-            _foregroundDirty = false;
-            var active = ActiveOf(Win32.GetForegroundWindow());
-            if (active != Active)
-            {
-                Active = active;
-                changed = true;
-            }
-        }
-        if (!_tracked.ContainsKey(Active) && Active != 0)
-        {
-            Active = 0;
-            changed = true;
-        }
-        // A dialog that flashes asks for the window that owns it. The window in front already has the user.
-        foreach (var hwnd in _flashed)
-        {
-            var wanting = ActiveOf(hwnd);
-            if (wanting != 0 && wanting != Active)
-                changed |= _wanting.Add(wanting);
-        }
-        _flashed.Clear();
-        changed |= WindowRules.SettleAttention(_wanting, Active, _tracked.ContainsKey);
-        if (changed)
-            Changed?.Invoke();
-    }
-
-    private nint ActiveOf(nint foreground)
-    {
-        var hwnd = foreground == 0 ? 0 : TopLevelWindows.RootOf(foreground);
-        for (var depth = 0; hwnd != 0 && depth < 16; depth++)
-        {
-            if (_tracked.ContainsKey(hwnd))
-                return hwnd;
-            hwnd = Win32.GetWindow(hwnd, Win32.GW_OWNER);
-        }
-        return 0;
-    }
+    public WindowRead? Read(nint hwnd, bool package, bool executable) => IsTaskbarWindow(hwnd) ? Describe(hwnd, package, executable) : null;
 
     /// <summary>
     /// The taskbar's rule: a visible, uncloaked top-level window with a title that either asks for a taskbar button
@@ -224,7 +161,7 @@ internal sealed class WindowTracker : IWindowSource
             TopLevelWindows.IsCloaked(hwnd)));
     }
 
-    private WindowInfo Describe(nint hwnd)
+    private static WindowRead Describe(nint hwnd, bool package, bool executable)
     {
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
@@ -238,39 +175,15 @@ internal sealed class WindowTracker : IWindowSource
             var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
             fullscreen = WindowRules.CoversMonitor(style, rect, mi.Bounds);
         }
-        _identities.TryGetValue(hwnd, out var previous);
-        // The property can arrive after the window is first shown. Read it every time. The package id and the
-        // program path do not change, so each is read once.
+        // The property can arrive after the window is first shown, so it is read every time.
         var property = AppUserModelIds.OfWindow(hwnd);
-        string? package = null;
-        if (property.Length == 0 && !previous.PackageKnown)
+        string? packageAppId = null;
+        if (property.Length == 0 && package)
         {
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
-            package = AppUserModelIds.OfProcess(pid);
+            packageAppId = AppUserModelIds.OfProcess(pid);
         }
-        string? executable = previous.Executable is { Length: > 0 } ? null : ExePath(hwnd);
-        var identity = Resolve(previous, property, package, executable);
-        _identities[hwnd] = identity;
-        var owner = Win32.GetWindow(hwnd, Win32.GW_OWNER);
-        return new WindowInfo(hwnd, TopLevelWindows.Title(hwnd), identity.AppId, identity.Executable, identity.Icon, owner, maximized, minimized, fullscreen, device);
-    }
-
-    /// <summary>
-    /// The app id to keep after one read of the window. <paramref name="windowProperty"/> is the property store now,
-    /// and it replaces a package id or a program name. An empty property uses <paramref name="packageAppId"/> when
-    /// that was read, or the package id already known. A null executable keeps the path already read.
-    /// </summary>
-    internal static WindowIdentity Resolve(WindowIdentity previous, string windowProperty, string? packageAppId, string? executable)
-    {
-        var package = packageAppId ?? previous.PackageAppId ?? "";
-        var path = executable ?? previous.Executable ?? "";
-        var source = windowProperty.Length > 0 ? windowProperty : package;
-        return new WindowIdentity(
-            WindowRules.AppId(windowProperty, package, path),
-            path,
-            WindowRules.IconPath(source, path),
-            package,
-            previous.PackageKnown || packageAppId is not null);
+        return new WindowRead(TopLevelWindows.Title(hwnd), maximized, minimized, fullscreen, device, property, packageAppId, executable ? ExePath(hwnd) : null);
     }
 
     /// <summary>The full path of the program that owns a window, or empty when it cannot be read.</summary>

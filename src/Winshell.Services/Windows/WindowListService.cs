@@ -1,31 +1,66 @@
 using System.Collections.ObjectModel;
+using Winshell.Native;
 
 namespace Winshell.Windows;
+
+/// <summary>What Winshell knows about one window on the taskbar.</summary>
+internal sealed record WindowInfo(
+    nint Hwnd,
+    string Title,
+    string AppId,
+    string Executable,
+    string Icon,
+    nint Owner,
+    bool Maximized,
+    bool Minimized,
+    bool Fullscreen,
+    string Monitor);
+
+/// <summary>
+/// The app id kept for a window between reads. <see cref="PackageKnown"/> is true once the process package has been
+/// asked, including when it has none.
+/// </summary>
+internal readonly record struct WindowIdentity(
+    string AppId,
+    string Executable,
+    string Icon,
+    string PackageAppId,
+    bool PackageKnown);
 
 /// <summary>The other programs' windows, as the taskbar and Alt+Tab list them.</summary>
 public sealed class WindowListService : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
-    private readonly IWindowSource _source;
+    private readonly IWindowBackend _backend;
     private readonly VirtualDesktopsService? _desktops;
     private readonly Dictionary<nint, AppWindow> _byHwnd = [];
+    private readonly Dictionary<nint, WindowIdentity> _identities = [];
+    private readonly HashSet<nint> _dirty = [];
+    private readonly HashSet<nint> _flashed = [];
+    private readonly HashSet<nint> _wanting = [];
     private AppWindow? _activeWindow;
+    private bool _flushPosted;
+    private bool _foregroundDirty;
     private bool _disposed;
 
-    /// <param name="loop">The loop of the thread the windows are read on.</param>
+    /// <param name="loop">The loop of the thread the windows are read on. That thread must pump messages.</param>
     /// <param name="log">Where a hook that cannot be set is reported.</param>
     /// <param name="desktops">Gives <see cref="AppWindow.Desktop"/> its value. Without it, that stays null.</param>
-    /// <param name="source">The windows, for a test.</param>
-    internal WindowListService(IEventLoop loop, Log log, VirtualDesktopsService? desktops = null, IWindowSource? source = null)
+    /// <param name="backend">The windows, for a test.</param>
+    internal WindowListService(IEventLoop loop, Log log, VirtualDesktopsService? desktops = null, IWindowBackend? backend = null)
     {
         _loop = loop;
         _desktops = desktops;
-        _source = source ?? WindowTracker.Instance;
-        _source.Start(loop, log);
-        _source.Changed += OnChanged;
+        _backend = backend ?? WindowBackend.Shared;
+        _backend.WinEvent += OnWinEvent;
+        _backend.Flashed += OnFlashed;
+        _backend.Start(log);
         if (_desktops is not null)
             _desktops.Refreshed += OnDesktopsRefreshed;
-        Apply();
+        foreach (var hwnd in _backend.TopLevel())
+            _dirty.Add(hwnd);
+        _foregroundDirty = true;
+        Flush();
     }
 
     /// <summary>The windows, in the order they opened.</summary>
@@ -37,48 +72,148 @@ public sealed class WindowListService : ObservableObject, IDisposable
     /// <summary>The window with this handle, or null when it is not listed.</summary>
     internal AppWindow? Find(nint hwnd) => _byHwnd.GetValueOrDefault(hwnd);
 
-    private void OnChanged() => _loop.Post(Apply);
-
-    private void Apply()
+    private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
+        // Windows reports no move of a window on its own, so maximizing, restoring and moving to another monitor
+        // arrive as location changes. The caret and cursor send them too, on every move, so drop those first.
+        if (eventType == Win32.EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
+            return;
+        var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && _backend.RootOf(hwnd) == hwnd;
+        var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, _byHwnd.ContainsKey(hwnd), isRoot);
+        var marksForeground = WindowRules.MarksForeground(eventType);
+        if (!marksWindow && !marksForeground)
+            return;
+        if (marksWindow)
+            _dirty.Add(hwnd);
+        _foregroundDirty |= marksForeground;
+        PostFlush();
+    }
+
+    private void OnFlashed(nint hwnd)
+    {
+        _flashed.Add(hwnd);
+        PostFlush();
+    }
+
+    private void PostFlush()
+    {
+        if (_flushPosted)
+            return;
+        _flushPosted = true;
+        _loop.Post(Flush);
+    }
+
+    /// <summary>Reads each window marked since the last turn of the loop once, and the foreground when it may have moved.</summary>
+    private void Flush()
+    {
+        _flushPosted = false;
         if (_disposed)
             return;
-        var windows = _source.Windows;
-        foreach (var (hwnd, window) in _byHwnd.ToArray())
-        {
-            if (windows.ContainsKey(hwnd))
-                continue;
-            _byHwnd.Remove(hwnd);
-            Windows.Remove(window);
-            if (_activeWindow == window)
-                Set(ref _activeWindow, null, nameof(ActiveWindow));
-            window.NotifyClosed();
-        }
+        // A read can pump once the UI thread is STA. Take only the windows marked so far, so a window marked during
+        // a read waits for the flush its event posts.
+        var pending = _dirty.ToArray();
+        _dirty.Clear();
         var added = new List<AppWindow>();
-        foreach (var (hwnd, info) in windows)
+        foreach (var hwnd in pending)
         {
-            if (_byHwnd.TryGetValue(hwnd, out var window))
+            var info = Read(hwnd);
+            _byHwnd.TryGetValue(hwnd, out var window);
+            if (info is null)
+            {
+                _identities.Remove(hwnd);
+                if (window is not null)
+                    Remove(window);
+            }
+            else if (window is null)
+            {
+                window = new AppWindow(info, _backend, _desktops);
+                _byHwnd[hwnd] = window;
+                added.Add(window);
+            }
+            else
             {
                 window.Update(info);
-                continue;
             }
-            window = new AppWindow(info, _source, _desktops);
-            _byHwnd[hwnd] = window;
-            added.Add(window);
         }
         // Owners are known once every window is.
-        foreach (var (hwnd, info) in windows)
-            _byHwnd[hwnd].SetParent(info.Owner == 0 ? null : _byHwnd.GetValueOrDefault(info.Owner));
+        foreach (var window in _byHwnd.Values)
+            window.SetParent(window.Owner == 0 ? null : _byHwnd.GetValueOrDefault(window.Owner));
         // A new window goes at the end, so the list stays in the order windows opened.
         foreach (var window in added)
             Windows.Add(window);
-        var active = _byHwnd.GetValueOrDefault(_source.Active);
-        Set(ref _activeWindow, active, nameof(ActiveWindow));
+        if (_foregroundDirty)
+        {
+            _foregroundDirty = false;
+            Set(ref _activeWindow, ActiveOf(_backend.Foreground), nameof(ActiveWindow));
+        }
+        // A dialog that flashes asks for the window that owns it. The window in front already has the user.
+        foreach (var hwnd in _flashed)
+        {
+            if (ActiveOf(hwnd) is { } wanting && wanting != _activeWindow)
+                _wanting.Add(wanting.Hwnd);
+        }
+        _flashed.Clear();
+        WindowRules.SettleAttention(_wanting, _activeWindow?.Hwnd ?? 0, _byHwnd.ContainsKey);
         foreach (var window in _byHwnd.Values)
         {
-            window.SetActivated(window == active);
-            window.SetAttention(_source.WantsAttention(window.Hwnd));
+            window.SetActivated(window == _activeWindow);
+            window.SetAttention(_wanting.Contains(window.Hwnd));
         }
+    }
+
+    private void Remove(AppWindow window)
+    {
+        _byHwnd.Remove(window.Hwnd);
+        Windows.Remove(window);
+        if (_activeWindow == window)
+            Set(ref _activeWindow, null, nameof(ActiveWindow));
+        window.NotifyClosed();
+    }
+
+    /// <summary>The listed window that is this one or owns it, as a main window owns its dialog. Null when none is.</summary>
+    private AppWindow? ActiveOf(nint hwnd)
+    {
+        hwnd = hwnd == 0 ? 0 : _backend.RootOf(hwnd);
+        for (var depth = 0; hwnd != 0 && depth < 16; depth++)
+        {
+            if (_byHwnd.TryGetValue(hwnd, out var window))
+                return window;
+            hwnd = _backend.OwnerOf(hwnd);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Reads a window, or null when the taskbar does not show it. The package id and the program path do not change,
+    /// so each is read once.
+    /// </summary>
+    private WindowInfo? Read(nint hwnd)
+    {
+        _identities.TryGetValue(hwnd, out var previous);
+        if (_backend.Read(hwnd, !previous.PackageKnown, previous.Executable is not { Length: > 0 }) is not { } read)
+            return null;
+        var identity = Resolve(previous, read.AppUserModelId, read.PackageAppId, read.Executable);
+        _identities[hwnd] = identity;
+        return new WindowInfo(hwnd, read.Title, identity.AppId, identity.Executable, identity.Icon, _backend.OwnerOf(hwnd),
+            read.Maximized, read.Minimized, read.Fullscreen, read.Monitor);
+    }
+
+    /// <summary>
+    /// The app id to keep after one read of the window. <paramref name="windowProperty"/> is the property store now,
+    /// and it replaces a package id or a program name. An empty property uses <paramref name="packageAppId"/> when
+    /// that was read, or the package id already known. A null executable keeps the path already read.
+    /// </summary>
+    private static WindowIdentity Resolve(WindowIdentity previous, string windowProperty, string? packageAppId, string? executable)
+    {
+        var package = packageAppId ?? previous.PackageAppId ?? "";
+        var path = executable ?? previous.Executable ?? "";
+        var source = windowProperty.Length > 0 ? windowProperty : package;
+        return new WindowIdentity(
+            WindowRules.AppId(windowProperty, package, path),
+            path,
+            WindowRules.IconPath(source, path),
+            package,
+            previous.PackageKnown || packageAppId is not null);
     }
 
     private void OnDesktopsRefreshed()
@@ -91,7 +226,8 @@ public sealed class WindowListService : ObservableObject, IDisposable
     public void Dispose()
     {
         _disposed = true;
-        _source.Changed -= OnChanged;
+        _backend.WinEvent -= OnWinEvent;
+        _backend.Flashed -= OnFlashed;
         if (_desktops is not null)
             _desktops.Refreshed -= OnDesktopsRefreshed;
     }
@@ -100,21 +236,23 @@ public sealed class WindowListService : ObservableObject, IDisposable
 /// <summary>A top-level window of another program.</summary>
 public sealed class AppWindow : ObservableObject
 {
-    private readonly IWindowSource _source;
+    private readonly IWindowBackend _backend;
     private readonly VirtualDesktopsService? _desktops;
     private WindowInfo _info;
     private AppWindow? _parent;
     private bool _activated;
     private bool _attention;
 
-    internal AppWindow(WindowInfo info, IWindowSource source, VirtualDesktopsService? desktops)
+    internal AppWindow(WindowInfo info, IWindowBackend backend, VirtualDesktopsService? desktops)
     {
         _info = info;
-        _source = source;
+        _backend = backend;
         _desktops = desktops;
     }
 
     internal nint Hwnd => _info.Hwnd;
+
+    internal nint Owner => _info.Owner;
 
     /// <summary>The window's title, as its title bar shows it. May be empty.</summary>
     public string Title => _info.Title;
@@ -129,7 +267,7 @@ public sealed class AppWindow : ObservableObject
     public string Icon => _info.Icon;
 
     /// <summary>The virtual desktop this window is on, or empty when Windows does not report one. This uses the supported desktop API.</summary>
-    public string DesktopId => _source.DesktopId(Hwnd);
+    public string DesktopId => _backend.DesktopId(Hwnd);
 
     /// <summary>The desktop in <see cref="VirtualDesktopsService.Desktops"/> whose id is <see cref="DesktopId"/>, when that list is loaded.</summary>
     public VirtualDesktop? Desktop => _desktops?.Find(DesktopId);
@@ -147,20 +285,20 @@ public sealed class AppWindow : ObservableObject
     public AppWindow? Parent => _parent;
 
     /// <summary>The screen the window is on: the one Windows says it is nearest.</summary>
-    public IReadOnlyList<ScreenInfo> Screens => _source.Screen(_info.Monitor) is { } screen ? [screen] : [];
+    public IReadOnlyList<ScreenInfo> Screens => _backend.Screen(_info.Monitor) is { } screen ? [screen] : [];
 
     /// <summary>Whether the window is maximized. Setting it maximizes the window, or restores it.</summary>
     public bool Maximized
     {
         get => _info.Maximized;
-        set => _source.SetMaximized(Hwnd, value);
+        set => _backend.SetMaximized(Hwnd, value);
     }
 
     /// <summary>Whether the window is minimized. Setting it minimizes the window, or restores it.</summary>
     public bool Minimized
     {
         get => _info.Minimized;
-        set => _source.SetMinimized(Hwnd, value);
+        set => _backend.SetMinimized(Hwnd, value);
     }
 
     /// <summary>Whether the window covers its screen without a frame. Windows has no request that puts another program's window into fullscreen.</summary>
@@ -170,20 +308,20 @@ public sealed class AppWindow : ObservableObject
     public event EventHandler? Closed;
 
     /// <summary>Brings the window to the front and focuses it, restoring it first when it is minimized.</summary>
-    public void Activate() => _source.Activate(Hwnd);
+    public void Activate() => _backend.Activate(Hwnd);
 
     /// <summary>Asks the window to close, as its close button does. The program can still keep it open.</summary>
-    public void Close() => _source.Close(Hwnd);
+    public void Close() => _backend.Close(Hwnd);
 
     /// <summary>Moves the window onto a monitor. Its logical size stays, and a maximized window is maximized again there.</summary>
-    public void MoveTo(ScreenInfo? screen) => _source.MoveToMonitor(Hwnd, screen?.Id ?? "");
+    public void MoveTo(ScreenInfo? screen) => _backend.MoveToMonitor(Hwnd, screen?.Id ?? "");
 
     /// <summary>Moves the window onto a virtual desktop. This uses the supported desktop API.</summary>
     public void MoveToDesktop(VirtualDesktop? desktop)
     {
         if (desktop is null || !Guid.TryParse(desktop.Id, out var id) || id == Guid.Empty)
             return;
-        if (_source.MoveToDesktop(Hwnd, id))
+        if (_backend.MoveToDesktop(Hwnd, id))
             NotifyDesktop();
     }
 
