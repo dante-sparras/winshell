@@ -83,17 +83,24 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
-    public async Task A_build_error_shows_on_the_running_shell()
+    public async Task A_build_error_shows_on_the_running_shell() => await ShellFixture.Hold(async () =>
     {
         var shell = await ShellFixture.Current();
-
         var response = Assert.Single(await Ask(new IpcRequest("build-error", Args: ["Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"])));
 
-        Assert.True(response.Ok);
-        Assert.Equal(NoticeKind.BuildError, shell.Notices!.Current!.Kind);
-        Assert.Contains("CS1002", shell.Notices.Current.Body, StringComparison.Ordinal);
-        Assert.Equal(Environment.ProcessId, (await Own()).Pid);
-    }
+        try
+        {
+            Assert.True(response.Ok);
+            Assert.Equal(NoticeKind.BuildError, shell.Notices!.Current!.Kind);
+            Assert.Contains("CS1002", shell.Notices.Current.Body, StringComparison.Ordinal);
+            Assert.Equal(Environment.ProcessId, (await Own()).Pid);
+        }
+        finally
+        {
+            // The shell is one for the whole run. A notice left up is a second window for the tests that follow.
+            await DismissNotice();
+        }
+    });
 
     [Fact]
     public async Task A_handler_that_throws_fails_the_call_and_the_shell_goes_on()
@@ -109,7 +116,7 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
-    public async Task Work_that_fails_on_the_shell_thread_writes_a_report_and_the_shell_goes_on()
+    public async Task Work_that_fails_on_the_shell_thread_writes_a_report_and_the_shell_goes_on() => await ShellFixture.Hold(async () =>
     {
         var shell = await ShellFixture.Current();
 
@@ -120,7 +127,16 @@ public sealed class ShellInstanceTests
                 && Directory.GetFiles(ShellLocations.CrashRoot).Any(f => ReadClosed(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
             "a crash report for the posted failure");
         Assert.True(await ShellFixture.On(_ => true));
-    }
+        // The report shows a notice. Take it down before another test looks at the shell's windows.
+        await DismissNotice();
+    });
+
+    /// <summary>Closes the shell's notice. The show is already posted by the time a report or a build error is visible.</summary>
+    private static Task DismissNotice() => ShellFixture.On(shell =>
+    {
+        shell.Notices?.Hide();
+        return true;
+    });
 
     /// <summary>
     /// A file's text, refusing to share with a writer as <see cref="File.ReadAllText(string)"/> does, so a report still
