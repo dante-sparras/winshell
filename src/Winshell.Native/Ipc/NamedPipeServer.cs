@@ -29,12 +29,18 @@ internal static unsafe class NamedPipeServer
             var mode = FILE_FLAGS_AND_ATTRIBUTES.PIPE_ACCESS_DUPLEX | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OVERLAPPED;
             if (first)
                 mode |= FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_FIRST_PIPE_INSTANCE;
-            var handle = PInvoke.CreateNamedPipe(name, mode, NAMED_PIPE_MODE.PIPE_REJECT_REMOTE_CLIENTS, 255, 4096, 4096, 0, attributes);
-            if ((nint)handle.Value == -1)
+            HANDLE handle;
+            fixed (char* path = name)
             {
-                error = Marshal.GetLastPInvokeError();
-                return null;
+                // The metadata leaves SetLastError off CreateNamedPipeW, so its error is read here, as CsWin32 does for
+                // the calls that have it.
+                Marshal.SetLastSystemError(0);
+                handle = PInvoke.CreateNamedPipe(path, mode, NAMED_PIPE_MODE.PIPE_REJECT_REMOTE_CLIENTS, 255, 4096, 4096, 0, &attributes);
+                error = Marshal.GetLastSystemError();
             }
+            if ((nint)handle.Value == -1)
+                return null;
+            error = 0;
             return new SafePipeHandle((nint)handle.Value, ownsHandle: true);
         }
         finally
