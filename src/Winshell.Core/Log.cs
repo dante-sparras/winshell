@@ -5,14 +5,18 @@ public enum LogLevel
 {
     /// <summary>Detail for tracking down a problem. Kept only when the shell runs with <c>--verbose</c>.</summary>
     Debug,
+
     /// <summary>Normal progress worth recording.</summary>
     Info,
+
     /// <summary>Something went wrong and the shell carried on.</summary>
     Warn,
+
     /// <summary>An operation failed.</summary>
     Error,
+
     /// <summary>A failure that ends the process.</summary>
-    Fatal,
+    Fatal
 }
 
 /// <summary>Writes messages as <c> WARN category: message</c>.</summary>
@@ -50,30 +54,45 @@ public sealed class Log
             sink(level, category, message);
             return;
         }
+
         var label = level switch
         {
             LogLevel.Debug => "DEBUG",
             LogLevel.Info => " INFO",
             LogLevel.Warn => " WARN",
             LogLevel.Error => "ERROR",
-            _ => "FATAL",
+            _ => "FATAL"
         };
         var line = string.IsNullOrEmpty(category) ? $"{label}: {message}" : $"{label} {category}: {message}";
         lock (_lock)
+        {
             Console.Error.WriteLine(line);
+        }
     }
 
     /// <summary>
     /// Writes a <see cref="LogLevel.Debug"/> message, kept only when the shell runs with <c>--verbose</c>.
     /// </summary>
-    public void Debug(string category, string message) => Write(LogLevel.Debug, category, message);
+    public void Debug(string category, string message)
+    {
+        Write(LogLevel.Debug, category, message);
+    }
 
     /// <summary>Writes a <see cref="LogLevel.Info"/> message.</summary>
-    public void Info(string category, string message) => Write(LogLevel.Info, category, message);
+    public void Info(string category, string message)
+    {
+        Write(LogLevel.Info, category, message);
+    }
 
     /// <summary>Writes a <see cref="LogLevel.Warn"/> message.</summary>
-    public void Warn(string category, string message) => Write(LogLevel.Warn, category, message);
+    public void Warn(string category, string message)
+    {
+        Write(LogLevel.Warn, category, message);
+    }
 
     /// <summary>Writes a <see cref="LogLevel.Error"/> message.</summary>
-    public void Error(string category, string message) => Write(LogLevel.Error, category, message);
+    public void Error(string category, string message)
+    {
+        Write(LogLevel.Error, category, message);
+    }
 }

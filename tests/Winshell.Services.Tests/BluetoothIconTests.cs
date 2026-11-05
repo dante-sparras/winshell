@@ -14,8 +14,10 @@ public sealed class BluetoothIconTests
     [InlineData(RadioState.On, BluetoothAdapterState.On)]
     [InlineData(RadioState.Off, BluetoothAdapterState.Off)]
     [InlineData(RadioState.Disabled, BluetoothAdapterState.Disabled)]
-    public void Radio_state_does_not_guess_when_unavailable(RadioState? state, BluetoothAdapterState expected) =>
+    public void Radio_state_does_not_guess_when_unavailable(RadioState? state, BluetoothAdapterState expected)
+    {
         Assert.Equal(expected, BluetoothBackend.MapRadioState(state));
+    }
 
     [Theory]
     [InlineData(null, null)]
@@ -25,8 +27,10 @@ public sealed class BluetoothIconTests
     [InlineData(255, null)]
     [InlineData(-1, null)]
     [InlineData("80", null)]
-    public void Battery_rejects_missing_invalid_and_unknown_values(object? value, double? expected) =>
+    public void Battery_rejects_missing_invalid_and_unknown_values(object? value, double? expected)
+    {
         Assert.Equal(expected, BluetoothBackend.BatteryLevel(value));
+    }
 
     [Fact]
     public void Battery_accepts_the_windows_numeric_property_types()
@@ -43,16 +47,20 @@ public sealed class BluetoothIconTests
     [InlineData(DevicePairingResultStatus.AuthenticationFailure, "AuthenticationFailure")]
     [InlineData(DevicePairingResultStatus.RejectedByHandler, "RejectedByHandler")]
     [InlineData(DevicePairingResultStatus.OperationAlreadyInProgress, "OperationAlreadyInProgress")]
-    public void Pairing_result_mapping(DevicePairingResultStatus status, string? error) =>
+    public void Pairing_result_mapping(DevicePairingResultStatus status, string? error)
+    {
         Assert.Equal(error, BluetoothBackend.PairingError(status));
+    }
 
     [Theory]
     [InlineData(DeviceUnpairingResultStatus.Unpaired, null)]
     [InlineData(DeviceUnpairingResultStatus.AlreadyUnpaired, null)]
     [InlineData(DeviceUnpairingResultStatus.AccessDenied, "AccessDenied")]
     [InlineData(DeviceUnpairingResultStatus.Failed, "Failed")]
-    public void Unpairing_result_mapping(DeviceUnpairingResultStatus status, string? error) =>
+    public void Unpairing_result_mapping(DeviceUnpairingResultStatus status, string? error)
+    {
         Assert.Equal(error, BluetoothBackend.UnpairingError(status));
+    }
 
     // Major and minor are the unshifted Windows codes: headphones is 6, not the raw class bits.
     [Theory]
@@ -117,8 +125,11 @@ public sealed class BluetoothIconTests
     [InlineData(null, null, 0x0f << 6, "")]
     [InlineData(null, null, 3 << 6, "")]
     [InlineData(null, null, 0x2a << 6, "")]
-    public void Icon_names_follow_the_BlueZ_class_and_appearance(int? major, int? minor, int? appearance, string expected) =>
+    public void Icon_names_follow_the_BlueZ_class_and_appearance(int? major, int? minor, int? appearance,
+        string expected)
+    {
         Assert.Equal(expected, BluetoothIcon.Name(Code(major), Code(minor), Code(appearance)));
+    }
 
     [Fact]
     public void Merged_endpoints_prefer_a_classic_class_over_an_appearance()
@@ -126,29 +137,37 @@ public sealed class BluetoothIconTests
         var headphones = new BluetoothClassReport(0x04, 0x06, null);
         var phone = new BluetoothClassReport(null, null, 1 << 6);
         Assert.Equal("audio-headphones", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("le", paired: true, phone), ClassEndpoint("classic", paired: false, headphones)])).Icon);
+            ClassEndpoint("le", true, phone), ClassEndpoint("classic", false, headphones)
+        ])).Icon);
 
         Assert.Equal("computer", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("headphones", paired: false, headphones),
-            ClassEndpoint("paired-computer", paired: true, new BluetoothClassReport(0x01, 0, null))])).Icon);
+            ClassEndpoint("headphones", false, headphones),
+            ClassEndpoint("paired-computer", true, new BluetoothClassReport(0x01, 0, null))
+        ])).Icon);
 
         Assert.Equal("computer", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("b", paired: true, headphones),
-            ClassEndpoint("a", paired: true, new BluetoothClassReport(0x01, 1, null))])).Icon);
+            ClassEndpoint("b", true, headphones),
+            ClassEndpoint("a", true, new BluetoothClassReport(0x01, 1, null))
+        ])).Icon);
 
-        Assert.Equal("phone", Assert.Single(BluetoothBackend.MergeEndpoints([ClassEndpoint("only-le", paired: true, phone)])).Icon);
+        Assert.Equal("phone",
+            Assert.Single(BluetoothBackend.MergeEndpoints([ClassEndpoint("only-le", true, phone)])).Icon);
         Assert.Equal("", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("band", paired: true, new BluetoothClassReport(0x07, 0x01, null)),
-            ClassEndpoint("band-le", paired: false, phone)])).Icon);
+            ClassEndpoint("band", true, new BluetoothClassReport(0x07, 0x01, null)),
+            ClassEndpoint("band-le", false, phone)
+        ])).Icon);
         Assert.Equal("", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("broken", paired: true, new BluetoothClassReport(null, null, null, ClassUnreadable: true)),
-            ClassEndpoint("broken-le", paired: false, phone)])).Icon);
+            ClassEndpoint("broken", true, new BluetoothClassReport(null, null, null, true)),
+            ClassEndpoint("broken-le", false, phone)
+        ])).Icon);
         Assert.Equal("phone", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("zero", paired: true, new BluetoothClassReport(0, 0, null)),
-            ClassEndpoint("zero-le", paired: false, phone)])).Icon);
+            ClassEndpoint("zero", true, new BluetoothClassReport(0, 0, null)),
+            ClassEndpoint("zero-le", false, phone)
+        ])).Icon);
         Assert.Equal("audio-headset", Assert.Single(BluetoothBackend.MergeEndpoints([
-            ClassEndpoint("zero-first", paired: true, new BluetoothClassReport(0, 0, null)),
-            ClassEndpoint("headset", paired: false, new BluetoothClassReport(0x04, 0x01, null))])).Icon);
+            ClassEndpoint("zero-first", true, new BluetoothClassReport(0, 0, null)),
+            ClassEndpoint("headset", false, new BluetoothClassReport(0x04, 0x01, null))
+        ])).Icon);
     }
 
     [Fact]
@@ -175,15 +194,25 @@ public sealed class BluetoothIconTests
         Assert.Equal("audio-card", IconProperties((BluetoothIcon.MajorKey, (ushort)4)));
         Assert.Equal("", IconProperties(
             (BluetoothIcon.MajorKey, 4u), (BluetoothIcon.AppearanceKey, (ushort)(1 << 6))));
-        Assert.Equal("", BluetoothIcon.Name(null, null, (ushort)(1 << 6), classUnreadable: true));
+        Assert.Equal("", BluetoothIcon.Name(null, null, (ushort)(1 << 6), true));
         Assert.Equal("", BluetoothIcon.Name(null, null, (ushort)(1 << 6), appearanceUnreadable: true));
     }
 
-    private static ushort? Code(int? value) => value is int code ? (ushort)code : null;
+    private static ushort? Code(int? value)
+    {
+        return value is int code ? (ushort)code : null;
+    }
 
-    private static BluetoothEndpointInfo ClassEndpoint(string id, bool paired, BluetoothClassReport report) =>
-        new(id, "aa:bb:cc:dd:ee:ff", "Device", false, paired, true, false, Container, report);
+    private static BluetoothEndpointInfo ClassEndpoint(string id, bool paired, BluetoothClassReport report)
+    {
+        return new BluetoothEndpointInfo(id, "aa:bb:cc:dd:ee:ff", "Device", false, paired, true, false, Container,
+            report);
+    }
 
-    private static string IconProperties(params (string Key, object Value)[] properties) =>
-        BluetoothIcon.FromReports([BluetoothIcon.Read(properties.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))]);
+    private static string IconProperties(params (string Key, object Value)[] properties)
+    {
+        return BluetoothIcon.FromReports([
+            BluetoothIcon.Read(properties.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal))
+        ]);
+    }
 }

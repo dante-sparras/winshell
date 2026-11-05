@@ -43,7 +43,10 @@ internal sealed class HotkeyBook
     /// <summary>True while a Windows-key hotkey is claimed or a sequence is waiting for its next chord.</summary>
     public bool NeedsHook => _win.Count > 0 || _armed.Count > 0;
 
-    public bool HasOs(OsChord chord) => _os.ContainsKey(chord);
+    public bool HasOs(OsChord chord)
+    {
+        return _os.ContainsKey(chord);
+    }
 
     public void Add(IHotkeyListener listener, HotkeySequence sequence)
     {
@@ -78,13 +81,15 @@ internal sealed class HotkeyBook
         var result = new BookResult();
         Expire(nowMs);
         if (_os.TryGetValue(chord, out var list))
-            Fire([.. list], nowMs, result, skip: null);
+            Fire([.. list], nowMs, result, null);
         return result;
     }
 
     /// <summary>Drops one armed step when its token is still current. A newer step keeps its own token.</summary>
-    public void Disarm(IHotkeyListener listener, long token) =>
+    public void Disarm(IHotkeyListener listener, long token)
+    {
         _armed.RemoveAll(armed => armed.Listener == listener && armed.Token == token);
+    }
 
     public BookResult Hook(int virtualKey, bool isUp, HotkeyModifiers modifiers, long nowMs)
     {
@@ -92,15 +97,18 @@ internal sealed class HotkeyBook
         Expire(nowMs);
         if (virtualKey is VirtualKeys.LeftWin or VirtualKeys.RightWin)
         {
-            HandleWin(virtualKey == VirtualKeys.LeftWin ? WinKeySide.Left : WinKeySide.Right, isUp, modifiers, nowMs, result);
+            HandleWin(virtualKey == VirtualKeys.LeftWin ? WinKeySide.Left : WinKeySide.Right, isUp, modifiers, nowMs,
+                result);
             return result;
         }
+
         if (isUp || VirtualKeys.IsModifier(virtualKey))
         {
             if (!isUp)
                 MarkWinUsed();
             return result;
         }
+
         MarkWinUsed();
         var matched = new List<Armed>();
         foreach (var armed in _armed)
@@ -109,6 +117,7 @@ internal sealed class HotkeyBook
             if (!expect.IsWinOnly && expect.VirtualKey == virtualKey && expect.Modifiers == modifiers)
                 matched.Add(armed);
         }
+
         _armed.Clear();
         if (matched.Count == 0)
             return result;
@@ -136,8 +145,10 @@ internal sealed class HotkeyBook
                 _rightDown = true;
                 _rightUsed = false;
             }
+
             return;
         }
+
         var used = side == WinKeySide.Left ? _leftUsed : _rightUsed;
         if (side == WinKeySide.Left)
             _leftDown = false;
@@ -167,6 +178,7 @@ internal sealed class HotkeyBook
             if (expect.IsWinOnly && (expect.Side == WinKeySide.Either || expect.Side == side))
                 matched.Add(armed);
         }
+
         _armed.Clear();
         var skip = new HashSet<IHotkeyListener>();
         foreach (var armed in matched)
@@ -174,6 +186,7 @@ internal sealed class HotkeyBook
             skip.Add(armed.Listener);
             Continue(armed, nowMs, result);
         }
+
         return skip;
     }
 
@@ -183,7 +196,8 @@ internal sealed class HotkeyBook
             Fire([.. list], nowMs, result, skip);
     }
 
-    private void Fire(IReadOnlyList<IHotkeyListener> listeners, long nowMs, BookResult result, HashSet<IHotkeyListener>? skip)
+    private void Fire(IReadOnlyList<IHotkeyListener> listeners, long nowMs, BookResult result,
+        HashSet<IHotkeyListener>? skip)
     {
         foreach (var listener in listeners)
         {
@@ -207,7 +221,7 @@ internal sealed class HotkeyBook
             Sequence = sequence,
             Next = 1,
             Token = ++_token,
-            Deadline = nowMs + TimeoutMs,
+            Deadline = nowMs + TimeoutMs
         };
         _armed.Add(armed);
         result.Armed.Add(new ArmNotice(listener, armed.Token, armed.Deadline));
@@ -221,6 +235,7 @@ internal sealed class HotkeyBook
             result.Pressed.Add(armed.Listener);
             return;
         }
+
         armed.Next = next;
         armed.Token = ++_token;
         armed.Deadline = nowMs + TimeoutMs;
@@ -236,7 +251,10 @@ internal sealed class HotkeyBook
             _rightUsed = true;
     }
 
-    private void Expire(long nowMs) => _armed.RemoveAll(armed => nowMs >= armed.Deadline);
+    private void Expire(long nowMs)
+    {
+        _armed.RemoveAll(armed => nowMs >= armed.Deadline);
+    }
 
     private static void AddTo<TKey>(Dictionary<TKey, List<IHotkeyListener>> map, TKey key, IHotkeyListener listener)
         where TKey : notnull
@@ -256,6 +274,7 @@ internal sealed class HotkeyBook
             if (list.Count == 0)
                 (empty ??= []).Add(key);
         }
+
         if (empty is null)
             return;
         foreach (var key in empty)

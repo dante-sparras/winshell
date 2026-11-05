@@ -1,13 +1,15 @@
 using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
+using System.Security;
+using Windows.UI;
+using Windows.UI.ViewManagement;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
-using Windows.UI;
-using Windows.UI.ViewManagement;
 using Winshell.Native;
+using Winshell.Tray;
 using Winshell.Windows;
 
 namespace Winshell;
@@ -22,7 +24,7 @@ internal sealed class ShellPlatform : IDisposable
     private HashSet<string> _fullscreenScreens = [];
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
-    private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
+    private UISettings? _uiSettings;
     private bool _windowsDark;
     private ColorScheme _scheme;
     private string _accent = "";
@@ -35,17 +37,15 @@ internal sealed class ShellPlatform : IDisposable
         _screens = Winshell.Screens.Enumerate().Select(m => m.Info).ToList();
         Screens = new ObservableCollection<ScreenInfo>(_screens);
         ReadTheme();
-        _uiSettings = new global::Windows.UI.ViewManagement.UISettings();
+        _uiSettings = new UISettings();
         _uiSettings.ColorValuesChanged += OnColorValuesChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         OutsideClicks = new OutsideClicks(this);
         // Explorer tells only the app bars that reserve an edge about a fullscreen app, so this reads it from the foreground window.
         foreach (var evt in new[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_LOCATIONCHANGE })
-        {
             if (WinEventHook.Start(evt, OnForegroundEvent) is { } watch)
                 _foregroundWatches.Add(watch);
-        }
         ReadFullscreen();
     }
 
@@ -60,18 +60,22 @@ internal sealed class ShellPlatform : IDisposable
     /// <summary>The native windows that exist now.</summary>
     internal IReadOnlyList<HostWindow> Windows => _windows;
 
-    public string PrimaryScreenId => _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
+    public string PrimaryScreenId =>
+        _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
 
     /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <see cref="ColorScheme.System"/> follows it.</summary>
     public bool IsDark => DarkFor(_scheme, _windowsDark);
 
     /// <summary>Whether <paramref name="scheme"/> is dark, with Windows in <paramref name="windowsDark"/>.</summary>
-    internal static bool DarkFor(ColorScheme scheme, bool windowsDark) => scheme switch
+    internal static bool DarkFor(ColorScheme scheme, bool windowsDark)
     {
-        ColorScheme.Dark => true,
-        ColorScheme.Light => false,
-        _ => windowsDark,
-    };
+        return scheme switch
+        {
+            ColorScheme.Dark => true,
+            ColorScheme.Light => false,
+            _ => windowsDark
+        };
+    }
 
     public bool IsHighContrast { get; private set; }
 
@@ -113,7 +117,7 @@ internal sealed class ShellPlatform : IDisposable
             {
                 if (_uiSettings is null)
                     return "#0078D4";
-                var color = _uiSettings.GetColorValue(global::Windows.UI.ViewManagement.UIColorType.Accent);
+                var color = _uiSettings.GetColorValue(UIColorType.Accent);
                 return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
             }
             catch (COMException)
@@ -128,7 +132,10 @@ internal sealed class ShellPlatform : IDisposable
     public SystemBackdropTheme BackdropTheme => IsDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
     /// <summary>Puts the tray windows behind Explorer's while an app bar changes.</summary>
-    internal static IDisposable ExplorerFirst() => Winshell.Tray.SystemTray.ExplorerFirst();
+    internal static IDisposable ExplorerFirst()
+    {
+        return SystemTray.ExplorerFirst();
+    }
 
     public event Action? ThemeChanged;
 
@@ -139,14 +146,20 @@ internal sealed class ShellPlatform : IDisposable
         return window;
     }
 
-    internal void Forget(HostWindow window) => _windows.Remove(window);
+    internal void Forget(HostWindow window)
+    {
+        _windows.Remove(window);
+    }
 
     // Screens and the work area
 
     /// <summary>Raised on the shell's thread when Explorer may have made a taskbar window.</summary>
     internal event Action? TaskbarMayHaveChanged;
 
-    internal void TaskbarCreated() => TaskbarMayHaveChanged?.Invoke();
+    internal void TaskbarCreated()
+    {
+        TaskbarMayHaveChanged?.Invoke();
+    }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
@@ -154,7 +167,10 @@ internal sealed class ShellPlatform : IDisposable
         Loop.Post(TaskbarCreated);
     }
 
-    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e) => FollowSystem(SystemChanges.From(e.Category));
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        FollowSystem(SystemChanges.From(e.Category));
+    }
 
     private void RefreshScreens()
     {
@@ -165,14 +181,15 @@ internal sealed class ShellPlatform : IDisposable
         _screens.AddRange(next);
         Screens.Sync(next, s => s.Id, s => s.Id, s => s, (_, _) => { });
         for (var i = 0; i < next.Count; i++)
-        {
             if (Screens[i] != next[i])
                 Screens[i] = next[i];
-        }
         WorkAreaMayHaveChanged();
     }
 
-    internal void SystemChanged(uint message, nint wParam) => FollowSystem(SystemChanges.From(message, wParam));
+    internal void SystemChanged(uint message, nint wParam)
+    {
+        FollowSystem(SystemChanges.From(message, wParam));
+    }
 
     private void FollowSystem(SystemChange change)
     {
@@ -213,23 +230,24 @@ internal sealed class ShellPlatform : IDisposable
             _relayout = null;
             RefreshScreens();
             foreach (var w in _windows.ToArray())
-            {
                 if (w.Kind == WindowKind.Panel && w.Placement.IsVisible)
                     w.Placement.PlacePanel();
-            }
         });
     }
 
     // Fullscreen apps
 
     /// <summary>Whether another app is fullscreen on a screen, so panels there step back as the taskbar does.</summary>
-    internal bool FullscreenOn(string screenId) => _fullscreenScreens.Contains(screenId);
+    internal bool FullscreenOn(string screenId)
+    {
+        return _fullscreenScreens.Contains(screenId);
+    }
 
     private void OnForegroundEvent(uint evt, nint hwnd, int idObject, int idChild)
     {
         // A window's move or resize sends this for every window, so only the foreground one can change the answer.
         if (hwnd == 0 || !WindowRules.IsWindowObject(idObject, idChild)
-            || (evt == Win32.EVENT_OBJECT_LOCATIONCHANGE && hwnd != Win32.GetForegroundWindow()))
+                      || (evt == Win32.EVENT_OBJECT_LOCATIONCHANGE && hwnd != Win32.GetForegroundWindow()))
             return;
         NativeCallback.Guard(Log, "shell", () => Loop.Post(ReadFullscreen));
     }
@@ -242,11 +260,10 @@ internal sealed class ShellPlatform : IDisposable
         {
             var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
             foreach (var monitor in Winshell.Screens.Enumerate())
-            {
                 if (WindowRules.CoversMonitor(style, rect, monitor.Bounds))
                     next.Add(monitor.Info.Id);
-            }
         }
+
         if (next.SetEquals(_fullscreenScreens))
             return;
         _fullscreenScreens = next;
@@ -263,7 +280,10 @@ internal sealed class ShellPlatform : IDisposable
 
     // Theme
 
-    private void OnColorValuesChanged(global::Windows.UI.ViewManagement.UISettings sender, object args) => Loop.Post(ReadTheme);
+    private void OnColorValuesChanged(UISettings sender, object args)
+    {
+        Loop.Post(ReadTheme);
+    }
 
     private void ReadTheme()
     {
@@ -271,12 +291,14 @@ internal sealed class ShellPlatform : IDisposable
         var dark = false;
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            using var key =
+                Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
             dark = WindowsModeDark(key?.GetValue("SystemUsesLightTheme"), key?.GetValue("AppsUseLightTheme"));
         }
-        catch (System.Security.SecurityException)
+        catch (SecurityException)
         {
         }
+
         var contrast = ContrastTheme.IsOn();
         var contrastChanged = contrast != IsHighContrast;
         if (dark == _windowsDark && !contrastChanged)
@@ -293,25 +315,27 @@ internal sealed class ShellPlatform : IDisposable
     /// this same object, so a new color reaches what is already on screen, where a new <c>SystemAccentColor</c> reaches
     /// only brushes not made yet. The contrast dictionary is not here: a contrast theme keeps the colors Windows gave it.
     /// </summary>
-    private static readonly (string Key, Func<AccentShades, Color> Dark, Func<AccentShades, Color> Light)[] AccentBrushes =
-    [
-        ("AccentFillColorDefaultBrush", s => s.Light2, s => s.Dark1),
-        ("AccentFillColorSecondaryBrush", s => s.Light2, s => s.Dark1),
-        ("AccentFillColorTertiaryBrush", s => s.Light2, s => s.Dark1),
-        ("AccentFillColorSelectedTextBackgroundBrush", s => s.Accent, s => s.Accent),
-        ("AccentTextFillColorPrimaryBrush", s => s.Light3, s => s.Dark2),
-        ("AccentTextFillColorSecondaryBrush", s => s.Light3, s => s.Dark3),
-        ("AccentTextFillColorTertiaryBrush", s => s.Light2, s => s.Dark1),
-        ("AccentAAFillColorDefaultBrush", s => s.Light2, s => s.Dark1),
-        ("AccentAAFillColorSecondaryBrush", s => s.Light3, s => s.Dark2),
-        ("AccentAAFillColorTertiaryBrush", s => s.Light1, s => s.Accent),
-        ("SystemFillColorAttentionBrush", s => s.Light2, s => s.Accent),
-    ];
+    private static readonly (string Key, Func<AccentShades, Color> Dark, Func<AccentShades, Color> Light)[]
+        AccentBrushes =
+        [
+            ("AccentFillColorDefaultBrush", s => s.Light2, s => s.Dark1),
+            ("AccentFillColorSecondaryBrush", s => s.Light2, s => s.Dark1),
+            ("AccentFillColorTertiaryBrush", s => s.Light2, s => s.Dark1),
+            ("AccentFillColorSelectedTextBackgroundBrush", s => s.Accent, s => s.Accent),
+            ("AccentTextFillColorPrimaryBrush", s => s.Light3, s => s.Dark2),
+            ("AccentTextFillColorSecondaryBrush", s => s.Light3, s => s.Dark3),
+            ("AccentTextFillColorTertiaryBrush", s => s.Light2, s => s.Dark1),
+            ("AccentAAFillColorDefaultBrush", s => s.Light2, s => s.Dark1),
+            ("AccentAAFillColorSecondaryBrush", s => s.Light3, s => s.Dark2),
+            ("AccentAAFillColorTertiaryBrush", s => s.Light1, s => s.Accent),
+            ("SystemFillColorAttentionBrush", s => s.Light2, s => s.Accent)
+        ];
 
     /// <summary>Paints the accent brushes. They are Windows's own until an accent is picked, and painted from then on.</summary>
     private void ApplyAccent()
     {
-        if (Application.Current?.Resources.MergedDictionaries.OfType<XamlControlsResources>().FirstOrDefault() is not { } controls)
+        if (Application.Current?.Resources.MergedDictionaries.OfType<XamlControlsResources>().FirstOrDefault() is not
+            { } controls)
             return;
         if (!AccentShades.TryFrom(_accent, out var shades))
         {
@@ -319,6 +343,7 @@ internal sealed class ShellPlatform : IDisposable
                 return;
             shades = WindowsShades();
         }
+
         _accentPainted = true;
         var dark = (ResourceDictionary)controls.ThemeDictionaries["Default"];
         var light = (ResourceDictionary)controls.ThemeDictionaries["Light"];
@@ -335,8 +360,7 @@ internal sealed class ShellPlatform : IDisposable
         try
         {
             if (_uiSettings is { } ui)
-            {
-                return new(
+                return new AccentShades(
                     ui.GetColorValue(UIColorType.Accent),
                     ui.GetColorValue(UIColorType.AccentLight1),
                     ui.GetColorValue(UIColorType.AccentLight2),
@@ -344,11 +368,11 @@ internal sealed class ShellPlatform : IDisposable
                     ui.GetColorValue(UIColorType.AccentDark1),
                     ui.GetColorValue(UIColorType.AccentDark2),
                     ui.GetColorValue(UIColorType.AccentDark3));
-            }
         }
         catch (COMException)
         {
         }
+
         AccentShades.TryFrom("#0078D4", out var shades);
         return shades;
     }
@@ -357,8 +381,10 @@ internal sealed class ShellPlatform : IDisposable
     /// Whether Windows mode is dark, from the Personalize values, where <c>0</c> is dark. A missing Windows-mode value
     /// follows app mode, and a missing pair is light.
     /// </summary>
-    internal static bool WindowsModeDark(object? systemValue, object? appsValue) =>
-        systemValue is int systemLight ? systemLight == 0 : appsValue is int appsLight && appsLight == 0;
+    internal static bool WindowsModeDark(object? systemValue, object? appsValue)
+    {
+        return systemValue is int systemLight ? systemLight == 0 : appsValue is int appsLight && appsLight == 0;
+    }
 
     public void Dispose()
     {
@@ -369,6 +395,7 @@ internal sealed class ShellPlatform : IDisposable
             _uiSettings.ColorValuesChanged -= OnColorValuesChanged;
             _uiSettings = null;
         }
+
         foreach (var watch in _foregroundWatches)
             watch.Dispose();
         foreach (var w in _windows.ToArray())

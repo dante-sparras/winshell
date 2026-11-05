@@ -36,6 +36,7 @@ internal sealed partial class CrashReports(string folder)
 
     /// <summary>The subfolder a report is written in before it is moved into the folder whole.</summary>
     private const string WritingFolder = "writing";
+
     private static readonly object TimeGate = new();
     private static long _lastTicks;
     private readonly object _lock = new();
@@ -70,11 +71,15 @@ internal sealed partial class CrashReports(string folder)
     /// Writes a report. Returns null when the folder cannot be written. Nothing it does throws: it runs when
     /// something else already failed, sometimes as the process ends.
     /// </summary>
-    public CrashReport? Write(string where, Exception error, bool fatal = false, string subject = "", string recovery = "")
+    public CrashReport? Write(string where, Exception error, bool fatal = false, string subject = "",
+        string recovery = "")
     {
         CrashReport? report;
         lock (_lock)
+        {
             report = WriteLocked(where, error, fatal, subject, recovery);
+        }
+
         Raise(report);
         return report;
     }
@@ -92,10 +97,11 @@ internal sealed partial class CrashReports(string folder)
             var fingerprint = Fingerprint(where, error);
             if (_reported.Contains(fingerprint))
                 return null;
-            report = WriteLocked(where, error, fatal: false, subject, recovery);
+            report = WriteLocked(where, error, false, subject, recovery);
             if (report is not null)
                 _reported.Add(fingerprint);
         }
+
         Raise(report);
         return report;
     }
@@ -121,21 +127,18 @@ internal sealed partial class CrashReports(string folder)
     internal static string Fingerprint(string where, Exception error)
     {
         var text = new StringBuilder(where);
+
         void Add(Exception e, int depth)
         {
             text.Append('\n').Append(depth).Append(' ').Append(e.GetType().FullName).Append('\n').Append(e.StackTrace);
             if (depth >= 16)
                 return;
             if (e is AggregateException aggregate)
-            {
                 foreach (var inner in aggregate.InnerExceptions)
                     Add(inner, depth + 1);
-            }
-            else if (e.InnerException is { } inner)
-            {
-                Add(inner, depth + 1);
-            }
+            else if (e.InnerException is { } inner) Add(inner, depth + 1);
         }
+
         Add(error, 0);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
     }
@@ -156,18 +159,22 @@ internal sealed partial class CrashReports(string folder)
                 using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     using (var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true))
+                    {
                         writer.Write(text);
-                    stream.Flush(flushToDisk: true);
+                    }
+
+                    stream.Flush(true);
                 }
+
                 var ticks = NextTicks(now.UtcTicks);
                 // The name is unique to this process and instant; another instance writing into the folder at the same
                 // time cannot take it over, since a report is moved only to a name that is not there yet.
-                for (var attempt = 0; ; attempt++)
+                for (var attempt = 0;; attempt++)
                 {
                     var path = Path.Combine(Folder, FileName(ticks, where));
                     try
                     {
-                        File.Move(temp, path, overwrite: false);
+                        File.Move(temp, path, false);
                         Prune(path);
                         return new CrashReport(path, where, error, fatal) { Subject = subject, Recovery = recovery };
                     }
@@ -207,8 +214,11 @@ internal sealed partial class CrashReports(string folder)
     }
 
     /// <summary><c>crash-20261029-140312-1234567Z-4321-winshell.txt</c>: the UTC instant, the process, where.</summary>
-    private static string FileName(long utcTicks, string where) =>
-        $"crash-{new DateTime(utcTicks, DateTimeKind.Utc).ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-{Environment.ProcessId}-{Slug(where)}.txt";
+    private static string FileName(long utcTicks, string where)
+    {
+        return
+            $"crash-{new DateTime(utcTicks, DateTimeKind.Utc).ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-{Environment.ProcessId}-{Slug(where)}.txt";
+    }
 
     [GeneratedRegex(@"^crash-(?<time>\d{8}-\d{6}-\d{7})Z-(?<pid>\d{1,10})-[a-z0-9\-]{1,40}\.txt$")]
     private static partial Regex ReportName();
@@ -217,7 +227,8 @@ internal sealed partial class CrashReports(string folder)
     private static (long Ticks, long Pid)? OrderOf(string name)
     {
         var m = ReportName().Match(name);
-        if (!m.Success || !DateTime.TryParseExact(m.Groups["time"].Value, "yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture,
+        if (!m.Success || !DateTime.TryParseExact(m.Groups["time"].Value, "yyyyMMdd-HHmmss-fffffff",
+                CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var time))
             return null;
         return (time.Ticks, long.Parse(m.Groups["pid"].Value, CultureInfo.InvariantCulture));
@@ -236,6 +247,7 @@ internal sealed partial class CrashReports(string folder)
             if (slug.Length >= 40)
                 break;
         }
+
         var result = slug.ToString().Trim('-');
         return result.Length > 0 ? result : "crash";
     }
@@ -249,7 +261,8 @@ internal sealed partial class CrashReports(string folder)
         text.AppendLine();
         text.AppendLine(CultureInfo.InvariantCulture, $"Time: {time:yyyy-MM-dd HH:mm:ss.fff zzz}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Winshell: {ProductVersion.Current.Text}");
-        text.AppendLine(CultureInfo.InvariantCulture, $"Windows: {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})");
+        text.AppendLine(CultureInfo.InvariantCulture,
+            $"Windows: {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})");
         text.AppendLine(CultureInfo.InvariantCulture, $".NET: {RuntimeInformation.FrameworkDescription}");
         text.AppendLine(CultureInfo.InvariantCulture, $"Process: {Environment.ProcessId}");
         if (ShellId.Length > 0)
@@ -271,6 +284,7 @@ internal sealed partial class CrashReports(string folder)
             foreach (var line in log)
                 text.AppendLine(line);
         }
+
         return text.ToString();
     }
 
@@ -295,7 +309,8 @@ internal sealed partial class CrashReports(string folder)
         List<string> lines;
         try
         {
-            using var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             var start = Math.Max(0, stream.Length - LogBytes);
             stream.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(stream);
@@ -310,6 +325,7 @@ internal sealed partial class CrashReports(string folder)
         {
             return [];
         }
+
         return [.. lines.TakeLast(LogLines).Select(CrashRedaction.Redact)];
     }
 
@@ -334,6 +350,7 @@ internal sealed partial class CrashReports(string folder)
                     continue;
                 reports.Add((file, order));
             }
+
             var old = reports
                 .OrderByDescending(r => r.Order.Ticks)
                 .ThenByDescending(r => r.Order.Pid)
@@ -358,14 +375,18 @@ internal sealed partial class CrashReports(string folder)
     }
 
     /// <summary>Whether a line is the heading a report starts with. The whole line must match.</summary>
-    internal static bool IsHeading([NotNullWhen(true)] string? line) => line == Heading;
+    internal static bool IsHeading([NotNullWhen(true)] string? line)
+    {
+        return line == Heading;
+    }
 
     /// <summary>Whether the file's first line is the report heading. A file that cannot be read is not one.</summary>
     internal static bool StartsWithHeading(string path)
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
             return IsHeading(reader.ReadLine());
         }

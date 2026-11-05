@@ -175,7 +175,10 @@ public sealed class MediaSessionRefreshTests
         public bool Closed => CloseCount > 0;
 
         // A completed request can lose its broker before its result is read.
-        public GlobalSystemMediaTransportControlsSessionManager GetResults() => throw ErrorCode;
+        public GlobalSystemMediaTransportControlsSessionManager GetResults()
+        {
+            throw ErrorCode;
+        }
 
         public void Cancel()
         {
@@ -185,7 +188,10 @@ public sealed class MediaSessionRefreshTests
                 NotifyCompletion(AsyncStatus.Canceled);
         }
 
-        public void Close() => CloseCount++;
+        public void Close()
+        {
+            CloseCount++;
+        }
 
         public void Finish(AsyncStatus status)
         {
@@ -193,6 +199,9 @@ public sealed class MediaSessionRefreshTests
             NotifyCompletion(status);
         }
 
-        public void NotifyCompletion(AsyncStatus status) => Completed(this, status);
+        public void NotifyCompletion(AsyncStatus status)
+        {
+            Completed(this, status);
+        }
     }
 }

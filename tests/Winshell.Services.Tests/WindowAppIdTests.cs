@@ -20,12 +20,14 @@ public class WindowAppIdTests
                 (uint)AppUserModelIds.MaxCharacters + 1)));
     }
 
-    private static string Read(string id) =>
-        AppUserModelIds.Read((buffer, _) =>
+    private static string Read(string id)
+    {
+        return AppUserModelIds.Read((buffer, _) =>
         {
             if (buffer is null)
                 return new AppUserModelIds.Query(WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER, (uint)id.Length + 1);
             id.CopyTo(buffer);
             return new AppUserModelIds.Query(WIN32_ERROR.ERROR_SUCCESS, (uint)id.Length + 1);
         });
+    }
 }

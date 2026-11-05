@@ -15,7 +15,7 @@ internal static class ConfigurationSelection
             {
                 { Path: { } path } => path,
                 { Config: { } name } => $"config \"{name}\"",
-                _ => "the config folder",
+                _ => "the config folder"
             };
             error = $"Winshell cannot read {what}: {e.Message}";
             return null;

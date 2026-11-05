@@ -17,17 +17,35 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
     /// <summary>Whether this hook is the one installed.</summary>
     public bool IsAttached
     {
-        get { lock (Gate) return ReferenceEquals(Owner, this) && Installed is not null; }
+        get
+        {
+            lock (Gate)
+            {
+                return ReferenceEquals(Owner, this) && Installed is not null;
+            }
+        }
     }
 
     internal static bool IsInstalled
     {
-        get { lock (Gate) return Installed is not null; }
+        get
+        {
+            lock (Gate)
+            {
+                return Installed is not null;
+            }
+        }
     }
 
     internal static Thread? InstalledThread
     {
-        get { lock (Gate) return Installed?.Thread; }
+        get
+        {
+            lock (Gate)
+            {
+                return Installed?.Thread;
+            }
+        }
     }
 
     // The procedure can run before the hook is recorded here. Do not hold the gate while waiting for it.
@@ -41,6 +59,7 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
                 return;
             Owner = this;
         }
+
         var thread = LowLevelKeyboard.Start(OnKey, "Winshell keyboard hook", OnThreadExited);
         lock (Gate)
         {
@@ -49,9 +68,11 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
                 Installed = thread;
                 return;
             }
+
             if (Owner == this)
                 Owner = null;
         }
+
         thread?.Stop();
     }
 
@@ -66,6 +87,7 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
             Installed = null;
             Owner = null;
         }
+
         thread?.Stop();
     }
 
@@ -79,6 +101,7 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
             Installed = null;
             Owner = null;
         }
+
         thread?.Stop();
     }
 
@@ -91,11 +114,15 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
             Installed = null;
             Owner = null;
         }
+
         onLost();
     }
 
     // Read the modifiers before the handler takes its lock: GetAsyncKeyState does not need it, and the lock stays short.
-    private bool Handle(HookedKey key) => onKey(key.VirtualKey, key.Up, ReadModifiers());
+    private bool Handle(HookedKey key)
+    {
+        return onKey(key.VirtualKey, key.Up, ReadModifiers());
+    }
 
     private static HotkeyModifiers ReadModifiers()
     {
@@ -111,13 +138,22 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
         return mods;
     }
 
-    private static bool Down(int virtualKey) => Win32.GetAsyncKeyState(virtualKey) < 0;
-
-    private static bool OnKey(HookedKey key) => !KeyMask.IsOurs(key.ExtraInfo) && NativeCallback.Guard(Log.Default, "hotkey", () =>
+    private static bool Down(int virtualKey)
     {
-        KeyboardHook? owner;
-        lock (Gate)
-            owner = Owner;
-        return owner is not null && owner.Handle(key);
-    }, false);
+        return Win32.GetAsyncKeyState(virtualKey) < 0;
+    }
+
+    private static bool OnKey(HookedKey key)
+    {
+        return !KeyMask.IsOurs(key.ExtraInfo) && NativeCallback.Guard(Log.Default, "hotkey", () =>
+        {
+            KeyboardHook? owner;
+            lock (Gate)
+            {
+                owner = Owner;
+            }
+
+            return owner is not null && owner.Handle(key);
+        }, false);
+    }
 }

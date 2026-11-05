@@ -17,7 +17,10 @@ public class BrightnessWriteTests
         var writer = new BrightnessWriter((_, value) =>
         {
             lock (written)
+            {
                 written.Add(value);
+            }
+
             started.Release();
             release.Wait(TestContext.Current.CancellationToken);
             return 0;
@@ -41,7 +44,9 @@ public class BrightnessWriteTests
         release.Set();
         Wait.Until(() => !writer.IsWriting("DISPLAY1"), "The writes did not finish.");
         lock (written)
+        {
             Assert.Equal([50, 80], written);
+        }
 
         // After the writes, the next read is what the property shows.
         monitor.Update(new BrightnessInfo("DISPLAY1", "Panel", BrightnessConnection.Internal, 0, 100, 78));

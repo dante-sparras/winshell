@@ -1,9 +1,11 @@
+using Windows.Foundation;
+using Windows.System;
+using Windows.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Foundation;
-using Windows.System;
+using Microsoft.UI.Xaml.Media;
 
 namespace Winshell;
 
@@ -42,7 +44,7 @@ internal sealed class NoticeWindow : IDisposable
             Focusable = true,
             Backdrop = WindowBackdrop.Acrylic,
             Corners = WindowCorners.Round,
-            Content = content,
+            Content = content
         };
         _window.Visible = true;
         Hold();
@@ -57,11 +59,20 @@ internal sealed class NoticeWindow : IDisposable
 
     private FrameworkElement Content(Notice notice, Action act, Action dismiss)
     {
-        var said = string.Join(". ", new[] { notice.Title, notice.Detail, notice.Body, notice.Note }.Where(text => text.Length > 0));
-        var close = new Button { Content = new FontIcon { Glyph = "", FontSize = 10 }, Width = 32, Height = 24, Padding = default, HorizontalAlignment = HorizontalAlignment.Right };
+        var said = string.Join(". ",
+            new[] { notice.Title, notice.Detail, notice.Body, notice.Note }.Where(text => text.Length > 0));
+        var close = new Button
+        {
+            Content = new FontIcon { Glyph = "", FontSize = 10 }, Width = 32, Height = 24, Padding = default,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
         AutomationProperties.SetName(close, "Dismiss");
         close.Click += (_, _) => dismiss();
-        var action = new Button { Content = notice.ActionText, Style = (Style)Application.Current.Resources["AccentButtonStyle"], HorizontalAlignment = HorizontalAlignment.Stretch };
+        var action = new Button
+        {
+            Content = notice.ActionText, Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
         action.Click += (_, _) => act();
         var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         header.Children.Add(Text("Winshell", "CaptionTextBlockStyle", 0.8));
@@ -76,7 +87,8 @@ internal sealed class NoticeWindow : IDisposable
         action.Margin = new Thickness(0, 8, 0, 0);
         stack.Children.Add(action);
         // Transparent, so a click on the text or between the buttons still lands on the notice.
-        var root = new Grid { Padding = new Thickness(16), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(0, 0, 0, 0)) };
+        var root = new Grid
+            { Padding = new Thickness(16), Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)) };
         root.Children.Add(stack);
         AutomationProperties.SetName(root, said);
         AutomationProperties.SetLiveSetting(root, AutomationLiveSetting.Assertive);
@@ -86,7 +98,8 @@ internal sealed class NoticeWindow : IDisposable
             root.Measure(new Size(NoticeWidth, double.PositiveInfinity));
             _window.Height = Math.Ceiling(root.DesiredSize.Height);
             FrameworkElementAutomationPeer.CreatePeerForElement(root)?
-                .RaiseNotificationEvent(AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantAll, said, "WinshellNotice");
+                .RaiseNotificationEvent(AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantAll,
+                    said, "WinshellNotice");
         };
         root.PointerPressed += (_, _) =>
         {
@@ -107,13 +120,16 @@ internal sealed class NoticeWindow : IDisposable
         return root;
     }
 
-    private static TextBlock Text(string text, string style, double opacity) => new()
+    private static TextBlock Text(string text, string style, double opacity)
     {
-        Text = text,
-        Style = (Style)Application.Current.Resources[style],
-        Opacity = opacity,
-        TextWrapping = TextWrapping.WrapWholeWords,
-    };
+        return new TextBlock
+        {
+            Text = text,
+            Style = (Style)Application.Current.Resources[style],
+            Opacity = opacity,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+    }
 
     private void Held(ref bool flag, bool on)
     {

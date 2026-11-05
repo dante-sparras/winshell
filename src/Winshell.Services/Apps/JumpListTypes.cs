@@ -22,7 +22,7 @@ internal readonly record struct JumpListRead(bool Available, IReadOnlyList<strin
         var names = new List<string>();
         Add(recent);
         Add(frequent);
-        return new(true, names);
+        return new JumpListRead(true, names);
 
         void Add(IReadOnlyList<string>? source)
         {

@@ -102,6 +102,8 @@ public sealed class ShellStartTests
     }
 
     [Fact]
-    public void A_shell_id_names_its_mutex_in_any_case() =>
+    public void A_shell_id_names_its_mutex_in_any_case()
+    {
         Assert.Equal(DuplicateHold.ShellMutexName("Mine"), DuplicateHold.ShellMutexName("mine"));
+    }
 }

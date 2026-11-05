@@ -34,7 +34,10 @@ internal sealed class WindowFocus(WindowKind kind, IFocusEffects effects)
     private bool _shown;
 
     /// <summary>The extended style a native window starts with: a panel and a popup window start out refusing activation.</summary>
-    internal static uint StartingExStyle(WindowKind kind) => kind == WindowKind.Floating ? 0 : Win32.WS_EX_NOACTIVATE;
+    internal static uint StartingExStyle(WindowKind kind)
+    {
+        return kind == WindowKind.Floating ? 0 : Win32.WS_EX_NOACTIVATE;
+    }
 
     /// <summary>Whether a click on the window activates it, and with it the keyboard.</summary>
     internal bool ActivatesOnClick => Takes;
@@ -46,7 +49,7 @@ internal sealed class WindowFocus(WindowKind kind, IFocusEffects effects)
     {
         WindowKind.Floating => true,
         WindowKind.Panel => _focusable,
-        _ => _grabFocus,
+        _ => _grabFocus
     };
 
     /// <summary>A panel's focusable setting changed.</summary>
@@ -69,7 +72,7 @@ internal sealed class WindowFocus(WindowKind kind, IFocusEffects effects)
     {
         _shown = true;
         var grabbing = kind == WindowKind.Popup && _grabFocus;
-        effects.Show(activate: kind == WindowKind.Floating || grabbing);
+        effects.Show(kind == WindowKind.Floating || grabbing);
         if (grabbing)
             effects.TakeForeground();
         if (kind == WindowKind.Popup)

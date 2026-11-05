@@ -65,7 +65,9 @@ internal static unsafe class AppUserModelIds
             {
                 var length = (uint)capacity;
                 fixed (char* text = buffer)
+                {
                     return new Query(PInvoke.GetApplicationUserModelId(new HANDLE(process), &length, text), length);
+                }
             });
         }
         finally

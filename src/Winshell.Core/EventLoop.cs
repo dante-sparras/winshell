@@ -54,7 +54,10 @@ internal class EventQueue : IEventLoop
     {
         var entry = new TimerEntry(this, action);
         lock (_timers)
+        {
             _timers.Enqueue(entry, (Now + delay, _sequence++));
+        }
+
         Woken?.Invoke();
         return entry;
     }
@@ -66,6 +69,7 @@ internal class EventQueue : IEventLoop
             if (!_frameCallbacks.Contains(action))
                 _frameCallbacks.Add(action);
         }
+
         Woken?.Invoke();
     }
 
@@ -74,7 +78,9 @@ internal class EventQueue : IEventLoop
         get
         {
             lock (_frameCallbacks)
+            {
                 return _frameCallbacks.Count > 0;
+            }
         }
     }
 
@@ -92,6 +98,7 @@ internal class EventQueue : IEventLoop
                     _timers.Dequeue();
                     _cancelled--;
                 }
+
                 return null;
             }
         }
@@ -118,10 +125,12 @@ internal class EventQueue : IEventLoop
                     _cancelled--;
                     continue;
                 }
+
                 entry.Cancelled = true;
                 dueNow.Add(entry);
             }
         }
+
         foreach (var next in dueNow)
         {
             Run(next.Action);
@@ -141,10 +150,8 @@ internal class EventQueue : IEventLoop
     internal bool RunPosted()
     {
         if (_batch.Count == 0)
-        {
             while (_posted.TryDequeue(out var queued))
                 _batch.Enqueue(queued);
-        }
         var ran = _batch.Count > 0;
         while (_batch.TryDequeue(out var action))
             Run(action);
@@ -166,6 +173,7 @@ internal class EventQueue : IEventLoop
                 _cancelled--;
             }
         }
+
         return false;
     }
 
@@ -201,6 +209,7 @@ internal class EventQueue : IEventLoop
             callbacks = [.. _frameCallbacks];
             _frameCallbacks.Clear();
         }
+
         foreach (var callback in callbacks)
             Run(callback);
     }
@@ -227,6 +236,7 @@ internal class EventQueue : IEventLoop
             if (name is not null && name.StartsWith("Xunit.Sdk.", StringComparison.Ordinal))
                 return true;
         }
+
         return false;
     }
 
@@ -239,9 +249,15 @@ internal class EventQueue : IEventLoop
         /// <summary>Set under the timer lock when the timer is cancelled or taken off the heap to fire.</summary>
         public bool Cancelled { get; set; }
 
-        public void DropAction() => Action = Dropped;
+        public void DropAction()
+        {
+            Action = Dropped;
+        }
 
-        public void Dispose() => queue.Cancel(this);
+        public void Dispose()
+        {
+            queue.Cancel(this);
+        }
     }
 }
 
@@ -263,6 +279,7 @@ internal sealed class ManualEventLoop : EventQueue
                 RunFrame();
                 ran = true;
             }
+
             if (!ran)
                 return;
         }
@@ -278,6 +295,7 @@ internal sealed class ManualEventLoop : EventQueue
             _now = due;
             Process();
         }
+
         _now = end;
         Process();
     }

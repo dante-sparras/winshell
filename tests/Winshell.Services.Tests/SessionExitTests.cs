@@ -13,7 +13,7 @@ public class SessionExitTests
             FileName = "cmd.exe",
             Arguments = "/c ping -n 60 127.0.0.1 >nul",
             CreateNoWindow = true,
-            UseShellExecute = false,
+            UseShellExecute = false
         });
         Assert.NotNull(process);
         var ran = 0;
@@ -26,7 +26,7 @@ public class SessionExitTests
         // callback check never ran. Killing is the exit the callback must ignore.
         try
         {
-            process.Kill(entireProcessTree: true);
+            process.Kill(true);
         }
         catch (InvalidOperationException)
         {

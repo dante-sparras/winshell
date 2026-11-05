@@ -26,7 +26,9 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             Win32.SetWindowTextW(Handle, placement.Title);
             OwnedWindows.Link(Handle, placement.Owner);
             if (_fullscreen && !placement.Fullscreen)
+            {
                 ExitFullscreen(placement);
+            }
             else if (!_fullscreen && placement.Fullscreen)
             {
                 ApplyFrame(placement);
@@ -38,19 +40,24 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
                 _lastWidth = placement.Width;
                 _lastHeight = placement.Height;
                 if (placement.Minimized && !Win32.IsIconic(Handle))
+                {
                     Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
+                }
                 else if (!placement.Minimized && Win32.IsIconic(Handle))
                 {
                     Win32.ShowWindow(Handle, Win32.SW_RESTORE);
                     FillMonitor();
                 }
                 else if (!Win32.IsIconic(Handle))
+                {
                     FillMonitor();
+                }
             }
             else
             {
                 ApplyFrame(placement);
             }
+
             // Showing or restoring the owner can put it above the windows it owns. Put those back above it.
             if (!Win32.IsIconic(Handle))
                 OwnedWindows.Raise(Handle, platform.Windows);
@@ -88,7 +95,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         else
         {
             // The user dragged it to another monitor, or that monitor's scale changed: Windows' rect keeps the logical size.
-            Win32.SetWindowPos(Handle, 0, suggested.Left, suggested.Top, suggested.Width, suggested.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            Win32.SetWindowPos(Handle, 0, suggested.Left, suggested.Top, suggested.Width, suggested.Height,
+                Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         }
     }
 
@@ -115,6 +123,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             info.ptMaxTrackSize.Y = bounds.Height;
             return 0;
         }
+
         if (_placement is not { } f)
             return null;
         if (f.MinimumSize.Width > 0)
@@ -137,7 +146,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             _lastHeight = placement.Height;
             var dpi = Win32.GetDpiForWindow(Handle);
             host.Placement.Scale = dpi / 96.0;
-            var client = new RECT(0, 0, (int)Math.Round(placement.Width * host.Placement.Scale), (int)Math.Round(placement.Height * host.Placement.Scale));
+            var client = new RECT(0, 0, (int)Math.Round(placement.Width * host.Placement.Scale),
+                (int)Math.Round(placement.Height * host.Placement.Scale));
             var (style, ex) = HostWindow.Styles(WindowKind.Floating);
             Win32.AdjustWindowRectExForDpi(ref client, style, false, ex, dpi);
             int x, y;
@@ -153,9 +163,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
                 x = current.Left;
                 y = current.Top;
             }
+
             Win32.SetWindowPos(Handle, 0, x, y, client.Width, client.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
             _placed = true;
         }
+
         if (host.Placement.IsVisible)
         {
             if (placement.Minimized && !Win32.IsIconic(Handle))
@@ -192,6 +204,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             ApplyFrame(placement);
             return;
         }
+
         SetStyle(saved.Style);
         Reframe();
         var monitor = Screens.Find(saved.MonitorId) ?? CurrentMonitor();
@@ -210,11 +223,13 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
                 return;
             }
         }
+
         if (monitor is null)
         {
             ApplyFrame(placement);
             return;
         }
+
         var rect = saved.RectOn(monitor.Bounds, scale);
         PlaceOuter(rect);
         if (!host.Placement.IsVisible)
@@ -242,8 +257,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         return show == 0 ? (uint)Win32.SW_SHOWNORMAL : show;
     }
 
-    private static uint RequestedShow(FloatingPlacement placement) =>
-        (uint)(placement.Minimized ? Win32.SW_SHOWMINIMIZED : placement.Maximized ? Win32.SW_SHOWMAXIMIZED : Win32.SW_SHOWNORMAL);
+    private static uint RequestedShow(FloatingPlacement placement)
+    {
+        return (uint)(placement.Minimized ? Win32.SW_SHOWMINIMIZED :
+            placement.Maximized ? Win32.SW_SHOWMAXIMIZED : Win32.SW_SHOWNORMAL);
+    }
 
     private SavedFloatingPlace CapturePlace()
     {
@@ -260,7 +278,9 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
             normal = RestoredScreenRect(placement, shown);
-        var logical = bounds.Width > 0 ? DesktopSpace.ToLogical(normal, bounds, scale) : new Rect(0, 0, normal.Width, normal.Height);
+        var logical = bounds.Width > 0
+            ? DesktopSpace.ToLogical(normal, bounds, scale)
+            : new Rect(0, 0, normal.Width, normal.Height);
         return new SavedFloatingPlace(
             (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE),
             scale,
@@ -314,8 +334,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         Win32.SetWindowLongPtr(Handle, Win32.GWL_STYLE, (nint)style);
     }
 
-    private void Reframe() =>
-        Win32.SetWindowPos(Handle, 0, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+    private void Reframe()
+    {
+        Win32.SetWindowPos(Handle, 0, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+    }
 
     private void FillMonitor()
     {
@@ -327,10 +350,15 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         PlaceOuter(bounds);
     }
 
-    private void PlaceOuter(RECT rect) => host.Placement.Move(rect, 0, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+    private void PlaceOuter(RECT rect)
+    {
+        host.Placement.Move(rect, 0, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+    }
 
-    private void ApplyCorners(int preference) =>
+    private void ApplyCorners(int preference)
+    {
         Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
+    }
 
     private ConnectedMonitor? CurrentMonitor()
     {
@@ -363,6 +391,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         var (_, bounds) = Screens.Of(Handle);
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return _fullscreen;
-        return rect.Left <= bounds.Left + 1 && rect.Top <= bounds.Top + 1 && rect.Right >= bounds.Right - 1 && rect.Bottom >= bounds.Bottom - 1;
+        return rect.Left <= bounds.Left + 1 && rect.Top <= bounds.Top + 1 && rect.Right >= bounds.Right - 1 &&
+               rect.Bottom >= bounds.Bottom - 1;
     }
 }

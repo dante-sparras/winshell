@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Security;
 using System.Text;
 using Microsoft.Win32;
 using Winshell.Native;
@@ -16,14 +18,26 @@ internal static class DoctorProbe
     private const string LayersKey = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
     private const string PersonalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
-    public static int WindowsBuild() => Environment.OSVersion.Version.Build;
+    public static int WindowsBuild()
+    {
+        return Environment.OSVersion.Version.Build;
+    }
 
-    public static int WindowsUpdateRevision() => CurrentVersionValue("UBR") is int revision ? revision : 0;
+    public static int WindowsUpdateRevision()
+    {
+        return CurrentVersionValue("UBR") is int revision ? revision : 0;
+    }
 
-    public static bool WindowsServer() => CurrentVersionValue("InstallationType") is string type
-        && type.StartsWith("Server", StringComparison.OrdinalIgnoreCase);
+    public static bool WindowsServer()
+    {
+        return CurrentVersionValue("InstallationType") is string type
+               && type.StartsWith("Server", StringComparison.OrdinalIgnoreCase);
+    }
 
-    public static string? WindowsDisplayVersion() => CurrentVersionValue("DisplayVersion") as string;
+    public static string? WindowsDisplayVersion()
+    {
+        return CurrentVersionValue("DisplayVersion") as string;
+    }
 
     /// <summary>
     /// Whether transparency effects are off: <c>EnableTransparency</c> is 0. Anything else, including a missing or
@@ -36,7 +50,7 @@ internal static class DoctorProbe
             using var key = Registry.CurrentUser.OpenSubKey(PersonalizeKey);
             return key?.GetValue("EnableTransparency") is int value && value == 0;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
         {
             return false;
         }
@@ -53,15 +67,18 @@ internal static class DoctorProbe
     {
         var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location);
         return string.IsNullOrEmpty(runtime)
-            || string.Equals(Path.GetFullPath(runtime), Path.GetFullPath(Path.GetDirectoryName(exePath) ?? ""), StringComparison.OrdinalIgnoreCase);
+               || string.Equals(Path.GetFullPath(runtime), Path.GetFullPath(Path.GetDirectoryName(exePath) ?? ""),
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Why <c>preferences.toml</c> in <paramref name="configRoot"/>, where the configuration guide keeps a shell's
     /// preferences, cannot be loaded, or null when it is missing or loads.
     /// </summary>
-    public static string? PreferencesProblem(string configRoot) =>
-        string.IsNullOrEmpty(configRoot) ? null : UserFileProblem(Path.Combine(configRoot, "preferences.toml"));
+    public static string? PreferencesProblem(string configRoot)
+    {
+        return string.IsNullOrEmpty(configRoot) ? null : UserFileProblem(Path.Combine(configRoot, "preferences.toml"));
+    }
 
     /// <summary>Why this file cannot be loaded, or null when it is missing or loads.</summary>
     private static string? UserFileProblem(string path)
@@ -71,7 +88,8 @@ internal static class DoctorProbe
         string text;
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             if (DataLimits.FileBytes(stream.Length, DataLimits.MaxTextBytes) is { } why)
                 return $"{path}: {why}";
             using var reader = new StreamReader(stream);
@@ -81,6 +99,7 @@ internal static class DoctorProbe
         {
             return $"{path}: could not be read: {e.Message}";
         }
+
         return TomlSyntax.TryLoad(path, text, out _, out _, out var error) ? null : error;
     }
 
@@ -97,7 +116,8 @@ internal static class DoctorProbe
             return false;
         try
         {
-            using var probe = new FileStream(Path.Combine(dir.FullName, $".winshell-doctor-{Guid.NewGuid():N}.tmp"), FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose);
+            using var probe = new FileStream(Path.Combine(dir.FullName, $".winshell-doctor-{Guid.NewGuid():N}.tmp"),
+                FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose);
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -110,12 +130,19 @@ internal static class DoctorProbe
     /// Whether a process runs as administrator. A process this account may not even ask is one: a non-elevated
     /// account can always read the token of its own non-elevated processes.
     /// </summary>
-    public static bool IsElevated(int pid) =>
-        ProcessElevation.TryRead((uint)pid, out var tokenDenied) ?? (tokenDenied && !Environment.IsPrivilegedProcess);
+    public static bool IsElevated(int pid)
+    {
+        return ProcessElevation.TryRead((uint)pid, out var tokenDenied) ??
+               (tokenDenied && !Environment.IsPrivilegedProcess);
+    }
 
-    public static IReadOnlyList<DoctorScreens.MonitorFacts> Monitors() => Screens.Enumerate()
-        .Select(m => new DoctorScreens.MonitorFacts(m.Info.Name, m.Bounds.Left, m.Bounds.Top, m.Bounds.Right, m.Bounds.Bottom, m.Work.Left, m.Work.Top, m.Work.Right, m.Work.Bottom, m.Scale))
-        .ToList();
+    public static IReadOnlyList<DoctorScreens.MonitorFacts> Monitors()
+    {
+        return Screens.Enumerate()
+            .Select(m => new DoctorScreens.MonitorFacts(m.Info.Name, m.Bounds.Left, m.Bounds.Top, m.Bounds.Right,
+                m.Bounds.Bottom, m.Work.Left, m.Work.Top, m.Work.Right, m.Work.Bottom, m.Scale))
+            .ToList();
+    }
 
     /// <summary>
     /// The visible top-level windows that are not minimized or cloaked: where an app bar would be. Explorer keeps
@@ -126,11 +153,14 @@ internal static class DoctorProbe
         var result = new List<DoctorScreens.WindowFacts>();
         foreach (var hwnd in TopLevelWindows.List())
         {
-            if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || TopLevelWindows.IsCloaked(hwnd) || !Win32.GetWindowRect(hwnd, out var rect))
+            if (!Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd) || TopLevelWindows.IsCloaked(hwnd) ||
+                !Win32.GetWindowRect(hwnd, out var rect))
                 continue;
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
-            result.Add(new DoctorScreens.WindowFacts(TopLevelWindows.ClassName(hwnd), rect.Left, rect.Top, rect.Right, rect.Bottom, ProgramOf((int)pid)));
+            result.Add(new DoctorScreens.WindowFacts(TopLevelWindows.ClassName(hwnd), rect.Left, rect.Top, rect.Right,
+                rect.Bottom, ProgramOf((int)pid)));
         }
+
         return result;
     }
 
@@ -141,7 +171,7 @@ internal static class DoctorProbe
             using var process = Process.GetProcessById(pid);
             return process.ProcessName + ".exe";
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
         {
             return "";
         }
@@ -158,11 +188,10 @@ internal static class DoctorProbe
             if (key is null)
                 continue;
             foreach (var name in key.GetValueNames())
-            {
                 if (string.Equals(name, full, StringComparison.OrdinalIgnoreCase) && key.GetValue(name) is string value)
                     layers.Add(value);
-            }
         }
+
         return layers;
     }
 
@@ -171,7 +200,7 @@ internal static class DoctorProbe
     {
         try
         {
-            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
+            return File.ResolveLinkTarget(path, true)?.FullName ?? path;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -183,15 +212,16 @@ internal static class DoctorProbe
     public static DoctorCrashes.CrashFolderRead ReadCrashReports(string folder)
     {
         if (!Directory.Exists(folder))
-            return new([], null);
+            return new DoctorCrashes.CrashFolderRead([], null);
         try
         {
-            var reports = new DirectoryInfo(folder).EnumerateFiles("crash-*.txt").Select(f => (f.FullName, f.LastWriteTimeUtc)).ToList();
-            return new(reports, null);
+            var reports = new DirectoryInfo(folder).EnumerateFiles("crash-*.txt")
+                .Select(f => (f.FullName, f.LastWriteTimeUtc)).ToList();
+            return new DoctorCrashes.CrashFolderRead(reports, null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new([], $"{folder}: {e.Message}");
+            return new DoctorCrashes.CrashFolderRead([], $"{folder}: {e.Message}");
         }
     }
 
@@ -200,7 +230,8 @@ internal static class DoctorProbe
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
             var first = reader.ReadLine();
             if (!CrashReports.IsHeading(first))
@@ -213,11 +244,12 @@ internal static class DoctorProbe
                 text.Append(line);
                 text.Append('\n');
             }
-            return new(text.ToString(), null);
+
+            return new DoctorCrashes.CrashPeek(text.ToString(), null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new(null, $"{path}: {e.Message}");
+            return new DoctorCrashes.CrashPeek(null, $"{path}: {e.Message}");
         }
     }
 }

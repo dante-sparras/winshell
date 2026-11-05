@@ -4,7 +4,8 @@ namespace Winshell.Power;
 
 internal sealed record PowerModeSnapshot(bool Ready, PowerModeLevel Mode, EffectivePowerMode Effective, bool Available)
 {
-    public static readonly PowerModeSnapshot Initial = new(false, PowerModeLevel.Balanced, EffectivePowerMode.Balanced, false);
+    public static readonly PowerModeSnapshot Initial = new(false, PowerModeLevel.Balanced, EffectivePowerMode.Balanced,
+        false);
 }
 
 /// <summary>
@@ -43,12 +44,14 @@ internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
     }
 
     /// <summary>The callback runs once immediately with the current mode, then on each change.</summary>
-    private static void Listen() =>
+    private static void Listen()
+    {
         PowerMode.ListenEffective(mode => NativeCallback.Guard(Log.Default, "power", () =>
         {
             Volatile.Write(ref _effective, mode);
             Instance.Refresh();
         }));
+    }
 
     protected override Task<PowerModeSnapshot> ReadAsync()
     {
@@ -80,15 +83,20 @@ internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
         return PowerModeLevel.Balanced;
     }
 
-    internal static Guid ToGuid(PowerModeLevel mode) => mode switch
+    internal static Guid ToGuid(PowerModeLevel mode)
     {
-        PowerModeLevel.BestEfficiency => BestEfficiency,
-        PowerModeLevel.BestPerformance => BestPerformance,
-        _ => Guid.Empty,
-    };
+        return mode switch
+        {
+            PowerModeLevel.BestEfficiency => BestEfficiency,
+            PowerModeLevel.BestPerformance => BestPerformance,
+            _ => Guid.Empty
+        };
+    }
 
     internal static EffectivePowerMode EffectiveFrom(int mode)
-        => Enum.IsDefined((EffectivePowerMode)mode) ? (EffectivePowerMode)mode : EffectivePowerMode.Balanced;
+    {
+        return Enum.IsDefined((EffectivePowerMode)mode) ? (EffectivePowerMode)mode : EffectivePowerMode.Balanced;
+    }
 
     private static bool OnBattery()
     {

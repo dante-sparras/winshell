@@ -3,7 +3,6 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
-using Winshell.TestSupport;
 
 namespace Winshell.ShellTests;
 
@@ -20,23 +19,25 @@ public sealed class NativeMenuTests
         var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         uint menuThread = 0;
         var app = new Thread(() =>
-        {
-            menuThread = Win32.GetCurrentThreadId();
-            var owner = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, 0, 0, 0, 0);
-            var menu = PInvoke.CreatePopupMenu();
-            try
             {
-                _ = PInvoke.AppendMenu(menu, MENU_ITEM_FLAGS.MF_STRING, 1, "Item");
-                _ = PInvoke.TrackPopupMenuEx(menu, (uint)(TRACK_POPUP_MENU_FLAGS.TPM_RETURNCMD | TRACK_POPUP_MENU_FLAGS.TPM_NONOTIFY), 0, 0, (HWND)owner, null);
-                closed.SetResult();
-            }
-            finally
-            {
-                _ = PInvoke.DestroyMenu(menu);
-                _ = Win32.DestroyWindow(owner);
-            }
-        })
-        { IsBackground = true, Name = "Tray app" };
+                menuThread = Win32.GetCurrentThreadId();
+                var owner = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, 0, 0, 0, 0);
+                var menu = PInvoke.CreatePopupMenu();
+                try
+                {
+                    _ = PInvoke.AppendMenu(menu, MENU_ITEM_FLAGS.MF_STRING, 1, "Item");
+                    _ = PInvoke.TrackPopupMenuEx(menu,
+                        (uint)(TRACK_POPUP_MENU_FLAGS.TPM_RETURNCMD | TRACK_POPUP_MENU_FLAGS.TPM_NONOTIFY), 0, 0,
+                        (HWND)owner, null);
+                    closed.SetResult();
+                }
+                finally
+                {
+                    _ = PInvoke.DestroyMenu(menu);
+                    _ = Win32.DestroyWindow(owner);
+                }
+            })
+            { IsBackground = true, Name = "Tray app" };
         var started = TimeProvider.System.GetTimestamp();
         app.SetApartmentState(ApartmentState.STA);
         app.Start();
@@ -53,7 +54,8 @@ public sealed class NativeMenuTests
         }
         catch (TimeoutException)
         {
-            Assert.Fail($"The menu stayed open. It took {opened.TotalMilliseconds:F0} ms to open. Its thread before the cancel: {before}. After: {State(menuThread)}.");
+            Assert.Fail(
+                $"The menu stayed open. It took {opened.TotalMilliseconds:F0} ms to open. Its thread before the cancel: {before}. After: {State(menuThread)}.");
         }
     }
 
@@ -62,17 +64,16 @@ public sealed class NativeMenuTests
     {
         var info = new GUITHREADINFO { cbSize = (uint)Marshal.SizeOf<GUITHREADINFO>() };
         bool known = PInvoke.GetGUIThreadInfo(thread, ref info);
-        return $"menu shows {MenuShowsOn(thread)}, info read {known}, flags 0x{(uint)info.flags:x}, owner {info.hwndMenuOwner != default}, capture {info.hwndCapture != default}";
+        return
+            $"menu shows {MenuShowsOn(thread)}, info read {known}, flags 0x{(uint)info.flags:x}, owner {info.hwndMenuOwner != default}, capture {info.hwndCapture != default}";
     }
 
     private static bool MenuShowsOn(uint thread)
     {
         nint menu = 0;
         while ((menu = Win32.FindWindowExW(0, menu, "#32768", null)) != 0)
-        {
             if (Win32.IsWindowVisible(menu) && Win32.GetWindowThreadProcessId(menu, out _) == thread)
                 return true;
-        }
         return false;
     }
 }

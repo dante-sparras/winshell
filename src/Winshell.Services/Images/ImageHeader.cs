@@ -30,21 +30,25 @@ internal static class ImageHeader
             [0xFF, 0xD8, 0xFF, ..] => ".jpg",
             [(byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'7' or (byte)'9', (byte)'a', ..] => ".gif",
             [(byte)'B', (byte)'M', ..] => ".bmp",
-            [(byte)'R', (byte)'I', (byte)'F', (byte)'F', _, _, _, _, (byte)'W', (byte)'E', (byte)'B', (byte)'P', ..] => ".webp",
-            _ => "",
+            [
+                (byte)'R', (byte)'I', (byte)'F', (byte)'F', _, _, _, _, (byte)'W', (byte)'E', (byte)'B', (byte)'P', ..
+            ] => ".webp",
+            _ => ""
         };
         width = height = 0;
-        if (extension.Length == 0 || ReadSize(data) is not (var readWidth, var readHeight))
+        if (extension.Length == 0 || ReadSize(data) is not var (readWidth, readHeight))
             return false;
         width = readWidth;
         height = readHeight;
         return true;
     }
 
-    private static (uint, uint)? Png(ReadOnlySpan<byte> data) =>
-        data.Length >= 24 && data[12..16].SequenceEqual("IHDR"u8)
+    private static (uint, uint)? Png(ReadOnlySpan<byte> data)
+    {
+        return data.Length >= 24 && data[12..16].SequenceEqual("IHDR"u8)
             ? (BinaryPrimitives.ReadUInt32BigEndian(data[16..]), BinaryPrimitives.ReadUInt32BigEndian(data[20..]))
             : null;
+    }
 
     /// <summary>Walks the segments to the first frame header, the one a decoder uses. An embedded thumbnail sits inside a segment.</summary>
     private static (uint, uint)? Jpeg(ReadOnlySpan<byte> data)
@@ -61,6 +65,7 @@ internal static class ImageHeader
                 at++;
                 continue;
             }
+
             var marker = data[at + 1];
             at += 2;
             if (marker is startOfScan or endOfImage)
@@ -72,20 +77,22 @@ internal static class ImageHeader
                 return null;
             // SOF0 to SOF15, leaving out DHT, JPG and DAC, which share that range.
             if (marker is >= 0xC0 and <= 0xCF and not (0xC4 or 0xC8 or 0xCC))
-            {
                 return at + 7 <= data.Length
-                    ? (BinaryPrimitives.ReadUInt16BigEndian(data[(at + 5)..]), BinaryPrimitives.ReadUInt16BigEndian(data[(at + 3)..]))
+                    ? (BinaryPrimitives.ReadUInt16BigEndian(data[(at + 5)..]),
+                        BinaryPrimitives.ReadUInt16BigEndian(data[(at + 3)..]))
                     : null;
-            }
             at += BinaryPrimitives.ReadUInt16BigEndian(data[at..]);
         }
+
         return null;
     }
 
-    private static (uint, uint)? Gif(ReadOnlySpan<byte> data) =>
-        data.Length >= 10
+    private static (uint, uint)? Gif(ReadOnlySpan<byte> data)
+    {
+        return data.Length >= 10
             ? (BinaryPrimitives.ReadUInt16LittleEndian(data[6..]), BinaryPrimitives.ReadUInt16LittleEndian(data[8..]))
             : null;
+    }
 
     private static (uint, uint)? Bmp(ReadOnlySpan<byte> data)
     {
@@ -94,11 +101,10 @@ internal static class ImageHeader
         var header = BinaryPrimitives.ReadUInt32LittleEndian(data[14..]);
         // The old OS/2 header holds 16-bit sizes. Later ones hold 32-bit sizes, and a top-down picture has a negative height.
         if (header == 12)
-        {
             return data.Length >= 22
-                ? (BinaryPrimitives.ReadUInt16LittleEndian(data[18..]), BinaryPrimitives.ReadUInt16LittleEndian(data[20..]))
+                ? (BinaryPrimitives.ReadUInt16LittleEndian(data[18..]),
+                    BinaryPrimitives.ReadUInt16LittleEndian(data[20..]))
                 : null;
-        }
         if (header < 16 || data.Length < 26)
             return null;
         var width = BinaryPrimitives.ReadInt32LittleEndian(data[18..]);
@@ -113,21 +119,24 @@ internal static class ImageHeader
         var chunk = data[12..16];
         var payload = data[20..];
         if (chunk.SequenceEqual("VP8 "u8))
-        {
             // A 3-byte frame tag, the start code, then two 14-bit sizes that each share a word with a scale.
             return payload[3..6].SequenceEqual<byte>([0x9D, 0x01, 0x2A])
-                ? ((uint)(BinaryPrimitives.ReadUInt16LittleEndian(payload[6..]) & 0x3FFF), (uint)(BinaryPrimitives.ReadUInt16LittleEndian(payload[8..]) & 0x3FFF))
+                ? ((uint)(BinaryPrimitives.ReadUInt16LittleEndian(payload[6..]) & 0x3FFF),
+                    (uint)(BinaryPrimitives.ReadUInt16LittleEndian(payload[8..]) & 0x3FFF))
                 : null;
-        }
         if (chunk.SequenceEqual("VP8L"u8))
         {
             // A signature byte, then 14-bit sizes less one.
             var sizes = BinaryPrimitives.ReadUInt32LittleEndian(payload[1..]);
             return payload[0] == 0x2F ? ((sizes & 0x3FFF) + 1, ((sizes >> 14) & 0x3FFF) + 1) : null;
         }
+
         // Flags, three reserved bytes, then 24-bit canvas sizes less one.
         return chunk.SequenceEqual("VP8X"u8) ? (UInt24(payload[4..]) + 1, UInt24(payload[7..]) + 1) : null;
     }
 
-    private static uint UInt24(ReadOnlySpan<byte> data) => (uint)(data[0] | (data[1] << 8) | (data[2] << 16));
+    private static uint UInt24(ReadOnlySpan<byte> data)
+    {
+        return (uint)(data[0] | (data[1] << 8) | (data[2] << 16));
+    }
 }

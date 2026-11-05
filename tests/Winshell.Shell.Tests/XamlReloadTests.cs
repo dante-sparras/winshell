@@ -15,28 +15,41 @@ public sealed class LivePanel : UserControl
 
     public int Clicks { get; private set; }
 
-    private void OnClick(object sender, RoutedEventArgs e) => Clicks++;
+    private void OnClick(object sender, RoutedEventArgs e)
+    {
+        Clicks++;
+    }
 }
 
 [Trait("Category", "Slow")]
 public sealed class XamlReloadTests : IDisposable
 {
-    private const string Open = """<UserControl x:Class="Winshell.ShellTests.LivePanel" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" """;
+    private const string Open =
+        """<UserControl x:Class="Winshell.ShellTests.LivePanel" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" """;
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
 
-    public XamlReloadTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
-
-    private static PanelWindow Panel(UIElement content) => new()
+    public XamlReloadTests()
     {
-        Anchors = Edges.Top | Edges.Left,
-        Width = 200,
-        Height = 40,
-        Content = content,
-        Visible = true,
-    };
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
+
+    private static PanelWindow Panel(UIElement content)
+    {
+        return new PanelWindow
+        {
+            Anchors = Edges.Top | Edges.Left,
+            Width = 200,
+            Height = 40,
+            Content = content,
+            Visible = true
+        };
+    }
 
     private string Saved(string markup)
     {
@@ -57,7 +70,8 @@ public sealed class XamlReloadTests : IDisposable
 
             var problem = XamlReload.Apply(shell, file);
 
-            return (ReferenceEquals(panel.Content, live), problem, (live.Content as TextBlock)?.Text, live.Remembered, live.Label?.Text);
+            return (ReferenceEquals(panel.Content, live), problem, (live.Content as TextBlock)?.Text, live.Remembered,
+                live.Label?.Text);
         });
 
         Assert.Null(problem);
@@ -93,13 +107,13 @@ public sealed class XamlReloadTests : IDisposable
     public async Task A_value_on_the_root_and_its_resources_reach_the_live_panel()
     {
         var file = Saved(Open + """
-             Width="123" Opacity="0.5">
-                <UserControl.Resources>
-                    <x:String x:Key="Word">from resources</x:String>
-                </UserControl.Resources>
-                <TextBlock Text="{StaticResource Word}" />
-            </UserControl>
-            """);
+                                 Width="123" Opacity="0.5">
+                                    <UserControl.Resources>
+                                        <x:String x:Key="Word">from resources</x:String>
+                                    </UserControl.Resources>
+                                    <TextBlock Text="{StaticResource Word}" />
+                                </UserControl>
+                                """);
 
         var (width, opacity, word, text) = await ShellFixture.On(shell =>
         {
@@ -175,6 +189,7 @@ public sealed class XamlReloadTests : IDisposable
             {
                 shell.Log.Sink = was;
             }
+
             return (ReferenceEquals(live.Content, content), said.Single());
         });
 

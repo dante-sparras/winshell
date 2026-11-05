@@ -24,7 +24,7 @@ public sealed class AtomicFileTests
         const string Incoming = "name = \"file\"\non = false\n";
         try
         {
-            var wrote = AtomicFile.Write(path, Incoming, bom: false, inPlace: false, () =>
+            var wrote = AtomicFile.Write(path, Incoming, false, false, () =>
             {
                 File.WriteAllText(path, Hand);
                 return AtomicFile.HandSaveWins(File.ReadAllText(path), diskAtStart, Incoming);
@@ -121,13 +121,18 @@ public sealed class AtomicFileTests
     private static bool Save(string path, string text)
     {
         var target = AtomicFile.SaveTarget(path, out var hardLink);
-        return AtomicFile.Write(target, text, bom: false, inPlace: hardLink, () => false);
+        return AtomicFile.Write(target, text, false, hardLink, () => false);
     }
 
-    private static TempDirectory Temp() => new(Directory.CreateTempSubdirectory("winshell-atomic-"));
+    private static TempDirectory Temp()
+    {
+        return new TempDirectory(Directory.CreateTempSubdirectory("winshell-atomic-"));
+    }
 
-    private static (string Real, string Link) Pair(TempDirectory dir) =>
-        (Path.Combine(dir.Path, "real.toml"), Path.Combine(dir.Path, "link.toml"));
+    private static (string Real, string Link) Pair(TempDirectory dir)
+    {
+        return (Path.Combine(dir.Path, "real.toml"), Path.Combine(dir.Path, "link.toml"));
+    }
 
     private static bool TryLink(string link, string real)
     {
@@ -153,6 +158,9 @@ public sealed class AtomicFileTests
     {
         public string Path { get; } = directory.FullName;
 
-        public void Dispose() => directory.Delete(true);
+        public void Dispose()
+        {
+            directory.Delete(true);
+        }
     }
 }

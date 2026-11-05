@@ -9,15 +9,28 @@ public sealed class BluetoothServiceTests
 {
     private static readonly Guid Container = Guid.Parse("71886561-73c1-4d67-a4a0-5077c90859d0");
 
-    private static BluetoothAdapterInfo Adapter(string id = "WindowsAdapter") => new(id, "Bluetooth", "00:11:22:33:44:55", BluetoothAdapterState.On);
+    private static BluetoothAdapterInfo Adapter(string id = "WindowsAdapter")
+    {
+        return new BluetoothAdapterInfo(id, "Bluetooth", "00:11:22:33:44:55", BluetoothAdapterState.On);
+    }
 
-    private static BluetoothDeviceInfo Device(string id = "WindowsEndpoint", bool paired = true, bool present = true, double? battery = .7) =>
-        new("stable-key", id, "00:11:22:33:44:66", "Headphones", true, paired, present, !paired, battery, Container, paired ? [id] : []);
+    private static BluetoothDeviceInfo Device(string id = "WindowsEndpoint", bool paired = true, bool present = true,
+        double? battery = .7)
+    {
+        return new BluetoothDeviceInfo("stable-key", id, "00:11:22:33:44:66", "Headphones", true, paired, present,
+            !paired, battery,
+            Container, paired ? [id] : []);
+    }
 
-    private static BluetoothSnapshot Snapshot(params BluetoothDeviceInfo[] devices) => new(true, Adapter(), devices);
+    private static BluetoothSnapshot Snapshot(params BluetoothDeviceInfo[] devices)
+    {
+        return new BluetoothSnapshot(true, Adapter(), devices);
+    }
 
-    private static BluetoothSnapshot Visibility(bool discoverable, bool pairable) =>
-        Snapshot() with { Adapter = Adapter() with { Discoverable = discoverable, Pairable = pairable } };
+    private static BluetoothSnapshot Visibility(bool discoverable, bool pairable)
+    {
+        return Snapshot() with { Adapter = Adapter() with { Discoverable = discoverable, Pairable = pairable } };
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -33,7 +46,8 @@ public sealed class BluetoothServiceTests
         return messages;
     }
 
-    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null, TimeProvider? time = null)
+    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null,
+        TimeProvider? time = null)
     {
         var service = new BluetoothService(loop, log ?? new Log(), backend, time);
         service.StartMonitoring();
@@ -62,7 +76,10 @@ public sealed class BluetoothServiceTests
         Assert.Same(device, Assert.Single(service.PairedDevices));
         Assert.Empty(service.NearbyDevices);
 
-        await session.ShowAsync(Snapshot(Device("ChangedEndpoint", paired: false, battery: null) with { Name = "Nearby", Connected = false }));
+        await session.ShowAsync(Snapshot(Device("ChangedEndpoint", false, battery: null) with
+        {
+            Name = "Nearby", Connected = false
+        }));
 
         Assert.Same(device, session.Device);
         Assert.Same(adapter, service.DefaultAdapter);
@@ -97,7 +114,7 @@ public sealed class BluetoothServiceTests
         Assert.Same(service.DefaultAdapter, session.Device.Adapter);
         Assert.Same(service.DefaultAdapter, Assert.Single(service.Adapters));
 
-        await session.ShowAsync(new(true, null, [Device()]));
+        await session.ShowAsync(new BluetoothSnapshot(true, null, [Device()]));
 
         Assert.Null(service.DefaultAdapter);
         Assert.Empty(service.Adapters);
@@ -111,7 +128,12 @@ public sealed class BluetoothServiceTests
     {
         using var session = await Session.OpenAsync(Snapshot(Device()));
         var updates = 0;
-        void Count(object? sender, NotifyCollectionChangedEventArgs e) => updates++;
+
+        void Count(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            updates++;
+        }
+
         session.Service.Devices.CollectionChanged += Count;
         session.Service.Adapters.CollectionChanged += Count;
         session.Service.PairedDevices.CollectionChanged += Count;
@@ -337,7 +359,9 @@ public sealed class BluetoothServiceTests
     [Fact]
     public async Task A_radio_request_in_flight_ignores_another_and_a_replaced_adapter_hears_nothing()
     {
-        using var session = await Session.OpenAsync(new(true, Adapter() with { State = BluetoothAdapterState.Off }, []));
+        using var session =
+            await Session.OpenAsync(new BluetoothSnapshot(true, Adapter() with { State = BluetoothAdapterState.Off },
+                []));
         var service = session.Service;
         var adapter = service.DefaultAdapter!;
         var gate = new TaskCompletionSource<string?>();
@@ -347,7 +371,8 @@ public sealed class BluetoothServiceTests
         await service.SetAdapterEnabledAsync(adapter, true);
         Assert.Equal("radio-on", Assert.Single(session.Backend.Calls));
 
-        await session.ShowAsync(new(true, Adapter("Replacement") with { State = BluetoothAdapterState.Off }, []));
+        await session.ShowAsync(new BluetoothSnapshot(true,
+            Adapter("Replacement") with { State = BluetoothAdapterState.Off }, []));
         gate.SetResult("refused");
         await first;
         session.Loop.Process();
@@ -358,7 +383,7 @@ public sealed class BluetoothServiceTests
     [Fact]
     public async Task Discoverable_and_pairable_follow_a_read_and_the_order_Windows_needs()
     {
-        using var session = await Session.OpenAsync(Visibility(discoverable: false, pairable: true));
+        using var session = await Session.OpenAsync(Visibility(false, true));
         var service = session.Service;
         var backend = session.Backend;
         var adapter = service.DefaultAdapter!;
@@ -373,7 +398,7 @@ public sealed class BluetoothServiceTests
         Assert.True(adapter.Discoverable);
         Assert.True(adapter.Pairable);
 
-        await session.ShowAsync(Visibility(discoverable: false, pairable: false));
+        await session.ShowAsync(Visibility(false, false));
         backend.Calls.Clear();
         await service.SetDiscoverableAsync(adapter, true);
         Assert.Equal(["pairable-on", "discoverable-on"], backend.Calls);
@@ -393,7 +418,7 @@ public sealed class BluetoothServiceTests
     [Fact]
     public async Task A_visibility_failure_is_reported_and_does_not_skip_ahead_of_windows()
     {
-        using var session = await Session.OpenAsync(Visibility(discoverable: false, pairable: false));
+        using var session = await Session.OpenAsync(Visibility(false, false));
         var service = session.Service;
         var backend = session.Backend;
         var adapter = service.DefaultAdapter!;
@@ -417,14 +442,14 @@ public sealed class BluetoothServiceTests
         Assert.False(adapter.Discoverable);
         Assert.Equal("discovery refused", adapter.Error);
 
-        await session.ShowAsync(Visibility(discoverable: true, pairable: true));
+        await session.ShowAsync(Visibility(true, true));
         Assert.Equal("", adapter.Error);
     }
 
     [Fact]
     public async Task A_visibility_request_in_flight_ignores_another()
     {
-        using var session = await Session.OpenAsync(Visibility(discoverable: false, pairable: true));
+        using var session = await Session.OpenAsync(Visibility(false, true));
         var service = session.Service;
         var adapter = service.DefaultAdapter!;
         var gate = new TaskCompletionSource<string?>();
@@ -595,7 +620,10 @@ public sealed class BluetoothServiceTests
             Loop.Process();
         }
 
-        public void Dispose() => Service.Dispose();
+        public void Dispose()
+        {
+            Service.Dispose();
+        }
     }
 
     /// <summary>A backend that does nothing but read, for the tests of the read loop.</summary>
@@ -607,7 +635,10 @@ public sealed class BluetoothServiceTests
 
         public abstract Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation);
 
-        public void RaiseChanged() => Changed?.Invoke();
+        public void RaiseChanged()
+        {
+            Changed?.Invoke();
+        }
 
         public void StartWatching()
         {
@@ -625,13 +656,25 @@ public sealed class BluetoothServiceTests
         {
         }
 
-        public Task<string?> PairAsync(string id, CancellationToken cancellation) => Task.FromResult<string?>(null);
+        public Task<string?> PairAsync(string id, CancellationToken cancellation)
+        {
+            return Task.FromResult<string?>(null);
+        }
 
-        public Task<string?> UnpairAsync(string id) => Task.FromResult<string?>(null);
+        public Task<string?> UnpairAsync(string id)
+        {
+            return Task.FromResult<string?>(null);
+        }
 
-        public Task<bool> SetAudioConnectionAsync(Guid container, bool connect) => Task.FromResult(true);
+        public Task<bool> SetAudioConnectionAsync(Guid container, bool connect)
+        {
+            return Task.FromResult(true);
+        }
 
-        public virtual void Dispose() => Disposed = true;
+        public virtual void Dispose()
+        {
+            Disposed = true;
+        }
     }
 
     private sealed class FlakyBackend : ReadBackend
@@ -690,7 +733,8 @@ public sealed class BluetoothServiceTests
 
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public TaskCompletionSource<BluetoothSnapshot> Finish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<BluetoothSnapshot> Finish { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
@@ -754,16 +798,27 @@ public sealed class BluetoothServiceTests
 
         public event Action? Changed;
 
-        public void RaiseChanged() => Changed?.Invoke();
+        public void RaiseChanged()
+        {
+            Changed?.Invoke();
+        }
 
-        public void StartWatching() => Watching = true;
+        public void StartWatching()
+        {
+            Watching = true;
+        }
 
-        public void StopWatching() => Watching = false;
+        public void StopWatching()
+        {
+            Watching = false;
+        }
 
         public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
             Interlocked.Increment(ref _reads);
-            return ReadFailure is { } e ? Task.FromException<BluetoothSnapshot>(e) : ReadTask ?? Task.FromResult(Snapshot);
+            return ReadFailure is { } e
+                ? Task.FromException<BluetoothSnapshot>(e)
+                : ReadTask ?? Task.FromResult(Snapshot);
         }
 
         public void StartDiscovery()
@@ -813,17 +868,27 @@ public sealed class BluetoothServiceTests
             return Task.FromResult(ApplyRadio(enabled, RadioError));
         }
 
-        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled) => ApplyRadio(enabled, await pending.ConfigureAwait(false));
+        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled)
+        {
+            return ApplyRadio(enabled, await pending.ConfigureAwait(false));
+        }
 
         private string? ApplyRadio(bool enabled, string? error)
         {
             if (error is null && Snapshot.Adapter is { } adapter)
-                Snapshot = Snapshot with { Adapter = adapter with { State = enabled ? BluetoothAdapterState.On : BluetoothAdapterState.Off } };
+                Snapshot = Snapshot with
+                {
+                    Adapter = adapter with
+                    {
+                        State = enabled ? BluetoothAdapterState.On : BluetoothAdapterState.Off
+                    }
+                };
             return error;
         }
 
-        public Task<string?> SetDiscoverableAsync(bool discoverable) =>
-            Visibility(discoverable ? "discoverable-on" : "discoverable-off", () =>
+        public Task<string?> SetDiscoverableAsync(bool discoverable)
+        {
+            return Visibility(discoverable ? "discoverable-on" : "discoverable-off", () =>
             {
                 if (DiscoverableError is { } error)
                     return error;
@@ -831,9 +896,11 @@ public sealed class BluetoothServiceTests
                     Snapshot = Snapshot with { Adapter = adapter with { Discoverable = discoverable } };
                 return null;
             });
+        }
 
-        public Task<string?> SetPairableAsync(bool pairable) =>
-            Visibility(pairable ? "pairable-on" : "pairable-off", () =>
+        public Task<string?> SetPairableAsync(bool pairable)
+        {
+            return Visibility(pairable ? "pairable-on" : "pairable-off", () =>
             {
                 if (PairableError is { } error)
                     return error;
@@ -841,6 +908,7 @@ public sealed class BluetoothServiceTests
                     Snapshot = Snapshot with { Adapter = adapter with { Pairable = pairable } };
                 return null;
             });
+        }
 
         private Task<string?> Visibility(string call, Func<string?> apply)
         {
@@ -856,6 +924,9 @@ public sealed class BluetoothServiceTests
             return error ?? apply();
         }
 
-        public void Dispose() => Disposed = true;
+        public void Dispose()
+        {
+            Disposed = true;
+        }
     }
 }

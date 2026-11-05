@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using Xunit.Sdk;
 
 namespace Winshell.Tests;
 
@@ -104,7 +105,9 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
             Wait.Until(() => process.HasExited, "the old process to exit");
             Wait.Until(
-                () => Listed().Any(row => row.GetProperty("shellId").GetString() == "probe" && row.GetProperty("pid").GetInt32() != process.Id),
+                () => Listed().Any(row =>
+                    row.GetProperty("shellId").GetString() == "probe" &&
+                    row.GetProperty("pid").GetInt32() != process.Id),
                 "the process that took over");
         }
         finally
@@ -148,7 +151,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         var run = Supervise();
         try
         {
-            var first = NextPid(0, shellId: null);
+            var first = NextPid(0, null);
             // Once the shell's thread answers, its configuration has started and will not see the marker.
             Run("ipc", "--pid", first.ToString(CultureInfo.InvariantCulture), "show").AssertExitCode(0);
             var marker = Path.Combine(_config, ProbeShell.HideTaskbarMarker);
@@ -166,6 +169,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
                 crashed.Kill();
                 crashed.WaitForExit();
             }
+
             NextPid(second, "reloaded");
             Assert.False(ExplorerTaskbarRecovery.AnyHidden());
             Assert.False(run.HasExited);
@@ -184,7 +188,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         var hang = Path.Combine(_config, ProbeShell.HangMarker);
         File.WriteAllText(hang, "");
         var run = Supervise();
-        var shell = NextPid(0, shellId: null);
+        var shell = NextPid(0, null);
         var pidFile = Path.Combine(_config, "child.pid");
         Wait.Until(() => File.Exists(pidFile), "the shell's program to start");
         // Only this shell hangs.
@@ -196,7 +200,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             Reload(shell);
 
             Assert.True(hung.HasExited);
-            NextPid(shell, shellId: null);
+            NextPid(shell, null);
             Assert.False(run.HasExited);
         }
         finally
@@ -211,7 +215,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     public void A_reload_under_winshell_run_without_its_project_is_refused()
     {
         var run = Supervise();
-        var shell = NextPid(0, shellId: null);
+        var shell = NextPid(0, null);
         var projectFile = Directory.GetFiles(_probe.Folder, "*.csproj").Single();
         File.Move(projectFile, projectFile + ".gone");
         try
@@ -221,7 +225,9 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             var id = Listed().Single(row => row.GetProperty("pid").GetInt32() == shell).GetProperty("id").GetString();
             result.AssertExitCode(1);
             Assert.Equal("", result.Output);
-            Assert.Equal($"Could not find the project that builds instance {id}, so it was not reloaded.{Environment.NewLine}", result.Error);
+            Assert.Equal(
+                $"Could not find the project that builds instance {id}, so it was not reloaded.{Environment.NewLine}",
+                result.Error);
             Assert.False(run.HasExited);
         }
         finally
@@ -254,7 +260,9 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             () =>
             {
                 pid = Listed()
-                    .Where(row => row.GetProperty("pid").GetInt32() != previous && (shellId is null || row.GetProperty("shellId").GetString() == shellId))
+                    .Where(row =>
+                        row.GetProperty("pid").GetInt32() != previous &&
+                        (shellId is null || row.GetProperty("shellId").GetString() == shellId))
                     .Select(row => row.GetProperty("pid").GetInt32())
                     .FirstOrDefault();
                 return pid != 0;
@@ -265,14 +273,16 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
 
     private Process ReloadTo(Process running, string original, string shellId)
     {
-        File.WriteAllText(Path.Combine(_probe.Folder, "Program.cs"), original.Replace("?? \"probe\"", $"?? \"{shellId}\"", StringComparison.Ordinal));
+        File.WriteAllText(Path.Combine(_probe.Folder, "Program.cs"),
+            original.Replace("?? \"probe\"", $"?? \"{shellId}\"", StringComparison.Ordinal));
         Reload(running.Id);
         Wait.Until(() => running.HasExited, "the old process to exit");
         var pid = 0;
         Wait.Until(
             () =>
             {
-                pid = Listed().Where(row => row.GetProperty("shellId").GetString() == shellId).Select(row => row.GetProperty("pid").GetInt32()).FirstOrDefault();
+                pid = Listed().Where(row => row.GetProperty("shellId").GetString() == shellId)
+                    .Select(row => row.GetProperty("pid").GetInt32()).FirstOrDefault();
                 return pid != 0;
             },
             $"the process that runs the {shellId} edit");
@@ -314,8 +324,10 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
+    private ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
+    }
 
     public void Dispose()
     {
@@ -324,34 +336,38 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         {
             rows = Listed();
         }
-        catch (Xunit.Sdk.XunitException)
+        catch (XunitException)
         {
         }
+
         foreach (var row in rows)
-        {
             try
             {
-                Run("kill", "--force", "--pid", row.GetProperty("pid").GetInt32().ToString(CultureInfo.InvariantCulture));
+                Run("kill", "--force", "--pid",
+                    row.GetProperty("pid").GetInt32().ToString(CultureInfo.InvariantCulture));
             }
-            catch (Xunit.Sdk.XunitException)
+            catch (XunitException)
             {
             }
-        }
+
         foreach (var process in _started)
         {
             if (!process.HasExited)
             {
                 try
                 {
-                    process.Kill(entireProcessTree: true);
+                    process.Kill(true);
                 }
                 catch (Exception)
                 {
                 }
+
                 process.WaitForExit();
             }
+
             process.Dispose();
         }
+
         // A test that failed can leave the taskbar its probe hid. One that another program hid stays hidden.
         if (!_taskbarHidden)
             ExplorerTaskbarRecovery.Restore();

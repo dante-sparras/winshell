@@ -110,8 +110,8 @@ public sealed class WifiProfileTests
         Assert.DoesNotContain(Secret, after.ToString());
 
         const string prefixed = """
-            <WLANProfile><name>Office</name><connectionMode>auto</connectionMode><sharedKey><keyMaterial /><p:keyMaterial xmlns:p="urn:p">winshell-profile-key-9f3a</p:keyMaterial><protected>true</protected></sharedKey><Vendor xmlns="urn:vendor">keep</Vendor></WLANProfile>
-            """;
+                                <WLANProfile><name>Office</name><connectionMode>auto</connectionMode><sharedKey><keyMaterial /><p:keyMaterial xmlns:p="urn:p">winshell-profile-key-9f3a</p:keyMaterial><protected>true</protected></sharedKey><Vendor xmlns="urn:vendor">keep</Vendor></WLANProfile>
+                                """;
         Assert.True(WifiProfileXml.TryParse(prefixed, out var before, out error), error);
         Assert.True(before.HasPassword);
         Assert.DoesNotContain(Secret, before.ToString());
@@ -124,7 +124,8 @@ public sealed class WifiProfileTests
             updated);
         Assert.DoesNotContain(Secret, updated);
 
-        const string comment = "<WLANProfile><name>Office</name><!-- <keyMaterial>winshell-profile-key-9f3a</keyMaterial> --><connectionMode>auto</connectionMode></WLANProfile>";
+        const string comment =
+            "<WLANProfile><name>Office</name><!-- <keyMaterial>winshell-profile-key-9f3a</keyMaterial> --><connectionMode>auto</connectionMode></WLANProfile>";
         Assert.True(WifiProfileXml.TryParse(comment, out var commented, out error), error);
         Assert.False(commented.HasPassword);
         Assert.DoesNotContain(Secret, commented.ToString());
@@ -132,7 +133,8 @@ public sealed class WifiProfileTests
         Assert.False(changed);
         Assert.Equal(comment, updated);
 
-        var nested = "<WLANProfile><name>Office<nested>" + Secret + "</nested></name><connectionMode>auto</connectionMode></WLANProfile>";
+        var nested = "<WLANProfile><name>Office<nested>" + Secret +
+                     "</nested></name><connectionMode>auto</connectionMode></WLANProfile>";
         Assert.True(WifiProfileXml.TryParse(nested, out var name, out error), error);
         Assert.Equal("Office", name.Name);
         Assert.False(name.HasPassword);
@@ -149,29 +151,29 @@ public sealed class WifiProfileTests
         Assert.Equal("", shallow);
 
         var dtd = """
-            <?xml version="1.0"?>
-            <!DOCTYPE WLANProfile [
-            <!ENTITY secret SYSTEM "file:///C:/winshell-profile-marker">
-            ]>
-            <WLANProfile><name>&secret;</name></WLANProfile>
-            """;
+                  <?xml version="1.0"?>
+                  <!DOCTYPE WLANProfile [
+                  <!ENTITY secret SYSTEM "file:///C:/winshell-profile-marker">
+                  ]>
+                  <WLANProfile><name>&secret;</name></WLANProfile>
+                  """;
         AssertNoWrite(dtd, WifiProfileXml.Unreadable);
         Assert.DoesNotContain(Marker, WifiProfileXml.Unreadable);
 
         var billion = """
-            <!DOCTYPE lolz [
-            <!ENTITY lol "lol">
-            <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
-            <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
-            <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
-            <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
-            <!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;">
-            <!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;">
-            <!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;">
-            <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
-            ]>
-            <WLANProfile><name>&lol9;</name></WLANProfile>
-            """;
+                      <!DOCTYPE lolz [
+                      <!ENTITY lol "lol">
+                      <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+                      <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+                      <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+                      <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
+                      <!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;">
+                      <!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;">
+                      <!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;">
+                      <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
+                      ]>
+                      <WLANProfile><name>&lol9;</name></WLANProfile>
+                      """;
         AssertNoWrite(billion, WifiProfileXml.Unreadable);
 
         var api = new FakeWlan { Xml = dtd };
@@ -201,8 +203,10 @@ public sealed class WifiProfileTests
     [InlineData("other", "AES", WifiSecurityType.Unknown)]
     public void Authentication_maps_like_the_scan(string authentication, string encryption, WifiSecurityType expected)
     {
-        var xml = "<WLANProfile><name>Office</name><SSIDConfig><SSID><name>Cafe</name></SSID></SSIDConfig><connectionMode>manual</connectionMode><MSM><security><authEncryption><authentication>"
-            + authentication + "</authentication><encryption>" + encryption + "</encryption></authEncryption></security></MSM></WLANProfile>";
+        var xml =
+            "<WLANProfile><name>Office</name><SSIDConfig><SSID><name>Cafe</name></SSID></SSIDConfig><connectionMode>manual</connectionMode><MSM><security><authEncryption><authentication>"
+            + authentication + "</authentication><encryption>" + encryption +
+            "</encryption></authEncryption></security></MSM></WLANProfile>";
         Assert.True(WifiProfileXml.TryParse(xml, out var fields, out var error), error);
         Assert.Equal(expected, fields.Security);
         Assert.False(fields.AutoConnect);
@@ -223,37 +227,50 @@ public sealed class WifiProfileTests
     [Fact]
     public void A_mode_write_fails_closed_when_the_element_is_not_one_plain_value()
     {
-        const string spaced = "<WLANProfile><name>Office</name><connectionMode> auto </connectionMode><Vendor>keep</Vendor></WLANProfile>";
-        Assert.True(WifiProfileXml.TrySetAutoConnect(spaced, true, out var same, out var changed, out var error), error);
+        const string spaced =
+            "<WLANProfile><name>Office</name><connectionMode> auto </connectionMode><Vendor>keep</Vendor></WLANProfile>";
+        Assert.True(WifiProfileXml.TrySetAutoConnect(spaced, true, out var same, out var changed, out var error),
+            error);
         Assert.False(changed);
         Assert.Equal(spaced, same);
         Assert.True(WifiProfileXml.TrySetAutoConnect(spaced, false, out var manual, out changed, out error), error);
         Assert.True(changed);
-        Assert.Equal("<WLANProfile><name>Office</name><connectionMode>manual</connectionMode><Vendor>keep</Vendor></WLANProfile>", manual);
+        Assert.Equal(
+            "<WLANProfile><name>Office</name><connectionMode>manual</connectionMode><Vendor>keep</Vendor></WLANProfile>",
+            manual);
 
         const string capital = "<WLANProfile><name>Office</name><connectionMode>Auto</connectionMode></WLANProfile>";
         Assert.True(WifiProfileXml.TrySetAutoConnect(capital, true, out same, out changed, out error), error);
         Assert.False(changed);
         Assert.Equal(capital, same);
 
-        const string foo = "<WLANProfile><name>Office</name><connectionMode>foo</connectionMode><Vendor>keep</Vendor></WLANProfile>";
+        const string foo =
+            "<WLANProfile><name>Office</name><connectionMode>foo</connectionMode><Vendor>keep</Vendor></WLANProfile>";
         Assert.True(WifiProfileXml.TrySetAutoConnect(foo, false, out manual, out changed, out error), error);
         Assert.True(changed);
-        Assert.Equal("<WLANProfile><name>Office</name><connectionMode>manual</connectionMode><Vendor>keep</Vendor></WLANProfile>", manual);
+        Assert.Equal(
+            "<WLANProfile><name>Office</name><connectionMode>manual</connectionMode><Vendor>keep</Vendor></WLANProfile>",
+            manual);
 
-        const string nested = "<WLANProfile><name>Office</name><connectionMode>auto</connectionMode><Vendor><connectionMode>auto</connectionMode><keep>1</keep></Vendor></WLANProfile>";
+        const string nested =
+            "<WLANProfile><name>Office</name><connectionMode>auto</connectionMode><Vendor><connectionMode>auto</connectionMode><keep>1</keep></Vendor></WLANProfile>";
         Assert.True(WifiProfileXml.TrySetAutoConnect(nested, false, out manual, out changed, out error), error);
         Assert.True(changed);
-        Assert.Equal("<WLANProfile><name>Office</name><connectionMode>manual</connectionMode><Vendor><connectionMode>auto</connectionMode><keep>1</keep></Vendor></WLANProfile>", manual);
+        Assert.Equal(
+            "<WLANProfile><name>Office</name><connectionMode>manual</connectionMode><Vendor><connectionMode>auto</connectionMode><keep>1</keep></Vendor></WLANProfile>",
+            manual);
 
         const string empty = "<WLANProfile><name>Office</name><connectionMode></connectionMode></WLANProfile>";
         Assert.True(WifiProfileXml.TrySetAutoConnect(empty, true, out manual, out changed, out error), error);
         Assert.Equal("<WLANProfile><name>Office</name><connectionMode>auto</connectionMode></WLANProfile>", manual);
 
-        AssertNoWrite("<WLANProfile><name>Office</name><connectionMode>auto</connectionMode><connectionMode>auto</connectionMode></WLANProfile>", WifiProfileXml.Rejected, auto: false);
-        AssertNoWrite("<WLANProfile><name>Office</name></WLANProfile>", WifiProfileXml.Rejected, auto: true);
-        AssertNoWrite("<WLANProfile><name>Office</name><connectionMode/></WLANProfile>", WifiProfileXml.Rejected, auto: true);
-        AssertNoWrite("<WLANProfile><name>Office</name><connectionMode><![CDATA[auto]]></connectionMode></WLANProfile>", WifiProfileXml.Rejected, auto: false);
+        AssertNoWrite(
+            "<WLANProfile><name>Office</name><connectionMode>auto</connectionMode><connectionMode>auto</connectionMode></WLANProfile>",
+            WifiProfileXml.Rejected, false);
+        AssertNoWrite("<WLANProfile><name>Office</name></WLANProfile>", WifiProfileXml.Rejected, true);
+        AssertNoWrite("<WLANProfile><name>Office</name><connectionMode/></WLANProfile>", WifiProfileXml.Rejected, true);
+        AssertNoWrite("<WLANProfile><name>Office</name><connectionMode><![CDATA[auto]]></connectionMode></WLANProfile>",
+            WifiProfileXml.Rejected, false);
     }
 
     [Theory]
@@ -317,12 +334,18 @@ public sealed class WifiProfileTests
         Assert.Equal(0u, Wlan.ProfileReadFlags() & 0x4);
         Assert.Equal(0u, Wlan.ProfileWriteFlags(0x4));
         Assert.Equal(0x2u, Wlan.ProfileWriteFlags(0x6));
-        Assert.Equal((nint)0, Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.wlanConnectionMode)));
-        Assert.Equal((nint)IntPtr.Size, Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.strProfile)));
-        Assert.Equal((nint)(IntPtr.Size * 2), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.pDot11Ssid)));
-        Assert.Equal((nint)(IntPtr.Size * 3), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.pDesiredBssidList)));
-        Assert.Equal((nint)(IntPtr.Size * 4), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.dot11BssType)));
-        Assert.Equal((nint)(IntPtr.Size * 4 + 4), Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.dwFlags)));
+        Assert.Equal((nint)0,
+            Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.wlanConnectionMode)));
+        Assert.Equal((nint)IntPtr.Size,
+            Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.strProfile)));
+        Assert.Equal((nint)(IntPtr.Size * 2),
+            Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.pDot11Ssid)));
+        Assert.Equal((nint)(IntPtr.Size * 3),
+            Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.pDesiredBssidList)));
+        Assert.Equal((nint)(IntPtr.Size * 4),
+            Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.dot11BssType)));
+        Assert.Equal((nint)(IntPtr.Size * 4 + 4),
+            Marshal.OffsetOf<WLAN_CONNECTION_PARAMETERS>(nameof(WLAN_CONNECTION_PARAMETERS.dwFlags)));
     }
 
     [Fact]
@@ -381,8 +404,8 @@ public sealed class WifiProfileTests
             do
             {
                 seen = Volatile.Read(ref max);
-            }
-            while (now > seen && Interlocked.CompareExchange(ref max, now, seen) != seen);
+            } while (now > seen && Interlocked.CompareExchange(ref max, now, seen) != seen);
+
             inside.SetResult();
             hold.Wait(TestContext.Current.CancellationToken);
             Interlocked.Decrement(ref inFlight);
@@ -423,7 +446,8 @@ public sealed class WifiProfileTests
 
     private static string Ssid(string inner)
     {
-        var xml = "<WLANProfile><name>Office</name><SSIDConfig><SSID>" + inner + "</SSID></SSIDConfig><connectionMode>auto</connectionMode></WLANProfile>";
+        var xml = "<WLANProfile><name>Office</name><SSIDConfig><SSID>" + inner +
+                  "</SSID></SSIDConfig><connectionMode>auto</connectionMode></WLANProfile>";
         Assert.True(WifiProfileXml.TryParse(xml, out var fields, out var error), error);
         Assert.True(fields.Name.Length > 0);
         return fields.Ssid;

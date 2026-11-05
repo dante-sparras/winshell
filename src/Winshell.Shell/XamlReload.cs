@@ -40,11 +40,14 @@ internal static partial class XamlReload
                     shell.Loop.Post(() => Changed(shell, Path.Combine(folder, name)));
             },
             () => { },
-            subtree: true);
+            true);
     }
 
-    private static bool IsBuildOutput(string name) =>
-        name.StartsWith(@"bin\", StringComparison.OrdinalIgnoreCase) || name.StartsWith(@"obj\", StringComparison.OrdinalIgnoreCase);
+    private static bool IsBuildOutput(string name)
+    {
+        return name.StartsWith(@"bin\", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith(@"obj\", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>An editor writes a file more than once, so the last write of a moment is the one to read.</summary>
     private static void Changed(Shell shell, string file)
@@ -72,18 +75,18 @@ internal static partial class XamlReload
         {
             return e.Message;
         }
+
         if (document.Root?.Attribute(X + "Class")?.Value is not { } name || CompilerOnly().IsMatch(text))
         {
             shell.Log.Warn("dev", $"{NeedsBuild}: {Path.GetFileName(file)}");
             return null;
         }
+
         var panels = shell.Platform.Windows.Select(host => host.Presentation.Content).OfType<DependencyObject>()
             .SelectMany(root => Of(root, name)).ToList();
         foreach (var panel in panels)
-        {
             if (Move(panel, document) is { } problem)
                 return problem;
-        }
         Saved[name] = text;
         shell.Log.Info("dev", $"Applied {Path.GetFileName(file)} to {panels.Count} of {name}.");
         return null;
@@ -101,10 +104,8 @@ internal static partial class XamlReload
         if (element is UserControl panel && element.GetType().FullName == name)
             yield return panel;
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
-        {
             foreach (var found in Of(VisualTreeHelper.GetChild(element, i), name))
                 yield return found;
-        }
     }
 
     private static string? Move(UserControl panel, XDocument document)
@@ -118,17 +119,16 @@ internal static partial class XamlReload
         {
             var fresh = (UserControl)XamlReader.Load(copy.ToString());
             foreach (var element in root.Descendants())
-            {
                 if (element.Attribute(X + "Name")?.Value is { } name)
                     type.GetField(name, Members)?.SetValue(panel, fresh.FindName(name));
-            }
             foreach (var (name, eventName, method) in handlers)
                 Connect(fresh.FindName(name), eventName, panel, method);
-            foreach (var attribute in root.Attributes().Where(a => !a.IsNamespaceDeclaration && a.Name.Namespace == XNamespace.None))
-            {
-                if (typeof(UserControl).GetProperty(attribute.Name.LocalName + "Property", BindingFlags.Static | BindingFlags.Public | BindingFlags.FlattenHierarchy)?.GetValue(null) is DependencyProperty property)
+            foreach (var attribute in root.Attributes()
+                         .Where(a => !a.IsNamespaceDeclaration && a.Name.Namespace == XNamespace.None))
+                if (typeof(UserControl).GetProperty(attribute.Name.LocalName + "Property",
+                            BindingFlags.Static | BindingFlags.Public | BindingFlags.FlattenHierarchy)
+                        ?.GetValue(null) is DependencyProperty property)
                     panel.SetValue(property, fresh.GetValue(property));
-            }
             var resources = fresh.Resources;
             fresh.Resources = [];
             panel.Resources = resources;
@@ -152,23 +152,23 @@ internal static partial class XamlReload
         var handlers = new List<(string, string, MethodInfo)>();
         var count = 0;
         foreach (var element in root.DescendantsAndSelf())
+        foreach (var attribute in element.Attributes().Where(a => a.Name.Namespace == XNamespace.None).ToList())
         {
-            foreach (var attribute in element.Attributes().Where(a => a.Name.Namespace == XNamespace.None).ToList())
+            if (type.GetMethod(attribute.Value, Members) is not { } method || method.GetParameters().Length != 2)
+                continue;
+            attribute.Remove();
+            if (element == root)
+                continue;
+            var name = element.Attribute(X + "Name")?.Value;
+            if (name is null)
             {
-                if (type.GetMethod(attribute.Value, Members) is not { } method || method.GetParameters().Length != 2)
-                    continue;
-                attribute.Remove();
-                if (element == root)
-                    continue;
-                var name = element.Attribute(X + "Name")?.Value;
-                if (name is null)
-                {
-                    name = $"Handler{count++}";
-                    element.SetAttributeValue(X + "Name", name);
-                }
-                handlers.Add((name, attribute.Name.LocalName, method));
+                name = $"Handler{count++}";
+                element.SetAttributeValue(X + "Name", name);
             }
+
+            handlers.Add((name, attribute.Name.LocalName, method));
         }
+
         return handlers;
     }
 

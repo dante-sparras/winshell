@@ -19,6 +19,7 @@ internal static class Cli
             Console.Error.WriteLine(e.Message);
             return 2;
         }
+
         var command = options.Command;
         if (options.ShowHelp)
             return HelpCommand.Run(command);
@@ -42,6 +43,7 @@ internal static class Cli
                         Console.Error.WriteLine("No command. Use winshell run to start a shell.");
                         return 2;
                     }
+
                     return RunCommand.Run(options);
                 case "run":
                     return RunCommand.Run(options);
@@ -74,8 +76,11 @@ internal static class Cli
     }
 
     /// <summary><c>winshellw.exe</c> is the same program with no console. It still starts a shell when given no command.</summary>
-    private static bool IsWindowlessHost() =>
-        string.Equals(System.IO.Path.GetFileName(Environment.ProcessPath), "winshellw.exe", StringComparison.OrdinalIgnoreCase);
+    private static bool IsWindowlessHost()
+    {
+        return string.Equals(Path.GetFileName(Environment.ProcessPath), "winshellw.exe",
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// A pipe or a file gets UTF-8. The console's own code page would turn text outside it into question marks,

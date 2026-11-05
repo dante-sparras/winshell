@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security;
 using Microsoft.Win32;
 using Winshell.Native;
 
@@ -30,13 +31,19 @@ internal interface IVirtualDesktopBackend
 /// <summary>The build Windows reports, from <c>RtlGetVersion</c> rather than the version a manifest can change.</summary>
 internal readonly record struct WindowsVersion(uint Build, uint Update)
 {
-    public override string ToString() => Update == 0 ? Build.ToString(CultureInfo.InvariantCulture) : $"{Build}.{Update}";
+    public override string ToString()
+    {
+        return Update == 0 ? Build.ToString(CultureInfo.InvariantCulture) : $"{Build}.{Update}";
+    }
 
     public static WindowsVersion Current => _current ??= Read();
 
     private static WindowsVersion? _current;
 
-    public static WindowsVersion Read() => OsVersion.Build() is { } build ? new(build, ReadUpdate()) : new(0, 0);
+    public static WindowsVersion Read()
+    {
+        return OsVersion.Build() is { } build ? new WindowsVersion(build, ReadUpdate()) : new WindowsVersion(0, 0);
+    }
 
     private static uint ReadUpdate()
     {
@@ -47,10 +54,10 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
             {
                 int value when value > 0 => (uint)value,
                 uint value => value,
-                _ => 0,
+                _ => 0
             };
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
         {
             return 0;
         }
@@ -84,7 +91,7 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
             var contract = DesktopContract.ForBuild(version.Build);
             if (contract.Supported)
                 return contract;
-            return new(false,
+            return new DesktopContract(false,
                 $"Windows {version} is outside the virtual desktop method table Winshell knows ({DesktopContract.OldestBuild} through {DesktopContract.NewestBuild}).");
         }
     }
@@ -95,11 +102,14 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
         return _hook is not null;
     }
 
-    private void OnEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
+    private void OnEvent(uint eventType, nint hwnd, int idObject, int idChild)
+    {
         NativeCallback.Guard(Log.Default, "desktops", () => Switched?.Invoke());
+    }
 
     public string ListStamp =>
-        Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops", "VirtualDesktopIDs", null) is byte[] ids
+        Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops",
+            "VirtualDesktopIDs", null) is byte[] ids
             ? Convert.ToHexString(ids)
             : "";
 

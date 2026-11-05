@@ -15,7 +15,11 @@ namespace Winshell;
 /// as Explorer has it, or it would keep a hidden taskbar hidden when it quits. A taskbar that another shell had hidden
 /// stays hidden, and so does one a clean exit could only take from the shell that hid it since.
 /// </remarks>
-internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskbarHidden, Action restoreTaskbar, TimeProvider time)
+internal sealed class ShellSupervisor(
+    Func<IShellChild?> start,
+    Func<bool> taskbarHidden,
+    Action restoreTaskbar,
+    TimeProvider time)
 {
     private const int CrashesBeforeGivingUp = 6;
 
@@ -46,6 +50,7 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
                 if (!hidden && exit.Code != 0)
                     restoreTaskbar();
             }
+
             var code = exit.Code;
             if (exit.Intent == ExitIntent.Stop || stop.IsCancellationRequested)
                 return code;
@@ -54,16 +59,20 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
                 crashes = 0;
                 continue;
             }
+
             if (code is 0 or 1)
                 return code;
             crashes = time.GetElapsedTime(started) >= RunningWell ? 1 : crashes + 1;
             if (crashes == CrashesBeforeGivingUp)
             {
-                Console.Error.WriteLine($"The shell crashed {crashes} times in a row, the last with exit code {code}. It is not started again.");
+                Console.Error.WriteLine(
+                    $"The shell crashed {crashes} times in a row, the last with exit code {code}. It is not started again.");
                 return code;
             }
+
             var wait = TimeSpan.FromTicks(Math.Min(FirstWait.Ticks << (crashes - 1), LongestWait.Ticks));
-            Console.Error.WriteLine($"The shell exited with code {code}. Starting it again in {wait.TotalSeconds:0} s.");
+            Console.Error.WriteLine(
+                $"The shell exited with code {code}. Starting it again in {wait.TotalSeconds:0} s.");
             try
             {
                 await Task.Delay(wait, time, stop);
@@ -91,6 +100,7 @@ internal sealed class ShellSupervisor(Func<IShellChild?> start, Func<bool> taskb
             await child.StopAsync();
             code = await child.Exited;
         }
+
         return (code, child.Intent);
     }
 }

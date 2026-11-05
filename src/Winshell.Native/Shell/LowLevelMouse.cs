@@ -47,22 +47,23 @@ internal static unsafe class LowLevelMouse
     private static nint Proc(int code, nint wParam, nint lParam)
     {
         if (code >= 0 && lParam != 0
-            && (uint)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN or Win32.WM_XBUTTONDOWN)
+                      && (uint)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN
+                      or Win32.WM_XBUTTONDOWN)
         {
             var pt = ((MSLLHOOKSTRUCT*)lParam)->pt;
             foreach (var watch in Volatile.Read(ref _watches))
-            {
                 try
                 {
                     watch.OnPress(pt);
                 }
-#pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
+#pragma warning disable CA1031
+                // Windows called in; nothing above this frame can catch it.
                 catch (Exception)
 #pragma warning restore CA1031
                 {
                 }
-            }
         }
+
         return Win32.CallNextHookEx(0, code, wParam, lParam);
     }
 

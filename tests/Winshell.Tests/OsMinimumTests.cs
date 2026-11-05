@@ -26,6 +26,7 @@ public class OsMinimumTests
     private static void AssertPlatform(string path)
     {
         var text = File.ReadAllText(path);
-        Assert.Contains("<SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>", text, StringComparison.Ordinal);
+        Assert.Contains("<SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>", text,
+            StringComparison.Ordinal);
     }
 }

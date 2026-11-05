@@ -55,9 +55,10 @@ public abstract class NetworkDevice : ObservableObject
         Changed(old.Name != info.Name, nameof(Name));
         Changed(old.Address != info.Address, nameof(Address));
         Changed(old.State != info.State, nameof(State));
-        Changed((old.State == ConnectionState.Connected) != Connected, nameof(Connected));
+        Changed(old.State == ConnectionState.Connected != Connected, nameof(Connected));
         Networks.Sync(info.Networks, n => n.Name, i => i.Name,
-            i => Type == DeviceType.Wifi ? new WifiNetwork(this, i) : new Network(this, i), (n, i) => n.Update(i), n => n.Remove());
+            i => Type == DeviceType.Wifi ? new WifiNetwork(this, i) : new Network(this, i), (n, i) => n.Update(i),
+            n => n.Remove());
     }
 
     internal void Remove()

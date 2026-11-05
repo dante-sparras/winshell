@@ -57,14 +57,18 @@ public sealed class CliJsonOutputTests : IDisposable, IClassFixture<ProbeBuild>
     [Fact]
     public void The_instance_file_keeps_process_start_and_exited_at()
     {
-        var info = new InstanceInfo("id", 1, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "C:\\log.txt", 42, DateTime.Now);
+        var info = new InstanceInfo("id", 1, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "C:\\log.txt", 42,
+            DateTime.Now);
         var file = JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo);
         Assert.Contains("\"processStart\": 42", file, StringComparison.Ordinal);
         Assert.Contains("\"exitedAt\":", file, StringComparison.Ordinal);
     }
 
-    private ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Local), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
+    private ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Local),
+            ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
+    }
 
     public void Dispose()
     {
@@ -75,8 +79,10 @@ public sealed class CliJsonOutputTests : IDisposable, IClassFixture<ProbeBuild>
                 process.Kill();
                 process.WaitForExit();
             }
+
             process.Dispose();
         }
+
         try
         {
             Directory.Delete(_dir, true);

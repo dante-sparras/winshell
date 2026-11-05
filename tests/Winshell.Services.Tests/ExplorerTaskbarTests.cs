@@ -13,16 +13,25 @@ public class ExplorerTaskbarTests
 
         public int Restores { get; private set; }
 
-        public void Hide() => Hides++;
+        public void Hide()
+        {
+            Hides++;
+        }
 
-        public void Restore() => Restores++;
+        public void Restore()
+        {
+            Restores++;
+        }
     }
 
-    private static ExplorerTaskbarSession Session(Fake fake) => new(() =>
+    private static ExplorerTaskbarSession Session(Fake fake)
     {
-        fake.Created++;
-        return fake;
-    });
+        return new ExplorerTaskbarSession(() =>
+        {
+            fake.Created++;
+            return fake;
+        });
+    }
 
     [Fact]
     public void Leaving_it_off_never_calls_the_taskbar_and_exit_does_not_either()

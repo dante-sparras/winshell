@@ -22,10 +22,8 @@ internal static class OwnedWindows
     public static void Raise(nint owner, IEnumerable<HostWindow> windows)
     {
         foreach (var window in windows)
-        {
             if (window.Handle != 0 && Win32.GetWindowLongPtr(window.Handle, Win32.GWLP_HWNDPARENT) == owner)
                 PlaceAboveOwner(window.Handle);
-        }
     }
 
     private static void PlaceAboveOwner(nint window)
@@ -38,7 +36,8 @@ internal static class OwnedWindows
         if (above == window)
             return;
         // InsertAfter is the window above this one. Nothing above the owner means the top of the z-order.
-        Win32.SetWindowPos(window, above == 0 ? Win32.HWND_TOP : above, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
+        Win32.SetWindowPos(window, above == 0 ? Win32.HWND_TOP : above, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
     }
 
     private static bool OwnerChainContains(nint owner, nint window)
@@ -52,6 +51,7 @@ internal static class OwnedWindows
                 return false;
             owner = next;
         }
+
         return false;
     }
 }

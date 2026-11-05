@@ -143,7 +143,7 @@ Describe 'Check command' {
 
     BeforeEach {
         $script:EnvironmentBefore = @{}
-        foreach ($name in @('PATH', 'PSModulePath', 'WINSHELL_CHECK_LOG', 'WINSHELL_CHECK_RESULTS', 'WINSHELL_CHECK_FAIL_PESTER', 'WINSHELL_CHECK_FAIL_LINT')) {
+        foreach ($name in @('PATH', 'PSModulePath', 'WINSHELL_CHECK_LOG', 'WINSHELL_CHECK_RESULTS', 'WINSHELL_CHECK_FAIL_PESTER', 'WINSHELL_CHECK_FAIL_LINT', 'WINSHELL_CHECK_FAIL_FORMAT')) {
             $script:EnvironmentBefore[$name] = [Environment]::GetEnvironmentVariable($name)
         }
         $script:Stub = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
@@ -154,6 +154,7 @@ Describe 'Check command' {
         $env:WINSHELL_CHECK_RESULTS = Join-Path $script:Stub 'results'
         $env:WINSHELL_CHECK_FAIL_PESTER = $null
         $env:WINSHELL_CHECK_FAIL_LINT = $null
+        $env:WINSHELL_CHECK_FAIL_FORMAT = $null
         foreach ($linter in @('lychee', 'actionlint', 'zizmor')) {
             Set-Content -LiteralPath (Join-Path $script:Stub "$linter.ps1") -Value @'
 $tool = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name)
@@ -167,6 +168,7 @@ exit 0
         }
         Set-Content -LiteralPath (Join-Path $script:Stub 'dotnet.ps1') -Value @'
 "dotnet $($args -join ' ')" | Add-Content -LiteralPath $env:WINSHELL_CHECK_LOG
+if ($env:WINSHELL_CHECK_FAIL_FORMAT -and $args -contains 'cleanupcode') { exit 23 }
 if ($args[0] -eq 'test') {
     $dest = $args[[array]::IndexOf($args, '--results-directory') + 1]
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
@@ -196,11 +198,17 @@ function Invoke-Pester {
         Invoke-Check | Out-Null
         $LASTEXITCODE | Should -Be 0
         $calls = Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG
-        $calls | Should -HaveCount 4
         $calls[0] | Should -Match '^dotnet build '
-        $calls[1] | Should -Match '^dotnet format whitespace '
-        $calls[2] | Should -Match '--filter Category!=Package&Category!=Slow '
-        $calls[3] | Should -Be 'Pester tests/Scripts'
+        $calls[-2] | Should -Match '--filter Category!=Package&Category!=Slow '
+        $calls[-1] | Should -Be 'Pester tests/Scripts'
+    }
+
+    It 'stops before running tests when formatting verification fails' {
+        $env:WINSHELL_CHECK_FAIL_FORMAT = '1'
+        Invoke-Check 2>&1 | Out-Null
+        $LASTEXITCODE | Should -Be 1
+        $calls = @(Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG)
+        @($calls | Where-Object { $_ -match '^dotnet test |^Pester ' }) | Should -HaveCount 0
     }
 
     It 'runs only slow tests on an existing build and forwards the seed and hang timeout' {

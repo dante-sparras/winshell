@@ -35,9 +35,10 @@ internal static class DevSession
             _ = ShellExit.QuitAsync(shell, ExitIntent.None, patience, ShellExit.Ending.Always).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
         }
+
         try
         {
-            watch.Kill(entireProcessTree: true);
+            watch.Kill(true);
         }
         catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
         {
@@ -54,9 +55,10 @@ internal static class DevSession
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            RedirectStandardError = true
         };
-        foreach (var argument in new[] { "watch", "--non-interactive", "--project", project.ProjectFile, "run", "--no-launch-profile" })
+        foreach (var argument in new[]
+                     { "watch", "--non-interactive", "--project", project.ProjectFile, "run", "--no-launch-profile" })
             start.ArgumentList.Add(argument);
         // Its lines are what DevOutput reads, in the one form it knows.
         start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
@@ -68,9 +70,14 @@ internal static class DevSession
             Console.Error.WriteLine(ConfigurationProject.NeedsSdk);
             return 1;
         }
+
         // dotnet watch has a console of its own, which Ctrl+C, Ctrl+Break and closing this one never reach. Each of
         // those ends this process once its handler returns, so the handler stops the shell and dotnet watch first.
-        void Stop(PosixSignalContext context) => StopShellAndWatch(project, process, context.Signal == PosixSignal.SIGHUP);
+        void Stop(PosixSignalContext context)
+        {
+            StopShellAndWatch(project, process, context.Signal == PosixSignal.SIGHUP);
+        }
+
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
         using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Stop);
         using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Stop);
@@ -87,11 +94,12 @@ internal static class DevSession
                 await Show(project, notice);
             if (line.Contains(XamlReload.NeedsBuild, StringComparison.Ordinal))
             {
-                StopShellAndWatch(project, process, closing: false);
+                StopShellAndWatch(project, process, false);
                 await process.WaitForExitAsync();
                 return null;
             }
         }
+
         await process.WaitForExitAsync();
         return process.ExitCode;
     }

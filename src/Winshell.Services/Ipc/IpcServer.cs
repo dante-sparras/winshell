@@ -25,9 +25,12 @@ internal sealed class IpcServer : IDisposable
     // The signal callback runs on the UI thread, so a full queue drops the oldest value instead of waiting.
     // A command line holds at most 32767 characters, so a request from winshell is well under this once encoded.
     internal const int MaxRequestBytes = 256 * 1024;
+
     // A listener holds its client for as long as it runs, so this has to leave room for `winshell kill`.
     internal const int MaxClients = 64;
+
     internal const int MaxQueuedSignals = 1024;
+
     // winshell sends its line as soon as it connects. A client that does not, refused or not, gives its slot back.
     internal static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
@@ -50,7 +53,8 @@ internal sealed class IpcServer : IDisposable
     /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it, including when the configuration did not
     /// build and has registered nothing to call.
     /// </param>
-    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control, Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null, TimeProvider? time = null)
+    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control,
+        Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null, TimeProvider? time = null)
     {
         _time = time ?? TimeProvider.System;
         _pipe = pipe;
@@ -63,15 +67,20 @@ internal sealed class IpcServer : IDisposable
     }
 
     /// <summary>Creates the first instance. Fails if the name is already taken, instead of attaching to it.</summary>
-    internal static NamedPipeServerStream OpenFirst(string pipe) => Create(pipe, first: true);
+    internal static NamedPipeServerStream OpenFirst(string pipe)
+    {
+        return Create(pipe, true);
+    }
 
-    internal static NamedPipeServerStream OpenNext(string pipe) => Create(pipe, first: false);
+    internal static NamedPipeServerStream OpenNext(string pipe)
+    {
+        return Create(pipe, false);
+    }
 
     /// <summary>Opens a free pipe, trying a new <c>winshell-</c> id when the name is taken. At most eight tries.</summary>
     internal static NamedPipeServerStream OpenAvailable(ref string pipe)
     {
         for (var attempt = 0; attempt < 8; attempt++)
-        {
             try
             {
                 return OpenFirst(pipe);
@@ -80,7 +89,7 @@ internal sealed class IpcServer : IDisposable
             {
                 pipe = "winshell-" + Instances.NewId();
             }
-        }
+
         throw new IOException("The control pipe is already taken.");
     }
 
@@ -89,7 +98,7 @@ internal sealed class IpcServer : IDisposable
         var handle = PipeTrust.OpenServer(pipe, first);
         try
         {
-            return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true, isConnected: false, handle);
+            return new NamedPipeServerStream(PipeDirection.InOut, true, false, handle);
         }
         catch
         {
@@ -113,6 +122,7 @@ internal sealed class IpcServer : IDisposable
             first = _first;
             _first = null;
         }
+
         try
         {
             if (first is null || !StartWaiting(first, waiting))
@@ -127,6 +137,7 @@ internal sealed class IpcServer : IDisposable
                     stream!.Dispose();
                     return;
                 }
+
                 OpenInstances(waiting);
                 // A client that never finishes its line holds a slot until it leaves or the shell stops.
                 // Past the cap the connection is closed, so the wait does not grow with every connect.
@@ -148,8 +159,11 @@ internal sealed class IpcServer : IDisposable
                     });
                 }
                 else
+                {
                     stream!.Dispose();
+                }
             }
+
             Log.Default.Error("ipc", "The control pipe has no instance left, so commands can't reach this shell.");
         }
         finally
@@ -164,10 +178,9 @@ internal sealed class IpcServer : IDisposable
     {
         var failures = 0;
         while (waiting.Count < WaitingInstances && failures < OpenAttempts)
-        {
             try
             {
-                if (!StartWaiting(Create(_pipe, first: false), waiting))
+                if (!StartWaiting(Create(_pipe, false), waiting))
                     failures++;
             }
             catch (IOException e)
@@ -175,7 +188,6 @@ internal sealed class IpcServer : IDisposable
                 failures++;
                 Log.Default.Warn("ipc", $"Could not open the next control pipe instance: {e.Message}");
             }
-        }
     }
 
     private bool StartWaiting(NamedPipeServerStream stream, Dictionary<Task, NamedPipeServerStream> waiting)
@@ -206,13 +218,18 @@ internal sealed class IpcServer : IDisposable
             bool tooLong;
             using (var idle = new CancellationTokenSource(RequestTimeout, _time))
             using (var reading = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token, idle.Token))
+            {
                 (line, tooLong) = await ReadRequest(stream, reading.Token).ConfigureAwait(false);
+            }
+
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
             if (tooLong)
             {
-                await Send(writer, new IpcResponse(false, Error: "Request is too long."), _cancel.Token).ConfigureAwait(false);
+                await Send(writer, new IpcResponse(false, Error: "Request is too long."), _cancel.Token)
+                    .ConfigureAwait(false);
                 return;
             }
+
             if (line is null)
                 return;
             // Answered after the request is read, so the client has finished writing and reads the reason.
@@ -221,6 +238,7 @@ internal sealed class IpcServer : IDisposable
                 await Send(writer, new IpcResponse(false, Error: refusal), _cancel.Token).ConfigureAwait(false);
                 return;
             }
+
             IpcRequest? request;
             try
             {
@@ -230,26 +248,33 @@ internal sealed class IpcServer : IDisposable
             {
                 request = null;
             }
+
             if (request is null)
             {
-                await Send(writer, new IpcResponse(false, Error: "Malformed request."), _cancel.Token).ConfigureAwait(false);
+                await Send(writer, new IpcResponse(false, Error: "Malformed request."), _cancel.Token)
+                    .ConfigureAwait(false);
                 return;
             }
+
             if (IpcProtocol.ClientRefusal(request.Protocol) is { } mismatch)
             {
                 await Send(writer, new IpcResponse(false, Error: mismatch), _cancel.Token).ConfigureAwait(false);
                 return;
             }
-            if (IpcOps.ChecksRelease(request.Op) && IpcProtocol.ReleaseRefusal(ProductVersion.Current.Text, request.Winshell) is { } release)
+
+            if (IpcOps.ChecksRelease(request.Op) &&
+                IpcProtocol.ReleaseRefusal(ProductVersion.Current.Text, request.Winshell) is { } release)
             {
                 await Send(writer, new IpcResponse(false, Error: release), _cancel.Token).ConfigureAwait(false);
                 return;
             }
+
             if (request.Op is IpcOps.Listen or IpcOps.Wait)
             {
-                await Listen(request, writer, stream, once: request.Op == IpcOps.Wait).ConfigureAwait(false);
+                await Listen(request, writer, stream, request.Op == IpcOps.Wait).ConfigureAwait(false);
                 return;
             }
+
             var response = request.Op == IpcOps.Inspect
                 ? await Inspect(request).ConfigureAwait(false)
                 : await OnUiThread(() => Handle(request)).ConfigureAwait(false);
@@ -288,12 +313,13 @@ internal sealed class IpcServer : IDisposable
             {
                 IpcOps.Show when request.Json => new IpcResponse(true, CliJson.IpcShow(ipc.Describe())),
                 IpcOps.Show => new IpcResponse(true, ipc.Show()),
-                IpcOps.Call => new IpcResponse(true, ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
+                IpcOps.Call => new IpcResponse(true,
+                    ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
                 IpcOps.Prop => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
                 IpcOps.Kill => Kill(),
                 IpcOps.Reload => Reload(request),
                 IpcOps.Build => Build(request),
-                _ => new IpcResponse(false, Error: $"Unknown request {request.Op}."),
+                _ => new IpcResponse(false, Error: $"Unknown request {request.Op}.")
             };
         }
         catch (IpcException e)
@@ -347,14 +373,15 @@ internal sealed class IpcServer : IDisposable
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
-            SingleWriter = false,
+            SingleWriter = false
         });
         IDisposable? subscription = null;
         var error = await OnUiThread(() =>
         {
             try
             {
-                subscription = _control.Ipc.Listen(request.Target ?? "", request.Name ?? "", value => channel.Writer.TryWrite(value));
+                subscription = _control.Ipc.Listen(request.Target ?? "", request.Name ?? "",
+                    value => channel.Writer.TryWrite(value));
                 return null;
             }
             catch (IpcException e)
@@ -371,6 +398,7 @@ internal sealed class IpcServer : IDisposable
             await Send(writer, new IpcResponse(false, Error: error), _cancel.Token).ConfigureAwait(false);
             return;
         }
+
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token);
         Task<bool>? waiting = null;
         try
@@ -388,6 +416,7 @@ internal sealed class IpcServer : IDisposable
                     await Finish(gone).ConfigureAwait(false);
                     break;
                 }
+
                 pause.Cancel();
                 await Finish(gone).ConfigureAwait(false);
                 var signal = waiting;
@@ -429,7 +458,8 @@ internal sealed class IpcServer : IDisposable
             var count = 0;
             while (true)
             {
-                var n = await stream.ReadAsync(bytes.AsMemory(count, MaxRequestBytes + 1 - count), cancel).ConfigureAwait(false);
+                var n = await stream.ReadAsync(bytes.AsMemory(count, MaxRequestBytes + 1 - count), cancel)
+                    .ConfigureAwait(false);
                 if (n == 0)
                     return (null, false);
                 // A client sends one line, so nothing after the newline is lost. A listener sees a disconnect by a read of 0.
@@ -440,6 +470,7 @@ internal sealed class IpcServer : IDisposable
                         newline--;
                     return (Encoding.UTF8.GetString(bytes, 0, newline), false);
                 }
+
                 count += n;
                 if (count > MaxRequestBytes)
                     return (null, true);
@@ -488,19 +519,25 @@ internal sealed class IpcServer : IDisposable
     private void ReleaseClient()
     {
         lock (_limit)
+        {
             _clients--;
+        }
     }
 
     private void Track(NamedPipeServerStream stream)
     {
         lock (_limit)
+        {
             _serving.Add(stream);
+        }
     }
 
     private void Untrack(NamedPipeServerStream stream)
     {
         lock (_limit)
+        {
             _serving.Remove(stream);
+        }
     }
 
     /// <summary>Starts on the shell's thread and ends where the shell's work does, since a screenshot awaits WinUI.</summary>
@@ -544,8 +581,13 @@ internal sealed class IpcServer : IDisposable
         return tcs.Task;
     }
 
-    private static Task Send(StreamWriter writer, IpcResponse response, CancellationToken cancel) =>
-        writer.WriteLineAsync(JsonSerializer.Serialize(response with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text }, IpcJson.Default.IpcResponse).AsMemory(), cancel);
+    private static Task Send(StreamWriter writer, IpcResponse response, CancellationToken cancel)
+    {
+        return writer.WriteLineAsync(
+            JsonSerializer
+                .Serialize(response with { Protocol = IpcProtocol.Current, Winshell = ProductVersion.Current.Text },
+                    IpcJson.Default.IpcResponse).AsMemory(), cancel);
+    }
 
     public void Dispose()
     {
@@ -555,9 +597,11 @@ internal sealed class IpcServer : IDisposable
         _cancel.Cancel();
         NamedPipeServerStream[] open;
         lock (_limit)
-            open = [.. _serving];
-        foreach (var stream in open)
         {
+            open = [.. _serving];
+        }
+
+        foreach (var stream in open)
             try
             {
                 stream.Dispose();
@@ -565,7 +609,7 @@ internal sealed class IpcServer : IDisposable
             catch (Exception e) when (e is IOException or ObjectDisposedException)
             {
             }
-        }
+
         lock (_firstGate)
         {
             _first?.Dispose();

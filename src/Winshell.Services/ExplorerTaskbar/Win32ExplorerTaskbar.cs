@@ -26,9 +26,9 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         var sample = primary.Count > 0 ? primary[0] : secondary.Count > 0 ? secondary[0] : 0;
         var autohide = sample != 0 && Autohide(sample);
         foreach (var hwnd in primary)
-            Take(hwnd, primary: true, autohide);
+            Take(hwnd, true, autohide);
         foreach (var hwnd in secondary)
-            Take(hwnd, primary: false, autohide);
+            Take(hwnd, false, autohide);
     }
 
     public void Restore()
@@ -41,7 +41,10 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         _active = false;
     }
 
-    private bool NotTaken(nint hwnd) => _saved.All(s => s.Hwnd != hwnd);
+    private bool NotTaken(nint hwnd)
+    {
+        return _saved.All(s => s.Hwnd != hwnd);
+    }
 
     private void Take(nint hwnd, bool primary, bool autohide)
     {
@@ -57,6 +60,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
             var abd = AppBar(hwnd);
             saved.Removed = Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd) != 0;
         }
+
         Win32.ShowWindow(hwnd, Win32.SW_HIDE);
     }
 
@@ -105,11 +109,13 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
                 return true;
             }
         }
+
         if (Win32.GetWindowRect(hwnd, out rect) && rect.Width > 0 && rect.Height > 0)
         {
             edge = EdgeOf(hwnd, rect);
             return true;
         }
+
         edge = Win32.ABE_BOTTOM;
         rect = default;
         return false;
@@ -121,11 +127,18 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
             ? info.Bounds
             : window;
         if (window.Height <= window.Width)
-            return Math.Abs(window.Top - monitor.Top) < Math.Abs(monitor.Bottom - window.Bottom) ? Win32.ABE_TOP : Win32.ABE_BOTTOM;
-        return Math.Abs(window.Left - monitor.Left) < Math.Abs(monitor.Right - window.Right) ? Win32.ABE_LEFT : Win32.ABE_RIGHT;
+            return Math.Abs(window.Top - monitor.Top) < Math.Abs(monitor.Bottom - window.Bottom)
+                ? Win32.ABE_TOP
+                : Win32.ABE_BOTTOM;
+        return Math.Abs(window.Left - monitor.Left) < Math.Abs(monitor.Right - window.Right)
+            ? Win32.ABE_LEFT
+            : Win32.ABE_RIGHT;
     }
 
-    private static APPBARDATA AppBar(nint hwnd) => new() { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
+    private static APPBARDATA AppBar(nint hwnd)
+    {
+        return new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
+    }
 
     /// <summary>Explorer's windows of that class. A shell's tray host makes a <c>Shell_TrayWnd</c> of its own.</summary>
     internal static List<nint> Windows(string className)
@@ -137,6 +150,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
             if (pid != Environment.ProcessId && IsExplorer((int)pid))
                 found.Add(next);
         }
+
         return found;
     }
 
@@ -155,8 +169,10 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
     }
 
     /// <summary>False when the handle was destroyed or reused, so restore does not show some other window.</summary>
-    private static bool IsExplorerTaskbar(nint hwnd) =>
-        Win32.IsWindow(hwnd) && TopLevelWindows.ClassName(hwnd) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+    private static bool IsExplorerTaskbar(nint hwnd)
+    {
+        return Win32.IsWindow(hwnd) && TopLevelWindows.ClassName(hwnd) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+    }
 
     internal sealed class Saved
     {

@@ -85,6 +85,7 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
             Set(ref _isIdle, false, nameof(IsIdle));
             return;
         }
+
         var next = TimeSpan.FromSeconds(1);
         try
         {
@@ -99,6 +100,7 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
         {
             _log.Warn("power", e.Message);
         }
+
         _timer = _loop.Schedule(next, Check);
     }
 
@@ -106,8 +108,10 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
     /// When to look again. Before the timeout, at the moment it can pass, at most 5 s ahead. Once idle, or held
     /// awake past it, once a second.
     /// </summary>
-    internal static TimeSpan NextCheck(bool idle, double remaining) =>
-        !idle && remaining > 0 ? TimeSpan.FromSeconds(Math.Clamp(remaining, 0.25, 5)) : TimeSpan.FromSeconds(1);
+    internal static TimeSpan NextCheck(bool idle, double remaining)
+    {
+        return !idle && remaining > 0 ? TimeSpan.FromSeconds(Math.Clamp(remaining, 0.25, 5)) : TimeSpan.FromSeconds(1);
+    }
 
     /// <summary>Stops checking for idle.</summary>
     public void Dispose()

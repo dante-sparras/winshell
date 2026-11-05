@@ -11,14 +11,17 @@ namespace Winshell.ShellTests;
 [Trait("Category", "Slow")]
 public sealed class PanelWindowTests
 {
-    private static PanelWindow Panel(FrameworkElement content) => new()
+    private static PanelWindow Panel(FrameworkElement content)
     {
-        Anchors = Edges.Top | Edges.Left,
-        Margins = new Thickness(40, 40, 0, 0),
-        Width = 320,
-        Height = 60,
-        Content = content,
-    };
+        return new PanelWindow
+        {
+            Anchors = Edges.Top | Edges.Left,
+            Margins = new Thickness(40, 40, 0, 0),
+            Width = 320,
+            Height = 60,
+            Content = content
+        };
+    }
 
     [Fact]
     public async Task A_panel_lays_out_its_content_at_the_size_it_was_given()

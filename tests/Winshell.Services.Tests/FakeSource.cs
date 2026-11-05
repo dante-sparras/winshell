@@ -6,9 +6,18 @@ internal sealed class FakeSource<T>(T initial) : SnapshotSource<T>(initial)
 {
     protected override string Category => "test";
 
-    public void Push(T next) => Publish(next);
+    public void Push(T next)
+    {
+        Publish(next);
+    }
 
-    protected override Task StartAsync() => Task.CompletedTask;
+    protected override Task StartAsync()
+    {
+        return Task.CompletedTask;
+    }
 
-    protected override Task<T> ReadAsync() => Task.FromResult(Current);
+    protected override Task<T> ReadAsync()
+    {
+        return Task.FromResult(Current);
+    }
 }

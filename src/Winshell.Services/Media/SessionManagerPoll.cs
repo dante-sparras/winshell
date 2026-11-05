@@ -58,6 +58,7 @@ internal sealed class SessionManagerPoll
             _refreshRequested = true;
             return;
         }
+
         _refresh?.Dispose();
         _refresh = null;
         try
@@ -89,12 +90,14 @@ internal sealed class SessionManagerPoll
         {
             _warning.Failed(e);
         }
+
         _requestTimeout = _requestTimeout * 2 < LongestRequestTimeout ? _requestTimeout * 2 : LongestRequestTimeout;
         // A hung broker may never deliver Completed after Cancel, so retire the request here; its late callback is ignored.
         Complete(operation, AsyncStatus.Canceled);
     }
 
-    private void Complete(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation, AsyncStatus status)
+    private void Complete(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation,
+        AsyncStatus status)
     {
         if (!ReferenceEquals(_pending, operation))
             return;
@@ -111,7 +114,9 @@ internal sealed class SessionManagerPoll
                 _warning.Succeeded();
             }
             else if (status == AsyncStatus.Error)
+            {
                 _warning.Failed(operation.ErrorCode);
+            }
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -127,6 +132,7 @@ internal sealed class SessionManagerPoll
             {
                 _warning.Failed(e);
             }
+
             _pending = null;
             if (_refreshRequested)
             {
@@ -134,9 +140,14 @@ internal sealed class SessionManagerPoll
                 _loop.Post(Refresh);
             }
             else
+            {
                 ScheduleRefresh();
+            }
         }
     }
 
-    private void ScheduleRefresh() => _refresh = _loop.Schedule(RefreshInterval, Refresh);
+    private void ScheduleRefresh()
+    {
+        _refresh = _loop.Schedule(RefreshInterval, Refresh);
+    }
 }

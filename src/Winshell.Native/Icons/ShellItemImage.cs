@@ -16,7 +16,8 @@ internal static unsafe class ShellItemImage
     /// </summary>
     internal static (int Width, int Height, byte[] Bgra)? Icon(string parsingName, int size)
     {
-        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItemImageFactory).GUID, out var pointer) < 0 || pointer == 0)
+        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItemImageFactory).GUID, out var pointer) <
+            0 || pointer == 0)
             return null;
         IShellItemImageFactory? factory = null;
         try
@@ -58,8 +59,10 @@ internal static unsafe class ShellItemImage
         {
             // A positive height is a bottom-up DIB.
             var from = info.bmHeight > 0 ? height - 1 - y : y;
-            new ReadOnlySpan<byte>((byte*)info.bmBits + (long)from * info.bmWidthBytes, row).CopyTo(pixels.AsSpan(y * stride, row));
+            new ReadOnlySpan<byte>((byte*)info.bmBits + (long)from * info.bmWidthBytes, row).CopyTo(
+                pixels.AsSpan(y * stride, row));
         }
+
         return (width, height, pixels);
     }
 

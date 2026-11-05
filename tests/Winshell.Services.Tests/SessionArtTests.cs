@@ -79,12 +79,16 @@ public sealed class SessionArtTests
             await writer.StoreAsync();
             writer.DetachStream();
         }
+
         stream.Seek(0);
         return RandomAccessStreamReference.CreateFromStream(stream);
     }
 
     private sealed class Unreadable(Exception? error = null) : IRandomAccessStreamReference
     {
-        public IAsyncOperation<IRandomAccessStreamWithContentType> OpenReadAsync() => throw (error ?? new COMException("the app is gone"));
+        public IAsyncOperation<IRandomAccessStreamWithContentType> OpenReadAsync()
+        {
+            throw error ?? new COMException("the app is gone");
+        }
     }
 }

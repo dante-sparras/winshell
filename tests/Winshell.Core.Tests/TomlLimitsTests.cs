@@ -9,12 +9,22 @@ public sealed class TomlLimitsTests
 {
     private sealed class Settings(string path, IEventLoop loop, Log log) : TomlFile(path, loop, log)
     {
-        public string Name { get; set => Set(ref field, value); } = "default";
+        public string Name
+        {
+            get;
+            set => Set(ref field, value);
+        } = "default";
     }
 
-    private static string Dotted(int segments) => string.Join('.', Enumerable.Repeat("a", segments)) + " = 1";
+    private static string Dotted(int segments)
+    {
+        return string.Join('.', Enumerable.Repeat("a", segments)) + " = 1";
+    }
 
-    private static string Nested(int depth) => "a = " + new string('[', depth) + "1" + new string(']', depth);
+    private static string Nested(int depth)
+    {
+        return "a = " + new string('[', depth) + "1" + new string(']', depth);
+    }
 
     [Fact]
     public void The_budgets_sit_above_a_preferences_file()
@@ -28,19 +38,19 @@ public sealed class TomlLimitsTests
             StringComparison.Ordinal);
 
         const string Preferences = """
-            colorScheme = "system"
-            accentColor = ""
-            backdrop = "acrylic"
-            taskbarCentered = true
-            taskbarAutoHide = false
-            taskbarAllScreens = true
-            taskbarAppsOn = "all"
-            startRecommended = true
-            hiddenNotificationApps = [{ id = "Contoso.Chat", name = "Chat" }]
-            startHotkey = "Win"
-            settingsHotkey = ""
-            autoUpdate = true
-            """;
+                                   colorScheme = "system"
+                                   accentColor = ""
+                                   backdrop = "acrylic"
+                                   taskbarCentered = true
+                                   taskbarAutoHide = false
+                                   taskbarAllScreens = true
+                                   taskbarAppsOn = "all"
+                                   startRecommended = true
+                                   hiddenNotificationApps = [{ id = "Contoso.Chat", name = "Chat" }]
+                                   startHotkey = "Win"
+                                   settingsHotkey = ""
+                                   autoUpdate = true
+                                   """;
         Assert.True(TomlDocument.TryParse("preferences.toml", Preferences, out var document, out var error), error);
         Assert.Equal("system", document.Values["colorScheme"]);
     }

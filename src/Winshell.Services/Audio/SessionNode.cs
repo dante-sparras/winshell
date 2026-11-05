@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Windows.Win32.Media.Audio;
 using Winshell.Native;
@@ -21,7 +23,8 @@ internal sealed class SessionNode : AudioGraphNode
     private EventHandler? _exited;
     private bool _released;
 
-    public SessionNode(AudioGraph graph, EndpointNode endpoint, IAudioSessionControl2 control, string instanceId, AudioSessionState state)
+    public SessionNode(AudioGraph graph, EndpointNode endpoint, IAudioSessionControl2 control, string instanceId,
+        AudioSessionState state)
         : base(graph.NextId())
     {
         _graph = graph;
@@ -84,7 +87,7 @@ internal sealed class SessionNode : AudioGraphNode
             if (_process.HasExited)
                 _graph.Post(() => _graph.RemoveSession(this));
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
         {
             // The process is gone, or cannot be watched; the session's own state still removes it.
             _process = null;
@@ -104,6 +107,7 @@ internal sealed class SessionNode : AudioGraphNode
             _process = null;
             _exited = null;
         }
+
         try
         {
             _control.UnregisterAudioSessionNotification(_events);
@@ -111,6 +115,7 @@ internal sealed class SessionNode : AudioGraphNode
         catch (COMException)
         {
         }
+
         // The volume and the meter are this same object.
         CoreAudio.Release(_control);
     }
@@ -151,8 +156,8 @@ internal sealed class SessionNode : AudioGraphNode
             ["appName"] = appName,
             // The program's own icon: IconImage and Shell.iconPath accept a program's path.
             ["icon"] = system ? "audio-volume-high" : path ?? "",
-            ["processId"] = _processId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["processName"] = binary,
+            ["processId"] = _processId.ToString(CultureInfo.InvariantCulture),
+            ["processName"] = binary
         };
         if (path is null && !system)
             Properties.Remove("icon");
@@ -181,6 +186,7 @@ internal sealed class SessionNode : AudioGraphNode
             _graph.RemoveSession(this);
             return;
         }
+
         ApplyActive(state == AudioSessionState.AudioSessionStateActive);
     }
 
@@ -198,7 +204,10 @@ internal sealed class SessionNode : AudioGraphNode
             return 0;
         }
 
-        public int OnIconPathChanged(string path, ref Guid context) => 0;
+        public int OnIconPathChanged(string path, ref Guid context)
+        {
+            return 0;
+        }
 
         public int OnSimpleVolumeChanged(float volume, bool mute, ref Guid context)
         {
@@ -210,9 +219,15 @@ internal sealed class SessionNode : AudioGraphNode
             return 0;
         }
 
-        public int OnChannelVolumeChanged(uint count, nint volumes, uint changedChannel, ref Guid context) => 0;
+        public int OnChannelVolumeChanged(uint count, nint volumes, uint changedChannel, ref Guid context)
+        {
+            return 0;
+        }
 
-        public int OnGroupingParamChanged(ref Guid param, ref Guid context) => 0;
+        public int OnGroupingParamChanged(ref Guid param, ref Guid context)
+        {
+            return 0;
+        }
 
         public int OnStateChanged(AudioSessionState state)
         {

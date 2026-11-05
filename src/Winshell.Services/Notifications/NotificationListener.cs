@@ -20,7 +20,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     private long _revision;
 
     internal NotificationListener(IEventLoop loop)
-        : this(loop, Log.Default, new WindowsNotificationBackend(), monitor: true)
+        : this(loop, Log.Default, new WindowsNotificationBackend(), true)
     {
     }
 
@@ -62,7 +62,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     {
         NotificationMode.Unrestricted => NotificationState.Off,
         NotificationMode.PriorityOnly or NotificationMode.AlarmsOnly => NotificationState.On,
-        _ => NotificationState.Unknown,
+        _ => NotificationState.Unknown
     };
 
     /// <summary>Why access or the last operation failed.</summary>
@@ -79,7 +79,10 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     internal CancellationToken Cancellation => _stop.Token;
 
     /// <summary>Asks Windows for access and returns at once. Call from a button in a foreground window.</summary>
-    public void RequestAccess() => _ = RequestAccessAsync();
+    public void RequestAccess()
+    {
+        _ = RequestAccessAsync();
+    }
 
     internal async Task RequestAccessAsync()
     {
@@ -135,8 +138,14 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                     await RefreshAsync().ConfigureAwait(false);
                     warning.Succeeded();
                 }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
-                catch (ObjectDisposedException) { return; }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
 #pragma warning disable CA1031 // One failed read must not stop the rest of the poll.
                 catch (Exception e)
 #pragma warning restore CA1031
@@ -144,12 +153,18 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                     warning.Failed(e);
                     wait = TimeSpan.FromSeconds(2);
                 }
+
                 try
                 {
                     await changed.WaitAsync(wait, cancellation).ConfigureAwait(false);
-                    while (changed.Wait(0, cancellation)) { }
+                    while (changed.Wait(0, cancellation))
+                    {
+                    }
                 }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                    return;
+                }
             }
         }
         finally
@@ -171,8 +186,14 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                     Apply(snapshot);
             });
         }
-        catch (OperationCanceledException) { return; }
-        catch (ObjectDisposedException) { return; }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
         catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
         {
             Post(() =>
@@ -200,7 +221,8 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             return;
 
         List<Notification> added = [];
-        var ordered = snapshot.Notifications.DistinctBy(t => t.Id).OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id);
+        var ordered = snapshot.Notifications.DistinctBy(t => t.Id).OrderByDescending(t => t.CreatedAt)
+            .ThenByDescending(t => t.Id);
         Notifications.Sync(ordered, n => n.Id, t => t.Id, t =>
         {
             var notification = new Notification(this, t);
@@ -217,9 +239,11 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         Set(ref _accessStatus, status, nameof(AccessStatus));
         Set(ref _error, status switch
         {
-            NotificationAccessStatus.Denied => "Notification access was denied. Allow access in Windows Settings to use the listener.",
-            NotificationAccessStatus.Unavailable => "Notification access is unavailable. A package identity with the userNotificationListener capability may be required.",
-            _ => "",
+            NotificationAccessStatus.Denied =>
+                "Notification access was denied. Allow access in Windows Settings to use the listener.",
+            NotificationAccessStatus.Unavailable =>
+                "Notification access is unavailable. A package identity with the userNotificationListener capability may be required.",
+            _ => ""
         }, nameof(Error));
         if (status != NotificationAccessStatus.Allowed && status != NotificationAccessStatus.Requesting)
         {
@@ -233,12 +257,17 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 
     private void SyncGroups()
     {
-        var grouped = Notifications.GroupBy(n => n.AppId.Length > 0 ? n.AppId : "notification:" + n.Id.ToString(CultureInfo.InvariantCulture)).ToArray();
-        Groups.Sync(grouped, g => g.Key, g => g.Key, g => new NotificationGroup(this, g.Key), (group, items) => group.Update([.. items]));
+        var grouped = Notifications.GroupBy(n =>
+            n.AppId.Length > 0 ? n.AppId : "notification:" + n.Id.ToString(CultureInfo.InvariantCulture)).ToArray();
+        Groups.Sync(grouped, g => g.Key, g => g.Key, g => new NotificationGroup(this, g.Key),
+            (group, items) => group.Update([.. items]));
     }
 
     /// <summary>Dismisses this listener's current snapshot. Returns whether every removal succeeded; failed ones stay.</summary>
-    public bool ClearAll() => DismissMany(Notifications.ToArray());
+    public bool ClearAll()
+    {
+        return DismissMany(Notifications.ToArray());
+    }
 
     internal bool DismissMany(IEnumerable<Notification> notifications)
     {
@@ -253,6 +282,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 success = false;
                 continue;
             }
+
             try
             {
                 _backend.Dismiss(notification.Id);
@@ -267,6 +297,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 failure = e.Message;
             }
         }
+
         if (failure is not null)
             Fail(failure);
         else if (success)
@@ -276,15 +307,19 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 
     internal void Fail(string message)
     {
-        Set(ref _error, string.IsNullOrWhiteSpace(message) ? "The Windows notification operation failed." : message, nameof(Error));
+        Set(ref _error, string.IsNullOrWhiteSpace(message) ? "The Windows notification operation failed." : message,
+            nameof(Error));
         OperationFailed?.Invoke(_error);
     }
 
-    private void Post(Action action) => _loop.Post(() =>
+    private void Post(Action action)
     {
-        if (!_disposed)
-            action();
-    });
+        _loop.Post(() =>
+        {
+            if (!_disposed)
+                action();
+        });
+    }
 
     /// <summary>Stops watching Notification Center and releases the app logos it read.</summary>
     public void Dispose()
@@ -346,12 +381,16 @@ public sealed class Notification : ObservableObject
     public bool CanInvoke => false;
 
     /// <summary>Removes the notification from Windows. Returns true only when Windows accepted the removal.</summary>
-    public bool Dismiss() => _listener.DismissMany([this]);
+    public bool Dismiss()
+    {
+        return _listener.DismissMany([this]);
+    }
 
     /// <summary>UserNotificationListener exposes no activation arguments or actions for other apps.</summary>
     public bool Invoke()
     {
-        _listener.Fail("Windows UserNotificationListener does not support invoking another app's notification. Use Windows Notification Center to activate it.");
+        _listener.Fail(
+            "Windows UserNotificationListener does not support invoking another app's notification. Use Windows Notification Center to activate it.");
         return false;
     }
 
@@ -386,7 +425,8 @@ public sealed class Notification : ObservableObject
         if (source is null || key is null)
             return;
         var request = _iconRequest;
-        var label = _toast.AppName.Length > 0 ? _toast.AppName : _toast.AppId.Length > 0 ? _toast.AppId : "a notification";
+        var label = _toast.AppName.Length > 0 ? _toast.AppName :
+            _toast.AppId.Length > 0 ? _toast.AppId : "a notification";
         var (loop, log, cancellation) = (_listener.Loop, _listener.Log, _listener.Cancellation);
         // Not the thread pool. Publishing the url has to run even when every pool thread is busy.
         var thread = new Thread(() =>
@@ -397,7 +437,7 @@ public sealed class Notification : ObservableObject
         })
         {
             IsBackground = true,
-            Name = "Notification icon",
+            Name = "Notification icon"
         };
         thread.Start();
     }
@@ -410,6 +450,7 @@ public sealed class Notification : ObservableObject
             NotificationAppIcons.Release(read.Hold);
             return;
         }
+
         _hold = read.Hold;
         Set(ref _appIcon, read.Url, nameof(AppIcon));
     }
@@ -450,7 +491,10 @@ public sealed class NotificationGroup : ObservableObject
     public ObservableCollection<Notification> Notifications { get; } = [];
 
     /// <summary>Dismisses the group's current notifications. Returns whether every removal succeeded; failed ones stay.</summary>
-    public bool Dismiss() => _listener.DismissMany(Notifications.ToArray());
+    public bool Dismiss()
+    {
+        return _listener.DismissMany(Notifications.ToArray());
+    }
 
     internal void Update(Notification[] items)
     {

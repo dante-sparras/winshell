@@ -7,14 +7,26 @@ namespace Winshell.Native;
 internal static class BluetoothRadios
 {
     /// <summary>Whether a radio is discoverable.</summary>
-    internal static bool IsDiscoverable() => PInvoke.BluetoothIsDiscoverable(HANDLE.Null);
+    internal static bool IsDiscoverable()
+    {
+        return PInvoke.BluetoothIsDiscoverable(HANDLE.Null);
+    }
 
     /// <summary>Whether a radio accepts incoming connections.</summary>
-    internal static bool IsConnectable() => PInvoke.BluetoothIsConnectable(HANDLE.Null);
+    internal static bool IsConnectable()
+    {
+        return PInvoke.BluetoothIsConnectable(HANDLE.Null);
+    }
 
     /// <summary>Whether Windows changed discovery on a radio.</summary>
-    internal static bool EnableDiscovery(bool enabled) => PInvoke.BluetoothEnableDiscovery(HANDLE.Null, enabled);
+    internal static bool EnableDiscovery(bool enabled)
+    {
+        return PInvoke.BluetoothEnableDiscovery(HANDLE.Null, enabled);
+    }
 
     /// <summary>Whether Windows changed incoming connections on a radio.</summary>
-    internal static bool EnableIncomingConnections(bool enabled) => PInvoke.BluetoothEnableIncomingConnections(HANDLE.Null, enabled);
+    internal static bool EnableIncomingConnections(bool enabled)
+    {
+        return PInvoke.BluetoothEnableIncomingConnections(HANDLE.Null, enabled);
+    }
 }

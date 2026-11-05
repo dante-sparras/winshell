@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.Tests;
 
 /// <summary>
@@ -37,12 +35,15 @@ public class CliErrorTests
         var list = WinshellCli.Run(["list"], local);
         var kill = WinshellCli.Run(["kill"], local);
 
-        Assert.Equal((0, "No running instances. Start one with winshell run." + Environment.NewLine, ""), (list.Code, list.Output, list.Error));
+        Assert.Equal((0, "No running instances. Start one with winshell run." + Environment.NewLine, ""),
+            (list.Code, list.Output, list.Error));
         Assert.Equal((1, "", "No running instances." + Environment.NewLine), (kill.Code, kill.Output, kill.Error));
     }
 
-    private static ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(
+    private static ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-error-absent")));
+    }
 }

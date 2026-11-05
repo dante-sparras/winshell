@@ -11,18 +11,27 @@ namespace Winshell.Tests;
 public sealed class ShellExitTests : IDisposable
 {
     private readonly string _pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
+
     // cmd waits on its open input. Its banner stays out of this process's output, which carries xUnit's results.
     private readonly Process _process = Process.Start(
-        new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true })!;
+        new ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true
+        })!;
+
     private readonly ShellExit.Supervision _supervision;
 
     /// <summary>Waits as long as the test does, so only the shell's exit ends a quit.</summary>
     private static readonly ShellExit.Patience Patient = new(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
-    public ShellExitTests() => _supervision = new ShellExit.Supervision(_process.Id);
+    public ShellExitTests()
+    {
+        _supervision = new ShellExit.Supervision(_process.Id);
+    }
 
     private InstanceInfo Instance => new(
-        "abc123", _process.Id, "shell", @"C:\cfg\MyShell.exe", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), _pipe, "log.txt",
+        "abc123", _process.Id, "shell", @"C:\cfg\MyShell.exe", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        _pipe, "log.txt",
         _process.StartTime.ToUniversalTime().Ticks, ProcessName: _process.ProcessName);
 
     /// <summary>A shell posts its quit before it answers, so it can exit before its answer is written.</summary>
@@ -87,6 +96,7 @@ public sealed class ShellExitTests : IDisposable
             _process.Kill();
             _process.WaitForExit(5000);
         }
+
         _supervision.Dispose();
         _process.Dispose();
     }

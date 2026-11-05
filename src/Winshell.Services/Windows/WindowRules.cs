@@ -22,14 +22,19 @@ internal static class WindowRules
     }
 
     /// <summary>The AppUserModelID, or else the program's file name in lower case without the extension.</summary>
-    public static string AppId(string appUserModelId, string executable) => AppId(appUserModelId, "", executable);
+    public static string AppId(string appUserModelId, string executable)
+    {
+        return AppId(appUserModelId, "", executable);
+    }
 
     /// <summary>
     /// A path the icon provider draws. A packaged app's id contains <c>!</c>, and its icon is the one Start shows
     /// for that id. Every other window uses its program's icon.
     /// </summary>
-    public static string IconPath(string appUserModelId, string executable) =>
-        appUserModelId.Contains('!') ? @"shell:AppsFolder\" + appUserModelId : executable;
+    public static string IconPath(string appUserModelId, string executable)
+    {
+        return appUserModelId.Contains('!') ? @"shell:AppsFolder\" + appUserModelId : executable;
+    }
 
     /// <summary>A minimized or maximized window moves by its restored rectangle. A normal window moves by its current one.</summary>
     public static RECT RectangleToMove(bool minimized, bool maximized, RECT current, RECT restored)
@@ -43,10 +48,17 @@ internal static class WindowRules
     /// How far a window's restored rectangle is offset from screen coordinates. Windows reports it in workspace
     /// coordinates, which start at the primary monitor's work area, unless the window is a tool window.
     /// </summary>
-    public static (int X, int Y) WorkspaceOffset(RECT primaryMonitor, RECT primaryWork, bool toolWindow) =>
-        toolWindow || primaryWork.Width <= 0 || primaryWork.Height <= 0 ? (0, 0) : (primaryWork.Left - primaryMonitor.Left, primaryWork.Top - primaryMonitor.Top);
+    public static (int X, int Y) WorkspaceOffset(RECT primaryMonitor, RECT primaryWork, bool toolWindow)
+    {
+        return toolWindow || primaryWork.Width <= 0 || primaryWork.Height <= 0
+            ? (0, 0)
+            : (primaryWork.Left - primaryMonitor.Left, primaryWork.Top - primaryMonitor.Top);
+    }
 
-    public static RECT Shift(RECT rect, int x, int y) => new(rect.Left + x, rect.Top + y, rect.Right + x, rect.Bottom + y);
+    public static RECT Shift(RECT rect, int x, int y)
+    {
+        return new RECT(rect.Left + x, rect.Top + y, rect.Right + x, rect.Bottom + y);
+    }
 
     /// <summary>
     /// Where a window goes on another monitor: the same logical offset and size, in the target's physical pixels.
@@ -90,8 +102,10 @@ internal static class WindowRules
     /// Whether a WinEvent is about a window itself and not a caret, a cursor, or an object inside one. The caret and
     /// cursor send <c>EVENT_OBJECT_LOCATIONCHANGE</c> on every move.
     /// </summary>
-    public static bool IsWindowObject(int idObject, int idChild) =>
-        idObject == Win32.OBJID_WINDOW && idChild == Win32.CHILDID_SELF;
+    public static bool IsWindowObject(int idObject, int idChild)
+    {
+        return idObject == Win32.OBJID_WINDOW && idChild == Win32.CHILDID_SELF;
+    }
 
     /// <summary>Whether a WinEvent names a top-level window the list should read again.</summary>
     public static bool MarksWindow(uint eventType, nint hwnd, int idObject, int idChild, bool tracked, bool isRoot)
@@ -105,27 +119,37 @@ internal static class WindowRules
     }
 
     /// <summary>Whether a window with this style and rectangle is fullscreen on a monitor: no title bar, and covering all of it.</summary>
-    public static bool CoversMonitor(long style, RECT window, RECT monitor) =>
-        (style & Win32.WS_CAPTION) != Win32.WS_CAPTION
-        && window.Left <= monitor.Left && window.Top <= monitor.Top && window.Right >= monitor.Right && window.Bottom >= monitor.Bottom;
+    public static bool CoversMonitor(long style, RECT window, RECT monitor)
+    {
+        return (style & Win32.WS_CAPTION) != Win32.WS_CAPTION
+               && window.Left <= monitor.Left && window.Top <= monitor.Top && window.Right >= monitor.Right &&
+               window.Bottom >= monitor.Bottom;
+    }
 
     /// <summary>Whether a WinEvent can move the foreground from one window to another.</summary>
-    public static bool MarksForeground(uint eventType) =>
-        eventType is Win32.EVENT_SYSTEM_FOREGROUND
+    public static bool MarksForeground(uint eventType)
+    {
+        return eventType is Win32.EVENT_SYSTEM_FOREGROUND
             or Win32.EVENT_SYSTEM_MINIMIZESTART
             or Win32.EVENT_SYSTEM_MINIMIZEEND
             or Win32.EVENT_OBJECT_DESTROY
             or Win32.EVENT_OBJECT_HIDE;
+    }
 
     /// <summary>Whether a shell hook message is <c>HSHELL_FLASH</c>: a window flashed to ask for attention.</summary>
-    public static bool IsFlash(nint code) => code == ShellHookWindow.Flash;
+    public static bool IsFlash(nint code)
+    {
+        return code == ShellHookWindow.Flash;
+    }
 
     /// <summary>
     /// Keeps the windows that want attention current, as the taskbar does: a window wants it from when it flashes
     /// until it is activated or leaves the list.
     /// </summary>
-    public static void SettleAttention(HashSet<nint> wanting, nint active, Func<nint, bool> listed) =>
+    public static void SettleAttention(HashSet<nint> wanting, nint active, Func<nint, bool> listed)
+    {
         wanting.RemoveWhere(hwnd => hwnd == active || !listed(hwnd));
+    }
 
     /// <summary>
     /// The part of a window a preview shows, relative to the window's corner: its visible frame, without the

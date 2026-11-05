@@ -11,7 +11,10 @@ internal static class MonitorSize
 {
     private static readonly MonitorSizeCache Cache = new(Query, TimeSpan.FromMilliseconds(250));
 
-    internal static (double WidthMm, double HeightMm) Read(string interfaceId) => Cache.Read(interfaceId);
+    internal static (double WidthMm, double HeightMm) Read(string interfaceId)
+    {
+        return Cache.Read(interfaceId);
+    }
 
     private static async Task<(double WidthMm, double HeightMm)> Query(string interfaceId)
     {
@@ -42,7 +45,8 @@ internal static class MonitorSize
 /// </summary>
 internal sealed class MonitorSizeCache(Func<string, Task<(double WidthMm, double HeightMm)>> query, TimeSpan wait)
 {
-    private readonly ConcurrentDictionary<string, Task<(double WidthMm, double HeightMm)>> _queries = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Task<(double WidthMm, double HeightMm)>> _queries =
+        new(StringComparer.Ordinal);
 
     internal (double WidthMm, double HeightMm) Read(string interfaceId)
     {

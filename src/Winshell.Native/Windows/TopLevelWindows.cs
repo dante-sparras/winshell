@@ -30,6 +30,7 @@ internal static unsafe class TopLevelWindows
         {
             handle.Free();
         }
+
         return windows;
     }
 
@@ -59,7 +60,10 @@ internal static unsafe class TopLevelWindows
         return new string(buffer, 0, Math.Clamp(got, 0, length - 1));
     }
 
-    internal static bool HasTitle(nint hwnd) => PInvoke.GetWindowTextLength((HWND)hwnd) > 0;
+    internal static bool HasTitle(nint hwnd)
+    {
+        return PInvoke.GetWindowTextLength((HWND)hwnd) > 0;
+    }
 
     /// <summary>The window's class name, or empty when it cannot be read.</summary>
     internal static string ClassName(nint hwnd)
@@ -70,46 +74,74 @@ internal static unsafe class TopLevelWindows
     }
 
     /// <summary>Whether this is the desktop window Explorer draws the wallpaper and icons in.</summary>
-    internal static bool IsShellWindow(nint hwnd) => hwnd == (nint)PInvoke.GetShellWindow();
+    internal static bool IsShellWindow(nint hwnd)
+    {
+        return hwnd == (nint)PInvoke.GetShellWindow();
+    }
 
     /// <summary>Whether DWM hides the window, as it does a window on another virtual desktop or a suspended app.</summary>
     internal static bool IsCloaked(nint hwnd)
     {
         int cloaked;
-        return PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_CLOAKED, &cloaked, sizeof(int)).Succeeded && cloaked != 0;
+        return PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_CLOAKED, &cloaked, sizeof(int))
+            .Succeeded && cloaked != 0;
     }
 
-    internal static bool HasChildStyle(nint hwnd) =>
-        ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE) & (long)WINDOW_STYLE.WS_CHILD) != 0;
+    internal static bool HasChildStyle(nint hwnd)
+    {
+        return ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE) & (long)WINDOW_STYLE.WS_CHILD) != 0;
+    }
 
     /// <summary>The top-level window that holds this one, or 0.</summary>
-    internal static nint RootOf(nint hwnd) => Win32.GetAncestor(hwnd, (uint)GET_ANCESTOR_FLAGS.GA_ROOT);
+    internal static nint RootOf(nint hwnd)
+    {
+        return Win32.GetAncestor(hwnd, (uint)GET_ANCESTOR_FLAGS.GA_ROOT);
+    }
 
     /// <summary>The window's visible frame in screen pixels, without the invisible resize borders.</summary>
     internal static bool TryFrameBounds(nint hwnd, out RECT frame)
     {
         RECT bounds = default;
-        var ok = PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, &bounds, (uint)sizeof(RECT)).Value == 0;
+        var ok = PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, &bounds,
+            (uint)sizeof(RECT)).Value == 0;
         frame = bounds;
         return ok;
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
-    internal static void Close(nint hwnd) => Win32.PostMessageW(hwnd, Win32.WM_SYSCOMMAND, (nint)PInvoke.SC_CLOSE, 0);
+    internal static void Close(nint hwnd)
+    {
+        Win32.PostMessageW(hwnd, Win32.WM_SYSCOMMAND, (nint)PInvoke.SC_CLOSE, 0);
+    }
 
-    internal static void Restore(nint hwnd) => PInvoke.ShowWindowAsync((HWND)hwnd, SHOW_WINDOW_CMD.SW_RESTORE);
+    internal static void Restore(nint hwnd)
+    {
+        PInvoke.ShowWindowAsync((HWND)hwnd, SHOW_WINDOW_CMD.SW_RESTORE);
+    }
 
-    internal static void Maximize(nint hwnd) => PInvoke.ShowWindowAsync((HWND)hwnd, SHOW_WINDOW_CMD.SW_MAXIMIZE);
+    internal static void Maximize(nint hwnd)
+    {
+        PInvoke.ShowWindowAsync((HWND)hwnd, SHOW_WINDOW_CMD.SW_MAXIMIZE);
+    }
 
-    internal static void Minimize(nint hwnd) => PInvoke.ShowWindowAsync((HWND)hwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);
+    internal static void Minimize(nint hwnd)
+    {
+        PInvoke.ShowWindowAsync((HWND)hwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);
+    }
 
     /// <summary>Puts the window at the top of the z-order without activating it.</summary>
-    internal static void Raise(nint hwnd) =>
-        Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | (uint)SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS);
+    internal static void Raise(nint hwnd)
+    {
+        Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | (uint)SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS);
+    }
 
     /// <summary>Moves and sizes the window to <paramref name="rect"/>, in screen pixels, without activating it.</summary>
-    internal static void Move(nint hwnd, RECT rect) =>
-        Win32.SetWindowPos(hwnd, 0, rect.Left, rect.Top, rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | (uint)SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS);
+    internal static void Move(nint hwnd, RECT rect)
+    {
+        Win32.SetWindowPos(hwnd, 0, rect.Left, rect.Top, rect.Width, rect.Height,
+            Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | (uint)SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS);
+    }
 
     /// <summary>
     /// The window's placement, with its restored rectangle in workspace coordinates. False when Windows does not say.
@@ -127,7 +159,8 @@ internal static unsafe class TopLevelWindows
     internal static void Place(nint hwnd, WINDOWPLACEMENT placement, RECT normal, bool minimized, bool maximized)
     {
         placement.Normal = normal;
-        placement.ShowCmd = (uint)(minimized ? Win32.SW_SHOWMINIMIZED : maximized ? (int)SHOW_WINDOW_CMD.SW_MAXIMIZE : Win32.SW_SHOWNORMAL);
+        placement.ShowCmd = (uint)(minimized ? Win32.SW_SHOWMINIMIZED :
+            maximized ? (int)SHOW_WINDOW_CMD.SW_MAXIMIZE : Win32.SW_SHOWNORMAL);
         placement.Flags |= (uint)WINDOWPLACEMENT_FLAGS.WPF_ASYNCWINDOWPLACEMENT;
         Win32.SetWindowPlacement(hwnd, placement);
     }

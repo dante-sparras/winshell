@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using global::Windows.ApplicationModel;
-using global::Windows.Management.Deployment;
+using System.Security;
+using Windows.ApplicationModel;
+using Windows.Management.Deployment;
 using Winshell.Native;
 
 namespace Winshell.Apps;
@@ -9,7 +11,8 @@ namespace Winshell.Apps;
 /// <summary>The apps and the usage from one scan.</summary>
 internal sealed class AppSnapshot
 {
-    public static readonly AppSnapshot Empty = new([], new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase));
+    public static readonly AppSnapshot Empty = new([],
+        new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase));
 
     public AppSnapshot(IReadOnlyList<AppRecord> entries, IReadOnlyDictionary<string, AppUsage> usage)
     {
@@ -26,15 +29,11 @@ internal sealed class AppSnapshot
         if (Entries.Count != other.Entries.Count || Usage.Count != other.Usage.Count)
             return false;
         for (var i = 0; i < Entries.Count; i++)
-        {
             if (!AppIndex.Same(Entries[i], other.Entries[i]))
                 return false;
-        }
         foreach (var (key, value) in Usage)
-        {
             if (!other.Usage.TryGetValue(key, out var theirs) || theirs != value)
                 return false;
-        }
         return true;
     }
 }
@@ -45,18 +44,21 @@ internal sealed class AppSnapshot
 /// </summary>
 internal sealed class AppCatalog : IAppsBackend, IDisposable
 {
-    public static IReadOnlyList<string> ProgramsFolders() =>
-    [
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
-        Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-    ];
+    public static IReadOnlyList<string> ProgramsFolders()
+    {
+        return
+        [
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs)
+        ];
+    }
 
     public static AppCatalog Shared { get; } = new(
         ProgramsFolders(),
         PackagedApps.Read,
         AppUsageReader.Read,
         TimeSpan.FromSeconds(1),
-        watchPackages: true);
+        true);
 
     private readonly object _gate = new();
     private readonly IReadOnlyList<string> _folders;
@@ -109,6 +111,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
                 return;
             _started = true;
         }
+
         // The scan thread is waiting before any watch is armed, so a change cannot arrive with nobody to scan it.
         _scanThread = new Thread(ScanLoop) { IsBackground = true, Name = "App scan" };
         _scanThread.Start();
@@ -116,7 +119,6 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
         foreach (var folder in _folders.Where(Directory.Exists))
             Arm(folder);
         if (_watchPackages)
-        {
             try
             {
                 _packages = PackageCatalog.OpenForCurrentUser();
@@ -128,7 +130,6 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             {
                 Debug.WriteLine(e);
             }
-        }
     }
 
     public void Dispose()
@@ -139,6 +140,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
                 return;
             _disposed = true;
         }
+
         _stop = true;
         _wake.Set();
         // The scan thread arms watches, so it stops first.
@@ -153,6 +155,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             _packages.PackageUpdating -= OnUpdating;
             _packages = null;
         }
+
         _wake.Dispose();
         _ready.TrySetResult();
     }
@@ -165,7 +168,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             DirectoryWatch.FileChanges | DirectoryWatch.NameChanges,
             _ => Poke(Debounce),
             () => Lost(folder),
-            subtree: true);
+            true);
         if (watch is null)
             return;
         DirectoryWatch? old;
@@ -174,13 +177,17 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             _watches.Remove(folder, out old);
             _watches[folder] = watch;
         }
+
         old?.Dispose();
     }
 
     private void Lost(string folder)
     {
         lock (_gate)
+        {
             _lost.Add(folder);
+        }
+
         Poke(Debounce);
     }
 
@@ -192,11 +199,17 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
     {
         string[] folders;
         lock (_gate)
+        {
             folders = [.. _lost];
+        }
+
         foreach (var folder in folders.Where(Directory.Exists))
         {
             lock (_gate)
+            {
                 _lost.Remove(folder);
+            }
+
             Arm(folder);
         }
     }
@@ -233,10 +246,14 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             if (until > _quietUntil)
                 _quietUntil = until;
         }
+
         _wake.Set();
     }
 
-    private void Soon() => Poke(Debounce);
+    private void Soon()
+    {
+        Poke(Debounce);
+    }
 
     private void ScanLoop()
     {
@@ -253,11 +270,13 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
                     var remain = _quietUntil - Clock;
                     waitMs = remain <= 0 ? 0 : (int)Math.Min(remain, int.MaxValue);
                 }
+
                 if (waitMs == 0)
                     break;
                 if (!_wake.WaitOne(waitMs))
                     break;
             }
+
             if (_stop)
                 return;
             ScanOnce();
@@ -297,7 +316,8 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
         {
             return _packaged();
         }
-        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException or InvalidOperationException)
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException
+                                      or InvalidOperationException)
         {
             return [];
         }
@@ -309,7 +329,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
         {
             return _usage();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
         {
             return new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
         }
@@ -325,7 +345,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             using var _ = Process.Start(start);
             return null;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
             return e.Message;
         }
@@ -358,10 +378,11 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
     {
         try
         {
-            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId) { UseShellExecute = true });
+            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId)
+                { UseShellExecute = true });
             return null;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
             return e.Message;
         }
@@ -383,23 +404,23 @@ internal static class PackagedApps
         {
             return result;
         }
+
         foreach (var package in packages)
-        {
             try
             {
                 if (package.IsFramework || package.IsResourcePackage)
                     continue;
                 foreach (var app in package.GetAppListEntries())
-                {
-                    if (AppIndex.Packaged(app.AppUserModelId, app.DisplayInfo.DisplayName, app.DisplayInfo.Description) is { } entry)
+                    if (AppIndex.Packaged(app.AppUserModelId, app.DisplayInfo.DisplayName,
+                            app.DisplayInfo.Description) is { } entry)
                         result.Add(entry);
-                }
             }
-            catch (Exception e) when (e is COMException or UnauthorizedAccessException or ArgumentException or FileNotFoundException or IOException or InvalidOperationException)
+            catch (Exception e) when (e is COMException or UnauthorizedAccessException or ArgumentException
+                                          or FileNotFoundException or IOException or InvalidOperationException)
             {
                 // A package being installed or removed can fail to answer; the next scan reads it again.
             }
-        }
+
         return result;
     }
 }

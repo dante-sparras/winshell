@@ -10,7 +10,10 @@ namespace Winshell;
 /// </summary>
 internal static class DesktopSpace
 {
-    public static double Scale(uint dpi) => dpi == 0 ? 1 : dpi / 96.0;
+    public static double Scale(uint dpi)
+    {
+        return dpi == 0 ? 1 : dpi / 96.0;
+    }
 
     /// <summary>A physical rectangle on a monitor, in logical pixels.</summary>
     public static Rect ToLogical(RECT rect, RECT monitor, double scale)
@@ -19,20 +22,27 @@ internal static class DesktopSpace
         return new Rect(origin.X, origin.Y, Math.Max(0, rect.Width) / scale, Math.Max(0, rect.Height) / scale);
     }
 
-    public static Point ToLogical(POINT point, RECT monitor, double scale) =>
-        new(monitor.Left + (point.X - monitor.Left) / scale, monitor.Top + (point.Y - monitor.Top) / scale);
-
-    public static POINT ToPhysical(Point point, RECT monitor, double scale) => new()
+    public static Point ToLogical(POINT point, RECT monitor, double scale)
     {
-        X = (int)Math.Round(monitor.Left + (point.X - monitor.Left) * scale),
-        Y = (int)Math.Round(monitor.Top + (point.Y - monitor.Top) * scale),
-    };
+        return new Point(monitor.Left + (point.X - monitor.Left) / scale,
+            monitor.Top + (point.Y - monitor.Top) / scale);
+    }
+
+    public static POINT ToPhysical(Point point, RECT monitor, double scale)
+    {
+        return new POINT
+        {
+            X = (int)Math.Round(monitor.Left + (point.X - monitor.Left) * scale),
+            Y = (int)Math.Round(monitor.Top + (point.Y - monitor.Top) * scale)
+        };
+    }
 
     /// <summary>A logical rectangle on a monitor, in physical pixels. The size is rounded on its own, so it does not depend on the position.</summary>
     public static RECT ToPhysical(Rect rect, RECT monitor, double scale)
     {
         var origin = ToPhysical(new Point(rect.X, rect.Y), monitor, scale);
-        return new RECT(origin.X, origin.Y, origin.X + (int)Math.Round(rect.Width * scale), origin.Y + (int)Math.Round(rect.Height * scale));
+        return new RECT(origin.X, origin.Y, origin.X + (int)Math.Round(rect.Width * scale),
+            origin.Y + (int)Math.Round(rect.Height * scale));
     }
 
     /// <summary>The monitor a logical point is on, or null when it is in no monitor, as in the gap beside a scaled one.</summary>
@@ -44,6 +54,7 @@ internal static class DesktopSpace
             if (point.X >= m.X && point.X < m.Right && point.Y >= m.Y && point.Y < m.Bottom)
                 return i;
         }
+
         return null;
     }
 
@@ -56,12 +67,15 @@ internal static class DesktopSpace
         var mb = (int)Math.Round(p.MarginBottom * scale);
         var w = (int)Math.Round(p.Width * scale);
         var h = (int)Math.Round(p.Height * scale);
-        var (x, width) = Span(area.Left, area.Width, p.Anchors.HasFlag(Edges.Left), p.Anchors.HasFlag(Edges.Right), ml, mr, w);
-        var (y, height) = Span(area.Top, area.Height, p.Anchors.HasFlag(Edges.Top), p.Anchors.HasFlag(Edges.Bottom), mt, mb, h);
+        var (x, width) = Span(area.Left, area.Width, p.Anchors.HasFlag(Edges.Left), p.Anchors.HasFlag(Edges.Right), ml,
+            mr, w);
+        var (y, height) = Span(area.Top, area.Height, p.Anchors.HasFlag(Edges.Top), p.Anchors.HasFlag(Edges.Bottom), mt,
+            mb, h);
         return new RECT(x, y, x + Math.Max(1, width), y + Math.Max(1, height));
     }
 
-    private static (int Start, int Length) Span(int start, int length, bool near, bool far, int nearMargin, int farMargin, int size)
+    private static (int Start, int Length) Span(int start, int length, bool near, bool far, int nearMargin,
+        int farMargin, int size)
     {
         if (near && far)
             return (start + nearMargin, length - nearMargin - farMargin);

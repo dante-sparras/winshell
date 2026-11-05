@@ -7,12 +7,14 @@ namespace Winshell.Architecture.Tests;
 public class LayerTests
 {
     // From the top down. A layer may use any layer below it, and none above it.
-    private static readonly string[] Layers = ["Winshell.Shell", "Winshell.Services", "Winshell.Core", "Winshell.Native"];
+    private static readonly string[] Layers =
+        ["Winshell.Shell", "Winshell.Services", "Winshell.Core", "Winshell.Native"];
 
     [Fact]
     public void A_project_references_only_layers_below_it()
     {
-        var upward = Layers.SelectMany((layer, i) => XDocument.Load(Path.Combine(Repo.Root, "src", layer, layer + ".csproj"))
+        var upward = Layers.SelectMany((layer, i) => XDocument
+            .Load(Path.Combine(Repo.Root, "src", layer, layer + ".csproj"))
             .Descendants("ProjectReference")
             .Select(reference => Path.GetFileNameWithoutExtension(reference.Attribute("Include")!.Value))
             .Where(name => !Layers.Skip(i + 1).Contains(name))
@@ -28,7 +30,8 @@ public class LayerTests
     {
         var upward = Layers.SelectMany((layer, i) => Assembly.Load(layer).GetReferencedAssemblies()
             .Select(reference => reference.Name!)
-            .Where(name => name.StartsWith("Winshell", StringComparison.OrdinalIgnoreCase) && !Layers.Skip(i + 1).Contains(name))
+            .Where(name => name.StartsWith("Winshell", StringComparison.OrdinalIgnoreCase) &&
+                           !Layers.Skip(i + 1).Contains(name))
             .Select(name => $"{layer} -> {name}"));
 
         Assert.Empty(upward);

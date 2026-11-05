@@ -12,14 +12,15 @@ public sealed class BuildNoticeTests : IDisposable
     public BuildNoticeTests()
     {
         _crashes = new CrashReports(_dir);
-        _notices = new ShellNotices(new ManualEventLoop(), new Log(), _crashes, (_, _, _) => new Window(), _ => { }, () => false);
+        _notices = new ShellNotices(new ManualEventLoop(), new Log(), _crashes, (_, _, _) => new Window(), _ => { },
+            () => false);
     }
 
     public void Dispose()
     {
         _notices.Dispose();
         if (Directory.Exists(_dir))
-            Directory.Delete(_dir, recursive: true);
+            Directory.Delete(_dir, true);
     }
 
     [Fact]

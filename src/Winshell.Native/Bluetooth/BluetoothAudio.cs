@@ -18,7 +18,9 @@ internal static class BluetoothAudio
             return false;
         var request = new KSIDENTIFIER();
         request.Set = PropertySet;
-        request.Id = (uint)(connect ? KSPROPERTY_BTAUDIO.KSPROPERTY_ONESHOT_RECONNECT : KSPROPERTY_BTAUDIO.KSPROPERTY_ONESHOT_DISCONNECT);
+        request.Id = (uint)(connect
+            ? KSPROPERTY_BTAUDIO.KSPROPERTY_ONESHOT_RECONNECT
+            : KSPROPERTY_BTAUDIO.KSPROPERTY_ONESHOT_DISCONNECT);
         request.Flags = PInvoke.KSPROPERTY_TYPE_GET;
         uint returned;
         return PInvoke.DeviceIoControl(new HANDLE(device.DangerousGetHandle()), PInvoke.IOCTL_KS_PROPERTY,

@@ -7,7 +7,10 @@ public sealed class ToastChangesTests
     private readonly FakeTimeProvider _time = new();
     private string? _stamp = "1024 1";
 
-    private ToastChanges Changes() => new(() => _stamp, _time);
+    private ToastChanges Changes()
+    {
+        return new ToastChanges(() => _stamp, _time);
+    }
 
     [Fact]
     public void The_toasts_are_read_again_when_the_database_changes_or_cannot_be_read_and_at_least_every_minute()

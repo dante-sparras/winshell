@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Foundation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Foundation;
 using Winshell.Capture;
 
 namespace Winshell.ShellTests;
@@ -22,7 +22,7 @@ public sealed class CaptureViewTests
             using var session = new CaptureSession(shell.Loop, () => backend)
             {
                 FrameInterval = 16,
-                Target = CaptureTarget.ForWindow(1),
+                Target = CaptureTarget.ForWindow(1)
             };
             var view = new CaptureView
             {
@@ -30,12 +30,12 @@ public sealed class CaptureViewTests
                 Height = 48,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
-                Session = session,
+                Session = session
             };
             using var popup = new PopupWindow
             {
                 Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
-                Content = new Grid { Children = { view } },
+                Content = new Grid { Children = { view } }
             };
             popup.Visible = true;
             await ShellFixture.LaidOut(view);
@@ -87,7 +87,7 @@ public sealed class CaptureViewTests
             using var session = new CaptureSession(shell.Loop, () => backend)
             {
                 FrameInterval = 16,
-                Target = CaptureTarget.ForWindow(1),
+                Target = CaptureTarget.ForWindow(1)
             };
             var view = new CaptureView
             {
@@ -95,12 +95,12 @@ public sealed class CaptureViewTests
                 Height = 48,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
-                Session = session,
+                Session = session
             };
             using var popup = new PopupWindow
             {
                 Rect = new Rect(screen.X + 80, screen.Y + 80, 200, 120),
-                Content = new Grid { Children = { view } },
+                Content = new Grid { Children = { view } }
             };
             popup.Visible = true;
             await ShellFixture.LaidOut(view);
@@ -126,7 +126,12 @@ public sealed class CaptureViewTests
     private static async Task NextFrame(CaptureSession session)
     {
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        void OnReady() => ready.TrySetResult();
+
+        void OnReady()
+        {
+            ready.TrySetResult();
+        }
+
         session.FrameReady += OnReady;
         try
         {
@@ -143,7 +148,7 @@ public sealed class CaptureViewTests
         var bgra = new byte[4 * 2 * 4];
         for (var i = 0; i < bgra.Length; i += 4)
             (bgra[i], bgra[i + 1], bgra[i + 2], bgra[i + 3]) = (blue, green, red, 255);
-        return new PixelImage(4, 2, bgra, premultiplied: true);
+        return new PixelImage(4, 2, bgra, true);
     }
 
     private static PixelImage Straight()
@@ -151,7 +156,7 @@ public sealed class CaptureViewTests
         var bgra = new byte[4 * 2 * 4];
         for (var i = 0; i < bgra.Length; i += 4)
             (bgra[i], bgra[i + 1], bgra[i + 2], bgra[i + 3]) = (0, 0, 255, 128);
-        return new PixelImage(4, 2, bgra, premultiplied: false);
+        return new PixelImage(4, 2, bgra, false);
     }
 
     private static byte[] Premultiplied(PixelImage image)
@@ -166,12 +171,19 @@ public sealed class CaptureViewTests
             pixels[i + 1] = (byte)((pixels[i + 1] * alpha + 127) / 255);
             pixels[i + 2] = (byte)((pixels[i + 2] * alpha + 127) / 255);
         }
+
         return pixels;
     }
 
-    private static Image ImageOf(CaptureView view) => Assert.IsType<Image>(VisualTreeHelper.GetChild(view, 0));
+    private static Image ImageOf(CaptureView view)
+    {
+        return Assert.IsType<Image>(VisualTreeHelper.GetChild(view, 0));
+    }
 
-    private static WriteableBitmap Shown(CaptureView view) => Assert.IsType<WriteableBitmap>(ImageOf(view).Source);
+    private static WriteableBitmap Shown(CaptureView view)
+    {
+        return Assert.IsType<WriteableBitmap>(ImageOf(view).Source);
+    }
 
     private static byte[] Pixels(WriteableBitmap bitmap)
     {

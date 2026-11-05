@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Security;
 using Windows.Win32.Storage.FileSystem;
 using Windows.Win32.System.Pipes;
+using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
 
@@ -23,9 +23,11 @@ internal static unsafe class NamedPipeServer
             error = Marshal.GetLastPInvokeError();
             return null;
         }
+
         try
         {
-            var attributes = new SECURITY_ATTRIBUTES { nLength = (uint)sizeof(SECURITY_ATTRIBUTES), lpSecurityDescriptor = sd };
+            var attributes = new SECURITY_ATTRIBUTES
+                { nLength = (uint)sizeof(SECURITY_ATTRIBUTES), lpSecurityDescriptor = sd };
             var mode = FILE_FLAGS_AND_ATTRIBUTES.PIPE_ACCESS_DUPLEX | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OVERLAPPED;
             if (first)
                 mode |= FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_FIRST_PIPE_INSTANCE;
@@ -35,13 +37,15 @@ internal static unsafe class NamedPipeServer
                 // The metadata leaves SetLastError off CreateNamedPipeW, so its error is read here, as CsWin32 does for
                 // the calls that have it.
                 Marshal.SetLastSystemError(0);
-                handle = PInvoke.CreateNamedPipe(path, mode, NAMED_PIPE_MODE.PIPE_REJECT_REMOTE_CLIENTS, 255, 4096, 4096, 0, &attributes);
+                handle = PInvoke.CreateNamedPipe(path, mode, NAMED_PIPE_MODE.PIPE_REJECT_REMOTE_CLIENTS, 255, 4096,
+                    4096, 0, &attributes);
                 error = Marshal.GetLastSystemError();
             }
+
             if ((nint)handle.Value == -1)
                 return null;
             error = 0;
-            return new SafePipeHandle((nint)handle.Value, ownsHandle: true);
+            return new SafePipeHandle((nint)handle.Value, true);
         }
         finally
         {
@@ -62,8 +66,9 @@ internal static unsafe class NamedPipeServer
         {
             if (!PInvoke.GetKernelObjectSecurity(target, label, new PSECURITY_DESCRIPTOR(buffer), needed, out _))
                 return "";
-            if (!PInvoke.ConvertSecurityDescriptorToStringSecurityDescriptor(new PSECURITY_DESCRIPTOR(buffer), PInvoke.SDDL_REVISION_1,
-                OBJECT_SECURITY_INFORMATION.LABEL_SECURITY_INFORMATION, out var text))
+            if (!PInvoke.ConvertSecurityDescriptorToStringSecurityDescriptor(new PSECURITY_DESCRIPTOR(buffer),
+                    PInvoke.SDDL_REVISION_1,
+                    OBJECT_SECURITY_INFORMATION.LABEL_SECURITY_INFORMATION, out var text))
                 return "";
             try
             {
@@ -86,7 +91,8 @@ internal static unsafe class NamedPipeServer
             return Marshal.GetLastPInvokeError();
         try
         {
-            return PInvoke.SetKernelObjectSecurity(new HANDLE(handle.DangerousGetHandle()), OBJECT_SECURITY_INFORMATION.LABEL_SECURITY_INFORMATION, sd)
+            return PInvoke.SetKernelObjectSecurity(new HANDLE(handle.DangerousGetHandle()),
+                OBJECT_SECURITY_INFORMATION.LABEL_SECURITY_INFORMATION, sd)
                 ? 0
                 : Marshal.GetLastPInvokeError();
         }

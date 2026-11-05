@@ -1,4 +1,3 @@
-
 namespace Winshell.Services.Tests;
 
 /// <summary>Physical size becomes millimeters, and a monitor with no size stays at 0.</summary>
@@ -20,7 +19,8 @@ public class MonitorSizeTests(ITestOutputHelper output)
         foreach (var monitor in Screens.Enumerate())
         {
             var info = monitor.Info;
-            output.WriteLine($"{info.Name} {info.Model} {info.Geometry.Width}x{info.Geometry.Height} dpr {info.DevicePixelRatio} mm {info.PhysicalWidthMm}x{info.PhysicalHeightMm}");
+            output.WriteLine(
+                $"{info.Name} {info.Model} {info.Geometry.Width}x{info.Geometry.Height} dpr {info.DevicePixelRatio} mm {info.PhysicalWidthMm}x{info.PhysicalHeightMm}");
             if (info.PhysicalWidthMm == 0)
                 Assert.Equal(0, info.PhysicalHeightMm);
             else

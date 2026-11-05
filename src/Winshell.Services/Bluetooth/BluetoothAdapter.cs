@@ -85,7 +85,7 @@ public sealed class BluetoothAdapter : ObservableObject
         Changed(old.Discoverable != info.Discoverable, nameof(Discoverable));
         Changed(old.Pairable != info.Pairable, nameof(Pairable));
         Changed(old.State != info.State, nameof(State));
-        Changed((old.State == BluetoothAdapterState.On) != ReportsOn, nameof(Enabled));
+        Changed(old.State == BluetoothAdapterState.On != ReportsOn, nameof(Enabled));
         if (old.State != info.State || old.Discoverable != info.Discoverable || old.Pairable != info.Pairable)
             Set(ref _error, "", nameof(Error));
     }

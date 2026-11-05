@@ -1,5 +1,3 @@
-using Winshell.Native;
-
 namespace Winshell.Tests;
 
 public class AppIconTests
@@ -36,6 +34,7 @@ public class AppIconTests
             var height = bytes[entry + 1] == 0 ? 256 : bytes[entry + 1];
             Assert.Equal(sizes[i], height);
         }
+
         return sizes;
     }
 

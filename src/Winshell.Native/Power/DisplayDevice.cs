@@ -8,7 +8,10 @@ internal static class DisplayDevice
     /// <summary>
     /// The device ID of the monitor on a display such as <c>\\.\DISPLAY1</c>, or "" when Windows has none.
     /// </summary>
-    internal static string MonitorId(string deviceName) => Monitor(deviceName).Id;
+    internal static string MonitorId(string deviceName)
+    {
+        return Monitor(deviceName).Id;
+    }
 
     /// <summary>
     /// The model Windows names for the monitor on a display such as <c>\\.\DISPLAY1</c>, and its device ID, such as

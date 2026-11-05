@@ -40,10 +40,8 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         {
             nint hwnd = 0;
             while ((hwnd = Win32.FindWindowExW(0, hwnd, names.Explorer, null)) != 0)
-            {
                 if (hwnd != Window)
                     return hwnd;
-            }
             return 0;
         }
     }
@@ -68,6 +66,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
             // The instance that had it ended without letting go; this thread owns it now.
             _owned = true;
         }
+
         return _owned;
     }
 
@@ -83,12 +82,10 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         _window.AllowFromAnyLevel(WM_COPYDATA);
         _settingsWatch = TrayIconSettings.Watch(loop, () => SettingsChanged?.Invoke());
         foreach (var eventType in new uint[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_REORDER })
-        {
             if (WinEventHook.Start(eventType, OnOrderChanged) is { } hook)
                 _eventHooks.Add(hook);
             else
                 log.Warn("tray", "Could not watch taskbar order; the tray will check every thirty seconds.");
-        }
         return true;
     }
 
@@ -116,20 +113,19 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
     {
         var explorer = Explorer;
         if (explorer != 0 && Win32.GetWindowRect(explorer, out var r))
-        {
             // Apps that read the taskbar's position from this window get Explorer's.
-            Win32.SetWindowPos(Window, Win32.HWND_TOPMOST, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top, Win32.SWP_NOACTIVATE);
-        }
+            Win32.SetWindowPos(Window, Win32.HWND_TOPMOST, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
+                Win32.SWP_NOACTIVATE);
         else
-        {
-            Win32.SetWindowPos(Window, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
-        }
+            Win32.SetWindowPos(Window, Win32.HWND_TOPMOST, 0, 0, 0, 0,
+                Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
     }
 
     public bool Lower()
     {
         var explorer = Explorer;
-        return Window != 0 && explorer != 0 && Win32.SetWindowPos(Window, explorer, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+        return Window != 0 && explorer != 0 && Win32.SetWindowPos(Window, explorer, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
     }
 
     public void Broadcast()
@@ -140,9 +136,15 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
             Win32.PostMessageW(window, TaskbarCreatedMessage, 0, 0);
     }
 
-    public IReadOnlyList<TrayIconSetting> ReadSettings() => TrayIconSettings.Read();
+    public IReadOnlyList<TrayIconSetting> ReadSettings()
+    {
+        return TrayIconSettings.Read();
+    }
 
-    public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon) => (IconImage.FromHandle(icon), IconImage.ResourceOf(icon));
+    public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon)
+    {
+        return (IconImage.FromHandle(icon), IconImage.ResourceOf(icon));
+    }
 
     public uint ProcessOf(nint window)
     {
@@ -150,11 +152,20 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         return pid;
     }
 
-    public string ProgramOf(nint window) => ProcessImage.TryRead(ProcessOf(window)) ?? "";
+    public string ProgramOf(nint window)
+    {
+        return ProcessImage.TryRead(ProcessOf(window)) ?? "";
+    }
 
-    public uint? IntegrityOf(uint processId) => ProcessIntegrity.TryRead(processId);
+    public uint? IntegrityOf(uint processId)
+    {
+        return ProcessIntegrity.TryRead(processId);
+    }
 
-    public void MoveCursor((int X, int Y) point) => Native.Cursor.MoveTo(point.X, point.Y);
+    public void MoveCursor((int X, int Y) point)
+    {
+        Native.Cursor.MoveTo(point.X, point.Y);
+    }
 
     public void LetAppTakeForeground(nint window, uint processId)
     {
@@ -164,7 +175,8 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
         var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
         var thread = Win32.GetCurrentThreadId();
-        var attached = foregroundThread != 0 && foregroundThread != thread && Win32.AttachThreadInput(foregroundThread, thread, true);
+        var attached = foregroundThread != 0 && foregroundThread != thread &&
+                       Win32.AttachThreadInput(foregroundThread, thread, true);
         try
         {
             Win32.SetForegroundWindow(window);
@@ -177,7 +189,10 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         }
     }
 
-    public void Notify(nint window, uint message, nint wParam, nint lParam) => TrayApp.Notify(window, message, wParam, lParam);
+    public void Notify(nint window, uint message, nint wParam, nint lParam)
+    {
+        TrayApp.Notify(window, message, wParam, lParam);
+    }
 
     /// <summary>
     /// Every message-only window on this desktop, each once, from a list Windows copies at once. A walk from one window
@@ -204,15 +219,16 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
             return;
         var explorer = Explorer;
         // Top-level z-order changes name the desktop's client object, not a child window's OBJID_WINDOW.
-        var desktopOrder = eventType == Win32.EVENT_OBJECT_REORDER && idObject == Win32.OBJID_CLIENT && hwnd == WindowTree.Desktop;
-        if (explorer == 0 || !desktopOrder && (hwnd != explorer || idObject != Win32.OBJID_WINDOW))
+        var desktopOrder = eventType == Win32.EVENT_OBJECT_REORDER && idObject == Win32.OBJID_CLIENT &&
+                           hwnd == WindowTree.Desktop;
+        if (explorer == 0 || (!desktopOrder && (hwnd != explorer || idObject != Win32.OBJID_WINDOW)))
             return;
         // A raise causes another reorder event. Only signal when Explorer is actually above this window.
-        for (var above = Win32.GetWindow(explorer, Win32.GW_HWNDPREV); above != 0; above = Win32.GetWindow(above, Win32.GW_HWNDPREV))
-        {
+        for (var above = Win32.GetWindow(explorer, Win32.GW_HWNDPREV);
+             above != 0;
+             above = Win32.GetWindow(above, Win32.GW_HWNDPREV))
             if (above == Window)
                 return;
-        }
         ExplorerInFront?.Invoke();
     }
 
@@ -255,15 +271,17 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
             NativeCallback.Guard(log, "tray", () => TaskbarCreated?.Invoke());
             return true;
         }
+
         // Apps that post a menu command to the taskbar, such as minimizing every window, find this window first.
         // These carry no pointers. Private WM_USER messages have no shared layout and cannot be forwarded safely.
-        if (msg == Win32.WM_SYSCOMMAND || msg == WM_COMMAND && lParam == 0)
+        if (msg == Win32.WM_SYSCOMMAND || (msg == WM_COMMAND && lParam == 0))
         {
             var explorer = Explorer;
             if (explorer != 0)
                 Win32.PostMessageW(explorer, msg, wParam, lParam);
             return true;
         }
+
         return false;
     }
 

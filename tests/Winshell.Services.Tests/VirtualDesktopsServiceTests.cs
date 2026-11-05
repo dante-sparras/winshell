@@ -6,7 +6,10 @@ public sealed class VirtualDesktopsServiceTests
 {
     private readonly ManualEventLoop _loop = new();
 
-    private VirtualDesktopsService Start(FakeDesktops source) => new(_loop, new Log(), source);
+    private VirtualDesktopsService Start(FakeDesktops source)
+    {
+        return new VirtualDesktopsService(_loop, new Log(), source);
+    }
 
     [Fact]
     public void The_list_names_desktops_and_marks_the_current_one()

@@ -18,6 +18,7 @@ internal static class RunCommand
             StartupError.Report(error, StartupError.FolderFor(options.Path, ConfigPaths.Root()));
             return 1;
         }
+
         // With no configuration there is nothing to run, so nothing starts and nothing is said.
         if (project is null)
             return 0;
@@ -25,14 +26,20 @@ internal static class RunCommand
         // A downloaded update goes in place before any shell runs, and then the new winshell.exe runs the shell.
         // System.Diagnostics.Process is loaded first, from the files this one started with.
         // RunUpdated is the private static method below.
-        RuntimeHelpers.PrepareMethod(typeof(RunCommand).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!.MethodHandle);
-        using (Process.GetCurrentProcess()) { }
+        RuntimeHelpers.PrepareMethod(
+            typeof(RunCommand).GetMethod(nameof(RunUpdated), BindingFlags.NonPublic | BindingFlags.Static)!
+                .MethodHandle);
+        using (Process.GetCurrentProcess())
+        {
+        }
+
         var update = InstallUpdate();
         if (update is { Error: null })
         {
             Console.Error.WriteLine($"Updated Winshell to {update.Version}.");
             return RunUpdated(originalArgs);
         }
+
         if (update is { Error: { } updateError })
             Console.Error.WriteLine($"Could not update Winshell to {update.Version}: {updateError}");
 
@@ -45,6 +52,7 @@ internal static class RunCommand
             StartupError.Report(reason, project.Folder);
             return 1;
         }
+
         // -d leaves the program to a child that supervises it. The build is done, and its errors were in this console.
         if (options.Daemonize)
         {
@@ -53,6 +61,7 @@ internal static class RunCommand
                 childArgs.Insert(0, "--no-build");
             return Detach(childArgs);
         }
+
         var program = new ProcessStartInfo(project.Program) { UseShellExecute = false };
         foreach (var a in ProgramArguments(options))
             program.ArgumentList.Add(a);
@@ -104,11 +113,14 @@ internal static class RunCommand
             // A reload builds beside a program that still runs, in bin\shell.next, so each start runs the last build. A
             // dialog about a start that failed offers its folder.
             shell.FileName = project.Program;
-            return ShellProcess.Start(shell, System.IO.Path.GetDirectoryName(shell.FileName));
+            return ShellProcess.Start(shell, Path.GetDirectoryName(shell.FileName));
         }
-        var supervisor = new ShellSupervisor(Start, ExplorerTaskbarRecovery.AnyHidden, ExplorerTaskbarRecovery.Restore, TimeProvider.System);
+
+        var supervisor = new ShellSupervisor(Start, ExplorerTaskbarRecovery.AnyHidden, ExplorerTaskbarRecovery.Restore,
+            TimeProvider.System);
         using var stop = new CancellationTokenSource();
         Task<int>? supervision = null;
+
         // Ctrl+C and Ctrl+Break stop the shell and supervision. Closing the console and the end of the session end this
         // process once the handler returns, so it waits for the shell to stop and the taskbar to come back. The session's
         // end is a window message: Windows sends no console signal for it to a process that has loaded user32. SystemEvents
@@ -127,12 +139,18 @@ internal static class RunCommand
                 // The wait below reports it.
             }
         }
+
         void Signal(PosixSignalContext context)
         {
             context.Cancel = true;
             Stop();
         }
-        void SessionEnded(object? sender, SessionEndedEventArgs e) => Stop();
+
+        void SessionEnded(object? sender, SessionEndedEventArgs e)
+        {
+            Stop();
+        }
+
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Signal);
         using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Signal);
         using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Signal);
@@ -178,11 +196,14 @@ internal static class RunCommand
         {
             mine = true;
         }
+
         if (!mine)
             return null;
         try
         {
-            return Instances.List(false).Count > 0 ? null : Updater.InstallStaged(CliMetadata.ReleaseRepository, CliMetadata.Version);
+            return Instances.List(false).Count > 0
+                ? null
+                : Updater.InstallStaged(CliMetadata.ReleaseRepository, CliMetadata.Version);
         }
         finally
         {
@@ -196,7 +217,8 @@ internal static class RunCommand
     /// </summary>
     private static int RunUpdated(string[] args)
     {
-        var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false }; // The CLI runs from its apphost.
+        var psi = new ProcessStartInfo(Environment.ProcessPath!)
+            { UseShellExecute = false }; // The CLI runs from its apphost.
         foreach (var a in args)
             psi.ArgumentList.Add(a);
         Process shell;
@@ -205,11 +227,14 @@ internal static class RunCommand
             // UseShellExecute=false starts a process rather than opening a document.
             shell = Process.Start(psi)!;
         }
-        catch (System.ComponentModel.Win32Exception e)
+        catch (Win32Exception e)
         {
-            StartupError.Report($"Winshell is updated, but the new winshell.exe did not start. Start winshell.exe again. {e.Message}", null);
+            StartupError.Report(
+                $"Winshell is updated, but the new winshell.exe did not start. Start winshell.exe again. {e.Message}",
+                null);
             return 1;
         }
+
         using (shell)
         {
             shell.WaitForExit();

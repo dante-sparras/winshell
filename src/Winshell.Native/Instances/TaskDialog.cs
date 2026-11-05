@@ -27,7 +27,7 @@ internal static unsafe class TaskDialog
                 pszContent = contentText,
                 cButtons = button is null ? 0u : 1u,
                 pButtons = button is null ? null : &custom,
-                nDefaultButton = Ok,
+                nDefaultButton = Ok
             };
             config.pszMainIcon = PInvoke.TD_ERROR_ICON;
             int pressed;

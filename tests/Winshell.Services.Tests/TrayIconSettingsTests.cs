@@ -10,9 +10,9 @@ public sealed class TrayIconSettingsTests
         var guid = Guid.NewGuid();
         List<TrayIconSetting> settings =
         [
-            new(guid, "", null, Promoted: true),
-            new(Guid.Empty, @"C:\Apps\sync.exe", 1, Promoted: true),
-            new(Guid.Empty, @"C:\Apps\sync.exe", 2, Promoted: false),
+            new(guid, "", null, true),
+            new(Guid.Empty, @"C:\Apps\sync.exe", 1, true),
+            new(Guid.Empty, @"C:\Apps\sync.exe", 2, false)
         ];
         Assert.False(TrayIconSettings.InOverflow(settings, guid, @"C:\Other\app.exe", 9));
         Assert.False(TrayIconSettings.InOverflow(settings, Guid.Empty, @"c:\apps\SYNC.exe", 1));
@@ -21,8 +21,10 @@ public sealed class TrayIconSettingsTests
         Assert.True(TrayIconSettings.InOverflow(settings, Guid.Empty, @"C:\Apps\sync.exe", 3));
         Assert.True(TrayIconSettings.InOverflow(settings, Guid.NewGuid(), @"C:\Apps\sync.exe", 1));
         // An icon with a GUID is not matched by program, nor a program by a GUID entry.
-        Assert.True(TrayIconSettings.InOverflow([new(Guid.Empty, @"C:\Apps\sync.exe", 1, true)], Guid.NewGuid(), @"C:\Apps\sync.exe", 1));
-        Assert.True(TrayIconSettings.InOverflow([new(guid, @"C:\Apps\sync.exe", 1, true)], Guid.Empty, @"C:\Apps\sync.exe", 1));
+        Assert.True(TrayIconSettings.InOverflow([new TrayIconSetting(Guid.Empty, @"C:\Apps\sync.exe", 1, true)],
+            Guid.NewGuid(), @"C:\Apps\sync.exe", 1));
+        Assert.True(TrayIconSettings.InOverflow([new TrayIconSetting(guid, @"C:\Apps\sync.exe", 1, true)], Guid.Empty,
+            @"C:\Apps\sync.exe", 1));
     }
 
     [Fact]
@@ -30,6 +32,7 @@ public sealed class TrayIconSettingsTests
     {
         // Read-only: the choices Explorer has stored for this user.
         var settings = TrayIconSettings.Read();
-        Assert.All(settings.Where(s => s.ExecutablePath.Length > 0), s => Assert.False(s.ExecutablePath.StartsWith('{'), s.ExecutablePath));
+        Assert.All(settings.Where(s => s.ExecutablePath.Length > 0),
+            s => Assert.False(s.ExecutablePath.StartsWith('{'), s.ExecutablePath));
     }
 }

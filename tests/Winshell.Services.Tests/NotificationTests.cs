@@ -10,11 +10,17 @@ public sealed class NotificationTests
 {
     private static readonly DateTimeOffset Noon = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
 
-    private static IncomingToast Toast(uint id, string appId = "Mail", string title = "Hello", int minutes = 0, IAppLogoSource? logo = null) =>
-        new(id, appId, "Mail app", title, "Body", Noon.AddMinutes(minutes), Logo: logo);
+    private static IncomingToast Toast(uint id, string appId = "Mail", string title = "Hello", int minutes = 0,
+        IAppLogoSource? logo = null)
+    {
+        return new IncomingToast(id, appId, "Mail app", title, "Body", Noon.AddMinutes(minutes), Logo: logo);
+    }
 
-    private static NotificationSnapshot Snapshot(params IncomingToast[] toasts) =>
-        new(NotificationAccessStatus.Allowed, toasts, NotificationState.Off, NotificationMode.Unrestricted);
+    private static NotificationSnapshot Snapshot(params IncomingToast[] toasts)
+    {
+        return new NotificationSnapshot(NotificationAccessStatus.Allowed, toasts, NotificationState.Off,
+            NotificationMode.Unrestricted);
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -34,7 +40,8 @@ public sealed class NotificationTests
     {
         using var listener = Listener(new FakeBackend(), out _);
 
-        listener.Apply(Snapshot(Toast(1, minutes: 1), Toast(2, minutes: 3), Toast(3, appId: "Chat", minutes: 2), Toast(4, appId: "")));
+        listener.Apply(Snapshot(Toast(1, minutes: 1), Toast(2, minutes: 3), Toast(3, "Chat", minutes: 2),
+            Toast(4, "")));
 
         Assert.Equal([2u, 3u, 1u, 4u], listener.Notifications.Select(n => n.Id));
         Assert.Equal(["Mail", "Chat", ""], listener.Groups.Select(g => g.AppId));
@@ -67,7 +74,7 @@ public sealed class NotificationTests
         listener.NotificationAdded += n => seen.Add((n.Id, listener.Notifications.Count, listener.Groups.Count));
 
         listener.Apply(Snapshot(Toast(1)));
-        listener.Apply(Snapshot(Toast(1), Toast(2, appId: "Chat")));
+        listener.Apply(Snapshot(Toast(1), Toast(2, "Chat")));
 
         Assert.Equal([(1u, 1, 1), (2u, 2, 2)], seen);
     }
@@ -84,7 +91,11 @@ public sealed class NotificationTests
         listener.Apply(Snapshot() with { Mode = NotificationMode.AlarmsOnly, Focus = NotificationState.On });
         Assert.Equal(NotificationState.On, listener.DoNotDisturbState);
         Assert.Equal(NotificationState.On, listener.FocusState);
-        Assert.Equal([nameof(NotificationListener.FocusState), nameof(NotificationListener.NotificationMode), nameof(NotificationListener.DoNotDisturbState)], changes);
+        Assert.Equal(
+        [
+            nameof(NotificationListener.FocusState), nameof(NotificationListener.NotificationMode),
+            nameof(NotificationListener.DoNotDisturbState)
+        ], changes);
         changes.Clear();
 
         // Both restrict, so this only changes the mode.
@@ -144,7 +155,7 @@ public sealed class NotificationTests
     {
         var backend = new FakeBackend();
         using var listener = Listener(backend, out _);
-        listener.Apply(Snapshot(Toast(1), Toast(2), Toast(3, appId: "Chat")));
+        listener.Apply(Snapshot(Toast(1), Toast(2), Toast(3, "Chat")));
         var group = listener.Groups.Single(g => g.AppId == "Mail");
 
         Assert.True(group.Dismiss());
@@ -156,7 +167,10 @@ public sealed class NotificationTests
     [Fact]
     public async Task A_read_from_before_a_dismissal_does_not_bring_it_back()
     {
-        var backend = new FakeBackend { Next = new TaskCompletionSource<NotificationSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var backend = new FakeBackend
+        {
+            Next = new TaskCompletionSource<NotificationSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
         using var listener = Listener(backend, out var loop);
         listener.Apply(Snapshot(Toast(1)));
 
@@ -234,7 +248,7 @@ public sealed class NotificationTests
     {
         var backend = new FakeBackend { Current = Snapshot(Toast(1)) };
         var loop = new ManualEventLoop();
-        var listener = new NotificationListener(loop, Log.Default, backend, monitor: true);
+        var listener = new NotificationListener(loop, Log.Default, backend, true);
 
         await Wait.UntilAsync(() => listener.Notifications.Count == 1, "the first read", loop.Process);
         var monitor = listener.MonitorTask!;
@@ -251,7 +265,7 @@ public sealed class NotificationTests
         using var listener = Listener(new FakeBackend(), out var loop);
         var appId = "Mail." + Guid.NewGuid().ToString("N");
 
-        listener.Apply(Snapshot(Toast(1, appId: appId, logo: logo)));
+        listener.Apply(Snapshot(Toast(1, appId, logo: logo)));
         var notification = listener.Notifications[0];
         Assert.Equal("", notification.AppIcon);
         await Wait.UntilAsync(() => notification.AppIcon.Length > 0, "the logo", loop.Process);
@@ -274,7 +288,7 @@ public sealed class NotificationTests
         var appId = "Mail." + Guid.NewGuid().ToString("N");
         var posted = 0;
         loop.Woken += () => Interlocked.Increment(ref posted);
-        listener.Apply(Snapshot(Toast(1, appId: appId, logo: logo)));
+        listener.Apply(Snapshot(Toast(1, appId, logo: logo)));
         var notification = listener.Notifications[0];
         await logo.Opened.WaitAsync(TestContext.Current.CancellationToken);
 
@@ -284,7 +298,8 @@ public sealed class NotificationTests
         loop.Process();
 
         Assert.Equal("", notification.AppIcon);
-        var again = NotificationAppIcons.Read(appId, "Mail", new FakeLogo(null), Log.Default, TestContext.Current.CancellationToken);
+        var again = NotificationAppIcons.Read(appId, "Mail", new FakeLogo(null), Log.Default,
+            TestContext.Current.CancellationToken);
         NotificationAppIcons.Release(again.Hold);
         Assert.Equal("", again.Url);
     }
@@ -293,7 +308,8 @@ public sealed class NotificationTests
     public void A_toast_is_built_from_its_properties()
     {
         var sent = new List<(string AppId, string Xml, string Tag, string Group)>();
-        var toast = new ToastMessage(new ManualEventLoop(), (appId, xml, tag, group, _) => sent.Add((appId, xml, tag, group)))
+        var toast = new ToastMessage(new ManualEventLoop(),
+            (appId, xml, tag, group, _) => sent.Add((appId, xml, tag, group)))
         {
             AppId = "Winshell",
             Title = "Hi <there>",
@@ -301,7 +317,7 @@ public sealed class NotificationTests
             ActivationUri = "winshell://open",
             Tag = "t",
             Group = "g",
-            Silent = true,
+            Silent = true
         };
         toast.Actions.Add(new ToastAction { Text = "Open", ActivationUri = "winshell://action" });
 
@@ -320,11 +336,13 @@ public sealed class NotificationTests
     [InlineData("Winshell", " ", "", "", "")]
     [InlineData("Winshell", "Title", "not a uri", "", "")]
     [InlineData("Winshell", "Title", "", "", "group without a tag")]
-    public void A_toast_that_fails_validation_is_not_sent_and_says_why(string appId, string title, string uri, string tag, string group)
+    public void A_toast_that_fails_validation_is_not_sent_and_says_why(string appId, string title, string uri,
+        string tag, string group)
     {
         var loop = new ManualEventLoop();
         var sent = 0;
-        var toast = new ToastMessage(loop, (_, _, _, _, _) => sent++) { AppId = appId, Title = title, ActivationUri = uri, Tag = tag, Group = group };
+        var toast = new ToastMessage(loop, (_, _, _, _, _) => sent++)
+            { AppId = appId, Title = title, ActivationUri = uri, Tag = tag, Group = group };
         var failures = new List<string>();
         toast.Failed += failures.Add;
 
@@ -341,7 +359,8 @@ public sealed class NotificationTests
     {
         var loop = new ManualEventLoop();
         Action<string>? reject = null;
-        var toast = new ToastMessage(loop, (_, _, _, _, failed) => reject = failed) { AppId = "Winshell", Title = "Hi" };
+        var toast = new ToastMessage(loop, (_, _, _, _, failed) => reject = failed)
+            { AppId = "Winshell", Title = "Hi" };
         Assert.True(toast.Send());
 
         reject!("Rejected");
@@ -354,7 +373,8 @@ public sealed class NotificationTests
     [Fact]
     public void A_toast_has_at_most_five_actions()
     {
-        var toast = new ToastMessage(new ManualEventLoop(), (_, _, _, _, _) => { }) { AppId = "Winshell", Title = "Hi" };
+        var toast = new ToastMessage(new ManualEventLoop(), (_, _, _, _, _) => { })
+            { AppId = "Winshell", Title = "Hi" };
         for (var i = 0; i < 6; i++)
             toast.Actions.Add(new ToastAction { Text = "Open", ActivationUri = "winshell://open" });
 
@@ -377,13 +397,15 @@ public sealed class NotificationTests
         { Bmp(2, 2), ".bmp" },
         { WebP("VP8X", 2, 2), ".webp" },
         { WebP("VP8L", 2, 2), ".webp" },
-        { WebP("VP8 ", 2, 2), ".webp" },
+        { WebP("VP8 ", 2, 2), ".webp" }
     };
 
     [Theory]
     [MemberData(nameof(HugePictures))]
-    public void A_picture_over_the_pixel_cap_is_refused(byte[] data) =>
+    public void A_picture_over_the_pixel_cap_is_refused(byte[] data)
+    {
         Assert.False(NotificationAppIcons.TryDescribe(data, out _));
+    }
 
     public static TheoryData<byte[]> HugePictures => new()
     {
@@ -394,12 +416,14 @@ public sealed class NotificationTests
         Bmp(5000, -5000),
         WebP("VP8X", 5000, 5000),
         WebP("VP8L", 5000, 5000),
-        WebP("VP8 ", 5000, 5000),
+        WebP("VP8 ", 5000, 5000)
     };
 
     [Fact]
-    public void A_picture_of_exactly_the_cap_is_accepted() =>
+    public void A_picture_of_exactly_the_cap_is_accepted()
+    {
         Assert.True(NotificationAppIcons.TryDescribe(Png(4096, 4096), out _));
+    }
 
     [Fact]
     public void Anything_else_is_refused()
@@ -414,7 +438,7 @@ public sealed class NotificationTests
             Encoding.ASCII.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
             Encoding.ASCII.GetBytes("GIF8"),
             Encoding.ASCII.GetBytes("BM"),
-            Encoding.ASCII.GetBytes("RIFF0000WAVEfmt "),
+            Encoding.ASCII.GetBytes("RIFF0000WAVEfmt ")
         ];
 
         Assert.All(others, data => Assert.False(NotificationAppIcons.TryDescribe(data, out _)));
@@ -422,7 +446,11 @@ public sealed class NotificationTests
 
     private static byte[] Png(int width, int height)
     {
-        byte[] data = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 0, 0, 0, 0, 0];
+        byte[] data =
+        [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0,
+            0, 0, 0, 0, 0, 0, 0
+        ];
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(16), width);
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(20), height);
         return data;
@@ -431,7 +459,8 @@ public sealed class NotificationTests
     /// <summary>Two segments ahead of the frame header, with a pad byte, as a real JPEG has.</summary>
     private static byte[] Jpeg(int width, int height)
     {
-        byte[] data = [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 1, 2, 0xFF, 0xFF, 0xDB, 0, 3, 9, 0xFF, 0xC2, 0, 11, 8, 0, 0, 0, 0, 1, 1];
+        byte[] data =
+            [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 1, 2, 0xFF, 0xFF, 0xDB, 0, 3, 9, 0xFF, 0xC2, 0, 11, 8, 0, 0, 0, 0, 1, 1];
         BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(19), (ushort)height);
         BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(21), (ushort)width);
         return data;
@@ -473,7 +502,8 @@ public sealed class NotificationTests
                 break;
             case "VP8L":
                 data[20] = 0x2F;
-                BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(21), (uint)(width - 1) | (uint)(height - 1) << 14);
+                BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(21),
+                    (uint)(width - 1) | ((uint)(height - 1) << 14));
                 break;
             default:
                 data[23] = 0x9D;
@@ -483,6 +513,7 @@ public sealed class NotificationTests
                 BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(28), (ushort)height);
                 break;
         }
+
         return data;
     }
 
@@ -515,10 +546,17 @@ public sealed class NotificationTests
 
         public int Unwatched { get; private set; }
 
-        public Task<NotificationAccessStatus> RequestAccessAsync() =>
-            AccessError is { } error ? Task.FromException<NotificationAccessStatus>(error) : Task.FromResult(NotificationAccessStatus.Allowed);
+        public Task<NotificationAccessStatus> RequestAccessAsync()
+        {
+            return AccessError is { } error
+                ? Task.FromException<NotificationAccessStatus>(error)
+                : Task.FromResult(NotificationAccessStatus.Allowed);
+        }
 
-        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation) => Next?.Task ?? Task.FromResult(Current);
+        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
+        {
+            return Next?.Task ?? Task.FromResult(Current);
+        }
 
         public void Dismiss(uint id)
         {
@@ -527,6 +565,9 @@ public sealed class NotificationTests
             Dismissed.Add(id);
         }
 
-        public Action? WatchToasts(Action changed) => () => Unwatched++;
+        public Action? WatchToasts(Action changed)
+        {
+            return () => Unwatched++;
+        }
     }
 }

@@ -21,24 +21,40 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
 
     public nint Handle
     {
-        get { lock (_lock) return _target?.Handle ?? 0; }
+        get
+        {
+            lock (_lock)
+            {
+                return _target?.Handle ?? 0;
+            }
+        }
     }
 
     public int Count
     {
-        get { lock (_lock) return _ids.Count; }
+        get
+        {
+            lock (_lock)
+            {
+                return _ids.Count;
+            }
+        }
     }
 
     public bool TryGetId(OsChord chord, out int id)
     {
         lock (_lock)
+        {
             return _ids.TryGetValue(chord, out id);
+        }
     }
 
     public bool TryGetChord(int id, out OsChord chord)
     {
         lock (_lock)
+        {
             return _chords.TryGetValue(id, out chord);
+        }
     }
 
     /// <summary>Registers <paramref name="chord"/>, or says why Windows would not. A chord already registered here is active.</summary>
@@ -57,12 +73,11 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
             id = _nextId;
             target = _target!;
         }
+
         if (!target.Register(id, chord.Win32Modifiers | ModNoRepeat, (uint)chord.VirtualKey, out var code))
-        {
             return code == ErrorAlreadyRegistered
                 ? HotkeyClaim.Taken($"{chord.Text} is already in use by Windows or another app.")
                 : HotkeyClaim.Invalid($"{chord.Text} could not be registered ({code}).");
-        }
         lock (_lock)
         {
             if (_disposed || _target != target)
@@ -70,11 +85,13 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
                 target.Unregister(id);
                 return HotkeyClaim.Invalid("Hotkeys are shut down.");
             }
+
             if (_ids.ContainsKey(chord.OsKey))
             {
                 target.Unregister(id);
                 return HotkeyClaim.Active;
             }
+
             _ids[chord.OsKey] = id;
             _chords[id] = chord.OsKey;
             _nextId = id + 1;
@@ -94,22 +111,17 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
         lock (_lock)
         {
             foreach (var (chord, id) in _ids)
-            {
                 if (!inUse(chord))
                     ids.Add(id);
-            }
             foreach (var id in ids)
-            {
                 if (_chords.Remove(id, out var chord))
                     _ids.Remove(chord);
-            }
             target = _target;
         }
+
         if (target is not null)
-        {
             foreach (var id in ids)
                 target.Unregister(id);
-        }
         DestroyIfIdle();
     }
 
@@ -128,6 +140,7 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
             target = _target;
             _target = null;
         }
+
         if (target is not null)
         {
             foreach (var id in ids)
@@ -146,6 +159,7 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
             target = _target;
             _target = null;
         }
+
         target.Dispose();
     }
 
@@ -158,6 +172,7 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
             if (_disposed)
                 return false;
         }
+
         var target = HotkeyTarget.Create(id => NativeCallback.Guard(Log.Default, "hotkey", () => onHotkey(id)));
         if (target is null)
             return false;
@@ -168,6 +183,7 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
                 target.Dispose();
                 return !_disposed && _target is not null;
             }
+
             _target = target;
             return true;
         }

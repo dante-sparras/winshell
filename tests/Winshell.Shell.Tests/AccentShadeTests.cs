@@ -1,3 +1,4 @@
+using Windows.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -28,7 +29,8 @@ public sealed class AccentShadeTests
         var (windows, picked, followed) = await ShellFixture.On(shell =>
         {
             var controls = Application.Current.Resources.MergedDictionaries.OfType<XamlControlsResources>().Single();
-            var brush = (SolidColorBrush)((ResourceDictionary)controls.ThemeDictionaries["Default"])["ToggleSwitchFillOn"];
+            var brush =
+                (SolidColorBrush)((ResourceDictionary)controls.ThemeDictionaries["Default"])["ToggleSwitchFillOn"];
             var before = brush.Color;
             shell.AccentColor = "#D13438";
             var after = brush.Color;
@@ -42,7 +44,7 @@ public sealed class AccentShadeTests
         Assert.Equal(windows, followed);
     }
 
-    private static double Lightness(global::Windows.UI.Color color)
+    private static double Lightness(Color color)
     {
         var r = color.R / 255d;
         var g = color.G / 255d;

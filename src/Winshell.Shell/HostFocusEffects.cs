@@ -5,7 +5,10 @@ namespace Winshell;
 /// <summary>Carries out <see cref="WindowFocus"/>'s answers on a native window and the shell's outside clicks.</summary>
 internal sealed class HostFocusEffects(HostWindow host, ShellPlatform platform) : IFocusEffects
 {
-    public void AllowActivation(bool allow) => host.Placement.SetExStyle(Win32.WS_EX_NOACTIVATE, !allow);
+    public void AllowActivation(bool allow)
+    {
+        host.Placement.SetExStyle(Win32.WS_EX_NOACTIVATE, !allow);
+    }
 
     public void Show(bool activate)
     {
@@ -16,7 +19,10 @@ internal sealed class HostFocusEffects(HostWindow host, ShellPlatform platform) 
             Win32.ShowWindow(host.Handle, show);
     }
 
-    public void TakeForeground() => Win32.SetForegroundWindow(host.Handle);
+    public void TakeForeground()
+    {
+        Win32.SetForegroundWindow(host.Handle);
+    }
 
     public void TakeKeyboard()
     {
@@ -27,7 +33,10 @@ internal sealed class HostFocusEffects(HostWindow host, ShellPlatform platform) 
         host.Presentation.FocusContent();
     }
 
-    public void GrabOutsideClicks(bool on) => platform.OutsideClicks.Grab(host, on);
+    public void GrabOutsideClicks(bool on)
+    {
+        platform.OutsideClicks.Grab(host, on);
+    }
 
     private void JoinForegroundAndTakeIt()
     {

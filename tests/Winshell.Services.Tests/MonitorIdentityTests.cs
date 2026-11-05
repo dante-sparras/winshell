@@ -1,4 +1,3 @@
-
 namespace Winshell.Services.Tests;
 
 /// <summary>How a monitor device id becomes <c>ShellScreen.manufacturer</c> and <c>serialNumber</c>.</summary>

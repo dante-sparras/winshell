@@ -25,11 +25,12 @@ internal static class ShellFixture
     private static Thread StartThread()
     {
         // This process becomes an instance, and it must not join the user's own.
-        Environment.SetEnvironmentVariable("WINSHELL_LOCAL_DIR", Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N")));
+        Environment.SetEnvironmentVariable("WINSHELL_LOCAL_DIR",
+            Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N")));
         var thread = new Thread(() => Shell.Run<Configuration>(new ShellOptions { ShellId = "winshell-tests" }))
         {
             IsBackground = true,
-            Name = "WinUI",
+            Name = "WinUI"
         };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -43,18 +44,24 @@ internal static class ShellFixture
     }
 
     /// <summary>Runs <paramref name="action"/> on the shell's thread and returns what it returned.</summary>
-    public static Task<T> On<T>(Func<Shell, Task<T>> action) => Gate(async () =>
-        await OnThread(await Current().WaitAsync(TestContext.Current.CancellationToken), action));
+    public static Task<T> On<T>(Func<Shell, Task<T>> action)
+    {
+        return Gate(async () =>
+            await OnThread(await Current().WaitAsync(TestContext.Current.CancellationToken), action));
+    }
 
     /// <summary>
     /// Keeps every other shell action out until <paramref name="action"/> finishes. A test that opens a window from the
     /// control pipe, rather than from <see cref="On"/>, holds this across that window's whole life.
     /// </summary>
-    public static Task Hold(Func<Task> action) => Gate(async () =>
+    public static Task Hold(Func<Task> action)
     {
-        await action();
-        return true;
-    });
+        return Gate(async () =>
+        {
+            await action();
+            return true;
+        });
+    }
 
     private static async Task<T> Gate<T>(Func<Task<T>> body)
     {
@@ -82,7 +89,10 @@ internal static class ShellFixture
         }
     }
 
-    public static Task<T> On<T>(Func<Shell, T> action) => On(shell => Task.FromResult(action(shell)));
+    public static Task<T> On<T>(Func<Shell, T> action)
+    {
+        return On(shell => Task.FromResult(action(shell)));
+    }
 
     /// <summary>
     /// Closes the windows a turn opened and left open, before the next turn can see them, and keeps their names for
@@ -141,19 +151,26 @@ internal static class ShellFixture
     }
 
     /// <summary>The names of the windows <paramref name="test"/>'s turns on the shell left open.</summary>
-    internal static List<string> LeftOpenBy(IXunitTest test) => Left.TryRemove(test.UniqueID, out var names) ? names : [];
+    internal static List<string> LeftOpenBy(IXunitTest test)
+    {
+        return Left.TryRemove(test.UniqueID, out var names) ? names : [];
+    }
 
     /// <summary>A window as a failure names it: its type, its title or the name of what it shows, and what it shows.</summary>
     private static string Describe(HostWindow window)
     {
         var content = (window.Client as ShellWindow)?.Content;
-        var name = window.Client is FloatingWindow floating ? floating.Title : content is null ? "" : AutomationProperties.GetName(content);
+        var name = window.Client is FloatingWindow floating ? floating.Title :
+            content is null ? "" : AutomationProperties.GetName(content);
         return $"{window.Client.GetType().Name} \"{name}\" showing {content?.GetType().Name ?? "nothing"}";
     }
 
     private sealed class Configuration : ShellConfiguration
     {
-        public override void Start(Shell shell) => Ready.SetResult(shell);
+        public override void Start(Shell shell)
+        {
+            Ready.SetResult(shell);
+        }
     }
 }
 

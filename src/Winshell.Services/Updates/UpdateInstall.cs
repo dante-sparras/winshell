@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using Winshell.Native;
 
 namespace Winshell.Updates;
@@ -29,6 +30,7 @@ internal static class UpdateInstall
             if (best is null || version > best.Value.Version)
                 best = (version, dir);
         }
+
         return best;
     }
 
@@ -54,6 +56,7 @@ internal static class UpdateInstall
                     File.Move(target, aside);
                     moved.Add((target, aside));
                 }
+
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 File.Copy(file, target);
                 placed.Add(target);
@@ -64,12 +67,17 @@ internal static class UpdateInstall
             foreach (var file in placed)
                 TryDeleteFile(file);
             foreach (var (target, aside) in moved)
-            {
-                try { File.Move(aside, target, overwrite: true); }
-                catch (Exception back) when (back is IOException or UnauthorizedAccessException) { }
-            }
+                try
+                {
+                    File.Move(aside, target, true);
+                }
+                catch (Exception back) when (back is IOException or UnauthorizedAccessException)
+                {
+                }
+
             return e.Message;
         }
+
         TryDeleteDirectory(staged);
         return null;
     }
@@ -81,14 +89,17 @@ internal static class UpdateInstall
     /// <c>winshell.exe</c> is signed, every <c>.exe</c> and <c>.dll</c> in the update must be signed too.
     /// Returns null when it is in place, or why not.
     /// </summary>
-    public static string? ApplyVerified(string updatesDir, string staged, string installDir) =>
-        ApplyVerified(updatesDir, staged, installDir, Authenticode.Signer);
+    public static string? ApplyVerified(string updatesDir, string staged, string installDir)
+    {
+        return ApplyVerified(updatesDir, staged, installDir, Authenticode.Signer);
+    }
 
     /// <summary>
     /// The same install, with <paramref name="signer"/> giving the subject that signed a file, or null when it is not
     /// validly signed, so a test can cover signed installs without certificates.
     /// </summary>
-    internal static string? ApplyVerified(string updatesDir, string staged, string installDir, Func<string, string?> signer)
+    internal static string? ApplyVerified(string updatesDir, string staged, string installDir,
+        Func<string, string?> signer)
     {
         var version = Path.GetFileName(staged);
         var zip = UpdateTrust.ZipPath(updatesDir, version);
@@ -98,6 +109,7 @@ internal static class UpdateInstall
             DeleteStaged(updatesDir, staged, version);
             return "The staged update has no saved digest, so Winshell will not copy it.";
         }
+
         var fresh = UpdateTrust.ExtractPath(updatesDir);
         try
         {
@@ -109,20 +121,23 @@ internal static class UpdateInstall
                 var actual = UpdateTrust.Hash(stream);
                 if (!string.Equals(actual, digest, StringComparison.OrdinalIgnoreCase))
                 {
-                    mismatch = $"The staged update's SHA-256 is {actual}, but the saved digest says {digest.ToLowerInvariant()}.";
+                    mismatch =
+                        $"The staged update's SHA-256 is {actual}, but the saved digest says {digest.ToLowerInvariant()}.";
                 }
                 else
                 {
                     stream.Position = 0;
-                    System.IO.Compression.ZipFile.ExtractToDirectory(stream, fresh);
+                    ZipFile.ExtractToDirectory(stream, fresh);
                 }
             }
+
             mismatch ??= VersionMismatch(fresh, version) ?? SignerMismatch(fresh, installDir, signer);
             if (mismatch is not null)
             {
                 DeleteStaged(updatesDir, staged, version);
                 return mismatch;
             }
+
             var error = Apply(fresh, installDir);
             if (error is not null)
                 return error;
@@ -146,7 +161,8 @@ internal static class UpdateInstall
         var product = FileVersionInfo.GetVersionInfo(Path.Combine(extract, "winshell.exe")).ProductVersion;
         if (Updater.ParseVersion(product ?? "")?.ToString(3) == version)
             return null;
-        return $"The update is Winshell {version}, but its winshell.exe is {(string.IsNullOrEmpty(product) ? "unversioned" : product)}, so Winshell does not install it.";
+        return
+            $"The update is Winshell {version}, but its winshell.exe is {(string.IsNullOrEmpty(product) ? "unversioned" : product)}, so Winshell does not install it.";
     }
 
     /// <summary>
@@ -160,21 +176,22 @@ internal static class UpdateInstall
         if (signer(Path.Combine(installDir, "winshell.exe")) is not { } expected)
             return null;
         foreach (var name in UpdateSignature.Signed)
-        {
             if (!File.Exists(Path.Combine(extract, name)))
                 return $"This Winshell is signed, but the update has no {name}, so Winshell does not install it.";
-        }
         foreach (var file in Files(extract))
         {
-            if (!file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            if (!file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                !file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                 continue;
             var actual = signer(file);
             if (actual != expected && !UpdateSignature.IsMicrosoft(actual))
             {
                 var by = actual is null ? "is not validly signed" : $"is signed by {actual}";
-                return $"This Winshell is signed by {expected}, but the update's {Path.GetRelativePath(extract, file)} {by}, so Winshell does not install it.";
+                return
+                    $"This Winshell is signed by {expected}, but the update's {Path.GetRelativePath(extract, file)} {by}, so Winshell does not install it.";
             }
         }
+
         return null;
     }
 
@@ -185,7 +202,10 @@ internal static class UpdateInstall
     }
 
     /// <summary>Deletes an update that is staged, with its saved zip and digest.</summary>
-    public static void Discard(string updatesDir, string staged) => DeleteStaged(updatesDir, staged, Path.GetFileName(staged));
+    public static void Discard(string updatesDir, string staged)
+    {
+        DeleteStaged(updatesDir, staged, Path.GetFileName(staged));
+    }
 
     /// <summary>Every file under <paramref name="root"/>. A link fails the copy instead of being followed.</summary>
     private static List<string> Files(string root)
@@ -194,7 +214,6 @@ internal static class UpdateInstall
         var pending = new Stack<string>();
         pending.Push(root);
         while (pending.Count > 0)
-        {
             foreach (var child in Directory.EnumerateFileSystemEntries(pending.Pop()))
             {
                 if ((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
@@ -204,7 +223,7 @@ internal static class UpdateInstall
                 else
                     files.Add(child);
             }
-        }
+
         return files;
     }
 
@@ -221,27 +240,36 @@ internal static class UpdateInstall
                 TryDeleteDirectory(dir);
             TryDeleteDirectory(old);
         }
+
         UpdateTrust.Clean(updatesDir, current);
         if (!Directory.Exists(updatesDir))
             return;
         foreach (var dir in Directory.EnumerateDirectories(updatesDir))
-        {
             if (Updater.ParseVersion(Path.GetFileName(dir)) is not { } version || version <= current)
                 TryDeleteDirectory(dir);
-        }
         foreach (var file in Directory.EnumerateFiles(updatesDir, "*.partial"))
             TryDeleteFile(file);
     }
 
     private static void TryDeleteFile(string path)
     {
-        try { File.Delete(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private static void TryDeleteDirectory(string path)
     {
-        try { Directory.Delete(path, recursive: true); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        try
+        {
+            Directory.Delete(path, true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 }

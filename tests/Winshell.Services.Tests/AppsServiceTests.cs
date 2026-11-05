@@ -9,7 +9,9 @@ namespace Winshell.Services.Tests;
 /// </summary>
 public sealed class AppsServiceTests : IDisposable
 {
-    private readonly string _folder = Path.Combine(Path.GetTempPath(), "winshell-apps-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _folder =
+        Path.Combine(Path.GetTempPath(), "winshell-apps-tests", Guid.NewGuid().ToString("N"));
+
     private readonly ManualEventLoop _loop = new();
     private readonly FakeBackend _backend = new();
     private readonly List<string> _warnings = [];
@@ -21,20 +23,32 @@ public sealed class AppsServiceTests : IDisposable
         _log = new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") };
     }
 
-    public void Dispose() => Directory.Delete(_folder, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_folder, true);
+    }
 
-    private static AppRecord App(string name, bool hidden = false) => AppIndex.Packaged($"{name}!App", name, "")! with { Hidden = hidden };
+    private static AppRecord App(string name, bool hidden = false)
+    {
+        return AppIndex.Packaged($"{name}!App", name, "")! with { Hidden = hidden };
+    }
 
     /// <summary>A shortcut as a scan of a Programs folder lists it.</summary>
-    private static AppRecord Shortcut(string name) => new(
-        $"Accessories/{name}", name, "", $@"C:\Menu\{name}.lnk", $@"C:\Tools\{name}.exe", "", $"{name}.exe",
-        @"C:\Users\Me", name.ToLowerInvariant(), ["Accessories"], false, false, $@"C:\Menu\{name}.lnk");
+    private static AppRecord Shortcut(string name)
+    {
+        return new AppRecord(
+            $"Accessories/{name}", name, "", $@"C:\Menu\{name}.lnk", $@"C:\Tools\{name}.exe", "", $"{name}.exe",
+            @"C:\Users\Me", name.ToLowerInvariant(), ["Accessories"], false, false, $@"C:\Menu\{name}.lnk");
+    }
 
-    private static Dictionary<string, AppUsage> Usage(params (string Id, AppUsage Usage)[] rows) =>
-        rows.ToDictionary(row => row.Id, row => row.Usage, StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, AppUsage> Usage(params (string Id, AppUsage Usage)[] rows)
+    {
+        return rows.ToDictionary(row => row.Id, row => row.Usage, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>A service over a backend whose first scan finds <paramref name="apps"/>, in name order as a scan lists them.</summary>
-    private AppsService Start(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null, TimeProvider? time = null)
+    private AppsService Start(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null,
+        TimeProvider? time = null)
     {
         _backend.FirstScan = new AppSnapshot(apps, usage ?? Usage());
         var service = new AppsService(_loop, _log, _backend, time);
@@ -49,12 +63,15 @@ public sealed class AppsServiceTests : IDisposable
         _loop.Process();
     }
 
-    private static List<string> Names(IEnumerable<AppEntry> entries) => entries.Select(entry => entry.Name).ToList();
+    private static List<string> Names(IEnumerable<AppEntry> entries)
+    {
+        return entries.Select(entry => entry.Name).ToList();
+    }
 
     [Fact]
     public void Hidden_apps_stay_out_of_the_lists_and_can_still_be_found()
     {
-        using var apps = Start([App("Alpha"), App("Uninstall", hidden: true), App("Zeta")]);
+        using var apps = Start([App("Alpha"), App("Uninstall", true), App("Zeta")]);
 
         Assert.Equal(["Alpha", "Zeta"], Names(apps.Apps));
         Assert.Equal("Uninstall", apps.ById("Uninstall!App")?.Name);
@@ -135,7 +152,8 @@ public sealed class AppsServiceTests : IDisposable
         _loop.Woken += () => Interlocked.Increment(ref posts);
 
         // Activation is still running. A launch that waited for it would never finish, and nothing reaches the loop yet.
-        await Task.Run(entry.Launch, TestContext.Current.CancellationToken).WaitAsync(TestContext.Current.CancellationToken);
+        await Task.Run(entry.Launch, TestContext.Current.CancellationToken)
+            .WaitAsync(TestContext.Current.CancellationToken);
         Assert.Equal(["activate Alpha!App"], _backend.Opened);
         Assert.Equal(0, Volatile.Read(ref posts));
 
@@ -155,7 +173,8 @@ public sealed class AppsServiceTests : IDisposable
 
     [Theory]
     [InlineData(false, new[] { "apps: Failed to launch Alpha: no such file" })]
-    [InlineData(true, new[] { "apps: Failed to launch Alpha: not registered", "apps: Failed to launch Alpha: no such file" })]
+    [InlineData(true,
+        new[] { "apps: Failed to launch Alpha: not registered", "apps: Failed to launch Alpha: no such file" })]
     public void A_launch_that_opens_nothing_is_logged_and_not_counted(bool packaged, string[] warnings)
     {
         var alpha = packaged ? App("Alpha") : Shortcut("Alpha");
@@ -233,7 +252,8 @@ public sealed class AppsServiceTests : IDisposable
         File.WriteAllBytes(Path.Combine(_folder, "Able.lnk"), []);
         File.SetLastWriteTimeUtc(Path.Combine(_folder, "Beta.lnk"), same);
         File.SetLastWriteTimeUtc(Path.Combine(_folder, "Able.lnk"), same);
-        Assert.Equal(["Able", "Beta"], documents.Search("a").Select(document => document.Name).Where(name => name is "Able" or "Beta"));
+        Assert.Equal(["Able", "Beta"],
+            documents.Search("a").Select(document => document.Name).Where(name => name is "Able" or "Beta"));
 
         Assert.Empty(new RecentDocuments().Search(""));
         Assert.Empty(new RecentDocuments().Search("\t"));
@@ -298,7 +318,10 @@ public sealed class AppsServiceTests : IDisposable
             Changed?.Invoke();
         }
 
-        public void Start() => Show(FirstScan);
+        public void Start()
+        {
+            Show(FirstScan);
+        }
 
         public string? OpenShortcut(string path, string startIn)
         {

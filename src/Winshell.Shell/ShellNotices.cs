@@ -11,11 +11,19 @@ internal enum NoticeKind
     ConfigError,
 
     /// <summary>Something failed and Winshell wrote a crash report. It goes away by itself.</summary>
-    Crash,
+    Crash
 }
 
 /// <summary>What a notice says, and the file its button opens. A zero <paramref name="Timeout"/> keeps it until it is dismissed.</summary>
-internal sealed record Notice(NoticeKind Kind, string Title, string Detail, string Body, string Note, string ActionText, string Target, TimeSpan Timeout);
+internal sealed record Notice(
+    NoticeKind Kind,
+    string Title,
+    string Detail,
+    string Body,
+    string Note,
+    string ActionText,
+    string Target,
+    TimeSpan Timeout);
 
 /// <summary>
 /// Winshell's own notices: a configuration that did not build, and something that failed. The host shows them, so they
@@ -46,7 +54,8 @@ internal sealed class ShellNotices : IDisposable
     /// <param name="show">Shows a notice, given what its button does and what closing it does. Disposing takes it away.</param>
     /// <param name="open">Opens a file: the project that did not build, or a crash report.</param>
     /// <param name="isQuiet">Whether Windows is holding notifications back. A failure waits for it, and goes to the log.</param>
-    public ShellNotices(IEventLoop loop, Log log, CrashReports crashes, Func<Notice, Action, Action, IDisposable> show, Action<string> open, Func<bool> isQuiet)
+    public ShellNotices(IEventLoop loop, Log log, CrashReports crashes, Func<Notice, Action, Action, IDisposable> show,
+        Action<string> open, Func<bool> isQuiet)
     {
         _loop = loop;
         _log = log;
@@ -61,36 +70,50 @@ internal sealed class ShellNotices : IDisposable
     public Notice? Current { get; private set; }
 
     /// <summary>A full-screen app, a presentation, a busy state or quiet hours, the states in which Windows holds a toast back.</summary>
-    internal static bool QuietState(int state) => state is QunsBusy or QunsFullScreen or QunsPresentation or QunsQuietTime;
+    internal static bool QuietState(int state)
+    {
+        return state is QunsBusy or QunsFullScreen or QunsPresentation or QunsQuietTime;
+    }
 
     /// <summary>Whether Windows is holding notifications back, as it reports it now.</summary>
-    internal static bool WindowsIsQuiet() => Win32.SHQueryUserNotificationState(out var state) == 0 && QuietState(state);
+    internal static bool WindowsIsQuiet()
+    {
+        return Win32.SHQueryUserNotificationState(out var state) == 0 && QuietState(state);
+    }
 
     /// <summary>How long a crash notice stays for someone who asked Windows to keep notifications up. A shorter setting doesn't shorten it.</summary>
-    internal static TimeSpan CrashTimeoutFor(uint messageSeconds) =>
-        TimeSpan.FromSeconds(Math.Max(CrashTimeout.TotalSeconds, messageSeconds));
+    internal static TimeSpan CrashTimeoutFor(uint messageSeconds)
+    {
+        return TimeSpan.FromSeconds(Math.Max(CrashTimeout.TotalSeconds, messageSeconds));
+    }
 
     /// <summary>The notice for a configuration that did not build, while the last one that did keeps running.</summary>
-    public static Notice ForBuildError(string error, string projectFile) => new(
-        NoticeKind.BuildError,
-        "Your configuration did not build",
-        Path.GetFileName(projectFile),
-        error,
-        "Winshell keeps running the last version that built.",
-        "Open project",
-        projectFile,
-        TimeSpan.Zero);
+    public static Notice ForBuildError(string error, string projectFile)
+    {
+        return new Notice(
+            NoticeKind.BuildError,
+            "Your configuration did not build",
+            Path.GetFileName(projectFile),
+            error,
+            "Winshell keeps running the last version that built.",
+            "Open project",
+            projectFile,
+            TimeSpan.Zero);
+    }
 
     /// <summary>The notice for a file that does not read, while what came from it before keeps working.</summary>
-    public static Notice ForConfigError(string error, string file) => new(
-        NoticeKind.ConfigError,
-        "This file has an error",
-        Path.GetFileName(file),
-        error,
-        "Winshell keeps what it had.",
-        "Open file",
-        file,
-        TimeSpan.Zero);
+    public static Notice ForConfigError(string error, string file)
+    {
+        return new Notice(
+            NoticeKind.ConfigError,
+            "This file has an error",
+            Path.GetFileName(file),
+            error,
+            "Winshell keeps what it had.",
+            "Open file",
+            file,
+            TimeSpan.Zero);
+    }
 
     /// <summary>Shows a file's error, or takes it away once the file reads again.</summary>
     public void ShowConfigError(string file, string error)
@@ -118,7 +141,8 @@ internal sealed class ShellNotices : IDisposable
     {
         var subject = report.Subject.Length > 0 ? report.Subject : "a window";
         var title = char.ToUpperInvariant(subject[0]) + subject[1..] + " stopped working";
-        return new Notice(NoticeKind.Crash, title, "", report.Recovery, "A crash report was saved on this PC.", "Open report", report.Path, timeout);
+        return new Notice(NoticeKind.Crash, title, "", report.Recovery, "A crash report was saved on this PC.",
+            "Open report", report.Path, timeout);
     }
 
     /// <summary>Shows a notice in place of the one showing. The notice is what reports problems, so one it has itself goes to the log.</summary>
@@ -155,7 +179,8 @@ internal sealed class ShellNotices : IDisposable
             return;
         CrashFollowUp.MarkShown(stateFile, closed.Path);
         var recovery = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
-        var previous = new CrashReport(closed.Path, "Winshell", new InvalidOperationException(recovery), true) { Subject = "Winshell", Recovery = recovery };
+        var previous = new CrashReport(closed.Path, "Winshell", new InvalidOperationException(recovery), true)
+            { Subject = "Winshell", Recovery = recovery };
         _loop.Post(() => Show(ForCrash(previous, timeout)));
     }
 
@@ -190,9 +215,13 @@ internal sealed class ShellNotices : IDisposable
                 _log.Info("shell", $"A crash notice was held back while Windows is quiet. See {report.Path}");
                 return;
             }
+
             Show(ForCrash(report, ReadCrashTimeout()));
         });
     }
 
-    internal static TimeSpan ReadCrashTimeout() => MessageDuration.Seconds() is { } seconds ? CrashTimeoutFor(seconds) : CrashTimeout;
+    internal static TimeSpan ReadCrashTimeout()
+    {
+        return MessageDuration.Seconds() is { } seconds ? CrashTimeoutFor(seconds) : CrashTimeout;
+    }
 }

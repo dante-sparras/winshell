@@ -15,7 +15,10 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
     /// <summary>Raised with what posted work or a timer threw, after it is logged.</summary>
     public event Action<Exception>? Failed;
 
-    public void Post(Action action) => queue.TryEnqueue(() => Run(action));
+    public void Post(Action action)
+    {
+        queue.TryEnqueue(() => Run(action));
+    }
 
     public IDisposable Schedule(TimeSpan delay, Action action)
     {
@@ -23,7 +26,10 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
         timer.IsRepeating = false;
         timer.Interval = delay < TimeSpan.Zero ? TimeSpan.Zero : delay;
         lock (_timers)
+        {
             _timers.Add(timer);
+        }
+
         timer.Tick += (_, _) =>
         {
             Forget(timer);
@@ -37,10 +43,15 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
     {
         timer.Stop();
         lock (_timers)
+        {
             _timers.Remove(timer);
+        }
     }
 
-    public void RequestFrame(Action action) => queue.TryEnqueue(DispatcherQueuePriority.Low, () => Run(action));
+    public void RequestFrame(Action action)
+    {
+        queue.TryEnqueue(DispatcherQueuePriority.Low, () => Run(action));
+    }
 
     private void Run(Action action)
     {
@@ -59,6 +70,9 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
 
     private sealed class Timer(DispatcherLoop loop, DispatcherQueueTimer timer) : IDisposable
     {
-        public void Dispose() => loop.Forget(timer);
+        public void Dispose()
+        {
+            loop.Forget(timer);
+        }
     }
 }

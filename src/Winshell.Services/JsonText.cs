@@ -14,6 +14,6 @@ internal static class JsonText
     public static JsonWriterOptions IndentedWriter { get; } = new()
     {
         Indented = true,
-        Encoder = Encoder,
+        Encoder = Encoder
     };
 }

@@ -1,3 +1,4 @@
+using System.Security;
 using Microsoft.Win32;
 using Winshell.Native;
 
@@ -6,18 +7,23 @@ namespace Winshell.Apps;
 /// <summary>How often and how recently Windows has run an app. <see cref="LastUsedUnixMilliseconds"/> is 0 when unknown.</summary>
 internal readonly record struct AppUsage(int RunCount, long LastUsedUnixMilliseconds)
 {
-    public static AppUsage Merge(AppUsage left, AppUsage right) =>
-        new(Math.Max(left.RunCount, right.RunCount), Math.Max(left.LastUsedUnixMilliseconds, right.LastUsedUnixMilliseconds));
+    public static AppUsage Merge(AppUsage left, AppUsage right)
+    {
+        return new AppUsage(Math.Max(left.RunCount, right.RunCount),
+            Math.Max(left.LastUsedUnixMilliseconds, right.LastUsedUnixMilliseconds));
+    }
 
     /// <summary>The usage recorded for an app's id, target, shortcut, or program name. Keys are matched ignoring case.</summary>
     public static AppUsage Lookup(IReadOnlyDictionary<string, AppUsage> usage, AppRecord app)
     {
         var best = default(AppUsage);
+
         void Take(string key)
         {
             if (key.Length > 0 && usage.TryGetValue(key, out var found))
                 best = Merge(best, found);
         }
+
         Take(app.AppId);
         Take(app.Id);
         Take(app.Target);
@@ -65,6 +71,7 @@ internal static class AppUsageReader
                 continue;
             Add(usage, name, parsed);
         }
+
         return usage;
     }
 
@@ -79,6 +86,7 @@ internal static class AppUsageReader
             else if (c is >= 'A' and <= 'Z')
                 chars[i] = (char)('A' + (c - 'A' + 13) % 26);
         }
+
         return new string(chars);
     }
 
@@ -113,11 +121,11 @@ internal static class AppUsageReader
             count = BitConverter.ToInt32(data, 0);
             fileTime = BitConverter.ToInt64(data, 8);
         }
+
         if (count < 0)
             count = 0;
         var last = 0L;
         if (fileTime > 0)
-        {
             try
             {
                 var time = DateTimeOffset.FromFileTime(fileTime);
@@ -128,7 +136,7 @@ internal static class AppUsageReader
             {
                 last = 0;
             }
-        }
+
         if (count == 0 && last == 0)
             return false;
         usage = new AppUsage(count, last);
@@ -162,15 +170,14 @@ internal static class AppUsageReader
             if (key is null)
                 return counts;
             foreach (var name in key.GetValueNames())
-            {
                 if (TryCount(key.GetValue(name), out var count) && count > 0)
                     counts.Add(new KeyValuePair<string, int>(name, count));
-            }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
         {
             return counts;
         }
+
         return counts;
     }
 
@@ -204,16 +211,15 @@ internal static class AppUsageReader
                 if (count is null)
                     continue;
                 foreach (var name in count.GetValueNames())
-                {
                     if (count.GetValue(name) is byte[] data)
                         entries.Add((name, data));
-                }
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
         {
             return entries;
         }
+
         return entries;
     }
 }

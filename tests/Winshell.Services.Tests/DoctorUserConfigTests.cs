@@ -9,29 +9,38 @@ namespace Winshell.Services.Tests;
 /// </summary>
 public sealed class DoctorUserConfigTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-doctor-user-config", Guid.NewGuid().ToString("N"));
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "winshell-doctor-user-config", Guid.NewGuid().ToString("N"));
 
-    public DoctorUserConfigTests() => Directory.CreateDirectory(_dir);
+    public DoctorUserConfigTests()
+    {
+        Directory.CreateDirectory(_dir);
+    }
 
-    public void Dispose() => Directory.Delete(_dir, true);
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
 
     [Theory]
     [InlineData(26300, 1, "26H2", false, CheckStatus.Pass)]
     [InlineData(22000, 1, "21H2", false, CheckStatus.Warn)]
     [InlineData(19045, 1, "22H2", false, CheckStatus.Fail)]
-    public void Windows_mentions_transparency_and_a_contrast_theme_without_changing_the_result(int build, int revision, string? version, bool server, CheckStatus status)
+    public void Windows_mentions_transparency_and_a_contrast_theme_without_changing_the_result(int build, int revision,
+        string? version, bool server, CheckStatus status)
     {
         var plain = Doctor.Windows(build, revision, version, server);
-        var both = Doctor.Windows(build, revision, version, server, transparencyOff: true, contrastTheme: true);
-        var transparency = Doctor.Windows(build, revision, version, server, transparencyOff: true);
+        var both = Doctor.Windows(build, revision, version, server, true, true);
+        var transparency = Doctor.Windows(build, revision, version, server, true);
         var contrast = Doctor.Windows(build, revision, version, server, contrastTheme: true);
 
         Assert.Equal(status, plain.Status);
         Assert.Equal(plain.Status, both.Status);
         Assert.Equal(plain.Fix, both.Fix);
-        Assert.Equal(plain.Message, Doctor.Windows(build, revision, version, server, transparencyOff: false, contrastTheme: false).Message);
+        Assert.Equal(plain.Message, Doctor.Windows(build, revision, version, server, false, false).Message);
         Assert.StartsWith(plain.Message + ". ", both.Message, StringComparison.Ordinal);
-        Assert.Contains("Transparency effects are off, so Mica and Acrylic look flat.", both.Message, StringComparison.Ordinal);
+        Assert.Contains("Transparency effects are off, so Mica and Acrylic look flat.", both.Message,
+            StringComparison.Ordinal);
         Assert.Contains("A contrast theme is on.", both.Message, StringComparison.Ordinal);
         Assert.Contains("Transparency effects are off", transparency.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("contrast theme", transparency.Message, StringComparison.OrdinalIgnoreCase);
@@ -57,7 +66,8 @@ public sealed class DoctorUserConfigTests : IDisposable
         Assert.Contains(Printed(preferences), warned.Message, StringComparison.Ordinal);
         Assert.Contains("until the file parses", warned.Fix, StringComparison.Ordinal);
 
-        var failed = Run(Context(config, local, crashes, problem: "Winshell cannot read the config folder: denied")).Single(c => c.Id == "project");
+        var failed = Run(Context(config, local, crashes, problem: "Winshell cannot read the config folder: denied"))
+            .Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Fail, failed.Status);
         Assert.Equal("Winshell cannot read the config folder: denied", failed.Message);
@@ -71,7 +81,8 @@ public sealed class DoctorUserConfigTests : IDisposable
         Directory.CreateDirectory(config);
         File.WriteAllText(Path.Combine(config, "preferences.toml"), "colorScheme =\n");
 
-        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"))).Single(c => c.Id == "project");
+        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")))
+            .Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Equal("No configuration project, so winshell run starts nothing.", check.Message);
@@ -102,7 +113,8 @@ public sealed class DoctorUserConfigTests : IDisposable
         var decoy = Path.Combine(shell, "preferences.toml");
         File.WriteAllText(decoy, "colorScheme =\n");
 
-        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), projectFile)).Single(c => c.Id == "project");
+        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), projectFile))
+            .Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Contains(Printed(preferences) + "[", check.Message, StringComparison.Ordinal);
@@ -137,15 +149,22 @@ public sealed class DoctorUserConfigTests : IDisposable
         var downloaded = checks.Single(c => c.Id == "downloaded");
         Assert.Equal(CheckStatus.Fail, downloaded.Status);
         Assert.Contains("was downloaded from the internet", downloaded.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("preferences.toml", checks.Single(c => c.Id == "project").Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("preferences.toml", checks.Single(c => c.Id == "project").Message,
+            StringComparison.Ordinal);
     }
 
-    private static DoctorContext Context(string config, string local, string crashes, string? project = null, string? problem = null) =>
-        new(Environment.ProcessPath!, config, project, problem, [], local, crashes);
+    private static DoctorContext Context(string config, string local, string crashes, string? project = null,
+        string? problem = null)
+    {
+        return new DoctorContext(Environment.ProcessPath!, config, project, problem, [], local, crashes);
+    }
 
     /// <summary>The path <see cref="Doctor.Run"/> prints: the user's local folder is <c>%LOCALAPPDATA%</c>.</summary>
-    private static string Printed(string path) => path.Replace(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "%LOCALAPPDATA%",
-        StringComparison.OrdinalIgnoreCase);
+    private static string Printed(string path)
+    {
+        return path.Replace(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "%LOCALAPPDATA%",
+            StringComparison.OrdinalIgnoreCase);
+    }
 }

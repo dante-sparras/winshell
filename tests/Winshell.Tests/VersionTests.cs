@@ -28,10 +28,13 @@ public class VersionTests
             if (File.Exists(path))
             {
                 using var json = JsonDocument.Parse(File.ReadAllText(path));
-                return json.RootElement.GetProperty(".").GetString() ?? throw new InvalidOperationException("The release-please manifest has no version.");
+                return json.RootElement.GetProperty(".").GetString() ??
+                       throw new InvalidOperationException("The release-please manifest has no version.");
             }
+
             dir = dir.Parent;
         }
+
         throw new InvalidOperationException("The release-please manifest is not above the test output.");
     }
 }

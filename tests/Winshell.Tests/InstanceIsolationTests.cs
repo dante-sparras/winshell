@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Xunit.Sdk;
 
 namespace Winshell.Tests;
 
@@ -16,7 +19,10 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
     // The instances' own local folder, so the list holds only what this test started and the user's is left alone.
     private string Local => Path.Combine(_dir, "local");
 
-    private string RunDir(string id) => Path.Combine(Local, "run", id);
+    private string RunDir(string id)
+    {
+        return Path.Combine(Local, "run", id);
+    }
 
     private string Config(string folder)
     {
@@ -69,13 +75,14 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
         // The shape left on disk before processStart was recorded: same pid, earlier launch, no processStart.
         var legacy = File.ReadAllText(Path.Combine(RunDir(liveId), "instance.json"));
         legacy = legacy.Replace($"\"id\": \"{liveId}\"", $"\"id\": \"{staleId}\"", StringComparison.Ordinal);
-        legacy = legacy.Replace($"\"pipe\": \"winshell-{liveId}\"", $"\"pipe\": \"winshell-{staleId}\"", StringComparison.Ordinal);
+        legacy = legacy.Replace($"\"pipe\": \"winshell-{liveId}\"", $"\"pipe\": \"winshell-{staleId}\"",
+            StringComparison.Ordinal);
         var launched = live.GetProperty("launchTime").GetDateTime().AddHours(-3);
-        legacy = System.Text.RegularExpressions.Regex.Replace(
+        legacy = Regex.Replace(
             legacy,
             "\"launchTime\": \"[^\"]+\"",
-            "\"launchTime\": \"" + launched.ToString("o", System.Globalization.CultureInfo.InvariantCulture) + "\"");
-        legacy = System.Text.RegularExpressions.Regex.Replace(legacy, ",\\s*\"processStart\": \\d+", "");
+            "\"launchTime\": \"" + launched.ToString("o", CultureInfo.InvariantCulture) + "\"");
+        legacy = Regex.Replace(legacy, ",\\s*\"processStart\": \\d+", "");
         File.WriteAllText(Path.Combine(dir, "instance.json"), legacy);
         var reusedId = Instances.NewId();
         var reusedDir = RunDir(reusedId);
@@ -89,9 +96,10 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
             DateTime.Now,
             "winshell-" + reusedId,
             Path.Combine(reusedDir, "log.txt"),
-            ProcessStart: 1,
+            1,
             ProcessName: process.ProcessName);
-        File.WriteAllText(Path.Combine(reusedDir, "instance.json"), JsonSerializer.Serialize(reused, InstanceJson.Default.InstanceInfo));
+        File.WriteAllText(Path.Combine(reusedDir, "instance.json"),
+            JsonSerializer.Serialize(reused, InstanceJson.Default.InstanceInfo));
 
         var rows = Listed().Where(i => i.GetProperty("pid").GetInt32() == process.Id).ToList();
         Assert.Single(rows);
@@ -105,7 +113,10 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
         return process;
     }
 
-    private JsonElement Info(Process process) => Listed().Single(i => i.GetProperty("pid").GetInt32() == process.Id);
+    private JsonElement Info(Process process)
+    {
+        return Listed().Single(i => i.GetProperty("pid").GetInt32() == process.Id);
+    }
 
     private List<JsonElement> Listed()
     {
@@ -115,7 +126,8 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
 
     private int Show(Process process)
     {
-        var result = WinshellCli.Run(["ipc", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "show"], ("WINSHELL_LOCAL_DIR", Local));
+        var result = WinshellCli.Run(["ipc", "--pid", process.Id.ToString(CultureInfo.InvariantCulture), "show"],
+            ("WINSHELL_LOCAL_DIR", Local));
         result.AssertExitCode(0);
         return result.Code;
     }
@@ -137,17 +149,20 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
             {
                 try
                 {
-                    Winshell("kill", "--pid", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    Winshell("kill", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
                 }
-                catch (Xunit.Sdk.XunitException)
+                catch (XunitException)
                 {
                 }
+
                 if (!process.WaitForExit(5000))
                     process.Kill();
                 process.WaitForExit();
             }
+
             process.Dispose();
         }
+
         try
         {
             Directory.Delete(_dir, true);

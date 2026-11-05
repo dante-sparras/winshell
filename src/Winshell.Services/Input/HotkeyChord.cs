@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Winshell.Input;
 
 [Flags]
@@ -7,7 +9,7 @@ internal enum HotkeyModifiers
     Win = 1,
     Ctrl = 2,
     Alt = 4,
-    Shift = 8,
+    Shift = 8
 }
 
 internal enum WinKeySide
@@ -15,7 +17,7 @@ internal enum WinKeySide
     None,
     Either,
     Left,
-    Right,
+    Right
 }
 
 /// <summary>Virtual keys a hotkey chord can name.</summary>
@@ -24,11 +26,14 @@ internal static class VirtualKeys
     public const int LeftWin = 0x5B;
     public const int RightWin = 0x5C;
 
-    public static bool IsModifier(int vk) => vk switch
+    public static bool IsModifier(int vk)
     {
-        0x10 or 0x11 or 0x12 or 0x5B or 0x5C or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5 => true,
-        _ => false,
-    };
+        return vk switch
+        {
+            0x10 or 0x11 or 0x12 or 0x5B or 0x5C or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5 => true,
+            _ => false
+        };
+    }
 }
 
 /// <summary>One chord, such as <c>Ctrl+Shift+K</c> or the Windows key by itself.</summary>
@@ -72,16 +77,19 @@ internal sealed class HotkeyChord
         }
     }
 
-    public static HotkeyChord WindowsKey(WinKeySide side) => new(
-        HotkeyModifiers.Win,
-        0,
-        side,
-        side switch
-        {
-            WinKeySide.Left => "Left Win",
-            WinKeySide.Right => "Right Win",
-            _ => "Win",
-        });
+    public static HotkeyChord WindowsKey(WinKeySide side)
+    {
+        return new HotkeyChord(
+            HotkeyModifiers.Win,
+            0,
+            side,
+            side switch
+            {
+                WinKeySide.Left => "Left Win",
+                WinKeySide.Right => "Right Win",
+                _ => "Win"
+            });
+    }
 
     public static HotkeyChord Key(HotkeyModifiers modifiers, int virtualKey, string keyText)
     {
@@ -132,6 +140,7 @@ internal sealed class HotkeySequence
             error = "A key sequence can have at most 8 chords.";
             return false;
         }
+
         var chords = new List<HotkeyChord>(pieces.Length);
         foreach (var piece in pieces)
         {
@@ -139,6 +148,7 @@ internal sealed class HotkeySequence
                 return false;
             chords.Add(chord!);
         }
+
         sequence = new HotkeySequence(chords, string.Join(", ", chords.Select(c => c.Text)));
         return true;
     }
@@ -152,12 +162,14 @@ internal sealed class HotkeySequence
             error = "A key sequence has an empty chord. For example, Ctrl+K, C.";
             return false;
         }
+
         var parts = raw.Split('+');
         if (parts.Length > 5 || parts.Any(p => string.IsNullOrWhiteSpace(p)))
         {
             error = Fail(raw, "A chord has an empty key. Write the comma key as Comma, as in Ctrl+Comma.");
             return false;
         }
+
         HotkeyModifiers mods = 0;
         KeyName? key = null;
         foreach (var piece in parts)
@@ -169,11 +181,13 @@ internal sealed class HotkeySequence
                 error = Fail(raw, $"\"{part}\" is not a Windows key name. Use Win, Ctrl, Alt or Shift.");
                 return false;
             }
+
             if (RejectedSide(norm, out var sideError))
             {
                 error = Fail(raw, sideError);
                 return false;
             }
+
             if (WinSide(norm) is { } side)
             {
                 if (parts.Length != 1)
@@ -183,45 +197,54 @@ internal sealed class HotkeySequence
                         : "Windows hotkeys cannot tell Right Win from Win. Use Win+K, or Right Win by itself.");
                     return false;
                 }
+
                 chord = HotkeyChord.WindowsKey(side);
                 return true;
             }
+
             if (norm is "win" or "windows")
             {
                 if (!AddMod(ref mods, HotkeyModifiers.Win, raw, "Win", out error))
                     return false;
                 continue;
             }
+
             if (norm is "ctrl" or "control")
             {
                 if (!AddMod(ref mods, HotkeyModifiers.Ctrl, raw, "Ctrl", out error))
                     return false;
                 continue;
             }
+
             if (norm == "alt")
             {
                 if (!AddMod(ref mods, HotkeyModifiers.Alt, raw, "Alt", out error))
                     return false;
                 continue;
             }
+
             if (norm == "shift")
             {
                 if (!AddMod(ref mods, HotkeyModifiers.Shift, raw, "Shift", out error))
                     return false;
                 continue;
             }
+
             if (!Keys.TryGetValue(norm, out var found))
             {
                 error = Fail(raw, $"Unknown key \"{part}\". Use Win, Ctrl, Alt and Shift, as in Ctrl+Shift+K or Win.");
                 return false;
             }
+
             if (key is not null)
             {
                 error = Fail(raw, "A chord can only have one key.");
                 return false;
             }
+
             key = found;
         }
+
         if (key is not { } named)
         {
             if (mods == HotkeyModifiers.Win)
@@ -229,26 +252,34 @@ internal sealed class HotkeySequence
                 chord = HotkeyChord.WindowsKey(WinKeySide.Either);
                 return true;
             }
-            error = Fail(raw, "A chord needs a key, unless it is the Windows key by itself. For example, Ctrl+Shift+K or Win.");
+
+            error = Fail(raw,
+                "A chord needs a key, unless it is the Windows key by itself. For example, Ctrl+Shift+K or Win.");
             return false;
         }
+
         chord = HotkeyChord.Key(mods, named.VirtualKey, named.Canonical);
         return true;
     }
 
-    private static bool AddMod(ref HotkeyModifiers mods, HotkeyModifiers flag, string raw, string name, out string? error)
+    private static bool AddMod(ref HotkeyModifiers mods, HotkeyModifiers flag, string raw, string name,
+        out string? error)
     {
         if ((mods & flag) != 0)
         {
             error = Fail(raw, $"{name} is repeated.");
             return false;
         }
+
         mods |= flag;
         error = null;
         return true;
     }
 
-    private static string Fail(string raw, string detail) => $"Could not read \"{raw}\" as a Windows key chord. {detail}";
+    private static string Fail(string raw, string detail)
+    {
+        return $"Could not read \"{raw}\" as a Windows key chord. {detail}";
+    }
 
     private static string Norm(string part)
     {
@@ -256,12 +287,15 @@ internal sealed class HotkeySequence
         return string.Join(' ', words).ToLowerInvariant();
     }
 
-    private static WinKeySide? WinSide(string norm) => norm switch
+    private static WinKeySide? WinSide(string norm)
     {
-        "left win" or "left windows" or "lwin" => WinKeySide.Left,
-        "right win" or "right windows" or "rwin" => WinKeySide.Right,
-        _ => null,
-    };
+        return norm switch
+        {
+            "left win" or "left windows" or "lwin" => WinKeySide.Left,
+            "right win" or "right windows" or "rwin" => WinKeySide.Right,
+            _ => null
+        };
+    }
 
     private static bool RejectedSide(string norm, out string message)
     {
@@ -273,14 +307,14 @@ internal sealed class HotkeySequence
                 "Windows hotkeys cannot tell Left Alt from Alt. Use Alt.",
             "left shift" or "right shift" or "lshift" or "rshift" =>
                 "Windows hotkeys cannot tell Left Shift from Shift. Use Shift.",
-            _ => "",
+            _ => ""
         };
         return message.Length > 0;
     }
 
     private static readonly HashSet<string> LinuxModifiers = new(StringComparer.Ordinal)
     {
-        "meta", "super", "mod4", "primary", "hyper",
+        "meta", "super", "mod4", "primary", "hyper"
     };
 
     private readonly record struct KeyName(int VirtualKey, string Canonical);
@@ -290,6 +324,7 @@ internal sealed class HotkeySequence
     private static Dictionary<string, KeyName> BuildKeys()
     {
         var keys = new Dictionary<string, KeyName>(StringComparer.Ordinal);
+
         void Add(int vk, string canonical, params string[] aliases)
         {
             var key = new KeyName(vk, canonical);
@@ -297,12 +332,13 @@ internal sealed class HotkeySequence
             foreach (var alias in aliases)
                 keys[Norm(alias)] = key;
         }
+
         for (var letter = 'A'; letter <= 'Z'; letter++)
             Add(letter, letter.ToString());
         for (var digit = '0'; digit <= '9'; digit++)
             Add(digit, digit.ToString());
         for (var function = 1; function <= 24; function++)
-            Add(0x6F + function, "F" + function.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Add(0x6F + function, "F" + function.ToString(CultureInfo.InvariantCulture));
         Add(0x08, "Backspace", "Back");
         Add(0x09, "Tab");
         Add(0x0D, "Enter", "Return");
@@ -332,7 +368,8 @@ internal sealed class HotkeySequence
         Add(0xB2, "Media Stop", "MediaStop");
         Add(0xB3, "Media Play Pause", "MediaPlayPause");
         for (var pad = 0; pad <= 9; pad++)
-            Add(0x60 + pad, "Numpad " + pad.ToString(System.Globalization.CultureInfo.InvariantCulture), "Numpad" + pad.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Add(0x60 + pad, "Numpad " + pad.ToString(CultureInfo.InvariantCulture),
+                "Numpad" + pad.ToString(CultureInfo.InvariantCulture));
         Add(0x6A, "Numpad Multiply", "Numpad Star");
         Add(0x6B, "Numpad Add");
         Add(0x6D, "Numpad Subtract");

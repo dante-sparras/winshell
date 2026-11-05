@@ -29,9 +29,14 @@ internal interface IInstanceControl
     }
 
     /// <summary>What <c>winshell inspect</c> asked of the shell, and the text it prints. <see cref="IpcException"/> is a failed request.</summary>
-    Task<string> Inspect(string command, IReadOnlyList<string> args) =>
+    Task<string> Inspect(string command, IReadOnlyList<string> args)
+    {
         throw new IpcException("This shell can't be inspected.");
+    }
 
     /// <summary>A failed request as the client reads it.</summary>
-    string Describe(Exception e) => $"ipc: {e.GetType().Name}: {e.Message}";
+    string Describe(Exception e)
+    {
+        return $"ipc: {e.GetType().Name}: {e.Message}";
+    }
 }

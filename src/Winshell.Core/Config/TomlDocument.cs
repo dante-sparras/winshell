@@ -41,7 +41,8 @@ internal sealed class TomlDocument
     /// Reads <paramref name="text"/>. <paramref name="error"/> is <c>path[line:column]: message</c>, or
     /// <c>path: message</c> for a file past 1 MiB or nesting past 64 levels, when it does not parse.
     /// </summary>
-    public static bool TryParse(string where, string text, [NotNullWhen(true)] out TomlDocument? document, out string error)
+    public static bool TryParse(string where, string text, [NotNullWhen(true)] out TomlDocument? document,
+        out string error)
     {
         document = null;
         if (!TryLoad(where, text, out var syntax, out var table, out error))
@@ -60,9 +61,13 @@ internal sealed class TomlDocument
         var desired = Plain(value);
         var owned = FindOwned(_document, key);
         if (desired is null)
+        {
             Take(owned);
+        }
         else if (!owned.Defined)
+        {
             AppendNew(key, desired, comment);
+        }
         else
         {
             var current = Values.GetValueOrDefault(key);
@@ -73,68 +78,87 @@ internal sealed class TomlDocument
             var updated = UpdateOwned(owned, key, changes);
             // A null for a part under its own header or in dotted keys is not taken out in place.
             if (!updated || !TryLoad("", _document.ToString(), out _, out var read, out _)
-                || Keeps(Plain(read.TryGetValue(key, out var after) ? after : null), changes))
+                         || Keeps(Plain(read.TryGetValue(key, out var after) ? after : null), changes))
             {
                 _document = SyntaxParser.Parse(before);
                 Take(FindOwned(_document, key));
                 AppendNew(key, Merged(current, desired), comment);
             }
         }
+
         _values = null;
     }
 
     /// <summary>The file's text.</summary>
-    public override string ToString() => _document.ToString();
+    public override string ToString()
+    {
+        return _document.ToString();
+    }
 
     /// <summary>A value as the plain types this class reads and writes.</summary>
-    public static object? Plain(object? value) => value switch
+    public static object? Plain(object? value)
     {
-        null or string or bool or long or double => value,
-        int i => (long)i,
-        float f => (double)f,
-        TomlTable table => PlainTable(table),
-        IReadOnlyDictionary<string, object?> table => table.ToDictionary(pair => pair.Key, pair => Plain(pair.Value)),
-        IEnumerable items => items.Cast<object?>().Select(Plain).ToList(),
-        // A date or a time.
-        _ => value.ToString() ?? "",
-    };
+        return value switch
+        {
+            null or string or bool or long or double => value,
+            int i => (long)i,
+            float f => (double)f,
+            TomlTable table => PlainTable(table),
+            IReadOnlyDictionary<string, object?> table => table.ToDictionary(pair => pair.Key,
+                pair => Plain(pair.Value)),
+            IEnumerable items => items.Cast<object?>().Select(Plain).ToList(),
+            // A date or a time.
+            _ => value.ToString() ?? ""
+        };
+    }
 
     /// <summary>Whether two plain values are the same value. An integer and a float can be.</summary>
-    public static bool Same(object? left, object? right) => (left, right) switch
+    public static bool Same(object? left, object? right)
     {
-        (IReadOnlyList<object?> a, IReadOnlyList<object?> b) => a.Count == b.Count && a.Zip(b).All(pair => Same(pair.First, pair.Second)),
-        (IReadOnlyDictionary<string, object?> a, IReadOnlyDictionary<string, object?> b) =>
-            a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && Same(pair.Value, other)),
-        (long a, double b) => a == b,
-        (double a, long b) => a == b,
-        _ => Equals(left, right),
-    };
+        return (left, right) switch
+        {
+            (IReadOnlyList<object?> a, IReadOnlyList<object?> b) => a.Count == b.Count &&
+                                                                    a.Zip(b).All(pair => Same(pair.First, pair.Second)),
+            (IReadOnlyDictionary<string, object?> a, IReadOnlyDictionary<string, object?> b) =>
+                a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && Same(pair.Value, other)),
+            (long a, double b) => a == b,
+            (double a, long b) => a == b,
+            _ => Equals(left, right)
+        };
+    }
 
     /// <summary>
     /// What <paramref name="desired"/> changes in <paramref name="current"/>: a table only with its keys that change, and
     /// a list with each table in it the same way, by position.
     /// </summary>
-    private static object Changes(object? current, object desired) => (current, desired) switch
+    private static object Changes(object? current, object desired)
     {
-        (IReadOnlyDictionary<string, object?> old, IReadOnlyDictionary<string, object?> table) => table
-            .Where(pair => !old.TryGetValue(pair.Key, out var was) || !Same(was, pair.Value))
-            .ToDictionary(
-                pair => pair.Key,
-                pair => pair.Value is null ? null : Changes(old.GetValueOrDefault(pair.Key), pair.Value)),
-        (IReadOnlyList<object?> old, IReadOnlyList<object?> list) =>
-            list.Select((item, i) => item is not null && i < old.Count ? Changes(old[i], item) : item).ToList(),
-        _ => desired,
-    };
+        return (current, desired) switch
+        {
+            (IReadOnlyDictionary<string, object?> old, IReadOnlyDictionary<string, object?> table) => table
+                .Where(pair => !old.TryGetValue(pair.Key, out var was) || !Same(was, pair.Value))
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value is null ? null : Changes(old.GetValueOrDefault(pair.Key), pair.Value)),
+            (IReadOnlyList<object?> old, IReadOnlyList<object?> list) =>
+                list.Select((item, i) => item is not null && i < old.Count ? Changes(old[i], item) : item).ToList(),
+            _ => desired
+        };
+    }
 
     /// <summary>Whether <paramref name="read"/> still has a key that <paramref name="changes"/> takes out.</summary>
-    private static bool Keeps(object? read, object changes) => (read, changes) switch
+    private static bool Keeps(object? read, object changes)
     {
-        (IReadOnlyDictionary<string, object?> table, IReadOnlyDictionary<string, object?> taken) =>
-            taken.Any(pair => table.TryGetValue(pair.Key, out var value) && (pair.Value is null || Keeps(value, pair.Value))),
-        (IReadOnlyList<object?> list, IReadOnlyList<object?> items) =>
-            list.Zip(items).Any(pair => pair.Second is not null && Keeps(pair.First, pair.Second)),
-        _ => false,
-    };
+        return (read, changes) switch
+        {
+            (IReadOnlyDictionary<string, object?> table, IReadOnlyDictionary<string, object?> taken) =>
+                taken.Any(pair =>
+                    table.TryGetValue(pair.Key, out var value) && (pair.Value is null || Keeps(value, pair.Value))),
+            (IReadOnlyList<object?> list, IReadOnlyList<object?> items) =>
+                list.Zip(items).Any(pair => pair.Second is not null && Keeps(pair.First, pair.Second)),
+            _ => false
+        };
+    }
 
     /// <summary>What an update in place makes of <paramref name="current"/>, for writing it again whole.</summary>
     private static object Merged(object? current, object desired)
@@ -144,22 +168,23 @@ internal sealed class TomlDocument
             case (IReadOnlyDictionary<string, object?> old, IReadOnlyDictionary<string, object?> table):
                 var merged = old.ToDictionary();
                 foreach (var (key, value) in table)
-                {
                     if (value is null)
                         merged.Remove(key);
                     else
                         merged[key] = Merged(old.GetValueOrDefault(key), value);
-                }
                 return merged;
             case (IReadOnlyList<object?> old, IReadOnlyList<object?> list):
-                return list.Select((item, i) => item is not null && i < old.Count ? Merged(old[i], item) : item).ToList();
+                return list.Select((item, i) => item is not null && i < old.Count ? Merged(old[i], item) : item)
+                    .ToList();
             default:
                 return desired;
         }
     }
 
-    private static Dictionary<string, object?> PlainTable(TomlTable table) =>
-        table.ToDictionary(pair => pair.Key, pair => Plain(pair.Value));
+    private static Dictionary<string, object?> PlainTable(TomlTable table)
+    {
+        return table.ToDictionary(pair => pair.Key, pair => Plain(pair.Value));
+    }
 
     private void Take(Owned owned)
     {
@@ -194,22 +219,26 @@ internal sealed class TomlDocument
             UpdateKeyValue(simple[0], desired);
             return true;
         }
+
         // No rows is not an array of tables, so an empty list is written as [] and stays a choice the file remembers.
         if (simple.Count == 0 && dotted.Count == 0 && tables.Count == 0 && rows.Count > 0
-            && desired is IReadOnlyList<object?> { Count: > 0 } list && list.All(item => item is IReadOnlyDictionary<string, object?>))
+            && desired is IReadOnlyList<object?> { Count: > 0 } list &&
+            list.All(item => item is IReadOnlyDictionary<string, object?>))
         {
             UpdateRows(rows, list, name);
             return true;
         }
+
         if (simple.Count == 0 && rows.Count == 0 && desired is IReadOnlyDictionary<string, object?> table
             && (tables.Count > 0 || dotted.Count > 0))
         {
             if (tables.Count > 0)
                 UpdateItems(tables[0], table);
             if (dotted.Count > 0)
-                UpdateDotted(dotted, table, name, addMissing: tables.Count == 0);
+                UpdateDotted(dotted, table, name, tables.Count == 0);
             return true;
         }
+
         return false;
     }
 
@@ -229,7 +258,8 @@ internal sealed class TomlDocument
         }
     }
 
-    private void UpdateDotted(List<KeyValueSyntax> dotted, IReadOnlyDictionary<string, object?> desired, string name, bool addMissing)
+    private void UpdateDotted(List<KeyValueSyntax> dotted, IReadOnlyDictionary<string, object?> desired, string name,
+        bool addMissing)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var kv in dotted)
@@ -243,6 +273,7 @@ internal sealed class TomlDocument
             else
                 UpdateKeyValue(kv, leaf);
         }
+
         if (addMissing)
             AddDotted(desired, [name], seen);
     }
@@ -257,6 +288,7 @@ internal sealed class TomlDocument
                 AddDotted(nested, path, seen);
                 continue;
             }
+
             if (Format(child) is { } written && !seen.Contains(string.Join(".", path.Skip(1))))
                 AppendRaw(_document, string.Join(".", path.Select(Key)), written, _newline);
         }
@@ -276,6 +308,7 @@ internal sealed class TomlDocument
                 return false;
             current = next;
         }
+
         return true;
     }
 
@@ -306,6 +339,7 @@ internal sealed class TomlDocument
                     integer.Token!.TokenKind = TokenKind.Integer;
                     integer.Token.Text = number.ToString(CultureInfo.InvariantCulture);
                 }
+
                 return true;
             case FloatValueSyntax number when desired is double value:
                 return UpdateFloat(number, value);
@@ -344,6 +378,7 @@ internal sealed class TomlDocument
             if (item.Value is null || !TryUpdate(item.Value, desired[i]))
                 item.Value = ParsedValue(desired[i], item.Value);
         }
+
         while (array.Items.ChildrenCount > desired.Count)
             RemoveLastItem(array);
         for (var i = array.Items.ChildrenCount; i < desired.Count; i++)
@@ -356,29 +391,31 @@ internal sealed class TomlDocument
         {
             InlineTableItemSyntax? found = null;
             foreach (var item in table.Items)
-            {
                 if (Names(item.KeyValue?.Key, key))
                 {
                     found = item;
                     break;
                 }
-            }
+
             if (child is null)
             {
                 if (found is not null)
                     RemoveInline(table, found);
                 continue;
             }
+
             if (found?.KeyValue is { } kv)
             {
                 UpdateKeyValue(kv, child);
                 continue;
             }
+
             if (table.Items.ChildrenCount > 0)
             {
                 var previous = table.Items.GetChild(table.Items.ChildrenCount - 1)!;
                 previous.Comma ??= Comma();
             }
+
             var assignment = ParseAssignment(Key(key), Format(child) ?? "\"\"", _newline);
             assignment.EndOfLineToken = null;
             table.Items.Add(new InlineTableItemSyntax(assignment));
@@ -393,10 +430,12 @@ internal sealed class TomlDocument
             var existing = FindItem(items, key);
             if (child is null)
             {
-                if (existing is not null && Remove(items, existing, _newline) is { } kept && table.EndOfLineToken is { } line)
+                if (existing is not null && Remove(items, existing, _newline) is { } kept &&
+                    table.EndOfLineToken is { } line)
                     line.TrailingTrivia = [.. line.TrailingTrivia ?? [], .. kept];
                 continue;
             }
+
             if (existing is not null)
                 UpdateKeyValue(existing, child);
             else if (Format(child) is { } text)
@@ -419,10 +458,8 @@ internal sealed class TomlDocument
         var text = new StringBuilder();
         text.Append("[[").Append(Key(name)).Append("]]").Append(_newline);
         foreach (var (key, child) in row)
-        {
             if (Format(child) is { } value)
                 text.Append(Key(key)).Append(" = ").Append(value).Append(_newline);
-        }
         var parsed = SyntaxParser.Parse(text.ToString());
         var table = (TableArraySyntax)parsed.Tables.GetChild(0)!;
         parsed.Tables.RemoveChild(table);

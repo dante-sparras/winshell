@@ -16,7 +16,10 @@ public class DesktopSpaceTests
     [InlineData(144u, 1.5)]
     [InlineData(192u, 2.0)]
     [InlineData(0u, 1.0)]
-    public void A_dpi_is_a_scale_of_96(uint dpi, double scale) => Assert.Equal(scale, DesktopSpace.Scale(dpi));
+    public void A_dpi_is_a_scale_of_96(uint dpi, double scale)
+    {
+        Assert.Equal(scale, DesktopSpace.Scale(dpi));
+    }
 
     [Fact]
     public void A_scaled_monitor_keeps_its_corner_and_divides_its_size()
@@ -72,7 +75,8 @@ public class DesktopSpaceTests
     [Fact]
     public void A_logical_point_belongs_to_at_most_one_monitor()
     {
-        var monitors = new[] { DesktopSpace.ToLogical(Primary, Primary, 1), DesktopSpace.ToLogical(Scaled, Scaled, 1.5) };
+        var monitors = new[]
+            { DesktopSpace.ToLogical(Primary, Primary, 1), DesktopSpace.ToLogical(Scaled, Scaled, 1.5) };
         Assert.Equal(0, DesktopSpace.MonitorAt(new Point(100, 100), monitors));
         Assert.Equal(1, DesktopSpace.MonitorAt(new Point(1920, 0), monitors));
         Assert.Equal(1, DesktopSpace.MonitorAt(new Point(3600, 959), monitors));
@@ -81,8 +85,11 @@ public class DesktopSpaceTests
         Assert.Null(DesktopSpace.MonitorAt(new Point(2000, 1000), monitors));
     }
 
-    private static PanelPlacement Panel(Edges anchors, double width = 0, double height = 0, double left = 0, double top = 0, double right = 0, double bottom = 0) =>
-        new(null, anchors, left, top, right, bottom, width, height, false, 0, true, false);
+    private static PanelPlacement Panel(Edges anchors, double width = 0, double height = 0, double left = 0,
+        double top = 0, double right = 0, double bottom = 0)
+    {
+        return new PanelPlacement(null, anchors, left, top, right, bottom, width, height, false, 0, true, false);
+    }
 
     [Fact]
     public void A_top_bar_spans_its_area_at_the_monitor_scale()
@@ -104,14 +111,15 @@ public class DesktopSpaceTests
     [Fact]
     public void A_corner_panel_keeps_its_margins_in_logical_pixels()
     {
-        var rect = DesktopSpace.Anchor(ScaledWork, Panel(Edges.Bottom | Edges.Right, width: 200, height: 100, right: 8, bottom: 8), 1.5);
+        var rect = DesktopSpace.Anchor(ScaledWork, Panel(Edges.Bottom | Edges.Right, 200, 100, right: 8, bottom: 8),
+            1.5);
         Assert.Equal(new RECT(4480 - 12 - 300, 1392 - 12 - 150, 4480 - 12, 1392 - 12), rect);
     }
 
     [Fact]
     public void An_unanchored_panel_is_centered()
     {
-        var rect = DesktopSpace.Anchor(Primary, Panel(Edges.None, width: 400, height: 300), 1);
+        var rect = DesktopSpace.Anchor(Primary, Panel(Edges.None, 400, 300), 1);
         Assert.Equal(new RECT(760, 390, 1160, 690), rect);
     }
 

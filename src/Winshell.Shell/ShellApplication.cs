@@ -12,13 +12,23 @@ namespace Winshell;
 /// </summary>
 internal sealed class ShellApplication(Action started) : Application, IXamlMetadataProvider
 {
-    private readonly List<IXamlMetadataProvider> _providers = [new XamlControlsXamlMetaDataProvider(), .. CompiledProviders()];
+    private readonly List<IXamlMetadataProvider> _providers =
+        [new XamlControlsXamlMetaDataProvider(), .. CompiledProviders()];
 
-    public IXamlType GetXamlType(Type type) => _providers.Select(p => p.GetXamlType(type)).FirstOrDefault(t => t is not null)!;
+    public IXamlType GetXamlType(Type type)
+    {
+        return _providers.Select(p => p.GetXamlType(type)).FirstOrDefault(t => t is not null)!;
+    }
 
-    public IXamlType GetXamlType(string fullName) => _providers.Select(p => p.GetXamlType(fullName)).FirstOrDefault(t => t is not null)!;
+    public IXamlType GetXamlType(string fullName)
+    {
+        return _providers.Select(p => p.GetXamlType(fullName)).FirstOrDefault(t => t is not null)!;
+    }
 
-    public XmlnsDefinition[] GetXmlnsDefinitions() => [.. _providers.SelectMany(p => p.GetXmlnsDefinitions())];
+    public XmlnsDefinition[] GetXmlnsDefinitions()
+    {
+        return [.. _providers.SelectMany(p => p.GetXmlnsDefinitions())];
+    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -31,16 +41,14 @@ internal sealed class ShellApplication(Action started) : Application, IXamlMetad
         if (Assembly.GetEntryAssembly() is not { } entry)
             yield break;
         var assemblies = entry.GetReferencedAssemblies()
-            .Where(a => a.Name is { } name && !name.StartsWith("Microsoft.", StringComparison.Ordinal) && !name.StartsWith("System", StringComparison.Ordinal))
+            .Where(a => a.Name is { } name && !name.StartsWith("Microsoft.", StringComparison.Ordinal) &&
+                        !name.StartsWith("System", StringComparison.Ordinal))
             .Select(Assembly.Load)
             .Prepend(entry);
         foreach (var assembly in assemblies)
-        {
-            foreach (var type in assembly.GetExportedTypes())
-            {
-                if (type.Name == "XamlMetaDataProvider" && typeof(IXamlMetadataProvider).IsAssignableFrom(type) && !type.IsAbstract)
-                    yield return (IXamlMetadataProvider)Activator.CreateInstance(type)!;
-            }
-        }
+        foreach (var type in assembly.GetExportedTypes())
+            if (type.Name == "XamlMetaDataProvider" && typeof(IXamlMetadataProvider).IsAssignableFrom(type) &&
+                !type.IsAbstract)
+                yield return (IXamlMetadataProvider)Activator.CreateInstance(type)!;
     }
 }

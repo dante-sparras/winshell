@@ -12,6 +12,7 @@ internal sealed class DirectoryWatch : IDisposable
 {
     // FILE_NOTIFY_CHANGE_FILE_NAME | SIZE | LAST_WRITE.
     public const uint FileChanges = 0x00000001 | 0x00000008 | 0x00000010;
+
     // FILE_NOTIFY_CHANGE_FILE_NAME | DIR_NAME.
     public const uint NameChanges = 0x00000001 | 0x00000002;
 
@@ -38,7 +39,8 @@ internal sealed class DirectoryWatch : IDisposable
     /// <param name="changed">Called with the name of each thing that changed, relative to the folder.</param>
     /// <param name="lost">Called once when the folder went away or changes were dropped. Nothing is reported after it.</param>
     /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
-    public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost, bool subtree = false)
+    public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost,
+        bool subtree = false)
     {
         if (DirectoryChanges.Open(path, filter, subtree) is not { } changes)
             return null;
@@ -51,6 +53,7 @@ internal sealed class DirectoryWatch : IDisposable
             watch.Dispose();
             return null;
         }
+
         return watch;
     }
 
@@ -73,6 +76,7 @@ internal sealed class DirectoryWatch : IDisposable
                 _lost();
                 return;
             }
+
             foreach (var name in names)
                 _changed(name);
             if (!_changes.Read())
@@ -90,14 +94,12 @@ internal sealed class DirectoryWatch : IDisposable
             return;
         _stopped = true;
         if (_thread.ThreadState != ThreadState.Unstarted)
-        {
             // Cancel until the thread ends. It may be between reads, where one cancel would miss it.
             do
             {
                 _changes.Cancel();
-            }
-            while (!_thread.Join(1));
-        }
+            } while (!_thread.Join(1));
+
         _changes.Dispose();
         _started.Dispose();
     }

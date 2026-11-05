@@ -10,9 +10,15 @@ public sealed class DoctorConfigurationTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
 
-    public DoctorConfigurationTests() => Directory.CreateDirectory(_root);
+    public DoctorConfigurationTests()
+    {
+        Directory.CreateDirectory(_root);
+    }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_root, true);
+    }
 
     private const string Plain = "<Project Sdk=\"Microsoft.NET.Sdk\" />";
 
@@ -68,7 +74,8 @@ public sealed class DoctorConfigurationTests : IDisposable
     [Fact]
     public void A_built_program_passes_until_a_source_is_newer()
     {
-        var file = Project("Mine.csproj", "<Project><PropertyGroup><AssemblyName>Shell</AssemblyName></PropertyGroup></Project>");
+        var file = Project("Mine.csproj",
+            "<Project><PropertyGroup><AssemblyName>Shell</AssemblyName></PropertyGroup></Project>");
         File.SetLastWriteTimeUtc(file, Long);
         var program = Path.Combine(_root, "bin", "shell", "Shell.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(program)!);
@@ -116,5 +123,9 @@ public sealed class DoctorConfigurationTests : IDisposable
         return path;
     }
 
-    private string[] Entries() => Directory.EnumerateFileSystemEntries(_root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+    private string[] Entries()
+    {
+        return Directory.EnumerateFileSystemEntries(_root, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal).ToArray();
+    }
 }

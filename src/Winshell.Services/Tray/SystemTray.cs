@@ -9,14 +9,18 @@ public enum BalloonIcon
 {
     /// <summary>No icon.</summary>
     None = 0,
+
     /// <summary>The information icon.</summary>
     Info = 1,
+
     /// <summary>The warning icon.</summary>
     Warning = 2,
+
     /// <summary>The error icon.</summary>
     Error = 3,
+
     /// <summary>The app's own icon.</summary>
-    App = 4,
+    App = 4
 }
 
 /// <summary>
@@ -69,17 +73,18 @@ public sealed class SystemTray : ObservableObject, IDisposable
     /// <c>SHAppBarMessage</c> passes the rectangle by an address in that process, which Explorer cannot use once a tray
     /// passes the message on: <c>ABM_QUERYPOS</c> and <c>ABM_SETPOS</c> then do nothing, and the work area stays as it was.
     /// </summary>
-    internal static IDisposable ExplorerFirst() => new Restore([.. Opened.Keys.Where(tray => tray._backend.Lower())]);
+    internal static IDisposable ExplorerFirst()
+    {
+        return new Restore([.. Opened.Keys.Where(tray => tray._backend.Lower())]);
+    }
 
     private sealed class Restore(List<SystemTray> trays) : IDisposable
     {
         public void Dispose()
         {
             foreach (var tray in trays)
-            {
                 if (Opened.ContainsKey(tray))
                     tray._backend.Raise();
-            }
         }
     }
 
@@ -92,11 +97,13 @@ public sealed class SystemTray : ObservableObject, IDisposable
         if (!_backend.TryOwn())
         {
             if (!_waiting)
-                _log.Info("tray", "Another winshell instance is the notification area; this one takes over when it exits");
+                _log.Info("tray",
+                    "Another winshell instance is the notification area; this one takes over when it exits");
             _waiting = true;
             _timer = _loop.Schedule(TimeSpan.FromMilliseconds(500), Start);
             return;
         }
+
         _waiting = false;
         if (!_backend.Open(_icons.Apply))
         {
@@ -104,6 +111,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
             _log.Warn("tray", "Could not create the notification area window; the system tray stays empty");
             return;
         }
+
         _open = true;
         Opened[this] = 0;
         _answered = _backend.Explorer;
@@ -113,7 +121,10 @@ public sealed class SystemTray : ObservableObject, IDisposable
         _backend.Broadcast();
     }
 
-    private void UseSettings() => _icons.UseSettings(_backend.ReadSettings());
+    private void UseSettings()
+    {
+        _icons.UseSettings(_backend.ReadSettings());
+    }
 
     /// <summary>
     /// Drops icons of apps that ended without removing them, and checks the taskbar order as a fallback for a
@@ -125,10 +136,8 @@ public sealed class SystemTray : ObservableObject, IDisposable
         {
             _backend.Raise();
             foreach (var icon in _icons.Icons.ToArray())
-            {
                 if (_backend.ProcessOf(icon.Window) == 0)
                     _icons.Remove(icon.Key);
-            }
         }
         finally
         {
@@ -159,7 +168,10 @@ public sealed class SystemTray : ObservableObject, IDisposable
         });
     }
 
-    private (int ProcessId, string ProgramPath) OwnerOf(nint window) => ((int)_backend.ProcessOf(window), _backend.ProgramOf(window));
+    private (int ProcessId, string ProgramPath) OwnerOf(nint window)
+    {
+        return ((int)_backend.ProcessOf(window), _backend.ProgramOf(window));
+    }
 
     private void OnChanged(TrayIcon icon)
     {
@@ -171,6 +183,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
                 item.Refresh();
             return;
         }
+
         if (icon.Hidden)
             return;
         item = new SystemTrayItem(_clicker, icon);
@@ -243,7 +256,6 @@ public sealed class SystemTrayItem : ObservableObject
         Id = Executable.Length > 0 ? Path.GetFileNameWithoutExtension(Executable) : icon.Key;
         AppName = Id;
         if (Executable.Length > 0)
-        {
             try
             {
                 if (FileVersionInfo.GetVersionInfo(Executable).FileDescription is { Length: > 0 } description)
@@ -252,7 +264,6 @@ public sealed class SystemTrayItem : ObservableObject
             catch (FileNotFoundException)
             {
             }
-        }
     }
 
     /// <summary>Raised once, just after the icon is added to <see cref="SystemTray.Items"/>.</summary>
@@ -293,23 +304,40 @@ public sealed class SystemTrayItem : ObservableObject
     {
         if (_icon.Image is not { } image)
             return null;
-        return size > 0 && size != image.Width && _icon.Resource is { } resource ? IconImage.FromResource(resource, size) ?? image : image;
+        return size > 0 && size != image.Width && _icon.Resource is { } resource
+            ? IconImage.FromResource(resource, size) ?? image
+            : image;
     }
 
     /// <summary>A left click at the cursor, which most apps answer by showing their window.</summary>
-    public void Click() => _clicker.Click(_icon, TrayClick.Left, null);
+    public void Click()
+    {
+        _clicker.Click(_icon, TrayClick.Left, null);
+    }
 
     /// <summary>A double click at the cursor, which many older apps need before they show their window.</summary>
-    public void DoubleClick() => _clicker.Click(_icon, TrayClick.Double, null);
+    public void DoubleClick()
+    {
+        _clicker.Click(_icon, TrayClick.Double, null);
+    }
 
     /// <summary>A middle click at the cursor. What it does is up to the app.</summary>
-    public void MiddleClick() => _clicker.Click(_icon, TrayClick.Middle, null);
+    public void MiddleClick()
+    {
+        _clicker.Click(_icon, TrayClick.Middle, null);
+    }
 
     /// <summary>A right click, which asks the app to open its menu at the cursor.</summary>
-    public void Display() => _clicker.Click(_icon, TrayClick.Menu, null);
+    public void Display()
+    {
+        _clicker.Click(_icon, TrayClick.Menu, null);
+    }
 
     /// <summary>A right click, which asks the app to open its menu at a point on the virtual desktop, in physical pixels.</summary>
-    public void Display(int x, int y) => _clicker.Click(_icon, TrayClick.Menu, (x, y));
+    public void Display(int x, int y)
+    {
+        _clicker.Click(_icon, TrayClick.Menu, (x, y));
+    }
 
     internal void Refresh()
     {
@@ -318,9 +346,15 @@ public sealed class SystemTrayItem : ObservableObject
         Set(ref _overflow, _icon.Overflow, nameof(Overflow));
     }
 
-    internal void OnReady() => Ready?.Invoke();
+    internal void OnReady()
+    {
+        Ready?.Invoke();
+    }
 
-    internal void OnBalloon(string title, string message, BalloonIcon icon) => Balloon?.Invoke(title, message, icon);
+    internal void OnBalloon(string title, string message, BalloonIcon icon)
+    {
+        Balloon?.Invoke(title, message, icon);
+    }
 }
 
 /// <summary>An app's tray menu. The app draws it; <see cref="Display()"/> asks the app to open it.</summary>
@@ -328,11 +362,20 @@ public sealed class SystemTrayMenu
 {
     private readonly SystemTrayItem _item;
 
-    internal SystemTrayMenu(SystemTrayItem item) => _item = item;
+    internal SystemTrayMenu(SystemTrayItem item)
+    {
+        _item = item;
+    }
 
     /// <summary>Opens the menu at the cursor.</summary>
-    public void Display() => _item.Display();
+    public void Display()
+    {
+        _item.Display();
+    }
 
     /// <summary>Opens the menu at a point on the virtual desktop, in physical pixels.</summary>
-    public void Display(int x, int y) => _item.Display(x, y);
+    public void Display(int x, int y)
+    {
+        _item.Display(x, y);
+    }
 }

@@ -23,8 +23,10 @@ public abstract class ObservableObject : INotifyPropertyChanged
     }
 
     /// <summary>Reports a change of <paramref name="property"/>, by default the calling property.</summary>
-    protected void Changed([CallerMemberName] string property = "") =>
+    protected void Changed([CallerMemberName] string property = "")
+    {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+    }
 
     /// <summary>Reports a change of a property read from a snapshot, when the two snapshots differ.</summary>
     protected void Changed(bool changed, string property)

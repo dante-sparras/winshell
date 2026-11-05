@@ -12,7 +12,10 @@ internal readonly struct DuplicateHold : IDisposable
 {
     private readonly Mutex? _mutex;
 
-    private DuplicateHold(Mutex mutex) => _mutex = mutex;
+    private DuplicateHold(Mutex mutex)
+    {
+        _mutex = mutex;
+    }
 
     public bool Acquired => _mutex is not null;
 
@@ -20,13 +23,21 @@ internal readonly struct DuplicateHold : IDisposable
     /// The mutex for a configuration's program, which is one shell by its shell id, wherever it was built. An id means
     /// that shell only in one local folder, whose instances are the ones it can see.
     /// </summary>
-    public static string ShellMutexName(string shellId) => ShellMutexName(shellId, ShellLocations.LocalRoot);
+    public static string ShellMutexName(string shellId)
+    {
+        return ShellMutexName(shellId, ShellLocations.LocalRoot);
+    }
 
     /// <summary>The mutex <paramref name="shellId"/> holds when its local folder is <paramref name="localRoot"/>.</summary>
-    internal static string ShellMutexName(string shellId, string localRoot) => @"Local\winshell-shell-" + Hash(localRoot + "\n" + shellId);
+    internal static string ShellMutexName(string shellId, string localRoot)
+    {
+        return @"Local\winshell-shell-" + Hash(localRoot + "\n" + shellId);
+    }
 
-    private static string Hash(string text) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToUpperInvariant())));
+    private static string Hash(string text)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToUpperInvariant())));
+    }
 
     /// <summary>Claims <paramref name="mutexName"/>, unless <paramref name="isSameShell"/> matches a running instance.</summary>
     public static DuplicateHold TryClaim(string mutexName, Func<InstanceInfo, bool> isSameShell)
@@ -42,11 +53,13 @@ internal readonly struct DuplicateHold : IDisposable
             // The previous shell crashed while it held this. The wait succeeded and this start owns it.
             mine = true;
         }
+
         if (!mine)
         {
             mutex.Dispose();
             return default;
         }
+
         // A shell started without --no-duplicate holds no mutex. Its instance.json is the only record of it.
         if (Instances.List(false).Any(i => isSameShell(i.Info)))
         {
@@ -54,6 +67,7 @@ internal readonly struct DuplicateHold : IDisposable
             mutex.Dispose();
             return default;
         }
+
         return new DuplicateHold(mutex);
     }
 

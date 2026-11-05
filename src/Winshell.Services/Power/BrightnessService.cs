@@ -82,7 +82,8 @@ public sealed class BrightnessService : ObservableObject, IDisposable
     private bool _ready;
     private bool _disposed;
 
-    internal BrightnessService(IEventLoop loop, Log log, SnapshotSource<BrightnessSnapshot>? source = null, BrightnessWriter? writer = null)
+    internal BrightnessService(IEventLoop loop, Log log, SnapshotSource<BrightnessSnapshot>? source = null,
+        BrightnessWriter? writer = null)
     {
         _log = log;
         source ??= BrightnessBackend.Instance;
@@ -101,7 +102,8 @@ public sealed class BrightnessService : ObservableObject, IDisposable
     {
         if (_disposed)
             return;
-        Monitors.Sync(snapshot.Monitors, m => m.DeviceName, i => i.DeviceName, _ => new BrightnessMonitor(_writer, _log), (m, i) => m.Update(i));
+        Monitors.Sync(snapshot.Monitors, m => m.DeviceName, i => i.DeviceName,
+            _ => new BrightnessMonitor(_writer, _log), (m, i) => m.Update(i));
         Set(ref _ready, snapshot.Ready, nameof(Ready));
     }
 

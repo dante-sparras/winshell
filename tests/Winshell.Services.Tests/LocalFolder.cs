@@ -6,6 +6,9 @@ namespace Winshell.Services.Tests;
 internal static class LocalFolder
 {
     [ModuleInitializer]
-    internal static void Set() =>
-        Environment.SetEnvironmentVariable("WINSHELL_LOCAL_DIR", Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N")));
+    internal static void Set()
+    {
+        Environment.SetEnvironmentVariable("WINSHELL_LOCAL_DIR",
+            Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N")));
+    }
 }

@@ -1,10 +1,12 @@
-using System.Collections.Generic;
-
 namespace Winshell.Bluetooth;
 
 /// <summary>The class and appearance Windows reported for one association endpoint.</summary>
 internal readonly record struct BluetoothClassReport(
-    ushort? Major, ushort? Minor, ushort? Appearance, bool ClassUnreadable = false, bool AppearanceUnreadable = false);
+    ushort? Major,
+    ushort? Minor,
+    ushort? Appearance,
+    bool ClassUnreadable = false,
+    bool AppearanceUnreadable = false);
 
 /// <summary>
 /// BlueZ device-type icon names. Major and minor are the UInt16 class codes from
@@ -39,6 +41,7 @@ internal static class BluetoothIcon
                 major = found;
                 minor = report.Minor;
             }
+
             if (report.ClassUnreadable)
                 classUnreadable = true;
             if (appearance is null && report.Appearance is ushort foundAppearance)
@@ -46,10 +49,13 @@ internal static class BluetoothIcon
             if (report.AppearanceUnreadable)
                 appearanceUnreadable = true;
         }
-        return Name(major, minor, appearance, major is null && classUnreadable, appearance is null && appearanceUnreadable);
+
+        return Name(major, minor, appearance, major is null && classUnreadable,
+            appearance is null && appearanceUnreadable);
     }
 
-    internal static string Name(ushort? major, ushort? minor, ushort? appearance, bool classUnreadable = false, bool appearanceUnreadable = false)
+    internal static string Name(ushort? major, ushort? minor, ushort? appearance, bool classUnreadable = false,
+        bool appearanceUnreadable = false)
     {
         if (classUnreadable)
             return "";
@@ -69,7 +75,8 @@ internal static class BluetoothIcon
         var minor = ReadUInt16(properties, MinorKey);
         var classUnreadable = major.Bad || (major.Value is not null && minor.Bad);
         var appearance = ReadAppearance(properties);
-        return new(classUnreadable ? null : major.Value, classUnreadable ? null : minor.Value, appearance.Value, classUnreadable, appearance.Bad);
+        return new BluetoothClassReport(classUnreadable ? null : major.Value, classUnreadable ? null : minor.Value,
+            appearance.Value, classUnreadable, appearance.Bad);
     }
 
     private static (ushort? Value, bool Bad) ReadAppearance(IReadOnlyDictionary<string, object> properties)
@@ -113,7 +120,7 @@ internal static class BluetoothIcon
                 {
                     0x01 or 0x02 or 0x03 or 0x05 => "phone",
                     0x04 => "modem",
-                    _ => "",
+                    _ => ""
                 };
             case 0x03:
                 return "network-wireless";
@@ -123,7 +130,7 @@ internal static class BluetoothIcon
                     0x01 or 0x02 => "audio-headset",
                     0x06 => "audio-headphones",
                     0x0b or 0x0c or 0x0d => "camera-video",
-                    _ => "audio-card",
+                    _ => "audio-card"
                 };
             case 0x05:
                 // The top two bits of the minor code are keyboard or pointing. BlueZ reads the
@@ -135,7 +142,7 @@ internal static class BluetoothIcon
                     0x00 when detail is 0x01 or 0x02 => "input-gaming",
                     0x01 => "input-keyboard",
                     0x02 => detail == 0x05 ? "input-tablet" : "input-mouse",
-                    _ => "",
+                    _ => ""
                 };
             case 0x06:
                 if ((minor & 0x20) != 0)
@@ -152,7 +159,6 @@ internal static class BluetoothIcon
     {
         var category = (appearance & 0xffc0) >> 6;
         if (category == 0x0f)
-        {
             return (appearance & 0x3f) switch
             {
                 0x01 => "input-keyboard",
@@ -160,9 +166,8 @@ internal static class BluetoothIcon
                 0x03 or 0x04 => "input-gaming",
                 0x05 => "input-tablet",
                 0x08 => "scanner",
-                _ => "",
+                _ => ""
             };
-        }
         return category switch
         {
             0x00 => "unknown",
@@ -171,7 +176,7 @@ internal static class BluetoothIcon
             0x05 => "video-display",
             0x0a => "multimedia-player",
             0x0b => "scanner",
-            _ => "",
+            _ => ""
         };
     }
 }

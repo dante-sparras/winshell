@@ -2,7 +2,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 using Winshell.Diagnostics;
-using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
+using StartupTaskState = Windows.ApplicationModel.StartupTaskState;
 using static Winshell.Diagnostics.Doctor;
 using static Winshell.Diagnostics.DoctorCrashes;
 using static Winshell.Diagnostics.DoctorReport;
@@ -17,11 +17,18 @@ namespace Winshell.Services.Tests;
 /// </summary>
 public sealed class DoctorTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-doctor-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "winshell-doctor-tests", Guid.NewGuid().ToString("N"));
 
-    public DoctorTests() => Directory.CreateDirectory(_dir);
+    public DoctorTests()
+    {
+        Directory.CreateDirectory(_dir);
+    }
 
-    public void Dispose() => Directory.Delete(_dir, true);
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
 
     // Windows and .NET
 
@@ -31,7 +38,8 @@ public sealed class DoctorTests : IDisposable
     [InlineData(22000, 2538, "21H2", false, CheckStatus.Warn, "Windows 11 21H2, build 22000.2538")]
     [InlineData(19045, 5011, "22H2", false, CheckStatus.Fail, "Windows 10 22H2, build 19045.5011")]
     [InlineData(26100, 1, null, true, CheckStatus.Pass, "Windows Server, build 26100.1")]
-    public void Windows_needs_11_and_22H2_for_its_materials(int build, int revision, string? version, bool server, CheckStatus status, string message)
+    public void Windows_needs_11_and_22H2_for_its_materials(int build, int revision, string? version, bool server,
+        CheckStatus status, string message)
     {
         var check = Doctor.Windows(build, revision, version, server);
         Assert.Equal(status, check.Status);
@@ -42,8 +50,9 @@ public sealed class DoctorTests : IDisposable
     [Fact]
     public void DotNet_says_where_the_runtime_comes_from()
     {
-        Assert.Equal(new DoctorCheck("dotnet", ".NET", CheckStatus.Pass, ".NET 10.0.1, built into Winshell"), DotNet(new Version(10, 0, 1), ".NET 10.0.1", selfContained: true));
-        Assert.Equal(CheckStatus.Fail, DotNet(new Version(9, 0), ".NET 9.0.0", selfContained: false).Status);
+        Assert.Equal(new DoctorCheck("dotnet", ".NET", CheckStatus.Pass, ".NET 10.0.1, built into Winshell"),
+            DotNet(new Version(10, 0, 1), ".NET 10.0.1", true));
+        Assert.Equal(CheckStatus.Fail, DotNet(new Version(9, 0), ".NET 9.0.0", false).Status);
     }
 
     // Folders
@@ -52,7 +61,9 @@ public sealed class DoctorTests : IDisposable
     public void Folders_fail_when_one_cannot_be_written_and_warn_about_an_elevated_instance()
     {
         var ok = new[] { ("the config folder", @"C:\a", true), ("its local folder", @"C:\b", true) };
-        Assert.Equal(new DoctorCheck("folders", "Folders", CheckStatus.Pass, "Winshell can write the config folder and its local folder"), Folders(ok, []));
+        Assert.Equal(
+            new DoctorCheck("folders", "Folders", CheckStatus.Pass,
+                "Winshell can write the config folder and its local folder"), Folders(ok, []));
         var locked = Folders([("the config folder", @"C:\a", false), ("its local folder", @"C:\b", true)], []);
         Assert.Equal(CheckStatus.Fail, locked.Status);
         Assert.Equal(@"Winshell cannot write the config folder, C:\a.", locked.Message);
@@ -64,10 +75,11 @@ public sealed class DoctorTests : IDisposable
     [Fact]
     public void A_doctor_run_as_administrator_says_so()
     {
-        var check = Folders([("the config folder", @"C:\a", true)], [], asAdministrator: true);
+        var check = Folders([("the config folder", @"C:\a", true)], [], true);
         Assert.Equal(CheckStatus.Pass, check.Status);
         Assert.Contains("This ran as administrator", check.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("administrator", Folders([("the config folder", @"C:\a", true)], []).Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("administrator", Folders([("the config folder", @"C:\a", true)], []).Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -75,7 +87,8 @@ public sealed class DoctorTests : IDisposable
     {
         var locked = Path.Combine(_dir, "locked");
         Directory.CreateDirectory(locked);
-        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.CreateFiles, AccessControlType.Deny);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.CreateFiles,
+            AccessControlType.Deny);
         var folder = new DirectoryInfo(locked);
         var acl = folder.GetAccessControl();
         acl.AddAccessRule(deny);
@@ -89,6 +102,7 @@ public sealed class DoctorTests : IDisposable
             acl.RemoveAccessRule(deny);
             folder.SetAccessControl(acl);
         }
+
         Assert.Empty(Directory.EnumerateFileSystemEntries(locked));
     }
 
@@ -97,7 +111,8 @@ public sealed class DoctorTests : IDisposable
     {
         var unreadable = Path.Combine(_dir, "unreadable");
         Directory.CreateDirectory(unreadable);
-        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory,
+            AccessControlType.Deny);
         var folder = new DirectoryInfo(unreadable);
         var acl = folder.GetAccessControl();
         acl.AddAccessRule(deny);
@@ -128,17 +143,24 @@ public sealed class DoctorTests : IDisposable
 
     // App bars
 
-    private static MonitorFacts Screen(string name = "DISPLAY1", int x = 0, int top = 0, int bottom = 0, int left = 0, int right = 0) =>
-        new(name, x, 0, x + 1920, 1080, x + left, top, x + 1920 - right, 1080 - bottom, 1);
+    private static MonitorFacts Screen(string name = "DISPLAY1", int x = 0, int top = 0, int bottom = 0, int left = 0,
+        int right = 0)
+    {
+        return new MonitorFacts(name, x, 0, x + 1920, 1080, x + left, top, x + 1920 - right, 1080 - bottom, 1);
+    }
 
-    private static WindowFacts Bar(string className, int x, int top, int width, int height, string program = "explorer.exe") =>
-        new(className, x, top, x + width, top + height, program);
+    private static WindowFacts Bar(string className, int x, int top, int width, int height,
+        string program = "explorer.exe")
+    {
+        return new WindowFacts(className, x, top, x + width, top + height, program);
+    }
 
     [Fact]
     public void An_edge_the_taskbar_or_winshell_reserves_is_fine()
     {
         Assert.Equal(CheckStatus.Pass, AppBars([Screen(bottom: 48)], [Bar(TaskbarClass, 0, 1032, 1920, 48)]).Status);
-        Assert.Equal(CheckStatus.Pass, AppBars([Screen(bottom: 48)], [Bar(WinshellClass, 0, 1032, 1920, 48, "winshell.exe")]).Status);
+        Assert.Equal(CheckStatus.Pass,
+            AppBars([Screen(bottom: 48)], [Bar(WinshellClass, 0, 1032, 1920, 48, "winshell.exe")]).Status);
         Assert.Equal(CheckStatus.Pass, AppBars([Screen()], []).Status);
     }
 
@@ -151,8 +173,11 @@ public sealed class DoctorTests : IDisposable
 
         // On the second screen, beside a taskbar on the first.
         var named = AppBars(
-            [Screen(bottom: 48), Screen("DISPLAY2", x: 1920, top: 40)],
-            [Bar(TaskbarClass, 0, 1032, 1920, 48), Bar("YasbBar", 1920, 0, 1920, 40, "yasb.exe"), Bar("Chrome_WidgetWin_1", 1920, 0, 1920, 1080, "chrome.exe")]);
+            [Screen(bottom: 48), Screen("DISPLAY2", 1920, 40)],
+            [
+                Bar(TaskbarClass, 0, 1032, 1920, 48), Bar("YasbBar", 1920, 0, 1920, 40, "yasb.exe"),
+                Bar("Chrome_WidgetWin_1", 1920, 0, 1920, 1080, "chrome.exe")
+            ]);
         Assert.Equal("yasb.exe reserves 40 pixels at the top of DISPLAY2.", named.Message);
     }
 
@@ -160,13 +185,21 @@ public sealed class DoctorTests : IDisposable
     public void A_winshell_panel_explains_its_margins_and_a_zone_other_than_its_size()
     {
         // A floating panel: 8 pixels of margin above and below a 40-pixel window reserve 56.
-        Assert.Equal(CheckStatus.Pass, AppBars([Screen(top: 56)], [Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe")]).Status);
+        Assert.Equal(CheckStatus.Pass,
+            AppBars([Screen(top: 56)], [Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe")]).Status);
         // Thin windows along the edge, such as another app's 2-pixel border, are not app bars.
-        Assert.Equal(CheckStatus.Pass, AppBars([Screen(top: 56)], [Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe"), Bar("Border", 0, 0, 1920, 2, "borders.exe"), Bar("EdgeUiInputTopWndClass", 15, 0, 1905, 4)]).Status);
+        Assert.Equal(CheckStatus.Pass,
+            AppBars([Screen(top: 56)],
+            [
+                Bar(WinshellClass, 0, 8, 1920, 40, "winshell.exe"), Bar("Border", 0, 0, 1920, 2, "borders.exe"),
+                Bar("EdgeUiInputTopWndClass", 15, 0, 1905, 4)
+            ]).Status);
         // A panel taller than its exclusive zone.
-        Assert.Equal(CheckStatus.Pass, AppBars([Screen(top: 40)], [Bar(WinshellClass, 0, 0, 1920, 60, "winshell.exe")]).Status);
+        Assert.Equal(CheckStatus.Pass,
+            AppBars([Screen(top: 40)], [Bar(WinshellClass, 0, 0, 1920, 60, "winshell.exe")]).Status);
         // A Winshell window filling the screen is no panel, and explains nothing.
-        Assert.Equal(CheckStatus.Warn, AppBars([Screen(top: 40)], [Bar(WinshellClass, 0, 0, 1920, 1080, "winshell.exe")]).Status);
+        Assert.Equal(CheckStatus.Warn,
+            AppBars([Screen(top: 40)], [Bar(WinshellClass, 0, 0, 1920, 1080, "winshell.exe")]).Status);
     }
 
     [Fact]
@@ -192,18 +225,23 @@ public sealed class DoctorTests : IDisposable
     {
         var check = AppBars(
             [Screen(top: 80)],
-            [Bar(WinshellClass, 0, 0, 960, 40, "winshell.exe"), Bar(WinshellClass, 960, 0, 960, 40, "winshell.exe"), Bar("YasbBar", 0, 40, 1920, 40, "yasb.exe")]);
+            [
+                Bar(WinshellClass, 0, 0, 960, 40, "winshell.exe"), Bar(WinshellClass, 960, 0, 960, 40, "winshell.exe"),
+                Bar("YasbBar", 0, 40, 1920, 40, "yasb.exe")
+            ]);
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Equal("yasb.exe reserves space at the top of DISPLAY1.", check.Message);
 
-        var taskbars = AppBars([Screen(bottom: 96)], [Bar(TaskbarClass, 0, 1032, 960, 48), Bar(SecondaryTaskbarClass, 960, 1032, 960, 48)]);
+        var taskbars = AppBars([Screen(bottom: 96)],
+            [Bar(TaskbarClass, 0, 1032, 960, 48), Bar(SecondaryTaskbarClass, 960, 1032, 960, 48)]);
         Assert.Equal("Another app reserves 48 pixels at the bottom of DISPLAY1.", taskbars.Message);
     }
 
     [Fact]
     public void The_taskbar_and_a_winshell_panel_on_one_edge_are_reported()
     {
-        var both = AppBars([Screen(bottom: 96)], [Bar(TaskbarClass, 0, 1032, 1920, 48), Bar(WinshellClass, 0, 984, 1920, 48, "winshell.exe")]);
+        var both = AppBars([Screen(bottom: 96)],
+            [Bar(TaskbarClass, 0, 1032, 1920, 48), Bar(WinshellClass, 0, 984, 1920, 48, "winshell.exe")]);
         Assert.Equal(CheckStatus.Pass, AppBars([Screen(bottom: 48)], [Bar(TaskbarClass, 0, 1032, 1920, 48)]).Status);
         Assert.Equal(CheckStatus.Warn, both.Status);
         Assert.Contains("both reserve the bottom of DISPLAY1", both.Message, StringComparison.Ordinal);
@@ -214,15 +252,19 @@ public sealed class DoctorTests : IDisposable
     [Fact]
     public void A_scaling_override_fails_and_another_compatibility_mode_warns()
     {
-        var screens = new[] { Screen() with { Scale = 1.5 }, Screen("DISPLAY2", x: 1920) };
-        Assert.Equal(new DoctorCheck("dpi", "DPI", CheckStatus.Pass, "Per-monitor aware. DISPLAY1 at 150%, DISPLAY2 at 100%"), Dpi(true, [], screens));
+        var screens = new[] { Screen() with { Scale = 1.5 }, Screen("DISPLAY2", 1920) };
+        Assert.Equal(
+            new DoctorCheck("dpi", "DPI", CheckStatus.Pass, "Per-monitor aware. DISPLAY1 at 150%, DISPLAY2 at 100%"),
+            Dpi(true, [], screens));
         Assert.Equal(CheckStatus.Fail, Dpi(true, ["~ DPIUNAWARE"], screens).Status);
         Assert.Equal(CheckStatus.Fail, Dpi(true, ["~ GDIDPISCALING DPIUNAWARE"], screens).Status);
         Assert.Equal(CheckStatus.Fail, Dpi(false, [], screens).Status);
         Assert.Equal(CheckStatus.Warn, Dpi(true, ["WIN8RTM"], screens).Status);
         var admin = Dpi(true, ["~ RUNASADMIN"], screens);
         Assert.Equal(CheckStatus.Warn, admin.Status);
-        Assert.Equal("Right-click winshell.exe, choose Properties > Compatibility, and clear Run this program as an administrator.", admin.Fix);
+        Assert.Equal(
+            "Right-click winshell.exe, choose Properties > Compatibility, and clear Run this program as an administrator.",
+            admin.Fix);
     }
 
     [Fact]
@@ -234,7 +276,9 @@ public sealed class DoctorTests : IDisposable
         Assert.EndsWith("clear Override high DPI scaling behavior.", application.Fix, StringComparison.Ordinal);
         var program = Dpi(true, ["~ PERPROCESSSYSTEMDPIFORCEON"], screens);
         Assert.Equal(CheckStatus.Warn, program.Status);
-        Assert.EndsWith("clear Use this setting to fix scaling problems for this program instead of the one in Settings.", program.Fix, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "clear Use this setting to fix scaling problems for this program instead of the one in Settings.",
+            program.Fix, StringComparison.Ordinal);
         Assert.DoesNotContain("compatibility mode", program.Message, StringComparison.Ordinal);
         var unaware = Dpi(false, ["~ HIGHDPIAWARE"], screens);
         Assert.Equal(CheckStatus.Fail, unaware.Status);
@@ -248,12 +292,19 @@ public sealed class DoctorTests : IDisposable
     {
         const string Here = @"C:\Program Files\Winshell\winshell.exe";
         var command = $@"C:\Windows\System32\conhost.exe --headless ""{Here}"" --no-duplicate";
-        bool Exists(string path) => path == Here || path == @"C:\Old\winshell.exe";
+
+        bool Exists(string path)
+        {
+            return path == Here || path == @"C:\Old\winshell.exe";
+        }
 
         Assert.Equal(CheckStatus.Pass, SignIn(null, false, Here, Exists).Status);
-        Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"), SignIn(command, false, Here, Exists));
+        Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"),
+            SignIn(command, false, Here, Exists));
         Assert.Equal(CheckStatus.Warn, SignIn(command, true, Here, Exists).Status);
-        Assert.Equal(CheckStatus.Warn, SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Old\winshell.exe -c bar", false, Here, Exists).Status);
+        Assert.Equal(CheckStatus.Warn,
+            SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Old\winshell.exe -c bar", false, Here, Exists)
+                .Status);
         var gone = SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Gone\winshell.exe", false, Here, Exists);
         Assert.Equal(CheckStatus.Fail, gone.Status);
         Assert.Equal(@"The sign-in entry starts C:\Gone\winshell.exe, which is not there.", gone.Message);
@@ -266,10 +317,16 @@ public sealed class DoctorTests : IDisposable
     {
         const string Here = @"C:\Users\a\AppData\Local\Microsoft\WinGet\Packages\Winshell\winshell.exe";
         const string Link = @"C:\Users\a\AppData\Local\Microsoft\WinGet\Links\winshell.exe";
-        string Resolve(string path) => path == Link ? Here : path;
 
-        Assert.Equal(CheckStatus.Pass, SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true, Resolve).Status);
-        Assert.Equal(CheckStatus.Warn, SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true).Status);
+        string Resolve(string path)
+        {
+            return path == Link ? Here : path;
+        }
+
+        Assert.Equal(CheckStatus.Pass,
+            SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true, Resolve).Status);
+        Assert.Equal(CheckStatus.Warn,
+            SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true).Status);
 
         var target = Path.Combine(_dir, "target.exe");
         File.WriteAllText(target, "");
@@ -280,13 +337,16 @@ public sealed class DoctorTests : IDisposable
     public void A_packaged_sign_in_is_the_startup_task_not_a_path()
     {
         Assert.Equal(CheckStatus.Pass, SignIn(StartupTaskState.Disabled).Status);
-        Assert.StartsWith("Winshell does not start when you sign in.", SignIn(StartupTaskState.Disabled).Message, StringComparison.Ordinal);
-        Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"), SignIn(StartupTaskState.Enabled));
+        Assert.StartsWith("Winshell does not start when you sign in.", SignIn(StartupTaskState.Disabled).Message,
+            StringComparison.Ordinal);
+        Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"),
+            SignIn(StartupTaskState.Enabled));
         Assert.Equal(CheckStatus.Pass, SignIn(StartupTaskState.EnabledByPolicy).Status);
 
         var user = SignIn(StartupTaskState.DisabledByUser);
         Assert.Equal(CheckStatus.Warn, user.Status);
-        Assert.Equal("Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", user.Message);
+        Assert.Equal("Winshell is set to start when you sign in, but Startup apps in Windows turned it off.",
+            user.Message);
 
         var policy = SignIn(StartupTaskState.DisabledByPolicy);
         Assert.Equal(CheckStatus.Warn, policy.Status);
@@ -313,19 +373,31 @@ public sealed class DoctorTests : IDisposable
     [InlineData("Denied", CheckStatus.Warn)]
     [InlineData("Unspecified", CheckStatus.Warn)]
     [InlineData("Unavailable", CheckStatus.Warn)]
-    public void Notification_access_is_read_without_asking(string access, CheckStatus status) =>
+    public void Notification_access_is_read_without_asking(string access, CheckStatus status)
+    {
         Assert.Equal(status, Doctor.Notifications(access).Status);
+    }
 
     [Fact]
     public void Running_instances_and_recent_crash_reports_are_listed()
     {
         Assert.Equal("No Winshell is running", Instances([]).Message);
-        Assert.Equal(@"abc (process 42) runs C:\c\MyShell.exe, log C:\l\log.txt", Instances([new DoctorInstance("abc", 42, @"C:\c\MyShell.exe", @"C:\l\log.txt")]).Message);
+        Assert.Equal(@"abc (process 42) runs C:\c\MyShell.exe, log C:\l\log.txt",
+            Instances([new DoctorInstance("abc", 42, @"C:\c\MyShell.exe", @"C:\l\log.txt")]).Message);
 
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
-        CrashPeek Report(string _) => new("Winshell crash report\n", null);
+
+        CrashPeek Report(string _)
+        {
+            return new CrashPeek("Winshell crash report\n", null);
+        }
+
         Assert.Equal(CheckStatus.Pass, Crashes([(@"C:\r\old.txt", now.AddDays(-8))], now, Report).Status);
-        var recent = Crashes([(@"C:\r\old.txt", now.AddDays(-8)), (@"C:\r\a.txt", now.AddDays(-2)), (@"C:\r\b.txt", now.AddHours(-1))], now, Report);
+        var recent =
+            Crashes(
+            [
+                (@"C:\r\old.txt", now.AddDays(-8)), (@"C:\r\a.txt", now.AddDays(-2)), (@"C:\r\b.txt", now.AddHours(-1))
+            ], now, Report);
         Assert.Equal(CheckStatus.Warn, recent.Status);
         Assert.Equal(@"2 crash reports in the last 7 days. The newest is C:\r\b.txt.", recent.Message);
     }
@@ -333,11 +405,17 @@ public sealed class DoctorTests : IDisposable
     [Fact]
     public void The_user_folders_are_written_as_their_variables()
     {
-        (string, string)[] folders = [(@"C:\Users\Ann", "%USERPROFILE%"), (@"C:\Users\Ann\AppData\Local", "%LOCALAPPDATA%"), (@"C:\Users\Ann\AppData\Roaming\", "%APPDATA%")];
+        (string, string)[] folders =
+        [
+            (@"C:\Users\Ann", "%USERPROFILE%"), (@"C:\Users\Ann\AppData\Local", "%LOCALAPPDATA%"),
+            (@"C:\Users\Ann\AppData\Roaming\", "%APPDATA%")
+        ];
         DoctorCheck[] checks =
         [
-            new("crashes", "Crashes", CheckStatus.Warn, @"The newest is C:\Users\Ann\AppData\Local\winshell\crashes\a.txt.", @"Open c:\users\ann\appdata\roaming\winshell or C:\Users\Ann."),
-            new("x", "X", CheckStatus.Pass, @"C:\Users\Anna\x and C:\Users\Ann.old stay"),
+            new("crashes", "Crashes", CheckStatus.Warn,
+                @"The newest is C:\Users\Ann\AppData\Local\winshell\crashes\a.txt.",
+                @"Open c:\users\ann\appdata\roaming\winshell or C:\Users\Ann."),
+            new("x", "X", CheckStatus.Pass, @"C:\Users\Anna\x and C:\Users\Ann.old stay")
         ];
 
         var shown = WithoutUserFolders(checks, folders);
@@ -352,7 +430,9 @@ public sealed class DoctorTests : IDisposable
     public void A_check_that_throws_warns_instead_of_ending_the_run()
     {
         var check = Guard("dpi", "DPI", () => throw new InvalidOperationException("no screens"));
-        Assert.Equal(new DoctorCheck("dpi", "DPI", CheckStatus.Warn, "Could not check: InvalidOperationException: no screens", $"Report it at {BugReports}."), check);
+        Assert.Equal(
+            new DoctorCheck("dpi", "DPI", CheckStatus.Warn, "Could not check: InvalidOperationException: no screens",
+                $"Report it at {BugReports}."), check);
     }
 
     // Output
@@ -360,14 +440,15 @@ public sealed class DoctorTests : IDisposable
     private static readonly DoctorCheck[] Sample =
     [
         new("windows", "Windows", CheckStatus.Pass, "Windows 11 26H2, build 26300.1"),
-        new("signIn", "Sign-in", CheckStatus.Warn, "Startup apps turned it off.", "Turn Winshell on in Settings > Apps > Startup."),
-        new("config", "Config", CheckStatus.Fail, "App.xaml[1:1]: x", "Correct that line."),
+        new("signIn", "Sign-in", CheckStatus.Warn, "Startup apps turned it off.",
+            "Turn Winshell on in Settings > Apps > Startup."),
+        new("config", "Config", CheckStatus.Fail, "App.xaml[1:1]: x", "Correct that line.")
     ];
 
     [Fact]
     public void Text_has_a_line_a_check_a_fix_under_each_problem_and_a_count()
     {
-        var text = Format(Sample, "1.2.3", color: false);
+        var text = Format(Sample, "1.2.3", false);
 
         Assert.Equal(
         [
@@ -379,9 +460,9 @@ public sealed class DoctorTests : IDisposable
             "  FAIL  Config   App.xaml[1:1]: x",
             "                 Fix: Correct that line.",
             "",
-            "1 passed, 1 warning, 1 failed.",
+            "1 passed, 1 warning, 1 failed."
         ], text.TrimEnd().Split(Environment.NewLine));
-        Assert.Contains("\e[31mFAIL\e[0m", Format(Sample, "1.2.3", color: true), StringComparison.Ordinal);
+        Assert.Contains("\e[31mFAIL\e[0m", Format(Sample, "1.2.3", true), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -409,15 +490,23 @@ public sealed class DoctorTests : IDisposable
         Directory.CreateDirectory(config);
         var before = Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList();
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [], Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
+        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [],
+            Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
 
-        Assert.Equal(["windows", "dotnet", "project", "downloaded", "built", "build", "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"], checks.Select(c => c.Id));
+        Assert.Equal(
+        [
+            "windows", "dotnet", "project", "downloaded", "built", "build", "folders", "appBars", "dpi", "signIn",
+            "notifications", "instances", "crashes"
+        ], checks.Select(c => c.Id));
         Assert.DoesNotContain(checks, c => c.Message.StartsWith("Could not check", StringComparison.Ordinal));
         Assert.Equal(CheckStatus.Warn, checks.Single(c => c.Id == "project").Status);
         Assert.Contains("starts nothing", checks.Single(c => c.Id == "project").Message, StringComparison.Ordinal);
         Assert.Equal(CheckStatus.Pass, checks.Single(c => c.Id == "crashes").Status);
         Assert.All(checks.Where(c => c.Status != CheckStatus.Pass), c => Assert.False(string.IsNullOrEmpty(c.Fix)));
-        Assert.Equal(before, Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList());
-        Assert.DoesNotContain(checks, c => c.Message.Contains(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(before,
+            Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList());
+        Assert.DoesNotContain(checks,
+            c => c.Message.Contains(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                StringComparison.OrdinalIgnoreCase));
     }
 }

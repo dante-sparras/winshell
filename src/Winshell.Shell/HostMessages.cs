@@ -26,21 +26,19 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
                     placement.Frame?.OnMovedOrResized();
                 return null;
             case Win32.WM_DPICHANGED:
-                {
-                    // A size we apply from this message can send it again with the monitor's old scale. Keep the one that started it.
-                    if (!placement.Placing)
-                        placement.Scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
-                    if (placement.Frame is { } frame)
-                        frame.OnDpiChanged(message.SuggestedRect, placement.Placing);
-                    else if (!placement.Placing)
-                    {
-                        // A panel or popup only changes DPI on its own when its monitor's scale changes: place it again from its logical size.
-                        platform.Loop.Post(placement.Replace);
-                    }
-                    placement.UpdateSize();
-                    platform.ScreensMayHaveChanged();
-                    return 0;
-                }
+            {
+                // A size we apply from this message can send it again with the monitor's old scale. Keep the one that started it.
+                if (!placement.Placing)
+                    placement.Scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
+                if (placement.Frame is { } frame)
+                    frame.OnDpiChanged(message.SuggestedRect, placement.Placing);
+                else if (!placement.Placing)
+                    // A panel or popup only changes DPI on its own when its monitor's scale changes: place it again from its logical size.
+                    platform.Loop.Post(placement.Replace);
+                placement.UpdateSize();
+                platform.ScreensMayHaveChanged();
+                return 0;
+            }
             case Win32.WM_MOUSEACTIVATE:
                 // A click here does not close a menu another app opened without the foreground, as tray menus
                 // often are. Close it before the mouse message reaches the XAML island.
@@ -66,12 +64,14 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
                 return null;
             case Win32.WM_ERASEBKGND:
                 return 1;
-            case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED or Win32.WM_SYSCOLORCHANGE or Win32.WM_THEMECHANGED:
+            case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED
+                or Win32.WM_SYSCOLORCHANGE or Win32.WM_THEMECHANGED:
                 if (msg == Win32.WM_DISPLAYCHANGE)
                     placement.Frame?.OnDisplayChanged();
                 platform.SystemChanged(msg, wParam);
                 return null;
         }
+
         // Explorer's notices to a panel's app bar.
         return placement.AppBar?.OnMessage(msg, wParam, message.LParam);
     }

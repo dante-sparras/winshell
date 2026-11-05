@@ -92,12 +92,15 @@ public class AppBarReservationTests
 
         public int SetPosCalls { get; private set; }
 
-        public void Place() => reservation.Reserve(query(), asked =>
+        public void Place()
         {
-            SetPosCalls++;
-            _callbacks.Enqueue(Place);
-            return Grant(asked);
-        });
+            reservation.Reserve(query(), asked =>
+            {
+                SetPosCalls++;
+                _callbacks.Enqueue(Place);
+                return Grant(asked);
+            });
+        }
 
         public Func<RECT, RECT> Grant { get; set; } = asked => asked;
 
@@ -110,6 +113,7 @@ public class AppBarReservationTests
                 _callbacks.Dequeue()();
                 delivered++;
             }
+
             Assert.Empty(_callbacks);
             return delivered;
         }
@@ -165,7 +169,7 @@ public class AppBarReservationTests
         var reservation = new AppBarReservation();
         var placement = new Placement(reservation, () => Bottom)
         {
-            Grant = asked => other == 0 ? asked : AboveOther,
+            Grant = asked => other == 0 ? asked : AboveOther
         };
         placement.Place();
         Assert.Equal(AboveOther, reservation.Granted);

@@ -3,7 +3,6 @@ using System.Management;
 using System.Text;
 using System.Text.Json;
 using Windows.Win32;
-using Winshell.Native;
 
 namespace Winshell.Tests;
 
@@ -22,7 +21,7 @@ public sealed class DevCommandTests : IDisposable
     private (string, string)[] Folders =>
     [
         ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")),
-        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
+        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local"))
     ];
 
     public DevCommandTests()
@@ -32,56 +31,56 @@ public sealed class DevCommandTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_dir, "local"));
         File.Copy(Path.Combine(Repo.Root, "global.json"), Path.Combine(Project, "global.json"));
         File.WriteAllText(Path.Combine(Project, "Dev.csproj"), $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <OutputType>WinExe</OutputType>
-                <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
-                <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
-                <ImplicitUsings>enable</ImplicitUsings>
-                <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-                <UseWinUI>true</UseWinUI>
-                <WindowsPackageType>None</WindowsPackageType>
-                <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-                <SelfContained>true</SelfContained>
-                <AssemblyName>Dev</AssemblyName>
-              </PropertyGroup>
-              <ItemGroup>
-                <ProjectReference Include="{Path.Combine(Repo.Root, "src", "Winshell.Shell", "Winshell.Shell.csproj")}" />
-              </ItemGroup>
-            </Project>
-            """);
+                                                                <Project Sdk="Microsoft.NET.Sdk">
+                                                                  <PropertyGroup>
+                                                                    <OutputType>WinExe</OutputType>
+                                                                    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+                                                                    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
+                                                                    <ImplicitUsings>enable</ImplicitUsings>
+                                                                    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+                                                                    <UseWinUI>true</UseWinUI>
+                                                                    <WindowsPackageType>None</WindowsPackageType>
+                                                                    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+                                                                    <SelfContained>true</SelfContained>
+                                                                    <AssemblyName>Dev</AssemblyName>
+                                                                  </PropertyGroup>
+                                                                  <ItemGroup>
+                                                                    <ProjectReference Include="{Path.Combine(Repo.Root, "src", "Winshell.Shell", "Winshell.Shell.csproj")}" />
+                                                                  </ItemGroup>
+                                                                </Project>
+                                                                """);
         File.WriteAllText(Path.Combine(Project, "Program.cs"), """
-            using Winshell;
+                                                               using Winshell;
 
-            internal sealed class Bare : ShellConfiguration
-            {
-                public override void Start(Shell shell)
-                {
-                    var view = new Dev.PanelView();
-                    _ = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 200, Height = 32, Content = view, Visible = true };
-                    shell.Ipc.Handle("probe", "value", Marker.Value);
-                    shell.Ipc.Handle("probe", "label", view.Shown);
-                }
-            }
+                                                               internal sealed class Bare : ShellConfiguration
+                                                               {
+                                                                   public override void Start(Shell shell)
+                                                                   {
+                                                                       var view = new Dev.PanelView();
+                                                                       _ = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 200, Height = 32, Content = view, Visible = true };
+                                                                       shell.Ipc.Handle("probe", "value", Marker.Value);
+                                                                       shell.Ipc.Handle("probe", "label", view.Shown);
+                                                                   }
+                                                               }
 
-            internal static class Program
-            {
-                [STAThread]
-                private static void Main() => Shell.Run<Bare>(new ShellOptions { ShellId = "dev-probe" });
-            }
-            """);
+                                                               internal static class Program
+                                                               {
+                                                                   [STAThread]
+                                                                   private static void Main() => Shell.Run<Bare>(new ShellOptions { ShellId = "dev-probe" });
+                                                               }
+                                                               """);
         File.WriteAllText(Path.Combine(Project, "PanelView.xaml.cs"), """
-            using Microsoft.UI.Xaml.Controls;
+                                                                      using Microsoft.UI.Xaml.Controls;
 
-            namespace Dev;
+                                                                      namespace Dev;
 
-            public sealed partial class PanelView : UserControl
-            {
-                public PanelView() => InitializeComponent();
+                                                                      public sealed partial class PanelView : UserControl
+                                                                      {
+                                                                          public PanelView() => InitializeComponent();
 
-                public string Shown() => Label.Text;
-            }
-            """);
+                                                                          public string Shown() => Label.Text;
+                                                                      }
+                                                                      """);
         Label("one");
         Mark("""=> "one";""");
     }
@@ -90,12 +89,15 @@ public sealed class DevCommandTests : IDisposable
     {
         if (_dev is not null)
         {
-            _dev.Kill(entireProcessTree: true);
+            _dev.Kill(true);
             _dev.WaitForExit();
             _dev.Dispose();
             lock (_printed)
+            {
                 TestContext.Current.TestOutputHelper?.WriteLine(_printed.ToString());
+            }
         }
+
         Wait.Until(Removed, "the test folder to be free");
     }
 
@@ -103,7 +105,7 @@ public sealed class DevCommandTests : IDisposable
     {
         try
         {
-            Directory.Delete(_dir, recursive: true);
+            Directory.Delete(_dir, true);
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -112,20 +114,29 @@ public sealed class DevCommandTests : IDisposable
         }
     }
 
-    private void Mark(string body) =>
-        File.WriteAllText(Path.Combine(Project, "Marker.cs"), $"internal static class Marker {{ public static string Value() {body} }}");
+    private void Mark(string body)
+    {
+        File.WriteAllText(Path.Combine(Project, "Marker.cs"),
+            $"internal static class Marker {{ public static string Value() {body} }}");
+    }
 
     /// <param name="needsBuild">Marks the label x:Load, which only a build applies.</param>
-    private void Label(string text, bool needsBuild = false) => File.WriteAllText(Path.Combine(Project, "PanelView.xaml"), $"""
-        <UserControl
-            x:Class="Dev.PanelView"
-            xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-            xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-            <TextBlock x:Name="Label" {(needsBuild ? "x:Load=\"True\" " : "")}Text="{text}" />
-        </UserControl>
-        """);
+    private void Label(string text, bool needsBuild = false)
+    {
+        File.WriteAllText(Path.Combine(Project, "PanelView.xaml"), $"""
+                                                                    <UserControl
+                                                                        x:Class="Dev.PanelView"
+                                                                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                                                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                                                                        <TextBlock x:Name="Label" {(needsBuild ? "x:Load=\"True\" " : "")}Text="{text}" />
+                                                                    </UserControl>
+                                                                    """);
+    }
 
-    private string Shown() => WinshellCli.Run(["ipc", "call", "probe", "label"], Folders).Output.Trim();
+    private string Shown()
+    {
+        return WinshellCli.Run(["ipc", "call", "probe", "label"], Folders).Output.Trim();
+    }
 
     private (int Code, string Text) Value()
     {
@@ -133,7 +144,10 @@ public sealed class DevCommandTests : IDisposable
         return (result.Code, result.Output.Trim());
     }
 
-    private ChildProcess CallValue() => WinshellCli.Run(["ipc", "call", "probe", "value"], Folders);
+    private ChildProcess CallValue()
+    {
+        return WinshellCli.Run(["ipc", "call", "probe", "value"], Folders);
+    }
 
     private string InstanceId()
     {
@@ -145,7 +159,7 @@ public sealed class DevCommandTests : IDisposable
     private int ShellProcess()
     {
         var (_, output, _) = WinshellCli.Run(["list", "-j"], Folders);
-        using var listed = System.Text.Json.JsonDocument.Parse(output);
+        using var listed = JsonDocument.Parse(output);
         return listed.RootElement.EnumerateArray().Single().GetProperty("pid").GetInt32();
     }
 
@@ -164,26 +178,26 @@ public sealed class DevCommandTests : IDisposable
         info.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         _dev = Process.Start(info)!;
         foreach (var stream in new[] { _dev.StandardOutput, _dev.StandardError })
-        {
             new Thread(() =>
-            {
-                while (stream.ReadLine() is { } line)
                 {
-                    lock (_printed)
-                        _printed.AppendLine(line);
-                }
-            })
-            { IsBackground = true }.Start();
-        }
+                    while (stream.ReadLine() is { } line)
+                        lock (_printed)
+                        {
+                            _printed.AppendLine(line);
+                        }
+                })
+                { IsBackground = true }.Start();
     }
 
     /// <summary>Every process this project started: dotnet watch, the build, and the shell, by command line or path.</summary>
     private List<string> FromProject()
     {
-        using var search = new ManagementObjectSearcher("SELECT ProcessId, Name, CommandLine, ExecutablePath FROM Win32_Process");
+        using var search =
+            new ManagementObjectSearcher("SELECT ProcessId, Name, CommandLine, ExecutablePath FROM Win32_Process");
         using var found = search.Get();
         return found.Cast<ManagementObject>()
-            .Where(p => $"{p["CommandLine"]} {p["ExecutablePath"]}".Contains(Project, StringComparison.OrdinalIgnoreCase))
+            .Where(p => $"{p["CommandLine"]} {p["ExecutablePath"]}".Contains(Project,
+                StringComparison.OrdinalIgnoreCase))
             .Select(p => $"{p["Name"]} {p["ProcessId"]}")
             .ToList();
     }
@@ -191,7 +205,9 @@ public sealed class DevCommandTests : IDisposable
     private bool Printed(string text)
     {
         lock (_printed)
+        {
             return _printed.ToString().Contains(text, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -219,8 +235,9 @@ public sealed class DevCommandTests : IDisposable
     public void Ctrl_Break_stops_dotnet_watch_and_the_shell()
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
-        Assert.True(ProcessConsole.Window() != 0 || PInvoke.GetConsoleProcessList(new uint[1]) > 0, "The test program has no console to send a Ctrl+Break on.");
-        StartDev(ownGroup: true);
+        Assert.True(ProcessConsole.Window() != 0 || PInvoke.GetConsoleProcessList(new uint[1]) > 0,
+            "The test program has no console to send a Ctrl+Break on.");
+        StartDev(true);
         Wait.Until(() => Value() == (0, "one"), "the first build", BuildPatience);
         Assert.Contains(FromProject(), p => p.StartsWith("Dev.exe ", StringComparison.Ordinal));
         var id = InstanceId();
@@ -256,7 +273,7 @@ public sealed class DevCommandTests : IDisposable
         var shell = ShellProcess();
         var id = InstanceId();
 
-        Label("two", needsBuild: true);
+        Label("two", true);
         Wait.Until(() => Printed("Building, because the XAML you saved needs it."), "the build the XAML needs");
         Wait.Until(() => Shown() == "two", "the shell to start again", BuildPatience);
 
@@ -282,7 +299,9 @@ public sealed class DevCommandTests : IDisposable
         var value = CallValue();
         value.AssertExitCode(0);
         Assert.Equal("two", value.Output.Trim());
-        Wait.Until(() => WinshellCli.Run(["log", "-t", "20"], Folders).Output.Contains("Your configuration did not build", StringComparison.Ordinal), "the notice");
+        Wait.Until(
+            () => WinshellCli.Run(["log", "-t", "20"], Folders).Output
+                .Contains("Your configuration did not build", StringComparison.Ordinal), "the notice");
 
         Mark("""=> "three";""");
         Wait.Until(() => Value().Text == "three", "the fix", BuildPatience);

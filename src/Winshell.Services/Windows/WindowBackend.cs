@@ -1,5 +1,5 @@
-using Winshell.Native;
 using Winshell.Input;
+using Winshell.Native;
 
 namespace Winshell.Windows;
 
@@ -110,17 +110,35 @@ internal sealed class WindowBackend : IWindowBackend
 
     public nint Foreground => Win32.GetForegroundWindow();
 
-    public IReadOnlyList<nint> TopLevel() => TopLevelWindows.List();
+    public IReadOnlyList<nint> TopLevel()
+    {
+        return TopLevelWindows.List();
+    }
 
-    public nint OwnerOf(nint hwnd) => Win32.GetWindow(hwnd, Win32.GW_OWNER);
+    public nint OwnerOf(nint hwnd)
+    {
+        return Win32.GetWindow(hwnd, Win32.GW_OWNER);
+    }
 
-    public nint RootOf(nint hwnd) => TopLevelWindows.RootOf(hwnd);
+    public nint RootOf(nint hwnd)
+    {
+        return TopLevelWindows.RootOf(hwnd);
+    }
 
-    public ScreenInfo? Screen(string deviceName) => Screens.Find(deviceName)?.Info;
+    public ScreenInfo? Screen(string deviceName)
+    {
+        return Screens.Find(deviceName)?.Info;
+    }
 
-    public string DesktopId(nint hwnd) => WindowDesktop.IdOf(hwnd);
+    public string DesktopId(nint hwnd)
+    {
+        return WindowDesktop.IdOf(hwnd);
+    }
 
-    public bool MoveToDesktop(nint hwnd, Guid desktop) => WindowDesktop.Move(hwnd, desktop);
+    public bool MoveToDesktop(nint hwnd, Guid desktop)
+    {
+        return WindowDesktop.Move(hwnd, desktop);
+    }
 
     public void Start(Log log)
     {
@@ -133,35 +151,40 @@ internal sealed class WindowBackend : IWindowBackend
             (Win32.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_SYSTEM_MINIMIZEEND),
             (Win32.EVENT_OBJECT_CREATE, Win32.EVENT_OBJECT_HIDE),
             (Win32.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_OBJECT_NAMECHANGE),
-            (Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED),
+            (Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED)
         ];
         foreach (var (min, max) in ranges)
-        {
             if (WinEventHook.Start(min, max, OnWinEvent) is null)
-                log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
-        }
+                log.Warn("windows",
+                    $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
         // window flashes.
         if (!ShellHookWindow.Start(OnShellHook))
-            log.Warn("windows", "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
+            log.Warn("windows",
+                "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
     }
 
-    private void OnShellHook(nint code, nint hwnd) =>
+    private void OnShellHook(nint code, nint hwnd)
+    {
         NativeCallback.Guard(Log.Default, "windows", () =>
         {
             if (WindowRules.IsFlash(code) && hwnd != 0)
                 Flashed?.Invoke(hwnd);
         });
+    }
 
-    private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
+    private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
+    {
         NativeCallback.Guard(Log.Default, "windows", () => WinEvent?.Invoke(eventType, hwnd, idObject, idChild));
+    }
 
     public TaskbarWindowFacts TaskbarFacts(nint hwnd)
     {
         // Asking a window of this process for its title sends it a message with no timeout. A hidden one can belong to a
         // thread waiting for this one, as SystemEvents does while it raises an event, and neither would ever go on.
         if (!Win32.IsWindowVisible(hwnd))
-            return new TaskbarWindowFacts(Win32.IsWindow(hwnd), false, false, false, false, false, false, false, false, false);
+            return new TaskbarWindowFacts(Win32.IsWindow(hwnd), false, false, false, false, false, false, false, false,
+                false);
         var ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         return new TaskbarWindowFacts(
             Win32.IsWindow(hwnd),
@@ -190,6 +213,7 @@ internal sealed class WindowBackend : IWindowBackend
             var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
             fullscreen = WindowRules.CoversMonitor(style, rect, mi.Bounds);
         }
+
         // The property can arrive after the window is first shown, so it is read every time.
         var property = AppUserModelIds.OfWindow(hwnd);
         string? packageAppId = null;
@@ -198,7 +222,9 @@ internal sealed class WindowBackend : IWindowBackend
             Win32.GetWindowThreadProcessId(hwnd, out var pid);
             packageAppId = AppUserModelIds.OfProcess(pid);
         }
-        return new WindowRead(TopLevelWindows.Title(hwnd), maximized, minimized, fullscreen, device, property, packageAppId, executable ? ExePath(hwnd) : null);
+
+        return new WindowRead(TopLevelWindows.Title(hwnd), maximized, minimized, fullscreen, device, property,
+            packageAppId, executable ? ExePath(hwnd) : null);
     }
 
     /// <summary>The full path of the program that owns a window, or empty when it cannot be read.</summary>
@@ -237,8 +263,10 @@ internal sealed class WindowBackend : IWindowBackend
         if (hasPlacement && !minimized && !maximized)
             bias = (current.Left - placement.Normal.Left, current.Top - placement.Normal.Top);
         else if (hasPlacement && monitors.FirstOrDefault(m => m.Info.IsPrimary) is { } primary)
-            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0);
-        var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current, WindowRules.Shift(placement.Normal, bias.X, bias.Y));
+            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work,
+                ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0);
+        var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current,
+            WindowRules.Shift(placement.Normal, bias.X, bias.Y));
         if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
             return;
         var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
@@ -270,7 +298,6 @@ internal sealed class WindowBackend : IWindowBackend
         var current = Win32.GetCurrentThreadId();
         var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, out _);
         if (other != 0 && other != current && Win32.AttachThreadInput(current, other, true))
-        {
             try
             {
                 TopLevelWindows.Raise(hwnd);
@@ -280,7 +307,7 @@ internal sealed class WindowBackend : IWindowBackend
             {
                 Win32.AttachThreadInput(current, other, false);
             }
-        }
+
         if (Win32.GetForegroundWindow() != hwnd)
         {
             // A key press makes this process the one that had the last input, which may take the foreground.
@@ -290,7 +317,10 @@ internal sealed class WindowBackend : IWindowBackend
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
-    public void Close(nint hwnd) => TopLevelWindows.Close(hwnd);
+    public void Close(nint hwnd)
+    {
+        TopLevelWindows.Close(hwnd);
+    }
 
     public void SetMaximized(nint hwnd, bool maximized)
     {

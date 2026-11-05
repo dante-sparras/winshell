@@ -38,6 +38,7 @@ internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> de
                 var message = e.Message;
                 loop.Post(() => log.Warn("media", $"Cannot name {appId}: {message}"));
             }
+
             loop.Post(() =>
             {
                 _names[appId] = name;
@@ -46,7 +47,7 @@ internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> de
         })
         {
             IsBackground = true,
-            Name = "Media app name",
+            Name = "Media app name"
         };
         thread.Start();
     }

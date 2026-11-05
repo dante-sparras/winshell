@@ -13,16 +13,21 @@ public enum UpdateStatus
 {
     /// <summary>Not checked yet in this run.</summary>
     Idle,
+
     /// <summary>Asking GitHub Releases for the newest release.</summary>
     Checking,
+
     /// <summary>No release is newer than the one running.</summary>
     UpToDate,
+
     /// <summary>A newer release is downloading.</summary>
     Downloading,
+
     /// <summary>Downloaded, its hash checked and unzipped. It applies when Winshell next starts.</summary>
     Ready,
+
     /// <summary>The last check, download or install failed. <see cref="UpdatesService.Error"/> says why.</summary>
-    Failed,
+    Failed
 }
 
 /// <summary>An update put in place as Winshell started, or, with <see cref="Error"/>, one that was not.</summary>
@@ -58,7 +63,8 @@ internal sealed class Updater : IDisposable
     private Timer? _timer;
     private bool _automatic;
 
-    internal Updater(string repository, string installDir, string updatesDir, string currentVersion, string runtime, Log log, HttpMessageHandler? handler = null)
+    internal Updater(string repository, string installDir, string updatesDir, string currentVersion, string runtime,
+        Log log, HttpMessageHandler? handler = null)
     {
         _repository = repository;
         _installDir = installDir;
@@ -67,7 +73,8 @@ internal sealed class Updater : IDisposable
         _runtime = runtime;
         _log = log;
         // One client for the life of the shell, so its connections must not outlive a DNS change.
-        _http = new HttpClient(handler ?? new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(15) });
+        _http = new HttpClient(
+            handler ?? new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(15) });
         // A download on a slow connection takes longer than HttpClient's default 100 seconds.
         _http.Timeout = TimeSpan.FromMinutes(30);
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("winshell", _current.ToString(3)));
@@ -114,7 +121,8 @@ internal sealed class Updater : IDisposable
     public static string UpdatesDir => Path.Combine(ShellLocations.LocalRoot, "updates");
 
     /// <summary>The runtime a release zip is built for: <c>win-x64</c> or <c>win-arm64</c>.</summary>
-    internal static string RuntimeName => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64";
+    internal static string RuntimeName =>
+        RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64";
 
     /// <summary>
     /// True when <paramref name="installDir"/> is winget's portable package folder or its Links alias.
@@ -122,8 +130,10 @@ internal sealed class Updater : IDisposable
     /// </summary>
     internal static bool IsWingetManaged(string installDir)
     {
-        var winget = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet");
-        return IsUnder(installDir, Path.Combine(winget, "Packages")) || IsUnder(installDir, Path.Combine(winget, "Links"));
+        var winget = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft", "WinGet");
+        return IsUnder(installDir, Path.Combine(winget, "Packages")) ||
+               IsUnder(installDir, Path.Combine(winget, "Links"));
     }
 
     /// <summary><paramref name="path"/> is <paramref name="root"/> or a directory inside it.</summary>
@@ -132,7 +142,7 @@ internal sealed class Updater : IDisposable
         var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var baseDir = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return full.Equals(baseDir, StringComparison.OrdinalIgnoreCase)
-            || full.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+               || full.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Raised on a background thread when <see cref="State"/> changes.</summary>
@@ -140,7 +150,13 @@ internal sealed class Updater : IDisposable
 
     internal UpdateState State
     {
-        get { lock (_lock) return _state; }
+        get
+        {
+            lock (_lock)
+            {
+                return _state;
+            }
+        }
     }
 
     /// <summary>
@@ -155,7 +171,13 @@ internal sealed class Updater : IDisposable
     /// </summary>
     internal bool Automatic
     {
-        get { lock (_lock) return _automatic; }
+        get
+        {
+            lock (_lock)
+            {
+                return _automatic;
+            }
+        }
         set
         {
             lock (_lock)
@@ -164,14 +186,18 @@ internal sealed class Updater : IDisposable
                     return;
                 _automatic = value;
                 _timer?.Dispose();
-                _timer = value ? new Timer(_ => ServiceSupport.Run("updates", CheckAsync), null, FirstCheck, Interval) : null;
+                _timer = value
+                    ? new Timer(_ => ServiceSupport.Run("updates", CheckAsync), null, FirstCheck, Interval)
+                    : null;
             }
         }
     }
 
     /// <summary>Records an update that downloaded but did not apply when Winshell started.</summary>
-    public void ReportApplyFailure(string version, string error) =>
+    public void ReportApplyFailure(string version, string error)
+    {
         Set(new UpdateState(UpdateStatus.Failed, version, $"Winshell could not install {version}: {error}"));
+    }
 
     /// <summary>
     /// Finds the latest release and, when it is newer than this Winshell, downloads and stages it. One check runs
@@ -189,11 +215,14 @@ internal sealed class Updater : IDisposable
             {
                 release = await LatestAsync().ConfigureAwait(false);
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or UriFormatException)
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException
+                                          or InvalidDataException or KeyNotFoundException or InvalidOperationException
+                                          or UriFormatException)
             {
                 Fail(ready, "Winshell could not check for updates: " + e.Message);
                 return;
             }
+
             // A staged update newer than the latest release was pulled, or never was one: it must not install at the next start.
             if (UpdateInstall.Staged(_updatesDir, _current) is { } pulled && pulled.Version > release.Version)
                 UpdateInstall.Discard(_updatesDir, pulled.Path);
@@ -202,30 +231,38 @@ internal sealed class Updater : IDisposable
                 Set(new UpdateState(UpdateStatus.UpToDate, release.Version.ToString(3), ""));
                 return;
             }
+
             if (UpdateInstall.Staged(_updatesDir, _current) is { } staged && staged.Version >= release.Version)
             {
                 Set(new UpdateState(UpdateStatus.Ready, staged.Version.ToString(3), ""));
                 return;
             }
+
             var version = release.Version.ToString(3);
             if (!CanWrite(_installDir))
             {
-                Fail(null, $"Winshell {version} is out, but Winshell cannot write to {_installDir}. Update it the way you installed it.", version);
+                Fail(null,
+                    $"Winshell {version} is out, but Winshell cannot write to {_installDir}. Update it the way you installed it.",
+                    version);
                 return;
             }
+
             Set(new UpdateState(UpdateStatus.Downloading, version, ""));
             try
             {
                 await DownloadAsync(release).ConfigureAwait(false);
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or InvalidDataException)
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException
+                                          or UnauthorizedAccessException or InvalidDataException)
             {
                 Fail(null, $"Winshell could not download {version}: {e.Message}", version);
                 return;
             }
+
             _log.Info("updates", $"Winshell {version} is ready. It applies when Winshell next starts.");
             if (Authenticode.Signer(Path.Combine(_installDir, "winshell.exe")) is null)
-                _log.Info("updates", "This winshell.exe is not signed, so the update's signature is not checked, only its SHA-256.");
+                _log.Info("updates",
+                    "This winshell.exe is not signed, so the update's signature is not checked, only its SHA-256.");
             Set(new UpdateState(UpdateStatus.Ready, version, ""));
         }
         finally
@@ -253,8 +290,12 @@ internal sealed class Updater : IDisposable
     /// The version of the update that applies at the next start, or null when there is none. A re-check shows
     /// <c>Checking</c> while the update is still staged, so the disk decides, not the state.
     /// </summary>
-    private string? ReadyVersion() =>
-        State.Status == UpdateStatus.Ready ? State.Version : UpdateInstall.Staged(_updatesDir, _current)?.Version.ToString(3);
+    private string? ReadyVersion()
+    {
+        return State.Status == UpdateStatus.Ready
+            ? State.Version
+            : UpdateInstall.Staged(_updatesDir, _current)?.Version.ToString(3);
+    }
 
     public void Dispose()
     {
@@ -263,6 +304,7 @@ internal sealed class Updater : IDisposable
             _timer?.Dispose();
             _timer = null;
         }
+
         _http.Dispose();
         _gate.Dispose();
     }
@@ -271,20 +313,26 @@ internal sealed class Updater : IDisposable
 
     private async Task<Release> LatestAsync()
     {
-        using var response = await _http.GetAsync(new Uri($"https://api.github.com/repos/{_repository}/releases/latest")).ConfigureAwait(false);
+        using var response = await _http
+            .GetAsync(new Uri($"https://api.github.com/repos/{_repository}/releases/latest")).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+            .ConfigureAwait(false);
         var root = json.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? "";
-        var version = ParseVersion(tag) ?? throw new InvalidDataException($"The latest release, \"{tag}\", is not a version.");
+        var version = ParseVersion(tag) ??
+                      throw new InvalidDataException($"The latest release, \"{tag}\", is not a version.");
         var suffix = $"-{_runtime}.zip";
         foreach (var asset in root.GetProperty("assets").EnumerateArray())
         {
             var name = asset.GetProperty("name").GetString() ?? "";
-            if (!name.StartsWith("winshell-", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            if (!name.StartsWith("winshell-", StringComparison.OrdinalIgnoreCase) ||
+                !name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 continue;
             // GitHub computes the digest when the file is uploaded. Without one, there is nothing to check the download against.
-            var digest = asset.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString()! : "";
+            var digest = asset.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String
+                ? d.GetString()!
+                : "";
             if (!digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"{name} has no SHA-256 digest, so Winshell does not install it.");
             var url = new Uri(asset.GetProperty("browser_download_url").GetString() ?? "");
@@ -292,6 +340,7 @@ internal sealed class Updater : IDisposable
                 throw new InvalidDataException($"{name} is not served over HTTPS.");
             return new Release(version, url, digest["sha256:".Length..]);
         }
+
         // A release that is still uploading its files, or has none for this architecture.
         throw new InvalidDataException($"Release {tag} has no zip for {_runtime}.");
     }
@@ -309,7 +358,8 @@ internal sealed class Updater : IDisposable
         try
         {
             string actual;
-            using (var response = await _http.GetAsync(release.Url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false))
+            using (var response = await _http.GetAsync(release.Url, HttpCompletionOption.ResponseHeadersRead)
+                       .ConfigureAwait(false))
             {
                 response.EnsureSuccessStatusCode();
                 await using var body = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
@@ -322,16 +372,19 @@ internal sealed class Updater : IDisposable
                     sha.AppendData(buffer, 0, read);
                     await file.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
                 }
+
                 actual = Convert.ToHexStringLower(sha.GetHashAndReset());
             }
+
             if (!string.Equals(actual, release.Sha256, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"the file's SHA-256 is {actual}, but the release says {release.Sha256.ToLowerInvariant()}.");
+                throw new InvalidDataException(
+                    $"the file's SHA-256 is {actual}, but the release says {release.Sha256.ToLowerInvariant()}.");
             // ExtractToDirectory refuses an entry that would land outside the folder.
             ZipFile.ExtractToDirectory(zip, unzipped);
             if (!File.Exists(Path.Combine(unzipped, "winshell.exe")))
                 throw new InvalidDataException("the zip has no winshell.exe.");
             if (Directory.Exists(target))
-                Directory.Delete(target, recursive: true);
+                Directory.Delete(target, true);
             Directory.Move(unzipped, target);
             // Kept outside the updates folder, so a later start can hash this zip again before it copies anything.
             UpdateTrust.Keep(_updatesDir, version, zip, actual);
@@ -340,10 +393,13 @@ internal sealed class Updater : IDisposable
         {
             TryDelete(zip);
             if (Directory.Exists(unzipped))
-            {
-                try { Directory.Delete(unzipped, recursive: true); }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-            }
+                try
+                {
+                    Directory.Delete(unzipped, true);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                }
         }
     }
 
@@ -356,7 +412,10 @@ internal sealed class Updater : IDisposable
             : new UpdateState(UpdateStatus.Failed, version, message));
     }
 
-    private void Set(UpdateState state) => Update(_ => state);
+    private void Set(UpdateState state)
+    {
+        Update(_ => state);
+    }
 
     private void Update(Func<UpdateState, UpdateState> change)
     {
@@ -368,6 +427,7 @@ internal sealed class Updater : IDisposable
                 return;
             _state = state;
         }
+
         Changed?.Invoke(state);
     }
 
@@ -376,7 +436,10 @@ internal sealed class Updater : IDisposable
         var probe = Path.Combine(dir, $".winshell-write-{Guid.NewGuid():N}");
         try
         {
-            using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+            using (File.Create(probe, 1, FileOptions.DeleteOnClose))
+            {
+            }
+
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -387,8 +450,13 @@ internal sealed class Updater : IDisposable
 
     private static void TryDelete(string path)
     {
-        try { File.Delete(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>Reads <c>v1.2.3</c> or <c>1.2.3</c>, ignoring a prerelease or build suffix.</summary>
@@ -403,10 +471,8 @@ internal sealed class Updater : IDisposable
             return null;
         var numbers = new int[3];
         for (var i = 0; i < 3; i++)
-        {
             if (!int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out numbers[i]))
                 return null;
-        }
         return new Version(numbers[0], numbers[1], numbers[2]);
     }
 }

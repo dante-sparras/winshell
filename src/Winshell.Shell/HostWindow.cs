@@ -1,3 +1,4 @@
+using Winshell.Diagnostics;
 using Winshell.Native;
 
 namespace Winshell;
@@ -10,7 +11,7 @@ namespace Winshell;
 /// </summary>
 internal sealed class HostWindow : IDisposable
 {
-    private const string ClassName = Diagnostics.DoctorScreens.WinshellClass;
+    private const string ClassName = DoctorScreens.WinshellClass;
 
     private readonly ShellPlatform _platform;
     private readonly NativeWindow _window;
@@ -62,11 +63,17 @@ internal sealed class HostWindow : IDisposable
     /// <summary>Whether the window has started letting go of its parts. <see cref="Handle"/> turns 0 once it has let go of the window too.</summary>
     internal bool Released { get; private set; }
 
-    internal static (uint Style, uint ExStyle) Styles(WindowKind kind) => kind switch
+    internal static (uint Style, uint ExStyle) Styles(WindowKind kind)
     {
-        WindowKind.Floating => (Win32.WS_OVERLAPPEDWINDOW | Win32.WS_CLIPCHILDREN, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_APPWINDOW | WindowFocus.StartingExStyle(kind)),
-        _ => (Win32.WS_POPUP, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | WindowFocus.StartingExStyle(kind)),
-    };
+        return kind switch
+        {
+            WindowKind.Floating => (Win32.WS_OVERLAPPEDWINDOW | Win32.WS_CLIPCHILDREN,
+                Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_APPWINDOW | WindowFocus.StartingExStyle(kind)),
+            _ => (Win32.WS_POPUP,
+                Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST |
+                WindowFocus.StartingExStyle(kind))
+        };
+    }
 
     private nint? OnWindowMessage(WindowMessage message)
     {
@@ -100,14 +107,17 @@ internal sealed class HostWindow : IDisposable
         });
     }
 
-    public void Dispose() => Cleanup(destroyWindow: true);
+    public void Dispose()
+    {
+        Cleanup(true);
+    }
 
     /// <summary>Windows is destroying the window, so it lets go of it without destroying it, and tells its client on the loop.</summary>
     internal void NoteExternalDestroy()
     {
         if (Released)
             return;
-        Cleanup(destroyWindow: false);
+        Cleanup(false);
         _platform.Loop.Post(Client.OnBackingDestroyed);
     }
 

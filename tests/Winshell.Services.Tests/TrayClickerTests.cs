@@ -25,14 +25,17 @@ public sealed class TrayClickerTests
     [Theory]
     [InlineData(ProcessIntegrity.Medium, true)]
     [InlineData(0x3000u, false)]
-    public void A_click_hands_over_the_foreground_then_reaches_the_app_only_when_this_process_may_click_it(uint shell, bool clicks)
+    public void A_click_hands_over_the_foreground_then_reaches_the_app_only_when_this_process_may_click_it(uint shell,
+        bool clicks)
     {
         // The app is elevated, and so is the shell in the second case.
         const nint app = 0x100;
-        var backend = new FakeTrayBackend { Windows = { [app] = 42 }, Integrities = { [42] = 0x3000, [(uint)Environment.ProcessId] = shell } };
+        var backend = new FakeTrayBackend
+            { Windows = { [app] = 42 }, Integrities = { [42] = 0x3000, [(uint)Environment.ProcessId] = shell } };
         using var clicker = new TrayClicker(new ManualEventLoop(), backend);
 
-        clicker.Click(new TrayIcon { Key = "app", Window = app, Id = 1, CallbackMessage = 0x8001 }, TrayClick.Left, null);
+        clicker.Click(new TrayIcon { Key = "app", Window = app, Id = 1, CallbackMessage = 0x8001 }, TrayClick.Left,
+            null);
 
         // An app before version 4 is told the mouse message: WM_LBUTTONDOWN, then WM_LBUTTONUP.
         string[] calls = clicks ? ["foreground 100 42", "notify", "notify"] : [];

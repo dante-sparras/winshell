@@ -10,7 +10,10 @@ public sealed class KeepAwakeTests
     private readonly List<string> _warnings = [];
     private readonly Log _log;
 
-    public KeepAwakeTests() => _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
+    public KeepAwakeTests()
+    {
+        _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
+    }
 
     [Fact]
     public void Enabling_holds_the_PC_awake_and_Windows_accepts_the_request()

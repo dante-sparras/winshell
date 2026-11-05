@@ -51,7 +51,8 @@ public sealed class BluetoothDevice : ObservableObject
     public bool Connected => _info.Connected;
 
     /// <summary><see cref="Connected"/>, as a state.</summary>
-    public BluetoothDeviceState State => _info.Connected ? BluetoothDeviceState.Connected : BluetoothDeviceState.Disconnected;
+    public BluetoothDeviceState State =>
+        _info.Connected ? BluetoothDeviceState.Connected : BluetoothDeviceState.Disconnected;
 
     /// <summary>Whether Windows reports the device's battery level. Only a connected device can have one.</summary>
     public bool BatteryAvailable => _info.Battery.HasValue;
@@ -75,65 +76,93 @@ public sealed class BluetoothDevice : ObservableObject
     public string Error => _error;
 
     /// <summary>Asks Windows to connect a paired audio device. Fails for other device types, which reconnect through Windows.</summary>
-    public void Connect() => _ = SetConnectionAsync(true);
+    public void Connect()
+    {
+        _ = SetConnectionAsync(true);
+    }
 
     /// <summary>Asks Windows to disconnect a paired audio device. Fails for other device types.</summary>
-    public void Disconnect() => _ = SetConnectionAsync(false);
+    public void Disconnect()
+    {
+        _ = SetConnectionAsync(false);
+    }
 
     /// <summary>Pairs the device with basic Windows pairing, which may show consent or PIN UI.</summary>
-    public void Pair() => _ = PairAsync();
+    public void Pair()
+    {
+        _ = PairAsync();
+    }
 
     /// <summary>Cancels a running <see cref="Pair"/>. Its <see cref="Error"/> becomes <c>Cancelled</c>.</summary>
     public void CancelPairing()
     {
         lock (_pairingLock)
+        {
             _pairing?.Cancel();
+        }
     }
 
     /// <summary>Unpairs every paired endpoint of the device, stopping at the first failure.</summary>
-    public void Unpair() => _ = UnpairAsync();
-
-    internal Task SetConnectionAsync(bool connect) => RunAsync(connect ? BluetoothOperation.Connecting : BluetoothOperation.Disconnecting, async info =>
+    public void Unpair()
     {
-        if (!info.Paired || info.Container is not { } container)
-            return "Windows connection requests require a paired Bluetooth audio device with a device container.";
-        return await _service.Backend.SetAudioConnectionAsync(container, connect).ConfigureAwait(false)
-            ? null : "Windows accepted no Bluetooth audio connection request. Other device types reconnect through Windows.";
-    });
+        _ = UnpairAsync();
+    }
 
-    internal Task PairAsync() => RunAsync(BluetoothOperation.Pairing, async info =>
+    internal Task SetConnectionAsync(bool connect)
     {
-        if (info.Paired)
-            return null;
-        if (!info.CanPair)
-            return "Windows reports that this device cannot be paired.";
-        var cancellation = new CancellationTokenSource();
-        lock (_pairingLock)
-            _pairing = cancellation;
-        try
+        return RunAsync(connect ? BluetoothOperation.Connecting : BluetoothOperation.Disconnecting, async info =>
         {
-            return await _service.Backend.PairAsync(info.Id, cancellation.Token).ConfigureAwait(false);
-        }
-        finally
+            if (!info.Paired || info.Container is not { } container)
+                return "Windows connection requests require a paired Bluetooth audio device with a device container.";
+            return await _service.Backend.SetAudioConnectionAsync(container, connect).ConfigureAwait(false)
+                ? null
+                : "Windows accepted no Bluetooth audio connection request. Other device types reconnect through Windows.";
+        });
+    }
+
+    internal Task PairAsync()
+    {
+        return RunAsync(BluetoothOperation.Pairing, async info =>
         {
+            if (info.Paired)
+                return null;
+            if (!info.CanPair)
+                return "Windows reports that this device cannot be paired.";
+            var cancellation = new CancellationTokenSource();
             lock (_pairingLock)
             {
-                _pairing = null;
-                cancellation.Dispose();
+                _pairing = cancellation;
             }
-        }
-    });
 
-    internal Task UnpairAsync() => RunAsync(BluetoothOperation.Unpairing, async info =>
+            try
+            {
+                return await _service.Backend.PairAsync(info.Id, cancellation.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_pairingLock)
+                {
+                    _pairing = null;
+                    cancellation.Dispose();
+                }
+            }
+        });
+    }
+
+    internal Task UnpairAsync()
     {
-        foreach (var id in info.PairedIds)
+        return RunAsync(BluetoothOperation.Unpairing, async info =>
         {
-            var error = await _service.Backend.UnpairAsync(id).ConfigureAwait(false);
-            if (error is not null)
-                return error;
-        }
-        return null;
-    });
+            foreach (var id in info.PairedIds)
+            {
+                var error = await _service.Backend.UnpairAsync(id).ConfigureAwait(false);
+                if (error is not null)
+                    return error;
+            }
+
+            return null;
+        });
+    }
 
     private async Task RunAsync(BluetoothOperation operation, Func<BluetoothDeviceInfo, Task<string?>> action)
     {
@@ -167,6 +196,7 @@ public sealed class BluetoothDevice : ObservableObject
                     if (error is not null)
                         OperationFailed?.Invoke(error);
                 }
+
                 _service.Refresh();
             });
         }

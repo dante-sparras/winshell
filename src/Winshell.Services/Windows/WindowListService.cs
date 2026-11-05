@@ -47,7 +47,8 @@ public sealed class WindowListService : ObservableObject, IDisposable
     /// <param name="log">Where a hook that cannot be set is reported.</param>
     /// <param name="desktops">Gives <see cref="AppWindow.Desktop"/> its value. Without it, that stays null.</param>
     /// <param name="backend">The windows, for a test.</param>
-    internal WindowListService(IEventLoop loop, Log log, VirtualDesktopsService? desktops = null, IWindowBackend? backend = null)
+    internal WindowListService(IEventLoop loop, Log log, VirtualDesktopsService? desktops = null,
+        IWindowBackend? backend = null)
     {
         _loop = loop;
         _desktops = desktops;
@@ -70,7 +71,10 @@ public sealed class WindowListService : ObservableObject, IDisposable
     public AppWindow? ActiveWindow => _activeWindow;
 
     /// <summary>The window with this handle, or null when it is not listed.</summary>
-    internal AppWindow? Find(nint hwnd) => _byHwnd.GetValueOrDefault(hwnd);
+    internal AppWindow? Find(nint hwnd)
+    {
+        return _byHwnd.GetValueOrDefault(hwnd);
+    }
 
     private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
@@ -79,7 +83,8 @@ public sealed class WindowListService : ObservableObject, IDisposable
         if (eventType == Win32.EVENT_OBJECT_LOCATIONCHANGE && !WindowRules.IsWindowObject(idObject, idChild))
             return;
         var isRoot = hwnd != 0 && eventType != Win32.EVENT_OBJECT_DESTROY && _backend.RootOf(hwnd) == hwnd;
-        var marksWindow = WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, _byHwnd.ContainsKey(hwnd), isRoot);
+        var marksWindow =
+            WindowRules.MarksWindow(eventType, hwnd, idObject, idChild, _byHwnd.ContainsKey(hwnd), isRoot);
         var marksForeground = WindowRules.MarksForeground(eventType);
         if (!marksWindow && !marksForeground)
             return;
@@ -134,6 +139,7 @@ public sealed class WindowListService : ObservableObject, IDisposable
                 window.Update(info);
             }
         }
+
         // Owners are known once every window is.
         foreach (var window in _byHwnd.Values)
             window.SetParent(window.Owner == 0 ? null : _byHwnd.GetValueOrDefault(window.Owner));
@@ -145,12 +151,11 @@ public sealed class WindowListService : ObservableObject, IDisposable
             _foregroundDirty = false;
             Set(ref _activeWindow, ActiveOf(_backend.Foreground), nameof(ActiveWindow));
         }
+
         // A dialog that flashes asks for the window that owns it. The window in front already has the user.
         foreach (var hwnd in _flashed)
-        {
             if (ActiveOf(hwnd) is { } wanting && wanting != _activeWindow)
                 _wanting.Add(wanting.Hwnd);
-        }
         _flashed.Clear();
         WindowRules.SettleAttention(_wanting, _activeWindow?.Hwnd ?? 0, _byHwnd.ContainsKey);
         foreach (var window in _byHwnd.Values)
@@ -179,6 +184,7 @@ public sealed class WindowListService : ObservableObject, IDisposable
                 return window;
             hwnd = _backend.OwnerOf(hwnd);
         }
+
         return null;
     }
 
@@ -194,7 +200,8 @@ public sealed class WindowListService : ObservableObject, IDisposable
         var read = _backend.Read(hwnd, !previous.PackageKnown, previous.Executable is not { Length: > 0 });
         var identity = Resolve(previous, read.AppUserModelId, read.PackageAppId, read.Executable);
         _identities[hwnd] = identity;
-        return new WindowInfo(hwnd, read.Title, identity.AppId, identity.Executable, identity.Icon, _backend.OwnerOf(hwnd),
+        return new WindowInfo(hwnd, read.Title, identity.AppId, identity.Executable, identity.Icon,
+            _backend.OwnerOf(hwnd),
             read.Maximized, read.Minimized, read.Fullscreen, read.Monitor);
     }
 
@@ -202,17 +209,20 @@ public sealed class WindowListService : ObservableObject, IDisposable
     /// The taskbar's rule: a visible, uncloaked top-level window with a title that either asks for a taskbar button
     /// or has no owner and is not a tool window or a window that never activates.
     /// </summary>
-    private static bool ShowsOnTaskbar(TaskbarWindowFacts window) =>
-        window.Exists && window.Visible && !window.Shell && !window.Child
-        && (window.AppWindow || (!window.Owned && !window.ToolWindow && !window.NoActivate))
-        && window.HasTitle && !window.Cloaked;
+    private static bool ShowsOnTaskbar(TaskbarWindowFacts window)
+    {
+        return window.Exists && window.Visible && !window.Shell && !window.Child
+               && (window.AppWindow || (!window.Owned && !window.ToolWindow && !window.NoActivate))
+               && window.HasTitle && !window.Cloaked;
+    }
 
     /// <summary>
     /// The app id to keep after one read of the window. <paramref name="windowProperty"/> is the property store now,
     /// and it replaces a package id or a program name. An empty property uses <paramref name="packageAppId"/> when
     /// that was read, or the package id already known. A null executable keeps the path already read.
     /// </summary>
-    private static WindowIdentity Resolve(WindowIdentity previous, string windowProperty, string? packageAppId, string? executable)
+    private static WindowIdentity Resolve(WindowIdentity previous, string windowProperty, string? packageAppId,
+        string? executable)
     {
         var package = packageAppId ?? previous.PackageAppId ?? "";
         var path = executable ?? previous.Executable ?? "";
@@ -317,13 +327,22 @@ public sealed class AppWindow : ObservableObject
     public event EventHandler? Closed;
 
     /// <summary>Brings the window to the front and focuses it, restoring it first when it is minimized.</summary>
-    public void Activate() => _backend.Activate(Hwnd);
+    public void Activate()
+    {
+        _backend.Activate(Hwnd);
+    }
 
     /// <summary>Asks the window to close, as its close button does. The program can still keep it open.</summary>
-    public void Close() => _backend.Close(Hwnd);
+    public void Close()
+    {
+        _backend.Close(Hwnd);
+    }
 
     /// <summary>Moves the window onto a monitor. Its logical size stays, and a maximized window is maximized again there.</summary>
-    public void MoveTo(ScreenInfo? screen) => _backend.MoveToMonitor(Hwnd, screen?.Id ?? "");
+    public void MoveTo(ScreenInfo? screen)
+    {
+        _backend.MoveToMonitor(Hwnd, screen?.Id ?? "");
+    }
 
     /// <summary>Moves the window onto a virtual desktop. This uses the supported desktop API.</summary>
     public void MoveToDesktop(VirtualDesktop? desktop)
@@ -340,7 +359,10 @@ public sealed class AppWindow : ObservableObject
         Changed(nameof(Desktop));
     }
 
-    internal void NotifyClosed() => Closed?.Invoke(this, EventArgs.Empty);
+    internal void NotifyClosed()
+    {
+        Closed?.Invoke(this, EventArgs.Empty);
+    }
 
     internal void Update(WindowInfo info)
     {
@@ -356,12 +378,24 @@ public sealed class AppWindow : ObservableObject
         Changed(old.Monitor != info.Monitor, nameof(Screens));
     }
 
-    internal void SetParent(AppWindow? parent) => Set(ref _parent, parent, nameof(Parent));
+    internal void SetParent(AppWindow? parent)
+    {
+        Set(ref _parent, parent, nameof(Parent));
+    }
 
-    internal void SetActivated(bool activated) => Set(ref _activated, activated, nameof(Activated));
+    internal void SetActivated(bool activated)
+    {
+        Set(ref _activated, activated, nameof(Activated));
+    }
 
-    internal void SetAttention(bool attention) => Set(ref _attention, attention, nameof(Attention));
+    internal void SetAttention(bool attention)
+    {
+        Set(ref _attention, attention, nameof(Attention));
+    }
 
     /// <summary>The window's app id and title, as <c>AppWindow(&lt;app id&gt;: &lt;title&gt;)</c>, for logs.</summary>
-    public override string ToString() => $"AppWindow({_info.AppId}: {_info.Title})";
+    public override string ToString()
+    {
+        return $"AppWindow({_info.AppId}: {_info.Title})";
+    }
 }

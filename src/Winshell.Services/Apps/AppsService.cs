@@ -15,7 +15,10 @@ public sealed class AppsService : ObservableObject, IDisposable
     private readonly Dictionary<string, AppEntry> _byId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AppUsage> _bumps = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<AppRecord> _entries = [];
-    private IReadOnlyDictionary<string, AppUsage> _usage = new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
+
+    private IReadOnlyDictionary<string, AppUsage> _usage =
+        new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
+
     private bool _disposed;
 
     internal AppsService(IEventLoop loop, Log log, IAppsBackend? backend = null, TimeProvider? time = null)
@@ -39,17 +42,28 @@ public sealed class AppsService : ObservableObject, IDisposable
     public ObservableCollection<AppEntry> Frequent { get; } = [];
 
     /// <summary>An entry by its id: a shortcut's path under Programs, or a packaged app's AppUserModelID. Includes hidden entries.</summary>
-    public AppEntry? ById(string id) => _byId.GetValueOrDefault(id);
+    public AppEntry? ById(string id)
+    {
+        return _byId.GetValueOrDefault(id);
+    }
 
     /// <summary>Finds an app by id, then by the app id a window carries, then by display name. Includes hidden entries.</summary>
-    public AppEntry? Find(string name) =>
-        AppIndex.Find(_entries, name) is { } found ? _byId[found.Id] : null;
+    public AppEntry? Find(string name)
+    {
+        return AppIndex.Find(_entries, name) is { } found ? _byId[found.Id] : null;
+    }
 
     /// <summary>Visible apps the query matches, best first. A blank query matches nothing.</summary>
-    public IReadOnlyList<AppEntry> Search(string query) =>
-        AppIndex.Search(_entries, query, UsageFor, _time.GetUtcNow().ToUnixTimeMilliseconds()).Select(entry => _byId[entry.Id]).ToList();
+    public IReadOnlyList<AppEntry> Search(string query)
+    {
+        return AppIndex.Search(_entries, query, UsageFor, _time.GetUtcNow().ToUnixTimeMilliseconds())
+            .Select(entry => _byId[entry.Id]).ToList();
+    }
 
-    private void OnChanged() => _loop.Post(Apply);
+    private void OnChanged()
+    {
+        _loop.Post(Apply);
+    }
 
     private void Apply()
     {
@@ -65,13 +79,12 @@ public sealed class AppsService : ObservableObject, IDisposable
             _bumps.Remove(id);
             gone.Launched = null;
         }
+
         foreach (var entry in _entries)
-        {
             if (_byId.TryGetValue(entry.Id, out var kept))
                 kept.Update(entry, UsageFor(entry));
             else
                 _byId[entry.Id] = new AppEntry(entry, UsageFor(entry), _loop, _log, _backend) { Launched = OnLaunched };
-        }
         Publish();
     }
 
@@ -93,8 +106,11 @@ public sealed class AppsService : ObservableObject, IDisposable
         Show(Frequent, AppIndex.Frequent(_entries, UsageFor));
     }
 
-    private void Show(ObservableCollection<AppEntry> list, IEnumerable<AppRecord> records) =>
-        list.Sync(records.Select(entry => _byId[entry.Id]), entry => entry, entry => entry, entry => entry, static (_, _) => { });
+    private void Show(ObservableCollection<AppEntry> list, IEnumerable<AppRecord> records)
+    {
+        list.Sync(records.Select(entry => _byId[entry.Id]), entry => entry, entry => entry, entry => entry,
+            static (_, _) => { });
+    }
 
     private AppUsage UsageFor(AppRecord entry)
     {
@@ -184,7 +200,12 @@ public sealed class AppEntry : ObservableObject
     public void Launch()
     {
         var entry = _entry;
-        void Warn(string message) => _log.Warn("apps", $"Failed to launch {entry.Name}: {message}");
+
+        void Warn(string message)
+        {
+            _log.Warn("apps", $"Failed to launch {entry.Name}: {message}");
+        }
+
         if (!entry.Packaged)
         {
             if (_backend.OpenShortcut(entry.LaunchPath, entry.StartIn) is { } error)
@@ -193,6 +214,7 @@ public sealed class AppEntry : ObservableObject
                 Launched?.Invoke(entry);
             return;
         }
+
         // Activation returns once the app is up, so its outcome, and the Apps folder when it failed, run on the loop.
         _ = _backend.ActivateAsync(entry.Id, entry.Arguments).ContinueWith(activated =>
         {
@@ -208,6 +230,7 @@ public sealed class AppEntry : ObservableObject
                         return;
                     }
                 }
+
                 Launched?.Invoke(entry);
             });
         }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
@@ -235,5 +258,8 @@ public sealed class AppEntry : ObservableObject
     }
 
     /// <summary>The entry's id, as <c>AppEntry(&lt;id&gt;)</c>, for logs.</summary>
-    public override string ToString() => $"AppEntry({Id})";
+    public override string ToString()
+    {
+        return $"AppEntry({Id})";
+    }
 }

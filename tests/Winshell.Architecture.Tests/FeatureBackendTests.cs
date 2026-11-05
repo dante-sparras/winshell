@@ -11,7 +11,8 @@ namespace Winshell.Architecture.Tests;
 public partial class FeatureBackendTests
 {
     private const BindingFlags Declared =
-        BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+        BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+        BindingFlags.Static;
 
     private static readonly Dictionary<short, OperandType> Operands = typeof(OpCodes)
         .GetFields(BindingFlags.Public | BindingFlags.Static)
@@ -25,13 +26,15 @@ public partial class FeatureBackendTests
         var backends = services.GetTypes().Where(type => type.IsInterface && BackendName().IsMatch(type.Name)).ToList();
         Assert.NotEmpty(backends);
         var owners = services.GetTypes()
-            .SelectMany(type => backends.Where(backend => backend.IsAssignableFrom(type)).Select(backend => (type, backend.Namespace)))
+            .SelectMany(type =>
+                backends.Where(backend => backend.IsAssignableFrom(type)).Select(backend => (type, backend.Namespace)))
             .ToLookup(pair => pair.type, pair => pair.Namespace);
 
         var crossings = new[] { services, Assembly.Load("Winshell.Shell") }
             .SelectMany(assembly => assembly.GetTypes())
             .SelectMany(user => Uses(user).SelectMany(Parts).Distinct()
-                .Where(used => owners.Contains(used) && !(user.Assembly == services && owners[used].Contains(user.Namespace)))
+                .Where(used =>
+                    owners.Contains(used) && !(user.Assembly == services && owners[used].Contains(user.Namespace)))
                 .Select(used => $"{user.Assembly.GetName().Name}: {user.FullName} uses {used.FullName}"))
             .Distinct()
             .ToList();
@@ -64,7 +67,6 @@ public partial class FeatureBackendTests
             var typeArguments = type.IsGenericType ? type.GetGenericArguments() : null;
             var methodArguments = method.IsGenericMethod ? method.GetGenericArguments() : null;
             foreach (var token in Tokens(body.GetILAsByteArray()!))
-            {
                 switch (type.Module.ResolveMember(token, typeArguments, methodArguments))
                 {
                     case Type named:
@@ -87,7 +89,6 @@ public partial class FeatureBackendTests
                         yield return constructed.DeclaringType!;
                         break;
                 }
-            }
         }
     }
 
@@ -99,7 +100,8 @@ public partial class FeatureBackendTests
             var twoBytes = il[i] == 0xFE;
             var operand = Operands[twoBytes ? (short)(0xFE00 | il[i + 1]) : il[i]];
             i += twoBytes ? 2 : 1;
-            if (operand is OperandType.InlineField or OperandType.InlineMethod or OperandType.InlineTok or OperandType.InlineType)
+            if (operand is OperandType.InlineField or OperandType.InlineMethod or OperandType.InlineTok
+                or OperandType.InlineType)
                 yield return BitConverter.ToInt32(il, i);
             i += operand switch
             {
@@ -107,15 +109,19 @@ public partial class FeatureBackendTests
                 OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
                 OperandType.InlineVar => 2,
                 OperandType.InlineI8 or OperandType.InlineR => 8,
-                OperandType.InlineSwitch => 4 + (4 * BitConverter.ToInt32(il, i)),
-                _ => 4,
+                OperandType.InlineSwitch => 4 + 4 * BitConverter.ToInt32(il, i),
+                _ => 4
             };
         }
     }
 
     // A type with its element and generic argument types: a List<IAppsBackend> uses IAppsBackend.
-    private static IEnumerable<Type> Parts(Type type) =>
-        type.HasElementType ? Parts(type.GetElementType()!)
-        : type.IsConstructedGenericType ? type.GetGenericArguments().SelectMany(Parts).Prepend(type.GetGenericTypeDefinition())
-        : [type];
+    private static IEnumerable<Type> Parts(Type type)
+    {
+        return type.HasElementType
+            ? Parts(type.GetElementType()!)
+            : type.IsConstructedGenericType
+                ? type.GetGenericArguments().SelectMany(Parts).Prepend(type.GetGenericTypeDefinition())
+                : [type];
+    }
 }

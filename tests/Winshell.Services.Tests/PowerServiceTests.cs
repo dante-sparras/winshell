@@ -5,13 +5,22 @@ namespace Winshell.Services.Tests;
 
 public sealed class PowerServiceTests
 {
-    private static PowerDeviceInfo Battery(string id, double percentage = 0.5) => new(id, "Model", PowerDeviceType.Battery, true, true,
-        PowerDeviceState.Discharging, percentage, 10, 20, -5, 3600, 0, 90);
+    private static PowerDeviceInfo Battery(string id, double percentage = 0.5)
+    {
+        return new PowerDeviceInfo(id, "Model", PowerDeviceType.Battery, true, true,
+            PowerDeviceState.Discharging, percentage, 10, 20, -5, 3600, 0, 90);
+    }
 
-    private static PowerSnapshot Snapshot(params PowerDeviceInfo[] devices) =>
-        new(true, devices.FirstOrDefault() ?? PowerDeviceInfo.NoBattery, devices, devices.Length > 0);
+    private static PowerSnapshot Snapshot(params PowerDeviceInfo[] devices)
+    {
+        return new PowerSnapshot(true, devices.FirstOrDefault() ?? PowerDeviceInfo.NoBattery, devices,
+            devices.Length > 0);
+    }
 
-    private static BrightnessInfo Monitor(int current) => new("d", "Monitor", BrightnessConnection.External, 0, 100, current);
+    private static BrightnessInfo Monitor(int current)
+    {
+        return new BrightnessInfo("d", "Monitor", BrightnessConnection.External, 0, 100, current);
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -71,7 +80,8 @@ public sealed class PowerServiceTests
     {
         var lines = new List<string>();
         var log = new Log { Sink = (_, _, message) => lines.Add(message) };
-        using var mode = new PowerModeService(new ManualEventLoop(), log, new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial), _ => 5);
+        using var mode = new PowerModeService(new ManualEventLoop(), log,
+            new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial), _ => 5);
 
         mode.Mode = PowerModeLevel.BestPerformance;
 
@@ -84,11 +94,12 @@ public sealed class PowerServiceTests
         var lines = new List<string>();
         var log = new Log { Sink = (_, _, message) => lines.Add(message) };
         var asked = 0;
-        using var mode = new PowerModeService(new ManualEventLoop(), log, new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial), _ =>
-        {
-            asked++;
-            return 0;
-        });
+        using var mode = new PowerModeService(new ManualEventLoop(), log,
+            new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial), _ =>
+            {
+                asked++;
+                return 0;
+            });
 
         mode.Mode = (PowerModeLevel)9;
 
@@ -156,6 +167,8 @@ public sealed class PowerServiceTests
     [InlineData(false, 0.1, 0.25)]
     [InlineData(true, 100, 1)]
     [InlineData(false, -1, 1)]
-    public void An_idle_monitor_looks_again_when_the_timeout_can_pass(bool idle, double remaining, double seconds) =>
+    public void An_idle_monitor_looks_again_when_the_timeout_can_pass(bool idle, double remaining, double seconds)
+    {
         Assert.Equal(TimeSpan.FromSeconds(seconds), IdleMonitor.NextCheck(idle, remaining));
+    }
 }

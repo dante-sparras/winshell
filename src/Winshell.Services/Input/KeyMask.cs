@@ -1,4 +1,5 @@
 using Winshell.Native;
+
 namespace Winshell.Input;
 
 /// <summary>
@@ -13,15 +14,24 @@ internal static class KeyMask
     /// <summary>Tag on <c>dwExtraInfo</c> so the low-level hook does not treat the mask as a user key.</summary>
     public const nint ExtraInfo = 0x57154E4B;
 
-    public static void Tap() => _ = KeyInput.Send(Stroke());
+    public static void Tap()
+    {
+        _ = KeyInput.Send(Stroke());
+    }
 
-    internal static bool IsOurs(nint extraInfo) => extraInfo == ExtraInfo;
+    internal static bool IsOurs(nint extraInfo)
+    {
+        return extraInfo == ExtraInfo;
+    }
 
-    internal static KeyStroke[] Stroke() =>
-    [
-        new(VirtualKey, false, ExtraInfo),
-        new(VirtualKey, true, ExtraInfo),
-    ];
+    internal static KeyStroke[] Stroke()
+    {
+        return
+        [
+            new KeyStroke(VirtualKey, false, ExtraInfo),
+            new KeyStroke(VirtualKey, true, ExtraInfo)
+        ];
+    }
 
     internal static int InputSize => KeyInput.Size;
 }

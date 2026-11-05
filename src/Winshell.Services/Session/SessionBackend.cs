@@ -4,5 +4,8 @@ namespace Winshell.Session;
 
 internal sealed class SessionBackend : ISessionBackend
 {
-    public bool Lock() => Workstation.Lock();
+    public bool Lock()
+    {
+        return Workstation.Lock();
+    }
 }

@@ -10,9 +10,15 @@ public sealed class AudioServiceTests
     private readonly List<string> _warnings = [];
     private readonly Log _log;
 
-    public AudioServiceTests() => _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
+    public AudioServiceTests()
+    {
+        _log = new Log { Sink = (_, _, message) => _warnings.Add(message) };
+    }
 
-    private AudioService Service() => new(_graph, _log);
+    private AudioService Service()
+    {
+        return new AudioService(_graph, _log);
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -147,12 +153,12 @@ public sealed class AudioServiceTests
         speaker.SetAudio([0.25f, 0.5f], false);
         using var audio = Service();
         var volume = audio.Nodes[0];
-        Assert.Equal(0.375, volume.Volume, precision: 5);
+        Assert.Equal(0.375, volume.Volume, 5);
 
         volume.Volume = 0.75;
 
-        Assert.Equal(0.5, volume.Volumes[0], precision: 5);
-        Assert.Equal(1, volume.Volumes[1], precision: 5);
+        Assert.Equal(0.5, volume.Volumes[0], 5);
+        Assert.Equal(1, volume.Volumes[1], 5);
     }
 
     [Fact]

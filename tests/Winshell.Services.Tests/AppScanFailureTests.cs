@@ -27,7 +27,7 @@ public class AppScanFailureTests
                 },
                 () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase),
                 TimeSpan.FromMilliseconds(30),
-                watchPackages: false,
+                false,
                 log);
             catalog.Start();
             await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -38,7 +38,7 @@ public class AppScanFailureTests
         }
         finally
         {
-            Directory.Delete(folder, recursive: true);
+            Directory.Delete(folder, true);
         }
     }
 }

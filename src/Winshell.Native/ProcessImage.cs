@@ -44,7 +44,8 @@ internal static class ProcessImage
             var result = query(buffer, capacity);
             if (result.Ok)
                 return (uint)result.Size > (uint)buffer.Length ? null : new string(buffer, 0, result.Size);
-            if (attempt == 1 || result.Error != Win32.ERROR_INSUFFICIENT_BUFFER || result.Size <= capacity || result.Size > MaxCharacters)
+            if (attempt == 1 || result.Error != Win32.ERROR_INSUFFICIENT_BUFFER || result.Size <= capacity ||
+                result.Size > MaxCharacters)
                 return null;
             capacity = result.Size;
         }

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Text.Json;
+using Windows.Foundation;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -11,7 +12,6 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Foundation;
 
 namespace Winshell;
 
@@ -34,7 +34,7 @@ internal static class Inspector
             "screenshot" when args.Count > 0 => await Screenshot(Shown(shell, window), args[0], shell.IsDark),
             "click" when args.Count > 0 => Click(Find(shell, command, args[0], window), args[0]),
             "hover" when args.Count > 0 => Hover(Find(shell, command, args[0], window), args[0]),
-            _ => throw new IpcException($"Unknown inspect command {command}."),
+            _ => throw new IpcException($"Unknown inspect command {command}.")
         };
     }
 
@@ -45,14 +45,21 @@ internal static class Inspector
         {
             var through = 255 - bgra[i + 3];
             for (var channel = i; channel < i + 3; channel++)
-                bgra[channel] = (byte)Math.Min(255, bgra[channel] + (back * through / 255));
+                bgra[channel] = (byte)Math.Min(255, bgra[channel] + back * through / 255);
             bgra[i + 3] = 255;
         }
+
         return bgra;
     }
 
-    private static List<ShellWindow> Windows(Shell shell) =>
-        [.. shell.Platform.Windows.Where(host => host.Placement.IsVisible).Select(host => host.Client).OfType<ShellWindow>()];
+    private static List<ShellWindow> Windows(Shell shell)
+    {
+        return
+        [
+            .. shell.Platform.Windows.Where(host => host.Placement.IsVisible).Select(host => host.Client)
+                .OfType<ShellWindow>()
+        ];
+    }
 
     /// <summary>The windows open now, each with its content's tree, as JSON.</summary>
     private static string Tree(Shell shell)
@@ -86,10 +93,13 @@ internal static class Inspector
                         json.WriteEndArray();
                     }
                 }
+
                 json.WriteEndObject();
             }
+
             json.WriteEndArray();
         }
+
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
@@ -113,6 +123,7 @@ internal static class Inspector
             if (framed.Visibility != Visibility.Visible)
                 json.WriteBoolean("visible", false);
         }
+
         if (ReferenceEquals(element, focused))
             json.WriteBoolean("focused", true);
         Values(json, element);
@@ -124,6 +135,7 @@ internal static class Inspector
                 Write(json, VisualTreeHelper.GetChild(element, i), root, focused);
             json.WriteEndArray();
         }
+
         json.WriteEndObject();
     }
 
@@ -148,6 +160,7 @@ internal static class Inspector
                 json.WriteNumber("selectedIndex", selector.SelectedIndex);
                 break;
         }
+
         if (element is ToggleButton { IsChecked: { } isChecked })
             json.WriteBoolean("checked", isChecked);
         if (element is ContentControl { Content: string content })
@@ -166,7 +179,7 @@ internal static class Inspector
         if (int.TryParse(name, out var index) && index >= 0 && index < windows.Count)
             return windows[index];
         return windows.FirstOrDefault(window => window.Content?.GetType().Name == name)
-            ?? throw new IpcException($"No open window shows {name}.");
+               ?? throw new IpcException($"No open window shows {name}.");
     }
 
     /// <summary>The one element <paramref name="name"/> names. When it names more, acting on the first would act on a guess.</summary>
@@ -183,15 +196,17 @@ internal static class Inspector
             foreach (var root in (UIElement[])[content, .. Popups(content)])
                 Find(root, name, element => found.Add((at, element)));
         }
+
         return found switch
         {
             [] => throw new IpcException($"No element is named {name}. winshell inspect tree lists them."),
             [var (_, element)] => element,
-            _ => throw new IpcException(Ambiguous(command, name, found, windows)),
+            _ => throw new IpcException(Ambiguous(command, name, found, windows))
         };
     }
 
-    private static string Ambiguous(string command, string name, List<(int Window, FrameworkElement Element)> found, List<ShellWindow> windows)
+    private static string Ambiguous(string command, string name, List<(int Window, FrameworkElement Element)> found,
+        List<ShellWindow> windows)
     {
         var quoted = name.Any(char.IsWhiteSpace) ? $"\"{name}\"" : name;
         // A window tells them apart only when they are in different windows.
@@ -200,8 +215,9 @@ internal static class Inspector
             : "Use a name only one of them has.";
         return string.Join('\n', [
             $"{name} names {found.Count} elements:",
-            .. found.Select(match => $"  window {match.Window} ({windows[match.Window].Content?.GetType().Name}): {Described(match.Element)}"),
-            hint,
+            .. found.Select(match =>
+                $"  window {match.Window} ({windows[match.Window].Content?.GetType().Name}): {Described(match.Element)}"),
+            hint
         ]);
     }
 
@@ -218,8 +234,12 @@ internal static class Inspector
     }
 
     /// <summary>What the open popups of a window show, such as a flyout or a menu, which its content's tree does not hold.</summary>
-    private static List<UIElement> Popups(UIElement content) =>
-        content.XamlRoot is { } root ? [.. VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Select(popup => popup.Child).OfType<UIElement>()] : [];
+    private static List<UIElement> Popups(UIElement content)
+    {
+        return content.XamlRoot is { } root
+            ? [.. VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Select(popup => popup.Child).OfType<UIElement>()]
+            : [];
+    }
 
     /// <summary>
     /// A window's root, which spans the window, or what an open popup shows when its type is the one named, such as
@@ -227,8 +247,9 @@ internal static class Inspector
     /// </summary>
     private static UIElement Shown(Shell shell, IReadOnlyList<string> named)
     {
-        if (named is [var name, ..] && Windows(shell).Select(open => open.Content).OfType<UIElement>().SelectMany(Popups)
-            .FirstOrDefault(popup => popup.GetType().Name == name) is { } shown)
+        if (named is [var name, ..] && Windows(shell).Select(open => open.Content).OfType<UIElement>()
+                .SelectMany(Popups)
+                .FirstOrDefault(popup => popup.GetType().Name == name) is { } shown)
             return shown;
         return Window(shell, named).Content?.XamlRoot?.Content ?? throw new IpcException("That window is empty.");
     }
@@ -243,11 +264,13 @@ internal static class Inspector
         if (element is UIElement { Visibility: Visibility.Collapsed })
             return;
         if (element is FrameworkElement framed
-            && (framed.Name == name || AutomationProperties.GetAutomationId(framed) == name || AutomationProperties.GetName(framed) == name))
+            && (framed.Name == name || AutomationProperties.GetAutomationId(framed) == name ||
+                AutomationProperties.GetName(framed) == name))
         {
             found(framed);
             return;
         }
+
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
             Find(VisualTreeHelper.GetChild(element, i), name, found);
     }
@@ -256,8 +279,10 @@ internal static class Inspector
     private static string Click(FrameworkElement element, string name)
     {
         ShellWindow.Of(element)?.Host?.Messages.Press();
-        var peer = FrameworkElementAutomationPeer.FromElement(element) ?? FrameworkElementAutomationPeer.CreatePeerForElement(element);
-        switch (peer?.GetPattern(PatternInterface.Invoke), peer?.GetPattern(PatternInterface.Toggle), peer?.GetPattern(PatternInterface.ExpandCollapse))
+        var peer = FrameworkElementAutomationPeer.FromElement(element) ??
+                   FrameworkElementAutomationPeer.CreatePeerForElement(element);
+        switch (peer?.GetPattern(PatternInterface.Invoke), peer?.GetPattern(PatternInterface.Toggle),
+            peer?.GetPattern(PatternInterface.ExpandCollapse))
         {
             case (IInvokeProvider invoke, _, _):
                 invoke.Invoke();
@@ -271,6 +296,7 @@ internal static class Inspector
             default:
                 throw new IpcException($"{name} is a {element.GetType().Name}, which takes no click.");
         }
+
         return $"Clicked {name}";
     }
 
@@ -305,8 +331,10 @@ internal static class Inspector
         {
             clear?.Background = null;
         }
+
         var pixels = await bitmap.GetPixelsAsync();
-        var image = new PixelImage(bitmap.PixelWidth, bitmap.PixelHeight, Flattened(pixels.ToArray(), dark ? DarkBack : LightBack));
+        var image = new PixelImage(bitmap.PixelWidth, bitmap.PixelHeight,
+            Flattened(pixels.ToArray(), dark ? DarkBack : LightBack));
         await File.WriteAllBytesAsync(file, image.EncodePng());
         return $"{bitmap.PixelWidth}x{bitmap.PixelHeight} {file}";
     }

@@ -15,7 +15,7 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
     private (string, string)[] Folders =>
     [
         ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")),
-        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
+        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local"))
     ];
 
     public InspectCommandTests()
@@ -35,6 +35,7 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
             _shell.Kill();
             _shell.WaitForExit();
         }
+
         _shell.Dispose();
         Wait.Until(Removed, "the test folder to be free");
     }
@@ -43,7 +44,7 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
     {
         try
         {
-            Directory.Delete(_dir, recursive: true);
+            Directory.Delete(_dir, true);
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -52,11 +53,16 @@ public sealed class InspectCommandTests : IDisposable, IClassFixture<ProbeBuild>
         }
     }
 
-    private ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(["inspect", "--pid", _pid, .. args], Folders);
+    private ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(["inspect", "--pid", _pid, .. args], Folders);
+    }
 
-    private static int Count(string tree, string type) =>
-        JsonDocument.Parse(tree).RootElement.EnumerateArray().Count(window => window.GetProperty("content").GetProperty("type").GetString() == type);
+    private static int Count(string tree, string type)
+    {
+        return JsonDocument.Parse(tree).RootElement.EnumerateArray().Count(window =>
+            window.GetProperty("content").GetProperty("type").GetString() == type);
+    }
 
     [Fact]
     public void The_tree_is_json_and_names_the_panel_and_its_button()

@@ -22,7 +22,10 @@ public sealed class RecentDocuments
     }
 
     /// <summary>Reads <paramref name="folder"/> instead of the real Recent folder. Tests pass a temporary one.</summary>
-    internal RecentDocuments(string folder) => _folder = folder;
+    internal RecentDocuments(string folder)
+    {
+        _folder = folder;
+    }
 
     /// <summary>
     /// Shortcuts whose name contains every word of <paramref name="query"/>, newest first, at most 20.
@@ -49,6 +52,7 @@ public sealed class RecentDocuments
                 {
                     continue;
                 }
+
                 var name = Path.GetFileNameWithoutExtension(info.Name);
                 if (name.Length == 0 || !words.All(word => name.Contains(word, StringComparison.OrdinalIgnoreCase)))
                     continue;
@@ -59,6 +63,7 @@ public sealed class RecentDocuments
         {
             return [];
         }
+
         found.Sort(static (a, b) =>
         {
             var byTime = b.When.CompareTo(a.When);

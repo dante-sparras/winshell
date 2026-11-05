@@ -11,33 +11,44 @@ public sealed class TomlDocumentTests
         return document;
     }
 
-    private static Dictionary<string, object?> Row(params (string Key, object? Value)[] items) =>
-        items.ToDictionary(item => item.Key, item => item.Value);
+    private static Dictionary<string, object?> Row(params (string Key, object? Value)[] items)
+    {
+        return items.ToDictionary(item => item.Key, item => item.Value);
+    }
 
-    private static List<object?> List(params object?[] items) => [.. items];
+    private static List<object?> List(params object?[] items)
+    {
+        return [.. items];
+    }
 
-    private static void AssertParses(string text) => Assert.False(SyntaxParser.Parse(text).HasErrors, text);
+    private static void AssertParses(string text)
+    {
+        Assert.False(SyntaxParser.Parse(text).HasErrors, text);
+    }
 
-    private static int Count(string text, string value) => text.Split(value).Length - 1;
+    private static int Count(string text, string value)
+    {
+        return text.Split(value).Length - 1;
+    }
 
     [Fact]
     public void Values_are_plain_types()
     {
         var values = Parse("""
-            name = 'from "file"'
-            on = true
-            size = 7
-            scale = 1.5
-            tiles = ["wifi", 2]
-            when = 1979-05-27
-            hidden = [{ id = "Contoso.Chat", name = "Chat" }, { id = "Contoso.Mail" }]
+                           name = 'from "file"'
+                           on = true
+                           size = 7
+                           scale = 1.5
+                           tiles = ["wifi", 2]
+                           when = 1979-05-27
+                           hidden = [{ id = "Contoso.Chat", name = "Chat" }, { id = "Contoso.Mail" }]
 
-            [other]
-            kept = true
+                           [other]
+                           kept = true
 
-            [[rows]]
-            id = "a"
-            """).Values;
+                           [[rows]]
+                           id = "a"
+                           """).Values;
 
         Assert.Equal("from \"file\"", values["name"]);
         Assert.Equal(true, values["on"]);
@@ -57,17 +68,17 @@ public sealed class TomlDocumentTests
     public void A_key_is_added_under_its_comment_at_the_end_of_the_top_level_keys()
     {
         var document = Parse("""
-            # My settings.
-            name = "mine" # set by hand
+                             # My settings.
+                             name = "mine" # set by hand
 
-            # Not Winshell's.
-            unknown = 1
-            size = 3
+                             # Not Winshell's.
+                             unknown = 1
+                             size = 3
 
-            [other]
-            kept = true
+                             [other]
+                             kept = true
 
-            """);
+                             """);
 
         document.Set("name", "changed \\ \"quoted\"");
         document.Set("on", true);
@@ -75,25 +86,25 @@ public sealed class TomlDocumentTests
         document.Set("hidden", List(Row(("id", "Contoso.Chat"), ("name", "Chat"))));
 
         Assert.Equal("""
-            # My settings.
-            name = "changed \\ \"quoted\"" # set by hand
+                     # My settings.
+                     name = "changed \\ \"quoted\"" # set by hand
 
-            # Not Winshell's.
-            unknown = 1
-            size = 3
+                     # Not Winshell's.
+                     unknown = 1
+                     size = 3
 
-            on = true
+                     on = true
 
-            # The tiles, in order.
-            # One per key.
-            tiles = ["wifi"]
+                     # The tiles, in order.
+                     # One per key.
+                     tiles = ["wifi"]
 
-            hidden = [{ id = "Contoso.Chat", name = "Chat" }]
+                     hidden = [{ id = "Contoso.Chat", name = "Chat" }]
 
-            [other]
-            kept = true
+                     [other]
+                     kept = true
 
-            """, document.ToString());
+                     """, document.ToString());
     }
 
     [Fact]
@@ -111,13 +122,13 @@ public sealed class TomlDocumentTests
     public void Null_takes_the_key_out_and_the_comments_around_it_stay()
     {
         var document = Parse("""
-            size = 3
-            # Above gone.
-            gone = 1
-            # Above name.
-            name = "kept"
+                             size = 3
+                             # Above gone.
+                             gone = 1
+                             # Above name.
+                             name = "kept"
 
-            """);
+                             """);
 
         document.Set("gone", null);
 
@@ -191,10 +202,12 @@ public sealed class TomlDocumentTests
     }
 
     [Theory]
-    [InlineData("x = 1\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "x = 1\n\n# Other settings.\n[other]\nk = 1\n")]
+    [InlineData("x = 1\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n",
+        "x = 1\n\n# Other settings.\n[other]\nk = 1\n")]
     [InlineData("[other]\nk = 1\n[a]\nk = 1\n# The end.\n", "[other]\nk = 1\n# The end.\n")]
     [InlineData("[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "# Other settings.\n[other]\nk = 1\n")]
-    [InlineData("[p]\nk = 1\n\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n", "[p]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n")]
+    [InlineData("[p]\nk = 1\n\n[a]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n",
+        "[p]\nk = 1\n\n# Other settings.\n[other]\nk = 1\n")]
     public void The_comments_after_a_table_stay_when_the_table_goes(string original, string expected)
     {
         var document = Parse(original);
@@ -230,18 +243,18 @@ public sealed class TomlDocumentTests
     public void An_array_of_tables_is_not_written_a_second_time()
     {
         var document = Parse("""
-            # apps
-            [[hidden]]
-            id = "Contoso.Chat" # chat
-            name = "Chat"
+                             # apps
+                             [[hidden]]
+                             id = "Contoso.Chat" # chat
+                             name = "Chat"
 
-            [[hidden]]
-            id = "Contoso.Mail"
+                             [[hidden]]
+                             id = "Contoso.Mail"
 
-            [other]
-            kept = true
+                             [other]
+                             kept = true
 
-            """);
+                             """);
 
         document.Set("hidden", document.Values["hidden"]);
         document.Set("name", "renamed");
@@ -259,18 +272,18 @@ public sealed class TomlDocumentTests
     public void A_changed_table_row_keeps_its_comment_and_unknown_key()
     {
         var document = Parse("""
-            [[hidden]]
-            id = "Contoso.Chat" # chat
-            name = "Chat"
-            extra = 1
+                             [[hidden]]
+                             id = "Contoso.Chat" # chat
+                             name = "Chat"
+                             extra = 1
 
-            [[hidden]]
-            id = "Contoso.Mail"
+                             [[hidden]]
+                             id = "Contoso.Mail"
 
-            [other]
-            kept = true
+                             [other]
+                             kept = true
 
-            """);
+                             """);
 
         document.Set("hidden", List(Row(("id", "Contoso.Chat"), ("name", "Renamed"))));
 
@@ -293,7 +306,8 @@ public sealed class TomlDocumentTests
 
         var text = document.ToString();
         AssertParses(text);
-        Assert.True(text.IndexOf("id = \"b\"", StringComparison.Ordinal) < text.IndexOf("[other]", StringComparison.Ordinal));
+        Assert.True(text.IndexOf("id = \"b\"", StringComparison.Ordinal) <
+                    text.IndexOf("[other]", StringComparison.Ordinal));
         Assert.Equal(2, Count(text, "[[hidden]]"));
         Assert.Equal(2, Assert.IsAssignableFrom<IReadOnlyList<object?>>(document.Values["hidden"]).Count);
     }
@@ -315,16 +329,16 @@ public sealed class TomlDocumentTests
     public void An_unchanged_value_keeps_its_spelling_and_item_comment()
     {
         const string Original = """
-            name = 'mine'
-            hidden = [
-              { id = "Contoso.Chat", name = "Chat" }, # chat
-            ]
-            scale = 1.0
-            when = 1979-05-27
-            hex = 0x10
-            grouped = 1_000
-            size = 3
-            """;
+                                name = 'mine'
+                                hidden = [
+                                  { id = "Contoso.Chat", name = "Chat" }, # chat
+                                ]
+                                scale = 1.0
+                                when = 1979-05-27
+                                hex = 0x10
+                                grouped = 1_000
+                                size = 3
+                                """;
         var document = Parse(Original);
 
         foreach (var (key, value) in document.Values)
@@ -338,12 +352,12 @@ public sealed class TomlDocumentTests
     public void A_changed_array_item_keeps_its_comment()
     {
         var document = Parse("""
-            hidden = [
-              { id = "Contoso.Chat", name = "Chat" }, # chat
-            ]
-            size = 3
+                             hidden = [
+                               { id = "Contoso.Chat", name = "Chat" }, # chat
+                             ]
+                             size = 3
 
-            """);
+                             """);
 
         document.Set("hidden", List(Row(("id", "Contoso.Chat"), ("name", "Renamed"))));
 
@@ -357,11 +371,14 @@ public sealed class TomlDocumentTests
     [InlineData("pins = [\"a\", \"b\", \"c\"]\n", "a c", "pins = [\"a\", \"c\"]\n")]
     [InlineData("pins = [\"a\"]\n", "a b", "pins = [\"a\", \"b\"]\n")]
     [InlineData("pins = [\n  \"a\",\n  \"b\",\n]\n", "a b c", "pins = [\n  \"a\",\n  \"b\",\n  \"c\",\n]\n")]
-    [InlineData("pins = [\n  \"a\",\n  \"b\" # last\n]\n", "a b c", "pins = [\n  \"a\",\n  \"b\", # last\n  \"c\"\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n  \"b\" # last\n]\n", "a b c",
+        "pins = [\n  \"a\",\n  \"b\", # last\n  \"c\"\n]\n")]
     [InlineData("pins = [\n  \"a\", # one\n  \"b\"\n]\n", "a", "pins = [\n  \"a\" # one\n]\n")]
     [InlineData("pins = [\n    \"a\", # one\n    \"b\", # two\n  ]\n", "a", "pins = [\n    \"a\", # one\n  ]\n")]
-    [InlineData("pins = [\n  \"a\",\n  \"b\",\n  # more to come\n]\n", "a", "pins = [\n  \"a\",\n  # more to come\n]\n")]
-    [InlineData("pins = [\n  \"a\", \"b\",\n  \"c\", \"d\",\n]\n", "a b c d e", "pins = [\n  \"a\", \"b\",\n  \"c\", \"d\", \"e\",\n]\n")]
+    [InlineData("pins = [\n  \"a\",\n  \"b\",\n  # more to come\n]\n", "a",
+        "pins = [\n  \"a\",\n  # more to come\n]\n")]
+    [InlineData("pins = [\n  \"a\", \"b\",\n  \"c\", \"d\",\n]\n", "a b c d e",
+        "pins = [\n  \"a\", \"b\",\n  \"c\", \"d\", \"e\",\n]\n")]
     [InlineData("pins = [\n  \"a\",\n]\n", "", "pins = []\n")]
     [InlineData("pins = [\"a\",\n  \"b\"]\n", "a", "pins = [\"a\"]\n")]
     [InlineData("pins = [\"a\", # one\n  \"b\"]\n", "a", "pins = [\"a\" # one\n]\n")]
@@ -380,15 +397,15 @@ public sealed class TomlDocumentTests
     public void A_date_inside_a_changed_value_keeps_its_text()
     {
         var document = Parse("""
-            row = { when = 1979-05-27 07:32:00, n = 1 }
+                             row = { when = 1979-05-27 07:32:00, n = 1 }
 
-            times = [07:32:00, 1979-05-27]
+                             times = [07:32:00, 1979-05-27]
 
-            [item]
-            name = "Chat"
-            when = 1979-05-27
+                             [item]
+                             name = "Chat"
+                             when = 1979-05-27
 
-            """);
+                             """);
 
         document.Set("item", Row(("name", "Mail"), ("when", "1979-05-27")));
         document.Set("row", Row(("when", "1979-05-27T07:32:00"), ("n", 2L)));
@@ -441,7 +458,8 @@ public sealed class TomlDocumentTests
         var document = Parse("# header\n\n[other]\nkept = true\n");
         document.Set("name", "default");
         var text = document.ToString();
-        Assert.True(text.IndexOf("# header", StringComparison.Ordinal) < text.IndexOf("name =", StringComparison.Ordinal));
+        Assert.True(text.IndexOf("# header", StringComparison.Ordinal) <
+                    text.IndexOf("name =", StringComparison.Ordinal));
         Assert.Contains("[other]", text, StringComparison.Ordinal);
 
         document = Parse("# header comment\n");
@@ -482,7 +500,8 @@ public sealed class TomlDocumentTests
     public void A_dotted_key_is_the_value_and_is_updated_in_place()
     {
         var document = Parse("taskbar.centered = false # stay\nname = \"mine\"\n");
-        Assert.Equal(false, Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(document.Values["taskbar"])["centered"]);
+        Assert.Equal(false,
+            Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(document.Values["taskbar"])["centered"]);
 
         document.Set("name", "next");
         Assert.Contains("taskbar.centered = false # stay", document.ToString(), StringComparison.Ordinal);
@@ -498,7 +517,8 @@ public sealed class TomlDocumentTests
 
     [Theory]
     [InlineData("[a]\nx = 1\n[a.sub]\ny = 2\n", "a = { x = 2, sub = { y = 3 } }", "a = { x = 2, sub = { y = 3 } }")]
-    [InlineData("[a]\nx = 1\nkept = 3\nsub.y = 2\n", "a = { sub = { y = 3 } }", "a = { x = 1, kept = 3, sub = { y = 3 } }")]
+    [InlineData("[a]\nx = 1\nkept = 3\nsub.y = 2\n", "a = { sub = { y = 3 } }",
+        "a = { x = 1, kept = 3, sub = { y = 3 } }")]
     [InlineData("[[a]]\nx = 1\nsub.y = 1\n", "a = [{ x = 2, sub = { y = 1 } }]", "a = [{ x = 2, sub = { y = 1 } }]")]
     [InlineData("a = { sub.y = 1, sub.z = 2 }\n", "a = { sub = { y = 5 } }", "a = { sub = { y = 5, z = 2 } }")]
     [InlineData("a.x = 1\n[a.sub]\ny = 2\n", "a = { x = 2, sub = { y = 2 } }", "a = { x = 2, sub = { y = 2 } }")]
@@ -566,7 +586,8 @@ public sealed class TomlDocumentTests
         var text = document.ToString();
         AssertParses(text);
         Assert.Contains("# stay", text, StringComparison.Ordinal);
-        Assert.Equal(Row(("a", 9L), ("b", 2L), ("d", "new")), Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(document.Values["row"]));
+        Assert.Equal(Row(("a", 9L), ("b", 2L), ("d", "new")),
+            Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(document.Values["row"]));
     }
 
     [Fact]

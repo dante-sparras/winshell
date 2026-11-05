@@ -5,12 +5,23 @@ public sealed class TomlFileWatchTests
 {
     private sealed class Settings(string path, IEventLoop loop, Log log) : TomlFile(path, loop, log)
     {
-        public string Name { get; set => Set(ref field, value); } = "default";
+        public string Name
+        {
+            get;
+            set => Set(ref field, value);
+        } = "default";
 
-        public bool On { get; set => Set(ref field, value); } = true;
+        public bool On
+        {
+            get;
+            set => Set(ref field, value);
+        } = true;
     }
 
-    private static Settings Open(TomlFixture fixture) => new(fixture.FilePath, fixture.Loop, fixture.Log);
+    private static Settings Open(TomlFixture fixture)
+    {
+        return new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
+    }
 
     [Fact]
     public void A_hand_edit_is_followed_on_the_loop()
@@ -183,7 +194,9 @@ public sealed class TomlFileWatchTests
         File.WriteAllText(fixture.FilePath, "name = \"second\"");
         Assert.True(woken.WaitOne(TimeSpan.FromSeconds(30)), "The write was not noticed.");
         using (new FileStream(fixture.FilePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
             fixture.Loop.Process();
+        }
 
         Assert.True(settings.Loaded);
         Assert.Equal("first", settings.Name);

@@ -14,17 +14,16 @@ public sealed class DocsTests
     [Fact]
     public void Every_csharp_example_is_compiled()
     {
-        var source = File.ReadAllText(Path.Combine(Repo, "tests", "Winshell.Shell.Tests", "GuideSamples.cs")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var source = File.ReadAllText(Path.Combine(Repo, "tests", "Winshell.Shell.Tests", "GuideSamples.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
         var examples = Examples().ToList();
         Assert.NotEmpty(examples);
         var problems = new List<string>();
         foreach (var (file, line, code) in examples)
-        {
             if (code.Length == 0)
                 problems.Add($"{Path.GetRelativePath(Repo, file)}:{line}: empty csharp fence");
             else if (!source.Contains(code, StringComparison.Ordinal))
                 problems.Add($"{Path.GetRelativePath(Repo, file)}:{line}: csharp fence is not in GuideSamples.cs");
-        }
         Assert.True(problems.Count == 0, "C# examples that are not compiled:\n" + string.Join("\n", problems));
     }
 
@@ -37,7 +36,8 @@ public sealed class DocsTests
     {
         var folder = Path.Combine(Repo, "docs", "reference");
         var stale = ReferencePages.Stale(folder, ReferencePages.Generate(folder));
-        Assert.True(stale.Count == 0, $"Out of date in docs/reference: {string.Join(", ", stale)}. Run: dotnet run scripts/generate-reference.cs");
+        Assert.True(stale.Count == 0,
+            $"Out of date in docs/reference: {string.Join(", ", stale)}. Run: dotnet run scripts/generate-reference.cs");
     }
 
     /// <summary>The <c>```csharp</c> blocks of every page, with the line each one starts on.</summary>

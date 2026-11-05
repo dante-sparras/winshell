@@ -4,7 +4,9 @@ namespace Winshell.Diagnostics;
 internal static class DoctorCrashes
 {
     /// <summary>Crash reports in a folder, or why the folder could not be listed.</summary>
-    internal readonly record struct CrashFolderRead(IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports, string? Unreadable);
+    internal readonly record struct CrashFolderRead(
+        IReadOnlyList<(string Path, DateTime WrittenUtc)> Reports,
+        string? Unreadable);
 
     /// <summary>The start of one crash file. No text and no error means the file is not a Winshell crash report.</summary>
     internal readonly record struct CrashPeek(string? Text, string? Unreadable);
@@ -12,13 +14,17 @@ internal static class DoctorCrashes
     internal static DoctorCheck CrashesIn(CrashFolderRead folder, DateTime nowUtc, Func<string, CrashPeek> peek)
     {
         if (folder.Unreadable is not null)
-            return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read the crash folder: {folder.Unreadable}", "Make sure your account can read that folder, then run winshell doctor again.");
+            return new DoctorCheck("crashes", "Crashes", CheckStatus.Warn,
+                $"Could not read the crash folder: {folder.Unreadable}",
+                "Make sure your account can read that folder, then run winshell doctor again.");
         return Crashes(folder.Reports, nowUtc, peek);
     }
 
-    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc, Func<string, CrashPeek> peek)
+    internal static DoctorCheck Crashes(IReadOnlyList<(string Path, DateTime WrittenUtc)> reports, DateTime nowUtc,
+        Func<string, CrashPeek> peek)
     {
-        var recent = reports.Where(r => nowUtc - r.WrittenUtc <= TimeSpan.FromDays(7)).OrderByDescending(r => r.WrittenUtc).ToList();
+        var recent = reports.Where(r => nowUtc - r.WrittenUtc <= TimeSpan.FromDays(7))
+            .OrderByDescending(r => r.WrittenUtc).ToList();
         var opened = new List<(string Path, string Text)>();
         string? unreadable = null;
         foreach (var report in recent)
@@ -29,14 +35,18 @@ internal static class DoctorCrashes
                 unreadable ??= head.Unreadable;
                 continue;
             }
+
             if (head.Text is null)
                 continue;
             opened.Add((report.Path, head.Text));
         }
+
         if (unreadable is not null && opened.Count == 0)
-            return new("crashes", "Crashes", CheckStatus.Warn, $"Could not read a crash report: {unreadable}", $"Read the crash folder, then attach a report to a bug report at {Doctor.BugReports}.");
+            return new DoctorCheck("crashes", "Crashes", CheckStatus.Warn,
+                $"Could not read a crash report: {unreadable}",
+                $"Read the crash folder, then attach a report to a bug report at {Doctor.BugReports}.");
         if (opened.Count == 0)
-            return new("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
+            return new DoctorCheck("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
 
         var countText = opened.Count == 1 ? "1 crash report" : $"{opened.Count} crash reports";
         var message = $"{countText} in the last 7 days. The newest is {opened[0].Path}.";
@@ -54,9 +64,11 @@ internal static class DoctorCrashes
         {
             message += " " + line;
         }
+
         if (unreadable is not null)
             message += $" Could not read a crash report: {unreadable}.";
-        return new("crashes", "Crashes", CheckStatus.Warn, message, $"Read it, then attach it to a bug report at {Doctor.BugReports}.");
+        return new DoctorCheck("crashes", "Crashes", CheckStatus.Warn, message,
+            $"Read it, then attach it to a bug report at {Doctor.BugReports}.");
     }
 
     private static string? ExceptionLine(string head)
@@ -70,6 +82,7 @@ internal static class DoctorCrashes
             if (line.Length > 0)
                 return line;
         }
+
         return null;
     }
 }

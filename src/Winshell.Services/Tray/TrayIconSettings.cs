@@ -36,6 +36,7 @@ internal static class TrayIconSettings
             var promoted = key.GetValue("IsPromoted") is int value && value != 0;
             settings.Add(new TrayIconSetting(guid, path, id, promoted));
         }
+
         return settings;
     }
 
@@ -49,15 +50,20 @@ internal static class TrayIconSettings
         {
             var match = guid != Guid.Empty
                 ? s.Guid == guid
-                : s.Guid == Guid.Empty && s.Id == id && program.Length > 0 && string.Equals(s.ExecutablePath, program, StringComparison.OrdinalIgnoreCase);
+                : s.Guid == Guid.Empty && s.Id == id && program.Length > 0 &&
+                  string.Equals(s.ExecutablePath, program, StringComparison.OrdinalIgnoreCase);
             if (match)
                 return !s.Promoted;
         }
+
         return true;
     }
 
     /// <summary>Calls back on the loop when Explorer changes any icon's choice, until disposed.</summary>
-    public static IDisposable Watch(IEventLoop loop, Action changed) => new Watcher(loop, changed);
+    public static IDisposable Watch(IEventLoop loop, Action changed)
+    {
+        return new Watcher(loop, changed);
+    }
 
     private sealed class Watcher : IDisposable
     {
@@ -76,10 +82,14 @@ internal static class TrayIconSettings
             _key = Registry.CurrentUser.OpenSubKey(KeyPath);
             if (_key is null || !Arm())
                 return;
-            _wait = ThreadPool.RegisterWaitForSingleObject(_event, (_, _) => _loop.Post(OnChanged), null, Timeout.Infinite, executeOnlyOnce: false);
+            _wait = ThreadPool.RegisterWaitForSingleObject(_event, (_, _) => _loop.Post(OnChanged), null,
+                Timeout.Infinite, false);
         }
 
-        private bool Arm() => RegistryChange.Notify(_key!.Handle, _event.SafeWaitHandle);
+        private bool Arm()
+        {
+            return RegistryChange.Notify(_key!.Handle, _event.SafeWaitHandle);
+        }
 
         private void OnChanged()
         {

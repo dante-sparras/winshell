@@ -118,7 +118,10 @@ public sealed class AudioNode : ObservableObject
         Removed?.Invoke();
     }
 
-    private static double Average(IReadOnlyList<float> volumes) => volumes.Count == 0 ? 0 : volumes.Average();
+    private static double Average(IReadOnlyList<float> volumes)
+    {
+        return volumes.Count == 0 ? 0 : volumes.Average();
+    }
 
     private void Apply(Action change)
     {
@@ -147,7 +150,10 @@ public sealed class AudioNode : ObservableObject
         Set(ref _muted, _node.Muted, nameof(Muted));
     }
 
-    private void OnActiveChanged() => Set(ref _active, _node.Active, nameof(Active));
+    private void OnActiveChanged()
+    {
+        Set(ref _active, _node.Active, nameof(Active));
+    }
 }
 
 /// <summary>Every playback device, recording device and audio session Windows has.</summary>
@@ -176,20 +182,23 @@ public sealed class AudioService : ObservableObject, IDisposable
     public AudioNode? DefaultPlaybackDevice
     {
         get => _defaultPlayback;
-        set => SetDefault(value, playback: true);
+        set => SetDefault(value, true);
     }
 
     /// <summary>The default recording device. Setting it makes that device the Windows default.</summary>
     public AudioNode? DefaultRecordingDevice
     {
         get => _defaultRecording;
-        set => SetDefault(value, playback: false);
+        set => SetDefault(value, false);
     }
 
     /// <summary>False when Windows audio cannot be opened, and then <see cref="Nodes"/> is empty.</summary>
     public bool Ready => _graph.Ready;
 
-    internal AudioNode? Find(AudioGraphNode? node) => Nodes.FirstOrDefault(n => n.Node == node);
+    internal AudioNode? Find(AudioGraphNode? node)
+    {
+        return Nodes.FirstOrDefault(n => n.Node == node);
+    }
 
     private void SetDefault(AudioNode? node, bool playback)
     {
@@ -201,14 +210,19 @@ public sealed class AudioService : ObservableObject, IDisposable
             _log.Warn("audio", $"Cannot make {node.Description} the default {kind} device: it is not a {kind} device");
             return;
         }
+
         _graph.SetDefault(node.Node);
     }
 
-    private void OnNodeChanged(AudioGraphNode _) => Refresh();
+    private void OnNodeChanged(AudioGraphNode _)
+    {
+        Refresh();
+    }
 
     private void Refresh()
     {
-        Nodes.Sync(_graph.Nodes, n => n.Node, n => n, n => new AudioNode(this, n, _log), static (_, _) => { }, n => n.Remove());
+        Nodes.Sync(_graph.Nodes, n => n.Node, n => n, n => new AudioNode(this, n, _log), static (_, _) => { },
+            n => n.Remove());
     }
 
     private void OnDefaultsChanged()

@@ -16,7 +16,7 @@ internal enum WlanInterfaceState
     Disconnected = 4,
     Associating = 5,
     Discovering = 6,
-    Authenticating = 7,
+    Authenticating = 7
 }
 
 /// <summary>The parts of wlanapi that WinRT does not cover: interface states, saved profiles and change notifications.</summary>
@@ -45,6 +45,7 @@ internal static unsafe class Wlan
                 catch (DllNotFoundException)
                 {
                 }
+
                 return _handle;
             }
         }
@@ -61,7 +62,8 @@ internal static unsafe class Wlan
         if (handle.IsNull)
             return;
         // ACM avoids the location consent required by MSM notifications.
-        _ = PInvoke.WlanRegisterNotification(handle, WLAN_NOTIFICATION_SOURCES.WLAN_NOTIFICATION_SOURCE_ACM, true, &OnNotification, null);
+        _ = PInvoke.WlanRegisterNotification(handle, WLAN_NOTIFICATION_SOURCES.WLAN_NOTIFICATION_SOURCE_ACM, true,
+            &OnNotification, null);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
@@ -94,6 +96,7 @@ internal static unsafe class Wlan
         {
             PInvoke.WlanFreeMemory(list);
         }
+
         return result;
     }
 
@@ -113,6 +116,7 @@ internal static unsafe class Wlan
         {
             PInvoke.WlanFreeMemory(list);
         }
+
         return result;
     }
 
@@ -132,7 +136,8 @@ internal static unsafe class Wlan
         void* data = null;
         try
         {
-            if (PInvoke.WlanQueryInterface(handle, interfaceGuid, WLAN_INTF_OPCODE.wlan_intf_opcode_current_operation_mode, out var size, out data) != 0
+            if (PInvoke.WlanQueryInterface(handle, interfaceGuid,
+                    WLAN_INTF_OPCODE.wlan_intf_opcode_current_operation_mode, out var size, out data) != 0
                 || data == null || size < sizeof(uint))
                 return null;
             return *(uint*)data;
@@ -160,12 +165,18 @@ internal static unsafe class Wlan
     }
 
     /// <summary>The only flags a profile read passes in. Zero, so the call never asks Windows for a key.</summary>
-    internal static uint ProfileReadFlags() => 0;
+    internal static uint ProfileReadFlags()
+    {
+        return 0;
+    }
 
     /// <summary>Per-user and group-policy bits. A plaintext-key bit is not one of them and is not kept.</summary>
     internal const uint ProfileFlagMask = PInvoke.WLAN_PROFILE_USER | PInvoke.WLAN_PROFILE_GROUP_POLICY;
 
-    internal static uint ProfileWriteFlags(uint flags) => flags & ProfileFlagMask;
+    internal static uint ProfileWriteFlags(uint flags)
+    {
+        return flags & ProfileFlagMask;
+    }
 
     /// <summary>
     /// The profile XML Windows stored. <see cref="ProfileReadFlags"/> is the only value passed in, so the key stays out.
@@ -206,7 +217,8 @@ internal static unsafe class Wlan
             return (uint)WIN32_ERROR.ERROR_SERVICE_NOT_ACTIVE;
         if (string.IsNullOrEmpty(profileXml))
             return (uint)WIN32_ERROR.ERROR_INVALID_PARAMETER;
-        return PInvoke.WlanSetProfile(handle, interfaceGuid, ProfileWriteFlags(flags), profileXml, null, true, out reason);
+        return PInvoke.WlanSetProfile(handle, interfaceGuid, ProfileWriteFlags(flags), profileXml, null, true,
+            out reason);
     }
 
     /// <summary>Connects with a saved profile (<c>wlan_connection_mode_profile</c>). Returns when Windows accepts the request.</summary>
@@ -224,7 +236,7 @@ internal static unsafe class Wlan
                 wlanConnectionMode = WLAN_CONNECTION_MODE.wlan_connection_mode_profile,
                 strProfile = name,
                 dot11BssType = DOT11_BSS_TYPE.dot11_BSS_type_any,
-                dwFlags = hidden ? PInvoke.WLAN_CONNECTION_HIDDEN_NETWORK : 0,
+                dwFlags = hidden ? PInvoke.WLAN_CONNECTION_HIDDEN_NETWORK : 0
             };
             return PInvoke.WlanConnect(handle, interfaceGuid, parameters);
         }

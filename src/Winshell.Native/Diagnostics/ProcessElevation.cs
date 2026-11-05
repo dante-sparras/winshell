@@ -24,10 +24,13 @@ internal static unsafe class ProcessElevation
                 tokenDenied = Marshal.GetLastPInvokeError() == Win32.ERROR_ACCESS_DENIED;
                 return null;
             }
+
             try
             {
                 int elevated;
-                return Win32.GetTokenInformation(token, TokenElevation, &elevated, sizeof(int), out _) ? elevated != 0 : null;
+                return Win32.GetTokenInformation(token, TokenElevation, &elevated, sizeof(int), out _)
+                    ? elevated != 0
+                    : null;
             }
             finally
             {

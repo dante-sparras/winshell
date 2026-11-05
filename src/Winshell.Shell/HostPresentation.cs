@@ -1,3 +1,6 @@
+using Windows.Foundation;
+using Windows.Graphics;
+using Windows.System;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -6,9 +9,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Windows.Foundation;
-using Windows.Graphics;
-using Windows.System;
 using WinRT;
 using Winshell.Native;
 
@@ -59,6 +59,7 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, 1, 4);
             Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, Win32.DWMWA_COLOR_NONE, 4);
         }
+
         _root.RequestedTheme = platform.RequestedTheme;
         ApplyCaption();
         _root.KeyDown += OnRootKeyDown;
@@ -71,7 +72,10 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
     }
 
     /// <summary>Sizes the island to the window's client area, in physical pixels.</summary>
-    internal void FitIsland(int width, int height) => _xaml?.SiteBridge.MoveAndResize(new RectInt32(0, 0, width, height));
+    internal void FitIsland(int width, int height)
+    {
+        _xaml?.SiteBridge.MoveAndResize(new RectInt32(0, 0, width, height));
+    }
 
     private void OnThemeChanged()
     {
@@ -103,12 +107,18 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
     }
 
     /// <summary>Fades the content. The material behind it does not fade, and has no opacity of its own.</summary>
-    public void SetOpacity(double opacity) => _root.Opacity = opacity;
+    public void SetOpacity(double opacity)
+    {
+        _root.Opacity = opacity;
+    }
 
     /// <summary>Clips the content to a rectangle in logical window coordinates. It does not change <see cref="HostPlacement.SetInputRegion"/>.</summary>
-    public void SetVisibleMask(Rect? bounds) => _root.Clip = bounds is { } b
-        ? new RectangleGeometry { Rect = new global::Windows.Foundation.Rect(b.X, b.Y, b.Width, b.Height) }
-        : null;
+    public void SetVisibleMask(Rect? bounds)
+    {
+        _root.Clip = bounds is { } b
+            ? new RectangleGeometry { Rect = new Rect(b.X, b.Y, b.Width, b.Height) }
+            : null;
+    }
 
     /// <summary>
     /// Puts a material behind the content. A controller told the window is active keeps a live material on a window
@@ -121,17 +131,19 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
         _backdropConfig = null;
         if (backdrop != WindowBackdrop.None && _xaml is not null)
         {
-            _backdropConfig = new SystemBackdropConfiguration { IsInputActive = true, Theme = platform.BackdropTheme, IsHighContrast = platform.IsHighContrast };
+            _backdropConfig = new SystemBackdropConfiguration
+                { IsInputActive = true, Theme = platform.BackdropTheme, IsHighContrast = platform.IsHighContrast };
             ISystemBackdropControllerWithTargets controller = backdrop switch
             {
                 WindowBackdrop.Acrylic => new DesktopAcrylicController(),
                 WindowBackdrop.MicaAlt => new MicaController { Kind = MicaKind.BaseAlt },
-                _ => new MicaController(),
+                _ => new MicaController()
             };
             controller.AddSystemBackdropTarget(_xaml.As<ICompositionSupportsSystemBackdrop>());
             controller.SetSystemBackdropConfiguration(_backdropConfig);
             _backdropController = controller;
         }
+
         var corner = corners switch
         {
             WindowCorners.Square => 1,
@@ -142,8 +154,8 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             {
                 WindowKind.Floating => 0,
                 WindowKind.Popup when backdrop != WindowBackdrop.None => 2,
-                _ => 1,
-            },
+                _ => 1
+            }
         };
         if (host.Placement.Frame is { } frame)
             frame.SetCorners(corner);
@@ -152,7 +164,9 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
         if (host.Kind != WindowKind.Floating)
         {
             // A material window gets Windows' hairline border; a plain one gets none.
-            var border = host.Kind == WindowKind.Popup && backdrop != WindowBackdrop.None ? 0xFFFFFFFF : Win32.DWMWA_COLOR_NONE;
+            var border = host.Kind == WindowKind.Popup && backdrop != WindowBackdrop.None
+                ? 0xFFFFFFFF
+                : Win32.DWMWA_COLOR_NONE;
             Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, border, 4);
         }
     }

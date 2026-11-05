@@ -38,6 +38,7 @@ internal static class AppActivation
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IApplicationActivationManager
     {
-        void ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appUserModelId, [MarshalAs(UnmanagedType.LPWStr)] string arguments, int options, out uint processId);
+        void ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appUserModelId,
+            [MarshalAs(UnmanagedType.LPWStr)] string arguments, int options, out uint processId);
     }
 }

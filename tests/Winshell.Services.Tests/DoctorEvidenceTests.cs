@@ -8,11 +8,18 @@ namespace Winshell.Services.Tests;
 /// </summary>
 public sealed class DoctorEvidenceTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-doctor-evidence", Guid.NewGuid().ToString("N"));
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "winshell-doctor-evidence", Guid.NewGuid().ToString("N"));
 
-    public DoctorEvidenceTests() => Directory.CreateDirectory(_dir);
+    public DoctorEvidenceTests()
+    {
+        Directory.CreateDirectory(_dir);
+    }
 
-    public void Dispose() => Directory.Delete(_dir, true);
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
 
     [Fact]
     public void A_missing_crash_folder_is_not_a_failure_to_read()
@@ -32,7 +39,8 @@ public sealed class DoctorEvidenceTests : IDisposable
         var check = CrashesIn(read, DateTime.UtcNow, DoctorProbe.PeekCrash);
 
         Assert.Equal(CheckStatus.Warn, check.Status);
-        Assert.Contains(@"Could not read the crash folder: C:\locked: Access is denied", check.Message, StringComparison.Ordinal);
+        Assert.Contains(@"Could not read the crash folder: C:\locked: Access is denied", check.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,17 +51,17 @@ public sealed class DoctorEvidenceTests : IDisposable
         var fatal = Path.Combine(_dir, "crash-fatal.txt");
         File.WriteAllText(stray, "notes, not a report\n");
         File.WriteAllText(draw, """
-            Winshell crash report
-            Winshell closed: no
-            Exception
-            System.Exception: draw failed
-            """);
+                                Winshell crash report
+                                Winshell closed: no
+                                Exception
+                                System.Exception: draw failed
+                                """);
         File.WriteAllText(fatal, """
-            Winshell crash report
-            Winshell closed: yes
-            Exception
-            System.InvalidOperationException: boom
-            """);
+                                 Winshell crash report
+                                 Winshell closed: yes
+                                 Exception
+                                 System.InvalidOperationException: boom
+                                 """);
         var now = DateTime.UtcNow;
         File.SetLastWriteTimeUtc(draw, now);
         File.SetLastWriteTimeUtc(fatal, now.AddMinutes(-5));

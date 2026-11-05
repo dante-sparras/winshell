@@ -63,7 +63,7 @@ Windows stay Winshell's. The content is any `UIElement`. Sizes are logical pixel
             Height = 48,
             ReservedSize = 48,
             Content = new TextBlock { Text = "Winshell" },
-            Visible = true,
+            Visible = true
         };
 ```
 
@@ -113,7 +113,11 @@ Preferences stay TOML. A subclass of `TomlFile` has one public read-write proper
 public sealed class ShellPreferences(string path, IEventLoop loop) : TomlFile(path, loop)
 {
     [TomlComment("\"system\" follows Windows; or \"light\" or \"dark\".")]
-    public string ColorScheme { get; set => Set(ref field, value); } = "system";
+    public string ColorScheme
+    {
+        get;
+        set => Set(ref field, value);
+    } = "system";
 }
 ```
 

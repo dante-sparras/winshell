@@ -34,11 +34,13 @@ internal static unsafe class ShellHookWindow
                 cbSize = (uint)sizeof(WNDCLASSEXW),
                 lpfnWndProc = &Proc,
                 hInstance = Win32.GetModuleHandleW(null),
-                lpszClassName = name,
+                lpszClassName = name
             };
             Win32.RegisterClassExW(wc);
         }
-        var hwnd = Win32.CreateWindowExW(0, ClassName, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
+
+        var hwnd = Win32.CreateWindowExW(0, ClassName, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0,
+            Win32.GetModuleHandleW(null), 0);
         return hwnd != 0 && _message != 0 && PInvoke.RegisterShellHookWindow((HWND)hwnd);
     }
 
@@ -56,6 +58,7 @@ internal static unsafe class ShellHookWindow
 #pragma warning restore CA1031
         {
         }
+
         return 0;
     }
 }

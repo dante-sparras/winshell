@@ -38,23 +38,23 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
     public RECT Reserve(Edges edge, int thickness, RECT monitor)
     {
         using var explorerFirst = ShellPlatform.ExplorerFirst();
-        var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window, uCallbackMessage = Message };
+        var abd = new APPBARDATA
+            { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window, uCallbackMessage = Message };
         if (!Registered)
         {
             Registered = Win32.SHAppBarMessage(Win32.ABM_NEW, ref abd) != 0;
             if (!Registered)
-            {
                 // No app bar host, as when Explorer is not running: keep the window where the zone would be.
                 return monitor;
-            }
             Held[window] = 0;
         }
+
         abd.uEdge = edge switch
         {
             Edges.Left => Win32.ABE_LEFT,
             Edges.Right => Win32.ABE_RIGHT,
             Edges.Bottom => Win32.ABE_BOTTOM,
-            _ => Win32.ABE_TOP,
+            _ => Win32.ABE_TOP
         };
         abd.rc = monitor;
         Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
@@ -76,7 +76,10 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
             return;
         var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window };
         using (ShellPlatform.ExplorerFirst())
+        {
             Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
+        }
+
         Registered = false;
         Held.TryRemove(window, out _);
         _reservation.Clear();
@@ -95,6 +98,7 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
                 Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
             }
         }
+
         Held.Clear();
     }
 
@@ -109,6 +113,7 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
             platform.TaskbarCreated();
             return 0;
         }
+
         if (msg != Message)
             return null;
         switch ((uint)wParam)
@@ -127,26 +132,34 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
                         place();
                     });
                 }
+
                 break;
         }
+
         return 0;
     }
 
     /// <summary>The strip of <paramref name="offered"/> that is <paramref name="thickness"/> pixels deep along an edge.</summary>
-    internal static RECT Strip(Edges edge, int thickness, RECT offered) => edge switch
+    internal static RECT Strip(Edges edge, int thickness, RECT offered)
     {
-        Edges.Bottom => offered with { Top = offered.Bottom - thickness },
-        Edges.Left => offered with { Right = offered.Left + thickness },
-        Edges.Right => offered with { Left = offered.Right - thickness },
-        _ => offered with { Bottom = offered.Top + thickness },
-    };
+        return edge switch
+        {
+            Edges.Bottom => offered with { Top = offered.Bottom - thickness },
+            Edges.Left => offered with { Right = offered.Left + thickness },
+            Edges.Right => offered with { Left = offered.Right - thickness },
+            _ => offered with { Bottom = offered.Top + thickness }
+        };
+    }
 
     /// <summary>The monitor, starting at the edge the app bar got and as long as its grant along that edge.</summary>
-    internal static RECT Area(Edges edge, RECT granted, RECT monitor) => edge switch
+    internal static RECT Area(Edges edge, RECT granted, RECT monitor)
     {
-        Edges.Bottom => monitor with { Bottom = granted.Bottom, Left = granted.Left, Right = granted.Right },
-        Edges.Left => monitor with { Left = granted.Left, Top = granted.Top, Bottom = granted.Bottom },
-        Edges.Right => monitor with { Right = granted.Right, Top = granted.Top, Bottom = granted.Bottom },
-        _ => monitor with { Top = granted.Top, Left = granted.Left, Right = granted.Right },
-    };
+        return edge switch
+        {
+            Edges.Bottom => monitor with { Bottom = granted.Bottom, Left = granted.Left, Right = granted.Right },
+            Edges.Left => monitor with { Left = granted.Left, Top = granted.Top, Bottom = granted.Bottom },
+            Edges.Right => monitor with { Right = granted.Right, Top = granted.Top, Bottom = granted.Bottom },
+            _ => monitor with { Top = granted.Top, Left = granted.Left, Right = granted.Right }
+        };
+    }
 }

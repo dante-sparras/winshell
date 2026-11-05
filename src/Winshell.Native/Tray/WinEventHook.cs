@@ -23,7 +23,10 @@ internal sealed unsafe class WinEventHook : IDisposable
 
     /// <summary>Hooks <paramref name="eventType"/>, or returns null when Windows would not.</summary>
     /// <param name="onEvent">Gets the event type, the window, the object id and the child id.</param>
-    internal static WinEventHook? Start(uint eventType, Action<uint, nint, int, int> onEvent) => Start(eventType, eventType, onEvent);
+    internal static WinEventHook? Start(uint eventType, Action<uint, nint, int, int> onEvent)
+    {
+        return Start(eventType, eventType, onEvent);
+    }
 
     /// <summary>Hooks the event types <paramref name="min"/> through <paramref name="max"/>, or returns null when Windows would not.</summary>
     /// <param name="onEvent">Gets the event type, the window, the object id and the child id.</param>

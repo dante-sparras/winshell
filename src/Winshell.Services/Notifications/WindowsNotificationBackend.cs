@@ -15,7 +15,11 @@ internal interface INotificationBackend
     Task<NotificationAccessStatus> RequestAccessAsync();
     Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation);
     void Dismiss(uint id);
-    Action? WatchToasts(Action changed) => null;
+
+    Action? WatchToasts(Action changed)
+    {
+        return null;
+    }
 }
 
 internal sealed class WindowsNotificationBackend : INotificationBackend
@@ -29,8 +33,10 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     private readonly ToastChanges _changes = new(ToastChanges.DatabaseStamp, TimeProvider.System);
     private IReadOnlyList<IncomingToast> _toasts = [];
 
-    public async Task<NotificationAccessStatus> RequestAccessAsync() =>
-        NotificationListenerAccess.Map(await UserNotificationListener.Current.RequestAccessAsync());
+    public async Task<NotificationAccessStatus> RequestAccessAsync()
+    {
+        return NotificationListenerAccess.Map(await UserNotificationListener.Current.RequestAccessAsync());
+    }
 
     public async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
     {
@@ -45,24 +51,26 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             if (access != NotificationAccessStatus.Allowed)
             {
                 _changes.Change();
-                return new(access, [], focus, mode);
+                return new NotificationSnapshot(access, [], focus, mode);
             }
+
             if (!_changes.Due(out var stamp))
-                return new(access, _toasts, focus, mode);
-            var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast).AsTask(cancellation).ConfigureAwait(false);
+                return new NotificationSnapshot(access, _toasts, focus, mode);
+            var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast).AsTask(cancellation)
+                .ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             // Access may be revoked while the asynchronous read is in progress.
             access = NotificationListenerAccess.Map(listener.GetAccessStatus());
             if (access != NotificationAccessStatus.Allowed)
             {
                 _changes.Change();
-                return new(access, [], focus, mode);
+                return new NotificationSnapshot(access, [], focus, mode);
             }
+
             var known = _read;
             Dictionary<(uint, DateTimeOffset), IncomingToast> read = [];
             List<IncomingToast> toasts = [];
             foreach (var notification in notifications)
-            {
                 try
                 {
                     var key = (notification.Id, notification.CreationTime);
@@ -76,15 +84,15 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
                     // An app can disappear between enumeration and reading its toast.
                     Log.Default.Warn("notifications", e.Message);
                 }
-            }
+
             _read = read;
             _toasts = toasts;
             _changes.Read(stamp);
-            return new(access, toasts, focus, mode);
+            return new NotificationSnapshot(access, toasts, focus, mode);
         }
         catch (Exception e) when (IsExpectedFailure(e))
         {
-            return new(NotificationAccessStatus.Unavailable, [], focus, mode,
+            return new NotificationSnapshot(NotificationAccessStatus.Unavailable, [], focus, mode,
                 $"Windows notification access is unavailable: {e.Message} Check package identity and the userNotificationListener capability.");
         }
     }
@@ -128,7 +136,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     internal static IncomingToast ReadToast(UserNotification notification)
     {
         var binding = notification.Notification.Visual.GetBinding(KnownNotificationBindings.ToastGeneric)
-            ?? notification.Notification.Visual.Bindings.FirstOrDefault();
+                      ?? notification.Notification.Visual.Bindings.FirstOrDefault();
         var texts = binding?.GetTextElements().Select(t => t.Text).ToArray() ?? [];
         var appId = "";
         var appName = "";
@@ -142,9 +150,13 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             // The stream stays closed until the icon thread asks. The toast is already in the snapshot.
             logo = new WindowsAppLogo(display);
         }
-        catch (Exception e) when (IsExpectedFailure(e)) { }
-        return new(notification.Id, appId, appName, texts.FirstOrDefault() ?? "",
-            string.Join('\n', texts.Skip(1)), notification.CreationTime, notification.Notification.ExpirationTime, logo);
+        catch (Exception e) when (IsExpectedFailure(e))
+        {
+        }
+
+        return new IncomingToast(notification.Id, appId, appName, texts.FirstOrDefault() ?? "",
+            string.Join('\n', texts.Skip(1)), notification.CreationTime, notification.Notification.ExpirationTime,
+            logo);
     }
 
     private static NotificationState ReadFocus()
@@ -154,7 +166,10 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             if (ApiInformation.IsTypePresent("Windows.UI.Shell.FocusSessionManager") && FocusSessionManager.IsSupported)
                 return FocusSessionManager.GetDefault().IsFocusActive ? NotificationState.On : NotificationState.Off;
         }
-        catch (Exception e) when (IsExpectedFailure(e)) { }
+        catch (Exception e) when (IsExpectedFailure(e))
+        {
+        }
+
         return NotificationState.Unknown;
     }
 
@@ -162,23 +177,33 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
     {
         try
         {
-            if (ApiInformation.IsPropertyPresent("Windows.UI.Notifications.ToastNotificationManagerForUser", "NotificationMode"))
+            if (ApiInformation.IsPropertyPresent("Windows.UI.Notifications.ToastNotificationManagerForUser",
+                    "NotificationMode"))
                 return MapMode((int)ToastNotificationManager.GetDefault().NotificationMode);
         }
-        catch (Exception e) when (IsExpectedFailure(e)) { }
+        catch (Exception e) when (IsExpectedFailure(e))
+        {
+        }
+
         return NotificationMode.Unknown;
     }
 
-    internal static NotificationMode MapMode(int mode) => mode switch
+    internal static NotificationMode MapMode(int mode)
     {
-        0 => NotificationMode.Unrestricted,
-        1 => NotificationMode.PriorityOnly,
-        2 => NotificationMode.AlarmsOnly,
-        _ => NotificationMode.Unknown,
-    };
+        return mode switch
+        {
+            0 => NotificationMode.Unrestricted,
+            1 => NotificationMode.PriorityOnly,
+            2 => NotificationMode.AlarmsOnly,
+            _ => NotificationMode.Unknown
+        };
+    }
 
-    internal static bool IsExpectedFailure(Exception e) => e is COMException or UnauthorizedAccessException
-        or InvalidOperationException or ArgumentException or NotSupportedException or TypeLoadException;
+    internal static bool IsExpectedFailure(Exception e)
+    {
+        return e is COMException or UnauthorizedAccessException
+            or InvalidOperationException or ArgumentException or NotSupportedException or TypeLoadException;
+    }
 }
 
 /// <summary>
@@ -193,7 +218,7 @@ internal sealed class WindowsAppLogo(AppDisplayInfo display) : IAppLogoSource
     public Stream? Open(CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        var reference = display.GetLogo(new global::Windows.Foundation.Size(Side, Side));
+        var reference = display.GetLogo(new Size(Side, Side));
         if (reference is null)
             return null;
 #pragma warning disable VSTHRD002 // The icon thread is here to wait.
@@ -210,21 +235,36 @@ internal sealed class WindowsAppLogo(AppDisplayInfo display) : IAppLogoSource
         public override bool CanSeek => false;
         public override bool CanWrite => false;
         public override long Length => throw new NotSupportedException();
+
         public override long Position
         {
             get => throw new NotSupportedException();
             set => throw new NotSupportedException();
         }
 
-        public override void Flush() { }
+        public override void Flush()
+        {
+        }
 
-        public override int Read(byte[] buffer, int offset, int count) => _stream.Read(buffer, offset, count);
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return _stream.Read(buffer, offset, count);
+        }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
 
         protected override void Dispose(bool disposing)
         {
@@ -233,6 +273,7 @@ internal sealed class WindowsAppLogo(AppDisplayInfo display) : IAppLogoSource
                 _stream.Dispose();
                 inner.Dispose();
             }
+
             base.Dispose(disposing);
         }
     }

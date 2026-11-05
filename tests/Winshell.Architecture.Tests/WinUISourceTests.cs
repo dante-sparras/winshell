@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace Winshell.Architecture.Tests;
@@ -16,11 +15,13 @@ public class WinUISourceTests
     {
         var projects = XDocument.Load(Path.Combine(Repo.Root, "winshell.slnx")).Descendants("Project")
             .Select(project => Path.Combine(Repo.Root, project.Attribute("Path")!.Value))
-            .Where(path => XDocument.Load(path).Descendants("UseWinUI").Any(use => use.Value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase)))
+            .Where(path => XDocument.Load(path).Descendants("UseWinUI").Any(use =>
+                use.Value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase)))
             .ToList();
         Assert.NotEmpty(projects);
 
-        var found = projects.SelectMany(Sources).Distinct(StringComparer.OrdinalIgnoreCase).SelectMany(UnsafeCode).ToList();
+        var found = projects.SelectMany(Sources).Distinct(StringComparer.OrdinalIgnoreCase).SelectMany(UnsafeCode)
+            .ToList();
 
         Assert.True(found.Count == 0, string.Join(Environment.NewLine, found));
     }
@@ -30,7 +31,8 @@ public class WinUISourceTests
     {
         var folder = Path.GetDirectoryName(project)!;
         var own = Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
-            .Where(file => Path.GetRelativePath(folder, file).Split(Path.DirectorySeparatorChar)[0] is not ("bin" or "obj"));
+            .Where(file =>
+                Path.GetRelativePath(folder, file).Split(Path.DirectorySeparatorChar)[0] is not ("bin" or "obj"));
         var linked = XDocument.Load(project).Descendants("Compile")
             .Select(compile => compile.Attribute("Include")?.Value)
             .OfType<string>()
@@ -39,10 +41,15 @@ public class WinUISourceTests
     }
 
     // Read as a Release and as a Debug build compile it, so code under #if DEBUG counts too.
-    private static IEnumerable<string> UnsafeCode(string file) =>
-        new[] { CSharpParseOptions.Default, CSharpParseOptions.Default.WithPreprocessorSymbols("DEBUG") }
-            .SelectMany(options => CSharpSyntaxTree.ParseText(File.ReadAllText(file), options, file).GetRoot().DescendantNodesAndTokens())
-            .Where(part => part.Kind() is SyntaxKind.UnsafeKeyword or SyntaxKind.FixedKeyword or SyntaxKind.PointerType or SyntaxKind.FunctionPointerType)
-            .Select(part => $"{Path.GetRelativePath(Repo.Root, file)}({part.GetLocation()!.GetLineSpan().StartLinePosition.Line + 1}): {part}")
+    private static IEnumerable<string> UnsafeCode(string file)
+    {
+        return new[] { CSharpParseOptions.Default, CSharpParseOptions.Default.WithPreprocessorSymbols("DEBUG") }
+            .SelectMany(options => CSharpSyntaxTree.ParseText(File.ReadAllText(file), options, file).GetRoot()
+                .DescendantNodesAndTokens())
+            .Where(part => part.Kind() is SyntaxKind.UnsafeKeyword or SyntaxKind.FixedKeyword or SyntaxKind.PointerType
+                or SyntaxKind.FunctionPointerType)
+            .Select(part =>
+                $"{Path.GetRelativePath(Repo.Root, file)}({part.GetLocation()!.GetLineSpan().StartLinePosition.Line + 1}): {part}")
             .Distinct();
+    }
 }

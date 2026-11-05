@@ -54,8 +54,8 @@ try {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     if ($Tier -ne 'Slow') {
-        # The build already checks style and analyzers.
-        dotnet format whitespace .\winshell.slnx --verify-no-changes --no-restore
+        # ReSharper checks an isolated copy; compiler warnings and analyzers remain build checks.
+        & (Join-Path $PSScriptRoot 'resharper.ps1') -Mode Check
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     $count = @(Get-ChildItem -Path (Join-Path $root 'tests/*/*.Tests.csproj')).Count

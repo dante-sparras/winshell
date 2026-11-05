@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.UI.WindowsAndMessaging;
@@ -45,7 +46,7 @@ public sealed class TrayBackendTests : IDisposable
         Assert.Equal("Backup", Assert.Single(explorer.Icons).Tip);
 
         // Not an icon: an app bar message. Explorer answers it.
-        Send(host.Window, new byte[16], data: 0);
+        Send(host.Window, new byte[16], 0);
 
         Send(host.Window, TrayCall.Build(TrayProtocol.Delete, (int)_app, 1, 0));
         Assert.Empty(host.Icons);
@@ -61,12 +62,16 @@ public sealed class TrayBackendTests : IDisposable
         // and adds it only when that fails. Explorer has the icon and would say yes; the host's own answer is the one.
         var guid = Guid.NewGuid();
         var flags = TrayProtocol.NIF_TIP | TrayProtocol.NIF_GUID;
-        Assert.Equal(1, Send(explorer.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
-        Assert.Equal(0, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Equal(1,
+            Send(explorer.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Equal(0,
+            Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Security", guid: guid)));
         Assert.Empty(host.Icons);
 
-        Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
-        Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Secure", guid: guid)));
+        Assert.Equal(1,
+            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, flags, tip: "Security", guid: guid)));
+        Assert.Equal(1,
+            Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, flags, tip: "Secure", guid: guid)));
         Assert.Equal("Secure", Assert.Single(host.Icons).Tip);
     }
 
@@ -100,6 +105,7 @@ public sealed class TrayBackendTests : IDisposable
             Assert.True(churn.Join(TimeSpan.FromMinutes(1)), "The thread that opens and closes windows did not stop");
             Win32.DestroyWindow(window);
         }
+
         Assert.DoesNotContain(window, TrayBackend.MessageOnlyWindows());
     }
 
@@ -197,19 +203,23 @@ public sealed class TrayBackendTests : IDisposable
             var host = Open(HostNames);
             // The first call also loads what handling an icon needs, and a busy runner can stall any one call, so the
             // limit is for the fastest of the later ones. Waiting on Explorer as long as an app bar does slows them all.
-            Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_TIP, tip: "Backup")));
+            Assert.Equal(1,
+                Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_TIP, tip: "Backup")));
             var fastest = TimeSpan.MaxValue;
             for (var i = 0; i < 3; i++)
             {
                 var started = TimeProvider.System.GetTimestamp();
-                Assert.Equal(1, Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, TrayProtocol.NIF_TIP, tip: "Backup")));
+                Assert.Equal(1,
+                    Send(host.Window,
+                        TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, TrayProtocol.NIF_TIP, tip: "Backup")));
                 var elapsed = TimeProvider.System.GetElapsedTime(started);
                 if (elapsed < fastest)
                     fastest = elapsed;
             }
 
             Assert.Equal("Backup", Assert.Single(host.Icons).Tip);
-            Assert.True(fastest < TimeSpan.FromSeconds(1), $"The icon waited {fastest.TotalMilliseconds} ms for Explorer");
+            Assert.True(fastest < TimeSpan.FromSeconds(1),
+                $"The icon waited {fastest.TotalMilliseconds} ms for Explorer");
         }
         finally
         {
@@ -220,7 +230,8 @@ public sealed class TrayBackendTests : IDisposable
 
     private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
 
-    private TrayNames ExplorerNames => new(ExplorerClass, $"WinshellTestNone-{_id}", $@"Local\winshell-test-explorer-{Guid.NewGuid():N}");
+    private TrayNames ExplorerNames => new(ExplorerClass, $"WinshellTestNone-{_id}",
+        $@"Local\winshell-test-explorer-{Guid.NewGuid():N}");
 
     /// <summary>
     /// Explorer's taskbar on its own thread, as in its own process, which records the messages posted to its window.
@@ -235,24 +246,25 @@ public sealed class TrayBackendTests : IDisposable
         public ExplorerThread(TrayNames names, Log log, ManualResetEventSlim? busy = null)
         {
             _thread = new Thread(() =>
-            {
-                var backend = new TrayBackend(new ManualEventLoop(), log, names);
-                if (backend.TryOwn())
-                    backend.Open(_ => true);
-                Window = backend.Window;
-                _started.Set();
-                busy?.Wait();
-                while (Win32.GetMessageW(out var msg, 0, 0, 0) > 0 && !(msg.hwnd == Window && msg.message == Quit))
                 {
-                    // Only the commands a host forwards. Any shell that takes the tray, a test's included, broadcasts
-                    // TaskbarCreated to every window, this one too.
-                    if (msg.hwnd == Window && msg.message is WM_COMMAND or WM_SYSCOMMAND)
-                        Posted.Add((msg.message, msg.wParam, msg.lParam));
-                    Win32.DispatchMessageW(msg);
-                }
-                backend.Dispose();
-            })
-            { IsBackground = true };
+                    var backend = new TrayBackend(new ManualEventLoop(), log, names);
+                    if (backend.TryOwn())
+                        backend.Open(_ => true);
+                    Window = backend.Window;
+                    _started.Set();
+                    busy?.Wait();
+                    while (Win32.GetMessageW(out var msg, 0, 0, 0) > 0 && !(msg.hwnd == Window && msg.message == Quit))
+                    {
+                        // Only the commands a host forwards. Any shell that takes the tray, a test's included, broadcasts
+                        // TaskbarCreated to every window, this one too.
+                        if (msg.hwnd == Window && msg.message is WM_COMMAND or WM_SYSCOMMAND)
+                            Posted.Add((msg.message, msg.wParam, msg.lParam));
+                        Win32.DispatchMessageW(msg);
+                    }
+
+                    backend.Dispose();
+                })
+                { IsBackground = true };
             _thread.Start();
             _started.Wait(TestContext.Current.CancellationToken);
             Assert.NotEqual(0, Window);
@@ -260,7 +272,7 @@ public sealed class TrayBackendTests : IDisposable
 
         public nint Window { get; private set; }
 
-        public System.Collections.Concurrent.BlockingCollection<(uint, nint, nint)> Posted { get; } = new();
+        public BlockingCollection<(uint, nint, nint)> Posted { get; } = new();
 
         public void Exit()
         {
@@ -279,7 +291,8 @@ public sealed class TrayBackendTests : IDisposable
         var signals = 0;
         host.Backend.ExplorerInFront += () => signals++;
 
-        Win32.SetWindowPos(explorer.Window, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+        Win32.SetWindowPos(explorer.Window, Win32.HWND_TOPMOST, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
         Wait.Until(() => signals > 0, "the host to hear that Explorer is in front", () =>
         {
             while (Win32.PeekMessageW(out var msg, 0, 0, 0, Win32.PM_REMOVE))
@@ -291,11 +304,11 @@ public sealed class TrayBackendTests : IDisposable
     /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>
     private static bool Above(nint upper, nint lower)
     {
-        for (var hwnd = Win32.GetWindow(upper, Win32.GW_HWNDNEXT); hwnd != 0; hwnd = Win32.GetWindow(hwnd, Win32.GW_HWNDNEXT))
-        {
+        for (var hwnd = Win32.GetWindow(upper, Win32.GW_HWNDNEXT);
+             hwnd != 0;
+             hwnd = Win32.GetWindow(hwnd, Win32.GW_HWNDNEXT))
             if (hwnd == lower)
                 return true;
-        }
         return false;
     }
 
@@ -310,8 +323,10 @@ public sealed class TrayBackendTests : IDisposable
         try
         {
             var host = Open(HostNames);
-            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_ICON, icon: (int)loaded.Handle));
-            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 2, TrayProtocol.NIF_ICON, icon: (int)(nint)copied));
+            Send(host.Window,
+                TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_ICON, icon: (int)loaded.Handle));
+            Send(host.Window,
+                TrayCall.Build(TrayProtocol.Add, (int)_app, 2, TrayProtocol.NIF_ICON, icon: (int)(nint)copied));
             var fromResource = host.Icons.Single(i => i.Id == 1);
             var drawn = host.Icons.Single(i => i.Id == 2);
             Assert.NotNull(fromResource.Resource);
@@ -363,13 +378,18 @@ public sealed class TrayBackendTests : IDisposable
         public IReadOnlyCollection<TrayIcon> Icons => Table.Icons;
     }
 
-    private Host OpenExplorer() => Open(new TrayNames(ExplorerClass, $"WinshellTestNone-{_id}", $@"Local\winshell-test-explorer-{Guid.NewGuid():N}"));
+    private Host OpenExplorer()
+    {
+        return Open(new TrayNames(ExplorerClass, $"WinshellTestNone-{_id}",
+            $@"Local\winshell-test-explorer-{Guid.NewGuid():N}"));
+    }
 
     private Host Open(TrayNames names)
     {
         var backend = new TrayBackend(_loop, _log, names);
         _backends.Add(backend);
-        var icons = new TrayIcons(backend.ReadIcon, window => ((int)backend.ProcessOf(window), backend.ProgramOf(window)));
+        var icons = new TrayIcons(backend.ReadIcon,
+            window => ((int)backend.ProcessOf(window), backend.ProgramOf(window)));
         Assert.True(backend.TryOwn());
         Assert.True(backend.Open(icons.Apply));
         return new Host(backend, icons);

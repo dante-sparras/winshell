@@ -1,5 +1,5 @@
-using Microsoft.UI.Xaml;
 using Windows.Foundation;
+using Microsoft.UI.Xaml;
 
 namespace Winshell;
 
@@ -27,13 +27,19 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     private Rect? _visibleMask;
     private bool _disposed;
 
-    private protected ShellWindow(Shell shell) => _shell = shell;
+    private protected ShellWindow(Shell shell)
+    {
+        _shell = shell;
+    }
 
     /// <summary>
     /// The shell window an element is drawn in. Its root holds that, and a table keyed on the <c>XamlRoot</c> would not:
     /// the wrapper of a <c>XamlRoot</c> goes in a collection, and the next read of it is another object.
     /// </summary>
-    internal static ShellWindow? Of(UIElement element) => (element.XamlRoot?.Content as FrameworkElement)?.Tag as ShellWindow;
+    internal static ShellWindow? Of(UIElement element)
+    {
+        return (element.XamlRoot?.Content as FrameworkElement)?.Tag as ShellWindow;
+    }
 
     private protected abstract WindowKind Kind { get; }
 
@@ -195,25 +201,40 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     public event Action<Exception>? Failed;
 
     /// <summary>Takes the keyboard, if this kind of window may. A panel takes it only while focusable, and a popup only while it grabs focus.</summary>
-    public void Focus() => _host?.Focus.TakeKeyboard();
+    public void Focus()
+    {
+        _host?.Focus.TakeKeyboard();
+    }
 
     /// <summary>Puts the window above the others at its level, without focusing it.</summary>
-    public void Raise() => _host?.Placement.Raise();
+    public void Raise()
+    {
+        _host?.Placement.Raise();
+    }
 
     /// <summary>
     /// Lets the user move the window by dragging, as a title bar does. Call it when a pointer button goes down.
     /// </summary>
-    public void StartSystemMove() => _host?.Placement.StartSystemMove();
+    public void StartSystemMove()
+    {
+        _host?.Placement.StartSystemMove();
+    }
 
     /// <summary>
     /// Lets the user resize the window by dragging an edge or a corner, as its border does. Call it when a pointer
     /// button goes down. Two adjacent edges, such as top and left, name a corner. Any other combination resizes from
     /// the bottom-right corner.
     /// </summary>
-    public void StartSystemResize(Edges edges) => _host?.Placement.StartSystemResize(edges);
+    public void StartSystemResize(Edges edges)
+    {
+        _host?.Placement.StartSystemResize(edges);
+    }
 
     /// <summary>A point in logical window coordinates, in physical pixels on the virtual desktop.</summary>
-    public (int X, int Y) MapToScreen(double x, double y) => _host?.Placement.MapToScreen(x, y) ?? ((int)x, (int)y);
+    public (int X, int Y) MapToScreen(double x, double y)
+    {
+        return _host?.Placement.MapToScreen(x, y) ?? ((int)x, (int)y);
+    }
 
     private protected void EnsureHost()
     {
@@ -260,7 +281,10 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         Set(ref _scale, scale, nameof(Scale));
     }
 
-    void IHostClient.OnMoved(double x, double y) => Changed(nameof(Origin));
+    void IHostClient.OnMoved(double x, double y)
+    {
+        Changed(nameof(Origin));
+    }
 
     void IHostClient.OnClosed()
     {
@@ -268,7 +292,10 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
         Closed?.Invoke();
     }
 
-    void IHostClient.OnActiveChanged(bool active) => Set(ref _active, active, nameof(Active));
+    void IHostClient.OnActiveChanged(bool active)
+    {
+        Set(ref _active, active, nameof(Active));
+    }
 
     void IHostClient.OnScreenChanged(string screenId)
     {
@@ -277,11 +304,20 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
             Changed(nameof(Screen));
     }
 
-    void IHostClient.OnDismissed() => OnDismissed();
+    void IHostClient.OnDismissed()
+    {
+        OnDismissed();
+    }
 
-    void IHostClient.OnStateChanged(bool maximized, bool minimized) => OnStateChanged(maximized, minimized);
+    void IHostClient.OnStateChanged(bool maximized, bool minimized)
+    {
+        OnStateChanged(maximized, minimized);
+    }
 
-    void IHostClient.OnFullscreenChanged(bool fullscreen) => OnFullscreenChanged(fullscreen);
+    void IHostClient.OnFullscreenChanged(bool fullscreen)
+    {
+        OnFullscreenChanged(fullscreen);
+    }
 
     /// <summary>Windows destroyed the native window, because its owner closed. To the app that is this window closing.</summary>
     void IHostClient.OnBackingDestroyed()

@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.Tests;
 
 /// <summary><c>winshell ipc</c> with no command says so, and where its usage is.</summary>

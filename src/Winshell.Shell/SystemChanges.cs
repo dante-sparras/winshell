@@ -11,7 +11,7 @@ internal enum SystemChange
     Theme = 1,
     Text = 2,
     Screens = 4,
-    WorkArea = 8,
+    WorkArea = 8
 }
 
 /// <summary>
@@ -23,19 +23,26 @@ internal sealed class SystemChanges
     private readonly object _gate = new();
     private SystemChange _pending;
 
-    public static SystemChange From(uint message, nint wParam) => message switch
+    public static SystemChange From(uint message, nint wParam)
     {
-        Win32.WM_DISPLAYCHANGE => SystemChange.Screens,
-        // The taskbar moved, resized, or started or stopped hiding.
-        Win32.WM_SETTINGCHANGE when wParam == Win32.SPI_SETWORKAREA => SystemChange.Text | SystemChange.WorkArea | SystemChange.Theme,
-        Win32.WM_SETTINGCHANGE => SystemChange.Text | SystemChange.Screens | SystemChange.Theme,
-        _ => SystemChange.Theme,
-    };
+        return message switch
+        {
+            Win32.WM_DISPLAYCHANGE => SystemChange.Screens,
+            // The taskbar moved, resized, or started or stopped hiding.
+            Win32.WM_SETTINGCHANGE when wParam == Win32.SPI_SETWORKAREA => SystemChange.Text | SystemChange.WorkArea |
+                                                                           SystemChange.Theme,
+            Win32.WM_SETTINGCHANGE => SystemChange.Text | SystemChange.Screens | SystemChange.Theme,
+            _ => SystemChange.Theme
+        };
+    }
 
-    public static SystemChange From(UserPreferenceCategory category) =>
-        category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Accessibility
+    public static SystemChange From(UserPreferenceCategory category)
+    {
+        return category is UserPreferenceCategory.General or UserPreferenceCategory.Color
+            or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Accessibility
             ? SystemChange.Theme
             : SystemChange.None;
+    }
 
     /// <summary>Adds a change. True when nothing was pending, so the caller has to post a <see cref="Take"/>.</summary>
     public bool Add(SystemChange change)

@@ -1,7 +1,7 @@
-using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Storage.FileSystem;
+using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
 
@@ -30,6 +30,10 @@ internal static unsafe class FileLinks
     }
 
     /// <summary>The number of hard links to an open file, or null when Windows could not say.</summary>
-    internal static int? Count(SafeFileHandle file) =>
-        PInvoke.GetFileInformationByHandle(new HANDLE(file.DangerousGetHandle()), out var info) ? (int)info.nNumberOfLinks : null;
+    internal static int? Count(SafeFileHandle file)
+    {
+        return PInvoke.GetFileInformationByHandle(new HANDLE(file.DangerousGetHandle()), out var info)
+            ? (int)info.nNumberOfLinks
+            : null;
+    }
 }

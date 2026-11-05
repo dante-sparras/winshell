@@ -9,7 +9,10 @@ namespace Winshell.TestSupport;
 internal static class TempFolderCleanup
 {
     [ModuleInitializer]
-    internal static void PruneAtStart() => Prune(TimeSpan.FromDays(1));
+    internal static void PruneAtStart()
+    {
+        Prune(TimeSpan.FromDays(1));
+    }
 
     internal static void Prune(TimeSpan olderThan)
     {
@@ -18,7 +21,6 @@ internal static class TempFolderCleanup
             return;
         var cutoff = DateTime.UtcNow - olderThan;
         foreach (var dir in Directory.EnumerateDirectories(root))
-        {
             try
             {
                 if (Directory.GetLastWriteTimeUtc(dir) >= cutoff)
@@ -28,6 +30,5 @@ internal static class TempFolderCleanup
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
-        }
     }
 }

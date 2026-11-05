@@ -1,10 +1,14 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Xunit.Sdk;
 
 namespace Winshell.ShellTests;
 
@@ -13,38 +17,48 @@ public sealed class InspectorTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
 
-    public InspectorTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
-
-    private static PanelWindow Panel(FrameworkElement content) => new()
+    public InspectorTests()
     {
-        Anchors = Edges.Top | Edges.Left,
-        Width = 220,
-        Height = 90,
-        Content = content,
-        Visible = true,
-    };
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
+
+    private static PanelWindow Panel(FrameworkElement content)
+    {
+        return new PanelWindow
+        {
+            Anchors = Edges.Top | Edges.Left,
+            Width = 220,
+            Height = 90,
+            Content = content,
+            Visible = true
+        };
+    }
 
     private static JsonElement Node(JsonElement node, string name)
     {
         if (node.TryGetProperty("name", out var own) && own.GetString() == name)
             return node;
         if (node.TryGetProperty("children", out var children))
-        {
             foreach (var child in children.EnumerateArray())
             {
                 var found = Node(child, name);
                 if (found.ValueKind != JsonValueKind.Undefined)
                     return found;
             }
-        }
+
         return default;
     }
 
-    private static JsonElement OpenWindow(string tree, string content) =>
-        JsonDocument.Parse(tree).RootElement.EnumerateArray()
+    private static JsonElement OpenWindow(string tree, string content)
+    {
+        return JsonDocument.Parse(tree).RootElement.EnumerateArray()
             .Single(window => window.GetProperty("content").GetProperty("type").GetString() == content).Clone();
+    }
 
     public sealed class Page : StackPanel;
 
@@ -191,6 +205,7 @@ public sealed class InspectorTests : IDisposable
             {
                 message = e.Message;
             }
+
             await Inspector.Run(shell, "click", ["Twin", nameof(Other)]);
             await ShellFixture.LaidOut(second);
             return (message, (firstClicks, secondClicks));
@@ -262,10 +277,11 @@ public sealed class InspectorTests : IDisposable
             {
                 await Inspector.Run(shell, "click", ["Off"]);
             }
-            catch (Exception e) when (e is not Xunit.Sdk.XunitException)
+            catch (Exception e) when (e is not XunitException)
             {
                 failed = true;
             }
+
             await ShellFixture.LaidOut(button);
             return (count, failed);
         });
@@ -321,7 +337,8 @@ public sealed class InspectorTests : IDisposable
 
         await ShellFixture.On(async shell =>
         {
-            var fill = new Border { Height = 70, Margin = new Thickness(20, 10, 20, 10), Background = new SolidColorBrush(Colors.Red) };
+            var fill = new Border
+                { Height = 70, Margin = new Thickness(20, 10, 20, 10), Background = new SolidColorBrush(Colors.Red) };
             var page = new Page();
             page.Children.Add(fill);
             using var panel = Panel(page);
@@ -331,10 +348,11 @@ public sealed class InspectorTests : IDisposable
 
         var (width, height, pixels) = await Decoded(File.ReadAllBytes(file));
         Assert.Equal((220, 90), (width, height));
-        var corner = ((5 * width) + 5) * 4;
+        var corner = (5 * width + 5) * 4;
         Assert.NotEqual(255, (int)pixels[corner + 2]);
-        var middle = ((height / 2 * width) + (width / 2)) * 4;
-        Assert.Equal((0, 0, 255, 255), ((int)pixels[middle], (int)pixels[middle + 1], (int)pixels[middle + 2], (int)pixels[middle + 3]));
+        var middle = (height / 2 * width + width / 2) * 4;
+        Assert.Equal((0, 0, 255, 255),
+            ((int)pixels[middle], (int)pixels[middle + 1], (int)pixels[middle + 2], (int)pixels[middle + 3]));
     }
 
     [Fact]
@@ -387,16 +405,16 @@ public sealed class InspectorTests : IDisposable
 
     private static async Task<(int Width, int Height, byte[] Bgra)> Decoded(byte[] png)
     {
-        using var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
-        await stream.WriteAsync(System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.AsBuffer(png));
+        using var stream = new InMemoryRandomAccessStream();
+        await stream.WriteAsync(WindowsRuntimeBufferExtensions.AsBuffer(png));
         stream.Seek(0);
-        var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+        var decoder = await BitmapDecoder.CreateAsync(stream);
         var data = await decoder.GetPixelDataAsync(
-            global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
-            global::Windows.Graphics.Imaging.BitmapAlphaMode.Straight,
-            new global::Windows.Graphics.Imaging.BitmapTransform(),
-            global::Windows.Graphics.Imaging.ExifOrientationMode.IgnoreExifOrientation,
-            global::Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Straight,
+            new BitmapTransform(),
+            ExifOrientationMode.IgnoreExifOrientation,
+            ColorManagementMode.DoNotColorManage);
         return ((int)decoder.PixelWidth, (int)decoder.PixelHeight, data.DetachPixelData());
     }
 

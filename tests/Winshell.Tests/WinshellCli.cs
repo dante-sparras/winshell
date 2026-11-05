@@ -19,7 +19,7 @@ internal static class WinshellCli
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
         foreach (var arg in args)
             info.ArgumentList.Add(arg);

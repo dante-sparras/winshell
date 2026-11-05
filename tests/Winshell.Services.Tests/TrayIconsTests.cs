@@ -8,8 +8,11 @@ public sealed class TrayIconsTests
     private const string Program = @"C:\Apps\sync.exe";
     private readonly TrayIcons _icons = new(_ => (null, null), _ => (42, Program));
 
-    private static NotifyIconCall Call(uint message, uint flags = 0, nint window = 0x100, uint id = 1, Guid guid = default) =>
-        new() { Message = message, Flags = flags, Window = window, Id = id, Guid = guid };
+    private static NotifyIconCall Call(uint message, uint flags = 0, nint window = 0x100, uint id = 1,
+        Guid guid = default)
+    {
+        return new NotifyIconCall { Message = message, Flags = flags, Window = window, Id = id, Guid = guid };
+    }
 
     [Fact]
     public void An_icon_added_by_guid_is_the_same_icon_when_an_app_names_it_by_its_window()
@@ -49,14 +52,20 @@ public sealed class TrayIconsTests
     [Fact]
     public void Hidden_changes_only_when_the_state_mask_names_it()
     {
-        _icons.Apply(Call(TrayProtocol.Add, TrayProtocol.NIF_STATE) with { State = TrayProtocol.NIS_HIDDEN, StateMask = TrayProtocol.NIS_HIDDEN });
+        _icons.Apply(Call(TrayProtocol.Add, TrayProtocol.NIF_STATE) with
+        {
+            State = TrayProtocol.NIS_HIDDEN, StateMask = TrayProtocol.NIS_HIDDEN
+        });
         var icon = Assert.Single(_icons.Icons);
         Assert.True(icon.Hidden);
 
         _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_STATE) with { State = 0, StateMask = 0 });
         Assert.True(icon.Hidden);
 
-        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_STATE) with { State = 0, StateMask = TrayProtocol.NIS_HIDDEN });
+        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_STATE) with
+        {
+            State = 0, StateMask = TrayProtocol.NIS_HIDDEN
+        });
         Assert.False(icon.Hidden);
     }
 
@@ -67,7 +76,10 @@ public sealed class TrayIconsTests
         _icons.Balloon += (_, title, text, flags) => balloons.Add((title, text, flags));
         _icons.Apply(Call(TrayProtocol.Add));
 
-        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with { InfoTitle = "Backup", Info = "Done", InfoFlags = 1 });
+        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with
+        {
+            InfoTitle = "Backup", Info = "Done", InfoFlags = 1
+        });
         // An empty text takes the balloon down.
         _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with { InfoTitle = "Backup", Info = "" });
 
@@ -84,7 +96,7 @@ public sealed class TrayIconsTests
         // Windows has no choice for either yet, so both start in the flyout.
         Assert.All(_icons.Icons, icon => Assert.True(icon.Overflow));
 
-        List<TrayIconSetting> promoted = [new(Guid.Empty, Program, 1, Promoted: true)];
+        List<TrayIconSetting> promoted = [new(Guid.Empty, Program, 1, true)];
         _icons.UseSettings(promoted);
         _icons.UseSettings(promoted);
 
@@ -97,14 +109,20 @@ public sealed class TrayIconsTests
     public void Only_nim_setversion_sets_the_version()
     {
         // A balloon timeout of 4 is not interface version 4.
-        _icons.Apply(Call(TrayProtocol.Add, TrayProtocol.NIF_INFO) with { Info = "Hi", TimeoutOrVersion = TrayProtocol.Version4 });
+        _icons.Apply(Call(TrayProtocol.Add, TrayProtocol.NIF_INFO) with
+        {
+            Info = "Hi", TimeoutOrVersion = TrayProtocol.Version4
+        });
         var icon = Assert.Single(_icons.Icons);
         Assert.Equal(0u, icon.Version);
 
         _icons.Apply(Call(TrayProtocol.SetVersion) with { TimeoutOrVersion = TrayProtocol.Version4 });
         Assert.Equal(TrayProtocol.Version4, icon.Version);
 
-        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with { Info = "Again", TimeoutOrVersion = TrayProtocol.Version });
+        _icons.Apply(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with
+        {
+            Info = "Again", TimeoutOrVersion = TrayProtocol.Version
+        });
         Assert.Equal(TrayProtocol.Version4, icon.Version);
     }
 }

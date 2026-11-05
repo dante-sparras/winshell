@@ -16,7 +16,8 @@ public sealed class RadioSwitchTests
         Assert.Equal(0, wifi.Sets);
 
         var missing = new FakeSource();
-        Assert.Equal(RadioSwitch.Missing(RadioKind.Bluetooth), await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, true, missing));
+        Assert.Equal(RadioSwitch.Missing(RadioKind.Bluetooth),
+            await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, true, missing));
         Assert.Equal("get", Assert.Single(missing.Calls));
     }
 
@@ -24,7 +25,8 @@ public sealed class RadioSwitchTests
     public async Task An_empty_list_does_not_request_access()
     {
         var source = new FakeSource();
-        Assert.Equal("Windows reports no Wi-Fi radio.", await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, true, source));
+        Assert.Equal("Windows reports no Wi-Fi radio.",
+            await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, true, source));
         Assert.Equal("get", Assert.Single(source.Calls));
     }
 
@@ -47,12 +49,14 @@ public sealed class RadioSwitchTests
     {
         var denied = new FakeRadio(RadioKind.Bluetooth, RadioState.Off) { Result = RadioAccessStatus.DeniedBySystem };
         var source = new FakeSource(denied);
-        Assert.Equal(RadioSwitch.AccessError(RadioAccessStatus.DeniedBySystem), await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, true, source));
+        Assert.Equal(RadioSwitch.AccessError(RadioAccessStatus.DeniedBySystem),
+            await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, true, source));
         Assert.Equal(1, denied.Sets);
         Assert.Equal(RadioState.Off, denied.State);
 
         var stuck = new FakeRadio(RadioKind.WiFi, RadioState.On) { Reach = false };
-        Assert.Equal(RadioSwitch.Unchanged, await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, false, new FakeSource(stuck)));
+        Assert.Equal(RadioSwitch.Unchanged,
+            await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, false, new FakeSource(stuck)));
         Assert.Equal(RadioState.On, stuck.State);
     }
 
@@ -99,15 +103,21 @@ public sealed class RadioSwitchTests
 
     private sealed class FakeSource : IRadioSource
     {
-        public FakeSource(params FakeRadio[] radios) => Radios = radios;
+        public FakeSource(params FakeRadio[] radios)
+        {
+            Radios = radios;
+        }
+
         public List<string> Calls { get; } = [];
         public FakeRadio[] Radios { get; }
         public RadioAccessStatus Access { get; init; } = RadioAccessStatus.Allowed;
+
         public Task<IReadOnlyList<IDeviceRadio>> GetRadiosAsync()
         {
             Calls.Add("get");
             return Task.FromResult<IReadOnlyList<IDeviceRadio>>(Radios);
         }
+
         public Task<RadioAccessStatus> RequestAccessAsync()
         {
             Calls.Add("access");

@@ -4,9 +4,13 @@ namespace Winshell.Tests;
 [Trait("Category", "Slow")]
 public sealed class ConfigPathTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-config-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _root =
+        Path.Combine(Path.GetTempPath(), "winshell-config-tests", Guid.NewGuid().ToString("N"));
 
-    public ConfigPathTests() => Directory.CreateDirectory(_root);
+    public ConfigPathTests()
+    {
+        Directory.CreateDirectory(_root);
+    }
 
     [Fact]
     public void The_default_root_is_roaming_app_data()
@@ -42,8 +46,10 @@ public sealed class ConfigPathTests : IDisposable
         Assert.Contains("missing", missing.Error, StringComparison.Ordinal);
     }
 
-    private static ChildProcess Run(string configDir, params string[] args) =>
-        WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configDir));
+    private static ChildProcess Run(string configDir, params string[] args)
+    {
+        return WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configDir));
+    }
 
     public void Dispose()
     {

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Winshell.Native;
 using Winshell.Notifications;
@@ -58,51 +59,60 @@ public static class Doctor
     {
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var search = context.ProjectRoot
-            ?? (context.ConfigFile is { } file && file.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                ? Path.GetDirectoryName(file) ?? context.ConfigRoot
-                : context.ConfigRoot);
+                     ?? (context.ConfigFile is { } file && file.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                         ? Path.GetDirectoryName(file) ?? context.ConfigRoot
+                         : context.ConfigRoot);
         var configFolder = search;
         // The CLI has picked the project already, or said why it could not, and that is what is checked. Searching a
         // folder by the config folder's rules would find its default or a lone subfolder instead.
         List<DoctorCheck> configuration;
         if (context.ConfigProblem is { } problem)
-        {
             configuration = [.. DoctorProject.Configuration(null, problem)];
-        }
         else if (context.ConfigFile is { } picked && picked.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-        {
             configuration = [.. DoctorProject.Picked(picked, context.ConfigRoot)];
-        }
         else
-        {
             configuration = [.. DoctorProject.Configuration(search)];
-        }
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
-        if (!blocked && configuration[0].Status == CheckStatus.Pass && DoctorProbe.PreferencesProblem(context.ConfigRoot) is { } preferences)
+        if (!blocked && configuration[0].Status == CheckStatus.Pass &&
+            DoctorProbe.PreferencesProblem(context.ConfigRoot) is { } preferences)
             configuration[0] = WithPreferences(configuration[0], preferences);
         DoctorCheck[] checks =
         [
-            Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer(), DoctorProbe.TransparencyEffectsOff(), ContrastTheme.IsOn())),
-            Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
+            Guard("windows", "Windows",
+                () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(),
+                    DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer(),
+                    DoctorProbe.TransparencyEffectsOff(), ContrastTheme.IsOn())),
+            Guard("dotnet", ".NET",
+                () => DotNet(Environment.Version, RuntimeInformation.FrameworkDescription,
+                    DoctorProbe.SelfContained(context.ExePath))),
             .. configuration,
             Guard("folders", "Folders", () => Folders(
-                [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
+                [
+                    ("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)),
+                    ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))
+                ],
                 context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
                 Environment.IsPrivilegedProcess)),
-            Guard("appBars", "App bars", () => DoctorScreens.AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
-            Guard("dpi", "DPI", () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath), DoctorProbe.Monitors())),
+            Guard("appBars", "App bars",
+                () => DoctorScreens.AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
+            Guard("dpi", "DPI",
+                () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath),
+                    DoctorProbe.Monitors())),
             Guard("signIn", "Sign-in", () => Packaging.IsPackaged
                 ? DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State)
-                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
+                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(),
+                    context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(context.Instances)),
-            Guard("crashes", "Crashes", () => DoctorCrashes.CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now, DoctorProbe.PeekCrash)),
+            Guard("crashes", "Crashes",
+                () => DoctorCrashes.CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now,
+                    DoctorProbe.PeekCrash))
         ];
         return WithoutUserFolders(checks,
         [
             (Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "%LOCALAPPDATA%"),
             (Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "%APPDATA%"),
-            (Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%"),
+            (Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%")
         ]);
     }
 
@@ -110,13 +120,22 @@ public static class Doctor
     /// Writes each of the user's folders as its variable in every message and fix, the longest folder first. A
     /// folder only matches whole: <c>C:\Users\ann</c> leaves <c>C:\Users\anna</c> alone.
     /// </summary>
-    internal static IReadOnlyList<DoctorCheck> WithoutUserFolders(IReadOnlyList<DoctorCheck> checks, IReadOnlyList<(string Path, string Name)> folders)
+    internal static IReadOnlyList<DoctorCheck> WithoutUserFolders(IReadOnlyList<DoctorCheck> checks,
+        IReadOnlyList<(string Path, string Name)> folders)
     {
         var patterns = folders.Where(f => f.Path.Length > 0).OrderByDescending(f => f.Path.Length)
-            .Select(f => (Pattern: new Regex(Regex.Escape(f.Path.TrimEnd('\\')) + @"(?![\w\-]|\.\w)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), f.Name))
+            .Select(f => (
+                Pattern: new Regex(Regex.Escape(f.Path.TrimEnd('\\')) + @"(?![\w\-]|\.\w)",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), f.Name))
             .ToList();
-        string Replace(string text) => patterns.Aggregate(text, (t, p) => p.Pattern.Replace(t, _ => p.Name));
-        return checks.Select(c => c with { Message = Replace(c.Message), Fix = c.Fix is null ? null : Replace(c.Fix) }).ToList();
+
+        string Replace(string text)
+        {
+            return patterns.Aggregate(text, (t, p) => p.Pattern.Replace(t, _ => p.Name));
+        }
+
+        return checks.Select(c => c with { Message = Replace(c.Message), Fix = c.Fix is null ? null : Replace(c.Fix) })
+            .ToList();
     }
 
     /// <summary>A check that could not run says so, rather than ending the whole run.</summary>
@@ -128,7 +147,8 @@ public static class Doctor
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            return new DoctorCheck(id, title, CheckStatus.Warn, $"Could not check: {e.GetType().Name}: {e.Message}", $"Report it at {BugReports}.");
+            return new DoctorCheck(id, title, CheckStatus.Warn, $"Could not check: {e.GetType().Name}: {e.Message}",
+                $"Report it at {BugReports}.");
         }
     }
 
@@ -140,7 +160,8 @@ public static class Doctor
     /// <param name="server">Whether this is Windows Server.</param>
     /// <param name="transparencyOff">Whether Windows transparency effects are off. The message says so. The result does not change.</param>
     /// <param name="contrastTheme">Whether a contrast theme is on. The message says so. The result does not change.</param>
-    internal static DoctorCheck Windows(int build, int revision, string? displayVersion, bool server = false, bool transparencyOff = false, bool contrastTheme = false)
+    internal static DoctorCheck Windows(int build, int revision, string? displayVersion, bool server = false,
+        bool transparencyOff = false, bool contrastTheme = false)
     {
         var name = server ? "Windows Server" : build >= 22000 ? "Windows 11" : "Windows 10";
         var version = string.IsNullOrEmpty(displayVersion) ? "" : " " + displayVersion;
@@ -152,10 +173,12 @@ public static class Doctor
         if (transparencyOff || contrastTheme)
             message += ".";
         if (build < 22000)
-            return new("windows", "Windows", CheckStatus.Fail, message, "Winshell needs Windows 11. Upgrade this PC to Windows 11.");
+            return new DoctorCheck("windows", "Windows", CheckStatus.Fail, message,
+                "Winshell needs Windows 11. Upgrade this PC to Windows 11.");
         if (build < 22621)
-            return new("windows", "Windows", CheckStatus.Warn, message, "Update Windows in Settings > Windows Update: Mica, Acrylic and other parts Winshell uses need Windows 11 version 22H2 or later.");
-        return new("windows", "Windows", CheckStatus.Pass, message);
+            return new DoctorCheck("windows", "Windows", CheckStatus.Warn, message,
+                "Update Windows in Settings > Windows Update: Mica, Acrylic and other parts Winshell uses need Windows 11 version 22H2 or later.");
+        return new DoctorCheck("windows", "Windows", CheckStatus.Pass, message);
     }
 
     // .NET
@@ -164,20 +187,24 @@ public static class Doctor
     {
         var how = selfContained ? "built into Winshell" : "installed on this PC";
         if (version.Major < 10)
-            return new("dotnet", ".NET", CheckStatus.Fail, $"{description}, {how}", "Winshell needs .NET 10. Install the .NET 10 runtime, or use a Winshell release, which brings its own.");
-        return new("dotnet", ".NET", CheckStatus.Pass, $"{description}, {how}");
+            return new DoctorCheck("dotnet", ".NET", CheckStatus.Fail, $"{description}, {how}",
+                "Winshell needs .NET 10. Install the .NET 10 runtime, or use a Winshell release, which brings its own.");
+        return new DoctorCheck("dotnet", ".NET", CheckStatus.Pass, $"{description}, {how}");
     }
 
     /// <summary>
     /// A <c>preferences.toml</c> that does not parse is a warning on a project check that passed. A project that is not
     /// there or failed already says what to fix, and with no project nothing reads the file.
     /// </summary>
-    private static DoctorCheck WithPreferences(DoctorCheck check, string problem) => check with
+    private static DoctorCheck WithPreferences(DoctorCheck check, string problem)
     {
-        Status = CheckStatus.Warn,
-        Message = check.Message.EndsWith('.') ? $"{check.Message} {problem}" : $"{check.Message}. {problem}",
-        Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses.",
-    };
+        return check with
+        {
+            Status = CheckStatus.Warn,
+            Message = check.Message.EndsWith('.') ? $"{check.Message} {problem}" : $"{check.Message}. {problem}",
+            Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses."
+        };
+    }
 
     /// <summary>
     /// Every check, for the shell running in this process. A configuration project's program is checked in its own
@@ -194,6 +221,7 @@ public static class Doctor
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+
         return Run(new DoctorContext(
             exe,
             configRoot,
@@ -209,7 +237,8 @@ public static class Doctor
     {
         try
         {
-            return global::Winshell.Instances.List(false).Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
+            return Winshell.Instances.List(false)
+                .Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -222,45 +251,68 @@ public static class Doctor
     /// <param name="folders">Each folder to write: its name in the message, its path, whether it is writable.</param>
     /// <param name="elevatedInstances">The ids of the running instances that run as administrator.</param>
     /// <param name="asAdministrator">Whether the doctor itself runs as administrator, and so says what an administrator can write.</param>
-    internal static DoctorCheck Folders(IReadOnlyList<(string Name, string Path, bool Writable)> folders, IReadOnlyList<string> elevatedInstances, bool asAdministrator = false)
+    internal static DoctorCheck Folders(IReadOnlyList<(string Name, string Path, bool Writable)> folders,
+        IReadOnlyList<string> elevatedInstances, bool asAdministrator = false)
     {
-        var who = asAdministrator ? " This ran as administrator, so it says what an administrator can write. Run it without Run as administrator to check your account." : "";
+        var who = asAdministrator
+            ? " This ran as administrator, so it says what an administrator can write. Run it without Run as administrator to check your account."
+            : "";
         var locked = folders.Where(f => !f.Writable).ToList();
         if (locked.Count > 0)
         {
             var list = string.Join("; ", locked.Select(f => $"{f.Name}, {f.Path}"));
-            return new("folders", "Folders", CheckStatus.Fail, $"Winshell cannot write {list}.{who}", "Give your account write access to it in the folder's Properties > Security, or move it with WINSHELL_CONFIG_DIR.");
+            return new DoctorCheck("folders", "Folders", CheckStatus.Fail, $"Winshell cannot write {list}.{who}",
+                "Give your account write access to it in the folder's Properties > Security, or move it with WINSHELL_CONFIG_DIR.");
         }
+
         if (elevatedInstances.Count > 0)
-            return new("folders", "Folders", CheckStatus.Warn, $"Instance {string.Join(", ", elevatedInstances)} runs as administrator. Apps it starts run as administrator too, and other apps cannot drag onto it.{who}", "Close it and start Winshell without Run as administrator.");
-        return new("folders", "Folders", CheckStatus.Pass, $"Winshell can write {string.Join(" and ", folders.Select(f => f.Name))}{(who.Length > 0 ? "." + who : "")}");
+            return new DoctorCheck("folders", "Folders", CheckStatus.Warn,
+                $"Instance {string.Join(", ", elevatedInstances)} runs as administrator. Apps it starts run as administrator too, and other apps cannot drag onto it.{who}",
+                "Close it and start Winshell without Run as administrator.");
+        return new DoctorCheck("folders", "Folders", CheckStatus.Pass,
+            $"Winshell can write {string.Join(" and ", folders.Select(f => f.Name))}{(who.Length > 0 ? "." + who : "")}");
     }
 
     // Notifications
 
-    internal static DoctorCheck Notifications(string access) => access switch
+    internal static DoctorCheck Notifications(string access)
     {
-        "Allowed" => new("notifications", "Notifications", CheckStatus.Pass, "Windows lets Winshell read notifications"),
-        "Denied" => new("notifications", "Notifications", CheckStatus.Warn, "Windows does not let Winshell read notifications, so a shell sees none.", "In Settings > Privacy & security > Notifications, let apps access your notifications."),
-        "Unspecified" => new("notifications", "Notifications", CheckStatus.Warn, "Winshell has not asked to read notifications yet, so a shell sees none.", "Have the shell call Shell.Notifications.RequestAccess from a button."),
-        _ => new("notifications", "Notifications", CheckStatus.Warn, "Windows does not let this Winshell read notifications: reading them needs an installed package with that permission. A shell sees none.", "Install Winshell from its package."),
-    };
+        return access switch
+        {
+            "Allowed" => new DoctorCheck("notifications", "Notifications", CheckStatus.Pass,
+                "Windows lets Winshell read notifications"),
+            "Denied" => new DoctorCheck("notifications", "Notifications", CheckStatus.Warn,
+                "Windows does not let Winshell read notifications, so a shell sees none.",
+                "In Settings > Privacy & security > Notifications, let apps access your notifications."),
+            "Unspecified" => new DoctorCheck("notifications", "Notifications", CheckStatus.Warn,
+                "Winshell has not asked to read notifications yet, so a shell sees none.",
+                "Have the shell call Shell.Notifications.RequestAccess from a button."),
+            _ => new DoctorCheck("notifications", "Notifications", CheckStatus.Warn,
+                "Windows does not let this Winshell read notifications: reading them needs an installed package with that permission. A shell sees none.",
+                "Install Winshell from its package.")
+        };
+    }
 
     // Running instances
 
     internal static DoctorCheck Instances(IReadOnlyList<DoctorInstance> instances)
     {
         if (instances.Count == 0)
-            return new("instances", "Running", CheckStatus.Pass, "No Winshell is running");
-        var list = string.Join("; ", instances.Select(i => string.Create(CultureInfo.InvariantCulture, $"{i.Id} (process {i.Pid}) runs {i.ConfigPath}, log {i.LogPath}")));
-        return new("instances", "Running", CheckStatus.Pass, list);
+            return new DoctorCheck("instances", "Running", CheckStatus.Pass, "No Winshell is running");
+        var list = string.Join("; ",
+            instances.Select(i => string.Create(CultureInfo.InvariantCulture,
+                $"{i.Id} (process {i.Pid}) runs {i.ConfigPath}, log {i.LogPath}")));
+        return new DoctorCheck("instances", "Running", CheckStatus.Pass, list);
     }
 
     /// <summary>The status as <c>winshell doctor</c> writes it: <c>pass</c>, <c>warn</c> or <c>fail</c>.</summary>
-    public static string StatusName(CheckStatus status) => status switch
+    public static string StatusName(CheckStatus status)
     {
-        CheckStatus.Pass => "pass",
-        CheckStatus.Warn => "warn",
-        _ => "fail",
-    };
+        return status switch
+        {
+            CheckStatus.Pass => "pass",
+            CheckStatus.Warn => "warn",
+            _ => "fail"
+        };
+    }
 }

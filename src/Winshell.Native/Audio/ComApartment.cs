@@ -17,7 +17,8 @@ internal static unsafe class ComApartment
         try
         {
             IStream* stream;
-            PInvoke.CoMarshalInterThreadInterfaceInStream(typeof(IUnknown).GUID, (IUnknown*)unknown, &stream).ThrowOnFailure();
+            PInvoke.CoMarshalInterThreadInterfaceInStream(typeof(IUnknown).GUID, (IUnknown*)unknown, &stream)
+                .ThrowOnFailure();
             return (nint)stream;
         }
         finally

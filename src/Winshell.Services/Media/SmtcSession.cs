@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Windows.Media;
 using Windows.Media.Control;
+using Windows.Storage.Streams;
 
 namespace Winshell.Media;
 
@@ -13,18 +15,21 @@ internal sealed class SmtcSession
     private DateTimeOffset _positionTime = TimeProvider.System.GetUtcNow();
     private double _position;
 
-    public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id, string appName)
+    public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id,
+        string appName)
         : this(loop, log, id, IdOf(session), appName, self => new SmtcSessionLink(loop, log, self, session))
     {
     }
 
     // The link is what talks to Windows for this session. A test gives it one that records commands.
-    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName, Func<SmtcSession, ISmtcLink> link)
+    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName,
+        Func<SmtcSession, ISmtcLink> link)
     {
         Id = id;
         AppId = appId;
         AppName = appName;
-        _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"), OnArtChanged);
+        _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"),
+            OnArtChanged);
         _link = link(this);
     }
 
@@ -134,10 +139,16 @@ internal sealed class SmtcSession
         return Length > 0 ? Math.Clamp(position, 0, Length) : Math.Max(0, position);
     }
 
-    public void Start() => _link.Start();
+    public void Start()
+    {
+        _link.Start();
+    }
 
     /// <summary>Follows the new object Windows returned for this same session, without dropping the read in progress.</summary>
-    public void Retarget(GlobalSystemMediaTransportControlsSession session) => _link.Retarget(session);
+    public void Retarget(GlobalSystemMediaTransportControlsSession session)
+    {
+        _link.Retarget(session);
+    }
 
     public void Release()
     {
@@ -148,21 +159,45 @@ internal sealed class SmtcSession
 
     // Commands. Each is asynchronous; Windows' events bring the result.
 
-    public void Play() => Send("play", s => s.TryPlayAsync());
+    public void Play()
+    {
+        Send("play", s => s.TryPlayAsync());
+    }
 
-    public void Pause() => Send("pause", s => s.TryPauseAsync());
+    public void Pause()
+    {
+        Send("pause", s => s.TryPauseAsync());
+    }
 
-    public void Stop() => Send("stop", s => s.TryStopAsync());
+    public void Stop()
+    {
+        Send("stop", s => s.TryStopAsync());
+    }
 
-    public void Next() => Send("next", s => s.TrySkipNextAsync());
+    public void Next()
+    {
+        Send("next", s => s.TrySkipNextAsync());
+    }
 
-    public void Previous() => Send("previous", s => s.TrySkipPreviousAsync());
+    public void Previous()
+    {
+        Send("previous", s => s.TrySkipPreviousAsync());
+    }
 
-    public void SetShuffle(bool shuffle) => Send("set shuffle", s => s.TryChangeShuffleActiveAsync(shuffle));
+    public void SetShuffle(bool shuffle)
+    {
+        Send("set shuffle", s => s.TryChangeShuffleActiveAsync(shuffle));
+    }
 
-    public void SetLoopState(int state) => Send("set loopState", s => s.TryChangeAutoRepeatModeAsync((MediaPlaybackAutoRepeatMode)state));
+    public void SetLoopState(int state)
+    {
+        Send("set loopState", s => s.TryChangeAutoRepeatModeAsync((MediaPlaybackAutoRepeatMode)state));
+    }
 
-    public void SetRate(double rate) => Send("set rate", s => s.TryChangePlaybackRateAsync(rate));
+    public void SetRate(double rate)
+    {
+        Send("set rate", s => s.TryChangePlaybackRateAsync(rate));
+    }
 
     public void SetPosition(double seconds)
     {
@@ -174,15 +209,16 @@ internal sealed class SmtcSession
         Seeked?.Invoke();
     }
 
-    private void Send(string what, Func<GlobalSystemMediaTransportControlsSession, global::Windows.Foundation.IAsyncOperation<bool>> command)
+    private void Send(string what, Func<GlobalSystemMediaTransportControlsSession, IAsyncOperation<bool>> command)
     {
         _link.Send(what, command);
     }
 
     // Updates from Windows
 
-    internal void ApplyTrack(string title, string artist, string album, string albumArtist, int trackNumber, IReadOnlyList<string>? genres,
-        global::Windows.Storage.Streams.IRandomAccessStreamReference? thumbnail)
+    internal void ApplyTrack(string title, string artist, string album, string albumArtist, int trackNumber,
+        IReadOnlyList<string>? genres,
+        IRandomAccessStreamReference? thumbnail)
     {
         if (title == Title && artist == Artist && album == Album && albumArtist == AlbumArtist
             && TrackNumber == trackNumber && SameGenres(genres))
@@ -192,6 +228,7 @@ internal sealed class SmtcSession
                 _art.Load(thumbnail);
             return;
         }
+
         var trackChanged = title != Title || artist != Artist || album != Album;
         var changed = new List<string>();
         if (trackChanged)
@@ -199,6 +236,7 @@ internal sealed class SmtcSession
             UniqueId++;
             changed.Add("uniqueId");
         }
+
         Set(title, Title, v => Title = v, "trackTitle", changed);
         Set(artist, Artist, v => Artist = v, "trackArtist", changed);
         Set(album, Album, v => Album = v, "trackAlbum", changed);
@@ -212,7 +250,10 @@ internal sealed class SmtcSession
         _art.Load(thumbnail);
     }
 
-    private void OnArtChanged() => Changed?.Invoke(["trackArtUrl", "metadata"], false);
+    private void OnArtChanged()
+    {
+        Changed?.Invoke(["trackArtUrl", "metadata"], false);
+    }
 
     internal void ApplyPlayback(SmtcPlayback info)
     {
@@ -223,7 +264,7 @@ internal sealed class SmtcSession
             GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused => MediaPlaybackState.Paused,
             // "Changing" is a moment between tracks: keep the state it had, so it does not flicker.
             GlobalSystemMediaTransportControlsSessionPlaybackStatus.Changing => PlaybackState,
-            _ => MediaPlaybackState.Stopped,
+            _ => MediaPlaybackState.Stopped
         };
         var seeked = false;
         if (state != PlaybackState || info.Rate != Rate)
@@ -233,6 +274,7 @@ internal sealed class SmtcSession
             _positionTime = TimeProvider.System.GetUtcNow();
             seeked = true;
         }
+
         Set(state, PlaybackState, v => PlaybackState = v, "playbackState", changed);
         if (changed.Contains("playbackState"))
             changed.Add("isPlaying");
@@ -258,7 +300,8 @@ internal sealed class SmtcSession
             Seeked?.Invoke();
     }
 
-    internal void ApplyTimeline(TimeSpan start, TimeSpan end, TimeSpan reported, DateTimeOffset updated, DateTimeOffset received)
+    internal void ApplyTimeline(TimeSpan start, TimeSpan end, TimeSpan reported, DateTimeOffset updated,
+        DateTimeOffset received)
     {
         var length = Math.Max(0, (end - start).TotalSeconds);
         var supported = length > 0 || reported > TimeSpan.Zero;
@@ -274,7 +317,9 @@ internal sealed class SmtcSession
         if (changed.Contains("length"))
             changed.Add("lengthSupported");
         // The app says when it took the position; trust that unless the time is clearly wrong.
-        var time = updated.Year > 2000 && updated <= received && received - updated < TimeSpan.FromHours(1) ? updated : received;
+        var time = updated.Year > 2000 && updated <= received && received - updated < TimeSpan.FromHours(1)
+            ? updated
+            : received;
         _position = position;
         _positionTime = time;
         if (changed.Count > 0)
@@ -288,10 +333,8 @@ internal sealed class SmtcSession
         if (count != Genres.Count)
             return false;
         for (var i = 0; i < count; i++)
-        {
             if (genres![i] != Genres[i])
                 return false;
-        }
         return true;
     }
 

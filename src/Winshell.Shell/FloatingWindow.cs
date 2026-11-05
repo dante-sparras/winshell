@@ -85,6 +85,7 @@ public sealed class FloatingWindow : ShellWindow
                 Changed(nameof(Fullscreen));
                 _stateRequested = true;
             }
+
             OnPlacementChanged();
         }
     }
@@ -120,19 +121,22 @@ public sealed class FloatingWindow : ShellWindow
         get => _owner;
         set
         {
-            if (ReferenceEquals(_owner, value) || ReferenceEquals(value, this) || (value is not null && WouldOwn(value)))
+            if (ReferenceEquals(_owner, value) || ReferenceEquals(value, this) ||
+                (value is not null && WouldOwn(value)))
                 return;
             if (_owner is { } previous)
             {
                 previous.HostCreated -= OnPlacementChanged;
                 previous.Disposing -= OnOwnerDisposing;
             }
+
             _owner = value;
             if (value is not null)
             {
                 value.HostCreated += OnPlacementChanged;
                 value.Disposing += OnOwnerDisposing;
             }
+
             Changed();
             OnPlacementChanged();
         }
@@ -151,13 +155,14 @@ public sealed class FloatingWindow : ShellWindow
 
     private bool WouldOwn(FloatingWindow owner)
     {
-        FloatingWindow? hop = owner;
+        var hop = owner;
         for (var n = 0; hop is not null && n < 16; n++)
         {
             if (ReferenceEquals(hop, this))
                 return true;
             hop = hop._owner;
         }
+
         return false;
     }
 
@@ -184,5 +189,8 @@ public sealed class FloatingWindow : ShellWindow
         Set(ref _minimized, minimized, nameof(Minimized));
     }
 
-    private protected override void OnFullscreenChanged(bool fullscreen) => Set(ref _fullscreen, fullscreen, nameof(Fullscreen));
+    private protected override void OnFullscreenChanged(bool fullscreen)
+    {
+        Set(ref _fullscreen, fullscreen, nameof(Fullscreen));
+    }
 }

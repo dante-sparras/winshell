@@ -21,7 +21,10 @@ internal static class PipeTrust
     /// True when both levels are known and <paramref name="actor"/> is not below <paramref name="floor"/>. Untrusted, 0,
     /// passes on neither side.
     /// </summary>
-    internal static bool AtLeast(uint? actor, uint? floor) => actor >= floor && floor > 0;
+    internal static bool AtLeast(uint? actor, uint? floor)
+    {
+        return actor >= floor && floor > 0;
+    }
 
     /// <summary>
     /// Creates one server instance. The medium label is part of the first instance's descriptor, which later
@@ -31,9 +34,10 @@ internal static class PipeTrust
     internal static SafePipeHandle OpenServer(string pipe, bool first)
     {
         var sid = WindowsIdentity.GetCurrent().User?.Value
-            ?? throw new IOException("The control pipe could not be labeled.");
+                  ?? throw new IOException("The control pipe could not be labeled.");
         var path = @"\\.\pipe\" + pipe;
-        var labeled = NamedPipeServer.CreateServer(path, first, $"O:{sid}D:(A;;GA;;;{sid}){MediumLabel}", out var error);
+        var labeled =
+            NamedPipeServer.CreateServer(path, first, $"O:{sid}D:(A;;GA;;;{sid}){MediumLabel}", out var error);
         if (labeled is not null && IsMedium(labeled))
             return labeled;
         labeled?.Dispose();
@@ -97,10 +101,12 @@ internal static class PipeTrust
     {
         if (NamedPipeServer.ClientProcessId(pipe, out var error) is not { } pid)
             return $"The shell could not identify the command's process ({error}).";
-        if (ProcessIntegrity.TryRead(pid) is not { } client || ProcessIntegrity.TryRead((uint)Environment.ProcessId) is not { } floor)
+        if (ProcessIntegrity.TryRead(pid) is not { } client ||
+            ProcessIntegrity.TryRead((uint)Environment.ProcessId) is not { } floor)
             return $"The shell could not read the integrity level of process {pid}.";
         if (!AtLeast(client, floor))
-            return $"The shell runs at a higher integrity level (0x{floor:X}) than process {pid} (0x{client:X}). Run the command elevated.";
+            return
+                $"The shell runs at a higher integrity level (0x{floor:X}) than process {pid} (0x{client:X}). Run the command elevated.";
         return null;
     }
 }

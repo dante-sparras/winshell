@@ -6,5 +6,8 @@ namespace Winshell.Native;
 internal static class ProcessSession
 {
     /// <summary>The session id, or null when Windows could not say.</summary>
-    internal static uint? Of(uint processId) => PInvoke.ProcessIdToSessionId(processId, out var session) ? session : null;
+    internal static uint? Of(uint processId)
+    {
+        return PInvoke.ProcessIdToSessionId(processId, out var session) ? session : null;
+    }
 }

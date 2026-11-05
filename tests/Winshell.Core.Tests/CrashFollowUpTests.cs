@@ -1,14 +1,20 @@
-
 namespace Winshell.Core.Tests;
 
 /// <summary>The next start shows a fatal crash report once, and skips one older than the last clean exit.</summary>
 public sealed class CrashFollowUpTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-crash-follow-up", Guid.NewGuid().ToString("N"));
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "winshell-crash-follow-up", Guid.NewGuid().ToString("N"));
 
-    public CrashFollowUpTests() => Directory.CreateDirectory(_dir);
+    public CrashFollowUpTests()
+    {
+        Directory.CreateDirectory(_dir);
+    }
 
-    public void Dispose() => Directory.Delete(_dir, true);
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
 
     [Fact]
     public void A_fatal_report_is_shown_once_and_a_later_one_is_shown_again()
@@ -20,17 +26,17 @@ public sealed class CrashFollowUpTests : IDisposable
         var fatal = Path.Combine(folder, "crash-fatal.txt");
         File.WriteAllText(stray, "notes\n");
         File.WriteAllText(draw, """
-            Winshell crash report
-            Winshell closed: no
-            Exception
-            System.Exception: draw
-            """);
+                                Winshell crash report
+                                Winshell closed: no
+                                Exception
+                                System.Exception: draw
+                                """);
         File.WriteAllText(fatal, """
-            Winshell crash report
-            Winshell closed: yes
-            Exception
-            System.InvalidOperationException: boom
-            """);
+                                 Winshell crash report
+                                 Winshell closed: yes
+                                 Exception
+                                 System.InvalidOperationException: boom
+                                 """);
         var now = DateTime.UtcNow;
         File.SetLastWriteTimeUtc(draw, now.AddMinutes(-10));
         File.SetLastWriteTimeUtc(fatal, now);
@@ -49,11 +55,11 @@ public sealed class CrashFollowUpTests : IDisposable
 
         var again = Path.Combine(folder, "crash-again.txt");
         File.WriteAllText(again, """
-            Winshell crash report
-            Winshell closed: yes
-            Exception
-            System.Exception: again
-            """);
+                                 Winshell crash report
+                                 Winshell closed: yes
+                                 Exception
+                                 System.Exception: again
+                                 """);
         File.SetLastWriteTimeUtc(again, now.AddMinutes(10));
 
         Assert.Equal(again, CrashFollowUp.Find(folder, state)?.Path);
@@ -67,11 +73,11 @@ public sealed class CrashFollowUpTests : IDisposable
         Directory.CreateDirectory(folder);
         var fatal = Path.Combine(folder, "crash-old.txt");
         File.WriteAllText(fatal, """
-            Winshell crash report
-            Winshell closed: yes
-            Exception
-            System.Exception: old
-            """);
+                                 Winshell crash report
+                                 Winshell closed: yes
+                                 Exception
+                                 System.Exception: old
+                                 """);
         var written = File.GetLastWriteTimeUtc(fatal);
         var state = Path.Combine(_dir, "old-state.toml");
         CrashFollowUp.MarkClean(state, new DateTimeOffset(written.AddMinutes(1), TimeSpan.Zero));

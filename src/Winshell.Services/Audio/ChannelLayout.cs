@@ -13,18 +13,17 @@ internal static class ChannelLayout
             var mask = BitConverter.ToUInt32(format, 20);
             var channels = new List<AudioChannel>();
             for (var bit = 0; bit < SpeakerBits; bit++)
-            {
                 if ((mask & (1u << bit)) != 0)
                     channels.Add(AudioChannel.FrontLeft + bit);
-            }
             if (channels.Count == count)
                 return channels.ToArray();
         }
+
         return count switch
         {
             1 => [AudioChannel.Mono],
             2 => [AudioChannel.FrontLeft, AudioChannel.FrontRight],
-            _ => new AudioChannel[count],
+            _ => new AudioChannel[count]
         };
     }
 }

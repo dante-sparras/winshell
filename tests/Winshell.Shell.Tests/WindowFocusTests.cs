@@ -22,11 +22,20 @@ public class WindowFocusTests
             Effects.Add(allow ? "activation allowed" : "activation refused");
         }
 
-        public void Show(bool activate) => Effects.Add(activate ? "show activating" : "show without activating");
+        public void Show(bool activate)
+        {
+            Effects.Add(activate ? "show activating" : "show without activating");
+        }
 
-        public void TakeForeground() => Effects.Add("foreground");
+        public void TakeForeground()
+        {
+            Effects.Add("foreground");
+        }
 
-        public void TakeKeyboard() => Effects.Add("keyboard");
+        public void TakeKeyboard()
+        {
+            Effects.Add("keyboard");
+        }
 
         public void GrabOutsideClicks(bool on)
         {
@@ -77,7 +86,9 @@ public class WindowFocusTests
         focus.TakeKeyboard();
 
         // Even a focusable panel is shown without taking activation; it takes the keyboard when asked.
-        Assert.Equal(takes ? [activation, "show without activating", "keyboard"] : [activation, "show without activating"], window.Drain());
+        Assert.Equal(
+            takes ? [activation, "show without activating", "keyboard"] : [activation, "show without activating"],
+            window.Drain());
         Assert.Equal(takes, focus.ActivatesOnClick);
         Assert.False(focus.DismissesOnEscape);
     }
@@ -100,7 +111,7 @@ public class WindowFocusTests
     {
         var (focus, window) = Of(WindowKind.Popup);
 
-        focus.SetPopup(grabFocus: false);
+        focus.SetPopup(false);
         focus.Show();
         focus.TakeKeyboard();
 
@@ -114,11 +125,12 @@ public class WindowFocusTests
     {
         var (focus, window) = Of(WindowKind.Popup);
 
-        focus.SetPopup(grabFocus: true);
+        focus.SetPopup(true);
         focus.Show();
         focus.TakeKeyboard();
 
-        Assert.Equal(["activation allowed", "show activating", "foreground", "grab clicks", "keyboard"], window.Drain());
+        Assert.Equal(["activation allowed", "show activating", "foreground", "grab clicks", "keyboard"],
+            window.Drain());
         Assert.True(focus.ActivatesOnClick);
         Assert.True(focus.DismissesOnEscape);
     }
@@ -127,7 +139,7 @@ public class WindowFocusTests
     public void A_popup_that_grabs_focus_stops_grabbing_clicks_when_it_hides_and_grabs_again_when_shown()
     {
         var (focus, window) = Of(WindowKind.Popup);
-        focus.SetPopup(grabFocus: true);
+        focus.SetPopup(true);
         focus.Show();
         window.Drain();
 
@@ -143,12 +155,12 @@ public class WindowFocusTests
     {
         var (focus, window) = Of(WindowKind.Popup);
 
-        focus.SetPopup(grabFocus: true);
+        focus.SetPopup(true);
         Assert.Equal(["activation allowed"], window.Drain());
 
         focus.Show();
         window.Drain();
-        focus.SetPopup(grabFocus: true);
+        focus.SetPopup(true);
         Assert.Empty(window.Drain());
     }
 
@@ -156,11 +168,11 @@ public class WindowFocusTests
     public void A_shown_popup_that_stops_grabbing_focus_releases_clicks_and_refuses_the_keyboard()
     {
         var (focus, window) = Of(WindowKind.Popup);
-        focus.SetPopup(grabFocus: true);
+        focus.SetPopup(true);
         focus.Show();
         window.Drain();
 
-        focus.SetPopup(grabFocus: false);
+        focus.SetPopup(false);
         focus.TakeKeyboard();
 
         Assert.Equal(["activation refused", "release clicks"], window.Drain());

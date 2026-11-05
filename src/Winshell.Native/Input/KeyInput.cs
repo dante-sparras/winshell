@@ -23,7 +23,10 @@ internal static unsafe class KeyInput
             inputs[i].Anonymous.ki.dwFlags = keys[i].Up ? KEYBD_EVENT_FLAGS.KEYEVENTF_KEYUP : 0;
             inputs[i].Anonymous.ki.dwExtraInfo = (nuint)keys[i].ExtraInfo;
         }
+
         fixed (INPUT* first = inputs)
+        {
             return PInvoke.SendInput((uint)inputs.Length, first, sizeof(INPUT));
+        }
     }
 }

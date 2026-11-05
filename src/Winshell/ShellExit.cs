@@ -16,7 +16,7 @@ internal enum ExitIntent
     Reload,
 
     /// <summary>Supervision ends, even after a crash on the way out. It outranks a reload, whichever was asked first.</summary>
-    Stop,
+    Stop
 }
 
 /// <summary>
@@ -48,7 +48,7 @@ internal static class ShellExit
         IfAccepted,
 
         /// <summary>Whatever it answered.</summary>
-        Always,
+        Always
     }
 
     /// <summary>Whether the instance has exited, and its answer to the quit. A shell that did not answer in time has none.</summary>
@@ -57,11 +57,15 @@ internal static class ShellExit
     /// <summary>The supervisor's side of one shell, from its start until the supervisor has read its intent.</summary>
     internal sealed class Supervision(int pid) : IDisposable
     {
-        private readonly EventWaitHandle _stop = new(false, EventResetMode.ManualReset, EventName(ExitIntent.Stop, pid));
-        private readonly EventWaitHandle _reload = new(false, EventResetMode.ManualReset, EventName(ExitIntent.Reload, pid));
+        private readonly EventWaitHandle
+            _stop = new(false, EventResetMode.ManualReset, EventName(ExitIntent.Stop, pid));
+
+        private readonly EventWaitHandle _reload = new(false, EventResetMode.ManualReset,
+            EventName(ExitIntent.Reload, pid));
 
         /// <summary>What was asked of the shell and not taken back.</summary>
-        public ExitIntent Intent => _stop.WaitOne(0) ? ExitIntent.Stop : _reload.WaitOne(0) ? ExitIntent.Reload : ExitIntent.None;
+        public ExitIntent Intent =>
+            _stop.WaitOne(0) ? ExitIntent.Stop : _reload.WaitOne(0) ? ExitIntent.Reload : ExitIntent.None;
 
         public void Dispose()
         {
@@ -86,17 +90,18 @@ internal static class ShellExit
     public static async Task<Outcome> QuitAsync(InstanceInfo info, ExitIntent intent, Patience patience, Ending ending)
     {
         using var process = Open(info);
-        return process is null ? new(true, default) : await QuitAsync(process, info, intent, patience, ending);
+        return process is null ? new Outcome(true, default) : await QuitAsync(process, info, intent, patience, ending);
     }
 
     /// <summary>
     /// <see cref="QuitAsync(InstanceInfo, ExitIntent, Patience, Ending)"/> for a shell this process started. Without
     /// <paramref name="info"/>, which a shell that has not started or is on its way out has none of, it is not asked.
     /// </summary>
-    public static async Task<Outcome> QuitAsync(Process process, InstanceInfo? info, ExitIntent intent, Patience patience, Ending ending)
+    public static async Task<Outcome> QuitAsync(Process process, InstanceInfo? info, ExitIntent intent,
+        Patience patience, Ending ending)
     {
         if (intent != ExitIntent.None)
-            Tell(process.Id, intent, asked: true);
+            Tell(process.Id, intent, true);
         var exited = false;
         try
         {
@@ -116,16 +121,18 @@ internal static class ShellExit
                     late = true;
                 }
             }
+
             // The quit is only posted, and a shell can exit before its answer is written.
-            var end = ending == Ending.Always || (ending == Ending.IfAccepted && (late || answer.Response is { Ok: true }));
+            var end = ending == Ending.Always ||
+                      (ending == Ending.IfAccepted && (late || answer.Response is { Ok: true }));
             exited = await WaitAsync(process, patience.Wait) || (end && await EndAsync(process, info));
-            return new(exited, answer);
+            return new Outcome(exited, answer);
         }
         finally
         {
             // Its supervisor reads the intent when the shell exits, so only a shell that still runs has it taken back.
             if (intent != ExitIntent.None && !exited && !process.HasExited)
-                Tell(process.Id, intent, asked: false);
+                Tell(process.Id, intent, false);
         }
     }
 
@@ -143,6 +150,7 @@ internal static class ShellExit
         {
             // It has exited.
         }
+
         process?.Dispose();
         return null;
     }
@@ -181,6 +189,7 @@ internal static class ShellExit
         {
             // It is exiting already, or this user cannot end it.
         }
+
         return await WaitAsync(process, TimeSpan.FromSeconds(1));
     }
 
@@ -197,6 +206,8 @@ internal static class ShellExit
         }
     }
 
-    private static string EventName(ExitIntent intent, int pid) =>
-        intent == ExitIntent.Stop ? $@"Local\winshell-stop-asked-{pid}" : $@"Local\winshell-reload-asked-{pid}";
+    private static string EventName(ExitIntent intent, int pid)
+    {
+        return intent == ExitIntent.Stop ? $@"Local\winshell-stop-asked-{pid}" : $@"Local\winshell-reload-asked-{pid}";
+    }
 }

@@ -7,9 +7,14 @@ namespace Winshell.Native;
 internal static class TrayApp
 {
     /// <summary>Posts a message to the app's window without waiting for it to be handled.</summary>
-    internal static bool Notify(nint window, uint message, nint wParam, nint lParam) =>
-        PInvoke.SendNotifyMessage((HWND)window, message, (WPARAM)(nuint)wParam, lParam);
+    internal static bool Notify(nint window, uint message, nint wParam, nint lParam)
+    {
+        return PInvoke.SendNotifyMessage((HWND)window, message, (WPARAM)(nuint)wParam, lParam);
+    }
 
     /// <summary>Lets the process take the foreground, if this process may pass that right on.</summary>
-    internal static bool AllowForeground(uint processId) => PInvoke.AllowSetForegroundWindow(processId);
+    internal static bool AllowForeground(uint processId)
+    {
+        return PInvoke.AllowSetForegroundWindow(processId);
+    }
 }

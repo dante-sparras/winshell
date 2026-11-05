@@ -36,7 +36,8 @@ internal static class TomlSyntax
     /// <c>path: message</c> for a byte limit or for Tomlyn's depth limit, when it does not. A file past 1 MiB does not
     /// load. Nesting past 64 levels makes Tomlyn throw, which is reported here and is not applied.
     /// </summary>
-    public static bool TryLoad(string where, string text, out DocumentSyntax document, out TomlTable table, out string error)
+    public static bool TryLoad(string where, string text, out DocumentSyntax document, out TomlTable table,
+        out string error)
     {
         document = new DocumentSyntax();
         table = [];
@@ -45,6 +46,7 @@ internal static class TomlSyntax
             error = $"{where}: {why}";
             return false;
         }
+
         try
         {
             document = SyntaxParser.Parse(text);
@@ -54,11 +56,13 @@ internal static class TomlSyntax
             error = $"{where}: {e.Message}";
             return false;
         }
+
         if (document.HasErrors)
         {
             error = document.Diagnostics.Count > 0 ? Locate(where, document.Diagnostics[0]) : $"{where}: invalid TOML";
             return false;
         }
+
         try
         {
             table = TomlSerializer.Deserialize<TomlTable>(text) ?? [];
@@ -106,6 +110,7 @@ internal static class TomlSyntax
             array.OpenBracket.TrailingTrivia = left.Exists(t => t.Kind == TokenKind.Comment) ? left : null;
             return;
         }
+
         var kept = items.GetChild(items.ChildrenCount - 1)!;
         var comma = kept.Comma!;
         if (last.Comma is null)
@@ -115,7 +120,9 @@ internal static class TomlSyntax
             value.TrailingTrivia = Ended([.. value.TrailingTrivia ?? [], .. comma.TrailingTrivia ?? []], end);
         }
         else
+        {
             comma.TrailingTrivia = Ended(comma.TrailingTrivia, end);
+        }
     }
 
     /// <summary>
@@ -135,6 +142,7 @@ internal static class TomlSyntax
             items.Add(item);
             return;
         }
+
         var last = items.GetChild(items.ChildrenCount - 1)!;
         var before = items.ChildrenCount > 1
             ? items.GetChild(items.ChildrenCount - 2)!.Comma?.TrailingTrivia
@@ -153,19 +161,25 @@ internal static class TomlSyntax
             between = before is { Count: > 0 } ? [.. before] : [new SyntaxTrivia(TokenKind.Whitespaces, " ")];
             after = end;
         }
+
         if (last.Comma is null)
         {
             LastToken(last.Value!).TrailingTrivia = null;
             LastToken(value).TrailingTrivia = after;
         }
         else
+        {
             item.Comma = Comma(after);
+        }
+
         last.Comma = Comma(between);
         items.Add(item);
     }
 
-    private static List<SyntaxTrivia>? After(ArrayItemSyntax item) =>
-        item.Comma is { } comma ? comma.TrailingTrivia : LastToken(item.Value!).TrailingTrivia;
+    private static List<SyntaxTrivia>? After(ArrayItemSyntax item)
+    {
+        return item.Comma is { } comma ? comma.TrailingTrivia : LastToken(item.Value!).TrailingTrivia;
+    }
 
     /// <summary>
     /// What follows an item that had <paramref name="own"/> after it once the item after it, which had
@@ -184,9 +198,13 @@ internal static class TomlSyntax
         return lines.Exists(t => t.Kind == TokenKind.Comment) ? lines : end;
     }
 
-    private static int LastBreak(List<SyntaxTrivia> trivia) => trivia.FindLastIndex(t => t.Kind == TokenKind.NewLine);
+    private static int LastBreak(List<SyntaxTrivia> trivia)
+    {
+        return trivia.FindLastIndex(t => t.Kind == TokenKind.NewLine);
+    }
 
-    public static void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline, IEnumerable<string>? commentLines = null)
+    public static void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline,
+        IEnumerable<string>? commentLines = null)
     {
         var fresh = ParseAssignment(keyText, tomlValue, newline);
         var leading = new List<SyntaxTrivia>();
@@ -195,13 +213,12 @@ internal static class TomlSyntax
         else
             leading.Add(new SyntaxTrivia(TokenKind.NewLine, newline));
         if (commentLines is not null)
-        {
             foreach (var line in commentLines)
             {
                 leading.Add(new SyntaxTrivia(TokenKind.Comment, line));
                 leading.Add(new SyntaxTrivia(TokenKind.NewLine, newline));
             }
-        }
+
         FirstToken(fresh.Key!).LeadingTrivia = leading;
         Append(document, fresh, newline);
     }
@@ -214,18 +231,22 @@ internal static class TomlSyntax
             document.TrailingTrivia = null;
             return trailing;
         }
+
         if (document.Tables.ChildrenCount > 0 && document.Tables.GetChild(0) is TableSyntaxBase table
-            && table.LeadingTrivia is { Count: > 0 } leading)
+                                              && table.LeadingTrivia is { Count: > 0 } leading)
         {
             table.LeadingTrivia = null;
             return leading;
         }
+
         return [];
     }
 
     private static void Append(DocumentSyntax document, KeyValueSyntax fresh, string newline)
     {
-        List<SyntaxTrivia>? after = document.Tables.ChildrenCount > 0 ? [new SyntaxTrivia(TokenKind.NewLine, newline)] : null;
+        List<SyntaxTrivia>? after = document.Tables.ChildrenCount > 0
+            ? [new SyntaxTrivia(TokenKind.NewLine, newline)]
+            : null;
         var count = document.KeyValues.ChildrenCount;
         if (count > 0)
         {
@@ -234,6 +255,7 @@ internal static class TomlSyntax
             after = last.EndOfLineToken.TrailingTrivia;
             last.EndOfLineToken.TrailingTrivia = null;
         }
+
         document.KeyValues.Add(fresh);
         fresh.EndOfLineToken ??= new SyntaxToken(TokenKind.NewLine, newline);
         fresh.EndOfLineToken.TrailingTrivia = after;
@@ -252,7 +274,11 @@ internal static class TomlSyntax
     public static List<SyntaxTrivia>? Remove(SyntaxList<KeyValueSyntax> list, KeyValueSyntax kv, string newline)
     {
         var above = kv.LeadingTrivia;
-        List<SyntaxTrivia> kept = [.. above is not null && above.Exists(t => t.Kind == TokenKind.Comment) ? above : [], .. kv.EndOfLineToken?.TrailingTrivia ?? []];
+        List<SyntaxTrivia> kept =
+        [
+            .. above is not null && above.Exists(t => t.Kind == TokenKind.Comment) ? above : [],
+            .. kv.EndOfLineToken?.TrailingTrivia ?? []
+        ];
         var index = 0;
         while (list.GetChild(index) != kv)
             index++;
@@ -266,12 +292,14 @@ internal static class TomlSyntax
             previous.EndOfLineToken.TrailingTrivia = [.. previous.EndOfLineToken.TrailingTrivia ?? [], .. kept];
             return null;
         }
+
         if (index < list.ChildrenCount)
         {
             var next = list.GetChild(index)!;
             next.LeadingTrivia = [.. kept, .. next.LeadingTrivia ?? []];
             return null;
         }
+
         return kept;
     }
 
@@ -286,7 +314,9 @@ internal static class TomlSyntax
             first.LeadingTrivia = [.. kept, .. first.LeadingTrivia ?? []];
         }
         else
+        {
             document.TrailingTrivia = [.. kept, .. document.TrailingTrivia ?? []];
+        }
     }
 
     /// <summary>
@@ -324,7 +354,9 @@ internal static class TomlSyntax
                 last.EndOfLineToken.TrailingTrivia = [.. last.EndOfLineToken.TrailingTrivia ?? [], .. kept];
         }
         else
+        {
             document.TrailingTrivia = [.. kept, .. document.TrailingTrivia ?? []];
+        }
     }
 
     /// <summary>The trivia after the line above the table at <paramref name="index"/>, or null when nothing is above it.</summary>
@@ -343,7 +375,8 @@ internal static class TomlSyntax
         if (trivia is null)
             return true;
         var kinds = trivia.Where(t => t.Kind != TokenKind.Whitespaces).Select(t => t.Kind).ToList();
-        return kinds.Count > 0 && kinds[^1] == TokenKind.NewLine && (kinds.Count == 1 || kinds[^2] == TokenKind.NewLine);
+        return kinds.Count > 0 && kinds[^1] == TokenKind.NewLine &&
+               (kinds.Count == 1 || kinds[^2] == TokenKind.NewLine);
     }
 
     public static void InsertAfter(DocumentSyntax document, TableSyntaxBase after, TableSyntaxBase table)
@@ -351,12 +384,10 @@ internal static class TomlSyntax
         var following = new List<TableSyntaxBase>();
         var seen = false;
         foreach (var current in document.Tables)
-        {
             if (seen)
                 following.Add(current);
             else if (ReferenceEquals(current, after))
                 seen = true;
-        }
         foreach (var current in following)
             document.Tables.RemoveChild(current);
         document.Tables.Add(table);
@@ -368,69 +399,70 @@ internal static class TomlSyntax
     {
         var owned = new Owned();
         foreach (var kv in document.KeyValues)
-        {
             if (RootName(kv.Key) == name)
                 owned.KeyValues.Add(kv);
-        }
         foreach (var table in document.Tables)
-        {
             if (RootName(table.Name) == name)
                 owned.Tables.Add(table);
-        }
         return owned;
     }
 
     public static KeyValueSyntax? FindItem(SyntaxList<KeyValueSyntax> items, string name)
     {
         foreach (var kv in items)
-        {
             if (Names(kv.Key, name))
                 return kv;
-        }
         return null;
     }
 
-    public static bool Names(KeySyntax? key, string name) => IsSimple(key) && RootName(key) == name;
+    public static bool Names(KeySyntax? key, string name)
+    {
+        return IsSimple(key) && RootName(key) == name;
+    }
 
-    public static bool IsSimple(KeySyntax? key) => key is not null && key.DotKeys.ChildrenCount == 0;
+    public static bool IsSimple(KeySyntax? key)
+    {
+        return key is not null && key.DotKeys.ChildrenCount == 0;
+    }
 
-    private static string? RootName(KeySyntax? key) => key is null ? null : SegmentText(key.Key);
+    private static string? RootName(KeySyntax? key)
+    {
+        return key is null ? null : SegmentText(key.Key);
+    }
 
     public static IEnumerable<string> Segments(KeySyntax key)
     {
         if (SegmentText(key.Key) is { } first)
             yield return first;
         foreach (var dot in key.DotKeys)
-        {
             if (SegmentText(dot.Key) is { } part)
                 yield return part;
-        }
     }
 
-    private static string? SegmentText(BareKeyOrStringValueSyntax? key) => key switch
+    private static string? SegmentText(BareKeyOrStringValueSyntax? key)
     {
-        BareKeySyntax bare => bare.Key?.Text,
-        StringValueSyntax quoted => quoted.Value,
-        _ => null,
-    };
+        return key switch
+        {
+            BareKeySyntax bare => bare.Key?.Text,
+            StringValueSyntax quoted => quoted.Value,
+            _ => null
+        };
+    }
 
     public static string NewlineOf(DocumentSyntax document)
     {
         foreach (var kv in document.KeyValues)
-        {
             if (Line(kv.EndOfLineToken) is { } line)
                 return line;
-        }
         foreach (var table in document.Tables)
         {
             if (Line(table.EndOfLineToken) is { } line)
                 return line;
             foreach (var kv in table.Items)
-            {
                 if (Line(kv.EndOfLineToken) is { } nested)
                     return nested;
-            }
         }
+
         // A comment-only file has its newline in trivia, not on a key.
         if (TriviaNewline(document.TrailingTrivia) is { } trailing)
             return trailing;
@@ -442,25 +474,37 @@ internal static class TomlSyntax
         if (trivia is null)
             return null;
         foreach (var item in trivia)
-        {
             if (item.Kind == TokenKind.NewLine && item.Text is { Length: > 0 } text)
                 return text == "\r\n" ? "\r\n" : "\n";
-        }
         return null;
     }
 
-    private static string? Line(SyntaxToken? token) =>
-        token is { TokenKind: TokenKind.NewLine, Text: { } text } && text.Length > 0
+    private static string? Line(SyntaxToken? token)
+    {
+        return token is { TokenKind: TokenKind.NewLine, Text: { } text } && text.Length > 0
             ? text == "\r\n" ? "\r\n" : "\n"
             : null;
+    }
 
-    public static SyntaxToken FirstToken(SyntaxNode node) => node.Tokens(false).OfType<SyntaxToken>().First();
+    public static SyntaxToken FirstToken(SyntaxNode node)
+    {
+        return node.Tokens(false).OfType<SyntaxToken>().First();
+    }
 
-    public static SyntaxToken LastToken(SyntaxNode node) => node.Tokens(false).OfType<SyntaxToken>().Last();
+    public static SyntaxToken LastToken(SyntaxNode node)
+    {
+        return node.Tokens(false).OfType<SyntaxToken>().Last();
+    }
 
-    public static SyntaxToken Comma() => Comma([new SyntaxTrivia(TokenKind.Whitespaces, " ")]);
+    public static SyntaxToken Comma()
+    {
+        return Comma([new SyntaxTrivia(TokenKind.Whitespaces, " ")]);
+    }
 
-    private static SyntaxToken Comma(List<SyntaxTrivia> trailing) => new(TokenKind.Comma, ",") { TrailingTrivia = trailing };
+    private static SyntaxToken Comma(List<SyntaxTrivia> trailing)
+    {
+        return new SyntaxToken(TokenKind.Comma, ",") { TrailingTrivia = trailing };
+    }
 
     public static void SetString(StringValueSyntax node, string text)
     {
@@ -476,14 +520,15 @@ internal static class TomlSyntax
         node.Token.Text = value ? "true" : "false";
     }
 
-    public static string Key(string key) =>
-        key.Length > 0 && key.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') ? key : Quote(key);
+    public static string Key(string key)
+    {
+        return key.Length > 0 && key.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') ? key : Quote(key);
+    }
 
     public static string Quote(string text)
     {
         var quoted = new StringBuilder("\"");
         foreach (var c in text)
-        {
             quoted.Append(c switch
             {
                 '"' => "\\\"",
@@ -492,9 +537,8 @@ internal static class TomlSyntax
                 '\r' => "\\r",
                 '\t' => "\\t",
                 _ when char.IsControl(c) => $"\\u{(int)c:X4}",
-                _ => c.ToString(),
+                _ => c.ToString()
             });
-        }
         return quoted.Append('"').ToString();
     }
 

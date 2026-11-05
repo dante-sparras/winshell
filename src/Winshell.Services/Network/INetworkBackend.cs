@@ -9,6 +9,7 @@ internal interface INetworkBackend
 
     /// <summary>Asks Windows to turn every Wi-Fi radio on or off. Null when they report <paramref name="enabled"/>.</summary>
     Task<string?> SetWifiEnabledAsync(bool enabled);
+
     Task ScanAsync(Guid device);
     Task<ConnectionFailReason?> ConnectAsync(Guid device, string ssid, string? password);
     bool Disconnect(Guid device);

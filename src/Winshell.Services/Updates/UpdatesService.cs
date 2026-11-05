@@ -76,6 +76,7 @@ public sealed class UpdatesService : ObservableObject, IDisposable
             _log.Warn("updates", "This Winshell does not update itself.");
             return;
         }
+
         ServiceSupport.Run("updates", _updater.CheckAsync);
     }
 
@@ -87,7 +88,10 @@ public sealed class UpdatesService : ObservableObject, IDisposable
     }
 
     // The event's payload is not applied: posts can run out of order, and the updater's state is the latest.
-    private void OnChanged(UpdateState _) => _loop.Post(Apply);
+    private void OnChanged(UpdateState _)
+    {
+        _loop.Post(Apply);
+    }
 
     private void Apply()
     {

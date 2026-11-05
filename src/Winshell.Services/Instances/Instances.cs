@@ -9,18 +9,24 @@ namespace Winshell;
 internal sealed record InstanceInfo(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("pid")] int Pid,
-    [property: JsonPropertyName("shellId")] string ShellId,
-    [property: JsonPropertyName("configPath")] string ConfigPath,
-    [property: JsonPropertyName("launchTime")] DateTime LaunchTime,
+    [property: JsonPropertyName("shellId")]
+    string ShellId,
+    [property: JsonPropertyName("configPath")]
+    string ConfigPath,
+    [property: JsonPropertyName("launchTime")]
+    DateTime LaunchTime,
     [property: JsonPropertyName("pipe")] string Pipe,
     [property: JsonPropertyName("log")] string Log,
     // UTC ticks of Process.StartTime. Windows reuses process ids, so the pid alone is not this process.
     // Files written before this field existed leave it at 0.
-    [property: JsonPropertyName("processStart")] long ProcessStart = 0,
+    [property: JsonPropertyName("processStart")]
+    long ProcessStart = 0,
     // Set when the shell exits cleanly. The folder stays so `winshell log` can still find it.
-    [property: JsonPropertyName("exitedAt")] DateTime? ExitedAt = null,
+    [property: JsonPropertyName("exitedAt")]
+    DateTime? ExitedAt = null,
     // The process's name, since a configuration's program can have any. Files from winshell.exe alone leave it out.
-    [property: JsonPropertyName("processName")] string? ProcessName = null);
+    [property: JsonPropertyName("processName")]
+    string? ProcessName = null);
 
 [JsonSerializable(typeof(InstanceInfo))]
 [JsonSerializable(typeof(List<InstanceInfo>))]
@@ -32,22 +38,32 @@ internal static class Instances
 {
     public static string RunDir => ShellLocations.RunRoot;
 
-    public static string NewId() => Convert.ToHexStringLower(Guid.NewGuid().ToByteArray())[..12];
+    public static string NewId()
+    {
+        return Convert.ToHexStringLower(Guid.NewGuid().ToByteArray())[..12];
+    }
 
-    public static string DirOf(string id) => Path.Combine(RunDir, id);
+    public static string DirOf(string id)
+    {
+        return Path.Combine(RunDir, id);
+    }
 
     public static void Write(InstanceInfo info)
     {
         var dir = DirOf(info.Id);
         Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "instance.json"), JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo));
+        File.WriteAllText(Path.Combine(dir, "instance.json"),
+            JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo));
     }
 
     /// <summary>
     /// A clean exit keeps <c>instance.json</c>, marked with <see cref="InstanceInfo.ExitedAt"/>, so the log
     /// can still be found. <see cref="Clean"/> deletes the folder once it is a day old.
     /// </summary>
-    public static void Remove(string id) => MarkExited(RunDir, id);
+    public static void Remove(string id)
+    {
+        MarkExited(RunDir, id);
+    }
 
     internal static void MarkExited(string runDir, string id)
     {
@@ -59,7 +75,9 @@ internal static class Instances
                 return;
             if (info.ExitedAt is not null)
                 return;
-            File.WriteAllText(file, JsonSerializer.Serialize(info with { ExitedAt = TimeProvider.System.GetLocalNow().LocalDateTime }, InstanceJson.Default.InstanceInfo));
+            File.WriteAllText(file,
+                JsonSerializer.Serialize(info with { ExitedAt = TimeProvider.System.GetLocalNow().LocalDateTime },
+                    InstanceJson.Default.InstanceInfo));
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -67,7 +85,10 @@ internal static class Instances
     }
 
     /// <summary>Every instance that wrote its file, newest first. Dead ones are skipped unless asked for.</summary>
-    public static List<(InstanceInfo Info, bool Alive)> List(bool includeDead) => ListIn(RunDir, includeDead);
+    public static List<(InstanceInfo Info, bool Alive)> List(bool includeDead)
+    {
+        return ListIn(RunDir, includeDead);
+    }
 
     internal static List<(InstanceInfo Info, bool Alive)> ListIn(string runDir, bool includeDead)
     {
@@ -88,6 +109,7 @@ internal static class Instances
             {
                 continue;
             }
+
             if (info is null)
                 continue;
             // A clean exit leaves the file in place, with exitedAt set, so it is not a running instance.
@@ -95,6 +117,7 @@ internal static class Instances
             if (alive || includeDead)
                 result.Add((info, alive));
         }
+
         if (result.Count > 1)
             result = OneRowPerProcess(result);
         return result.OrderByDescending(r => r.Item1.LaunchTime).ToList();
@@ -119,6 +142,7 @@ internal static class Instances
             {
                 return true;
             }
+
             var started = StartTicks(process);
             if (started == 0)
                 return true;
@@ -160,9 +184,12 @@ internal static class Instances
         }
     }
 
-    private static bool HasRecordedName(InstanceInfo info, Process process) => info.ProcessName is { Length: > 0 } name
-        ? string.Equals(process.ProcessName, name, StringComparison.OrdinalIgnoreCase)
-        : process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase);
+    private static bool HasRecordedName(InstanceInfo info, Process process)
+    {
+        return info.ProcessName is { Length: > 0 } name
+            ? string.Equals(process.ProcessName, name, StringComparison.OrdinalIgnoreCase)
+            : process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Waits for the shell a new one takes over from to let go of the taskbar, the hotkeys and the tray.</summary>
     internal static void WaitForExit(int pid)
@@ -185,10 +212,8 @@ internal static class Instances
         foreach (var group in items.Where(i => i.Alive).GroupBy(i => i.Info.Pid))
             kept.Add((Choose(group.Select(i => i.Info).ToList()), true));
         foreach (var item in items)
-        {
             if (!item.Alive)
                 kept.Add(item);
-        }
         return kept;
     }
 
@@ -201,6 +226,7 @@ internal static class Instances
             if (exact.Count > 0)
                 return exact.OrderByDescending(i => i.LaunchTime).First();
         }
+
         return samePid.OrderByDescending(i => i.LaunchTime).First();
     }
 
@@ -229,15 +255,21 @@ internal static class Instances
         }
     }
 
-    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    private static DateTime AsUtc(DateTime value)
     {
-        DateTimeKind.Utc => value,
-        DateTimeKind.Local => value.ToUniversalTime(),
-        _ => DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime(),
-    };
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime()
+        };
+    }
 
     /// <summary>Removes the folders of instances that are no longer running, keeping their logs a day.</summary>
-    public static void Clean() => CleanIn(RunDir);
+    public static void Clean()
+    {
+        CleanIn(RunDir);
+    }
 
     /// <summary>
     /// Deletes a stopped instance's folder once it is a day old, measured from when it exited, or from the log's
@@ -259,6 +291,7 @@ internal static class Instances
                     TryDelete(dir);
                 continue;
             }
+
             InstanceInfo? info;
             try
             {
@@ -268,6 +301,7 @@ internal static class Instances
             {
                 continue;
             }
+
             if (info is null || (info.ExitedAt is null && IsCurrent(info)))
                 continue;
             if (OlderThanADay(AgeOf(dir, info)))
@@ -283,7 +317,10 @@ internal static class Instances
         return File.Exists(log) ? File.GetLastWriteTime(log) : info.LaunchTime;
     }
 
-    private static bool OlderThanADay(DateTime stamp) => TimeProvider.System.GetLocalNow().LocalDateTime - stamp > TimeSpan.FromDays(1);
+    private static bool OlderThanADay(DateTime stamp)
+    {
+        return TimeProvider.System.GetLocalNow().LocalDateTime - stamp > TimeSpan.FromDays(1);
+    }
 
     private static void TryDelete(string dir)
     {

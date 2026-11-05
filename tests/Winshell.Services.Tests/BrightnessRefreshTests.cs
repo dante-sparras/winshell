@@ -47,7 +47,8 @@ public class BrightnessRefreshTests
             () => Interlocked.Increment(ref drained));
 
         writer.Request("DISPLAY1", 10, _ => { });
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken), "The first write did not start.");
+        Assert.True(started.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken),
+            "The first write did not start.");
         for (var value = 11; value <= 30; value++)
             writer.Request("DISPLAY1", value, _ => { });
         Assert.Equal(0, Volatile.Read(ref drained));

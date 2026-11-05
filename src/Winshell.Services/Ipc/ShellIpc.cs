@@ -21,14 +21,17 @@ public sealed class ShellIpc
         [typeof(double)] = "double",
         [typeof(float)] = "real",
         [typeof(Color)] = "color",
-        [typeof(void)] = "void",
+        [typeof(void)] = "void"
     };
 
     private readonly Log _log;
 
     private readonly SortedDictionary<string, Target> _targets = new(StringComparer.Ordinal);
 
-    internal ShellIpc(Log log) => _log = log;
+    internal ShellIpc(Log log)
+    {
+        _log = log;
+    }
 
     /// <summary>
     /// Lets <c>winshell ipc call</c> run <paramref name="handler"/>, such as <c>(string page) => Open(page)</c>.
@@ -42,11 +45,13 @@ public sealed class ShellIpc
         ArgumentNullException.ThrowIfNull(handler);
         var signature = handler.GetType().GetMethod("Invoke")!;
         var types = signature.GetParameters().Select(p => p.ParameterType).ToArray();
-        if (types.Length > IpcValues.MaxParameters || types.Any(t => !Declared.ContainsKey(t)) || !Declared.ContainsKey(signature.ReturnType))
+        if (types.Length > IpcValues.MaxParameters || types.Any(t => !Declared.ContainsKey(t)) ||
+            !Declared.ContainsKey(signature.ReturnType))
             throw new ArgumentException(IpcValues.WrongTypes(target, function), nameof(handler));
         // The delegate's own Invoke has generic names. A delegate closed over a first argument declares one more parameter.
         var names = handler.Method.GetParameters().TakeLast(types.Length).Select(p => p.Name ?? "").ToArray();
-        return Add(target, function, new Function(function, names, types, signature.ReturnType, handler), t => t.Functions);
+        return Add(target, function, new Function(function, names, types, signature.ReturnType, handler),
+            t => t.Functions);
     }
 
     /// <summary>Lets <c>winshell ipc prop get</c> read a value. Dispose the result to take it away.</summary>
@@ -72,16 +77,22 @@ public sealed class ShellIpc
     }
 
     /// <summary>Every target with the functions, properties and signals <c>ipc show</c> lists.</summary>
-    internal IReadOnlyList<IpcTargetView> Describe() => _targets.Select(pair => new IpcTargetView(
-        pair.Key,
-        pair.Value.Functions.Select(f => new IpcFunctionView(f.Name, f.Names.Zip(f.Types, (name, type) => new IpcParameterView(name, Declared[type])).ToList(), Declared[f.Returns])).ToList(),
-        pair.Value.Properties.Select(p => new IpcPropertyView(p.Name, Declared[p.Type])).ToList(),
-        pair.Value.Signals.Select(s => new IpcSignalView(s.Name, [])).ToList())).ToList();
+    internal IReadOnlyList<IpcTargetView> Describe()
+    {
+        return _targets.Select(pair => new IpcTargetView(
+            pair.Key,
+            pair.Value.Functions.Select(f => new IpcFunctionView(f.Name,
+                f.Names.Zip(f.Types, (name, type) => new IpcParameterView(name, Declared[type])).ToList(),
+                Declared[f.Returns])).ToList(),
+            pair.Value.Properties.Select(p => new IpcPropertyView(p.Name, Declared[p.Type])).ToList(),
+            pair.Value.Signals.Select(s => new IpcSignalView(s.Name, [])).ToList())).ToList();
+    }
 
     /// <summary>Calls a function. Returns its result as text, or throws <see cref="IpcException"/> with a message for the CLI.</summary>
     internal string Call(string target, string function, IReadOnlyList<string> args)
     {
-        var found = Find(target).Functions.Find(f => f.Name == function) ?? throw new IpcException($"Function not found: {target}.{function}.");
+        var found = Find(target).Functions.Find(f => f.Name == function) ??
+                    throw new IpcException($"Function not found: {target}.{function}.");
         if (args.Count != found.Types.Length)
             throw new IpcException(IpcValues.WrongCount(target, function, found.Types.Length, args.Count));
         var converted = new object[args.Count];
@@ -100,19 +111,25 @@ public sealed class ShellIpc
 
     internal string GetProperty(string target, string property)
     {
-        var found = Find(target).Properties.Find(p => p.Name == property) ?? throw new IpcException($"Property not found: {target}.{property}.");
+        var found = Find(target).Properties.Find(p => p.Name == property) ??
+                    throw new IpcException($"Property not found: {target}.{property}.");
         return Format(found.Read());
     }
 
     /// <summary>Calls back with a signal's argument as text each time it fires, until disposed.</summary>
     internal IDisposable Listen(string target, string signal, Action<string> onSignal)
     {
-        var found = Find(target).Signals.Find(s => s.Name == signal) ?? throw new IpcException($"Signal not found: {target}.{signal}.");
+        var found = Find(target).Signals.Find(s => s.Name == signal) ??
+                    throw new IpcException($"Signal not found: {target}.{signal}.");
         return found.Connect(onSignal);
     }
 
-    private Target Find(string target) =>
-        _targets.TryGetValue(target, out var found) ? found : throw new IpcException($"Target not found: {target}.");
+    private Target Find(string target)
+    {
+        return _targets.TryGetValue(target, out var found)
+            ? found
+            : throw new IpcException($"Target not found: {target}.");
+    }
 
     private DisposeAction Add<T>(string target, string name, T member, Func<Target, List<T>> list)
         where T : IIpcMember
@@ -127,7 +144,10 @@ public sealed class ShellIpc
             members[index] = member;
         }
         else
+        {
             members.Add(member);
+        }
+
         return new DisposeAction(() =>
         {
             // A later registration under this name took over, and it stays.
@@ -147,7 +167,8 @@ public sealed class ShellIpc
         if (type == typeof(bool))
             return IpcValues.ParseBool(text, name);
         if (type == typeof(Color))
-            return ParseColor(IpcValues.ColorText(text)) ?? throw new IpcException($"Argument {name} is not a color: {text}.");
+            return ParseColor(IpcValues.ColorText(text)) ??
+                   throw new IpcException($"Argument {name} is not a color: {text}.");
         return text;
     }
 
@@ -159,24 +180,30 @@ public sealed class ShellIpc
             return null;
         return hex.Length switch
         {
-            3 => Color.FromArgb(255, (byte)((v >> 8 & 0xf) * 17), (byte)((v >> 4 & 0xf) * 17), (byte)((v & 0xf) * 17)),
-            4 => Color.FromArgb((byte)((v >> 12 & 0xf) * 17), (byte)((v >> 8 & 0xf) * 17), (byte)((v >> 4 & 0xf) * 17), (byte)((v & 0xf) * 17)),
+            3 => Color.FromArgb(255, (byte)(((v >> 8) & 0xf) * 17), (byte)(((v >> 4) & 0xf) * 17),
+                (byte)((v & 0xf) * 17)),
+            4 => Color.FromArgb((byte)(((v >> 12) & 0xf) * 17), (byte)(((v >> 8) & 0xf) * 17),
+                (byte)(((v >> 4) & 0xf) * 17), (byte)((v & 0xf) * 17)),
             6 => Color.FromArgb(255, (byte)(v >> 16), (byte)(v >> 8), (byte)v),
             8 => Color.FromArgb((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v),
-            _ => null,
+            _ => null
         };
     }
 
-    private static string Format(object? value) => value switch
+    private static string Format(object? value)
     {
-        null => "",
-        bool b => b ? "true" : "false",
-        Color c => $"#{c.A:x2}{c.R:x2}{c.G:x2}{c.B:x2}",
-        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
-        _ => value.ToString() ?? "",
-    };
+        return value switch
+        {
+            null => "",
+            bool b => b ? "true" : "false",
+            Color c => $"#{c.A:x2}{c.R:x2}{c.G:x2}{c.B:x2}",
+            IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? ""
+        };
+    }
 
-    private sealed record Function(string Name, string[] Names, Type[] Types, Type Returns, Delegate Handler) : IIpcMember;
+    private sealed record Function(string Name, string[] Names, Type[] Types, Type Returns, Delegate Handler)
+        : IIpcMember;
 
     private sealed record Value(string Name, Type Type, Func<object?> Read) : IIpcMember;
 
@@ -202,7 +229,10 @@ public sealed class IpcSignal : IIpcMember
 {
     private readonly List<Action<string>> _listeners = [];
 
-    internal IpcSignal(string name) => Name = name;
+    internal IpcSignal(string name)
+    {
+        Name = name;
+    }
 
     /// <summary>The signal's name, which <c>winshell ipc wait</c> and <c>listen</c> take.</summary>
     public string Name { get; }
@@ -222,6 +252,9 @@ public sealed class IpcSignal : IIpcMember
 
     private sealed class Connection(IpcSignal signal, Action<string> listener) : IDisposable
     {
-        public void Dispose() => signal._listeners.Remove(listener);
+        public void Dispose()
+        {
+            signal._listeners.Remove(listener);
+        }
     }
 }

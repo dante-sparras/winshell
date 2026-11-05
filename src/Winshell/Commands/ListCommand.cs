@@ -10,11 +10,13 @@ internal static class ListCommand
             Console.WriteLine(CliJson.Instances(instances.Select(i => i.Info)));
             return 0;
         }
+
         if (instances.Count == 0)
         {
             Console.WriteLine(InstanceSelection.NoneRunning);
             return 0;
         }
+
         foreach (var (info, _) in instances)
         {
             Console.WriteLine($"Instance {info.Id}:");
@@ -24,6 +26,7 @@ internal static class ListCommand
             Console.WriteLine($"  Launch time: {info.LaunchTime:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine($"  Log file: {info.Log}");
         }
+
         return 0;
     }
 }

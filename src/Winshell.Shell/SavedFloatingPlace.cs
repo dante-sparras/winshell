@@ -22,13 +22,15 @@ internal sealed record SavedFloatingPlace(
     bool HasPlacement)
 {
     /// <summary>True when this place can be put back with the saved placement, because the monitor and its scale are unchanged.</summary>
-    public bool Matches(string monitorId, RECT bounds, double scale) =>
-        monitorId == MonitorId
-        && bounds.Left == MonitorBounds.Left
-        && bounds.Top == MonitorBounds.Top
-        && bounds.Right == MonitorBounds.Right
-        && bounds.Bottom == MonitorBounds.Bottom
-        && Math.Abs(scale - Scale) < 0.001;
+    public bool Matches(string monitorId, RECT bounds, double scale)
+    {
+        return monitorId == MonitorId
+               && bounds.Left == MonitorBounds.Left
+               && bounds.Top == MonitorBounds.Top
+               && bounds.Right == MonitorBounds.Right
+               && bounds.Bottom == MonitorBounds.Bottom
+               && Math.Abs(scale - Scale) < 0.001;
+    }
 
     /// <summary>The saved place on a monitor, in that monitor's physical pixels at <paramref name="scale"/>.</summary>
     public RECT RectOn(RECT monitor, double scale)
