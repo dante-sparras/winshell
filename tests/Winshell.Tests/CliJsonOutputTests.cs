@@ -17,6 +17,7 @@ public sealed class CliJsonOutputTests : IDisposable
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
+    private readonly List<Process> _runs = [];
     private string? _local;
 
     [Fact]
@@ -75,13 +76,16 @@ public sealed class CliJsonOutputTests : IDisposable
         _local = configDir;
         info.Environment["WINSHELL_CONFIG_DIR"] = Path.Combine(_dir, "config");
         info.Environment["WINSHELL_LOCAL_DIR"] = configDir;
-        var process = Process.Start(info)!;
+        var run = Process.Start(info)!;
+        _runs.Add(run);
+        run.ErrorDataReceived += (_, _) => { };
+        run.OutputDataReceived += (_, _) => { };
+        run.BeginErrorReadLine();
+        run.BeginOutputReadLine();
+        // winshell run supervises the shell, which runs in a child process.
+        Wait.Until(() => ListedPids().Count > 0, "the shell in winshell list");
+        var process = Process.GetProcessById(ListedPids().Single());
         _started.Add(process);
-        process.ErrorDataReceived += (_, _) => { };
-        process.OutputDataReceived += (_, _) => { };
-        process.BeginErrorReadLine();
-        process.BeginOutputReadLine();
-        Wait.Until(() => ListedPids().Contains(process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -117,6 +121,14 @@ public sealed class CliJsonOutputTests : IDisposable
                 process.WaitForExit();
             }
             process.Dispose();
+        }
+        // Each ends once its shell has. One that has not would start the shell again.
+        foreach (var run in _runs)
+        {
+            if (!run.WaitForExit(5000))
+                run.Kill(entireProcessTree: true);
+            run.WaitForExit();
+            run.Dispose();
         }
         try
         {

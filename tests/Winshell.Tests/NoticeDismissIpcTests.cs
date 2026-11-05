@@ -15,6 +15,7 @@ public sealed class NoticeDismissIpcTests : IDisposable
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
+    private readonly List<Process> _runs = [];
 
     [Fact]
     public void Notice_dismiss_reaches_a_running_shell_and_takes_no_arguments()
@@ -53,13 +54,16 @@ public sealed class NoticeDismissIpcTests : IDisposable
         info.ArgumentList.Add("run");
         info.Environment["WINSHELL_CONFIG_DIR"] = configDir;
         info.Environment["WINSHELL_LOCAL_DIR"] = Path.Combine(_dir, "local");
-        var process = Process.Start(info)!;
+        var run = Process.Start(info)!;
+        _runs.Add(run);
+        run.ErrorDataReceived += (_, _) => { };
+        run.OutputDataReceived += (_, _) => { };
+        run.BeginErrorReadLine();
+        run.BeginOutputReadLine();
+        // winshell run supervises the shell, which runs in a child process.
+        Wait.Until(() => Listed().Count > 0, "the shell in winshell list");
+        var process = Process.GetProcessById(Assert.Single(Listed()).GetProperty("pid").GetInt32());
         _started.Add(process);
-        process.ErrorDataReceived += (_, _) => { };
-        process.OutputDataReceived += (_, _) => { };
-        process.BeginErrorReadLine();
-        process.BeginOutputReadLine();
-        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -92,6 +96,14 @@ public sealed class NoticeDismissIpcTests : IDisposable
                 process.WaitForExit();
             }
             process.Dispose();
+        }
+        // Each ends once its shell has. One that has not would start the shell again.
+        foreach (var run in _runs)
+        {
+            if (!run.WaitForExit(5000))
+                run.Kill(entireProcessTree: true);
+            run.WaitForExit();
+            run.Dispose();
         }
         try
         {

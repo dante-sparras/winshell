@@ -35,15 +35,25 @@ winshell help [command]             print this summary, or that command's help
 | `-p`, `--path <path>` | Builds and runs this `.csproj`, or the one `.csproj` in this folder. |
 | `-c`, `--config <name>` | Builds and runs the project in `<name>` under the config folder, `%APPDATA%\winshell` or `WINSHELL_CONFIG_DIR`. The name is one folder: use `-p` for a path. |
 | `--no-build` | Runs the program the last build left in `bin\shell`. Does not build, so a newer source is left unbuilt. The sign-in entry uses this. |
-| `-d`, `--daemonize` | Starts the shell in the background, with no console window, and returns at once. |
+| `-d`, `--daemonize` | Builds the project, if there is one, then starts the shell in the background, with no console window, and returns at once. |
 | `-n`, `--no-duplicate` | Exits 0 without starting, and without a message, when this shell id is already running. Two starts that overlap do the same: only one of them keeps running. |
 | `-v`, `--verbose` | Also logs debug messages. |
 | `-V`, `--version` | Prints the version, such as `winshell 0.6.0+e8d05d1…` for a build from source, and exits. |
 | `-h`, `--help` | Prints `run`'s usage, or with no command the summary, and exits. |
 
-The program a project builds also takes `--no-duplicate` and `-d` on its own command line. `--no-duplicate` exits at once when its shell id is already running. `-d` starts that program again and returns. A start that carries `--after` keeps it.
+The program a project builds also takes `--no-duplicate` and `-d` on its own command line, and then runs with no supervisor. `--no-duplicate` exits at once when its shell id is already running. `-d` starts that program again and returns. A start that carries `--after` keeps it.
 
 The log goes to the console and to the instance's log file. The file is kept to about 4 MB, and the previous part is `log.1.txt` beside it. Ctrl+C in the console stops the shell.
+
+### Crashes
+
+`winshell run` runs the shell in a child process and stays until supervision ends; `winshell list` shows that child. When the shell exits, `winshell run` acts on its exit code:
+
+- **0** is a stop that was asked for: `winshell kill`, with or without `--force`, a reload that handed over to a new process, or a `--no-duplicate` start that found its shell running. `winshell run` exits 0.
+- **1** is a shell that could not start and said why. `winshell run` exits 1 and does not try again.
+- **Any other code** is a crash. The shell starts again after 1, 2, 4, 8 and then 10 seconds. The sixth crash in a row ends `winshell run` with that crash's code. A shell that ran for a minute before it crashed starts the count again.
+
+After every exit, `winshell run` shows Explorer's taskbar again and reserves its edge, if the taskbar showed when that shell started, so a crash that skipped the shell's own exit does not leave it hidden. A taskbar another shell had hidden stays hidden. A reload of the default shell hands over to a new `winshell run`, which supervises the next shell. A configuration's program hands over to a new process of itself, which runs with no supervisor. Ctrl+C, closing the console and signing out end supervision too: they ask the shell to quit, end it two seconds later if it has not, and start nothing again.
 
 A failure before that log exists, such as no project and no default shell to run, is printed to the console. The Start tile, the sign-in entry and any other start with no console window also show that message in a dialog, unless another program is reading the error. **Open config folder** opens the `--path` folder, or the config folder when there was no `--path`. An attached console prints the message and shows no dialog.
 

@@ -7,8 +7,8 @@ using System.Text.RegularExpressions;
 namespace Winshell.Tests;
 
 /// <summary>
-/// <c>winshell run</c> starts the default shell in this process. Each test has config and local folders of its own,
-/// so it sees only its own shells and can't touch the user's.
+/// <c>winshell run</c> starts the default shell in a child process and supervises it. Each test has config and local
+/// folders of its own, so it sees only its own shells and can't touch the user's.
 /// </summary>
 [Collection(DefaultShellCollection.Name)]
 [Trait("Category", "Slow")]
@@ -23,7 +23,7 @@ public sealed partial class ShellProgramTests : IDisposable
     [Fact]
     public void List_log_ipc_and_kill_reach_the_program()
     {
-        var process = Start();
+        var (run, process) = Start();
         var pid = process.Id.ToString(CultureInfo.InvariantCulture);
 
         var row = Info(process);
@@ -43,8 +43,10 @@ public sealed partial class ShellProgramTests : IDisposable
         Assert.Equal((0, ""), (killed.Code, killed.Error));
         Assert.StartsWith("Killed ", killed.Output, StringComparison.Ordinal);
         Assert.True(process.HasExited);
-        Assert.Equal(0, process.ExitCode);
         Assert.Empty(Listed());
+        // winshell run ends with the shell's exit code. A kill is a clean exit, so it does not start the shell again.
+        Wait.Until(() => run.HasExited, "winshell run to end with its shell");
+        Assert.Equal(0, run.ExitCode);
 
         // A clean exit keeps the record, marked exited, so the log can still be found.
         var stopped = Run("log");
@@ -59,7 +61,7 @@ public sealed partial class ShellProgramTests : IDisposable
         Directory.CreateDirectory(config);
         File.WriteAllText(Path.Combine(config, "preferences.toml"), "startHotkey = \"\"\ndesktopChords = true\n");
 
-        var process = Start();
+        var process = Start().Shell;
 
         // The chords' windows are made after the instance is listed.
         Wait.ForNothingToHappen(TimeSpan.FromSeconds(4));
@@ -69,7 +71,7 @@ public sealed partial class ShellProgramTests : IDisposable
     [Fact]
     public void A_second_start_of_the_same_shell_id_exits_and_leaves_the_first()
     {
-        var first = Start("--no-duplicate");
+        var first = Start("--no-duplicate").Shell;
 
         var second = Launch(["-n"]);
 
@@ -82,7 +84,7 @@ public sealed partial class ShellProgramTests : IDisposable
     [Fact]
     public void A_reload_hands_over_to_a_new_process_of_the_same_program()
     {
-        var first = Start("--no-duplicate");
+        var first = Start("--no-duplicate").Shell;
 
         var reload = Run("reload", "--pid", first.Id.ToString(CultureInfo.InvariantCulture));
 
@@ -126,7 +128,7 @@ public sealed partial class ShellProgramTests : IDisposable
         Assert.Empty(Listed());
 
         // Its shell id is free again, with no mutex or record left behind.
-        var next = Start("--no-duplicate");
+        var next = Start("--no-duplicate").Shell;
         Assert.False(next.HasExited);
     }
 
@@ -146,11 +148,16 @@ public sealed partial class ShellProgramTests : IDisposable
         Assert.Equal(child.GetProperty("pid").GetInt32(), Assert.Single(Listed()).GetProperty("pid").GetInt32());
     }
 
-    private Process Start(params string[] args)
+    /// <summary>Starts <c>winshell run</c>, and returns it with the shell it runs once <c>winshell list</c> shows that.</summary>
+    private (Process Run, Process Shell) Start(params string[] args)
     {
-        var process = Launch(args);
-        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
-        return process;
+        var before = Listed().Select(i => i.GetProperty("pid").GetInt32()).ToHashSet();
+        var run = Launch(args);
+        var pid = 0;
+        Wait.Until(() => (pid = Listed().Select(i => i.GetProperty("pid").GetInt32()).FirstOrDefault(p => !before.Contains(p))) != 0, "the new shell in winshell list");
+        var shell = Process.GetProcessById(pid);
+        _started.Add(shell);
+        return (run, shell);
     }
 
     private Process Launch(string[] args)
@@ -209,9 +216,10 @@ public sealed partial class ShellProgramTests : IDisposable
         catch (Xunit.Sdk.XunitException)
         {
         }
+        // A winshell run ends once its shell has. One that has not would start the shell again.
         foreach (var process in _started)
         {
-            if (!process.HasExited)
+            if (!process.WaitForExit(5000))
             {
                 process.Kill(entireProcessTree: true);
                 process.WaitForExit();

@@ -207,6 +207,9 @@ internal static class ProbeShell
     /// <summary>A file whose presence in the config folder makes the probe start a program and never exit.</summary>
     internal const string HangMarker = "probe-hang";
 
+    /// <summary>A file whose presence in the config folder makes the probe hide Explorer's taskbar, and then delete the file.</summary>
+    internal const string HideTaskbarMarker = "probe-hide-taskbar";
+
     private const string Source =
         $$"""
         using Winshell;
@@ -217,8 +220,14 @@ internal static class ProbeShell
         {
             public override void Start(Shell shell)
             {
-                // A test that puts {{HangMarker}} in the config folder gets a shell that starts a program and then never exits.
                 var config = Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR");
+                // A test that puts {{HideTaskbarMarker}} there gets a shell that hides Explorer's taskbar once.
+                if (config is not null && File.Exists(Path.Combine(config, "{{HideTaskbarMarker}}")))
+                {
+                    shell.ExplorerTaskbar.Hidden = true;
+                    File.Delete(Path.Combine(config, "{{HideTaskbarMarker}}"));
+                }
+                // A test that puts {{HangMarker}} there gets a shell that starts a program and then never exits.
                 if (config is null || !File.Exists(Path.Combine(config, "{{HangMarker}}")))
                     return;
                 var child = Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;

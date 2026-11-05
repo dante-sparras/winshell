@@ -1,0 +1,225 @@
+namespace Winshell.Tests;
+
+/// <summary>
+/// The supervisor's policy against fake shells and a fake clock. Supervision starts on a pool thread, which captures no
+/// synchronization context, so an exit, a stop or a clock step runs the supervisor on the test's thread up to its next wait.
+/// </summary>
+public sealed class ShellSupervisorTests
+{
+    private static readonly TimeSpan Tick = TimeSpan.FromTicks(1);
+
+    private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 11, 5, 12, 0, 0, TimeSpan.Zero));
+    private readonly Shells _shells = new();
+
+    [Fact]
+    public async Task A_crash_brings_the_taskbar_back_before_the_wait_and_starts_the_shell_again_after_it()
+    {
+        var run = Supervise(CancellationToken.None);
+        var first = await _shells.Started(1);
+
+        first.Exit(-1);
+        Assert.Equal(["start", "restore"], _shells.Events);
+        _time.Advance(ShellSupervisor.FirstWait - Tick);
+        Assert.Equal(["start", "restore"], _shells.Events);
+        _time.Advance(Tick);
+        var second = await _shells.Started(2);
+
+        second.Exit(0);
+        Assert.Equal(0, await run);
+        Assert.Equal(["start", "restore", "start", "restore"], _shells.Events);
+    }
+
+    [Fact]
+    public async Task Each_crash_in_a_row_waits_twice_as_long_up_to_the_cap_and_the_last_ends_supervision()
+    {
+        var run = Supervise(CancellationToken.None);
+        TimeSpan[] waits = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8), ShellSupervisor.LongestWait];
+        Assert.Equal(ShellSupervisor.CrashesBeforeGivingUp - 1, waits.Length);
+
+        for (var i = 0; i < waits.Length; i++)
+        {
+            (await _shells.Started(i + 1)).Exit(-1073741819);
+            _time.Advance(waits[i] - Tick);
+            Assert.Equal(i + 1, _shells.Count);
+            _time.Advance(Tick);
+        }
+        (await _shells.Started(ShellSupervisor.CrashesBeforeGivingUp)).Exit(-1073741819);
+
+        Assert.Equal(-1073741819, await run);
+        Assert.Equal(Enumerable.Repeat<string[]>(["start", "restore"], ShellSupervisor.CrashesBeforeGivingUp).SelectMany(e => e), _shells.Events);
+        _time.Advance(ShellSupervisor.LongestWait);
+        Assert.Equal(ShellSupervisor.CrashesBeforeGivingUp, _shells.Count);
+    }
+
+    [Fact]
+    public async Task A_crash_after_a_minute_of_running_waits_as_long_as_the_first()
+    {
+        var run = Supervise(CancellationToken.None);
+        (await _shells.Started(1)).Exit(-1);
+        _time.Advance(TimeSpan.FromSeconds(1));
+        (await _shells.Started(2)).Exit(-1);
+        _time.Advance(TimeSpan.FromSeconds(2));
+        var third = await _shells.Started(3);
+
+        _time.Advance(ShellSupervisor.RunningWell);
+        third.Exit(-1);
+        _time.Advance(ShellSupervisor.FirstWait);
+        var fourth = await _shells.Started(4);
+
+        fourth.Exit(0);
+        Assert.Equal(0, await run);
+    }
+
+    /// <summary>0 is a stop that was asked for, and 1 a shell that could not start and said why.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task An_exit_that_is_no_crash_ends_supervision_with_the_taskbar_back(int code)
+    {
+        var run = Supervise(CancellationToken.None);
+
+        (await _shells.Started(1)).Exit(code);
+
+        Assert.Equal(code, await run);
+        Assert.Equal(["start", "restore"], _shells.Events);
+        _time.Advance(ShellSupervisor.LongestWait);
+        Assert.Equal(1, _shells.Count);
+    }
+
+    [Fact]
+    public async Task A_shell_that_does_not_start_ends_supervision_with_the_taskbar_back()
+    {
+        _shells.FailToStart = true;
+
+        Assert.Equal(1, await Supervise(CancellationToken.None));
+
+        Assert.Equal(["start", "restore"], _shells.Events);
+    }
+
+    [Fact]
+    public async Task A_stop_stops_the_running_shell_and_brings_the_taskbar_back_without_a_new_start()
+    {
+        using var stop = new CancellationTokenSource();
+        var run = Supervise(stop.Token);
+        await _shells.Started(1);
+
+        await stop.CancelAsync();
+
+        Assert.Equal(0, await run);
+        Assert.Equal(["start", "stop", "restore"], _shells.Events);
+    }
+
+    [Fact]
+    public async Task A_stop_during_the_wait_ends_supervision_without_a_new_start()
+    {
+        using var stop = new CancellationTokenSource();
+        var run = Supervise(stop.Token);
+        (await _shells.Started(1)).Exit(-1);
+
+        await stop.CancelAsync();
+
+        Assert.Equal(-1, await run);
+        _time.Advance(ShellSupervisor.LongestWait);
+        Assert.Equal(["start", "restore"], _shells.Events);
+    }
+
+    /// <summary>A duplicate start leaves at once, and the taskbar belongs to the shell that hid it.</summary>
+    [Fact]
+    public async Task A_taskbar_that_was_hidden_when_the_shell_started_stays_hidden()
+    {
+        _shells.TaskbarShowing = false;
+        var run = Supervise(CancellationToken.None);
+
+        (await _shells.Started(1)).Exit(0);
+
+        Assert.Equal(0, await run);
+        Assert.Equal(["start"], _shells.Events);
+    }
+
+    private Task<int> Supervise(CancellationToken stop)
+    {
+        var supervisor = new ShellSupervisor(_shells.Start, () => _shells.TaskbarShowing, _shells.Restore, _time);
+        return Task.Run(() => supervisor.RunAsync(stop), TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>What the supervisor started, stopped and restored, in order.</summary>
+    private sealed class Shells
+    {
+        private readonly object _gate = new();
+        private readonly List<string> _events = [];
+        private readonly List<Child> _children = [];
+        private readonly SemaphoreSlim _started = new(0);
+
+        public bool TaskbarShowing { get; set; } = true;
+
+        public bool FailToStart { get; set; }
+
+        public string[] Events
+        {
+            get
+            {
+                lock (_gate)
+                    return [.. _events];
+            }
+        }
+
+        public int Count
+        {
+            get
+            {
+                lock (_gate)
+                    return _children.Count;
+            }
+        }
+
+        public IShellChild? Start()
+        {
+            Add("start");
+            if (FailToStart)
+                return null;
+            var child = new Child(this);
+            lock (_gate)
+                _children.Add(child);
+            _started.Release();
+            return child;
+        }
+
+        public void Restore() => Add("restore");
+
+        /// <summary>The <paramref name="number"/>th shell, once it has started.</summary>
+        public async Task<Child> Started(int number)
+        {
+            while (Count < number)
+                await _started.WaitAsync(TestContext.Current.CancellationToken);
+            lock (_gate)
+                return _children[number - 1];
+        }
+
+        public void Add(string what)
+        {
+            lock (_gate)
+                _events.Add(what);
+        }
+    }
+
+    private sealed class Child(Shells shells) : IShellChild
+    {
+        private readonly TaskCompletionSource<int> _exit = new();
+
+        public Task<int> Exited => _exit.Task;
+
+        public void Exit(int code) => _exit.SetResult(code);
+
+        /// <summary>A shell asked to quit quits.</summary>
+        public Task StopAsync()
+        {
+            shells.Add("stop");
+            _exit.SetResult(0);
+            return Task.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+}

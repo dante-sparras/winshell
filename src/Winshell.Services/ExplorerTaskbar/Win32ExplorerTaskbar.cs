@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Winshell.Native;
 
@@ -11,9 +12,38 @@ namespace Winshell.ExplorerTaskbar;
 /// </summary>
 internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
 {
+    private static uint _callback;
     private readonly List<Saved> _saved = [];
-    private uint _callback;
     private bool _active;
+
+    /// <summary>Whether Explorer shows a taskbar window now.</summary>
+    public static bool Showing() => Windows("Shell_TrayWnd").Concat(Windows("Shell_SecondaryTrayWnd")).Any(Win32.IsWindowVisible);
+
+    /// <summary>
+    /// Shows every hidden taskbar window and reserves its edge again, for a process that did not hide them: the shell
+    /// that did can end before it puts them back. The edge is read from where the window is now. A window that still
+    /// reserves its edge keeps it, since Explorer refuses to register it twice.
+    /// </summary>
+    public static void RestoreHidden()
+    {
+        var primary = Windows("Shell_TrayWnd");
+        var secondary = Windows("Shell_SecondaryTrayWnd");
+        var sample = primary.Count > 0 ? primary[0] : secondary.Count > 0 ? secondary[0] : 0;
+        var autohide = sample != 0 && Autohide(sample);
+        foreach (var (hwnd, isPrimary) in primary.Select(h => (h, true)).Concat(secondary.Select(h => (h, false))))
+        {
+            if (Win32.IsWindowVisible(hwnd))
+                continue;
+            var saved = new Saved { Hwnd = hwnd, WasVisible = true };
+            if (!autohide && TryPosition(hwnd, isPrimary, out var edge, out var rect))
+            {
+                saved.Edge = edge;
+                saved.Rect = rect;
+                saved.Removed = true;
+            }
+            PutBack(saved);
+        }
+    }
 
     /// <summary>Takes every taskbar window not yet taken, so calling it again picks up one Explorer made since.</summary>
     public void Hide()
@@ -59,7 +89,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         Win32.ShowWindow(hwnd, Win32.SW_HIDE);
     }
 
-    private void PutBack(Saved saved)
+    private static void PutBack(Saved saved)
     {
         if (!IsExplorerTaskbar(saved.Hwnd))
             return;
@@ -78,7 +108,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
     }
 
-    private uint Callback()
+    private static uint Callback()
     {
         if (_callback == 0)
             _callback = Win32.RegisterWindowMessageW("WinshellExplorerTaskbar");
@@ -126,17 +156,31 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
 
     private static APPBARDATA AppBar(nint hwnd) => new() { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
 
-    /// <summary>Explorer's windows of that class. The tray host makes a <c>Shell_TrayWnd</c> of its own in this process.</summary>
+    /// <summary>Explorer's windows of that class. A shell's tray host makes a <c>Shell_TrayWnd</c> of its own.</summary>
     private static List<nint> Windows(string className)
     {
         var found = new List<nint>();
         for (nint hwnd = 0, next; (next = Win32.FindWindowExW(0, hwnd, className, null)) != 0; hwnd = next)
         {
             Win32.GetWindowThreadProcessId(next, out var pid);
-            if (pid != Environment.ProcessId)
+            if (pid != Environment.ProcessId && IsExplorer((int)pid))
                 found.Add(next);
         }
         return found;
+    }
+
+    private static bool IsExplorer(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return string.Equals(process.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        {
+            // It has exited.
+            return false;
+        }
     }
 
     /// <summary>False when the handle was destroyed or reused, so restore does not show some other window.</summary>

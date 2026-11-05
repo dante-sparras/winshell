@@ -209,7 +209,7 @@ Look at the screenshot, and check values in the tree rather than trusting that t
 dotnet run --project src/Winshell -- run
 ```
 
-That runs the default shell in this process. `-p` is a configuration project: a folder with a `.csproj`, or the project file. `--no-build` starts the last build and does not compile. From another terminal:
+That runs the default shell in a child process and supervises it. `-p` is a configuration project: a folder with a `.csproj`, or the project file. `--no-build` starts the last build and does not compile. From another terminal:
 
 ```powershell
 dotnet run --project src/Winshell -- list
@@ -225,6 +225,8 @@ A running shell reads these. None is needed to build or test.
 | --- | --- |
 | `WINSHELL_CONFIG_DIR` | Folder named configs are loaded from, instead of `%APPDATA%\winshell`. |
 | `WINSHELL_LOCAL_DIR` | Folder used instead of `%LOCALAPPDATA%\winshell` for cache, state, data, the default shell, instance logs, crash reports and downloaded updates. A child process inherits it. |
+
+`winshell run` sets `WINSHELL_SUPERVISED`, and `WINSHELL_UPDATE_FAILURE` when an update did not install, on the process that runs the default shell for it. That process clears both. Never set them.
 
 `WINSHELL_TEST_CRASH` is read only by a Debug build, for the crash tests: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. A Release build ignores it. Never set it otherwise.
 
