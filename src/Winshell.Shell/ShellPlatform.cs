@@ -16,12 +16,10 @@ namespace Winshell;
 internal sealed class ShellPlatform : IDisposable
 {
     private readonly List<HostWindow> _windows = [];
-    private readonly HashSet<HostWindow> _grabbing = [];
     private readonly SystemChanges _systemChanges = new();
     private readonly List<ScreenInfo> _screens;
     private readonly List<WinEventHook> _foregroundWatches = [];
     private HashSet<string> _fullscreenScreens = [];
-    private IDisposable? _mouseWatch;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
@@ -41,7 +39,7 @@ internal sealed class ShellPlatform : IDisposable
         _uiSettings.ColorValuesChanged += OnColorValuesChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
-        Flyouts = new FlyoutDismissal(this);
+        OutsideClicks = new OutsideClicks(this);
         // Explorer tells only the app bars that reserve an edge about a fullscreen app, so this reads it from the foreground window.
         foreach (var evt in new[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_LOCATIONCHANGE })
         {
@@ -57,7 +55,7 @@ internal sealed class ShellPlatform : IDisposable
 
     public ObservableCollection<ScreenInfo> Screens { get; }
 
-    internal FlyoutDismissal Flyouts { get; }
+    internal OutsideClicks OutsideClicks { get; }
 
     /// <summary>The native windows that exist now.</summary>
     internal IReadOnlyList<HostWindow> Windows => _windows;
@@ -141,13 +139,7 @@ internal sealed class ShellPlatform : IDisposable
         return window;
     }
 
-    internal void Forget(HostWindow window)
-    {
-        _windows.Remove(window);
-        _grabbing.Remove(window);
-        if (_grabbing.Count == 0)
-            Unhook();
-    }
+    internal void Forget(HostWindow window) => _windows.Remove(window);
 
     // Screens and the work area
 
@@ -269,38 +261,6 @@ internal sealed class ShellPlatform : IDisposable
         return TopLevelWindows.ClassName(hwnd) is "Progman" or "WorkerW";
     }
 
-    // Popups that close on a click outside them
-
-    internal void UpdatePopupGrab(HostWindow window, bool grabbing)
-    {
-        if (grabbing && window.Handle != 0)
-            _grabbing.Add(window);
-        else
-            _grabbing.Remove(window);
-        if (_grabbing.Count > 0 && _mouseWatch is null)
-            _mouseWatch = LowLevelMouse.Start(OnPress);
-        else if (_grabbing.Count == 0)
-            Unhook();
-    }
-
-    private void Unhook()
-    {
-        _mouseWatch?.Dispose();
-        _mouseWatch = null;
-    }
-
-    // This runs on the hook thread, so it only posts the click to the loop.
-    private void OnPress(POINT pt) => NativeCallback.Guard(Log, "shell", () => Loop.Post(() => DismissOutside(pt)));
-
-    internal void DismissOutside(POINT pt)
-    {
-        foreach (var w in _grabbing.ToArray())
-        {
-            if (!w.Placement.ContainsScreenPoint(pt))
-                w.Client.OnDismissed();
-        }
-    }
-
     // Theme
 
     private void OnColorValuesChanged(global::Windows.UI.ViewManagement.UISettings sender, object args) => Loop.Post(ReadTheme);
@@ -409,11 +369,11 @@ internal sealed class ShellPlatform : IDisposable
             _uiSettings.ColorValuesChanged -= OnColorValuesChanged;
             _uiSettings = null;
         }
-        Unhook();
         foreach (var watch in _foregroundWatches)
             watch.Dispose();
-        Flyouts.Dispose();
         foreach (var w in _windows.ToArray())
             w.Dispose();
+        // Last, since a window lets go of its grab as it goes.
+        OutsideClicks.Dispose();
     }
 }

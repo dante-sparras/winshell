@@ -50,7 +50,7 @@ public sealed class WindowKindTests
             popup.Visible = true;
             await Task.Yield();
 
-            shell.Platform.DismissOutside(new POINT { X = (int)screen.X + 1000, Y = (int)screen.Y + 500 });
+            shell.Platform.OutsideClicks.Click(new POINT { X = (int)screen.X + 1000, Y = (int)screen.Y + 500 });
 
             return (heard, popup.Visible);
         });
@@ -76,12 +76,51 @@ public sealed class WindowKindTests
             await Task.Yield();
             Win32.GetWindowRect(popup.Host!.Handle, out var r);
 
-            shell.Platform.DismissOutside(new POINT { X = r.Left + 5, Y = r.Top + 5 });
+            shell.Platform.OutsideClicks.Click(new POINT { X = r.Left + 5, Y = r.Top + 5 });
 
             return count;
         });
 
         Assert.Equal(0, heard);
+    }
+
+    [Fact]
+    public async Task A_click_on_a_flyout_that_extends_past_a_grabbing_popup_leaves_the_popup_open()
+    {
+        var after = await ShellFixture.On(async shell =>
+        {
+            var screen = shell.Screens[0].Geometry;
+            var button = new Button { Content = "Open", Width = 80, Height = 32 };
+            var flyout = new Flyout { Content = new TextBlock { Text = "Flyout", Height = 300 }, ShouldConstrainToRootBounds = false, Placement = FlyoutPlacementMode.Bottom };
+            var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            flyout.Opened += (_, _) => opened.TrySetResult();
+            using var popup = new PopupWindow
+            {
+                Rect = new Rect(screen.X + 60, screen.Y + 60, 200, 48),
+                GrabFocus = true,
+                Content = button,
+            };
+            var heard = 0;
+            popup.Dismissed += () => heard++;
+            popup.Visible = true;
+            await ShellFixture.LaidOut(button);
+            flyout.ShowAt(button);
+            await opened.Task;
+            var child = (FrameworkElement)VisualTreeHelper.GetOpenPopupsForXamlRoot(button.XamlRoot)[0].Child;
+            var corner = child.TransformToVisual(null).TransformPoint(default);
+            var (left, _) = popup.Host!.Placement.MapToScreen(corner.X, corner.Y);
+            Win32.GetWindowRect(popup.Host.Handle, out var r);
+
+            var below = new POINT { X = left + 10, Y = r.Bottom + 10 };
+            shell.Platform.OutsideClicks.Click(below);
+            var result = (heard, popup.Visible, flyout.IsOpen);
+
+            // A click outside both closes the flyout, so the mouse hook does not outlive the test.
+            shell.Platform.OutsideClicks.Click(new POINT { X = (int)screen.Right - 5, Y = (int)screen.Bottom - 5 });
+            return result;
+        });
+
+        Assert.Equal((0, true, true), after);
     }
 
     [Fact]
@@ -116,26 +155,12 @@ public sealed class WindowKindTests
             var open = VisualTreeHelper.GetOpenPopupsForXamlRoot(button.XamlRoot).Count;
 
             var far = shell.Screens[0].Geometry;
-            shell.Platform.Flyouts.Click(new POINT { X = (int)far.Right - 5, Y = (int)far.Bottom - 5 });
+            shell.Platform.OutsideClicks.Click(new POINT { X = (int)far.Right - 5, Y = (int)far.Bottom - 5 });
 
             return (open, flyout.IsOpen);
         });
 
         Assert.Equal((1, false), after);
-    }
-
-    [Fact]
-    public async Task A_shown_xaml_popup_starts_the_watch_for_clicks_and_the_last_click_ends_it()
-    {
-        var watched = await ShellFixture.On(shell =>
-        {
-            shell.Platform.Flyouts.StartWatching();
-            var during = shell.Platform.Flyouts.Watching;
-            shell.Platform.Flyouts.Click(new POINT { X = 0, Y = 0 });
-            return (during, shell.Platform.Flyouts.Watching);
-        });
-
-        Assert.Equal((true, false), watched);
     }
 
     private static string Win32Title(nint hwnd)

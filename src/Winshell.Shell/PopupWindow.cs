@@ -35,7 +35,7 @@ public sealed class PopupWindow : ShellWindow
         }
     }
 
-    /// <summary>Takes the keyboard while shown. A click outside the popup, or Esc, then dismisses it.</summary>
+    /// <summary>Takes the keyboard while shown. A click outside the popup and its open flyouts, or Esc, then dismisses it.</summary>
     public bool GrabFocus
     {
         get => _grabFocus;
@@ -46,7 +46,7 @@ public sealed class PopupWindow : ShellWindow
         }
     }
 
-    /// <summary>A click outside the popup, or Esc, dismissed it. It is hidden.</summary>
+    /// <summary>A click outside the popup and its open flyouts, or Esc, dismissed it. It is hidden.</summary>
     public event Action? Dismissed;
 
     private protected override void ApplyPlacement() => Host!.Placement.SetPopup(new PopupPlacement(Screen, _rect, _grabFocus));
