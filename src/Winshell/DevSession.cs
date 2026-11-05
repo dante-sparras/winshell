@@ -131,9 +131,7 @@ internal static class DevSession
     {
         if (ShellOf(project) is not { } shell)
             return;
-        var request = notice.Length > 0
-            ? new IpcRequest("build-error", Args: [notice, project.ProjectFile])
-            : new IpcRequest("call", Target: "notice", Name: "dismiss");
+        var request = new IpcRequest("build-error", Args: [notice, project.ProjectFile]);
         try
         {
             await foreach (var response in IpcClient.Request(shell.Pipe, request))

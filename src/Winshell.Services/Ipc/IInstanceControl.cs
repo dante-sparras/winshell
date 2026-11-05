@@ -20,7 +20,10 @@ internal interface IInstanceControl
     /// <summary>Ends the shell.</summary>
     void Quit();
 
-    /// <summary>Shows the notice for a configuration that did not build. The shell keeps running.</summary>
+    /// <summary>
+    /// Shows the notice for a configuration that did not build, and the shell keeps running. An empty <paramref name="error"/>
+    /// says the project built: that closes the build-error notice of <paramref name="projectFile"/>, and no other.
+    /// </summary>
     void ShowBuildError(string error, string projectFile)
     {
     }
