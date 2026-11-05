@@ -6,7 +6,7 @@ using Windows.Win32.NetworkManagement.WiFi;
 
 namespace Winshell.Native;
 
-/// <summary>A WLAN interface state, as <c>WLAN_INTERFACE_STATE</c> numbers it.</summary>
+/// <summary>A WLAN interface state, as <c>WLAN_INTERFACE_STATE</c> numbers it. Services reads this, not the generated enum.</summary>
 internal enum WlanInterfaceState
 {
     NotReady = 0,
@@ -178,8 +178,9 @@ internal static unsafe class Wlan
         var handle = Handle;
         if (handle.IsNull)
             return (uint)WIN32_ERROR.ERROR_SERVICE_NOT_ACTIVE;
+        PWSTR text = default;
         var requested = ProfileReadFlags();
-        var error = PInvoke.WlanGetProfile(handle, interfaceGuid, profileName, out var text, ref requested, out _);
+        var error = PInvoke.WlanGetProfile(handle, interfaceGuid, profileName, out text, ref requested, out _);
         if (text.Value == null)
             return error == 0 ? (uint)WIN32_ERROR.ERROR_NOT_FOUND : error;
         try

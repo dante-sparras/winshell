@@ -7,7 +7,7 @@ namespace Winshell.Native;
 /// <summary>The one-shot connection requests of a Bluetooth audio driver.</summary>
 internal static class BluetoothAudio
 {
-    /// <summary>KSPROPSETID_BtAudio.</summary>
+    /// <summary>KSPROPSETID_BtAudio. CsWin32 emits it as a class to create, not as a GUID value.</summary>
     private static readonly Guid PropertySet = new("7fa06c40-b8f6-4c7e-8556-e8c33a12e54d");
 
     /// <summary>Asks the audio filter at <paramref name="filterPath"/> to connect or disconnect. Whether the driver accepted the request.</summary>
