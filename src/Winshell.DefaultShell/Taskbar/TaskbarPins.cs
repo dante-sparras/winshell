@@ -15,7 +15,6 @@ public sealed class TaskbarPins : ObservableObject, IDisposable
     private readonly string _path;
     private readonly Log _log;
     private readonly FileWatch _watch;
-    private IReadOnlyList<string> _ids = Defaults;
 
     public TaskbarPins(string path, IEventLoop loop, Log? log = null)
     {
@@ -27,14 +26,14 @@ public sealed class TaskbarPins : ObservableObject, IDisposable
 
     public IReadOnlyList<string> Ids
     {
-        get => _ids;
+        get;
         private set
         {
             // A read of our own write is a new list of the same ids, and that is not a change.
-            if (!_ids.SequenceEqual(value))
-                Set(ref _ids, value);
+            if (!field.SequenceEqual(value))
+                Set(ref field, value);
         }
-    }
+    } = Defaults;
 
     public void Pin(string id)
     {

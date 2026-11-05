@@ -49,7 +49,7 @@ Test service policy against fake backends on a real `EventQueue`. Fakes supply p
 
 Split `HostWindow` by responsibility, with explicit owners for window lifetime, placement, native message handling and presentation. Thin out `Shell.cs` and `ShellServices.cs` so they compose focused types instead of collecting feature behavior. Preserve disposal order, event-loop affinity, cancellation and the existing public Shell API.
 
-Use CommunityToolkit.Mvvm source generators only in DefaultShell and only where they remove clear property or command boilerplate. Keep model behavior and notification ordering explicit. Core's `ObservableObject` remains shared infrastructure; do not spread a UI generator dependency through the lower layers.
+DefaultShell's models derive from Core's `ObservableObject` and write a property as a one-line `field` setter. They take no MVVM source generator: a generated property is no shorter, and DefaultShell's sources ship in the template, so the generator would become a dependency of every configuration. Keep model behavior and notification ordering explicit.
 
 ## Crash supervision
 
