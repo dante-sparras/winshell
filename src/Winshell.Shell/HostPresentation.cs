@@ -16,7 +16,7 @@ namespace Winshell;
 
 /// <summary>
 /// What a native window shows, and the keyboard that reaches it: a XAML island whose background stays transparent, over
-/// a material, both following the shell's theme. The root exists with the window's parts; the island once the window does.
+/// a material, both following the shell's theme. The island goes in once every part of the window exists.
 /// </summary>
 internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) : IDisposable
 {

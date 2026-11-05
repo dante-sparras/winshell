@@ -3,9 +3,9 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>
-/// The native window behind a shell window, and its life. It makes the window with its <see cref="Placement"/>,
-/// <see cref="Presentation"/> and <see cref="Messages"/>, and releases them in that order when its client disposes
-/// it or Windows destroys it. A window that throws while handling a message stops, and its client makes another.
+/// The native window behind a shell window, and its life. It makes the window and the parts that own its
+/// <see cref="Placement"/>, <see cref="Presentation"/> and <see cref="Messages"/>, and lets go of them when its client
+/// disposes it or Windows destroys it. A window that throws while handling a message stops, and its client makes another.
 /// </summary>
 internal sealed class HostWindow : IDisposable
 {
@@ -20,13 +20,14 @@ internal sealed class HostWindow : IDisposable
         _platform = platform;
         Kind = kind;
         Client = client;
-        // Messages reach these from the moment the window exists.
-        Presentation = new HostPresentation(this, platform);
-        Messages = new HostMessages(this, platform, dismissMenu);
         var (style, exStyle) = Styles(kind);
         _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage);
         Handle = _window.Handle;
+        // The handler gets no message until Create returns, and nothing here pumps one, so every part exists before
+        // the first message. Their constructors send and pump none; the presentation attaches its island below.
         Placement = new HostPlacement(this, platform);
+        Presentation = new HostPresentation(this, platform);
+        Messages = new HostMessages(this, platform, dismissMenu);
         // A window that could not be finished is destroyed here; its client never gets it to dispose.
         try
         {
@@ -53,7 +54,7 @@ internal sealed class HostWindow : IDisposable
 
     internal HostMessages Messages { get; }
 
-    /// <summary>Whether the window has let go of its parts. <see cref="Handle"/> turns 0 once it has let go of the window too.</summary>
+    /// <summary>Whether the window has started letting go of its parts. <see cref="Handle"/> turns 0 once it has let go of the window too.</summary>
     internal bool Released { get; private set; }
 
     internal static (uint Style, uint ExStyle) Styles(WindowKind kind) => kind switch
@@ -97,7 +98,7 @@ internal sealed class HostWindow : IDisposable
 
     public void Dispose() => Cleanup(destroyWindow: true);
 
-    /// <summary>The owner is closing, so Windows destroys this window. Its handle goes before it dangles.</summary>
+    /// <summary>Windows is destroying the window, so it lets go of it without destroying it, and tells its client on the loop.</summary>
     internal void NoteExternalDestroy()
     {
         if (Released)
