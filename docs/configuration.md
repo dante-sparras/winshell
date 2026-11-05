@@ -4,7 +4,7 @@ A configuration is a .NET project that references the Winshell package and build
 
 ## Create one
 
-You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](../README.md#build-from-source), so the two are the same release.
+You need the [.NET SDK](https://dotnet.microsoft.com/download), PowerShell 7 and Git. Running the default shell does not. The `dotnet new` templates and the `Winshell` package a configuration references are not published yet, so you pack them from a clone of Winshell. Use a `winshell` [built from that clone](development.md#build-from-source), so the two are the same release.
 
 ```powershell
 git clone https://github.com/enpaze/winshell.git
@@ -29,6 +29,18 @@ winshell run --path .
 A downloaded project is refused before any build. Winshell looks for a `Zone.Identifier` stream on the `.csproj` and on `.props` and `.targets` beside it. Unblock the file (right-click > Properties > Unblock, or `Unblock-File`) if you trust it. `git clone` writes no zone, so it is not caught.
 
 A `winshell` and a shell of different releases refuse each other, except `kill`. The message names both releases.
+
+## Where a configuration lives
+
+A configuration is a .NET project. Winshell looks for a `.csproj` in this order. With none, it runs the default shell.
+
+| What you run | The project it builds and runs |
+| --- | --- |
+| `winshell run --path <folder or file>` | That `.csproj`, or the one `.csproj` in that folder |
+| `winshell run --config <name>` | The project in `%APPDATA%\winshell\<name>` |
+| `winshell run` | The project in `%APPDATA%\winshell`; else `%APPDATA%\winshell\default`; else the one subfolder of `%APPDATA%\winshell` that has a project. With several, Winshell asks you to pick one with `--config`. With none, it runs the default shell. |
+
+`WINSHELL_CONFIG_DIR` replaces `%APPDATA%\winshell` in this table. The default shell keeps `preferences.toml` in that folder.
 
 ## The program
 

@@ -28,7 +28,7 @@ winshell help [command]             print this summary, or that command's help
 
 ## Run a shell
 
-`winshell run` with no project runs the default shell, which is built in. With a project it builds to `bin\shell` when a source is newer than that program, then starts the program. A failed build does not start the last program that built. Options may come before `run`. [Where a configuration lives](../../README.md#where-a-configuration-lives) explains which project it picks. A command may also come after its options, so `winshell -c work kill` stops that config instead of starting it.
+`winshell run` with no project runs the default shell, which is built in. With a project it builds to `bin\shell` when a source is newer than that program, then starts the program. A failed build does not start the last program that built. Options may come before `run`. [Where a configuration lives](../configuration.md#where-a-configuration-lives) explains which project it picks. A command may also come after its options, so `winshell -c work kill` stops that config instead of starting it.
 
 | Option | What it does |
 | --- | --- |
