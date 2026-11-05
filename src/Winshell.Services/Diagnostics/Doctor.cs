@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Winshell.Native;
 using Winshell.Notifications;
 using Winshell.Session;
 using Winshell.Updates;
@@ -50,10 +51,10 @@ internal sealed record DoctorContext(
 /// </summary>
 public static class Doctor
 {
-    // Each check reads what it needs, mostly through IDoctorFacts, and judges it in code of its own, so the judging is tested without the PC.
+    // Each check reads what it needs, mostly through DoctorProbe, and judges it in a function of its own, so the judging is tested without the PC.
     internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
-    internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context, IDoctorFacts facts)
+    internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context)
     {
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
         var search = context.ProjectRoot
@@ -77,25 +78,25 @@ public static class Doctor
             configuration = [.. DoctorProject.Configuration(search)];
         }
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
-        if (!blocked && configuration[0].Status == CheckStatus.Pass && facts.PreferencesProblem(context.ConfigRoot) is { } preferences)
+        if (!blocked && configuration[0].Status == CheckStatus.Pass && DoctorProbe.PreferencesProblem(context.ConfigRoot) is { } preferences)
             configuration[0] = WithPreferences(configuration[0], preferences);
         DoctorCheck[] checks =
         [
-            Guard("windows", "Windows", () => Windows(facts.WindowsBuild(), facts.WindowsUpdateRevision(), facts.WindowsDisplayVersion(), facts.WindowsServer(), facts.TransparencyEffectsOff(), facts.ContrastThemeOn())),
-            Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, facts.SelfContained(context.ExePath))),
+            Guard("windows", "Windows", () => Windows(DoctorProbe.WindowsBuild(), DoctorProbe.WindowsUpdateRevision(), DoctorProbe.WindowsDisplayVersion(), DoctorProbe.WindowsServer(), DoctorProbe.TransparencyEffectsOff(), ContrastTheme.IsOn())),
+            Guard("dotnet", ".NET", () => DotNet(Environment.Version, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, DoctorProbe.SelfContained(context.ExePath))),
             .. configuration,
             Guard("folders", "Folders", () => Folders(
-                [("the config folder", configFolder, facts.CanWrite(configFolder)), ("its local folder", context.LocalRoot, facts.CanWrite(context.LocalRoot))],
-                context.Instances.Where(i => facts.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
+                [("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)), ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))],
+                context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
                 Environment.IsPrivilegedProcess)),
-            Guard("appBars", "App bars", () => DoctorScreens.AppBars(facts.Monitors(), facts.EdgeWindows())),
-            Guard("dpi", "DPI", () => DoctorScreens.Dpi(facts.PerMonitorV2(), facts.CompatibilityLayers(context.ExePath), facts.Monitors())),
+            Guard("appBars", "App bars", () => DoctorScreens.AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
+            Guard("dpi", "DPI", () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath), DoctorProbe.Monitors())),
             Guard("signIn", "Sign-in", () => Packaging.IsPackaged
                 ? DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State)
-                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(), context.ExePath, File.Exists, facts.ResolveLinks)),
+                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(), context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(context.Instances)),
-            Guard("crashes", "Crashes", () => DoctorCrashes.CrashesIn(facts.ReadCrashReports(context.CrashRoot), now, facts.PeekCrash)),
+            Guard("crashes", "Crashes", () => DoctorCrashes.CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now, DoctorProbe.PeekCrash)),
         ];
         return WithoutUserFolders(checks,
         [
@@ -201,7 +202,7 @@ public static class Doctor
             ListedInstances(),
             ShellLocations.LocalRoot,
             ShellLocations.CrashRoot,
-            project?.Folder), DoctorFacts.Pc);
+            project?.Folder));
     }
 
     private static List<DoctorInstance> ListedInstances()

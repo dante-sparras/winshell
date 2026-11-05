@@ -50,14 +50,14 @@ public sealed class DoctorUserConfigTests : IDisposable
         var local = Path.Combine(_dir, "local");
         var crashes = Path.Combine(_dir, "crashes");
 
-        var warned = Run(Context(config, local, crashes), DoctorFacts.Pc).Single(c => c.Id == "project");
+        var warned = Run(Context(config, local, crashes)).Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Warn, warned.Status);
         Assert.Contains("Mine.csproj", warned.Message, StringComparison.Ordinal);
         Assert.Contains(Printed(preferences), warned.Message, StringComparison.Ordinal);
         Assert.Contains("until the file parses", warned.Fix, StringComparison.Ordinal);
 
-        var failed = Run(Context(config, local, crashes, problem: "Winshell cannot read the config folder: denied"), DoctorFacts.Pc).Single(c => c.Id == "project");
+        var failed = Run(Context(config, local, crashes, problem: "Winshell cannot read the config folder: denied")).Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Fail, failed.Status);
         Assert.Equal("Winshell cannot read the config folder: denied", failed.Message);
@@ -71,7 +71,7 @@ public sealed class DoctorUserConfigTests : IDisposable
         Directory.CreateDirectory(config);
         File.WriteAllText(Path.Combine(config, "preferences.toml"), "colorScheme =\n");
 
-        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")), DoctorFacts.Pc).Single(c => c.Id == "project");
+        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"))).Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Equal("No configuration project, so winshell run starts nothing.", check.Message);
@@ -102,7 +102,7 @@ public sealed class DoctorUserConfigTests : IDisposable
         var decoy = Path.Combine(shell, "preferences.toml");
         File.WriteAllText(decoy, "colorScheme =\n");
 
-        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), projectFile), DoctorFacts.Pc).Single(c => c.Id == "project");
+        var check = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), projectFile)).Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Contains(Printed(preferences) + "[", check.Message, StringComparison.Ordinal);
@@ -132,7 +132,7 @@ public sealed class DoctorUserConfigTests : IDisposable
         File.WriteAllText(project + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n");
         File.WriteAllText(Path.Combine(config, "preferences.toml"), "colorScheme =\n");
 
-        var checks = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), project), DoctorFacts.Pc);
+        var checks = Run(Context(config, Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes"), project));
 
         var downloaded = checks.Single(c => c.Id == "downloaded");
         Assert.Equal(CheckStatus.Fail, downloaded.Status);
