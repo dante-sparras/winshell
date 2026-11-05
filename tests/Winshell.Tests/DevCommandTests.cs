@@ -157,6 +157,9 @@ public sealed class DevCommandTests : IDisposable
         info.CreateNewProcessGroup = ownGroup;
         foreach (var (name, value) in Folders)
             info.Environment[name] = value;
+        // dotnet watch's builds leave idle MSBuild nodes that another test's build can take, and those nodes end
+        // when dotnet watch does, failing that build with MSB4166. Without node reuse its builds share none.
+        info.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         _dev = Process.Start(info)!;
         foreach (var stream in new[] { _dev.StandardOutput, _dev.StandardError })
         {

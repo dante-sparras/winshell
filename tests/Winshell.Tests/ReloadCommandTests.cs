@@ -96,9 +96,8 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         try
         {
             File.WriteAllText(source, original + "\n// rebuilt\n");
-            var result = Run("reload", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
+            var result = Reload(process);
 
-            Assert.Equal(0, result.Code);
             Assert.Equal("", result.Error);
             Assert.StartsWith("Reloaded ", result.Output, StringComparison.Ordinal);
             Wait.Until(() => process.HasExited, "the old process to exit");
@@ -136,8 +135,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     private Process ReloadTo(Process running, string original, string shellId)
     {
         File.WriteAllText(Path.Combine(_probe.Folder, "Program.cs"), original.Replace("?? \"probe\"", $"?? \"{shellId}\"", StringComparison.Ordinal));
-        var result = Run("reload", "--pid", running.Id.ToString(CultureInfo.InvariantCulture));
-        Assert.True(result.Code == 0, $"Reload exited {result.Code}.\n{result.Output}\n{result.Error}");
+        Reload(running);
         Wait.Until(() => running.HasExited, "the old process to exit");
         var pid = 0;
         Wait.Until(
@@ -150,6 +148,14 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         var next = Process.GetProcessById(pid);
         _started.Add(next);
         return next;
+    }
+
+    /// <summary>Reloads <paramref name="running"/>, failing with what the reload printed unless it exits 0.</summary>
+    private (int Code, string Output, string Error) Reload(Process running)
+    {
+        var result = Run("reload", "--pid", running.Id.ToString(CultureInfo.InvariantCulture));
+        Assert.True(result.Code == 0, $"Reload exited {result.Code}.\n{result.Output}\n{result.Error}");
+        return result;
     }
 
     [Fact]
