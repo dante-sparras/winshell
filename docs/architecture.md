@@ -49,7 +49,7 @@ Test service policy against fake backends on a real `EventQueue`. Fakes supply p
 
 Split `HostWindow` by responsibility, with explicit owners for window lifetime, placement, native message handling and presentation. Thin out `Shell.cs` and `ShellServices.cs` so they compose focused types instead of collecting feature behavior. Preserve disposal order, event-loop affinity, cancellation and the existing public Shell API.
 
-DefaultShell's models derive from Core's `ObservableObject` and write a property as a one-line `field` setter. They take no MVVM source generator: a generated property is no shorter, and DefaultShell's sources ship in the template, so the generator would become a dependency of every configuration. Keep model behavior and notification ordering explicit.
+DefaultShell's models derive from Core's `ObservableObject`. A property that only stores a value and reports its change is a `field` setter, one line when it needs nothing else. The models take no MVVM source generator: a generated property is no shorter, and DefaultShell's sources ship in the template, so the generator would become a dependency of every configuration. Keep model behavior and notification ordering explicit.
 
 ## Crash supervision
 
@@ -80,7 +80,7 @@ Deliver in dependency order, with the rules documented first:
 1. Introduce Native with CsWin32 and package integration. Migrate interop and its callers in focused, independently buildable groups, converting the remaining `DllImport` declarations. Remove each replaced declaration in the same PR. Seal the boundary with build enforcement once the last consumer has moved; finish Native before starting the higher-layer restructuring.
 2. Extract Core and include it in the single package. Move infrastructure and its existing tests without changing behavior. Add architecture tests as the relevant boundaries become enforceable, and complete the full graph guard when all layers exist.
 3. Complete the Services feature seams and their fake-based tests. Split HostWindow and thin Shell composition while preserving its public API. These can proceed side by side only when their files and shared types do not overlap.
-4. Apply useful DefaultShell MVVM generators and add CLI crash supervision with taskbar recovery. Remove the named orphan build trees. Keep independent changes in separate PRs and serialize any shared build or package edits.
+4. Move DefaultShell's remaining backing-field properties to `field` setters and add CLI crash supervision with taskbar recovery. Remove the named orphan build trees. Keep independent changes in separate PRs and serialize any shared build or package edits.
 5. Verify the complete dependency graph, interop ban, feature isolation, package contents, TOML behavior and recovery contracts. Confirm every migration PR has merged.
 
 Each small PR owns one issue, thread, worktree and branch. Record its allowed paths, prerequisites and acceptance checks in its issue. Prefer [PR stacks](development.md#pull-request-stacks) for dependent layers; each layer must still build and be reviewable on its own. An intermediate migration step is not permission to add new interop outside Native or expand an old boundary violation.
