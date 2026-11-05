@@ -43,19 +43,9 @@ public sealed class DetachOutputTests : IDisposable, IClassFixture<ProbeBuild>
 
     public void Dispose()
     {
+        // Asked, not ended: the winshell run that supervises the shell would start an ended one again.
         foreach (var pid in Running())
-        {
-            try
-            {
-                using var shell = System.Diagnostics.Process.GetProcessById(pid);
-                shell.Kill();
-                shell.WaitForExit();
-            }
-            catch (ArgumentException)
-            {
-                // It has exited already.
-            }
-        }
+            WinshellCli.Run(["kill", "--force", "--pid", pid.ToString(System.Globalization.CultureInfo.InvariantCulture)], Folders);
         Wait.Until(Removed, "the test folder to be free");
     }
 

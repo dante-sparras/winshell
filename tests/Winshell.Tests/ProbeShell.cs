@@ -7,7 +7,8 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// A real program with no windows, shell id <c>probe</c> unless a test names another, built once into <c>bin\shell</c>.
-/// Tests of instances start it, so they hold no taskbar and no screen edge. A class that starts it has the
+/// Tests of instances start it, so they hold no taskbar and no screen edge unless a test puts <see cref="HideTaskbarMarker"/>
+/// in its config folder. A class that starts it has the
 /// <see cref="ProbeBuild"/> fixture. Nothing changes that build once it is made: a test that edits and rebuilds a probe
 /// builds one of its own with <see cref="Build"/>.
 /// </summary>
@@ -207,6 +208,9 @@ internal static class ProbeShell
     /// <summary>A file whose presence in the config folder makes the probe start a program and never exit.</summary>
     internal const string HangMarker = "probe-hang";
 
+    /// <summary>A file whose presence in the config folder makes the probe hide Explorer's taskbar, and then delete the file.</summary>
+    internal const string HideTaskbarMarker = "probe-hide-taskbar";
+
     private const string Source =
         $$"""
         using Winshell;
@@ -217,8 +221,14 @@ internal static class ProbeShell
         {
             public override void Start(Shell shell)
             {
-                // A test that puts {{HangMarker}} in the config folder gets a shell that starts a program and then never exits.
                 var config = Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR");
+                // A test that puts {{HideTaskbarMarker}} there gets a shell that hides Explorer's taskbar once.
+                if (config is not null && File.Exists(Path.Combine(config, "{{HideTaskbarMarker}}")))
+                {
+                    shell.ExplorerTaskbar.Hidden = true;
+                    File.Delete(Path.Combine(config, "{{HideTaskbarMarker}}"));
+                }
+                // A test that puts {{HangMarker}} there gets a shell that starts a program and then never exits.
                 if (config is null || !File.Exists(Path.Combine(config, "{{HangMarker}}")))
                     return;
                 var child = Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;

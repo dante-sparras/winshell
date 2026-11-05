@@ -46,20 +46,20 @@ To make Winshell the only bar, set this in `preferences.toml` and save:
 hideExplorerTaskbar = true
 ```
 
-There is no switch for it in Winshell Settings. Winshell then hides Explorer's taskbar window and releases the screen edge it reserved. It puts both back when it exits: quitting, Ctrl+C, `winshell kill`, or a crash that still runs Winshell's exit. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`.
+There is no switch for it in Winshell Settings. Winshell then hides Explorer's taskbar window and releases the screen edge it reserved. It puts both back when it exits: quitting, Ctrl+C, `winshell kill`, or a crash. A crash that skips Winshell's own exit is caught by `winshell run`, which [puts the taskbar back](reference/command-line.md#crashes) and starts the shell again. Windows keeps a few hotkeys for its own taskbar while Explorer runs, such as `Win+T`, `Win+S`, `Win+A`, `Win+N`, and `Win+1` through `Win+9`.
 
 ## Explorer's taskbar is missing
 
 This is `hideExplorerTaskbar`. While Winshell is still running, set the key back to `false` and save, or quit Winshell. It puts Explorer's taskbar window back and reserves its edge again.
 
-If Winshell was killed before that code could run, the window stays hidden and the edge stays released. Winshell cannot run anything in that case. Bring the taskbar back yourself:
+If `winshell run` was ended too, or the shell ran without it, as a configuration's program started directly does, the window stays hidden and the edge stays released. Bring the taskbar back yourself:
 
 1. Press Ctrl+Shift+Esc to open Task Manager.
 2. Find **Windows Explorer**, right-click it and choose **Restart**.
 
 Explorer builds its taskbar again. Set `hideExplorerTaskbar` to `false` before you start Winshell if you want that taskbar to stay. Signing out and back in also starts Explorer again, which brings the taskbar back.
 
-A kill that skips the exit code is Task Manager's **End task**, `taskkill /F`, or `winshell kill --force` when the shell did not exit on its own. The same is true of a native crash that never reaches Winshell's handler, such as a stack overflow. A normal exit, `winshell kill` without `--force`, Ctrl+C, and a managed crash that still runs the exit or the unhandled-exception handler all put the taskbar back.
+Ending `winshell run` and the shell together does that, such as `taskkill /F /T` on `winshell run`. Ending only the shell, a native crash such as a stack overflow, and `winshell kill --force` leave `winshell run` to put the taskbar back.
 
 ## A change to preferences.toml does nothing
 

@@ -10,7 +10,7 @@ namespace Winshell.Tests;
 public sealed class InspectCommandTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
-    private readonly Process _shell;
+    private readonly Process _run;
     private readonly string _pid;
 
     private (string, string)[] Folders =>
@@ -28,19 +28,22 @@ public sealed class InspectCommandTests : IDisposable
         var info = WinshellCli.StartInfo(["run"]);
         foreach (var (name, value) in Folders)
             info.Environment[name] = value;
-        _shell = Process.Start(info)!;
-        _pid = _shell.Id.ToString(CultureInfo.InvariantCulture);
+        _run = Process.Start(info)!;
+        // winshell run supervises the shell, which runs in a child process.
+        var shell = 0;
+        Wait.Until(() => (shell = ListedPid()) != 0, "the shell in winshell list");
+        _pid = shell.ToString(CultureInfo.InvariantCulture);
         Wait.Until(() => Run("tree").Output.Contains("TaskbarView", StringComparison.Ordinal), "the taskbar in the tree");
     }
 
     public void Dispose()
     {
-        if (!_shell.HasExited)
+        if (!_run.HasExited)
         {
-            _shell.Kill(entireProcessTree: true);
-            _shell.WaitForExit();
+            _run.Kill(entireProcessTree: true);
+            _run.WaitForExit();
         }
-        _shell.Dispose();
+        _run.Dispose();
         Wait.Until(Removed, "the test folder to be free");
     }
 
@@ -59,6 +62,13 @@ public sealed class InspectCommandTests : IDisposable
 
     private (int Code, string Output, string Error) Run(params string[] args) =>
         WinshellCli.Run(["inspect", "--pid", _pid, .. args], Folders);
+
+    /// <summary>The one shell <c>winshell list</c> shows, or 0 before it does.</summary>
+    private int ListedPid()
+    {
+        using var listed = JsonDocument.Parse(WinshellCli.Run(["list", "--json"], Folders).Output);
+        return listed.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).SingleOrDefault();
+    }
 
     private static int Count(string tree, string type) =>
         JsonDocument.Parse(tree).RootElement.EnumerateArray().Count(window => window.GetProperty("content").GetProperty("type").GetString() == type);

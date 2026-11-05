@@ -12,12 +12,24 @@ internal static class KillCommand
             Console.Error.WriteLine(choice.Error == InstanceSelection.NoneRunning ? InstanceSelection.NoneToKill : choice.Error);
             return choice.Code;
         }
+        // Its supervisor must not start it again, even after a crash on the way out or the end --force gives it.
+        ShellProcess.TellSupervisor(info.Pid, stopAsked: true);
         // Null once the instance has accepted the kill. No answer is a failure too.
-        var answer = await InstanceCall.AskAsync(info, new IpcRequest("kill"));
+        InstanceCall.Answer answer;
+        try
+        {
+            answer = await InstanceCall.AskAsync(info, new IpcRequest("kill"));
+        }
+        catch
+        {
+            ShellProcess.TellSupervisor(info.Pid, stopAsked: false);
+            throw;
+        }
         var failure = answer.Response is { Ok: false } refused ? $"Instance {info.Id} refused: {refused.Error}" : answer.Failure;
         // The quit is only posted. Wait so the next start does not overlap the AppBar, hotkeys and tray.
         if (!WaitForShellExit(info, TimeSpan.FromSeconds(5)) && !(options.Force && EndProcess(info)))
         {
+            ShellProcess.TellSupervisor(info.Pid, stopAsked: false);
             if (failure is not null)
                 Console.Error.WriteLine(failure);
             Console.Error.WriteLine(options.Force
