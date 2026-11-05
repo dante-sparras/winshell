@@ -20,7 +20,7 @@ public sealed class WindowListService : ObservableObject, IDisposable
     {
         _loop = loop;
         _desktops = desktops;
-        _source = source ?? TrackedWindows.Instance;
+        _source = source ?? WindowTracker.Instance;
         _source.Start(loop, log);
         _source.Changed += OnChanged;
         if (_desktops is not null)

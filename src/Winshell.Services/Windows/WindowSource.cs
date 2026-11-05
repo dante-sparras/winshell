@@ -2,7 +2,7 @@ namespace Winshell.Windows;
 
 /// <summary>
 /// The windows a <see cref="WindowListService"/> follows, and what it asks of them. Tests use a stand-in, so no real
-/// window moves. The shell uses <see cref="TrackedWindows"/>.
+/// window moves. The shell uses <see cref="WindowTracker"/>.
 /// </summary>
 internal interface IWindowSource
 {
@@ -33,40 +33,4 @@ internal interface IWindowSource
     void SetMinimized(nint hwnd, bool minimized);
 
     void MoveToMonitor(nint hwnd, string deviceName);
-}
-
-/// <summary>The process's <see cref="WindowTracker"/>, and the supported desktop API.</summary>
-internal sealed class TrackedWindows : IWindowSource
-{
-    public static readonly TrackedWindows Instance = new();
-
-    public IReadOnlyDictionary<nint, WindowInfo> Windows => WindowTracker.Windows;
-
-    public nint Active => WindowTracker.Active;
-
-    public event Action? Changed
-    {
-        add => WindowTracker.Changed += value;
-        remove => WindowTracker.Changed -= value;
-    }
-
-    public void Start(IEventLoop loop, Log log) => WindowTracker.EnsureStarted(loop, log);
-
-    public bool WantsAttention(nint hwnd) => WindowTracker.WantsAttention(hwnd);
-
-    public ScreenInfo? Screen(string deviceName) => Screens.Find(deviceName)?.Info;
-
-    public string DesktopId(nint hwnd) => WindowDesktop.IdOf(hwnd);
-
-    public bool MoveToDesktop(nint hwnd, Guid desktop) => WindowDesktop.Move(hwnd, desktop);
-
-    public void Activate(nint hwnd) => WindowTracker.Activate(hwnd);
-
-    public void Close(nint hwnd) => WindowTracker.Close(hwnd);
-
-    public void SetMaximized(nint hwnd, bool maximized) => WindowTracker.SetMaximized(hwnd, maximized);
-
-    public void SetMinimized(nint hwnd, bool minimized) => WindowTracker.SetMinimized(hwnd, minimized);
-
-    public void MoveToMonitor(nint hwnd, string deviceName) => WindowTracker.MoveToMonitor(hwnd, deviceName);
 }

@@ -5,7 +5,7 @@ namespace Winshell.Windows;
 
 /// <summary>
 /// Which virtual desktop a window is on, and moving it to another, through the supported
-/// <c>IVirtualDesktopManager</c>. Unlike the desktop list in <see cref="VirtualDesktopBroker"/>, it works on every build.
+/// <c>IVirtualDesktopManager</c>. Unlike the desktop list in <see cref="VirtualDesktopBackend"/>, it works on every build.
 /// </summary>
 internal static class WindowDesktop
 {
