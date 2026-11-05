@@ -12,6 +12,7 @@
     <InternalsVisibleTo Include="Winshell.Services" />
     <InternalsVisibleTo Include="Winshell.Shell" />
     <!-- The test projects. Each compiles tests/TestSupport, whose parent process watch calls what Testing/NativeMethods.txt generates. -->
+    <InternalsVisibleTo Include="Winshell.Architecture.Tests" />
     <InternalsVisibleTo Include="Winshell.Core.Tests" />
     <InternalsVisibleTo Include="Winshell.DefaultShell.Tests" />
     <InternalsVisibleTo Include="Winshell.Package.Tests" />

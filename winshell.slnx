@@ -12,6 +12,7 @@
     <Project Path="templates/Winshell.Templates.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Winshell.Architecture.Tests/Winshell.Architecture.Tests.csproj" />
     <Project Path="tests/Winshell.Core.Tests/Winshell.Core.Tests.csproj" />
     <Project Path="tests/Winshell.DefaultShell.Tests/Winshell.DefaultShell.Tests.csproj" />
     <Project Path="tests/Winshell.Services.Tests/Winshell.Services.Tests.csproj" />

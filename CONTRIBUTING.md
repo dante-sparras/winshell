@@ -8,6 +8,7 @@ Every new or changed test passes the authoring gate of the `test-audit` skill, w
 
 | Project | Owns |
 | --- | --- |
+| `Winshell.Architecture.Tests` | The boundaries of [the architecture](docs/architecture.md#architecture-proof): layers, feature backends, and no hand-written unsafe code in WinUI projects |
 | `Winshell.Core.Tests` | The shared infrastructure: the event loop, the log, TOML files, crash reports and file helpers |
 | `Winshell.Services.Tests` | A service against a fake of its Windows backend, on a real `EventQueue` |
 | `Winshell.DefaultShell.Tests` | The default shell's models, with no window |
