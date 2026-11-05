@@ -163,6 +163,8 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             return;
         if (host.Kind == WindowKind.Panel && host.Placement.Panel?.Focusable != true)
             return;
+        if (host.Kind == WindowKind.Popup && host.Placement.Popup?.GrabFocus != true)
+            return;
         // A Windows-key chord arrives through a low-level hook, which does not grant foreground rights, so
         // SetForegroundWindow can fail. Join the foreground thread long enough to take the keyboard, then leave it.
         if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))

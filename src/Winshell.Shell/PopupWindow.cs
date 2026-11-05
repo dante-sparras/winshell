@@ -35,7 +35,7 @@ public sealed class PopupWindow : ShellWindow
         }
     }
 
-    /// <summary>Takes the keyboard while shown. A click outside the popup and its open flyouts, or Esc, then dismisses it.</summary>
+    /// <summary>Takes the keyboard while shown. Focus does nothing unless this is set. A click outside the popup and its open flyouts, or Esc, then dismisses it.</summary>
     public bool GrabFocus
     {
         get => _grabFocus;

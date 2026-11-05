@@ -124,6 +124,45 @@ public sealed class WindowKindTests
     }
 
     [Fact]
+    public async Task Focus_on_a_popup_that_does_not_grab_focus_leaves_the_app_in_front_active()
+    {
+        var (app, _, foreground) = await FocusPopup(grabFocus: false);
+
+        Assert.Equal(app, foreground);
+    }
+
+    [Fact]
+    public async Task Focus_on_a_popup_that_grabs_focus_takes_the_foreground()
+    {
+        var (_, popup, foreground) = await FocusPopup(grabFocus: true);
+
+        Assert.Equal(popup, foreground);
+    }
+
+    /// <summary>Puts an app window in front of a shown popup, calls the popup's Focus, and reports who is in front.</summary>
+    private static Task<(nint App, nint Popup, nint Foreground)> FocusPopup(bool grabFocus) => ShellFixture.On(async shell =>
+    {
+        var screen = shell.Screens[0].Geometry;
+        using var popup = new PopupWindow
+        {
+            Rect = new Rect(screen.X + 60, screen.Y + 60, 200, 120),
+            GrabFocus = grabFocus,
+            Content = new Grid(),
+        };
+        popup.Visible = true;
+        using var app = new FloatingWindow { Width = 300, Height = 200, Content = new Grid() };
+        app.Visible = true;
+        await Task.Yield();
+        var front = app.Host!.Handle;
+        app.Focus();
+        await Wait.UntilAsync(() => Win32.GetForegroundWindow() == front, "the app window to come to the front");
+
+        popup.Focus();
+
+        return (front, popup.Host!.Handle, Win32.GetForegroundWindow());
+    });
+
+    [Fact]
     public async Task A_floating_window_has_the_size_and_title_it_was_given()
     {
         var read = await ShellFixture.On(async _ =>
