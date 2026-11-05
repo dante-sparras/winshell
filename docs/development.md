@@ -228,8 +228,6 @@ A running shell reads these. None is needed to build or test.
 
 `winshell run` sets `WINSHELL_SUPERVISED`, and `WINSHELL_UPDATE_FAILURE` when an update did not install, on the process that runs the default shell for it. That process clears both. Never set them.
 
-`WINSHELL_TEST_CRASH` is read only by a Debug build, for the crash tests: it names a folder for crash reports, and the shell crashes once its config has loaded, so the test sees the report a real crash writes. A Release build ignores it. Never set it otherwise.
-
 ### Installer
 
 `scripts/install.ps1` and `scripts/uninstall.ps1` read these. A normal install sets none of them. `WINSHELL_VERSION` and `WINSHELL_AUTOSTART` are the `irm | iex` forms of `-Version` and `-AutoStart`; they are described with those commands above.
