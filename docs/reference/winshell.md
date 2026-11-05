@@ -251,6 +251,14 @@ A configuration: the program that defines a shell. Start makes its windows.
 | --- | --- | --- |
 | `Start([Shell](#shell) shell)` | void | Runs once, on the shell's thread, after WinUI has started. |
 
+## ShellImage
+
+The icons the Windows shell shows for programs, files and packaged apps.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `Load(string shellPath, int size)` | [PixelImage](#pixelimage)?, static | Reads the icon the Windows shell shows for an item. Blocks while the shell reads it. The icon, premultiplied, or null when the shell has none for the item. |
+
 ## ShellIpc
 
 What `winshell ipc` reaches in a C# configuration: functions, properties and signals, by target. A function's own types declare what it takes and returns, and only string, int, bool, double, float and Color cross the pipe. The CLI's text is parsed into those types and nothing is ever evaluated. Use this on the shell's thread.

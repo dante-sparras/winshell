@@ -1,11 +1,10 @@
 using System.ComponentModel;
-using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
-using WinRT;
 using Winshell.Capture;
 
 namespace Winshell;
@@ -143,35 +142,38 @@ public sealed class CaptureView : Panel
     }
 
     /// <summary>One write into the bitmap. Capture frames are already premultiplied, which is what the bitmap stores.</summary>
-    private static unsafe void Copy(WriteableBitmap bitmap, PixelImage frame)
+    private static void Copy(WriteableBitmap bitmap, PixelImage frame)
     {
-        // A C# cast does not query this interface on a CsWinRT buffer.
-        var access = bitmap.PixelBuffer.As<IBufferByteAccess>();
-        access.Buffer(out var destination);
+        using var destination = bitmap.PixelBuffer.AsStream();
         var pixels = frame.Bgra;
-        var length = pixels.Length;
         if (frame.Premultiplied)
         {
-            fixed (byte* source = pixels)
-                Buffer.MemoryCopy(source, destination, length, length);
+            destination.Write(pixels);
             return;
         }
-        for (var i = 0; i < length; i += 4)
+        // Premultiplied a piece at a time, so a frame needs no second array.
+        Span<byte> piece = stackalloc byte[4096];
+        for (var start = 0; start < pixels.Length; start += piece.Length)
         {
-            var alpha = pixels[i + 3];
-            destination[i + 3] = alpha;
-            if (alpha == 255)
+            var source = pixels.Slice(start, Math.Min(piece.Length, pixels.Length - start));
+            for (var i = 0; i < source.Length; i += 4)
             {
-                destination[i] = pixels[i];
-                destination[i + 1] = pixels[i + 1];
-                destination[i + 2] = pixels[i + 2];
+                var alpha = source[i + 3];
+                piece[i + 3] = alpha;
+                if (alpha == 255)
+                {
+                    piece[i] = source[i];
+                    piece[i + 1] = source[i + 1];
+                    piece[i + 2] = source[i + 2];
+                }
+                else
+                {
+                    piece[i] = (byte)((source[i] * alpha + 127) / 255);
+                    piece[i + 1] = (byte)((source[i + 1] * alpha + 127) / 255);
+                    piece[i + 2] = (byte)((source[i + 2] * alpha + 127) / 255);
+                }
             }
-            else
-            {
-                destination[i] = (byte)((pixels[i] * alpha + 127) / 255);
-                destination[i + 1] = (byte)((pixels[i + 1] * alpha + 127) / 255);
-                destination[i + 2] = (byte)((pixels[i + 2] * alpha + 127) / 255);
-            }
+            destination.Write(piece[..source.Length]);
         }
     }
 
@@ -214,13 +216,5 @@ public sealed class CaptureView : Panel
     {
         if (e.PropertyName is nameof(ShellWindow.Scale))
             InvalidateMeasure();
-    }
-
-    [ComImport]
-    [Guid("905a0fef-bc53-11df-8c49-001e4fc686da")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IBufferByteAccess
-    {
-        unsafe void Buffer(out byte* value);
     }
 }

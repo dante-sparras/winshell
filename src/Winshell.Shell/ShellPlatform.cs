@@ -13,17 +13,15 @@ using Winshell.Windows;
 namespace Winshell;
 
 /// <summary>What every native window of one process shares: the screens, the theme, and the clicks that close popups.</summary>
-internal sealed unsafe class ShellPlatform : IDisposable
+internal sealed class ShellPlatform : IDisposable
 {
-    private static ShellPlatform? _current;
-
     private readonly List<HostWindow> _windows = [];
     private readonly HashSet<HostWindow> _grabbing = [];
     private readonly SystemChanges _systemChanges = new();
     private readonly List<ScreenInfo> _screens;
-    private readonly List<nint> _foregroundWatches = [];
+    private readonly List<WinEventHook> _foregroundWatches = [];
     private HashSet<string> _fullscreenScreens = [];
-    private HookThread? _mouseThread;
+    private IDisposable? _mouseWatch;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
     private global::Windows.UI.ViewManagement.UISettings? _uiSettings;
@@ -36,7 +34,6 @@ internal sealed unsafe class ShellPlatform : IDisposable
     {
         Loop = loop;
         Log = log;
-        _current = this;
         _screens = Winshell.Screens.Enumerate().Select(m => m.Info).ToList();
         Screens = new ObservableCollection<ScreenInfo>(_screens);
         ReadTheme();
@@ -47,7 +44,10 @@ internal sealed unsafe class ShellPlatform : IDisposable
         Flyouts = new FlyoutDismissal(this);
         // Explorer tells only the app bars that reserve an edge about a fullscreen app, so this reads it from the foreground window.
         foreach (var evt in new[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_LOCATIONCHANGE })
-            _foregroundWatches.Add(Win32.SetWinEventHook(evt, evt, 0, &OnForegroundEvent, 0, 0, Win32.WINEVENT_OUTOFCONTEXT));
+        {
+            if (WinEventHook.Start(evt, OnForegroundEvent) is { } watch)
+                _foregroundWatches.Add(watch);
+        }
         ReadFullscreen();
     }
 
@@ -225,14 +225,13 @@ internal sealed unsafe class ShellPlatform : IDisposable
     /// <summary>Whether another app is fullscreen on a screen, so panels there step back as the taskbar does.</summary>
     internal bool FullscreenOn(string screenId) => _fullscreenScreens.Contains(screenId);
 
-    [UnmanagedCallersOnly]
-    private static void OnForegroundEvent(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    private void OnForegroundEvent(uint evt, nint hwnd, int idObject, int idChild)
     {
         // A window's move or resize sends this for every window, so only the foreground one can change the answer.
-        if (_current is not { } self || hwnd == 0 || !WindowRules.IsWindowObject(idObject, idChild)
+        if (hwnd == 0 || !WindowRules.IsWindowObject(idObject, idChild)
             || (evt == Win32.EVENT_OBJECT_LOCATIONCHANGE && hwnd != Win32.GetForegroundWindow()))
             return;
-        NativeCallback.Guard(self.Log, "shell", () => self.Loop.Post(self.ReadFullscreen));
+        NativeCallback.Guard(Log, "shell", () => Loop.Post(ReadFullscreen));
     }
 
     private void ReadFullscreen()
@@ -259,12 +258,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
     {
         if (((uint)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0)
             return true;
-        Span<char> name = stackalloc char[16];
-        fixed (char* chars = name)
-        {
-            var length = Win32.GetClassNameW(hwnd, chars, name.Length);
-            return name[..length].SequenceEqual("Progman") || name[..length].SequenceEqual("WorkerW");
-        }
+        return TopLevelWindows.ClassName(hwnd) is "Progman" or "WorkerW";
     }
 
     // Popups that close on a click outside them
@@ -275,34 +269,20 @@ internal sealed unsafe class ShellPlatform : IDisposable
             _grabbing.Add(window);
         else
             _grabbing.Remove(window);
-        if (_grabbing.Count > 0 && _mouseThread is null)
-            _mouseThread = HookThread.Start(Win32.WH_MOUSE_LL, &MouseHook, "Winshell popup mouse hook");
+        if (_grabbing.Count > 0 && _mouseWatch is null)
+            _mouseWatch = LowLevelMouse.Start(OnPress);
         else if (_grabbing.Count == 0)
             Unhook();
     }
 
     private void Unhook()
     {
-        _mouseThread?.Stop();
-        _mouseThread = null;
+        _mouseWatch?.Dispose();
+        _mouseWatch = null;
     }
 
-    // The procedure runs on the hook thread, so it only reads the click and posts the rest to the loop.
-    [UnmanagedCallersOnly]
-    private static nint MouseHook(int code, nint wParam, nint lParam)
-    {
-        var platform = _current;
-        if (code >= 0 && platform is not null)
-        {
-            var msg = (uint)wParam;
-            if (msg is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN or Win32.WM_XBUTTONDOWN)
-            {
-                var pt = ((MSLLHOOKSTRUCT*)lParam)->pt;
-                NativeCallback.Guard(platform.Log, "shell", () => platform.Loop.Post(() => platform.DismissOutside(pt)));
-            }
-        }
-        return Win32.CallNextHookEx(0, code, wParam, lParam);
-    }
+    // This runs on the hook thread, so it only posts the click to the loop.
+    private void OnPress(POINT pt) => NativeCallback.Guard(Log, "shell", () => Loop.Post(() => DismissOutside(pt)));
 
     internal void DismissOutside(POINT pt)
     {
@@ -329,7 +309,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
         catch (System.Security.SecurityException)
         {
         }
-        var contrast = HighContrastOn();
+        var contrast = ContrastTheme.IsOn();
         var contrastChanged = contrast != IsHighContrast;
         if (dark == _windowsDark && !contrastChanged)
             return;
@@ -412,12 +392,6 @@ internal sealed unsafe class ShellPlatform : IDisposable
     internal static bool WindowsModeDark(object? systemValue, object? appsValue) =>
         systemValue is int systemLight ? systemLight == 0 : appsValue is int appsLight && appsLight == 0;
 
-    private static bool HighContrastOn()
-    {
-        var hc = new HIGHCONTRASTW { cbSize = (uint)sizeof(HIGHCONTRASTW) };
-        return Win32.SystemParametersInfoW(Win32.SPI_GETHIGHCONTRAST, hc.cbSize, &hc, 0) && (hc.dwFlags & Win32.HCF_HIGHCONTRASTON) != 0;
-    }
-
     public void Dispose()
     {
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
@@ -429,7 +403,7 @@ internal sealed unsafe class ShellPlatform : IDisposable
         }
         Unhook();
         foreach (var watch in _foregroundWatches)
-            Win32.UnhookWinEvent(watch);
+            watch.Dispose();
         Flyouts.Dispose();
         foreach (var w in _windows.ToArray())
             w.Dispose();

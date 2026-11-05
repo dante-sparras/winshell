@@ -1,8 +1,6 @@
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Winshell.DefaultShell.Taskbar;
 
@@ -10,7 +8,7 @@ namespace Winshell.DefaultShell.Taskbar;
 /// An icon for a task button. This asks the Windows shell for the program path or packaged app id and keeps the
 /// bitmap for WinUI.
 /// </summary>
-internal static partial class ShellIcon
+internal static class ShellIcon
 {
     private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -50,98 +48,21 @@ internal static partial class ShellIcon
         var key = size + "|" + path;
         if (Cache.TryGetValue(key, out var cached))
             return cached;
-        var loaded = LoadUncached(path, size);
+        var loaded = Bitmap(path, size);
         Cache[key] = loaded;
         return loaded;
     }
 
-    private static ImageSource? LoadUncached(string path, int size)
+    /// <summary>The icon as a WinUI bitmap. A bitmap WinUI cannot make is no icon.</summary>
+    private static ImageSource? Bitmap(string path, int size)
     {
         try
         {
-            SHCreateItemFromParsingName(path, 0, typeof(IShellItemImageFactory).GUID, out var factory);
-            // SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK | SIIGBF_SCALEUP.
-            if (factory.GetImage(new SIZE { Cx = size, Cy = size }, 0x4 | 0x1 | 0x100, out var bitmap) != 0 || bitmap == 0)
-                return null;
-            try
-            {
-                return BitmapOf(bitmap);
-            }
-            finally
-            {
-                DeleteObject(bitmap);
-            }
+            return TrayImage.Bitmap(ShellImage.Load(path, size));
         }
-        catch (Exception e) when (e is COMException or FileNotFoundException or ArgumentException or IOException)
+        catch (Exception e) when (e is COMException or ArgumentException)
         {
             return null;
         }
     }
-
-    private static WriteableBitmap? BitmapOf(nint bitmap)
-    {
-        if (GetObjectW(bitmap, Marshal.SizeOf<BITMAP>(), out var info) == 0 || info.bmBits == 0 || info.bmBitsPixel != 32)
-            return null;
-        var width = info.bmWidth;
-        var height = Math.Abs(info.bmHeight);
-        if (width <= 0 || height <= 0)
-            return null;
-        var stride = width * 4;
-        var pixels = new byte[stride * height];
-        unsafe
-        {
-            var source = (byte*)info.bmBits;
-            fixed (byte* destination = pixels)
-            {
-                for (var y = 0; y < height; y++)
-                {
-                    var from = info.bmHeight > 0 ? height - 1 - y : y;
-                    Buffer.MemoryCopy(source + from * info.bmWidthBytes, destination + y * stride, stride, Math.Min(stride, info.bmWidthBytes));
-                }
-            }
-        }
-        var image = new WriteableBitmap(width, height);
-        using (var stream = image.PixelBuffer.AsStream())
-            stream.Write(pixels);
-        image.Invalidate();
-        return image;
-    }
-
-    [ComImport]
-    [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellItemImageFactory
-    {
-        [PreserveSig]
-        int GetImage(SIZE size, int flags, out nint bitmap);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SIZE
-    {
-        public int Cx;
-        public int Cy;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BITMAP
-    {
-        public int bmType;
-        public int bmWidth;
-        public int bmHeight;
-        public int bmWidthBytes;
-        public ushort bmPlanes;
-        public ushort bmBitsPixel;
-        public nint bmBits;
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-    private static extern void SHCreateItemFromParsingName(string path, nint bindContext, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory item);
-
-    [LibraryImport("gdi32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DeleteObject(nint obj);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial int GetObjectW(nint handle, int size, out BITMAP bitmap);
 }

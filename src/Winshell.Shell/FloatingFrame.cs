@@ -5,7 +5,7 @@ using Winshell.Windows;
 namespace Winshell;
 
 /// <summary>How a floating window sits on its screen: framed at a size, minimized, maximized or fullscreen.</summary>
-internal sealed unsafe class FloatingFrame(HostWindow host, ShellPlatform platform)
+internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
 {
     private FloatingPlacement? _placement;
     private bool _placed;
@@ -99,7 +99,7 @@ internal sealed unsafe class FloatingFrame(HostWindow host, ShellPlatform platfo
     }
 
     /// <summary>Sets the window's track sizes. Returns null to leave Windows' defaults.</summary>
-    public nint? OnGetMinMaxInfo(MINMAXINFO* info)
+    public nint? OnGetMinMaxInfo(ref MINMAXINFO info)
     {
         if (_fullscreen && Handle != 0)
         {
@@ -107,24 +107,24 @@ internal sealed unsafe class FloatingFrame(HostWindow host, ShellPlatform platfo
             var (_, bounds) = Screens.Of(Handle);
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return null;
-            info->ptMaxPosition.X = bounds.Left;
-            info->ptMaxPosition.Y = bounds.Top;
-            info->ptMaxSize.X = bounds.Width;
-            info->ptMaxSize.Y = bounds.Height;
-            info->ptMaxTrackSize.X = bounds.Width;
-            info->ptMaxTrackSize.Y = bounds.Height;
+            info.ptMaxPosition.X = bounds.Left;
+            info.ptMaxPosition.Y = bounds.Top;
+            info.ptMaxSize.X = bounds.Width;
+            info.ptMaxSize.Y = bounds.Height;
+            info.ptMaxTrackSize.X = bounds.Width;
+            info.ptMaxTrackSize.Y = bounds.Height;
             return 0;
         }
         if (_placement is not { } f)
             return null;
         if (f.MinimumSize.Width > 0)
-            info->ptMinTrackSize.X = (int)(f.MinimumSize.Width * host.Scale);
+            info.ptMinTrackSize.X = (int)(f.MinimumSize.Width * host.Scale);
         if (f.MinimumSize.Height > 0)
-            info->ptMinTrackSize.Y = (int)(f.MinimumSize.Height * host.Scale);
+            info.ptMinTrackSize.Y = (int)(f.MinimumSize.Height * host.Scale);
         if (f.MaximumSize.Width > 0)
-            info->ptMaxTrackSize.X = (int)(f.MaximumSize.Width * host.Scale);
+            info.ptMaxTrackSize.X = (int)(f.MaximumSize.Width * host.Scale);
         if (f.MaximumSize.Height > 0)
-            info->ptMaxTrackSize.Y = (int)(f.MaximumSize.Height * host.Scale);
+            info.ptMaxTrackSize.Y = (int)(f.MaximumSize.Height * host.Scale);
         return 0;
     }
 
@@ -256,8 +256,7 @@ internal sealed unsafe class FloatingFrame(HostWindow host, ShellPlatform platfo
         Win32.GetWindowRect(Handle, out var shown);
         var maximized = Win32.IsZoomed(Handle);
         var minimized = Win32.IsIconic(Handle);
-        var placement = new WINDOWPLACEMENT { Length = (uint)sizeof(WINDOWPLACEMENT) };
-        var hasPlacement = Win32.GetWindowPlacement(Handle, ref placement);
+        var hasPlacement = TopLevelWindows.TryPlacement(Handle, out var placement);
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
             normal = RestoredScreenRect(placement, shown);

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell;
@@ -7,7 +8,7 @@ namespace Winshell;
 /// A panel's app bar with Explorer, which reserves an edge of its screen so maximized windows stay out of the zone.
 /// When Explorer says the zones moved, <c>place</c> places the panel again.
 /// </summary>
-internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action place)
+internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
 {
     internal static readonly uint Message = Win32.WM_APP + 1;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
@@ -37,7 +38,7 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
     public RECT Reserve(Edges edge, int thickness, RECT monitor)
     {
         using var explorerFirst = ShellPlatform.ExplorerFirst();
-        var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = window, uCallbackMessage = Message };
+        var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window, uCallbackMessage = Message };
         if (!Registered)
         {
             Registered = Win32.SHAppBarMessage(Win32.ABM_NEW, ref abd) != 0;
@@ -73,7 +74,7 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
     {
         if (!Registered)
             return;
-        var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = window };
+        var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window };
         using (ShellPlatform.ExplorerFirst())
             Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
         Registered = false;
@@ -90,7 +91,7 @@ internal sealed unsafe class AppBar(nint window, ShellPlatform platform, Action 
         {
             foreach (var window in Held.Keys)
             {
-                var abd = new APPBARDATA { cbSize = (uint)sizeof(APPBARDATA), hWnd = window };
+                var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window };
                 Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
             }
         }
