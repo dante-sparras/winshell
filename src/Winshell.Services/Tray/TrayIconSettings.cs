@@ -1,7 +1,6 @@
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using Microsoft.Win32.SafeHandles;
 using Winshell.Apps;
+using Winshell.Native;
 
 namespace Winshell.Tray;
 
@@ -13,7 +12,7 @@ internal sealed record TrayIconSetting(Guid Guid, string ExecutablePath, uint? I
 /// <c>HKCU\Control Panel\NotifyIconSettings</c>, one key per icon it has seen: the icon's GUID, or its program and
 /// id, and <c>IsPromoted</c> when it is shown in the taskbar. Explorer writes the key when an icon first appears.
 /// </summary>
-internal static partial class TrayIconSettings
+internal static class TrayIconSettings
 {
     public const string KeyPath = @"Control Panel\NotifyIconSettings";
 
@@ -80,8 +79,7 @@ internal static partial class TrayIconSettings
             _wait = ThreadPool.RegisterWaitForSingleObject(_event, (_, _) => _loop.Post(OnChanged), null, Timeout.Infinite, executeOnlyOnce: false);
         }
 
-        private bool Arm() =>
-            RegNotifyChangeKeyValue(_key!.Handle, true, REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_THREAD_AGNOSTIC, _event.SafeWaitHandle, true) == 0;
+        private bool Arm() => RegistryChange.Notify(_key!.Handle, _event.SafeWaitHandle);
 
         private void OnChanged()
         {
@@ -107,9 +105,4 @@ internal static partial class TrayIconSettings
             _event.Dispose();
         }
     }
-
-    private const uint REG_NOTIFY_CHANGE_NAME = 0x1, REG_NOTIFY_CHANGE_LAST_SET = 0x4, REG_NOTIFY_THREAD_AGNOSTIC = 0x10000000;
-
-    [LibraryImport("advapi32.dll")]
-    private static partial int RegNotifyChangeKeyValue(SafeRegistryHandle key, [MarshalAs(UnmanagedType.Bool)] bool watchSubtree, uint filter, SafeWaitHandle evt, [MarshalAs(UnmanagedType.Bool)] bool asynchronous);
 }

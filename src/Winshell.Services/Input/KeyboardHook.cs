@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Input;
@@ -9,10 +8,8 @@ namespace Winshell.Input;
 /// </summary>
 /// <param name="onKey">Runs on the hook thread with the key, whether it came up, and the modifiers Windows sees held.</param>
 /// <param name="onLost">Runs on the hook thread when that thread ends without <see cref="Detach"/>.</param>
-internal sealed unsafe class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey, Action onLost)
+internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey, Action onLost)
 {
-    private const uint LlkhfUp = 0x80;
-
     private static readonly object Gate = new();
     private static HookThread? Installed;
     private static KeyboardHook? Owner;
@@ -44,7 +41,7 @@ internal sealed unsafe class KeyboardHook(Func<int, bool, HotkeyModifiers, bool>
                 return;
             Owner = this;
         }
-        var thread = HookThread.Start(Win32.WH_KEYBOARD_LL, &Proc, "Winshell keyboard hook", OnThreadExited);
+        var thread = LowLevelKeyboard.Start(OnKey, "Winshell keyboard hook", OnThreadExited);
         lock (Gate)
         {
             if (Owner == this && thread is not null)
@@ -98,11 +95,7 @@ internal sealed unsafe class KeyboardHook(Func<int, bool, HotkeyModifiers, bool>
     }
 
     // Read the modifiers before the handler takes its lock: GetAsyncKeyState does not need it, and the lock stays short.
-    private bool Handle(nint lParam)
-    {
-        var info = (KbdLlHookStruct*)lParam;
-        return onKey((int)info->vkCode, (info->flags & LlkhfUp) != 0, ReadModifiers());
-    }
+    private bool Handle(HookedKey key) => onKey(key.VirtualKey, key.Up, ReadModifiers());
 
     private static HotkeyModifiers ReadModifiers()
     {
@@ -120,30 +113,11 @@ internal sealed unsafe class KeyboardHook(Func<int, bool, HotkeyModifiers, bool>
 
     private static bool Down(int virtualKey) => Win32.GetAsyncKeyState(virtualKey) < 0;
 
-    [UnmanagedCallersOnly]
-    private static nint Proc(int code, nint wParam, nint lParam)
+    private static bool OnKey(HookedKey key) => !KeyMask.IsOurs(key.ExtraInfo) && NativeCallback.Guard(Log.Default, "hotkey", () =>
     {
-        var swallow = code >= 0 && !IsOwnInjection(lParam) && NativeCallback.Guard(Log.Default, "hotkey", () =>
-        {
-            KeyboardHook? owner;
-            lock (Gate)
-                owner = Owner;
-            return owner is not null && owner.Handle(lParam);
-        }, false);
-        if (swallow)
-            return 1;
-        return Win32.CallNextHookEx(0, code, wParam, lParam);
-    }
-
-    private static bool IsOwnInjection(nint lParam) => lParam != 0 && KeyMask.IsOurs(((KbdLlHookStruct*)lParam)->dwExtraInfo);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KbdLlHookStruct
-    {
-        public uint vkCode;
-        public uint scanCode;
-        public uint flags;
-        public uint time;
-        public nint dwExtraInfo;
-    }
+        KeyboardHook? owner;
+        lock (Gate)
+            owner = Owner;
+        return owner is not null && owner.Handle(key);
+    }, false);
 }

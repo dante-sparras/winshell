@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 using Winshell.Tray;
 
@@ -147,7 +149,7 @@ public sealed class TrayHostTests : IDisposable
         Assert.Equal(1, owner.Broadcasts);
         owner.Exit(clean: true);
         // The owner's window went first, then it asked apps to register with whoever is first now.
-        Assert.False(IsWindow(window));
+        Assert.False(Win32.IsWindow(window));
         Assert.Equal(2, owner.Broadcasts);
 
         _loop.Advance(TimeSpan.FromMilliseconds(500));
@@ -196,7 +198,7 @@ public sealed class TrayHostTests : IDisposable
         Send(host.Window, TrayCall.Build(TrayProtocol.Modify, (int)_app, 1, TrayProtocol.NIF_MESSAGE, callback: 0x0010));
         Assert.Equal(0u, icon.CallbackMessage);
         host.Click(icon, TrayClick.Left, null);
-        Assert.True(IsWindow(_app));
+        Assert.True(Win32.IsWindow(_app));
     }
 
     [Fact]
@@ -327,18 +329,13 @@ public sealed class TrayHostTests : IDisposable
     /// <summary>Whether one window is in front of another, as FindWindow and SHAppBarMessage see the order.</summary>
     private static bool Above(nint upper, nint lower)
     {
-        for (var hwnd = GetWindow(upper, GW_HWNDNEXT); hwnd != 0; hwnd = GetWindow(hwnd, GW_HWNDNEXT))
+        for (var hwnd = Win32.GetWindow(upper, Win32.GW_HWNDNEXT); hwnd != 0; hwnd = Win32.GetWindow(hwnd, Win32.GW_HWNDNEXT))
         {
             if (hwnd == lower)
                 return true;
         }
         return false;
     }
-
-    private const uint GW_HWNDNEXT = 2;
-
-    [DllImport("user32.dll")]
-    private static extern nint GetWindow(nint hwnd, uint command);
 
     [Fact]
     public void An_active_tray_has_no_half_second_poll()
@@ -368,14 +365,15 @@ public sealed class TrayHostTests : IDisposable
     public void An_icon_from_a_resource_is_drawn_again_at_the_size_asked_for()
     {
         // A 16-pixel icon from shell32's resources, as an app loads it at 100%, and a copy that no longer knows its resource.
-        var shell32 = LoadLibraryExW(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 0, 0x2 | 0x20);
-        var loaded = Win32.LoadImageW(shell32, 4, Win32.IMAGE_ICON, 16, 16, 0);
-        var copied = CopyIcon(loaded);
+        using var loaded = OwnedIcon.Load(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 4, "", 16);
+        Assert.NotNull(loaded);
+        var copied = PInvoke.CopyIcon((HICON)loaded.Handle);
+        Assert.NotEqual(0, (nint)copied);
         try
         {
             var host = Start(HostNames, out _);
-            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_ICON, icon: (int)loaded));
-            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 2, TrayProtocol.NIF_ICON, icon: (int)copied));
+            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 1, TrayProtocol.NIF_ICON, icon: (int)loaded.Handle));
+            Send(host.Window, TrayCall.Build(TrayProtocol.Add, (int)_app, 2, TrayProtocol.NIF_ICON, icon: (int)(nint)copied));
             var fromResource = host.Icons.Single(i => i.Id == 1);
             var drawn = host.Icons.Single(i => i.Id == 2);
             Assert.NotNull(fromResource.Resource);
@@ -384,23 +382,9 @@ public sealed class TrayHostTests : IDisposable
         }
         finally
         {
-            DestroyIcon(copied);
-            DestroyIcon(loaded);
-            FreeLibrary(shell32);
+            PInvoke.DestroyIcon(copied);
         }
     }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern nint LoadLibraryExW(string fileName, nint file, uint flags);
-
-    [DllImport("kernel32.dll")]
-    private static extern bool FreeLibrary(nint module);
-
-    [DllImport("user32.dll")]
-    private static extern nint CopyIcon(nint icon);
-
-    [DllImport("user32.dll")]
-    private static extern bool DestroyIcon(nint icon);
 
     private TrayHost StartExplorer()
     {
@@ -449,10 +433,6 @@ public sealed class TrayHostTests : IDisposable
             host.Dispose();
         Win32.DestroyWindow(_app);
     }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindow(nint hwnd);
 
     /// <summary>A host on its own thread, the way another winshell process holds the tray.</summary>
     private sealed class OtherInstance
