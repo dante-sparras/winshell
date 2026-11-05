@@ -44,10 +44,6 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public IReadOnlyList<string> CompatibilityLayers(string exePath) => DoctorProbe.CompatibilityLayers(exePath);
 
-    public string? RunEntry() => DoctorProbe.RunEntry();
-
-    public bool RunEntryTurnedOff() => DoctorProbe.RunEntryTurnedOff();
-
     public string ResolveLinks(string path) => DoctorProbe.ResolveLinks(path);
 
     public string NotificationAccess() => DoctorProbe.NotificationAccess();

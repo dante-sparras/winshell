@@ -4,7 +4,6 @@ using Microsoft.Win32;
 using Windows.UI.Notifications.Management;
 using Winshell.Native;
 using Winshell.Notifications;
-using Winshell.Session;
 
 namespace Winshell.Diagnostics;
 
@@ -197,18 +196,6 @@ internal static class DoctorProbe
             }
         }
         return layers;
-    }
-
-    public static string? RunEntry()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(WindowsStartupRegistry.RunKey);
-        return key?.GetValue(WindowsStartupRegistry.ValueName) as string;
-    }
-
-    public static bool RunEntryTurnedOff()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(WindowsStartupRegistry.ApprovedKey);
-        return key?.GetValue(WindowsStartupRegistry.ValueName) is byte[] { Length: > 0 } state && (state[0] & 1) == 1;
     }
 
     /// <summary>The file a path names in the end, past symbolic links, or the path itself when it is no link or cannot be read.</summary>

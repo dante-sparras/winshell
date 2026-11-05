@@ -41,15 +41,15 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.False(registry.IsRegistered());
         Assert.True(registry.Register());
         using (var key = Registry.CurrentUser.OpenSubKey(run)!)
-            Assert.Equal("\"C:\\winshell.exe\" --no-duplicate", key.GetValue(WindowsStartupRegistry.ValueName));
+            Assert.Equal("\"C:\\winshell.exe\" --no-duplicate", key.GetValue(SignInEntry.Name));
         Assert.True(registry.IsRegistered());
         Assert.False(registry.TurnedOffInWindows());
 
         using (var key = Registry.CurrentUser.CreateSubKey(approved))
-            key.SetValue(WindowsStartupRegistry.ValueName, new byte[] { 3, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8 }, RegistryValueKind.Binary);
+            key.SetValue(SignInEntry.Name, new byte[] { 3, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8 }, RegistryValueKind.Binary);
         Assert.True(registry.TurnedOffInWindows());
         using (var key = Registry.CurrentUser.CreateSubKey(approved))
-            key.SetValue(WindowsStartupRegistry.ValueName, new byte[] { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
+            key.SetValue(SignInEntry.Name, new byte[] { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
         Assert.False(registry.TurnedOffInWindows());
 
         Assert.True(registry.Unregister());
@@ -64,7 +64,7 @@ public sealed class StartupRegistryTests : IDisposable
         var registry = new WindowsStartupRegistry("\"C:\\new\\winshell.exe\" --no-duplicate", run, _testKey + @"\StartupApproved");
         Assert.False(registry.PointsElsewhere());
         using (var key = Registry.CurrentUser.CreateSubKey(run))
-            key.SetValue(WindowsStartupRegistry.ValueName, "\"C:\\old\\winshell.exe\" --no-duplicate", RegistryValueKind.String);
+            key.SetValue(SignInEntry.Name, "\"C:\\old\\winshell.exe\" --no-duplicate", RegistryValueKind.String);
         Assert.True(registry.IsRegistered());
         Assert.True(registry.PointsElsewhere());
         Assert.True(registry.Register());
@@ -97,12 +97,12 @@ public sealed class StartupRegistryTests : IDisposable
         var run = _testKey + @"\Run";
         var registry = new WindowsStartupRegistry(console, run, _testKey + @"\StartupApproved");
         using (var key = Registry.CurrentUser.CreateSubKey(run))
-            key.SetValue(WindowsStartupRegistry.ValueName, $@"{conhost} --headless ""{folder}\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
+            key.SetValue(SignInEntry.Name, $@"{conhost} --headless ""{folder}\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
         Assert.True(registry.IsRegistered());
         Assert.False(registry.PointsElsewhere());
 
         using (var key = Registry.CurrentUser.CreateSubKey(run))
-            key.SetValue(WindowsStartupRegistry.ValueName, $@"{conhost} --headless ""C:\Old\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
+            key.SetValue(SignInEntry.Name, $@"{conhost} --headless ""C:\Old\winshellw.exe"" --no-duplicate", RegistryValueKind.String);
         Assert.True(registry.PointsElsewhere());
     }
 

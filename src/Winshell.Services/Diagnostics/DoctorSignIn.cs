@@ -1,5 +1,4 @@
 using Winshell.Native;
-using Winshell.Session;
 using StartupTaskState = global::Windows.ApplicationModel.StartupTaskState;
 
 namespace Winshell.Diagnostics;
@@ -32,7 +31,7 @@ internal static class DoctorSignIn
         var started = resolve(Path.GetFullPath(exe));
         var here = resolve(Path.GetFullPath(thisExe));
         // Start launches winshellw.exe. Sign-in runs the winshell.exe beside it. They are one install.
-        if (!string.Equals(started, here, StringComparison.OrdinalIgnoreCase) && !WindowsStartupRegistry.SameInstall(started, here))
+        if (!string.Equals(started, here, StringComparison.OrdinalIgnoreCase) && !SameInstall(started, here))
             return new("signIn", "Sign-in", CheckStatus.Warn, $"The sign-in entry starts another winshell.exe: {exe}.", "Turn Run Winshell when I sign in on in Winshell Settings > Startup, from the Winshell you use.");
         if (turnedOff)
             return new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Startup apps in Windows turned it off.", "Turn Winshell on in Settings > Apps > Startup.");
@@ -40,11 +39,12 @@ internal static class DoctorSignIn
     }
 
     /// <summary>Sign-in for a packaged Winshell: the startup task, which names no executable path.</summary>
-    internal static DoctorCheck SignIn(IStartupTask? task)
+    /// <param name="state">The startup task's state, or null when the package has none.</param>
+    internal static DoctorCheck SignIn(StartupTaskState? state)
     {
-        if (task is null)
+        if (state is null)
             return new("signIn", "Sign-in", CheckStatus.Warn, "This package has no startup task, so Winshell cannot run when you sign in.");
-        return task.State switch
+        return state switch
         {
             StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy =>
                 new("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"),
@@ -54,5 +54,19 @@ internal static class DoctorSignIn
                 new("signIn", "Sign-in", CheckStatus.Warn, "Winshell is set to start when you sign in, but Windows policy turned it off.", "A Windows policy controls this. Startup apps in Settings cannot turn it on."),
             _ => new("signIn", "Sign-in", CheckStatus.Pass, "Winshell does not start when you sign in. Run Winshell when I sign in, in Winshell Settings > Startup, turns it on."),
         };
+    }
+
+    /// <summary><c>winshell.exe</c> and <c>winshellw.exe</c> in the same folder are one install.</summary>
+    private static bool SameInstall(string left, string right)
+    {
+        static bool Pair(string path)
+        {
+            var name = Path.GetFileName(path);
+            return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
+        }
+        if (!Pair(left) || !Pair(right))
+            return false;
+        return string.Equals(Path.GetDirectoryName(Path.GetFullPath(left)), Path.GetDirectoryName(Path.GetFullPath(right)), StringComparison.OrdinalIgnoreCase);
     }
 }
