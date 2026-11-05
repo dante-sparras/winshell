@@ -353,7 +353,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 ├── src/
 │   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
 │   ├── Winshell/                    # winshell.exe: the CLI, and the process that runs the default shell
-│   ├── Winshell.Native/             # CsWin32 declarations and safe native operations; currently session locking
+│   ├── Winshell.Native/             # Shared Win32/COM declarations, process/hook support and session locking; migration in progress
 │   ├── Winshell.Services/           # Windows services, instances, and the control pipe
 │   ├── Winshell.Shell/              # Shell.Run and WinUI windows
 │   ├── Winshell.DefaultShell/       # The default shell, in XAML and C#

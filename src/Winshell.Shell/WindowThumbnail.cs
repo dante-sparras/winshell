@@ -198,7 +198,7 @@ public sealed class WindowThumbnail : FrameworkElement
     private RECT SourceRect(nint hwnd, int width, int height)
     {
         if (!Win32.IsIconic(hwnd) && Win32.GetWindowRect(hwnd, out var window)
-            && DwmGetWindowRect(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var frame, Marshal.SizeOf<RECT>()) == 0)
+            && Win32.DwmGetWindowRect(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var frame, Marshal.SizeOf<RECT>()) == 0)
         {
             var visible = WindowRules.PreviewSource(window, frame);
             _insets = new RECT(visible.Left, visible.Top, window.Width - visible.Right, window.Height - visible.Bottom);
@@ -267,7 +267,7 @@ public sealed class WindowThumbnail : FrameworkElement
             Opacity = paint.Opacity,
             Visible = paint.Visible ? 1 : 0,
         };
-        return DwmUpdateThumbnailProperties(_thumbnail, properties) == 0;
+        return Win32.DwmUpdateThumbnailProperties(_thumbnail, properties) == 0;
     }
 
     private void ReleaseThumbnail()
