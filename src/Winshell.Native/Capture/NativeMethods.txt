@@ -1,5 +1,0 @@
-CLIPBOARD_FORMAT
-CreateDirect3D11DeviceFromDXGIDevice
-GlobalFree
-IDirect3DDxgiInterfaceAccess
-IGraphicsCaptureItemInterop

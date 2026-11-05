@@ -1,9 +1,0 @@
-BluetoothIsDiscoverable
-BluetoothIsConnectable
-BluetoothEnableDiscovery
-BluetoothEnableIncomingConnections
-DeviceIoControl
-IOCTL_KS_PROPERTY
-KSIDENTIFIER
-KSPROPERTY_TYPE_GET
-KSPROPERTY_BTAUDIO
