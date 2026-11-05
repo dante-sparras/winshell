@@ -175,7 +175,6 @@ winland keyword windowrule 'ignore, exe:(winshell|winshellw|Winshell\..*Tests)\.
 - The rule reaches windows that open after it. Test projects are their own programs, not `testhost`. Without the rule `A_floating_window_has_the_size_and_title_it_was_given` fails.
 - No workspace contains what the rule ignores: an ignored window opens where Windows puts it, usually on the primary monitor, and a taskbar opens on every screen. Keep what a test opens small and short.
 - `winland -j clients` must list no Winshell window, and the user's windows must be where they were when you finish.
-- Winland must keep tiling the user's windows, and no shell window may draw over them.
 - Finish in a `finally`, so the rule goes:
 
 ```powershell
