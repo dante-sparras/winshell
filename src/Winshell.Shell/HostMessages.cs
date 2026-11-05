@@ -45,11 +45,7 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
                 // A click here does not close a menu another app opened without the foreground, as tray menus
                 // often are. Close it before the mouse message reaches the XAML island.
                 Press();
-                if (host.Kind == WindowKind.Panel && placement.Panel?.Focusable != true)
-                    return Win32.MA_NOACTIVATE;
-                if (host.Kind == WindowKind.Popup && placement.Popup?.GrabFocus != true)
-                    return Win32.MA_NOACTIVATE;
-                return null;
+                return host.Focus.ActivatesOnClick ? null : Win32.MA_NOACTIVATE;
             case Win32.WM_ACTIVATE:
                 // A grabbing popup closes on a click outside it, which the mouse hook sees; losing activation
                 // alone does not close it, since Windows can take activation away at any time.

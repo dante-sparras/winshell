@@ -54,6 +54,10 @@ _Avoid_: popup, flyout
 A control shown over a window, in that window's overlay. It is not a window of its own.
 _Avoid_: popup, popup window, dialog
 
+**Focus**:
+Whether a window takes the keyboard, and with it activation from the app in front. A panel takes focus only when it is focusable; a popup window only while it grabs focus; a floating window always.
+_Avoid_: activation, foreground
+
 **Taskbar**:
 Explorer's own bar along the bottom of each screen, the Windows taskbar. A shell's bar is a panel.
 _Avoid_: bar, dock, task list

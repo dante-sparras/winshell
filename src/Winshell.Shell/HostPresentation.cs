@@ -95,7 +95,7 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Escape && host.Kind == WindowKind.Popup && host.Placement.Popup?.GrabFocus == true)
+        if (e.Key == VirtualKey.Escape && host.Focus.DismissesOnEscape)
         {
             host.Client.OnDismissed();
             e.Handled = true;
@@ -157,43 +157,11 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
         }
     }
 
-    public void SetKeyboardFocus(bool focus)
-    {
-        if (!focus)
-            return;
-        if (host.Kind == WindowKind.Panel && host.Placement.Panel?.Focusable != true)
-            return;
-        if (host.Kind == WindowKind.Popup && host.Placement.Popup?.GrabFocus != true)
-            return;
-        // A Windows-key chord arrives through a low-level hook, which does not grant foreground rights, so
-        // SetForegroundWindow can fail. Join the foreground thread long enough to take the keyboard, then leave it.
-        if (Win32.GetForegroundWindow() != Handle && !Win32.SetForegroundWindow(Handle))
-            JoinForegroundAndTakeIt();
-        FocusContent();
-    }
-
     /// <summary>Hands the keyboard to the island, unless it already has it.</summary>
     internal void FocusContent()
     {
         if (_xaml is { HasFocus: false } xaml)
             xaml.NavigateFocus(new XamlSourceFocusNavigationRequest(XamlSourceFocusNavigationReason.Programmatic));
-    }
-
-    private void JoinForegroundAndTakeIt()
-    {
-        var foreground = Win32.GetForegroundWindow();
-        var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, out _);
-        var current = Win32.GetCurrentThreadId();
-        if (other == 0 || other == current || !Win32.AttachThreadInput(current, other, true))
-            return;
-        try
-        {
-            Win32.SetForegroundWindow(Handle);
-        }
-        finally
-        {
-            Win32.AttachThreadInput(current, other, false);
-        }
     }
 
     public void Dispose()

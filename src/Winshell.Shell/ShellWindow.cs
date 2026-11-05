@@ -195,7 +195,7 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     public event Action<Exception>? Failed;
 
     /// <summary>Takes the keyboard, if this kind of window may. A panel takes it only while focusable, and a popup only while it grabs focus.</summary>
-    public void Focus() => _host?.Presentation.SetKeyboardFocus(true);
+    public void Focus() => _host?.Focus.TakeKeyboard();
 
     /// <summary>Puts the window above the others at its level, without focusing it.</summary>
     public void Raise() => _host?.Placement.Raise();

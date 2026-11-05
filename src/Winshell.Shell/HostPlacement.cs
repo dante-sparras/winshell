@@ -51,7 +51,7 @@ internal sealed class HostPlacement
     public void SetPanel(PanelPlacement placement)
     {
         Panel = placement;
-        SetExStyle(Win32.WS_EX_NOACTIVATE, !placement.Focusable);
+        _host.Focus.SetPanel(placement.Focusable);
         PlacePanel();
     }
 
@@ -95,7 +95,7 @@ internal sealed class HostPlacement
     public void SetPopup(PopupPlacement placement)
     {
         Popup = placement;
-        SetExStyle(Win32.WS_EX_NOACTIVATE, !placement.GrabFocus);
+        _host.Focus.SetPopup(placement.GrabFocus);
         // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
         var monitors = Screens.Enumerate();
         var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y), monitors.Select(m => m.Info.Geometry).ToList());
@@ -105,7 +105,6 @@ internal sealed class HostPlacement
         Scale = monitor.Scale;
         var r = DesktopSpace.ToPhysical(placement.Rect, monitor.Bounds, Scale);
         Move(r, Win32.HWND_TOPMOST, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
-        _platform.OutsideClicks.Grab(_host, _visible && placement.GrabFocus);
     }
 
     public void SetFloating(FloatingPlacement placement)
@@ -155,7 +154,7 @@ internal sealed class HostPlacement
         UpdateSize();
     }
 
-    private void SetExStyle(uint flag, bool on)
+    internal void SetExStyle(uint flag, bool on)
     {
         var ex = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_EXSTYLE);
         var next = on ? ex | flag : ex & ~flag;
@@ -193,23 +192,16 @@ internal sealed class HostPlacement
         {
             if (kind == WindowKind.Panel)
                 PlacePanel();
-            var show = kind == WindowKind.Floating ? Win32.SW_SHOW : (kind == WindowKind.Popup && Popup?.GrabFocus == true ? Win32.SW_SHOW : Win32.SW_SHOWNOACTIVATE);
-            Win32.ShowWindow(Handle, show);
-            // A process's first SW_SHOW takes the state its launcher asked for, so a hidden start would hide the window.
-            if (!Win32.IsWindowVisible(Handle))
-                Win32.ShowWindow(Handle, show);
+            _host.Focus.Show();
             if (kind == WindowKind.Floating && !Win32.IsIconic(Handle))
                 OwnedWindows.Raise(Handle, _platform.Windows);
-            if (kind == WindowKind.Popup && Popup?.GrabFocus == true)
-                Win32.SetForegroundWindow(Handle);
         }
         else
         {
             AppBar?.Remove();
             Win32.ShowWindow(Handle, Win32.SW_HIDE);
+            _host.Focus.Release();
         }
-        if (kind == WindowKind.Popup)
-            _platform.OutsideClicks.Grab(_host, visible && Popup?.GrabFocus == true);
     }
 
     public void SetInputRegion(IReadOnlyList<Rect>? rects)
@@ -279,7 +271,7 @@ internal sealed class HostPlacement
     /// <summary>Gives back what the window holds while it is placed: a popup's grab on clicks and a panel's edge.</summary>
     internal void Release()
     {
-        _platform.OutsideClicks.Grab(_host, false);
+        _host.Focus.Release();
         AppBar?.Remove();
     }
 }
