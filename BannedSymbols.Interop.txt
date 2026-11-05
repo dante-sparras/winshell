@@ -3,3 +3,6 @@ T:System.Runtime.InteropServices.LibraryImportAttribute;Declare interop in Winsh
 T:System.Runtime.InteropServices.ComImportAttribute;Declare interop in Winshell.Native and call its managed operation
 T:System.Runtime.InteropServices.Marshalling.GeneratedComInterfaceAttribute;Declare interop in Winshell.Native and call its managed operation
 T:System.Runtime.InteropServices.Marshalling.GeneratedComClassAttribute;Declare interop in Winshell.Native and call its managed operation
+T:System.Runtime.InteropServices.NativeLibrary;Declare interop in Winshell.Native and call its managed operation
+M:System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer(System.IntPtr,System.Type);Declare interop in Winshell.Native and call its managed operation
+M:System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer``1(System.IntPtr);Declare interop in Winshell.Native and call its managed operation

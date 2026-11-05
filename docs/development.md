@@ -371,7 +371,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 │   └── Directory.Build.props        # What every test project shares
 ├── winshell.slnx                    # The solution the check builds
 ├── Directory.Build.targets          # Seals interop into Winshell.Native: bans interop attributes elsewhere, and unsafe code outside WinUI projects
-├── BannedSymbols.Interop.txt        # The interop attributes no project but Winshell.Native may use
+├── BannedSymbols.Interop.txt        # The interop APIs no project but Winshell.Native may use
 ├── Directory.Solution.targets       # Points Git at .githooks when the solution builds
 ├── CONTRIBUTING.md                  # Test rules, branch names, PR titles and descriptions
 └── GLOSSARY.md                      # The words this repo uses
