@@ -82,7 +82,7 @@ public sealed partial class Shell
     public SessionService Session => _session ??= new SessionService(Log);
 
     /// <summary>Whether this shell runs when the user signs in.</summary>
-    public StartupService Startup => _startup ??= new StartupService(Log, StartupRegistry());
+    public StartupService Startup => _startup ??= StartupService.ForThisProcess(Log);
 
     /// <summary>The notification area. Only one running instance in the Windows session owns it.</summary>
     public SystemTray SystemTray => Own(ref _systemTray, () => new SystemTray(Loop, Log));
@@ -133,15 +133,6 @@ public sealed partial class Shell
             _services.Add(field);
         }
         return field;
-    }
-
-    private static IStartupRegistry? StartupRegistry()
-    {
-        if (Packaging.IsPackaged)
-            return WindowsStartupTasks.Open() is { } task ? new StartupTaskRegistry(task) : null;
-        return Environment.ProcessPath is { } exe
-            ? new WindowsStartupRegistry(WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)))
-            : null;
     }
 
     private void DisposeServices()
