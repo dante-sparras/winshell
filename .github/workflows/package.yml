@@ -1,7 +1,7 @@
 name: Package
 
 # Builds and verifies what a release ships with scripts/package.ps1: on PRs that change packaging or the release
-# workflow, and on a push to main that is not only docs or Markdown, so a broken package shows before a release.
+# workflow (excluding Markdown-only changes), and on a push to main that is not only docs or Markdown.
 # release-please.yml calls it for a new draft release, and it can be run by hand to resume a draft; both publish only
 # after its assets are verified. A docs-only push does not start this workflow. A release still does, through workflow_call.
 # The upload also includes scripts/install.ps1 and scripts/uninstall.ps1, copied from the tagged commit.
@@ -25,6 +25,7 @@ on:
       - "Directory.Build.props"
       - "Directory.Packages.props"
       - "global.json"
+      - "!**/*.md"
   push:
     branches:
       - main

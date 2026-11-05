@@ -10,8 +10,7 @@ on:
 permissions:
   contents: read
 
-# Every check of a pull request is in this file, except pr-title and pr-rules, which need their own trigger. changes
-# decides which of them a pull request needs, so a docs change holds one runner and not a dozen.
+# The main build, test and lint jobs live here. changes selects what a PR or main push needs, so prose runs only links.
 #
 # A pull request cancels its older run. Each push to main gets its own group, because a group holds only one pending run:
 # a shared one would drop the ci run of a commit in a burst of merges.
@@ -21,46 +20,54 @@ concurrency:
 
 jobs:
   changes:
-    # What this pull request needs. The other jobs skip on false, and a skipped job counts as a passed required check.
-    # Only false skips, so a changes job that failed, or a push to main where it does not run, still runs everything.
+    # Only false skips, so a failed comparison still runs everything. Job-level skips satisfy required checks.
     name: changes
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       code: ${{ steps.files.outputs.code }}
       fast: ${{ steps.files.outputs.fast }}
+      docs: ${{ steps.files.outputs.docs }}
       scripts: ${{ steps.files.outputs.scripts }}
       workflows: ${{ steps.files.outputs.workflows }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Look at the changed files
         id: files
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.number }}
           DRAFT: ${{ github.event.pull_request.draft }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
         run: |
-          # A draft leaves ci and slow to ready_for_review. A draft can't merge, so their skipped checks pass nothing.
-          if [ "$DRAFT" = true ]; then
-            echo 'fast=false' >> "$GITHUB_OUTPUT"
-            echo 'code=false' >> "$GITHUB_OUTPUT"
-          fi
-          # A rename lists the path it left too: moving a file out of src/ can break what used it.
-          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
-          # GitHub lists 3000 files at most, so a list that long may leave out what matters, and everything runs.
-          if [ -z "$files" ] || [ "$(wc -l <<<"$files")" -ge 3000 ]; then exit 0; fi
-          grep -qvE '^docs/|\.md$' <<<"$files" || echo 'code=false' >> "$GITHUB_OUTPUT"
-          grep -qE '^scripts/|^tests/Scripts/|^\.github/(workflows|actions)/' <<<"$files" || echo 'scripts=false' >> "$GITHUB_OUTPUT"
-          grep -qE '^\.github/(workflows|actions)/' <<<"$files" || echo 'workflows=false' >> "$GITHUB_OUTPUT"
+          $ErrorActionPreference = 'Stop'
+          $files = Join-Path $env:RUNNER_TEMP 'changed-files.json'
+          if ($env:PR) {
+            $rows = @(gh api --paginate "repos/$env:REPO/pulls/$env:PR/files?per_page=100" --jq '.[] | @json')
+            $limit = 3000
+          } else {
+            $rows = @(gh api "repos/$env:REPO/compare/$env:BEFORE...$env:AFTER" --jq '.files[] | @json')
+            $limit = 300
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read changed files.' }
+          $changed = @($rows | ForEach-Object { $_ | ConvertFrom-Json })
+          ConvertTo-Json -InputObject $changed -Depth 10 | Set-Content -LiteralPath $files
+          ./scripts/ci-changes.ps1 -Files $files -MaxFiles $limit -Draft:($env:DRAFT -eq 'true') |
+            Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
   ci:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
     name: ci
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.fast != 'false' }}
+    if: ${{ !cancelled() && github.event.pull_request.draft != true }}
     runs-on: windows-2025
     timeout-minutes: 15
     outputs:
@@ -91,17 +98,25 @@ jobs:
           exit $LASTEXITCODE
       # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
       - uses: ./.github/actions/prepare # zizmor: ignore[self-repository]
+        if: needs.changes.outputs.fast != 'false' || needs.changes.outputs.docs == 'true'
       - uses: ./.github/actions/powershell # zizmor: ignore[self-repository]
+        if: needs.changes.outputs.fast != 'false'
       - name: Build
         id: build
+        if: needs.changes.outputs.fast != 'false'
         shell: pwsh
         run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Check
+        if: needs.changes.outputs.fast != 'false'
         timeout-minutes: 10
         shell: pwsh
         run: |
           $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
           ./scripts/check.ps1 -NoBuild
+      - name: Check compiled documentation
+        if: needs.changes.outputs.fast == 'false' && needs.changes.outputs.docs == 'true'
+        shell: pwsh
+        run: dotnet test .\tests\Winshell.Shell.Tests -warnaserror --nologo --filter FullyQualifiedName~Winshell.ShellTests.DocsTests
   stop:
     # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
     # which runs the code under test, gets no token that can cancel a run.
