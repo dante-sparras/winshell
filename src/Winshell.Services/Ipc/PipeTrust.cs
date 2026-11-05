@@ -68,7 +68,7 @@ internal static class PipeTrust
 
     private static bool IsMedium(SafePipeHandle pipe)
     {
-        var label = MandatoryLabel(pipe);
+        var label = NamedPipeServer.MandatoryLabel(pipe);
         return label.Contains("ME", StringComparison.Ordinal) && label.Contains("NW", StringComparison.Ordinal);
     }
 
@@ -78,8 +78,6 @@ internal static class PipeTrust
         if (error != 0)
             throw new IOException($"The control pipe could not be labeled ({error}).");
     }
-
-    internal static string MandatoryLabel(SafePipeHandle pipe) => NamedPipeServer.MandatoryLabel(pipe);
 
     /// <summary>Null when the client may talk to the pipe's server. Otherwise the reason, for the user.</summary>
     internal static string? ServerRefusal(PipeStream pipe)

@@ -45,9 +45,6 @@ internal static class DoctorProbe
         }
     }
 
-    /// <summary>Whether a contrast theme is on, the same read the theme uses.</summary>
-    public static bool ContrastThemeOn() => ContrastTheme.IsOn();
-
     private static object? CurrentVersionValue(string name)
     {
         using var key = Registry.LocalMachine.OpenSubKey(CurrentVersionKey);
@@ -183,9 +180,6 @@ internal static class DoctorProbe
             return "";
         }
     }
-
-    /// <summary>Whether this process is per-monitor DPI aware, version 2, as its manifest asks unless Windows overrides it.</summary>
-    public static bool PerMonitorV2() => ThreadDpi.IsPerMonitorV2();
 
     /// <summary>The compatibility settings Windows keeps for this executable, for this user and for the PC.</summary>
     public static IReadOnlyList<string> CompatibilityLayers(string exePath)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Winshell.Native;
 
 namespace Winshell.Updates;
 
@@ -81,7 +82,7 @@ internal static class UpdateInstall
     /// Returns null when it is in place, or why not.
     /// </summary>
     public static string? ApplyVerified(string updatesDir, string staged, string installDir) =>
-        ApplyVerified(updatesDir, staged, installDir, UpdateSignature.Signer);
+        ApplyVerified(updatesDir, staged, installDir, Authenticode.Signer);
 
     /// <summary>
     /// The same install, with <paramref name="signer"/> giving the subject that signed a file, or null when it is not

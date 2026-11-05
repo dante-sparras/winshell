@@ -1,3 +1,5 @@
+using Winshell.Native;
+
 namespace Winshell.Diagnostics;
 
 /// <summary>
@@ -23,7 +25,7 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public bool TransparencyEffectsOff() => DoctorProbe.TransparencyEffectsOff();
 
-    public bool ContrastThemeOn() => DoctorProbe.ContrastThemeOn();
+    public bool ContrastThemeOn() => ContrastTheme.IsOn();
 
     public bool SelfContained(string exePath) => DoctorProbe.SelfContained(exePath);
 
@@ -38,7 +40,7 @@ internal sealed class DoctorFacts : IDoctorFacts
 
     public IReadOnlyList<DoctorScreens.WindowFacts> EdgeWindows() => DoctorProbe.EdgeWindows();
 
-    public bool PerMonitorV2() => DoctorProbe.PerMonitorV2();
+    public bool PerMonitorV2() => ThreadDpi.IsPerMonitorV2();
 
     public IReadOnlyList<string> CompatibilityLayers(string exePath) => DoctorProbe.CompatibilityLayers(exePath);
 
