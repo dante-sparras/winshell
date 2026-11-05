@@ -10,7 +10,7 @@ internal sealed class ShellProcess : IShellChild
     private readonly EventWaitHandle _stopAsked;
     private readonly EventWaitHandle _reloadAsked;
 
-    private ShellProcess(Process process)
+    internal ShellProcess(Process process)
     {
         _process = process;
         _stopAsked = new EventWaitHandle(false, EventResetMode.ManualReset, AskedEventName(Asked.Stop, process.Id));
