@@ -3,8 +3,51 @@ using System.Runtime.InteropServices;
 
 namespace Winshell.Native;
 
+/// <summary>A window message as it arrived, and what its pointer carries, readable only while it is handled.</summary>
+internal readonly unsafe ref struct WindowMessage
+{
+    internal WindowMessage(uint id, nint wParam, nint lParam)
+    {
+        Id = id;
+        WParam = wParam;
+        LParam = lParam;
+    }
+
+    internal uint Id { get; }
+
+    internal nint WParam { get; }
+
+    internal nint LParam { get; }
+
+    /// <summary>The rectangle a <c>WM_DPICHANGED</c> message suggests, in physical pixels.</summary>
+    internal RECT SuggestedRect
+    {
+        get
+        {
+            Expect(Win32.WM_DPICHANGED);
+            return *(RECT*)LParam;
+        }
+    }
+
+    /// <summary>The track sizes a <c>WM_GETMINMAXINFO</c> message carries, which its handler changes in place.</summary>
+    internal ref MINMAXINFO MinMaxInfo
+    {
+        get
+        {
+            Expect(Win32.WM_GETMINMAXINFO);
+            return ref *(MINMAXINFO*)LParam;
+        }
+    }
+
+    private void Expect(uint id)
+    {
+        if (Id != id || LParam == 0)
+            throw new InvalidOperationException($"Message 0x{Id:X4} does not carry what message 0x{id:X4} does.");
+    }
+}
+
 /// <summary>Answers a window message, or returns null to leave it to Windows.</summary>
-internal delegate nint? WindowMessageHandler(uint msg, nint wParam, nint lParam);
+internal delegate nint? WindowMessageHandler(WindowMessage message);
 
 /// <summary>
 /// A top-level window of a class this process registers, whose messages go to a handler on the thread that made it.
@@ -55,12 +98,6 @@ internal sealed unsafe class NativeWindow
             Win32.DestroyWindow(hwnd);
     }
 
-    /// <summary>The rectangle a <c>WM_DPICHANGED</c> message suggests, in physical pixels.</summary>
-    internal static RECT SuggestedRect(nint lParam) => *(RECT*)lParam;
-
-    /// <summary>The track sizes a <c>WM_GETMINMAXINFO</c> message carries, which its handler changes in place.</summary>
-    internal static ref MINMAXINFO MinMaxInfo(nint lParam) => ref *(MINMAXINFO*)lParam;
-
     private static void Register(string className)
     {
         fixed (char* name = className)
@@ -94,7 +131,7 @@ internal sealed unsafe class NativeWindow
         {
             try
             {
-                if (window._handler(msg, wParam, lParam) is { } result)
+                if (window._handler(new WindowMessage(msg, wParam, lParam)) is { } result)
                     return result;
             }
 #pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.

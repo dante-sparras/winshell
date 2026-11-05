@@ -2,6 +2,5 @@ AppendMenu
 CreatePopupMenu
 DestroyMenu
 GetGUIThreadInfo
-GetWindowText
 TRACK_POPUP_MENU_FLAGS
 TrackPopupMenuEx

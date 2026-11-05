@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 
@@ -47,8 +48,21 @@ internal static class ShellIcon
         var key = size + "|" + path;
         if (Cache.TryGetValue(key, out var cached))
             return cached;
-        var loaded = TrayImage.Bitmap(ShellImage.Load(path, size));
+        var loaded = Bitmap(path, size);
         Cache[key] = loaded;
         return loaded;
+    }
+
+    /// <summary>The icon as a WinUI bitmap. A bitmap WinUI cannot make is no icon.</summary>
+    private static ImageSource? Bitmap(string path, int size)
+    {
+        try
+        {
+            return TrayImage.Bitmap(ShellImage.Load(path, size));
+        }
+        catch (COMException)
+        {
+            return null;
+        }
     }
 }

@@ -158,14 +158,14 @@ internal sealed class HostWindow : IDisposable
         _ => (Win32.WS_POPUP, Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE),
     };
 
-    private nint? OnWindowMessage(uint msg, nint wParam, nint lParam)
+    private nint? OnWindowMessage(WindowMessage message)
     {
         // A window that threw handles nothing more; its client is making another.
         if (_failed)
             return null;
         try
         {
-            return OnMessage(msg, wParam, lParam);
+            return OnMessage(message);
         }
         catch (Exception e)
         {
@@ -508,8 +508,9 @@ internal sealed class HostWindow : IDisposable
 
     // Messages
 
-    private nint? OnMessage(uint msg, nint wParam, nint lParam)
+    private nint? OnMessage(WindowMessage message)
     {
+        var (msg, wParam) = (message.Id, message.WParam);
         switch (msg)
         {
             case Win32.WM_SIZE:
@@ -525,7 +526,7 @@ internal sealed class HostWindow : IDisposable
                     if (!_placing)
                         Scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
                     if (_frame is { } frame)
-                        frame.OnDpiChanged(NativeWindow.SuggestedRect(lParam), _placing);
+                        frame.OnDpiChanged(message.SuggestedRect, _placing);
                     else if (!_placing)
                     {
                         // A panel or popup only changes DPI on its own when its monitor's scale changes: place it again from its logical size.
@@ -553,7 +554,7 @@ internal sealed class HostWindow : IDisposable
                 FocusContent();
                 return null;
             case Win32.WM_GETMINMAXINFO when _frame is { } frame:
-                return frame.OnGetMinMaxInfo(ref NativeWindow.MinMaxInfo(lParam));
+                return frame.OnGetMinMaxInfo(ref message.MinMaxInfo);
             case Win32.WM_CLOSE:
                 _client.OnClosed();
                 SetVisible(false);
@@ -571,7 +572,7 @@ internal sealed class HostWindow : IDisposable
                 return null;
         }
         // Explorer's notices to a panel's app bar.
-        return _appBar?.OnMessage(msg, wParam, lParam);
+        return _appBar?.OnMessage(msg, wParam, message.LParam);
     }
 
     /// <summary>Whether a point on the virtual desktop, in physical pixels, is inside this window.</summary>

@@ -6,8 +6,8 @@ namespace Winshell;
 
 /// <summary>
 /// Closes XAML flyouts on a click outside them. WinUI closes a flyout when its window loses activation, and a panel
-/// that never activates has none to lose. A flyout shows in a window of its own, so a WinEvent hook notices this
-/// process's, and only then does a mouse hook run, until no flyout is open.
+/// that never activates has none to lose. A flyout shows in a window of its own, so a WinEvent hook notices when one
+/// of this process's flyout windows shows, and only then does a mouse hook run, until no flyout is open.
 /// </summary>
 internal sealed class FlyoutDismissal : IDisposable
 {

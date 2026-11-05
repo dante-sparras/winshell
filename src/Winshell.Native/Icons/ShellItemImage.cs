@@ -21,11 +21,12 @@ internal static unsafe partial class ShellItemImage
         try
         {
             factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(pointer);
-            if (factory.GetImage(new SIZE { Cx = size, Cy = size }, IconFlags, out var bitmap) != 0 || bitmap == 0)
+            var result = factory.GetImage(new SIZE { Cx = size, Cy = size }, IconFlags, out var bitmap);
+            if (bitmap == 0)
                 return null;
             try
             {
-                return Pixels(bitmap);
+                return result == 0 ? Pixels(bitmap) : null;
             }
             finally
             {

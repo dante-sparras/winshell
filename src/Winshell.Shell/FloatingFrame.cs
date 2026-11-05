@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Windows.Foundation;
 using Winshell.Native;
 using Winshell.Windows;
@@ -257,8 +256,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         Win32.GetWindowRect(Handle, out var shown);
         var maximized = Win32.IsZoomed(Handle);
         var minimized = Win32.IsIconic(Handle);
-        var placement = new WINDOWPLACEMENT { Length = (uint)Marshal.SizeOf<WINDOWPLACEMENT>() };
-        var hasPlacement = Win32.GetWindowPlacement(Handle, ref placement);
+        var hasPlacement = TopLevelWindows.TryPlacement(Handle, out var placement);
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
             normal = RestoredScreenRect(placement, shown);

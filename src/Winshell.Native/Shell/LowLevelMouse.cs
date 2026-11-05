@@ -4,7 +4,7 @@ namespace Winshell.Native;
 
 /// <summary>
 /// The low-level mouse hook, on a <see cref="HookThread"/> that runs while anyone watches for presses. Every watch
-/// shares the one hook.
+/// shares the one hook, and the newest hears a press first, as it would from a hook of its own.
 /// </summary>
 internal static unsafe class LowLevelMouse
 {
@@ -25,7 +25,7 @@ internal static unsafe class LowLevelMouse
             if (_thread is null)
                 return null;
             var watch = new Watch(onPress);
-            Volatile.Write(ref _watches, [.. _watches, watch]);
+            Volatile.Write(ref _watches, [watch, .. _watches]);
             return watch;
         }
     }
