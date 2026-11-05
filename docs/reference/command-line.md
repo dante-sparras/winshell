@@ -47,13 +47,13 @@ The log goes to the console and to the instance's log file. The file is kept to 
 
 ### Crashes
 
-`winshell run` runs the shell in a child process and stays until supervision ends; `winshell list` shows that child. When the shell exits, `winshell run` acts on its exit code:
+`winshell run` runs the shell in a child process and stays until supervision ends; `winshell list` shows that child. `winshell run` exits with the code the shell's last process exited with. When the shell exits:
 
-- **0** is a stop that was asked for: `winshell kill`, with or without `--force`, a reload that handed over to a new process, or a `--no-duplicate` start that found its shell running. `winshell run` exits 0.
-- **1** is a shell that could not start and said why. `winshell run` exits 1 and does not try again.
-- **Any other code** is a crash. The shell starts again after 1, 2, 4, 8 and then 10 seconds. The sixth crash in a row ends `winshell run` with that crash's code. A shell that ran for a minute before it crashed starts the count again.
+- **0** is a stop that was asked for: `winshell kill`, a reload that handed over to a new process, or a `--no-duplicate` start that found its shell running. The shell has put Explorer's taskbar back itself.
+- **1** is a shell that could not start and said why, which a new start would repeat. Task Manager's **End task** also ends a process with 1. Nothing starts again.
+- **Any other code** is a crash. The shell starts again after 1, 2, 4, 8 and then 10 seconds. The sixth crash in a row ends supervision. A shell that ran for a minute before it crashed starts the count again. A shell that `winshell kill` or `winshell reload` had asked to stop, such as one `kill --force` ended, does not start again.
 
-After every exit, `winshell run` shows Explorer's taskbar again and reserves its edge, if the taskbar showed when that shell started, so a crash that skipped the shell's own exit does not leave it hidden. A taskbar another shell had hidden stays hidden. A reload of the default shell hands over to a new `winshell run`, which supervises the next shell. A configuration's program hands over to a new process of itself, which runs with no supervisor. Ctrl+C, closing the console and signing out end supervision too: they ask the shell to quit, end it two seconds later if it has not, and start nothing again.
+After every exit but 0, `winshell run` shows Explorer's taskbar again and reserves its edge, unless a taskbar window was already hidden when that shell started: that taskbar belongs to another shell. So a crash that skipped the shell's own exit does not leave the taskbar hidden. A reload of the default shell hands over to a new `winshell run`, which supervises the next shell. A configuration's program hands over to a new process of itself, which runs with no supervisor. Ctrl+C, closing the console and signing out end supervision too: they ask the shell to quit, end it two seconds later if it has not, and start nothing again.
 
 A failure before that log exists, such as no project and no default shell to run, is printed to the console. The Start tile, the sign-in entry and any other start with no console window also show that message in a dialog, unless another program is reading the error. **Open config folder** opens the `--path` folder, or the config folder when there was no `--path`. An attached console prints the message and shows no dialog.
 

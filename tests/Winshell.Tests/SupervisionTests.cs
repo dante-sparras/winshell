@@ -13,7 +13,7 @@ public sealed class SupervisionTests : IDisposable, IClassFixture<ProbeBuild>
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
-    private readonly bool _taskbarShowed = Win32ExplorerTaskbar.Showing();
+    private readonly bool _taskbarHidden = ExplorerTaskbarRecovery.AnyHidden();
 
     public SupervisionTests()
     {
@@ -28,15 +28,15 @@ public sealed class SupervisionTests : IDisposable, IClassFixture<ProbeBuild>
     ];
 
     [Fact]
-    public void A_crashed_shell_starts_again_with_the_taskbar_back_and_a_kill_ends_supervision()
+    public void A_crashed_shell_starts_again_with_the_taskbar_back()
     {
-        Assert.True(_taskbarShowed, "Explorer's taskbar was not showing before the test.");
+        Assert.False(_taskbarHidden, "Explorer's taskbar was hidden before the test.");
         var marker = Path.Combine(_dir, "config", ProbeShell.HideTaskbarMarker);
         File.WriteAllText(marker, "");
         var run = Supervise();
         var first = NextShell(0);
         Wait.Until(() => !File.Exists(marker), "the shell to hide the taskbar");
-        Assert.False(Win32ExplorerTaskbar.Showing());
+        Assert.True(ExplorerTaskbarRecovery.AnyHidden());
 
         // Ended without its cleanup, as a crash would end it.
         using (var crashed = Process.GetProcessById(first))
@@ -44,18 +44,14 @@ public sealed class SupervisionTests : IDisposable, IClassFixture<ProbeBuild>
             crashed.Kill();
             crashed.WaitForExit();
         }
-        var second = NextShell(first);
+        NextShell(first);
 
         // The taskbar came back before the second shell started, and that shell found no file telling it to hide it.
-        Assert.True(Win32ExplorerTaskbar.Showing());
-        var killed = Cli("kill", "--pid", second.ToString(CultureInfo.InvariantCulture));
-        Assert.Equal(0, killed.Code);
-        Wait.Until(() => run.HasExited, "winshell run to end with its shell");
-        Assert.Equal(0, run.ExitCode);
-        Assert.Empty(Listed());
+        Assert.False(ExplorerTaskbarRecovery.AnyHidden());
+        Assert.False(run.HasExited);
     }
 
-    /// <summary>A forced kill ends a shell that did not quit when asked. Its supervisor takes that for a stop.</summary>
+    /// <summary>A forced kill ends a shell that did not quit when asked. Its supervisor takes that for a stop, not a crash.</summary>
     [Fact]
     public void A_forced_kill_of_a_hung_shell_ends_supervision()
     {
@@ -71,7 +67,8 @@ public sealed class SupervisionTests : IDisposable, IClassFixture<ProbeBuild>
 
             Assert.Equal(0, killed.Code);
             Wait.Until(() => run.HasExited, "winshell run to end with its shell");
-            Assert.Equal(0, run.ExitCode);
+            // The exit code of the end --force gave it.
+            Assert.Equal(-1, run.ExitCode);
             Assert.Empty(Listed());
         }
         finally
@@ -127,8 +124,8 @@ public sealed class SupervisionTests : IDisposable, IClassFixture<ProbeBuild>
             run.Dispose();
         }
         // A test that failed can leave the taskbar its probe hid. One that another program hid stays hidden.
-        if (_taskbarShowed)
-            Win32ExplorerTaskbar.RestoreHidden();
+        if (!_taskbarHidden)
+            ExplorerTaskbarRecovery.Restore();
         try
         {
             Directory.Delete(_dir, true);

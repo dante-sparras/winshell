@@ -7,16 +7,18 @@ namespace Winshell;
 internal sealed class ShellProcess : IShellChild
 {
     private readonly Process _process;
-    private readonly EventWaitHandle _killed;
+    private readonly EventWaitHandle _stopAsked;
 
     private ShellProcess(Process process)
     {
         _process = process;
-        _killed = new EventWaitHandle(false, EventResetMode.ManualReset, KilledEventName(process.Id));
+        _stopAsked = new EventWaitHandle(false, EventResetMode.ManualReset, StopAskedEventName(process.Id));
         Exited = ExitAsync();
     }
 
     public Task<int> Exited { get; }
+
+    public bool StopAsked => _stopAsked.WaitOne(0);
 
     /// <summary>Starts the shell, or says why it did not start and returns null. A dialog can offer <paramref name="folder"/>.</summary>
     public static ShellProcess? Start(ProcessStartInfo info, string? folder)
@@ -34,10 +36,21 @@ internal sealed class ShellProcess : IShellChild
     }
 
     /// <summary>
-    /// What <c>winshell kill --force</c> sets before it ends the shell with this process id. That exit was asked for, so
-    /// <see cref="Exited"/> gives 0, and supervision stops.
+    /// Tells the supervisor of the shell with this process id, when it has one, that a stop was asked for, so a crash on
+    /// the way out is not started again. False takes that back when the shell did not stop after all.
     /// </summary>
-    internal static string KilledEventName(int pid) => $@"Local\winshell-killed-{pid}";
+    internal static void TellSupervisor(int pid, bool stopAsked)
+    {
+        if (!EventWaitHandle.TryOpenExisting(StopAskedEventName(pid), out var asked))
+            return;
+        using (asked)
+        {
+            if (stopAsked)
+                asked.Set();
+            else
+                asked.Reset();
+        }
+    }
 
     /// <summary>
     /// Asks the shell to quit and ends it two seconds later if it has not. Closing the console or signing out leaves this
@@ -78,13 +91,15 @@ internal sealed class ShellProcess : IShellChild
 
     public void Dispose()
     {
-        _killed.Dispose();
+        _stopAsked.Dispose();
         _process.Dispose();
     }
+
+    private static string StopAskedEventName(int pid) => $@"Local\winshell-stop-asked-{pid}";
 
     private async Task<int> ExitAsync()
     {
         await _process.WaitForExitAsync();
-        return _killed.WaitOne(0) ? 0 : _process.ExitCode;
+        return _process.ExitCode;
     }
 }

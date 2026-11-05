@@ -7,43 +7,14 @@ namespace Winshell.ExplorerTaskbar;
 /// <summary>
 /// Hides Explorer's taskbar windows and removes the app-bar reservation that insets the work area, then puts both
 /// back. An auto-hidden taskbar already reserves nothing, so only its window is hidden: removing that app bar and
-/// registering it again would make it reserve an edge. This is the only type that calls Win32 on
-/// <c>Shell_TrayWnd</c> or <c>Shell_SecondaryTrayWnd</c>.
+/// registering it again would make it reserve an edge. This and <see cref="ExplorerTaskbarRecovery"/> are the only types
+/// that call Win32 on <c>Shell_TrayWnd</c> or <c>Shell_SecondaryTrayWnd</c>.
 /// </summary>
 internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
 {
     private static uint _callback;
     private readonly List<Saved> _saved = [];
     private bool _active;
-
-    /// <summary>Whether Explorer shows a taskbar window now.</summary>
-    public static bool Showing() => Windows("Shell_TrayWnd").Concat(Windows("Shell_SecondaryTrayWnd")).Any(Win32.IsWindowVisible);
-
-    /// <summary>
-    /// Shows every hidden taskbar window and reserves its edge again, for a process that did not hide them: the shell
-    /// that did can end before it puts them back. The edge is read from where the window is now. A window that still
-    /// reserves its edge keeps it, since Explorer refuses to register it twice.
-    /// </summary>
-    public static void RestoreHidden()
-    {
-        var primary = Windows("Shell_TrayWnd");
-        var secondary = Windows("Shell_SecondaryTrayWnd");
-        var sample = primary.Count > 0 ? primary[0] : secondary.Count > 0 ? secondary[0] : 0;
-        var autohide = sample != 0 && Autohide(sample);
-        foreach (var (hwnd, isPrimary) in primary.Select(h => (h, true)).Concat(secondary.Select(h => (h, false))))
-        {
-            if (Win32.IsWindowVisible(hwnd))
-                continue;
-            var saved = new Saved { Hwnd = hwnd, WasVisible = true };
-            if (!autohide && TryPosition(hwnd, isPrimary, out var edge, out var rect))
-            {
-                saved.Edge = edge;
-                saved.Rect = rect;
-                saved.Removed = true;
-            }
-            PutBack(saved);
-        }
-    }
 
     /// <summary>Takes every taskbar window not yet taken, so calling it again picks up one Explorer made since.</summary>
     public void Hide()
@@ -89,7 +60,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         Win32.ShowWindow(hwnd, Win32.SW_HIDE);
     }
 
-    private static void PutBack(Saved saved)
+    internal static void PutBack(Saved saved)
     {
         if (!IsExplorerTaskbar(saved.Hwnd))
             return;
@@ -115,14 +86,14 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         return _callback;
     }
 
-    private static bool Autohide(nint hwnd)
+    internal static bool Autohide(nint hwnd)
     {
         var abd = AppBar(hwnd);
         var state = (uint)Win32.SHAppBarMessage(Win32.ABM_GETSTATE, ref abd);
         return (state & Win32.ABS_AUTOHIDE) != 0;
     }
 
-    private static bool TryPosition(nint hwnd, bool primary, out uint edge, out RECT rect)
+    internal static bool TryPosition(nint hwnd, bool primary, out uint edge, out RECT rect)
     {
         if (primary)
         {
@@ -157,7 +128,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
     private static APPBARDATA AppBar(nint hwnd) => new() { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
 
     /// <summary>Explorer's windows of that class. A shell's tray host makes a <c>Shell_TrayWnd</c> of its own.</summary>
-    private static List<nint> Windows(string className)
+    internal static List<nint> Windows(string className)
     {
         var found = new List<nint>();
         for (nint hwnd = 0, next; (next = Win32.FindWindowExW(0, hwnd, className, null)) != 0; hwnd = next)
@@ -187,7 +158,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
     private static bool IsExplorerTaskbar(nint hwnd) =>
         Win32.IsWindow(hwnd) && TopLevelWindows.ClassName(hwnd) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
 
-    private sealed class Saved
+    internal sealed class Saved
     {
         public nint Hwnd;
         public bool WasVisible;

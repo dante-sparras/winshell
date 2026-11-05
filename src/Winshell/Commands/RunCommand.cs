@@ -90,7 +90,9 @@ internal static class RunCommand
     /// </summary>
     private static List<string> ChildArguments(string[] originalArgs)
     {
-        var childArgs = originalArgs.Where(a => a is not ("-d" or "--daemonize")).ToList();
+        // Words after -- are the program's, and keep a -d of theirs.
+        var options = Array.IndexOf(originalArgs, "--") is var end and >= 0 ? end : originalArgs.Length;
+        var childArgs = originalArgs.Where((a, i) => i >= options || a is not ("-d" or "--daemonize")).ToList();
         if (CliParser.FirstCommand([.. childArgs]) is null)
             childArgs.Insert(0, "run");
         return childArgs;
@@ -134,12 +136,21 @@ internal static class RunCommand
     /// </summary>
     private static int Supervise(ProcessStartInfo shell, string? folder)
     {
-        var supervisor = new ShellSupervisor(() => ShellProcess.Start(shell, folder), Win32ExplorerTaskbar.Showing, Win32ExplorerTaskbar.RestoreHidden, TimeProvider.System);
+        IShellChild? Start()
+        {
+            var child = ShellProcess.Start(shell, folder);
+            // The shell reports a failed update once. A shell started again after a crash does not repeat it.
+            shell.Environment.Remove(UpdateFailureVariable);
+            return child;
+        }
+        var supervisor = new ShellSupervisor(Start, ExplorerTaskbarRecovery.AnyHidden, ExplorerTaskbarRecovery.Restore, TimeProvider.System);
         using var stop = new CancellationTokenSource();
         Task<int>? supervision = null;
         // Ctrl+C and Ctrl+Break stop the shell and supervision. Closing the console and the end of the session end this
         // process once the handler returns, so it waits for the shell to stop and the taskbar to come back. The session's
-        // end is a window message: Windows sends no console signal for it to a process that has loaded user32.
+        // end is a window message: Windows sends no console signal for it to a process that has loaded user32. SystemEvents
+        // makes its window on the thread that first subscribes when that thread is STA, and this one pumps no messages, so a
+        // pool thread subscribes and SystemEvents makes a thread of its own.
         void Stop()
         {
             stop.Cancel();
@@ -162,7 +173,7 @@ internal static class RunCommand
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Signal);
         using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Signal);
         using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Signal);
-        SystemEvents.SessionEnded += SessionEnded;
+        Task.Run(() => SystemEvents.SessionEnded += SessionEnded).GetAwaiter().GetResult();
         try
         {
             supervision = supervisor.RunAsync(stop.Token);

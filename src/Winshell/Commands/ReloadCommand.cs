@@ -29,15 +29,19 @@ internal static class ReloadCommand
                 return 1;
             }
         }
+        // Its supervisor must not start it again beside the process it hands over to, even after a crash on the way out.
+        ShellProcess.TellSupervisor(info.Pid, stopAsked: true);
         // The program the build left, which is not always the one this instance runs.
         var answer = await InstanceCall.AskAsync(info, new IpcRequest("reload", Args: project is null ? null : [project.Program]));
         if (answer.Response is not { } response)
         {
+            ShellProcess.TellSupervisor(info.Pid, stopAsked: false);
             Console.Error.WriteLine(answer.Failure);
             return 1;
         }
         if (!response.Ok)
         {
+            ShellProcess.TellSupervisor(info.Pid, stopAsked: false);
             Console.Error.WriteLine($"Instance {info.Id} did not reload: {response.Error}");
             return 1;
         }

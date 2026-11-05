@@ -43,8 +43,9 @@ public sealed partial class ShellProgramTests : IDisposable
         Assert.Equal((0, ""), (killed.Code, killed.Error));
         Assert.StartsWith("Killed ", killed.Output, StringComparison.Ordinal);
         Assert.True(process.HasExited);
+        Assert.Equal(0, process.ExitCode);
         Assert.Empty(Listed());
-        // winshell run ends with the shell's exit code. A kill is a clean exit, so it does not start the shell again.
+        // A kill was asked for, so winshell run ends with the shell and does not start it again.
         Wait.Until(() => run.HasExited, "winshell run to end with its shell");
         Assert.Equal(0, run.ExitCode);
 
@@ -84,13 +85,16 @@ public sealed partial class ShellProgramTests : IDisposable
     [Fact]
     public void A_reload_hands_over_to_a_new_process_of_the_same_program()
     {
-        var first = Start("--no-duplicate").Shell;
+        var (run, first) = Start("--no-duplicate");
 
         var reload = Run("reload", "--pid", first.Id.ToString(CultureInfo.InvariantCulture));
 
         Assert.Equal((0, ""), (reload.Code, reload.Error));
         Assert.StartsWith("Reloaded ", reload.Output, StringComparison.Ordinal);
         Wait.Until(() => first.HasExited, "the old shell to exit");
+        // The winshell run of the old shell ends with it: the new process runs under a winshell run of its own.
+        Wait.Until(() => run.HasExited, "the old shell's winshell run to end");
+        Assert.Equal(0, run.ExitCode);
         Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() != first.Id), "the new shell in winshell list");
         var next = Assert.Single(Listed());
         Assert.Equal("winshell-default", next.GetProperty("shellId").GetString());
@@ -156,6 +160,8 @@ public sealed partial class ShellProgramTests : IDisposable
         var pid = 0;
         Wait.Until(() => (pid = Listed().Select(i => i.GetProperty("pid").GetInt32()).FirstOrDefault(p => !before.Contains(p))) != 0, "the new shell in winshell list");
         var shell = Process.GetProcessById(pid);
+        // Opened while it runs, so its exit code can still be read once it has exited.
+        _ = shell.SafeHandle;
         _started.Add(shell);
         return (run, shell);
     }
