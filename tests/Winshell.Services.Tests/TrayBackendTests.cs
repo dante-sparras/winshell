@@ -133,12 +133,13 @@ public sealed class TrayBackendTests : IDisposable
         Assert.False(next.TryOwn());
 
         var window = owner.Window;
-        // A crash ends the owner's thread with the owner name still held; Windows hands it on as abandoned.
+        // A crash ends the owner's thread with the owner name still held; Windows hands it on as abandoned. Join can
+        // return before Windows has ended the thread, so the next instance tries again, as SystemTray does.
         owner.Exit(clean);
         if (clean)
             Assert.False(Win32.IsWindow(window));
 
-        Assert.True(next.TryOwn());
+        Wait.Until(next.TryOwn, "the next instance to own the notification area");
         Assert.True(next.Open(_ => true));
         Assert.NotEqual(0, next.Window);
     }
