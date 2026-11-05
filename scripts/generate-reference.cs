@@ -1,7 +1,7 @@
 // Writes the reference pages, docs/reference/winshell*.md: a page per namespace of the Winshell package, from the
-// public types of Winshell.Shell, Winshell.Services and Winshell.Core and their /// comments. A page keeps what is above its
-// marker line, and this writes everything below it. Run it after changing a public member, and commit the pages
-// it writes. DocsTests compiles this file and fails when a committed page is not what it writes.
+// public types of Winshell.Shell, Winshell.Services and Winshell.Core and their /// comments. A page keeps what is
+// above its marker line, and this writes everything below it. Run it after changing a public member, and commit the
+// pages it writes. DocsTests compiles this file and fails when a committed page is not what it writes.
 //
 //   dotnet run scripts/generate-reference.cs
 #:property PublishAot=false
@@ -37,9 +37,9 @@ foreach (var file in Winshell.Docs.ReferencePages.Stale(folder, pages))
 namespace Winshell.Docs
 {
     /// <summary>
-    /// The reference pages of Winshell.Shell, Winshell.Services and Winshell.Core. A page has a section for each included type: the
-    /// public types of a <c>Winshell</c> namespace, and the public types their members use. A section lists the
-    /// public members the type declares, with their /// comments.
+    /// The reference pages of Winshell.Shell, Winshell.Services and Winshell.Core. A page has a section for each
+    /// included type: the public types of a <c>Winshell</c> namespace, and the public types their members use. A
+    /// section lists the public members the type declares, with their /// comments.
     /// </summary>
     internal static partial class ReferencePages
     {

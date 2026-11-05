@@ -11,7 +11,7 @@ internal static class UpdateSignature
 {
     /// <summary>The binaries SignPath signs, as <c>packaging/signpath/artifact-configuration.xml</c> lists them.</summary>
     internal static readonly string[] Signed =
-        ["winshell.exe", "winshellw.exe", "winshell.dll", "Winshell.Native.dll", "Winshell.Services.dll", "Winshell.Shell.dll", "Winshell.DefaultShell.dll"];
+        ["winshell.exe", "winshellw.exe", "winshell.dll", "Winshell.Native.dll", "Winshell.Core.dll", "Winshell.Services.dll", "Winshell.Shell.dll", "Winshell.DefaultShell.dll"];
 
     /// <summary>Whether <paramref name="subject"/>, from <see cref="Authenticode.Signer"/>, names Microsoft, which signs the .NET runtime and its libraries.</summary>
     internal static bool IsMicrosoft(string? subject) =>
