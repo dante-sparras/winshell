@@ -3,10 +3,11 @@ using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
 
+[Trait("Category", "Slow")]
 public sealed class WindowScanTests
 {
     [Fact]
-    public async Task A_hidden_window_on_a_thread_that_is_not_answering_does_not_stop_the_scan()
+    public async Task A_hidden_window_on_a_thread_that_is_not_answering_is_reported_as_not_visible()
     {
         using var release = new ManualResetEventSlim();
         var made = new TaskCompletionSource<nint>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -24,10 +25,11 @@ public sealed class WindowScanTests
 
         try
         {
-            var shows = await Task.Run(() => WindowBackend.IsTaskbarWindow(window), TestContext.Current.CancellationToken)
+            var facts = await Task.Run(() => WindowBackend.Shared.TaskbarFacts(window), TestContext.Current.CancellationToken)
                 .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-            Assert.False(shows);
+            Assert.True(facts.Exists);
+            Assert.False(facts.Visible);
         }
         finally
         {
