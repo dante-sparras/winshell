@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using Windows.Win32.Media.Audio;
 using Winshell.Audio;
+using Winshell.Native;
 
 namespace Winshell.Services.Tests;
 
@@ -8,8 +10,8 @@ public sealed class AudioRulesTests
     [Fact]
     public void A_device_node_releases_its_com_objects_once()
     {
-        var enumerator = CoreAudio.Create<IMMDeviceEnumerator>(CoreAudio.MMDeviceEnumeratorClsid);
-        if (enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Console, out var device) != 0)
+        var enumerator = CoreAudio.CreateEnumerator();
+        if (enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, out var device) != 0)
             return;
 
         device.GetId(out var id);
@@ -22,7 +24,7 @@ public sealed class AudioRulesTests
         node.Release();
 
         Assert.Throws<InvalidComObjectException>(() => device.GetId(out _));
-        Assert.Throws<InvalidComObjectException>(() => meter.GetPeakValue(out _));
+        Assert.Throws<InvalidComObjectException>(() => meter.ReadPeaks());
         Assert.Null(node.Meter);
         node.SetMuted(true);
         Assert.Null(node.KeepRunning());

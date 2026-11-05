@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.Power;
@@ -6,14 +5,11 @@ namespace Winshell.Power;
 /// <summary>Keeps the screen on and the PC awake while enabled. Dispose it to let go.</summary>
 public sealed class KeepAwake : ObservableObject, IDisposable
 {
-    private const int PowerRequestDisplayRequired = 0;
-    private const int PowerRequestSystemRequired = 1;
-
     private static int _active;
 
     private readonly Log _log;
     private bool _enabled;
-    private nint _request;
+    private PowerRequest? _request;
 
     /// <summary>Creates a keep-awake that is off until <see cref="Enabled"/> is set.</summary>
     public KeepAwake()
@@ -42,41 +38,18 @@ public sealed class KeepAwake : ObservableObject, IDisposable
     internal static bool AnyActive => Volatile.Read(ref _active) > 0;
 
     // Each enabled instance holds its own request, and Windows keeps the PC awake while any is held.
-    private unsafe void Acquire()
+    private void Acquire()
     {
-        const string reason = "Winshell keeps the screen on";
-        nint request;
-        fixed (char* text = reason)
-        {
-            var context = new REASON_CONTEXT { Version = 0, Flags = 1, SimpleReasonString = (nint)text };
-            request = Win32.PowerCreateRequest(ref context);
-        }
-        if (request == -1 || request == 0)
-        {
-            Fail("create");
-            return;
-        }
-        if (!Win32.PowerSetRequest(request, PowerRequestDisplayRequired) || !Win32.PowerSetRequest(request, PowerRequestSystemRequired))
-        {
-            Fail("set");
-            Win32.CloseHandle(request);
-            return;
-        }
-        _request = request;
+        _request = PowerRequest.TryCreate("Winshell keeps the screen on", out var step, out var error);
+        if (_request is null)
+            _log.Warn("power", $"Cannot {step} the power request: Windows error {error}");
     }
 
     private void Release()
     {
-        if (_request == 0)
-            return;
-        Win32.PowerClearRequest(_request, PowerRequestDisplayRequired);
-        Win32.PowerClearRequest(_request, PowerRequestSystemRequired);
-        Win32.CloseHandle(_request);
-        _request = 0;
+        _request?.Dispose();
+        _request = null;
     }
-
-    private void Fail(string step) =>
-        _log.Warn("power", $"Cannot {step} the power request: Windows error {Marshal.GetLastPInvokeError()}");
 
     /// <summary>Turns this keep-awake off, so it no longer holds the PC awake.</summary>
     public void Dispose() => Enabled = false;

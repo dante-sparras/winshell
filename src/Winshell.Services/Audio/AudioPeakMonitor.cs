@@ -84,9 +84,8 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
             return;
         try
         {
-            meter.GetMeteringChannelCount(out var count);
-            var values = new float[count];
-            if (count > 0 && meter.GetChannelsPeakValues(count, values) == 0)
+            var values = meter.ReadPeaks();
+            if (values.Length > 0)
                 Apply(values);
         }
         catch (COMException)

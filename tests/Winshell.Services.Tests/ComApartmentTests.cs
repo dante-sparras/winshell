@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using Winshell.Audio;
+using Winshell.Native;
 
 namespace Winshell.Services.Tests;
 

@@ -34,7 +34,7 @@ internal sealed record BrightnessSnapshot(bool Ready, IReadOnlyList<BrightnessIn
 /// after a burst of writes ends, so external monitors are not polled. A monitor whose read fails stays at its
 /// last reading while it is connected.
 /// </summary>
-internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
+internal sealed class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
 {
     public static readonly BrightnessBackend Instance = new();
 
@@ -80,7 +80,7 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
         var result = new List<BrightnessInfo>();
         foreach (var screen in Screens.Enumerate())
         {
-            var token = ModelToken(PnpId(screen.Info.Id));
+            var token = ModelToken(DisplayDevice.MonitorId(screen.Info.Id));
             var panel = panels.FirstOrDefault(p =>
                 token.Length > 0
                 && !used.Contains(p.Instance)
@@ -92,7 +92,7 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
                 result.Add(new BrightnessInfo(panel.Instance, name, BrightnessConnection.Internal, panel.Minimum, panel.Maximum, panel.Current));
                 continue;
             }
-            var reading = TryReadDdc(screen.Handle, out var min, out var current, out var max) ? (min, current, max) : ((int, int, int)?)null;
+            var reading = MonitorBrightness.TryRead(screen.Handle, out var min, out var current, out var max) ? (min, current, max) : ((int, int, int)?)null;
             var external = External(screen.Info.Id, screen.Info.Model.Length > 0 ? screen.Info.Model : screen.Info.Name, reading, previous);
             if (external is not null)
                 result.Add(external);
@@ -182,14 +182,6 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
         return (values.Min(), values.Max());
     }
 
-    private static unsafe string PnpId(string deviceName)
-    {
-        var info = new DISPLAY_DEVICEW { cb = (uint)sizeof(DISPLAY_DEVICEW) };
-        if (!Win32.EnumDisplayDevicesW(deviceName, 0, ref info, 1))
-            return "";
-        return new string(info.DeviceID).TrimEnd('\0');
-    }
-
     /// <summary>The model code in <c>MONITOR\GSM5B7F\...</c> or <c>DISPLAY\GSM5B7F\...</c>.</summary>
     private static string ModelToken(string id)
     {
@@ -197,75 +189,8 @@ internal sealed partial class BrightnessBackend : SnapshotSource<BrightnessSnaps
         return parts.Length >= 2 ? parts[1] : "";
     }
 
-    private static unsafe bool TryReadDdc(nint handle, out int min, out int current, out int max)
-    {
-        min = current = max = 0;
-        if (!GetNumberOfPhysicalMonitorsFromHMONITOR(handle, out var count) || count == 0 || count > 16)
-            return false;
-        var monitors = stackalloc PHYSICAL_MONITOR[(int)count];
-        if (!GetPhysicalMonitorsFromHMONITOR(handle, count, monitors))
-            return false;
-        try
-        {
-            if (!GetMonitorBrightness(monitors[0].hPhysicalMonitor, out var lo, out var now, out var hi))
-                return false;
-            min = (int)lo;
-            current = (int)now;
-            max = (int)hi;
-            return max >= min;
-        }
-        finally
-        {
-            DestroyPhysicalMonitors(count, monitors);
-        }
-    }
-
-    private static unsafe bool TrySetDdc(string deviceName, uint brightness)
-    {
-        var screen = Screens.Find(deviceName);
-        if (screen is null)
-            return false;
-        if (!GetNumberOfPhysicalMonitorsFromHMONITOR(screen.Handle, out var count) || count == 0 || count > 16)
-            return false;
-        var monitors = stackalloc PHYSICAL_MONITOR[(int)count];
-        if (!GetPhysicalMonitorsFromHMONITOR(screen.Handle, count, monitors))
-            return false;
-        try
-        {
-            return SetMonitorBrightness(monitors[0].hPhysicalMonitor, brightness);
-        }
-        finally
-        {
-            DestroyPhysicalMonitors(count, monitors);
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private unsafe struct PHYSICAL_MONITOR
-    {
-        public nint hPhysicalMonitor;
-        public fixed char szPhysicalMonitorDescription[128];
-    }
-
-    [LibraryImport("dxva2.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool GetNumberOfPhysicalMonitorsFromHMONITOR(nint hMonitor, out uint count);
-
-    [LibraryImport("dxva2.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool GetPhysicalMonitorsFromHMONITOR(nint hMonitor, uint count, PHYSICAL_MONITOR* monitors);
-
-    [LibraryImport("dxva2.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetMonitorBrightness(nint hMonitor, out uint minimum, out uint current, out uint maximum);
-
-    [LibraryImport("dxva2.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetMonitorBrightness(nint hMonitor, uint brightness);
-
-    [LibraryImport("dxva2.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool DestroyPhysicalMonitors(uint count, PHYSICAL_MONITOR* monitors);
+    private static bool TrySetDdc(string deviceName, uint brightness)
+        => Screens.Find(deviceName) is { } screen && MonitorBrightness.TrySet(screen.Handle, brightness);
 }
 
 /// <summary>
