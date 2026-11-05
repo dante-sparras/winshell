@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Winshell.Native/Winshell.Native.csproj" />
     <Project Path="src/Winshell.Services/Winshell.Services.csproj" />
     <Project Path="src/Winshell.Shell/Winshell.Shell.csproj" />
     <Project Path="src/Winshell.DefaultShell/Winshell.DefaultShell.csproj" />

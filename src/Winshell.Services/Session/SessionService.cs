@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using Winshell.Native;
 
 namespace Winshell.Session;
 
@@ -36,13 +36,9 @@ internal interface IWorkstationLock
     bool Lock();
 }
 
-internal sealed partial class WindowsWorkstationLock : IWorkstationLock
+internal sealed class WindowsWorkstationLock : IWorkstationLock
 {
     public static readonly WindowsWorkstationLock Instance = new();
 
-    public bool Lock() => LockWorkStation();
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool LockWorkStation();
+    public bool Lock() => Workstation.Lock();
 }
