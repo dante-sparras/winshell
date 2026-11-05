@@ -2,34 +2,12 @@ using Winshell.Native;
 
 namespace Winshell.Windows;
 
-/// <summary>The facts the taskbar uses to decide that a window gets a button.</summary>
-internal readonly record struct TaskbarWindowFacts(
-    bool Exists,
-    bool Visible,
-    bool Shell,
-    bool Child,
-    bool AppWindow,
-    bool Owned,
-    bool ToolWindow,
-    bool NoActivate,
-    bool HasTitle,
-    bool Cloaked);
-
 /// <summary>A monitor's work area in physical pixels, and the scale that turns those pixels into logical ones.</summary>
 internal readonly record struct MonitorFrame(int Left, int Top, int Right, int Bottom, double Scale);
 
 /// <summary>Decisions the window list can make without calling Win32, so the rules can be tested on their own.</summary>
 internal static class WindowRules
 {
-    /// <summary>
-    /// The taskbar's rule: a visible, uncloaked top-level window with a title that either asks for a taskbar button
-    /// or has no owner and is not a tool window or a window that never activates.
-    /// </summary>
-    public static bool ShowsOnTaskbar(TaskbarWindowFacts window) =>
-        window.Exists && window.Visible && !window.Shell && !window.Child
-        && (window.AppWindow || (!window.Owned && !window.ToolWindow && !window.NoActivate))
-        && window.HasTitle && !window.Cloaked;
-
     /// <summary>
     /// The window's AppUserModelID, or else its process package's application user model id, or else the program's
     /// file name in lower case without the extension.

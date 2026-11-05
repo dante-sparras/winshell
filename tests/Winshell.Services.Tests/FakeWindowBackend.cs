@@ -6,8 +6,11 @@ namespace Winshell.Services.Tests;
 /// <summary>Windows a test opens, changes and closes by hand, raising the events Windows would. No real window is read or moved.</summary>
 internal sealed class FakeWindowBackend : IWindowBackend
 {
-    /// <summary>The windows the taskbar shows, in z-order.</summary>
+    /// <summary>The windows that exist, in z-order, with what reading each gives.</summary>
     public Dictionary<nint, WindowRead> Shown { get; } = [];
+
+    /// <summary>What Windows says about each window the taskbar's rule uses.</summary>
+    public Dictionary<nint, TaskbarWindowFacts> Facts { get; } = [];
 
     public Dictionary<nint, nint> Owners { get; } = [];
 
@@ -28,20 +31,25 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public event Action<nint>? Flashed;
 
+    /// <summary>The facts of a normal window with a title: the taskbar lists it.</summary>
+    public static TaskbarWindowFacts Normal { get; } = new(true, true, false, false, false, false, false, false, true, false);
+
     public static WindowRead Window(string title = "Title") => new(title, false, false, false, "M1", "", "", @"C:\app.exe");
 
     public void Show(nint hwnd, string title = "Title") => Show(hwnd, Window(title));
 
     /// <summary>Shows a window, or changes one, and says its name changed.</summary>
-    public void Show(nint hwnd, WindowRead read)
+    public void Show(nint hwnd, WindowRead read, TaskbarWindowFacts? facts = null)
     {
         Shown[hwnd] = read;
+        Facts[hwnd] = facts ?? Normal;
         Raise(Win32.EVENT_OBJECT_NAMECHANGE, hwnd);
     }
 
     public void Destroy(nint hwnd)
     {
         Shown.Remove(hwnd);
+        Facts.Remove(hwnd);
         Raise(Win32.EVENT_OBJECT_DESTROY, hwnd);
     }
 
@@ -65,12 +73,13 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public nint RootOf(nint hwnd) => hwnd;
 
-    /// <summary>The shown window, with the package id and program path left out when they were not asked for.</summary>
-    public WindowRead? Read(nint hwnd, bool package, bool executable)
+    public TaskbarWindowFacts TaskbarFacts(nint hwnd) => Facts.GetValueOrDefault(hwnd);
+
+    /// <summary>The window, with the package id and program path left out when they were not asked for.</summary>
+    public WindowRead Read(nint hwnd, bool package, bool executable)
     {
         Reading?.Invoke(hwnd);
-        if (Shown.GetValueOrDefault(hwnd) is not { } read)
-            return null;
+        var read = Shown[hwnd];
         return read with
         {
             PackageAppId = package && read.AppUserModelId.Length == 0 ? read.PackageAppId : null,

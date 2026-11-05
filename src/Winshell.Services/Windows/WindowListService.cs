@@ -188,14 +188,24 @@ public sealed class WindowListService : ObservableObject, IDisposable
     /// </summary>
     private WindowInfo? Read(nint hwnd)
     {
-        _identities.TryGetValue(hwnd, out var previous);
-        if (_backend.Read(hwnd, !previous.PackageKnown, previous.Executable is not { Length: > 0 }) is not { } read)
+        if (!ShowsOnTaskbar(_backend.TaskbarFacts(hwnd)))
             return null;
+        _identities.TryGetValue(hwnd, out var previous);
+        var read = _backend.Read(hwnd, !previous.PackageKnown, previous.Executable is not { Length: > 0 });
         var identity = Resolve(previous, read.AppUserModelId, read.PackageAppId, read.Executable);
         _identities[hwnd] = identity;
         return new WindowInfo(hwnd, read.Title, identity.AppId, identity.Executable, identity.Icon, _backend.OwnerOf(hwnd),
             read.Maximized, read.Minimized, read.Fullscreen, read.Monitor);
     }
+
+    /// <summary>
+    /// The taskbar's rule: a visible, uncloaked top-level window with a title that either asks for a taskbar button
+    /// or has no owner and is not a tool window or a window that never activates.
+    /// </summary>
+    private static bool ShowsOnTaskbar(TaskbarWindowFacts window) =>
+        window.Exists && window.Visible && !window.Shell && !window.Child
+        && (window.AppWindow || (!window.Owned && !window.ToolWindow && !window.NoActivate))
+        && window.HasTitle && !window.Cloaked;
 
     /// <summary>
     /// The app id to keep after one read of the window. <paramref name="windowProperty"/> is the property store now,

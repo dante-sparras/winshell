@@ -8,33 +8,6 @@ public sealed class WindowRulesTests
     private static readonly MonitorFrame Primary = new(0, 0, 1920, 1080, 1);
     private static readonly MonitorFrame Scaled = new(1920, 0, 4480, 1440, 1.5);
 
-    private static TaskbarWindowFacts Shown(bool appWindow = false, bool owned = false, bool tool = false, bool noActivate = false) =>
-        new(true, true, false, false, appWindow, owned, tool, noActivate, true, false);
-
-    [Fact]
-    public void A_normal_window_with_a_title_is_on_the_taskbar() => Assert.True(WindowRules.ShowsOnTaskbar(Shown()));
-
-    [Theory]
-    [InlineData(false, true, false, false, false, false, false, false, true, false)]
-    [InlineData(true, false, false, false, false, false, false, false, true, false)]
-    [InlineData(true, true, true, false, false, false, false, false, true, false)]
-    [InlineData(true, true, false, true, false, false, false, false, true, false)]
-    [InlineData(true, true, false, false, false, true, false, false, true, false)]
-    [InlineData(true, true, false, false, false, false, true, false, true, false)]
-    [InlineData(true, true, false, false, false, false, false, true, true, false)]
-    [InlineData(true, true, false, false, false, false, false, false, false, false)]
-    [InlineData(true, true, false, false, false, false, false, false, true, true)]
-    public void Windows_the_taskbar_skips_stay_out_of_the_list(
-        bool exists, bool visible, bool shell, bool child, bool appWindow, bool owned, bool tool, bool noActivate, bool title, bool cloaked)
-    {
-        var facts = new TaskbarWindowFacts(exists, visible, shell, child, appWindow, owned, tool, noActivate, title, cloaked);
-        Assert.False(WindowRules.ShowsOnTaskbar(facts));
-    }
-
-    [Fact]
-    public void An_owned_window_that_asks_for_a_taskbar_button_is_listed() =>
-        Assert.True(WindowRules.ShowsOnTaskbar(Shown(appWindow: true, owned: true, tool: true, noActivate: true)));
-
     [Fact]
     public void App_identity_prefers_the_window_id_and_otherwise_uses_the_program_name()
     {

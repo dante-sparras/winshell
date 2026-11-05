@@ -36,6 +36,37 @@ public sealed class WindowListServiceTests
         Assert.Same(kept, list.Windows[0]);
     }
 
+    [Theory]
+    [InlineData(false, true, false, false, false, false, false, false, true, false)]
+    [InlineData(true, false, false, false, false, false, false, false, true, false)]
+    [InlineData(true, true, true, false, false, false, false, false, true, false)]
+    [InlineData(true, true, false, true, false, false, false, false, true, false)]
+    [InlineData(true, true, false, false, false, true, false, false, true, false)]
+    [InlineData(true, true, false, false, false, false, true, false, true, false)]
+    [InlineData(true, true, false, false, false, false, false, true, true, false)]
+    [InlineData(true, true, false, false, false, false, false, false, false, false)]
+    [InlineData(true, true, false, false, false, false, false, false, true, true)]
+    public void Windows_the_taskbar_skips_stay_out_of_the_list(
+        bool exists, bool visible, bool shell, bool child, bool appWindow, bool owned, bool tool, bool noActivate, bool title, bool cloaked)
+    {
+        _windows.Show(1, FakeWindowBackend.Window(), new TaskbarWindowFacts(exists, visible, shell, child, appWindow, owned, tool, noActivate, title, cloaked));
+        _windows.Show(2);
+
+        using var list = Start();
+
+        Assert.Equal([2], list.Windows.Select(window => (int)window.Hwnd));
+    }
+
+    [Fact]
+    public void An_owned_window_that_asks_for_a_taskbar_button_is_listed()
+    {
+        _windows.Show(1, FakeWindowBackend.Window(), FakeWindowBackend.Normal with { AppWindow = true, Owned = true, ToolWindow = true, NoActivate = true });
+
+        using var list = Start();
+
+        Assert.Equal([1], list.Windows.Select(window => (int)window.Hwnd));
+    }
+
     [Fact]
     public void A_change_reports_only_the_properties_that_differ()
     {

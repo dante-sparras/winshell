@@ -4,7 +4,23 @@ using Winshell.Input;
 namespace Winshell.Windows;
 
 /// <summary>
-/// One read of a window the taskbar shows. <see cref="AppUserModelId"/> is the id the window set, read every time.
+/// What Windows says about a window that the taskbar's rule uses. A window that is not visible reports only
+/// <see cref="Exists"/>: its title is not read, so every other fact is false.
+/// </summary>
+internal readonly record struct TaskbarWindowFacts(
+    bool Exists,
+    bool Visible,
+    bool Shell,
+    bool Child,
+    bool AppWindow,
+    bool Owned,
+    bool ToolWindow,
+    bool NoActivate,
+    bool HasTitle,
+    bool Cloaked);
+
+/// <summary>
+/// One read of a window. <see cref="AppUserModelId"/> is the id the window set, read every time.
 /// <see cref="PackageAppId"/> and <see cref="Executable"/> are null when they were not read.
 /// </summary>
 internal sealed record WindowRead(
@@ -45,11 +61,16 @@ internal interface IWindowBackend
     nint RootOf(nint hwnd);
 
     /// <summary>
-    /// Reads a window when the taskbar shows it, or null. The process package is read only when
-    /// <paramref name="package"/> is true and the window set no id. The program path is read only when
-    /// <paramref name="executable"/> is true.
+    /// The facts the taskbar's rule uses to decide whether this window gets a button. A window that is not visible is
+    /// reported as such without reading its title.
     /// </summary>
-    WindowRead? Read(nint hwnd, bool package, bool executable);
+    TaskbarWindowFacts TaskbarFacts(nint hwnd);
+
+    /// <summary>
+    /// Reads a window. The process package is read only when <paramref name="package"/> is true and
+    /// the window set no id. The program path is read only when <paramref name="executable"/> is true.
+    /// </summary>
+    WindowRead Read(nint hwnd, bool package, bool executable);
 
     /// <summary>The connected monitor with this device name, or null.</summary>
     ScreenInfo? Screen(string deviceName);
@@ -135,22 +156,16 @@ internal sealed class WindowBackend : IWindowBackend
     private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild) =>
         NativeCallback.Guard(Log.Default, "windows", () => WinEvent?.Invoke(eventType, hwnd, idObject, idChild));
 
-    public WindowRead? Read(nint hwnd, bool package, bool executable) => IsTaskbarWindow(hwnd) ? Describe(hwnd, package, executable) : null;
-
-    /// <summary>
-    /// The taskbar's rule: a visible, uncloaked top-level window with a title that either asks for a taskbar button
-    /// or has no owner and is not a tool window or a window that never activates.
-    /// </summary>
-    internal static bool IsTaskbarWindow(nint hwnd)
+    public TaskbarWindowFacts TaskbarFacts(nint hwnd)
     {
         // Asking a window of this process for its title sends it a message with no timeout. A hidden one can belong to a
         // thread waiting for this one, as SystemEvents does while it raises an event, and neither would ever go on.
         if (!Win32.IsWindowVisible(hwnd))
-            return false;
+            return new TaskbarWindowFacts(Win32.IsWindow(hwnd), false, false, false, false, false, false, false, false, false);
         var ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
-        return WindowRules.ShowsOnTaskbar(new TaskbarWindowFacts(
+        return new TaskbarWindowFacts(
             Win32.IsWindow(hwnd),
-            Win32.IsWindowVisible(hwnd),
+            true,
             TopLevelWindows.IsShellWindow(hwnd),
             TopLevelWindows.HasChildStyle(hwnd),
             (ex & Win32.WS_EX_APPWINDOW) != 0,
@@ -158,10 +173,10 @@ internal sealed class WindowBackend : IWindowBackend
             (ex & Win32.WS_EX_TOOLWINDOW) != 0,
             (ex & Win32.WS_EX_NOACTIVATE) != 0,
             TopLevelWindows.HasTitle(hwnd),
-            TopLevelWindows.IsCloaked(hwnd)));
+            TopLevelWindows.IsCloaked(hwnd));
     }
 
-    private static WindowRead Describe(nint hwnd, bool package, bool executable)
+    public WindowRead Read(nint hwnd, bool package, bool executable)
     {
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
