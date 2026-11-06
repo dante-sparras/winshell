@@ -15,26 +15,33 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+
+namespace Winshell.Docs;
+
 #if !REFERENCE_PAGES_LIBRARY
-var root = Path.GetFullPath(Path.Combine(AppContext.GetData("EntryPointFileDirectoryPath") as string ?? ".", ".."));
-var folder = Path.Combine(root, "docs", "reference");
-var pages = Winshell.Docs.ReferencePages.Generate(folder);
-foreach (var file in Winshell.Docs.ReferencePages.Stale(folder, pages))
+internal static class Program
 {
-    if (pages.TryGetValue(file, out var text))
+    private static void Main()
     {
-        File.WriteAllText(Path.Combine(folder, file), text);
-        Console.WriteLine($"wrote docs/reference/{file}");
-    }
-    else
-    {
-        File.Delete(Path.Combine(folder, file));
-        Console.WriteLine($"deleted docs/reference/{file}, whose namespace is gone");
+        var scripts = AppContext.GetData("EntryPointFileDirectoryPath") as string ?? ".";
+        var folder = Path.GetFullPath(Path.Combine(scripts, "..", "docs", "reference"));
+        var pages = ReferencePages.Generate(folder);
+        foreach (var file in ReferencePages.Stale(folder, pages))
+        {
+            if (pages.TryGetValue(file, out var text))
+            {
+                File.WriteAllText(Path.Combine(folder, file), text);
+                Console.WriteLine($"wrote docs/reference/{file}");
+            }
+            else
+            {
+                File.Delete(Path.Combine(folder, file));
+                Console.WriteLine($"deleted docs/reference/{file}, whose namespace is gone");
+            }
+        }
     }
 }
 #endif
-
-namespace Winshell.Docs;
 
 /// <summary>
 /// The reference pages of Winshell.Shell, Winshell.Services and Winshell.Core. A page has a section for each

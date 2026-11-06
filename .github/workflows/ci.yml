@@ -116,7 +116,7 @@ jobs:
       - name: Check compiled documentation
         if: needs.changes.outputs.fast == 'false' && needs.changes.outputs.docs == 'true'
         shell: pwsh
-        run: dotnet test .\tests\Winshell.Shell.Tests -warnaserror --nologo --filter FullyQualifiedName~Winshell.ShellTests.DocsTests
+        run: ./scripts/check.ps1 -Tier Docs
   stop:
     # Code that doesn't compile has nothing for slow to prove, so its runner goes back. It is a separate job so that ci,
     # which runs the code under test, gets no token that can cancel a run.

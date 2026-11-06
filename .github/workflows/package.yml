@@ -134,7 +134,7 @@ jobs:
       - uses: ./.github/actions/prepare # zizmor: ignore[self-repository]
       - name: Package tests
         shell: pwsh
-        run: dotnet test .\tests\Winshell.Package.Tests --filter Category=Package
+        run: ./scripts/check.ps1 -Tier Package
 
   package:
     name: package
