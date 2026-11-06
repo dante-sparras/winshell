@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.DataExchange;
@@ -44,26 +42,20 @@ internal delegate nint CopyDataHandler(CopyData data);
 /// <summary>
 /// A window of a taskbar class that apps send their notification area icons to. Layered and transparent, so it can
 /// report Explorer's taskbar rectangle without taking its clicks; topmost and never activated. Its messages arrive on
-/// the thread that made it. A handler's exception does not reach Windows: the message is answered with 0, so a
-/// handler logs its own.
+/// the thread that made it. A handler's exception does not reach Windows: the message goes to Windows' default
+/// handling, so a handler logs its own.
 /// </summary>
 internal sealed unsafe class TrayWindow : IDisposable
 {
-    private static readonly ConcurrentDictionary<nint, TrayWindow> Live = new();
-    private static readonly ConcurrentDictionary<string, byte> Registered = new();
+    private readonly NativeWindow _window;
 
-    private readonly CopyDataHandler _copyData;
-    private readonly Func<uint, nint, nint, bool> _message;
-
-    private TrayWindow(nint handle, CopyDataHandler copyData, Func<uint, nint, nint, bool> message)
+    private TrayWindow(NativeWindow window)
     {
-        Handle = handle;
-        _copyData = copyData;
-        _message = message;
+        _window = window;
     }
 
     /// <summary>The window, or 0 once disposed.</summary>
-    internal nint Handle { get; private set; }
+    internal nint Handle => _window.Handle;
 
     /// <summary>Makes the window, or returns null when Windows would not.</summary>
     /// <param name="className">The window class, registered once in the process.</param>
@@ -71,29 +63,13 @@ internal sealed unsafe class TrayWindow : IDisposable
     /// <param name="message">Gets every other message, and returns true when it handled one, which is then answered with 0.</param>
     internal static TrayWindow? Create(string className, CopyDataHandler copyData, Func<uint, nint, nint, bool> message)
     {
-        if (Registered.TryAdd(className, 0))
-            fixed (char* name = className)
-            {
-                var wc = new WNDCLASSEXW
-                {
-                    cbSize = (uint)sizeof(WNDCLASSEXW),
-                    lpfnWndProc = &WndProc,
-                    hInstance = Win32.GetModuleHandleW(null),
-                    lpszClassName = name
-                };
-                Win32.RegisterClassExW(wc);
-            }
-
-        var hwnd = Win32.CreateWindowExW(
+        var window = NativeWindow.TryCreate(className, Win32.WS_POPUP,
             Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_LAYERED |
-            Win32.WS_EX_TRANSPARENT,
-            className, "", Win32.WS_POPUP, 0, 0, 0, 0, 0, 0, Win32.GetModuleHandleW(null), 0);
-        if (hwnd == 0)
+            Win32.WS_EX_TRANSPARENT, OnMessage(copyData, message), false);
+        if (window is null)
             return null;
-        var window = new TrayWindow(hwnd, copyData, message);
-        Live[hwnd] = window;
-        Win32.SetLayeredWindowAttributes(hwnd, 0, 0, Win32.LWA_ALPHA);
-        return window;
+        Win32.SetLayeredWindowAttributes(window.Handle, 0, 0, Win32.LWA_ALPHA);
+        return new TrayWindow(window);
     }
 
     /// <summary>Lets <paramref name="message"/> through from a process at any integrity level.</summary>
@@ -104,32 +80,18 @@ internal sealed unsafe class TrayWindow : IDisposable
 
     public void Dispose()
     {
-        if (Handle == 0)
-            return;
-        Live.TryRemove(Handle, out _);
-        Win32.DestroyWindow(Handle);
-        Handle = 0;
+        _window.Release(true);
     }
 
-    [UnmanagedCallersOnly]
-    private static nint WndProc(nint hwnd, uint msg, nint wParam, nint lParam)
+    private static WindowMessageHandler OnMessage(CopyDataHandler copyData, Func<uint, nint, nint, bool> message)
     {
-        if (!Live.TryGetValue(hwnd, out var window))
-            return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
-        try
+        return received =>
         {
-            if (msg == PInvoke.WM_COPYDATA)
-                return lParam == 0 ? 0 : window._copyData(new CopyData(wParam, (COPYDATASTRUCT*)lParam));
-            if (window._message(msg, wParam, lParam))
-                return 0;
-        }
-#pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
-        catch (Exception)
-#pragma warning restore CA1031
-        {
-            return 0;
-        }
-
-        return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
+            if (received.Id == PInvoke.WM_COPYDATA)
+                return received.LParam == 0
+                    ? 0
+                    : copyData(new CopyData(received.WParam, (COPYDATASTRUCT*)received.LParam));
+            return message(received.Id, received.WParam, received.LParam) ? 0 : null;
+        };
     }
 }

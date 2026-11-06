@@ -51,12 +51,15 @@ internal readonly unsafe ref struct WindowMessage
 internal delegate nint? WindowMessageHandler(WindowMessage message);
 
 /// <summary>
-/// A top-level window of a class this process registers, whose messages go to a handler on the thread that made it.
-/// The class carries the logo embedded in the program. A handler's exception does not reach Windows: the message
-/// goes to Windows' default handling, so a handler reports its own.
+/// The one window procedure in Native. A class is registered once, and each window's messages go to its handler on
+/// the thread that made it. The class carries the logo embedded in the program. A handler's exception does not reach
+/// Windows: the message goes to Windows' default handling, so a handler reports its own. <c>WM_NCDESTROY</c> drops
+/// the handler, including a window nobody released.
 /// </summary>
 internal sealed unsafe class NativeWindow
 {
+    private const int ErrorClassAlreadyExists = 1410;
+
     private static readonly ConcurrentDictionary<nint, NativeWindow> Live = new();
     private static readonly ConcurrentDictionary<string, byte> Registered = new();
 
@@ -74,12 +77,30 @@ internal sealed unsafe class NativeWindow
     /// <summary>Makes a window of <paramref name="className"/>, registered once in the process. Throws when Windows would not.</summary>
     internal static NativeWindow Create(string className, uint style, uint exStyle, WindowMessageHandler handler)
     {
+        return Make(className, style, exStyle, handler, 0, 1)
+               ?? throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
+    }
+
+    /// <summary>
+    /// Makes a window of <paramref name="className"/>, registered once in the process. Null when Windows would not.
+    /// <paramref name="messageOnly"/> keeps it off the desktop: only messages sent to it arrive.
+    /// </summary>
+    internal static NativeWindow? TryCreate(string className, uint style, uint exStyle, WindowMessageHandler handler,
+        bool messageOnly)
+    {
+        var parent = messageOnly ? Win32.HWND_MESSAGE : 0;
+        return Make(className, style, exStyle, handler, parent, 0);
+    }
+
+    private static NativeWindow? Make(string className, uint style, uint exStyle, WindowMessageHandler handler,
+        nint parent, int size)
+    {
         if (Registered.TryAdd(className, 0))
             Register(className);
-        var hwnd = Win32.CreateWindowExW(exStyle, className, "", style, 0, 0, 1, 1, 0, 0, Win32.GetModuleHandleW(null),
-            0);
+        var hwnd = Win32.CreateWindowExW(exStyle, className, "", style, 0, 0, size, size, parent, 0,
+            Win32.GetModuleHandleW(null), 0);
         if (hwnd == 0)
-            throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
+            return null;
         var window = new NativeWindow(hwnd, handler);
         Live[hwnd] = window;
         return window;
@@ -121,8 +142,11 @@ internal sealed unsafe class NativeWindow
                 hCursor = Win32.LoadCursorW(0, Win32.IDC_ARROW),
                 lpszClassName = name
             };
-            Win32.RegisterClassExW(wc);
+            if (Win32.RegisterClassExW(wc) != 0 || Marshal.GetLastPInvokeError() == ErrorClassAlreadyExists)
+                return;
         }
+
+        Registered.TryRemove(className, out _);
     }
 
     /// <summary>
