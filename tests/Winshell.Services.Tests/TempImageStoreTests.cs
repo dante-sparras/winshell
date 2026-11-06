@@ -91,6 +91,26 @@ public sealed class TempImageStoreTests
     }
 
     [Fact]
+    public void A_file_still_open_at_the_last_release_is_reused()
+    {
+        using var directory = Temp();
+        var store = new TempImageStore(directory.Path);
+        var png = Png(2, 2);
+        var url = store.Store("same", png);
+        Assert.NotNull(url);
+        var path = new Uri(url).LocalPath;
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            store.Release("same");
+            Assert.Equal(url, store.Store("same", png));
+            Assert.Equal(png, File.ReadAllBytes(path));
+        }
+
+        store.Release("same");
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void A_picture_with_no_pixels_is_not_stored()
     {
         using var directory = Temp();

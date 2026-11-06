@@ -85,7 +85,9 @@ internal sealed class TempImageStore
             }
 
             var path = Path.Combine(_folder, key + extension);
-            if (!IsUnderFolder(path) || !TryWrite(path, data))
+            // A failed delete leaves the previous file. It is this key's picture, so reuse it: replacing it
+            // would fail while a loader still has it open.
+            if (!IsUnderFolder(path) || (!File.Exists(path) && !TryWrite(path, data)))
                 return null;
             var url = new Uri(path).AbsoluteUri;
             _uses.Add(key, new Use(url, path));
@@ -116,7 +118,6 @@ internal sealed class TempImageStore
     {
         if (string.IsNullOrEmpty(key))
             return;
-        string? path;
         lock (_gate)
         {
             if (!_uses.TryGetValue(key, out var use))
@@ -128,16 +129,16 @@ internal sealed class TempImageStore
             }
 
             _uses.Remove(key);
-            path = use.Path;
-        }
-
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // An image loader still has it open; a later start cleans it up.
+            // Delete before letting the lock go. The next store of this key uses the same path, and a delete
+            // that ran after that store would remove the file while the new use still hands out its url.
+            try
+            {
+                File.Delete(use.Path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // An image loader still has it open. The file stays, and the next store of this key reuses it.
+            }
         }
     }
 
