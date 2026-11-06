@@ -44,6 +44,8 @@ Only a feature may consume its own backend contracts and implementations. Anothe
 
 Test service policy against fake backends on a real `EventQueue`. Fakes supply platform results and signals; the real service supplies the behavior under test. Keep tests that own distinct platform, transport or lifecycle contracts. Preserve assertion strength when moving tests to their new owner.
 
+Media keeps one type per job, the split from #1102. `ISmtcLink` (#1306) stays the seam a test uses to reach one session.
+
 ## Shell
 
 Split `HostWindow` by responsibility, with explicit owners for window lifetime, placement, native message handling and presentation. Thin out `Shell.cs` and `ShellServices.cs` so they compose focused types instead of collecting feature behavior. Preserve disposal order, event-loop affinity, cancellation and the existing public Shell API.
@@ -56,7 +58,7 @@ The supervisor owns Explorer taskbar recovery independently of the child. Restor
 
 ## Distribution and configuration
 
-Keep one `Winshell` library NuGet package. It carries Native, Core, Services and Shell; a configuration must not acquire references to separately published module packages. The existing template package remains the delivery mechanism for `dotnet new` templates. Keep package and template contracts covered as assembly ownership changes.
+Keep one `Winshell` library NuGet package. It carries Native, Core, Services and Shell; a configuration must not acquire references to separately published module packages. The existing template package remains the delivery mechanism for `dotnet new` templates. Keep package and template contracts covered as assembly ownership changes. CI compiles the template sources against the in-repo `Winshell.Shell` through `scripts/check.ps1`, which runs `scripts/resharper.ps1` (#1451), so the pack project does not compile them.
 
 User configuration stays TOML. Keep its file format, defaults and semantics through the refactor. Do not add a second configuration system or compatibility layer.
 

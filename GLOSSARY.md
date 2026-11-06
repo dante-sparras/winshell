@@ -150,6 +150,6 @@ _Avoid_: global shortcut, keybind, accelerator, bind
 
 ## The language
 
-**Module**:
-A Winshell namespace.
-_Avoid_: package, library
+**Namespace**:
+A named group of the public API, such as `Winshell.Media`.
+_Avoid_: module, package, library
