@@ -66,11 +66,12 @@ public sealed class DoctorUserConfigTests : IDisposable
         Assert.Contains(Printed(preferences), warned.Message, StringComparison.Ordinal);
         Assert.Contains("until the file parses", warned.Fix, StringComparison.Ordinal);
 
-        var failed = Run(Context(config, local, crashes, problem: "Winshell cannot read the config folder: denied"))
-            .Single(c => c.Id == "project");
+        var missing = Path.Combine(_dir, "missing");
+        var failed = Run(Context(config, local, crashes, missing)).Single(c => c.Id == "project");
 
         Assert.Equal(CheckStatus.Fail, failed.Status);
-        Assert.Equal("Winshell cannot read the config folder: denied", failed.Message);
+        Assert.StartsWith("No .csproj at ", failed.Message, StringComparison.Ordinal);
+        Assert.EndsWith(@"\missing.", failed.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("preferences.toml", failed.Message, StringComparison.Ordinal);
     }
 
@@ -153,10 +154,9 @@ public sealed class DoctorUserConfigTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    private static DoctorContext Context(string config, string local, string crashes, string? project = null,
-        string? problem = null)
+    private static DoctorContext Context(string config, string local, string crashes, string? path = null)
     {
-        return new DoctorContext(Environment.ProcessPath!, config, project, problem, [], local, crashes);
+        return new DoctorContext(config, path, null, local, crashes);
     }
 
     /// <summary>The path <see cref="Doctor.Run"/> prints: the user's local folder is <c>%LOCALAPPDATA%</c>.</summary>

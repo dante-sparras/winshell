@@ -10,14 +10,7 @@ internal static class DoctorProject
     /// </summary>
     internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
     {
-        var found = FindProject(null, configRoot);
-        return Configuration(found.Project, found.Problem);
-    }
-
-    /// <summary>The same checks for <paramref name="projectFile"/>, the project the CLI picked, read again as it is now.</summary>
-    internal static IReadOnlyList<DoctorCheck> Picked(string projectFile, string configRoot)
-    {
-        var found = FindProject(projectFile, configRoot);
+        var found = FindProject(configRoot);
         return Configuration(found.Project, found.Problem);
     }
 
@@ -35,18 +28,17 @@ internal static class DoctorProject
 
     private readonly record struct FoundProject(ConfigurationProject? Project, string? Problem);
 
-    /// <param name="path">A project file the CLI picked, or null to search <paramref name="root"/>.</param>
     /// <param name="root">The config folder.</param>
-    private static FoundProject FindProject(string? path, string root)
+    private static FoundProject FindProject(string root)
     {
         try
         {
-            var project = ConfigurationProject.Find(path, null, root, out var problem);
+            var project = ConfigurationProject.Find(null, null, root, out var problem);
             return new FoundProject(project, problem);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new FoundProject(null, $"Winshell cannot read {path ?? "the config folder"}: {e.Message}");
+            return new FoundProject(null, $"Winshell cannot read the config folder: {e.Message}");
         }
     }
 

@@ -12,8 +12,8 @@ using static Winshell.Diagnostics.DoctorSignIn;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// winshell doctor's checks: each judges facts passed in, so these tests need nothing of this PC. One test runs the
-/// whole doctor here, which only reads. Every file is under a temp folder this class creates.
+/// winshell doctor's checks: each judges facts passed in, so these tests need nothing of this PC. Two tests run the
+/// whole doctor here. Every file is under a temp folder this class creates.
 /// </summary>
 public sealed class DoctorTests : IDisposable
 {
@@ -497,13 +497,44 @@ public sealed class DoctorTests : IDisposable
     // On this PC
 
     [Fact]
+    public void A_path_with_no_project_is_the_folder_the_doctor_tries_to_write()
+    {
+        var parent = Path.Combine(_dir, "parent");
+        var asked = Path.Combine(parent, "asked");
+        Directory.CreateDirectory(asked);
+        File.WriteAllText(Path.Combine(parent, "Other.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.CreateFiles,
+            AccessControlType.Deny);
+        var folder = new DirectoryInfo(asked);
+        var acl = folder.GetAccessControl();
+        acl.AddAccessRule(deny);
+        folder.SetAccessControl(acl);
+        try
+        {
+            var checks = Run(new DoctorContext(parent, asked, null, Path.Combine(_dir, "local"),
+                Path.Combine(_dir, "crashes")));
+            var folders = checks.Single(c => c.Id == "folders");
+            Assert.Equal(CheckStatus.Fail, folders.Status);
+            Assert.Contains(@"\asked", folders.Message, StringComparison.Ordinal);
+            var project = checks.Single(c => c.Id == "project");
+            Assert.Equal(CheckStatus.Fail, project.Status);
+            Assert.DoesNotContain("Other.csproj", project.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            folder.SetAccessControl(acl);
+        }
+    }
+
+    [Fact]
     public void The_doctor_runs_every_check_here_and_changes_nothing()
     {
         var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
         var before = Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList();
 
-        var checks = Run(new DoctorContext(Environment.ProcessPath!, config, null, null, [],
+        var checks = Run(new DoctorContext(config, null, null,
             Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
 
         Assert.Equal(

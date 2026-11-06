@@ -20,29 +20,21 @@ public sealed record DoctorCheck(string Id, string Title, CheckStatus Status, st
 internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, string LogPath);
 
 /// <summary>
-/// What the doctor needs from <c>winshell.exe</c>: this executable, the config that would run (or why none would),
-/// the running instances and Winshell's folders.
+/// What <c>winshell doctor</c> was asked to check, and the folders it reads. <see cref="Doctor"/> decides which
+/// project that is, and which folder the Folders check writes to, from <paramref name="Path"/> and
+/// <paramref name="Config"/>.
 /// </summary>
-/// <param name="ExePath">The path of the running <c>winshell.exe</c>.</param>
 /// <param name="ConfigRoot">The config root: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> if set.</param>
-/// <param name="ConfigFile">The project file that runs, or null when there is none, or none can be picked.</param>
-/// <param name="ConfigProblem">Why no config can be picked, such as several configs and no <c>-c</c>; null when one can.</param>
-/// <param name="Instances">The running Winshell instances.</param>
+/// <param name="Path">The <c>-p</c> folder or project, as the user gave it. Null when they gave none.</param>
+/// <param name="Config">The <c>-c</c> name, as the user gave it. Null when they gave none.</param>
 /// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
-/// <param name="CrashRoot">The folder of crash reports, under <paramref name="LocalRoot"/>.</param>
-/// <param name="ProjectRoot">
-/// The folder the Folders check writes to, and the one searched for a project when the CLI picked none and gave no
-/// problem. Null is <paramref name="ConfigRoot"/>.
-/// </param>
+/// <param name="CrashRoot">The folder of crash reports.</param>
 internal sealed record DoctorContext(
-    string ExePath,
     string ConfigRoot,
-    string? ConfigFile,
-    string? ConfigProblem,
-    IReadOnlyList<DoctorInstance> Instances,
+    string? Path,
+    string? Config,
     string LocalRoot,
-    string CrashRoot,
-    string? ProjectRoot = null);
+    string CrashRoot);
 
 /// <summary>
 /// Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance
@@ -57,25 +49,92 @@ public static class Doctor
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context)
     {
+        return Report(context, ChooseUser(context.ConfigRoot, context.Path, context.Config));
+    }
+
+    /// <summary>
+    /// The project one run checks, why there is none, where Folders writes, and the configuration sign-in is about.
+    /// Sign-in is null when a shell is not a configuration program: the search of the config root is not a choice of one.
+    /// </summary>
+    private readonly record struct Chosen(
+        ConfigurationProject? Project,
+        string? Problem,
+        string Folder,
+        string? SignInFolder);
+
+    /// <summary>
+    /// The project <c>winshell doctor</c> checks for the <c>-p</c> and <c>-c</c> the user gave. Neither means the
+    /// project <c>winshell run</c> would start. The Folders check writes to that project's folder, or, when there is
+    /// none, to the <c>-p</c> path as given. Its parent could be a drive, the profile or another project.
+    /// </summary>
+    private static Chosen ChooseUser(string configRoot, string? path, string? config)
+    {
+        var found = Find(path, config, configRoot);
+        var folder = found.Project?.Folder ?? AskedFolder(configRoot, path, config);
+        return new Chosen(found.Project, found.Problem, folder, found.Project?.Folder);
+    }
+
+    /// <summary>
+    /// The project a shell running in <paramref name="program"/> checks. A configuration program is checked in its own
+    /// folder. Any other program is checked in <paramref name="configRoot"/>: the project search starts there, and the
+    /// Folders check writes there even when the search finds a project. Sign-in is not about that project.
+    /// </summary>
+    private static Chosen ChooseProcess(string configRoot, string program)
+    {
+        try
+        {
+            if (ConfigurationProject.ForProgram(program) is { } own)
+                return new Chosen(own, null, own.Folder, own.Folder);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        var found = Find(null, null, configRoot);
+        return new Chosen(found.Project, found.Problem, configRoot, null);
+    }
+
+    private readonly record struct Found(ConfigurationProject? Project, string? Problem);
+
+    /// <summary>One read of the project the arguments name. A failure to read it is the doctor's own words.</summary>
+    private static Found Find(string? path, string? config, string configRoot)
+    {
+        try
+        {
+            var project = ConfigurationProject.Find(path, config, configRoot, out var problem);
+            return new Found(project, problem);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            var what = path is not null ? path
+                : config is not null ? $"config \"{config}\""
+                : "the config folder";
+            return new Found(null, $"Winshell cannot read {what}: {e.Message}");
+        }
+    }
+
+    private static string AskedFolder(string configRoot, string? path, string? config)
+    {
+        if (path is not null)
+            return Path.GetFullPath(path);
+        if (config is not null)
+            return Path.Combine(configRoot, config);
+        return configRoot;
+    }
+
+    private static IReadOnlyList<DoctorCheck> Report(DoctorContext context, Chosen chosen)
+    {
         var now = TimeProvider.System.GetUtcNow().UtcDateTime;
-        var search = context.ProjectRoot
-                     ?? (context.ConfigFile is { } file && file.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                         ? Path.GetDirectoryName(file) ?? context.ConfigRoot
-                         : context.ConfigRoot);
-        var configFolder = search;
-        // The CLI has picked the project already, or said why it could not, and that is what is checked. Searching a
-        // folder by the config folder's rules would find its default or a lone subfolder instead.
-        List<DoctorCheck> configuration;
-        if (context.ConfigProblem is { } problem)
-            configuration = [.. DoctorProject.Configuration(null, problem)];
-        else if (context.ConfigFile is { } picked && picked.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            configuration = [.. DoctorProject.Picked(picked, context.ConfigRoot)];
-        else
-            configuration = [.. DoctorProject.Configuration(search)];
+        // The process running the doctor. The CLI is winshell.exe. A shell is its configuration program, and sign-in
+        // compares the winshell.exe that started it.
+        var process = Environment.ProcessPath ?? "";
+        var configFolder = chosen.Folder;
+        var configuration = DoctorProject.Configuration(chosen.Project, chosen.Problem).ToList();
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
         if (!blocked && configuration[0].Status == CheckStatus.Pass &&
             DoctorProbe.PreferencesProblem(context.ConfigRoot) is { } preferences)
             configuration[0] = WithPreferences(configuration[0], preferences);
+        var instances = ListedInstances(context.LocalRoot);
         DoctorCheck[] checks =
         [
             Guard("windows", "Windows",
@@ -84,37 +143,36 @@ public static class Doctor
                     DoctorProbe.TransparencyEffectsOff(), ContrastTheme.IsOn())),
             Guard("dotnet", ".NET",
                 () => DotNet(Environment.Version, RuntimeInformation.FrameworkDescription,
-                    DoctorProbe.SelfContained(context.ExePath))),
+                    DoctorProbe.SelfContained(process))),
             .. configuration,
             Guard("folders", "Folders", () => Folders(
                 [
                     ("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)),
                     ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))
                 ],
-                context.Instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
+                instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
                 Environment.IsPrivilegedProcess)),
             Guard("appBars", "App bars",
                 () => DoctorScreens.AppBars(DoctorProbe.Monitors(), DoctorProbe.EdgeWindows())),
             Guard("dpi", "DPI",
-                () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath),
+                () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(process),
                     DoctorProbe.Monitors())),
             Guard("signIn", "Sign-in", () =>
             {
                 if (Packaging.IsPackaged)
                     return DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State);
-                // The doctor already knows which configuration it is checking. A sign-in command with no -p and no -c
-                // starts whichever configuration winshell run would, and that is a different verdict.
-                var project = context.ConfigFile is { } file ? Path.GetDirectoryName(file) : null;
-                // The shell's process is the configuration program. The entry starts the winshell.exe that started it.
-                var supervisor = SignInEntry.ProjectFolder(context.ExePath) is null
+                // A sign-in command with no -p and no -c starts whichever configuration winshell run would, and that
+                // is a different verdict from a configuration the user, or this process, picked.
+                var project = chosen.SignInFolder;
+                var supervisor = SignInEntry.ProjectFolder(process) is null
                     ? null
                     : ProcessImage.SupervisingWinshell();
-                return SignInForProcess(context.ExePath, supervisor, SignInEntry.RegisteredCommand(),
+                return SignInForProcess(process, supervisor, SignInEntry.RegisteredCommand(),
                     SignInEntry.TurnedOffInWindows(), File.Exists, DoctorProbe.ResolveLinks, project,
                     project is null ? null : SignInEntry.BareFolder(context.ConfigRoot), context.ConfigRoot);
             }),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
-            Guard("instances", "Running", () => Instances(context.Instances)),
+            Guard("instances", "Running", () => Instances(instances)),
             Guard("crashes", "Crashes",
                 () => DoctorCrashes.CrashesIn(CrashReports.List(context.CrashRoot), now))
         ];
@@ -235,32 +293,20 @@ public static class Doctor
     /// </summary>
     public static IReadOnlyList<DoctorCheck> ForThisProcess(string configRoot)
     {
-        var exe = Environment.ProcessPath ?? "";
-        ConfigurationProject? project = null;
-        try
-        {
-            project = ConfigurationProject.ForProgram(exe);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-
-        return Run(new DoctorContext(
-            exe,
-            configRoot,
-            project?.ProjectFile,
-            null,
-            ListedInstances(),
-            ShellLocations.LocalRoot,
-            ShellLocations.CrashRoot,
-            project?.Folder));
+        return Report(
+            new DoctorContext(configRoot, null, null, ShellLocations.LocalRoot, ShellLocations.CrashRoot),
+            ChooseProcess(configRoot, Environment.ProcessPath ?? ""));
     }
 
-    private static List<DoctorInstance> ListedInstances()
+    /// <summary>
+    /// The running instances under <paramref name="localRoot"/>, or none when their folder cannot be read. The doctor
+    /// still runs its checks. The folder is <c>run</c>, the same one <see cref="ShellLocations.RunRoot"/> uses.
+    /// </summary>
+    private static List<DoctorInstance> ListedInstances(string localRoot)
     {
         try
         {
-            return Winshell.Instances.List(false)
+            return Winshell.Instances.ListIn(Path.Combine(localRoot, "run"), false)
                 .Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

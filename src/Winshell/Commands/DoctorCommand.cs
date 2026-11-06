@@ -7,23 +7,12 @@ internal static class DoctorCommand
     /// <summary>winshell doctor: checks this PC's setup, prints a line each, and fails when a check fails. It never builds.</summary>
     internal static int Run(CliOptions options)
     {
-        var root = ConfigPaths.Root();
-        var project = ConfigurationSelection.FindProject(options, out var problem);
-        var search = project?.Folder;
-        // The folder the Folders check writes to is the -p folder as given, never its parent: that could be a drive, the
-        // profile or another project.
-        if (search is null && options.Path is { } path)
-            search = Path.GetFullPath(path);
-        else if (search is null && options.Config is { } name) search = Path.Combine(root, name);
         var checks = Doctor.Run(new DoctorContext(
-            Environment.ProcessPath!, // The CLI runs from its apphost.
-            root,
-            project?.ProjectFile,
-            problem,
-            DoctorInstances(),
+            ConfigPaths.Root(),
+            options.Path,
+            options.Config,
             ShellLocations.LocalRoot,
-            ShellLocations.CrashRoot,
-            search));
+            ShellLocations.CrashRoot));
         if (options.Json)
         {
             Console.WriteLine(DoctorReport.ToJson(checks, CliMetadata.Version));
@@ -36,19 +25,5 @@ internal static class DoctorCommand
         }
 
         return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;
-    }
-
-    /// <summary>The running instances, or none when their folder cannot be read: the doctor still runs its checks.</summary>
-    private static List<DoctorInstance> DoctorInstances()
-    {
-        try
-        {
-            return Instances.List(false)
-                .Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
     }
 }
