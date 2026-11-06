@@ -263,10 +263,20 @@ public sealed class PackedTemplates : IDisposable
 
     private static void AssertPackage(string nupkg, string version)
     {
-        var packageProject = XDocument.Load(Path.Combine(Repo(), "src", "Winshell.Package", "Winshell.Package.csproj"));
+        var packageFile = Path.Combine(Repo(), "src", "Winshell.Package", "Winshell.Package.csproj");
+        var packageProject = XDocument.Load(packageFile);
+        var packageDir = Path.GetDirectoryName(packageFile)!;
         var lib = "lib/" + packageProject.Descendants("TargetFramework").Single().Value + "/";
-        var libraries = packageProject.Descendants("ProjectReference")
-            .Select(reference => lib + Path.GetFileNameWithoutExtension(reference.Attribute("Include")!.Value) + ".dll")
+        var referenced = packageProject.Descendants("ProjectReference").Select(reference =>
+        {
+            var include = reference.Attribute("Include")!.Value;
+            var project = XDocument.Load(Path.GetFullPath(Path.Combine(packageDir, include)));
+            var documents = project.Descendants("GenerateDocumentationFile").Any(element =>
+                element.Value.Equals("true", StringComparison.OrdinalIgnoreCase));
+            return (Name: Path.GetFileNameWithoutExtension(include), Documents: documents);
+        }).ToList();
+        var libraries = referenced.Select(library => lib + library.Name + ".dll")
+            .Concat(referenced.Where(library => library.Documents).Select(library => lib + library.Name + ".xml"))
             .Order(StringComparer.Ordinal)
             .ToList();
 
@@ -277,7 +287,7 @@ public sealed class PackedTemplates : IDisposable
 
         var extracted = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(extracted);
-        foreach (var library in libraries)
+        foreach (var library in libraries.Where(name => name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
         {
             var dll = Path.Combine(extracted, Path.GetFileName(library));
             zip.GetEntry(library)!.ExtractToFile(dll);

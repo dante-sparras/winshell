@@ -40,8 +40,10 @@
     <ItemGroup>
       <!-- WithMetadataValue skips an asset that does not define ReferenceSourceTarget. A bare
            %(ReferenceSourceTarget) condition fails the pack on that asset (MSB4096). -->
+      <!-- A library that sets GenerateDocumentationFile has an XML file beside its DLL. One that does
+           not contributes no documentation. Symbols and .pri stay out. -->
       <None Include="@(ReferenceCopyLocalPaths->WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))"
-            Condition="'%(Extension)' == '.dll'">
+            Condition="'%(Extension)' == '.dll' or '%(Extension)' == '.xml'">
         <Pack>true</Pack>
         <PackagePath>lib/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
       </None>
