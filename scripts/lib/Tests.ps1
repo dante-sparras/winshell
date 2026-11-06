@@ -2,12 +2,16 @@
 $script:Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:TrxNamespace = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'
 
-function Get-MainTestFilter {
+# What a tier tests: the solution, or one test project, and a filter. Docs builds the guide samples and checks the
+# generated reference; Package packs the template and runs a shell from it.
+function Get-TestRun {
     param([string] $Tier = 'All')
     switch ($Tier) {
-        'Fast' { 'Category!=Package&Category!=Slow' }
-        'Slow' { 'Category!=Package&Category=Slow' }
-        default { 'Category!=Package' }
+        'Fast' { @{ Project = 'winshell.slnx'; Filter = 'Category!=Package&Category!=Slow' } }
+        'Slow' { @{ Project = 'winshell.slnx'; Filter = 'Category!=Package&Category=Slow' } }
+        'Docs' { @{ Project = 'tests\Winshell.Shell.Tests'; Filter = 'FullyQualifiedName~Winshell.ShellTests.DocsTests' } }
+        'Package' { @{ Project = 'tests\Winshell.Package.Tests'; Filter = 'Category=Package' } }
+        default { @{ Project = 'winshell.slnx'; Filter = 'Category!=Package' } }
     }
 }
 
@@ -37,6 +41,7 @@ function Read-TestResult {
 
 function Invoke-DotnetTest {
     param(
+        [Parameter(Mandatory)][string] $Project,
         [Parameter(Mandatory)][string] $Filter,
         [Parameter(Mandatory)][string] $ResultsDirectory,
         [int] $Seed = 1,
@@ -47,11 +52,11 @@ function Invoke-DotnetTest {
     # Each project still writes its own results file.
     $nodes = @()
     if ($Serial) { $nodes = @('-m:1') }
-    dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo @nodes --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
+    dotnet test (Join-Path $script:Root $Project) --no-build --nologo @nodes --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
     $LASTEXITCODE
 }
 
-function Invoke-MainTest {
+function Invoke-TestRun {
     param(
         [string] $Tier = 'Fast',
         [Parameter(Mandatory)][int] $ProjectCount,
@@ -61,7 +66,8 @@ function Invoke-MainTest {
     Write-Host "Test order seed: $Seed. To run this order again: pwsh scripts/check.ps1 -Tier $Tier -Seed $Seed"
     $results = Join-Path ([IO.Path]::GetTempPath()) ('winshell-test-results-' + [guid]::NewGuid().ToString('N'))
     try {
-        $exit = Invoke-DotnetTest -Filter (Get-MainTestFilter -Tier $Tier) -ResultsDirectory $results -Seed $Seed -Serial:($Tier -ne 'Fast')
+        $run = Get-TestRun -Tier $Tier
+        $exit = Invoke-DotnetTest -Project $run.Project -Filter $run.Filter -ResultsDirectory $results -Seed $Seed -Serial:($Tier -in 'Slow', 'All')
         if ($exit -ne 0) { return $exit }
         $outcome = Read-TestResult -Directory $results -ProjectCount $ProjectCount
         if ($outcome.Passed -gt 0 -and $outcome.Failed -eq 0 -and $outcome.Complete) { return 0 }

@@ -5,7 +5,7 @@ param(
     [Parameter(ParameterSetName = 'Tests')]
     [switch] $NoBuild,
     [Parameter(ParameterSetName = 'Tests')]
-    [ValidateSet('All', 'Fast', 'Slow')]
+    [ValidateSet('All', 'Fast', 'Slow', 'Docs', 'Package')]
     [string] $Tier = 'Fast',
     [Parameter(ParameterSetName = 'Tests')]
     [int] $Seed = 0,
@@ -39,8 +39,12 @@ if ($Lint) {
 
 . (Join-Path $PSScriptRoot 'lib/Tests.ps1')
 
-# Check prerequisites before spending time on a build. The slow job runs only .NET tests.
-if ($Tier -ne 'Slow') {
+# Fast and All also check formatting and run the tooling tests; the other tiers run only their .NET tests.
+$full = $Tier -in 'Fast', 'All'
+$run = Get-TestRun -Tier $Tier
+
+# Check prerequisites before spending time on a build.
+if ($full) {
     if (-not (Get-Module -ListAvailable -Name Pester | Where-Object Version -EQ ([version]'5.6.1'))) {
         throw 'Pester 5.6.1 is required. Run: Install-Module Pester -RequiredVersion 5.6.1 -Scope CurrentUser -Force -SkipPublisherCheck'
     }
@@ -50,18 +54,21 @@ if ($Tier -ne 'Slow') {
 Push-Location $root
 try {
     if (-not $NoBuild) {
-        dotnet build .\winshell.slnx -warnaserror --nologo
+        dotnet build $run.Project -warnaserror --nologo
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
-    if ($Tier -ne 'Slow') {
+    if ($full) {
         # ReSharper checks an isolated copy; compiler warnings and analyzers remain build checks.
         & (Join-Path $PSScriptRoot 'resharper.ps1') -Mode Check
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # DocsTests compiles the reference generator as a library, which leaves out its entry point.
+        dotnet build scripts/generate-reference.cs --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
-    $count = @(Get-ChildItem -Path (Join-Path $root 'tests/*/*.Tests.csproj')).Count
-    $exit = Invoke-MainTest -Tier $Tier -ProjectCount $count -Seed $Seed
+    $count = if ($run.Project -eq 'winshell.slnx') { @(Get-ChildItem -Path (Join-Path $root 'tests/*/*.Tests.csproj')).Count } else { 1 }
+    $exit = Invoke-TestRun -Tier $Tier -ProjectCount $count -Seed $Seed
     if ($exit -ne 0) { exit $exit }
-    if ($Tier -ne 'Slow') {
+    if ($full) {
         # -CI writes testResults.xml into the checkout; inspect the result instead.
         $result = & {
             # Pester suites control their own strict mode, independently of this command.

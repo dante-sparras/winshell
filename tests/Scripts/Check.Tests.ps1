@@ -33,9 +33,9 @@ BeforeAll {
 
 Describe 'Choosing tests' {
     It 'leaves the package tests out, and picks a tier' {
-        Get-MainTestFilter | Should -Be 'Category!=Package'
-        Get-MainTestFilter -Tier Fast | Should -Be 'Category!=Package&Category!=Slow'
-        Get-MainTestFilter -Tier Slow | Should -Be 'Category!=Package&Category=Slow'
+        (Get-TestRun).Filter | Should -Be 'Category!=Package'
+        (Get-TestRun -Tier Fast).Filter | Should -Be 'Category!=Package&Category!=Slow'
+        (Get-TestRun -Tier Slow).Filter | Should -Be 'Category!=Package&Category=Slow'
     }
 }
 
@@ -74,7 +74,7 @@ Describe 'Reading test results' {
     }
 }
 
-Describe 'Running the main stage' {
+Describe 'Running a tier' {
     BeforeEach {
         $script:Exit = 0
         $script:Rows = @('Ns.Class.Good=Passed')
@@ -85,40 +85,40 @@ Describe 'Running the main stage' {
     }
 
     It 'passes when every test passes' {
-        Invoke-MainTest -ProjectCount 1 -Seed 7 | Should -Be 0
+        Invoke-TestRun -ProjectCount 1 -Seed 7 | Should -Be 0
         Should -Invoke Invoke-DotnetTest -Times 1 -Exactly -ParameterFilter { $Seed -eq 7 }
     }
 
     It 'fails on a failed test, once, with nothing run again' {
         $script:Rows = @('Ns.Class.Good=Passed', 'Ns.Class.Bad=Failed')
         $script:Exit = 1
-        Invoke-MainTest -ProjectCount 1 | Should -Be 1
+        Invoke-TestRun -ProjectCount 1 | Should -Be 1
         Should -Invoke Invoke-DotnetTest -Times 1 -Exactly
     }
 
     It 'fails a run that exits 0 having run no tests' {
         $script:Rows = @()
-        Invoke-MainTest -ProjectCount 1 | Should -Be 1
+        Invoke-TestRun -ProjectCount 1 | Should -Be 1
     }
 
     It 'fails when a results file reports failure despite exit code 0' {
         $script:Rows = @('Ns.Class.Good=Passed', 'Ns.Class.Bad=Failed')
-        Invoke-MainTest -ProjectCount 1 | Should -Be 1
+        Invoke-TestRun -ProjectCount 1 | Should -Be 1
     }
 
     It 'fails a run that exits 0 with a test project missing' {
-        Invoke-MainTest -ProjectCount 2 | Should -Be 1
+        Invoke-TestRun -ProjectCount 2 | Should -Be 1
     }
 
     It 'chooses a seed of its own and prints it' {
         Mock Write-Host { }
-        Invoke-MainTest -ProjectCount 1 | Should -Be 0
+        Invoke-TestRun -ProjectCount 1 | Should -Be 0
         Should -Invoke Write-Host -ParameterFilter { $Object -match 'Test order seed: \d+' }
     }
 
     It 'prints how to play back the tier it ran' {
         Mock Write-Host { }
-        Invoke-MainTest -Tier Fast -ProjectCount 1 -Seed 7 | Should -Be 0
+        Invoke-TestRun -Tier Fast -ProjectCount 1 -Seed 7 | Should -Be 0
         Should -Invoke Write-Host -ParameterFilter { $Object -match 'check\.ps1 -Tier Fast -Seed 7' }
     }
 }
@@ -172,7 +172,10 @@ if ($env:WINSHELL_CHECK_FAIL_FORMAT -and $args -contains 'cleanupcode') { exit 2
 if ($args[0] -eq 'test') {
     $dest = $args[[array]::IndexOf($args, '--results-directory') + 1]
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
-    Copy-Item -Path (Join-Path $env:WINSHELL_CHECK_RESULTS '*.trx') -Destination $dest
+    # One results file for each project the run tests.
+    $files = @(Get-ChildItem -Path (Join-Path $env:WINSHELL_CHECK_RESULTS '*.trx'))
+    if ($args[1] -notlike '*.slnx') { $files = $files | Select-Object -First 1 }
+    $files | Copy-Item -Destination $dest
 }
 exit 0
 '@
@@ -199,6 +202,7 @@ function Invoke-Pester {
         $LASTEXITCODE | Should -Be 0
         $calls = Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG
         $calls[0] | Should -Match '^dotnet build '
+        $calls | Should -Contain 'dotnet build scripts/generate-reference.cs --nologo'
         $calls[-2] | Should -Match '--filter Category!=Package&Category!=Slow '
         $calls[-2] | Should -Not -Match '(^| )-m:1( |$)'
         $calls[-1] | Should -Be 'Pester tests/Scripts'
@@ -222,6 +226,30 @@ function Invoke-Pester {
         $calls[0] | Should -Match 'xUnit.Seed=7'
         $calls[0] | Should -Match 'xUnit.MaxParallelThreads=2x'
         $calls[0] | Should -Match '--blame-hang-timeout 3m'
+    }
+
+    It 'builds and runs only <Project>, without Pester' -ForEach @(
+        @{ Tier = 'Docs'; Project = 'tests\Winshell.Shell.Tests' }
+        @{ Tier = 'Package'; Project = 'tests\Winshell.Package.Tests' }
+    ) {
+        Remove-Item -LiteralPath (Join-Path $script:Stub 'modules/Pester/5.6.1/Pester.psd1')
+        Invoke-Check @{ Tier = $Tier } | Out-Null
+        $LASTEXITCODE | Should -Be 0
+        $calls = @(Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG)
+        $calls | Should -HaveCount 2
+        $calls[0] | Should -Be "dotnet build $Project -warnaserror --nologo"
+        $calls[1] | Should -Match "^dotnet test \S*\\$([regex]::Escape($Project)) --no-build "
+    }
+
+    # A filter that matches nothing, after a renamed namespace or category, ends here.
+    It 'fails a <Tier> run that ran no tests' -ForEach @(
+        @{ Tier = 'Docs' }
+        @{ Tier = 'Package' }
+    ) {
+        Remove-Item -Path (Join-Path $env:WINSHELL_CHECK_RESULTS '*.trx')
+        Write-Trx -Directory $env:WINSHELL_CHECK_RESULTS -Rows @()
+        Invoke-Check @{ Tier = $Tier } | Out-Null
+        $LASTEXITCODE | Should -Be 1
     }
 
     It 'fails before building when the pinned Pester version is missing' {
