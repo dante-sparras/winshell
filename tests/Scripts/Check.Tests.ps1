@@ -200,6 +200,7 @@ function Invoke-Pester {
         $calls = Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG
         $calls[0] | Should -Match '^dotnet build '
         $calls[-2] | Should -Match '--filter Category!=Package&Category!=Slow '
+        $calls[-2] | Should -Not -Match '(^| )-m:1( |$)'
         $calls[-1] | Should -Be 'Pester tests/Scripts'
     }
 
@@ -217,6 +218,7 @@ function Invoke-Pester {
         $calls = @(Get-Content -LiteralPath $env:WINSHELL_CHECK_LOG)
         $calls | Should -HaveCount 1
         $calls[0] | Should -Match '--filter Category!=Package&Category=Slow '
+        $calls[0] | Should -Match '(^| )-m:1( |$)'
         $calls[0] | Should -Match 'xUnit.Seed=7'
         $calls[0] | Should -Match 'xUnit.MaxParallelThreads=2x'
         $calls[0] | Should -Match '--blame-hang-timeout 3m'
