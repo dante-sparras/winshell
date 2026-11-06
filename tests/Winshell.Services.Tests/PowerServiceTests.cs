@@ -115,7 +115,7 @@ public sealed class PowerServiceTests
         var writer = new BrightnessWriter((_, value) =>
         {
             written.TrySetResult(value);
-            return 0;
+            return null;
         });
         var source = new FakeSource<BrightnessSnapshot>(new BrightnessSnapshot(true, [Monitor(10)]));
         using var brightness = new BrightnessService(loop, Log.Default, source, writer);

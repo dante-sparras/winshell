@@ -2,9 +2,22 @@ using Winshell.Native;
 
 namespace Winshell;
 
-/// <summary>A connected monitor: its identity, and its physical rectangles and scale.</summary>
-internal sealed record ConnectedMonitor(nint Handle, ScreenInfo Info, RECT Bounds, RECT Work, double Scale)
+/// <summary>
+/// A connected monitor: its identity, its device interface path such as
+/// <c>\\?\DISPLAY#AUS32A8#5&amp;15335277&amp;0&amp;UID184582#{...}</c> ("" when Windows has none), and its physical
+/// rectangles and scale.
+/// </summary>
+internal sealed record ConnectedMonitor(
+    nint Handle,
+    ScreenInfo Info,
+    string InterfacePath,
+    RECT Bounds,
+    RECT Work,
+    double Scale)
 {
+    /// <summary>The monitor's PnP model code, such as <c>AUS32A8</c>, or "" when Windows names none.</summary>
+    public string ModelCode => Screens.ModelCode(InterfacePath);
+
     /// <summary>The area a panel or popup on this monitor lays out in: the work area, or the whole monitor without one.</summary>
     public RECT Area => Work.Width > 0 ? Work : Bounds;
 }
@@ -43,7 +56,7 @@ internal static class Screens
             device,
             name,
             model,
-            Manufacturer(id),
+            Manufacturer(ModelCode(id)),
             Serial(id),
             DesktopSpace.ToLogical(mi.Bounds, mi.Bounds, scale),
             DesktopSpace.ToLogical(mi.Work, mi.Bounds, scale),
@@ -52,7 +65,7 @@ internal static class Screens
             size.HeightMm,
             RefreshRate(device),
             mi.IsPrimary);
-        return new ConnectedMonitor(handle, info, mi.Bounds, mi.Work, scale);
+        return new ConnectedMonitor(handle, info, id, mi.Bounds, mi.Work, scale);
     }
 
     /// <summary>The device name and physical bounds of the monitor a window is on, without reading the rest.</summary>
@@ -63,11 +76,17 @@ internal static class Screens
         return (mi.Device, mi.Bounds);
     }
 
-    /// <summary>The three-letter PnP manufacturer code, from an interface path like \\?\DISPLAY#GSM5B7F#...</summary>
-    internal static string Manufacturer(string id)
+    /// <summary>The PnP model code, such as <c>GSM5B7F</c>, in an interface path like <c>\\?\DISPLAY#GSM5B7F#...</c>.</summary>
+    internal static string ModelCode(string id)
     {
         var parts = id.Split('#');
-        return parts.Length > 1 && parts[1].Length >= 3 ? parts[1][..3] : "";
+        return parts.Length > 1 ? parts[1] : "";
+    }
+
+    /// <summary>The three-letter PnP manufacturer code that starts a model code.</summary>
+    internal static string Manufacturer(string modelCode)
+    {
+        return modelCode.Length >= 3 ? modelCode[..3] : "";
     }
 
     internal static string Serial(string id)

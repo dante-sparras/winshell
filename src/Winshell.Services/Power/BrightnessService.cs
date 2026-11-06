@@ -52,8 +52,8 @@ public sealed class BrightnessMonitor : ObservableObject
             _requested = value;
             Changed();
             var name = _info.Name;
-            _writer.Request(_info.DeviceName, value, error =>
-                _log.Warn("power", $"Windows did not set the brightness of {name} (error {error})."));
+            _writer.Request(_info.DeviceName, value, reason =>
+                _log.Warn("power", $"Windows did not set the brightness of {name}: {reason}."));
         }
     }
 

@@ -42,7 +42,7 @@ public class BrightnessRefreshTests
                 Interlocked.Increment(ref writes);
                 started.Release();
                 release.Wait(TimeSpan.FromSeconds(10));
-                return 0;
+                return null;
             },
             () => Interlocked.Increment(ref drained));
 
