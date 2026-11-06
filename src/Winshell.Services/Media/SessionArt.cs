@@ -39,7 +39,7 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             {
                 using var stream = await thumbnail.OpenReadAsync().AsTask().ConfigureAwait(false);
                 using var input = stream.AsStreamForRead();
-                var url = await ArtCache.StoreAsync(input, stream.ContentType).ConfigureAwait(false);
+                var url = await ArtCache.StoreAsync(input).ConfigureAwait(false);
                 if (url is null)
                     Skip("it is not a picture under the size limit");
                 else

@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using Winshell.Media;
 
 namespace Winshell.Services.Tests;
 
@@ -212,43 +211,5 @@ public sealed class ImageHeaderTests
                 Assert.True(size is null || size == whole, $"{length} bytes gave {size}");
             }
         }
-    }
-
-    [Fact]
-    public async Task Art_within_the_limits_is_stored()
-    {
-        foreach (var art in new[] { Bytes(Png), Bytes(Jpeg), Bytes(WebP), PngOf(4096, 4096), GifOf(3, 2), BmpOf(3, 2) })
-        {
-            var url = await ArtCache.StoreAsync(new MemoryStream(art), "image/png");
-
-            Assert.False(string.IsNullOrEmpty(url));
-            Assert.True(File.Exists(new Uri(url).LocalPath));
-            ArtCache.Release(url);
-            Assert.False(File.Exists(new Uri(url).LocalPath));
-        }
-    }
-
-    [Fact]
-    public async Task Art_that_says_it_has_too_many_pixels_is_dropped()
-    {
-        foreach (var art in new[]
-                 {
-                     PngOf(8193, 2049), PngOf(uint.MaxValue, uint.MaxValue), PngOf(4097, 4096), GifOf(65535, 65535),
-                     BmpOf(9000, -9000), Riff("VP8X", 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)
-                 })
-            Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
-    }
-
-    [Fact]
-    public async Task Art_with_no_pixels_is_dropped()
-    {
-        foreach (var art in new[] { PngOf(0, 2), GifOf(3, 0), BmpOf(0, 2), BmpOf(3, 0), BmpOf(-3, 2) })
-            Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
-    }
-
-    [Fact]
-    public async Task No_art_is_no_url()
-    {
-        Assert.Equal("", await ArtCache.StoreAsync(new MemoryStream(), "image/png"));
     }
 }

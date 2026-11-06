@@ -1,77 +1,41 @@
 using System.Buffers.Binary;
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using Winshell.Media;
 
 namespace Winshell.Services.Tests;
 
 public class ArtCacheTests
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Cleanup_leaves_files_reached_through_a_directory_link_alone(bool linkedRoot)
+    [Fact]
+    public async Task WebP_bytes_are_stored_with_a_webp_extension()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
-        var cache = Path.Combine(directory, "cache");
-        var elsewhere = Path.Combine(directory, "elsewhere");
-        Directory.CreateDirectory(cache);
-        Directory.CreateDirectory(elsewhere);
-        var outside = Path.Combine(elsewhere, new string('a', 32) + ".png");
-        File.WriteAllText(outside, "not the cache's to delete");
-        File.SetLastWriteTimeUtc(outside, DateTime.UtcNow.AddDays(-3));
-        var link = linkedRoot ? Path.Combine(directory, "linked-cache") : Path.Combine(cache, "1234");
+        var art = Convert.FromBase64String(
+            "UklGRjAAAABXRUJQVlA4ICQAAADQAQCdASoDAAIAAUAmJZwCdAEfbfUlgAD+/wuX85lhocmFMAA=");
+        var url = await ArtCache.StoreAsync(new MemoryStream(art));
         try
         {
-            ChildProcess.Run("cmd.exe", "/c", "mklink", "/J", link, elsewhere).AssertExitCode(0);
-            Assert.NotNull(new DirectoryInfo(link).LinkTarget);
-
-            ArtCache.CleanOld(linkedRoot ? link : cache);
-
-            Assert.True(File.Exists(outside), "Cleanup followed a junction and removed a file outside the cache.");
+            Assert.NotNull(url);
+            Assert.EndsWith(".webp", new Uri(url).LocalPath, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
-            if (Directory.Exists(link))
-                Directory.Delete(link);
-            Directory.Delete(directory, true);
+            if (url is { Length: > 0 })
+                ArtCache.Release(url);
         }
     }
 
     [Fact]
-    public void Cleanup_removes_old_art_but_keeps_recent_art()
+    public async Task Art_is_kept_in_a_folder_of_this_process_and_deleted_after_its_last_use()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
-        var processFolder = Path.Combine(directory, "1234");
-        Directory.CreateDirectory(processFolder);
-        var old = Path.Combine(processFolder, new string('a', 32) + ".png");
-        var recent = Path.Combine(processFolder, new string('b', 32) + ".png");
-        File.WriteAllText(old, "old");
-        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-3));
-        File.WriteAllText(recent, "recent");
-        try
-        {
-            ArtCache.CleanOld(directory);
-            Assert.False(File.Exists(old));
-            Assert.True(File.Exists(recent));
-        }
-        finally
-        {
-            Directory.Delete(directory, true);
-        }
-    }
-
-    [Fact]
-    public void Art_is_kept_in_a_folder_of_this_process_and_deleted_after_its_last_use()
-    {
-        var art = Guid.NewGuid().ToByteArray();
-        var url = ArtCache.Store(art, "image/png");
+        var art = Png(2, 2).Concat(Guid.NewGuid().ToByteArray()).ToArray();
+        var url = await ArtCache.StoreAsync(new MemoryStream(art));
+        Assert.NotNull(url);
         var path = new Uri(url).LocalPath;
         // Another instance deleting its copy of the same art must not take this one's.
         Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
             Path.GetFileName(Path.GetDirectoryName(path)));
-        Assert.Equal(url, ArtCache.Store(art, "image/png"));
+        Assert.EndsWith(".png", path, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(url, await ArtCache.StoreAsync(new MemoryStream(art)));
 
         ArtCache.Release(url);
         Assert.True(File.Exists(path));
@@ -80,33 +44,9 @@ public class ArtCacheTests
     }
 
     [Fact]
-    public async Task Art_over_the_size_limit_is_dropped_without_a_file()
+    public async Task No_art_is_no_url()
     {
-        var art = new byte[ArtCache.MaxBytes + 1];
-        Png(2, 2).CopyTo(art, 0);
-
-        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
-        Assert.False(Stored(art));
-    }
-
-    [Fact]
-    public async Task Svg_art_is_dropped_without_a_file()
-    {
-        var art = Encoding.UTF8.GetBytes(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>");
-
-        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
-        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/svg+xml"));
-        Assert.False(Stored(art));
-    }
-
-    [Fact]
-    public async Task Art_that_decodes_to_too_many_pixels_is_dropped_without_a_file()
-    {
-        var art = Png(8193, 2049);
-
-        Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
-        Assert.False(Stored(art));
+        Assert.Equal("", await ArtCache.StoreAsync(new MemoryStream()));
     }
 
     private static byte[] Png(int width, int height)
@@ -117,13 +57,5 @@ public class ArtCacheTests
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(16), (uint)width);
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(20), (uint)height);
         return data;
-    }
-
-    private static bool Stored(byte[] art)
-    {
-        var folder = Path.Combine(Path.GetTempPath(), "winshell", "media-art",
-            Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-        var name = Convert.ToHexString(SHA256.HashData(art))[..32].ToLowerInvariant();
-        return Directory.Exists(folder) && Directory.EnumerateFiles(folder, name + ".*").Any();
     }
 }

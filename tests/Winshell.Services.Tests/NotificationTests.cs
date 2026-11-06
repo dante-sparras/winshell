@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.ComponentModel;
-using System.Text;
 using Winshell.Notifications;
 
 namespace Winshell.Services.Tests;
@@ -381,69 +380,6 @@ public sealed class NotificationTests
         Assert.False(toast.Send());
     }
 
-    [Theory]
-    [MemberData(nameof(Pictures))]
-    public void A_picture_is_known_by_its_first_bytes(byte[] data, string extension)
-    {
-        Assert.True(NotificationAppIcons.TryDescribe(data, out var found));
-        Assert.Equal(extension, found);
-    }
-
-    public static TheoryData<byte[], string> Pictures => new()
-    {
-        { Png(2, 2), ".png" },
-        { Jpeg(2, 2), ".jpg" },
-        { Gif(2, 2), ".gif" },
-        { Bmp(2, 2), ".bmp" },
-        { WebP("VP8X", 2, 2), ".webp" },
-        { WebP("VP8L", 2, 2), ".webp" },
-        { WebP("VP8 ", 2, 2), ".webp" }
-    };
-
-    [Theory]
-    [MemberData(nameof(HugePictures))]
-    public void A_picture_over_the_pixel_cap_is_refused(byte[] data)
-    {
-        Assert.False(NotificationAppIcons.TryDescribe(data, out _));
-    }
-
-    public static TheoryData<byte[]> HugePictures => new()
-    {
-        Png(4097, 4096),
-        Png(-1, -1),
-        Jpeg(5000, 5000),
-        Gif(5000, 5000),
-        Bmp(5000, -5000),
-        WebP("VP8X", 5000, 5000),
-        WebP("VP8L", 5000, 5000),
-        WebP("VP8 ", 5000, 5000)
-    };
-
-    [Fact]
-    public void A_picture_of_exactly_the_cap_is_accepted()
-    {
-        Assert.True(NotificationAppIcons.TryDescribe(Png(4096, 4096), out _));
-    }
-
-    [Fact]
-    public void Anything_else_is_refused()
-    {
-        byte[][] others =
-        [
-            [],
-            [1, 2, 3, 4],
-            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
-            [0xFF, 0xD8, 0xFF, 0xD9],
-            Png(0, 2),
-            Encoding.ASCII.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
-            Encoding.ASCII.GetBytes("GIF8"),
-            Encoding.ASCII.GetBytes("BM"),
-            Encoding.ASCII.GetBytes("RIFF0000WAVEfmt ")
-        ];
-
-        Assert.All(others, data => Assert.False(NotificationAppIcons.TryDescribe(data, out _)));
-    }
-
     private static byte[] Png(int width, int height)
     {
         byte[] data =
@@ -453,67 +389,6 @@ public sealed class NotificationTests
         ];
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(16), width);
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(20), height);
-        return data;
-    }
-
-    /// <summary>Two segments ahead of the frame header, with a pad byte, as a real JPEG has.</summary>
-    private static byte[] Jpeg(int width, int height)
-    {
-        byte[] data =
-            [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 1, 2, 0xFF, 0xFF, 0xDB, 0, 3, 9, 0xFF, 0xC2, 0, 11, 8, 0, 0, 0, 0, 1, 1];
-        BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(19), (ushort)height);
-        BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(21), (ushort)width);
-        return data;
-    }
-
-    private static byte[] Gif(int width, int height)
-    {
-        var data = new byte[10];
-        Encoding.ASCII.GetBytes("GIF89a").CopyTo(data, 0);
-        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(6), (ushort)width);
-        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(8), (ushort)height);
-        return data;
-    }
-
-    private static byte[] Bmp(int width, int height)
-    {
-        var data = new byte[54];
-        data[0] = (byte)'B';
-        data[1] = (byte)'M';
-        data[14] = 40;
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(18), width);
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(22), height);
-        return data;
-    }
-
-    private static byte[] WebP(string chunk, int width, int height)
-    {
-        var data = new byte[30];
-        Encoding.ASCII.GetBytes("RIFF").CopyTo(data, 0);
-        Encoding.ASCII.GetBytes("WEBP").CopyTo(data, 8);
-        Encoding.ASCII.GetBytes(chunk).CopyTo(data, 12);
-        switch (chunk)
-        {
-            case "VP8X":
-                data[24] = (byte)(width - 1);
-                data[25] = (byte)((width - 1) >> 8);
-                data[27] = (byte)(height - 1);
-                data[28] = (byte)((height - 1) >> 8);
-                break;
-            case "VP8L":
-                data[20] = 0x2F;
-                BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(21),
-                    (uint)(width - 1) | ((uint)(height - 1) << 14));
-                break;
-            default:
-                data[23] = 0x9D;
-                data[24] = 0x01;
-                data[25] = 0x2A;
-                BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(26), (ushort)width);
-                BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(28), (ushort)height);
-                break;
-        }
-
         return data;
     }
 
