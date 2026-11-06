@@ -44,7 +44,8 @@ internal static class RunCommand
             Console.Error.WriteLine($"Could not update Winshell to {update.Version}: {updateError}");
 
         // Before the build: a duplicate exits quietly, so it must not wait on one or fail on a broken edit.
-        if (options.NoDuplicate && Instances.List(false).Any(i => InstanceSelection.RunsProject(i.Info, project)))
+        if (options.NoDuplicate &&
+            ConfigurationInstances.Of(Instances.List(false).Select(i => i.Info), project).Count > 0)
             return 0;
         var reason = project.Prepare(options.NoBuild, ConfigurationProject.Run);
         if (reason is not null)

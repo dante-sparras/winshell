@@ -123,15 +123,15 @@ internal static class DevSession
     }
 
     /// <summary>
-    /// The running shell dotnet watch started for this project, or null before its first start. A shell <c>winshell run</c>
-    /// started runs from <c>bin\shell</c> or <c>bin\shell.next</c>, and is not this one.
+    /// The running shell dotnet watch started for this project, or null before its first start. A Run or Dev build
+    /// of this project is <c>winshell run</c>, and is not this one.
     /// </summary>
     private static InstanceInfo? ShellOf(ConfigurationProject project)
     {
         var folder = project.Folder + Path.DirectorySeparatorChar;
         return Instances.List(false).Select(i => i.Info).FirstOrDefault(i =>
             i.ConfigPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
-            && !i.ConfigPath.StartsWith(project.OutputFolder, StringComparison.OrdinalIgnoreCase));
+            && ConfigurationInstances.BuildOf(i.ConfigPath, project) is null);
     }
 
     /// <summary>Tells the shell of this project. Before its first start there is none, and the console has the error.</summary>
