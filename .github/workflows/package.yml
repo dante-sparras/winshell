@@ -7,7 +7,8 @@ name: Package
 # The upload also includes scripts/install.ps1 and scripts/uninstall.ps1, copied from the tagged commit.
 # A pull request or a push to main also runs the packed template tests (Category=Package), so a new project that
 # cannot restore shows before a release. The pull request filter lists each library project file. A push to main
-# already includes those files, because it ignores only docs and Markdown. A release does not run these tests.
+# already includes those files, because it ignores only docs and Markdown. A release passes a tag. The called
+# workflow sees the caller's event name, so these tests stay off when that tag is set.
 on:
   pull_request:
     paths:
@@ -118,10 +119,11 @@ jobs:
           retention-days: 1
 
   templates:
-    # Packs the library and the template, builds a shell from it and runs it. A pull request or a push to main: a
-    # release builds the same packages above, and these tests open windows. A change that bumps a pin in
+    # Packs the library and the template, builds a shell from it and runs it. A pull request or a push to main, and
+    # not a release: a release passes a tag, and these tests open windows. The called workflow sees the caller's
+    # event name, so the empty tag is what keeps a release off this job. A change that bumps a pin in
     # Directory.Packages.props, or a library project file, shows here if a new project can no longer restore.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    if: ${{ inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
