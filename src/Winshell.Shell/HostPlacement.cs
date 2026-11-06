@@ -5,8 +5,8 @@ namespace Winshell;
 
 /// <summary>
 /// Where a native window is and whether it shows: its screen, scale, size and place, its z-order, and the parts of it
-/// that take clicks. A panel reserves its edge through its <see cref="AppBar"/>, and a floating window sits on its
-/// screen through its <see cref="Frame"/>.
+/// that take clicks. A panel's screen and edge are <see cref="PanelEdge"/>. A floating window sits on its screen
+/// through its <see cref="Frame"/>.
 /// </summary>
 internal sealed class HostPlacement
 {
@@ -22,13 +22,13 @@ internal sealed class HostPlacement
         _host = host;
         _platform = platform;
         if (host.Kind == WindowKind.Panel)
-            AppBar = new AppBar(host.Handle, platform, PlacePanel);
+            Edge = new PanelEdge(host.Handle, new HostPanelDesktop(host, platform), PlacePanel);
         else if (host.Kind == WindowKind.Floating)
             Frame = new FloatingFrame(host, platform);
     }
 
-    /// <summary>A panel's app bar with Explorer, which reserves its edge while it is registered.</summary>
-    internal AppBar? AppBar { get; }
+    /// <summary>Where a panel sits and which edge it holds. Null for a popup or a floating window.</summary>
+    internal PanelEdge? Edge { get; }
 
     /// <summary>How a floating window sits on its screen.</summary>
     internal FloatingFrame? Frame { get; }
@@ -55,43 +55,11 @@ internal sealed class HostPlacement
         PlacePanel();
     }
 
-    /// <summary>Puts the panel on its screen, reserving its exclusive zone through an app bar.</summary>
+    /// <summary>Puts the panel on its screen. The edge module decides the screen, the reservation and the z-order.</summary>
     internal void PlacePanel()
     {
-        // Explorer's notice that another bar moved can land on the loop after this window is gone. An app bar asked
-        // for with no window is one nothing can remove, and it holds the edge after the shell has exited.
-        if (_host.Released || Panel is not { } p || AppBar is not { } appBar)
-            return;
-        // A panel whose screen was unplugged moves to the primary screen until that screen comes back.
-        var monitor = (p.Screen is { } screen ? Screens.Find(screen.Id) : null) ??
-                      Screens.Find(_platform.PrimaryScreenId);
-        if (monitor is null)
-            return;
-        Scale = monitor.Scale;
-        var edge = AppBar.EdgeFor(p.Anchors);
-        var size = (int)Math.Round(p.ReservedSize * Scale);
-        RECT area;
-        if (p.CoversScreen)
-        {
-            appBar.Remove();
-            area = monitor.Bounds;
-        }
-        else if (edge is { } e && size > 0 && _visible)
-        {
-            area = appBar.Reserve(e, size, monitor.Bounds);
-        }
-        else
-        {
-            appBar.Remove();
-            area = monitor.Area;
-        }
-
-        var rect = DesktopSpace.Anchor(area, p, Scale);
-        var topmost = p.AboveWindows && !_platform.FullscreenOn(monitor.Info.Id);
-        SetExStyle(Win32.WS_EX_TOPMOST, topmost);
-        // HWND_NOTOPMOST would put it above every window that is not topmost, so over the fullscreen app.
-        var after = topmost ? Win32.HWND_TOPMOST : Win32.HWND_BOTTOM;
-        Move(rect, after, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
+        if (Edge is { } edge && edge.Place(Panel, _visible, _host.Released))
+            Scale = edge.Scale;
     }
 
     public void SetPopup(PopupPlacement placement)
@@ -203,7 +171,7 @@ internal sealed class HostPlacement
         }
         else
         {
-            AppBar?.Remove();
+            Edge?.Remove();
             Win32.ShowWindow(Handle, Win32.SW_HIDE);
             _host.Focus.Release();
         }
@@ -285,6 +253,6 @@ internal sealed class HostPlacement
     internal void Release()
     {
         _host.Focus.Release();
-        AppBar?.Remove();
+        Edge?.Remove();
     }
 }

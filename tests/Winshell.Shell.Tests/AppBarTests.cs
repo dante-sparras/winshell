@@ -2,7 +2,7 @@ using Winshell.Native;
 
 namespace Winshell.ShellTests;
 
-/// <summary>Which edge a panel reserves, what it asks Explorer for, and where it lays out in what Explorer grants.</summary>
+/// <summary>Which edge a panel reserves, the strip it asks Explorer for, and where it lays out in the grant.</summary>
 public class AppBarTests
 {
     // A 1920×1080 monitor and a 48 px bar.
@@ -19,7 +19,7 @@ public class AppBarTests
     [InlineData(Edges.Bottom, Edges.Bottom)]
     public void A_panel_along_one_edge_reserves_that_edge(Edges anchors, Edges edge)
     {
-        Assert.Equal(edge, AppBar.EdgeFor(anchors));
+        Assert.Equal(edge, PanelEdge.EdgeFor(anchors));
     }
 
     [Theory]
@@ -29,7 +29,7 @@ public class AppBarTests
     [InlineData(Edges.Top | Edges.Bottom | Edges.Left | Edges.Right)]
     public void A_panel_in_a_corner_or_across_the_screen_reserves_no_edge(Edges anchors)
     {
-        Assert.Null(AppBar.EdgeFor(anchors));
+        Assert.Null(PanelEdge.EdgeFor(anchors));
     }
 
     [Theory]
@@ -40,7 +40,7 @@ public class AppBarTests
     public void A_bar_asks_for_a_strip_as_deep_as_its_size_along_its_edge(Edges edge, int left, int top, int right,
         int bottom)
     {
-        Assert.Equal(new RECT(left, top, right, bottom), AppBar.Strip(edge, 48, Monitor));
+        Assert.Equal(new RECT(left, top, right, bottom), PanelEdge.Strip(edge, 48, Monitor));
     }
 
     // Explorer grants a strip beside the taskbar, which holds 48 px along the top or the bottom.
@@ -54,7 +54,7 @@ public class AppBarTests
         int bottom)
     {
         Assert.Equal(new RECT(left, top, right, bottom),
-            AppBar.Area(edge, new RECT(grantLeft, grantTop, grantRight, grantBottom), Monitor));
+            PanelEdge.Area(edge, new RECT(grantLeft, grantTop, grantRight, grantBottom), Monitor));
     }
 
     [Theory]
@@ -65,7 +65,7 @@ public class AppBarTests
     public void A_bar_on_a_monitor_away_from_the_origin_asks_for_a_strip_of_that_monitor(Edges edge, int left, int top,
         int right, int bottom)
     {
-        Assert.Equal(new RECT(left, top, right, bottom), AppBar.Strip(edge, 48, Second));
+        Assert.Equal(new RECT(left, top, right, bottom), PanelEdge.Strip(edge, 48, Second));
     }
 
     // Explorer grants a strip shortened along its edge by a taskbar on a neighboring edge, and the bar keeps out of it.
@@ -79,6 +79,6 @@ public class AppBarTests
         int bottom)
     {
         Assert.Equal(new RECT(left, top, right, bottom),
-            AppBar.Area(edge, new RECT(grantLeft, grantTop, grantRight, grantBottom), Second));
+            PanelEdge.Area(edge, new RECT(grantLeft, grantTop, grantRight, grantBottom), Second));
     }
 }
