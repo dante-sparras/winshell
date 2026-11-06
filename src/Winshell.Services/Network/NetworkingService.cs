@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Windows.Devices.Radios;
 
 namespace Winshell.Network;
 
@@ -10,6 +11,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
     private readonly INetworkBackend _backend;
+    private readonly IRadioSource _radios;
     private readonly IDisposable _subscription;
     private NetworkSnapshot _snapshot = NetworkSnapshot.Initial;
     private string _error = "";
@@ -18,10 +20,11 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     private bool _settingWifi;
     private bool _disposed;
 
-    internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null)
+    internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null, IRadioSource? radios = null)
     {
         _loop = loop;
         _backend = backend ?? NetworkBackend.Instance;
+        _radios = radios ?? WindowsRadioSource.Instance;
         Apply(_backend.Current);
         _subscription = _backend.Subscribe(s => _loop.Post(() => Apply(s)));
     }
@@ -131,7 +134,9 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         var report = false;
         try
         {
-            error = await _backend.SetWifiEnabledAsync(enabled).ConfigureAwait(false) ?? "";
+            error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, enabled, _radios).ConfigureAwait(false) ?? "";
+            if (error.Length == 0)
+                await _backend.RefreshNowAsync().ConfigureAwait(false);
             report = true;
         }
         catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))

@@ -100,47 +100,4 @@ public sealed class RadioSwitchTests
         Assert.Equal(["get", "access"], turnOn.Calls);
         Assert.Equal("set", Assert.Single(off.Calls));
     }
-
-    private sealed class FakeSource : IRadioSource
-    {
-        public FakeSource(params FakeRadio[] radios)
-        {
-            Radios = radios;
-        }
-
-        public List<string> Calls { get; } = [];
-        public FakeRadio[] Radios { get; }
-        public RadioAccessStatus Access { get; init; } = RadioAccessStatus.Allowed;
-
-        public Task<IReadOnlyList<IDeviceRadio>> GetRadiosAsync()
-        {
-            Calls.Add("get");
-            return Task.FromResult<IReadOnlyList<IDeviceRadio>>(Radios);
-        }
-
-        public Task<RadioAccessStatus> RequestAccessAsync()
-        {
-            Calls.Add("access");
-            return Task.FromResult(Access);
-        }
-    }
-
-    private sealed class FakeRadio(RadioKind kind, RadioState state) : IDeviceRadio
-    {
-        public RadioKind Kind { get; } = kind;
-        public RadioState State { get; private set; } = state;
-        public RadioAccessStatus Result { get; init; } = RadioAccessStatus.Allowed;
-        public bool Reach { get; init; } = true;
-        public int Sets { get; private set; }
-        public List<string> Calls { get; } = [];
-
-        public Task<RadioAccessStatus> SetStateAsync(RadioState next)
-        {
-            Sets++;
-            Calls.Add("set");
-            if (Result == RadioAccessStatus.Allowed && Reach)
-                State = next;
-            return Task.FromResult(Result);
-        }
-    }
 }

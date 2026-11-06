@@ -158,17 +158,9 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         Refresh();
     }
 
-    /// <summary>
-    /// Asks Windows to set every Wi-Fi radio, then rereads them. Null when they report <paramref name="enabled"/>.
-    /// Tests use a fake backend and do not call this, so it never runs against the radios on a machine.
-    /// </summary>
-    public async Task<string?> SetWifiEnabledAsync(bool enabled)
+    Task INetworkBackend.RefreshNowAsync()
     {
-        var error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, enabled, WindowsRadioSource.Instance)
-            .ConfigureAwait(false);
-        if (error is null)
-            await RefreshNowAsync().ConfigureAwait(false);
-        return error;
+        return RefreshNowAsync();
     }
 
     public async Task RequestAccessAsync()

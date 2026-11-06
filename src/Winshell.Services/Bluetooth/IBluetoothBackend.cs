@@ -19,10 +19,12 @@ internal interface IBluetoothBackend : IDisposable
     Task<string?> UnpairAsync(string id);
     Task<bool> SetAudioConnectionAsync(Guid container, bool connect);
 
-    /// <summary>Asks Windows to turn the adapter's radio on or off. Null when it reports <paramref name="enabled"/>.</summary>
-    Task<string?> SetRadioEnabledAsync(bool enabled)
+    /// <summary>
+    /// The default adapter's own radio. Null when that adapter has none, so a change must not touch another radio.
+    /// </summary>
+    Task<IDeviceRadio?> GetRadioAsync()
     {
-        throw new NotSupportedException("This Bluetooth backend does not change radios.");
+        return Task.FromResult<IDeviceRadio?>(null);
     }
 
     /// <summary>Asks Windows to change discovery. Null when it reports <paramref name="discoverable"/>. Tests use a fake.</summary>

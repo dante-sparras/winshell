@@ -89,7 +89,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
     private string? _radioAdapterId;
     private string? _adapterId;
     private string _discoveryError = "";
-    private bool _hasRadio;
     private bool _disposed;
 
     public event Action? Changed;
@@ -184,11 +183,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
             if (adapter is null)
             {
                 StopDiscovery();
-                lock (_lock)
-                {
-                    _hasRadio = false;
-                }
-
                 return new BluetoothSnapshot(true, null, []);
             }
 
@@ -201,11 +195,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
             }
             catch (Exception e) when (IsExpectedFailure(e))
             {
-            }
-
-            lock (_lock)
-            {
-                _hasRadio = radio is not null;
             }
 
             WatchRadio(adapter.DeviceId, radio);
@@ -355,22 +344,19 @@ internal sealed class BluetoothBackend : IBluetoothBackend
         return level;
     }
 
-    /// <summary>
-    /// Asks Windows to set the Bluetooth radios. Null when they report <paramref name="enabled"/>.
-    /// An adapter whose own radio is missing fails before any request, so another radio is left alone.
-    /// Tests use a fake backend and do not call this.
-    /// </summary>
-    public async Task<string?> SetRadioEnabledAsync(bool enabled)
+    /// <summary>The default adapter's own radio. Null when that adapter has none.</summary>
+    public async Task<IDeviceRadio?> GetRadioAsync()
     {
         lock (_lock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (!_hasRadio)
-                return RadioSwitch.NoAdapterRadio;
         }
 
-        return await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, enabled, WindowsRadioSource.Instance)
-            .ConfigureAwait(false);
+        var adapter = await WinAdapter.GetDefaultAsync().AsTask().ConfigureAwait(false);
+        if (adapter is null)
+            return null;
+        var radio = await adapter.GetRadioAsync().AsTask().ConfigureAwait(false);
+        return radio is null ? null : WindowsRadioSource.Wrap(radio);
     }
 
     /// <summary>
