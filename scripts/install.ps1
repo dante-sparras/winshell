@@ -11,8 +11,7 @@
     irm | iex, and running this file with the call operator, also add that folder to this session's
     PATH and tell you to run winshell. pwsh -File leaves the caller unchanged and tells you to open
     a new terminal.
-    It also deletes %LOCALAPPDATA%\winshell\updates, so a staged update cannot replace this install
-    on the next start. If a Microsoft Store copy is also installed, it says so and still finishes.
+    If a Microsoft Store copy is also installed, it says so and still finishes.
 
     iex cannot pass parameters. WINSHELL_VERSION (x.y.z) and WINSHELL_AUTOSTART (1, true, or yes)
     are the same choices as -Version and -AutoStart.
@@ -60,20 +59,6 @@ function Remove-WinshellFolder([string] $Path) {
     if ($item.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw "Refusing to delete $Path because it is a link." }
     Remove-Item -LiteralPath $Path -Recurse -Force
     return $true
-}
-
-function Remove-WinshellStagedUpdate {
-    # A staged update replaces the next start, even of another install.
-    $updates = Join-Path $env:LOCALAPPDATA 'winshell\updates'
-    try {
-        if (Remove-WinshellFolder $updates) {
-            Write-WinshellLine "Removed $updates."
-            return $true
-        }
-    } catch {
-        Write-WinshellLine "The staged update is still at $updates. $($_.Exception.Message)"
-    }
-    return $false
 }
 
 function Get-WinshellUserPath {
@@ -196,7 +181,6 @@ function Install-Winshell([string] $Version, [switch] $AutoStart, [switch] $Sess
     } catch {
         Write-WinshellLine "The previous copy is still at $old. $($_.Exception.Message)"
     }
-    Remove-WinshellStagedUpdate | Out-Null
 
     $parts = @((Get-WinshellUserPath).Split(';') | Where-Object { $_ })
     if ($parts | Where-Object { $_.TrimEnd('\') -eq $bin }) {

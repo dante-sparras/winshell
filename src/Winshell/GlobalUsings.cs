@@ -8,6 +8,5 @@ global using Winshell.Network;
 global using Winshell.Notifications;
 global using Winshell.Power;
 global using Winshell.Tray;
-global using Winshell.Updates;
 global using Winshell.Windows;
 global using Winshell.Winland;

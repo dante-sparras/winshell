@@ -1,5 +1,4 @@
 using Winshell.Native;
-using Winshell.Updates;
 
 namespace Winshell.Session;
 

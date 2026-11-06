@@ -181,18 +181,6 @@ Describe 'install.ps1 and uninstall.ps1' {
         Get-Text $p.PathFile | Should -Be "C:\Windows;C:\Tools;$($p.Bin)"
     }
 
-    It 'deletes a staged update and keeps the logs' {
-        $p = New-TestProfile
-        $staged = Join-Path $p.Local 'winshell\updates\9.9.9\winshell.exe'
-        $log = Join-Path $p.Local 'winshell\logs\winshell.log'
-        New-Item -ItemType Directory -Path (Split-Path $staged), (Split-Path $log) | Out-Null
-        [IO.File]::WriteAllText($staged, 'staged')
-        [IO.File]::WriteAllText($log, 'log')
-        (Invoke-Script $p -File $Install).ExitCode | Should -Be 0
-        Test-Path -LiteralPath (Join-Path $p.Local 'winshell\updates') | Should -BeFalse
-        Get-Text $log | Should -Be 'log'
-    }
-
     It 'returns to the iex session on failure, and tells it to run winshell on success' {
         $p = New-TestProfile
         $iex = "Get-Content -Raw -LiteralPath '$Install' | Invoke-Expression"

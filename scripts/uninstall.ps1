@@ -5,9 +5,8 @@
 
 .DESCRIPTION
     Removes %LOCALAPPDATA%\Programs\winshell, that bin folder's user PATH entry, the Winshell Start
-    menu shortcut, the Winshell sign-in entry when it starts that install, and a staged update in
-    %LOCALAPPDATA%\winshell\updates. It does not remove configuration under %APPDATA%\winshell, or
-    logs and state under %LOCALAPPDATA%\winshell.
+    menu shortcut, and the Winshell sign-in entry when it starts that install. It does not remove
+    configuration under %APPDATA%\winshell, or logs and state under %LOCALAPPDATA%\winshell.
     irm | iex removes that folder from this session's PATH and leaves every other entry.
 
     Stops without changing anything while that Winshell is running. Safe to run when Winshell is
@@ -51,20 +50,6 @@ function Remove-WinshellFolder([string] $Path) {
     if ($item.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw "Refusing to delete $Path because it is a link." }
     Remove-Item -LiteralPath $Path -Recurse -Force
     return $true
-}
-
-function Remove-WinshellStagedUpdate {
-    # A staged update replaces the next start, even of another install.
-    $updates = Join-Path $env:LOCALAPPDATA 'winshell\updates'
-    try {
-        if (Remove-WinshellFolder $updates) {
-            Write-WinshellLine "Removed $updates."
-            return $true
-        }
-    } catch {
-        Write-WinshellLine "The staged update is still at $updates. $($_.Exception.Message)"
-    }
-    return $false
 }
 
 function Get-WinshellUserPath {
@@ -146,7 +131,6 @@ function Uninstall-Winshell {
             } finally { $key.Dispose() }
         }
     }
-    if (Remove-WinshellStagedUpdate) { $removed = $true }
 
     if ($removed) {
         Write-WinshellLine 'Winshell is uninstalled. Your configuration in %APPDATA%\winshell was left in place. Logs and state stay in %LOCALAPPDATA%\winshell.'

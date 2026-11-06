@@ -6,7 +6,6 @@ using Windows.Storage.Streams;
 using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
 using Windows.UI.Shell;
-using Winshell.Updates;
 
 namespace Winshell.Notifications;
 

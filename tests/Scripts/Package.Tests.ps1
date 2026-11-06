@@ -5,6 +5,7 @@ BeforeAll {
     $function = $tree.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'New-Zip' }, $true)
     . ([scriptblock]::Create($function.Extent.Text))
     $releaseDay = [datetime]::new(2026, 11, 2)
+    $ownBinaries = $tree.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.VariablePath.UserPath -eq 'ownBinaries' }, $true).Right.Expression.SafeGetValue()
 }
 
 Describe 'Packing a zip' {
@@ -24,5 +25,30 @@ Describe 'Packing a zip' {
             $archive.Entries.FullName -join ',' | Should -BeExactly "Z,i,sub/a,y,$([char]0x012F)"
             $archive.Entries.LastWriteTime.Date | Select-Object -Unique | Should -Be ([DateTimeOffset]::new($releaseDay, [TimeSpan]::Zero).Date)
         } finally { $archive.Dispose() }
+    }
+}
+
+Describe 'The binaries Winshell signs' {
+    It 'are the same list in SignPath''s artifact configuration, for each runtime, as in the package script' {
+        [xml] $config = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../packaging/signpath/artifact-configuration.xml')
+        $runtimes = $config.'artifact-configuration'.'zip-file'.'pe-file-set'.include.path | Group-Object { ($_ -split '/')[0] }
+
+        $runtimes.Name | Sort-Object | Should -Be 'win-arm64', 'win-x64'
+        foreach ($runtime in $runtimes) {
+            $runtime.Group | ForEach-Object { ($_ -split '/')[1] } | Sort-Object | Should -Be ($ownBinaries | Sort-Object)
+        }
+    }
+
+    It 'include every assembly built from src' {
+        # The package project only packs the others; it builds nothing that ships.
+        $assemblies = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '../../src') -Recurse -Filter '*.csproj' | ForEach-Object {
+            $text = Get-Content -Raw -LiteralPath $_.FullName
+            if ($text -notmatch '<IsPackable>true</IsPackable>') {
+                ($text -match '<AssemblyName>([^<]+)</AssemblyName>' ? $Matches[1] : $_.BaseName) + '.dll'
+            }
+        }
+
+        $assemblies | Should -Not -BeNullOrEmpty
+        foreach ($assembly in $assemblies) { $ownBinaries | Should -Contain $assembly }
     }
 }
