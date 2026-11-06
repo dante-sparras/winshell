@@ -22,7 +22,7 @@ public sealed class MediaSessionRefreshTests
                 return pending;
             Assert.True(pending.Closed);
             return next;
-        });
+        }, TimeProvider.System);
 
         loop.Process();
         loop.Advance(TimeSpan.FromMilliseconds(29999));
@@ -61,7 +61,7 @@ public sealed class MediaSessionRefreshTests
         var loop = new ManualEventLoop();
         List<string> warnings = [];
         var log = new Log { Sink = (level, category, message) => warnings.Add($"{level} {category}: {message}") };
-        _ = new SmtcSessions(loop, log, () => new Discovery { CompletesOnCancel = false });
+        _ = new SmtcSessions(loop, log, () => new Discovery { CompletesOnCancel = false }, TimeProvider.System);
         loop.Process();
 
         loop.Advance(TimeSpan.FromSeconds(29));
@@ -85,7 +85,7 @@ public sealed class MediaSessionRefreshTests
         {
             starts.Add(loop.Now);
             return last = new Discovery { CompletesOnCancel = false };
-        });
+        }, TimeProvider.System);
         loop.Process();
 
         loop.Advance(TimeSpan.FromSeconds(11028));
@@ -111,7 +111,7 @@ public sealed class MediaSessionRefreshTests
         var requests = 0;
         var first = new Discovery();
         var next = new Discovery();
-        _ = new SmtcSessions(loop, new Log(), () => ++requests == 1 ? first : next);
+        _ = new SmtcSessions(loop, new Log(), () => ++requests == 1 ? first : next, TimeProvider.System);
         loop.Process();
 
         first.Finish(status);
@@ -134,7 +134,7 @@ public sealed class MediaSessionRefreshTests
         var pending = new Discovery();
         _ = new SmtcSessions(loop, new Log(), () => ++requests == 1
             ? throw new COMException("The media broker is unavailable.")
-            : pending);
+            : pending, TimeProvider.System);
 
         loop.Process();
         loop.Advance(TimeSpan.FromMilliseconds(1999));

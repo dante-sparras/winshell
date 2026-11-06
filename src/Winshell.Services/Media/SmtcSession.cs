@@ -11,23 +11,27 @@ internal sealed class SmtcSession
 {
     private readonly ISmtcLink _link;
     private readonly SessionArt _art;
+    private readonly TimeProvider _time;
     private bool _released;
-    private DateTimeOffset _positionTime = TimeProvider.System.GetUtcNow();
+    private DateTimeOffset _positionTime;
     private double _position;
 
     public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id,
-        string appName)
-        : this(loop, log, id, IdOf(session), appName, self => new SmtcSessionLink(loop, log, self, session))
+        string appName, TimeProvider time)
+        : this(loop, log, id, IdOf(session), appName, time, self => new SmtcSessionLink(loop, log, self, session))
     {
     }
 
     // The link is what talks to Windows for this session. A test gives it one that records commands.
-    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName,
+    // The owner supplies the clock, so a test can advance position without waiting on the system clock.
+    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName, TimeProvider time,
         Func<SmtcSession, ISmtcLink> link)
     {
         Id = id;
         AppId = appId;
         AppName = appName;
+        _time = time;
+        _positionTime = time.GetUtcNow();
         _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"),
             OnArtChanged);
         _link = link(this);
@@ -135,7 +139,7 @@ internal sealed class SmtcSession
             return 0;
         var position = _position;
         if (PlaybackState == MediaPlaybackState.Playing)
-            position += (TimeProvider.System.GetUtcNow() - _positionTime).TotalSeconds * Rate;
+            position += (_time.GetUtcNow() - _positionTime).TotalSeconds * Rate;
         return Length > 0 ? Math.Clamp(position, 0, Length) : Math.Max(0, position);
     }
 
@@ -205,7 +209,7 @@ internal sealed class SmtcSession
         Send("set position", s => s.TryChangePlaybackPositionAsync((StartTime + TimeSpan.FromSeconds(seconds)).Ticks));
         // Show the new position now, as the app may report it late or not at all.
         _position = seconds;
-        _positionTime = TimeProvider.System.GetUtcNow();
+        _positionTime = _time.GetUtcNow();
         Seeked?.Invoke();
     }
 
@@ -271,7 +275,7 @@ internal sealed class SmtcSession
         {
             // Count the position up to now with the old state, then from now with the new one.
             _position = PositionNow();
-            _positionTime = TimeProvider.System.GetUtcNow();
+            _positionTime = _time.GetUtcNow();
             seeked = true;
         }
 

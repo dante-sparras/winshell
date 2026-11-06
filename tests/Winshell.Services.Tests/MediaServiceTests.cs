@@ -31,9 +31,10 @@ public sealed class MediaServiceTests
     }
 
     /// <summary>A session with no Windows behind it. Its commands land on the link.</summary>
-    private SmtcSession Native(RecordingLink link, string appId = "test")
+    private SmtcSession Native(RecordingLink link, string appId = "test", TimeProvider? time = null)
     {
-        return new SmtcSession(new ManualEventLoop(), _log, 0, appId, appId, _ => link);
+        return new SmtcSession(new ManualEventLoop(), _log, 0, appId, appId, time ?? TimeProvider.System,
+            _ => link);
     }
 
     private sealed class RecordingLink : ISmtcLink
@@ -420,6 +421,25 @@ public sealed class MediaServiceTests
         Assert.Equal(1, session.Rate);
         Assert.Equal(1, session.MinRate);
         Assert.Equal(1, session.MaxRate);
+    }
+
+    [Fact]
+    public void Position_moves_while_playing_and_holds_while_paused()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var native = Native(new RecordingLink(), time: time);
+        native.ApplyPlayback(new SmtcPlayback(Playing));
+        native.ApplyTimeline(TimeSpan.Zero, TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(10), time.GetUtcNow(),
+            time.GetUtcNow());
+        var session = new MediaSession(native, _log);
+        Assert.Equal(10, session.Position);
+
+        time.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(15, session.Position);
+
+        native.ApplyPlayback(new SmtcPlayback(Paused));
+        time.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(15, session.Position);
     }
 
     [Fact]

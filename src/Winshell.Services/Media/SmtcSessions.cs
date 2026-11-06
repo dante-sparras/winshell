@@ -14,6 +14,7 @@ internal sealed class SmtcSessions : IMediaSessions
 
     private readonly IEventLoop _loop;
     private readonly Log _log;
+    private readonly TimeProvider _time;
     private readonly List<SmtcSession> _sessions = [];
     private readonly AppNames _names;
     private readonly SessionManagerPoll _poll;
@@ -25,10 +26,11 @@ internal sealed class SmtcSessions : IMediaSessions
     private int _nextId = 1;
 
     internal SmtcSessions(IEventLoop loop, Log log,
-        Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> request)
+        Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> request, TimeProvider time)
     {
         _loop = loop;
         _log = log;
+        _time = time;
         _poll = new SessionManagerPoll(loop, log, request, manager =>
         {
             Subscribe(manager);
@@ -45,7 +47,9 @@ internal sealed class SmtcSessions : IMediaSessions
             return _instance;
         // Old art is older than a day, so cleaning it does not have to finish before the first read.
         _ = Task.Run(ArtCache.CleanOld);
-        return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync);
+        // The shell's clock. A session counts playback forward from it while playing.
+        return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync,
+            TimeProvider.System);
     }
 
     public IReadOnlyList<SmtcSession> Sessions => _sessions;
@@ -89,7 +93,7 @@ internal sealed class SmtcSessions : IMediaSessions
             }
 
             var session = new SmtcSession(_loop, _log, incoming[i], _nextId++,
-                _names.Get(ids[i]) ?? AppDisplayName.Fallback(ids[i]));
+                _names.Get(ids[i]) ?? AppDisplayName.Fallback(ids[i]), _time);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
