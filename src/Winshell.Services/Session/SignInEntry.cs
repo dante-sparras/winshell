@@ -123,14 +123,39 @@ internal static class SignInEntry
     /// </summary>
     internal static bool SameInstall(string program, string thisExe, Func<string, string> resolve)
     {
-        var started = resolve(Path.GetFullPath(program));
-        var here = resolve(Path.GetFullPath(thisExe));
+        // A Run value can name a program that is not a path. That is not this install, and it must not throw.
+        if (Full(program) is not { } programPath || Full(thisExe) is not { } herePath)
+            return false;
+        string started;
+        string here;
+        try
+        {
+            started = resolve(programPath);
+            here = resolve(herePath);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or IOException
+                                      or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
         if (string.Equals(started, here, StringComparison.OrdinalIgnoreCase))
             return true;
         if (!Host(started) || !Host(here))
             return false;
-        return string.Equals(Path.GetDirectoryName(Path.GetFullPath(started)),
-            Path.GetDirectoryName(Path.GetFullPath(here)), StringComparison.OrdinalIgnoreCase);
+        if (Full(started) is not { } startedFull || Full(here) is not { } hereFull)
+            return false;
+        return string.Equals(Path.GetDirectoryName(startedFull), Path.GetDirectoryName(hereFull),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The <c>winshell.exe</c> a sign-in entry is compared with. A configuration program is not that file: the host
+    /// that started it is. With no such host, the process path stands.
+    /// </summary>
+    internal static string InstallExe(string processPath, string? supervisor)
+    {
+        return ProjectFolder(processPath) is not null && supervisor is not null ? supervisor : processPath;
     }
 
     /// <summary>

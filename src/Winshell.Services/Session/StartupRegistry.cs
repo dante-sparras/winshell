@@ -95,7 +95,8 @@ internal sealed class WindowsStartupRegistry(
         {
             return action();
         }
-        catch (Exception e) when (e is UnauthorizedAccessException or SecurityException or IOException)
+        catch (Exception e) when (e is UnauthorizedAccessException or SecurityException or IOException
+                                      or ArgumentException or NotSupportedException)
         {
             return false;
         }

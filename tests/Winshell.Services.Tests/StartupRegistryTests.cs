@@ -302,6 +302,25 @@ public sealed class StartupRegistryTests : IDisposable
     }
 
     [Fact]
+    public void A_sign_in_entry_whose_program_is_not_a_path_is_not_this_one()
+    {
+        const string winshell = @"C:\Program Files\Winshell\winshell.exe";
+        const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
+        var run = _testKey + @"\Run";
+        var registry = new WindowsStartupRegistry(
+            WindowsStartupRegistry.CommandFor(winshell, ["run", "-p", project]), run, bareFolder: project);
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, @"conhost.exe --headless ""C:\bad|winshell.exe"" --no-build",
+                RegistryValueKind.String);
+        }
+
+        var startup = new StartupService(_log, registry);
+        Assert.False(startup.RunAtSignIn);
+        Assert.True(startup.RegisteredElsewhere);
+    }
+
+    [Fact]
     public void A_startup_task_turns_on_and_off_without_a_path()
     {
         var task = new FakeStartupTask();

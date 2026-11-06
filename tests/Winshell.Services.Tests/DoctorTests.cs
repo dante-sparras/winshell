@@ -366,6 +366,18 @@ public sealed class DoctorTests : IDisposable
         Assert.Equal(CheckStatus.Pass, SignIn(command, false, windowed, path => path == console).Status);
     }
 
+    [Fact]
+    public void A_configuration_program_judges_sign_in_by_the_winshell_that_started_it()
+    {
+        const string host = @"C:\Program Files\Winshell\winshell.exe";
+        const string shell = @"C:\Users\a\work\bin\shell\work.exe";
+        var command = $@"C:\Windows\System32\conhost.exe --headless ""{host}"" --no-build --no-duplicate";
+        Assert.Equal(CheckStatus.Pass,
+            SignInForProcess(shell, host, command, false, _ => true).Status);
+        Assert.Equal(CheckStatus.Warn,
+            SignInForProcess(shell, @"C:\Other\winshell.exe", command, false, _ => true).Status);
+    }
+
     // Notifications, instances, crashes
 
     [Theory]
