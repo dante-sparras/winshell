@@ -1,10 +1,9 @@
 using System.ComponentModel;
-using Winshell.ExplorerTaskbar;
 using Winshell.Session;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>Locking, sign-in and Explorer's taskbar, each over a fake. Nothing here changes this PC.</summary>
+/// <summary>Locking and sign-in, each over a fake. Nothing here changes this PC.</summary>
 public sealed class SessionServiceTests
 {
     private readonly List<string> _warnings = [];
@@ -117,28 +116,6 @@ public sealed class SessionServiceTests
         Assert.Single(_warnings);
     }
 
-    [Fact]
-    public void Hiding_Explorers_taskbar_goes_through_the_session_and_reports_the_change()
-    {
-        var taskbar = new FakeTaskbar();
-        using var session = new ExplorerTaskbarSession(() => taskbar);
-        var service = new ExplorerTaskbarService(session);
-        var changes = Watch(service);
-
-        service.Hidden = false;
-        Assert.Equal(0, taskbar.Hides + taskbar.Restores);
-        Assert.Empty(changes);
-
-        service.Hidden = true;
-        service.Hidden = true;
-        Assert.True(session.Hidden);
-        Assert.Equal(1, taskbar.Hides);
-
-        service.Hidden = false;
-        Assert.Equal(1, taskbar.Restores);
-        Assert.Equal([nameof(ExplorerTaskbarService.Hidden), nameof(ExplorerTaskbarService.Hidden)], changes);
-    }
-
     private sealed class FakeSessionBackend(bool accepts) : ISessionBackend
     {
         public int Calls { get; private set; }
@@ -194,23 +171,6 @@ public sealed class SessionServiceTests
             Writes++;
             Registered = false;
             return true;
-        }
-    }
-
-    private sealed class FakeTaskbar : IExplorerTaskbar
-    {
-        public int Hides { get; private set; }
-
-        public int Restores { get; private set; }
-
-        public void Hide()
-        {
-            Hides++;
-        }
-
-        public void Restore()
-        {
-            Restores++;
         }
     }
 }

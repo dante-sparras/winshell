@@ -4,7 +4,6 @@ using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using WinRT;
-using Winshell.Native;
 
 namespace Winshell;
 
@@ -59,8 +58,6 @@ public sealed partial class Shell : IDisposable
         _arguments = arguments;
         Ipc = new ShellIpc(log);
         Platform = new ShellPlatform(loop, log);
-        Platform.TaskbarMayHaveChanged += () =>
-            NativeCallback.Guard(log, "explorer-taskbar", () => _explorerTaskbarSession?.Rehide());
     }
 
     /// <summary>The project folder <c>winshell dev</c> runs, where a shell follows its <c>.xaml</c> files.</summary>
@@ -362,7 +359,7 @@ public sealed partial class Shell : IDisposable
     /// </summary>
     private void ReleaseForCrash()
     {
-        _explorerTaskbarSession?.Restore();
+        _explorerTaskbar?.Restore();
         AppBar.RemoveAll();
     }
 

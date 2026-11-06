@@ -6,10 +6,11 @@ Explorer's taskbar: whether it is hidden while this shell runs. Reach it from `S
 
 ## ExplorerTaskbarService
 
-Hides Explorer's taskbar for a shell that draws its own. The session belongs to the program, which restores the taskbar when it exits, however it exits.
+Hides Explorer's taskbar for a shell that draws its own. Winshell shows it again when the shell exits, however it exits. While it is hidden, a taskbar window Explorer makes is hidden too.
 
 Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
 | `Hidden` | bool | Whether Explorer's taskbar is hidden and its screen edge is released. |
+| `Dispose()` | void | Shows Explorer's taskbar again when this shell had hidden it. |

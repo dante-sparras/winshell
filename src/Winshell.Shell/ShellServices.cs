@@ -4,6 +4,7 @@ using Winshell.Bluetooth;
 using Winshell.ExplorerTaskbar;
 using Winshell.Input;
 using Winshell.Media;
+using Winshell.Native;
 using Winshell.Network;
 using Winshell.Notifications;
 using Winshell.Power;
@@ -23,7 +24,6 @@ public sealed partial class Shell
     private AudioService? _audio;
     private BluetoothService? _bluetooth;
     private BrightnessService? _brightness;
-    private ExplorerTaskbarSession? _explorerTaskbarSession;
     private ExplorerTaskbarService? _explorerTaskbar;
     private JumpListService? _jumpLists;
     private MediaService? _media;
@@ -54,8 +54,9 @@ public sealed partial class Shell
     public BrightnessService Brightness => Own(ref _brightness, () => new BrightnessService(Loop, Log));
 
     /// <summary>Whether Explorer's taskbar is hidden. Winshell shows it again when it exits.</summary>
-    public ExplorerTaskbarService ExplorerTaskbar => _explorerTaskbar ??=
-        new ExplorerTaskbarService(Own(ref _explorerTaskbarSession, ExplorerTaskbarSession.ForThisProcess));
+    public ExplorerTaskbarService ExplorerTaskbar => Own(ref _explorerTaskbar, () =>
+        new ExplorerTaskbarService(whenTaskbarMayHaveChanged: listen =>
+            Platform.TaskbarMayHaveChanged += () => NativeCallback.Guard(Log, "explorer-taskbar", listen)));
 
     /// <summary>The recent and frequent documents of an app, as its jump list shows them.</summary>
     public JumpListService JumpLists => _jumpLists ??= new JumpListService();
