@@ -3,40 +3,40 @@ using System.Runtime.CompilerServices;
 namespace Winshell.Input;
 
 /// <summary>
-/// Connects the <see cref="HotkeyBook"/> of one loop to Windows. A normal chord goes to a <see cref="HotkeyWindow"/>;
-/// the Windows key, and a sequence waiting for its next chord, hold the <see cref="KeyboardHook"/> while the book needs it.
+/// The claim rules for the hotkeys on one loop: chords are shared, an unused chord is given back, the keyboard hook
+/// is installed only while a Windows-key hotkey or a waiting sequence needs it, and a sequence that is not finished
+/// in time is dropped. Windows is reached through <see cref="IHotkeyBackend"/>.
 /// </summary>
-internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
+internal sealed class HotkeyRegistrar : IDisposable
 {
-    private static readonly ConditionalWeakTable<IEventLoop, WindowsHotkeyRegistrar> PerLoop = new();
+    private static readonly ConditionalWeakTable<IEventLoop, HotkeyRegistrar> PerLoop = new();
 
     private readonly object _bookLock = new();
     private readonly IEventLoop _loop;
+    private readonly IHotkeyBackend _backend;
     private readonly HotkeyBook _book = new();
-    private readonly HotkeyWindow _window;
-    private readonly KeyboardHook _hook;
+    private readonly HashSet<OsChord> _registered = [];
     private readonly Dictionary<IHotkeyListener, IDisposable> _timers = [];
     private int _syncPosted;
     private bool _disposed;
 
-    public WindowsHotkeyRegistrar(IEventLoop loop)
+    public HotkeyRegistrar(IEventLoop loop)
+        : this(loop, new HotkeyBackend(loop))
+    {
+    }
+
+    internal HotkeyRegistrar(IEventLoop loop, IHotkeyBackend backend)
     {
         _loop = loop;
-        _window = new HotkeyWindow(id => _loop.Post(() => OnHotkey(id)));
-        // The hook thread ended without being asked to. Windows does not report a hook it removed for a timeout
-        // while leaving the thread running, so this is only the exit this process can see.
-        _hook = new KeyboardHook(OnHook, () => _loop.Post(SyncHook));
+        _backend = backend;
+        _backend.ChordPressed += OnChord;
     }
 
     /// <summary>The registrar the hotkeys on a loop share. With nothing claimed, it holds no window and no hook.</summary>
-    public static WindowsHotkeyRegistrar For(IEventLoop loop)
+    public static HotkeyRegistrar For(IEventLoop loop)
     {
-        return PerLoop.GetValue(loop, static l => new WindowsHotkeyRegistrar(l));
+        return PerLoop.GetValue(loop, static l => new HotkeyRegistrar(l));
     }
-
-    internal int RegistrationCount => _window.Count;
-
-    internal nint Window => _window.Handle;
 
     internal bool NeedsHook
     {
@@ -49,9 +49,10 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
         }
     }
 
-    internal static bool IsHookInstalled => KeyboardHook.IsInstalled;
-
-    internal static Thread? InstalledHookThread => KeyboardHook.InstalledThread;
+    internal bool IsKeyDown(int virtualKey)
+    {
+        return _backend.IsKeyDown(virtualKey);
+    }
 
     public HotkeyClaim Claim(IHotkeyListener listener, HotkeySequence? sequence)
     {
@@ -75,7 +76,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
 
             if (!exists)
             {
-                var registered = _window.Register(first);
+                var registered = _backend.Register(first);
                 if (registered.Status != HotkeyClaimStatus.Active)
                 {
                     SyncHook();
@@ -86,11 +87,13 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
 
         lock (_bookLock)
         {
+            if (!first.IsWinOnly)
+                _registered.Add(first.OsKey);
             _book.Add(listener, sequence);
         }
 
         SyncHook();
-        if (first.IsWinOnly && !_hook.IsAttached)
+        if (first.IsWinOnly && !_backend.IsHookInstalled)
         {
             lock (_bookLock)
             {
@@ -118,34 +121,36 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        _backend.ChordPressed -= OnChord;
         IDisposable[] timers;
         lock (_bookLock)
         {
             timers = [.. _timers.Values];
             _timers.Clear();
             _book.Clear();
+            _registered.Clear();
         }
 
         foreach (var timer in timers)
             timer.Dispose();
-        _window.Dispose();
-        _hook.Detach();
+        _backend.Dispose();
     }
 
-    /// <summary>Removes this process's hotkey hook, whoever installed it. Tests call this if a registrar is abandoned.</summary>
-    internal static void EmergencyUnhook()
+    /// <summary>
+    /// A handled Windows-key tap is not eaten. The masking key is injected while the Windows key is still down,
+    /// and the real key-up is passed on so the async key state clears.
+    /// </summary>
+    internal static bool Consume(BookResult result, Action? mask = null)
     {
-        KeyboardHook.EmergencyUnhook();
+        if (!result.MaskWin)
+            return result.Swallow;
+        (mask ?? KeyMask.Tap).Invoke();
+        return false;
     }
 
-    internal bool TryGetId(OsChord chord, out int id)
+    private void OnChord(OsChord chord)
     {
-        return _window.TryGetId(chord, out id);
-    }
-
-    internal void OnHotkey(int id)
-    {
-        if (_disposed || !_window.TryGetChord(id, out var chord))
+        if (_disposed)
             return;
         BookResult result;
         var changed = false;
@@ -161,18 +166,6 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             SyncHook();
     }
 
-    /// <summary>
-    /// A handled Windows-key tap is not eaten. The masking key is injected while the Windows key is still down,
-    /// and the real key-up is passed on so the async key state clears.
-    /// </summary>
-    internal static bool Consume(BookResult result, Action? mask = null)
-    {
-        if (!result.MaskWin)
-            return result.Swallow;
-        (mask ?? KeyMask.Tap).Invoke();
-        return false;
-    }
-
     private void ReleaseListener(IHotkeyListener listener)
     {
         CancelTimer(listener);
@@ -186,13 +179,18 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
 
     private void FlushRegistrations()
     {
-        _window.UnregisterUnused(chord =>
+        List<OsChord> unused = [];
+        lock (_bookLock)
         {
-            lock (_bookLock)
-            {
-                return _book.HasOs(chord);
-            }
-        });
+            foreach (var chord in _registered)
+                if (!_book.HasOs(chord))
+                    unused.Add(chord);
+            foreach (var chord in unused)
+                _registered.Remove(chord);
+        }
+
+        foreach (var chord in unused)
+            _backend.Unregister(chord);
     }
 
     private void Deliver(BookResult result)
@@ -256,9 +254,14 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
         if (_disposed)
             return;
         if (NeedsHook)
-            _hook.Attach();
+            _backend.InstallHook(OnHook, OnHookLost);
         else
-            _hook.Detach();
+            _backend.RemoveHook();
+    }
+
+    private void OnHookLost()
+    {
+        _loop.Post(SyncHook);
     }
 
     // Runs on the hook thread. Work for the loop is posted, and so is the unhook.

@@ -1,5 +1,4 @@
 using Winshell.Input;
-using Winshell.Native;
 
 namespace Winshell.Services.Tests;
 
@@ -8,8 +7,8 @@ public sealed class HotkeyBookTests : IDisposable
 {
     public void Dispose()
     {
-        var leaked = WindowsHotkeyRegistrar.IsHookInstalled;
-        WindowsHotkeyRegistrar.EmergencyUnhook();
+        var leaked = KeyboardHook.IsInstalled;
+        KeyboardHook.EmergencyUnhook();
         Assert.False(leaked);
     }
 
@@ -122,7 +121,7 @@ public sealed class HotkeyBookTests : IDisposable
         Assert.True(up.MaskWin);
         Assert.True(up.Swallow);
         var injected = 0;
-        Assert.False(WindowsHotkeyRegistrar.Consume(up, () => injected++));
+        Assert.False(HotkeyRegistrar.Consume(up, () => injected++));
         Assert.Equal(1, injected);
     }
 
@@ -137,7 +136,7 @@ public sealed class HotkeyBookTests : IDisposable
 
         Assert.False(up.MaskWin);
         Assert.False(up.Swallow);
-        Assert.False(WindowsHotkeyRegistrar.Consume(up));
+        Assert.False(HotkeyRegistrar.Consume(up));
     }
 
     [Fact]
@@ -151,7 +150,7 @@ public sealed class HotkeyBookTests : IDisposable
 
         Assert.False(hit.MaskWin);
         Assert.True(hit.Swallow);
-        Assert.True(WindowsHotkeyRegistrar.Consume(hit));
+        Assert.True(HotkeyRegistrar.Consume(hit));
     }
 
     [Fact]
@@ -256,102 +255,30 @@ public sealed class HotkeyBookTests : IDisposable
     }
 
     [Fact]
-    public void RegisterHotKey_reports_a_taken_chord_and_shares_one_registration()
-    {
-        var loop = new ManualEventLoop();
-        using var registrar = new WindowsHotkeyRegistrar(loop);
-        var text = ClaimableChord(registrar, loop);
-        var sequence = Parse(text);
-        var first = new Probe(loop);
-        var second = new Probe(loop);
-        Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(first, sequence).Status);
-        Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(second, sequence).Status);
-        Assert.Equal(1, registrar.RegistrationCount);
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
-        Assert.True(registrar.TryGetId(sequence.Chords[0].OsKey, out var id));
-
-        Win32.SendMessageW(registrar.Window, Win32.WM_HOTKEY, id, 0);
-        loop.Process();
-        Assert.Equal(1, first.Presses);
-        Assert.Equal(1, second.Presses);
-
-        registrar.Release(first);
-        Assert.Equal(1, registrar.RegistrationCount);
-        Assert.NotEqual(0, registrar.Window);
-        registrar.Release(second);
-        Assert.Equal(0, registrar.RegistrationCount);
-        Assert.Equal(0, registrar.Window);
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
-    }
-
-    [Fact]
     public void Ctrl_Alt_Delete_is_not_registered()
     {
         var loop = new ManualEventLoop();
-        using var registrar = new WindowsHotkeyRegistrar(loop);
-        var probe = new Probe(loop);
-        var claim = registrar.Claim(probe, Parse("Ctrl+Alt+Delete"));
-        try
-        {
-            Assert.NotEqual(HotkeyClaimStatus.Active, claim.Status);
-            Assert.Contains("Ctrl+Alt+Delete", claim.Error, StringComparison.Ordinal);
-            if (claim.Error.Contains("already in use", StringComparison.Ordinal))
-                Assert.Equal(HotkeyClaimStatus.Taken, claim.Status);
-            else
-                Assert.Equal(HotkeyClaimStatus.Invalid, claim.Status);
-        }
-        finally
-        {
-            registrar.Release(probe);
-        }
+        using var hotkey = new Hotkey(loop);
+        hotkey.Sequence = "Ctrl+Alt+Delete";
 
-        Assert.Equal(0, registrar.RegistrationCount);
-    }
-
-    [Fact]
-    public void Windows_key_installs_a_hook_and_dispose_removes_it()
-    {
-        var loop = new ManualEventLoop();
-        var probe = new Probe(loop);
-        var registrar = new WindowsHotkeyRegistrar(loop);
-        try
-        {
-            var claim = registrar.Claim(probe, Parse("Left Win"));
-            Assert.Equal(HotkeyClaimStatus.Active, claim.Status);
-            Assert.Equal(0, registrar.RegistrationCount);
-            Assert.True(WindowsHotkeyRegistrar.IsHookInstalled);
-        }
-        finally
-        {
-            registrar.Dispose();
-        }
-
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
-
-        registrar = new WindowsHotkeyRegistrar(loop);
-        try
-        {
-            Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
-            Assert.True(WindowsHotkeyRegistrar.IsHookInstalled);
-        }
-        finally
-        {
-            registrar.Dispose();
-        }
-
-        Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
+        Assert.False(hotkey.Active);
+        Assert.Contains("Ctrl+Alt+Delete", hotkey.Error, StringComparison.Ordinal);
+        if (hotkey.Error.Contains("already in use", StringComparison.Ordinal))
+            Assert.True(hotkey.Taken);
+        else
+            Assert.False(hotkey.Taken);
     }
 
     [Fact]
     public void The_keyboard_hook_runs_on_its_own_thread_until_it_is_removed()
     {
         var loop = new ManualEventLoop();
-        var registrar = new WindowsHotkeyRegistrar(loop);
+        var registrar = new HotkeyRegistrar(loop);
         Thread? thread;
         try
         {
             Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
-            thread = WindowsHotkeyRegistrar.InstalledHookThread;
+            thread = KeyboardHook.InstalledThread;
             Assert.NotNull(thread);
             Assert.NotEqual(Environment.CurrentManagedThreadId, thread.ManagedThreadId);
             Assert.True(thread.IsAlive);
@@ -362,17 +289,17 @@ public sealed class HotkeyBookTests : IDisposable
         }
 
         Assert.False(thread!.IsAlive);
-        Assert.Null(WindowsHotkeyRegistrar.InstalledHookThread);
+        Assert.Null(KeyboardHook.InstalledThread);
 
-        registrar = new WindowsHotkeyRegistrar(loop);
+        registrar = new HotkeyRegistrar(loop);
         try
         {
             Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
-            thread = WindowsHotkeyRegistrar.InstalledHookThread;
+            thread = KeyboardHook.InstalledThread;
             Assert.NotNull(thread);
-            WindowsHotkeyRegistrar.EmergencyUnhook();
+            KeyboardHook.EmergencyUnhook();
             Assert.False(thread.IsAlive);
-            Assert.False(WindowsHotkeyRegistrar.IsHookInstalled);
+            Assert.False(KeyboardHook.IsInstalled);
         }
         finally
         {
@@ -392,22 +319,6 @@ public sealed class HotkeyBookTests : IDisposable
     {
         Assert.True(HotkeySequence.TryParse(text, out var sequence, out var error), error);
         return sequence!;
-    }
-
-    /// <summary>Claims and releases an unused chord so the test can register it. Fails if F21 through F24 are all taken.</summary>
-    private static string ClaimableChord(WindowsHotkeyRegistrar registrar, ManualEventLoop loop)
-    {
-        var probe = new Probe(loop);
-        foreach (var name in new[] { "F24", "F23", "F22", "F21" })
-        {
-            var text = "Ctrl+Alt+Shift+" + name;
-            var claim = registrar.Claim(probe, Parse(text));
-            registrar.Release(probe);
-            if (claim.Status == HotkeyClaimStatus.Active)
-                return text;
-        }
-
-        throw new InvalidOperationException("Ctrl+Alt+Shift+F21 through F24 are already registered.");
     }
 
     private sealed class Probe(IEventLoop loop) : IHotkeyListener

@@ -1,5 +1,3 @@
-using Winshell.Native;
-
 namespace Winshell.Input;
 
 /// <summary>
@@ -16,8 +14,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
 
     private readonly IEventLoop _loop;
     private readonly Log _log;
-    private readonly IHotkeyRegistrar _registrar;
-    private readonly Func<int, bool> _down;
+    private readonly HotkeyRegistrar _registrar;
     private string _sequence = "";
     private bool _enabled = true;
     private bool _active;
@@ -30,20 +27,18 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
     private bool _disposed;
 
     internal Hotkey(IEventLoop loop)
-        : this(loop, Log.Default, WindowsHotkeyRegistrar.For(loop))
+        : this(loop, Log.Default, HotkeyRegistrar.For(loop))
     {
     }
 
     /// <param name="loop">The loop the hotkey lives on.</param>
     /// <param name="log">Where a hotkey that is not active is reported.</param>
-    /// <param name="registrar">Claims the keys from Windows.</param>
-    /// <param name="down">Whether a virtual key is down. Tests substitute it so the real keyboard is not read.</param>
-    internal Hotkey(IEventLoop loop, Log log, IHotkeyRegistrar registrar, Func<int, bool>? down = null)
+    /// <param name="registrar">Claims the keys, and reads whether a key is down.</param>
+    internal Hotkey(IEventLoop loop, Log log, HotkeyRegistrar registrar)
     {
         _loop = loop;
         _log = log;
         _registrar = registrar;
-        _down = down ?? (static virtualKey => Win32.GetAsyncKeyState(virtualKey) < 0);
     }
 
     /// <summary>
@@ -178,21 +173,26 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
         if (chord.IsWinOnly)
             return chord.Side switch
             {
-                WinKeySide.Left => _down(VirtualKeys.LeftWin),
-                WinKeySide.Right => _down(VirtualKeys.RightWin),
-                _ => _down(VirtualKeys.LeftWin) || _down(VirtualKeys.RightWin)
+                WinKeySide.Left => Down(VirtualKeys.LeftWin),
+                WinKeySide.Right => Down(VirtualKeys.RightWin),
+                _ => Down(VirtualKeys.LeftWin) || Down(VirtualKeys.RightWin)
             };
-        if (!_down(chord.VirtualKey))
+        if (!Down(chord.VirtualKey))
             return false;
-        if ((chord.Modifiers & HotkeyModifiers.Ctrl) != 0 && !_down(VkControl))
+        if ((chord.Modifiers & HotkeyModifiers.Ctrl) != 0 && !Down(VkControl))
             return false;
-        if ((chord.Modifiers & HotkeyModifiers.Alt) != 0 && !_down(VkMenu))
+        if ((chord.Modifiers & HotkeyModifiers.Alt) != 0 && !Down(VkMenu))
             return false;
-        if ((chord.Modifiers & HotkeyModifiers.Shift) != 0 && !_down(VkShift))
+        if ((chord.Modifiers & HotkeyModifiers.Shift) != 0 && !Down(VkShift))
             return false;
-        if ((chord.Modifiers & HotkeyModifiers.Win) != 0 && !_down(VirtualKeys.LeftWin) && !_down(VirtualKeys.RightWin))
+        if ((chord.Modifiers & HotkeyModifiers.Win) != 0 && !Down(VirtualKeys.LeftWin) && !Down(VirtualKeys.RightWin))
             return false;
         return true;
+    }
+
+    private bool Down(int virtualKey)
+    {
+        return _registrar.IsKeyDown(virtualKey);
     }
 
     /// <summary>Gives the keys back to Windows. No event is raised after this.</summary>
