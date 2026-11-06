@@ -273,6 +273,35 @@ public sealed class StartupRegistryTests : IDisposable
     }
 
     [Fact]
+    public void Adding_a_configuration_stops_the_install_entry_counting_as_this_one()
+    {
+        const string winshell = @"C:\Program Files\Winshell\winshell.exe";
+        const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
+        var conhost = Path.Combine(Environment.SystemDirectory, "conhost.exe");
+        var install = string.Join(' ', new[] { conhost, "--headless", winshell, "--no-build", "--no-duplicate" }
+            .Select(part => part.Any(char.IsWhiteSpace) ? "\"" + part + "\"" : part));
+        // The second read is after another configuration exists, so a bare run no longer starts this one.
+        var answers = new[] { project, (string?)null };
+        var read = 0;
+        var run = _testKey + @"\Run";
+        var registry = new WindowsStartupRegistry(
+            WindowsStartupRegistry.CommandFor(winshell, ["run", "-p", project]), run,
+            bareFolderOf: () => answers[read]);
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
+        }
+
+        var startup = new StartupService(_log, registry);
+        Assert.True(startup.RunAtSignIn);
+
+        read = 1;
+        startup.Refresh();
+        Assert.False(startup.RunAtSignIn);
+        Assert.True(startup.RegisteredElsewhere);
+    }
+
+    [Fact]
     public void A_startup_task_turns_on_and_off_without_a_path()
     {
         var task = new FakeStartupTask();

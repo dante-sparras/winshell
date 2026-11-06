@@ -33,7 +33,9 @@ internal sealed class WindowsStartupRegistry(
     string runKey = SignInEntry.RunKey,
     string approvedKey = SignInEntry.ApprovedKey,
     string? bareFolder = null,
-    string? configRoot = null) : IStartupRegistry
+    string? configRoot = null,
+    Func<string?>? bareFolderOf = null,
+    Func<string>? configRootOf = null) : IStartupRegistry
 {
     public string Command => command;
 
@@ -45,7 +47,21 @@ internal sealed class WindowsStartupRegistry(
     public bool PointsElsewhere()
     {
         return Try(() => SignInEntry.RegisteredCommand(runKey) is { } value &&
-                         !SameSignInCommand(value, command, bareFolder, configRoot));
+                         !SameSignInCommand(value, command, BareFolder(), ConfigRoot()));
+    }
+
+    /// <summary>
+    /// The folder a bare <c>winshell run</c> starts, read when the entry is read. A shell stays open across adding a
+    /// configuration, and that changes which project the installer's command starts.
+    /// </summary>
+    private string? BareFolder()
+    {
+        return bareFolderOf is null ? bareFolder : bareFolderOf();
+    }
+
+    private string? ConfigRoot()
+    {
+        return configRootOf is null ? configRoot : configRootOf();
     }
 
     public bool TurnedOffInWindows()
