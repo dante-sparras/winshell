@@ -54,32 +54,14 @@ internal static class RunCommand
         }
 
         // -d leaves the program to a child that supervises it. The build is done, and its errors were in this console.
+        // The child runs the tokens Parse kept, so a -d that is the value of -c or -p is not dropped.
         if (options.Daemonize)
-        {
-            var childArgs = ChildArguments(originalArgs);
-            if (!options.NoBuild)
-                childArgs.Insert(0, "--no-build");
-            return Detach(childArgs);
-        }
+            return Detach(options.ChildArguments.ToList());
 
         var program = new ProcessStartInfo(project.Program) { UseShellExecute = false };
         foreach (var a in ProgramArguments(options))
             program.ArgumentList.Add(a);
         return Supervise(program, project);
-    }
-
-    /// <summary>
-    /// This program's arguments for another <c>winshell.exe</c> that runs the shell, without <c>-d</c>. A bare
-    /// <c>winshellw.exe</c> runs a shell, but a bare child of <c>winshell.exe</c> would print help, so it gets the run command.
-    /// </summary>
-    private static List<string> ChildArguments(string[] originalArgs)
-    {
-        // Words after -- are the program's, and keep a -d of theirs.
-        var options = Array.IndexOf(originalArgs, "--") is var end and >= 0 ? end : originalArgs.Length;
-        var childArgs = originalArgs.Where((a, i) => i >= options || a is not ("-d" or "--daemonize")).ToList();
-        if (CliParser.FirstCommand([.. childArgs]) is null)
-            childArgs.Insert(0, "run");
-        return childArgs;
     }
 
     /// <summary>Starts <c>winshell.exe</c> again with <paramref name="childArgs"/>, and returns at once. The child supervises the shell.</summary>

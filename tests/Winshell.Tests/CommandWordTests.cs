@@ -100,6 +100,20 @@ public class CommandWordTests
         Assert.True(CliParser.Parse(["help"]).ShowHelp);
     }
 
+    [Fact]
+    public void Help_fills_in_the_version_and_the_config_folder()
+    {
+        var summary = CliParser.Help(null);
+        var doctor = CliParser.Help("doctor");
+
+        Assert.Contains(CliMetadata.Version, summary, StringComparison.Ordinal);
+        Assert.Contains(ConfigPaths.Root(), summary, StringComparison.Ordinal);
+        Assert.Contains(ConfigPaths.OverrideVariable, summary, StringComparison.Ordinal);
+        Assert.Contains(ConfigPaths.Root(), doctor, StringComparison.Ordinal);
+        Assert.DoesNotContain("{version}", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("{config-root}", doctor, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("help foo", "Unknown command \"foo\". Run winshell --help.")]
     [InlineData("help kill log", "Unexpected argument \"log\".")]

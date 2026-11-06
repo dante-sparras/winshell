@@ -46,4 +46,10 @@ internal sealed record CliOptions
 
     /// <summary>The <c>--</c> and everything after it. Those words belong to the configuration's program.</summary>
     public ImmutableArray<string> Rest { get; init; } = [];
+
+    /// <summary>
+    /// Arguments for the background <c>winshell</c> that <c>-d</c> leaves behind. The daemonize flag is gone, and a
+    /// <c>-d</c> that is the value of <c>-c</c> or <c>-p</c> is still there. Empty when this command does not daemonize.
+    /// </summary>
+    public ImmutableArray<string> ChildArguments { get; init; } = [];
 }
