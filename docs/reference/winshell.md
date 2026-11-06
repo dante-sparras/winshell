@@ -72,7 +72,6 @@ The thread the shell's objects live on. Work from other threads is posted to it.
 | --- | --- | --- |
 | `Now` | TimeSpan, read-only | Time since the loop started, for timers and animations. |
 | `Post(Action action)` | void | Runs the action on the loop's thread. Safe to call from any thread. |
-| `RequestFrame(Action action)` | void | Runs the action before the next frame is drawn, once per request. |
 | `Schedule(TimeSpan delay, Action action)` | IDisposable | Runs the action once after the delay, on the loop's thread. Dispose to cancel. |
 
 ## IpcException

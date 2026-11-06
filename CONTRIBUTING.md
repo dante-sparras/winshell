@@ -9,9 +9,9 @@ Every new or changed test passes the authoring gate of the `test-audit` skill, w
 | Project | Owns |
 | --- | --- |
 | `Winshell.Architecture.Tests` | The boundaries of [the architecture](docs/architecture.md#architecture-proof): layers, feature backends, and no hand-written unsafe code in WinUI projects |
-| `Winshell.Core.Tests` | The shared infrastructure: the event loop, the log, TOML files, crash reports and file helpers |
-| `Winshell.Services.Tests` | A service against a fake of its Windows backend, on a real `EventQueue` |
-| `Winshell.Shell.Tests` | A real shell with real windows |
+| `Winshell.Core.Tests` | The shared infrastructure: the log, TOML files, crash reports and file helpers |
+| `Winshell.Services.Tests` | A service against a fake of its Windows backend, on the test event loop |
+| `Winshell.Shell.Tests` | A real shell with real windows, and the event-loop contract on the test loop and `DispatcherLoop` |
 | `Winshell.Tests` | `winshell.exe` and shell programs as separate processes |
 | `Winshell.Package.Tests` | The packed library and template, `Category=Package` |
 

@@ -267,11 +267,6 @@ public sealed class SessionServiceTests
         {
             throw new NotSupportedException();
         }
-
-        public void RequestFrame(Action action)
-        {
-            throw new NotSupportedException();
-        }
     }
 
     private sealed class FakeSessionBackend(bool accepts) : ISessionBackend
