@@ -30,17 +30,15 @@ public sealed class DevCommandTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_dir, "config"));
         Directory.CreateDirectory(Path.Combine(_dir, "local"));
         File.Copy(Path.Combine(Repo.Root, "global.json"), Path.Combine(Project, "global.json"));
+        var props = Path.Combine(Repo.Root, "src", "Winshell.Package", "buildTransitive", "Winshell.props");
         File.WriteAllText(Path.Combine(Project, "Dev.csproj"), $"""
                                                                 <Project Sdk="Microsoft.NET.Sdk">
+                                                                  <Import Project="{props}" />
                                                                   <PropertyGroup>
                                                                     <OutputType>WinExe</OutputType>
                                                                     <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
-                                                                    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
                                                                     <ImplicitUsings>enable</ImplicitUsings>
                                                                     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-                                                                    <UseWinUI>true</UseWinUI>
-                                                                    <WindowsPackageType>None</WindowsPackageType>
-                                                                    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
                                                                     <SelfContained>true</SelfContained>
                                                                     <AssemblyName>Dev</AssemblyName>
                                                                   </PropertyGroup>

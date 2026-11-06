@@ -24,6 +24,14 @@
     <PackageReference Include="Vortice.DXGI" />
   </ItemGroup>
 
+  <!-- A configuration imports this after restore. IncludeBuildOutput is false, so it is packed as a file. -->
+  <ItemGroup>
+    <None Update="buildTransitive\Winshell.props">
+      <Pack>true</Pack>
+      <PackagePath>buildTransitive/Winshell.props</PackagePath>
+    </None>
+  </ItemGroup>
+
   <!-- Private so the package does not depend on separate Winshell module packages. The assemblies are included below. -->
   <ItemGroup>
     <ProjectReference Include="..\Winshell.Native\Winshell.Native.csproj" PrivateAssets="all" />

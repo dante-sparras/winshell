@@ -284,6 +284,7 @@ public sealed class PackedTemplates : IDisposable
         var names = zip.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
         Assert.Equal(libraries,
             names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+        AssertProps(zip, packageDir);
 
         var extracted = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(extracted);
@@ -315,6 +316,19 @@ public sealed class PackedTemplates : IDisposable
         Assert.Equal(declared, dependencies.Keys.Order(StringComparer.OrdinalIgnoreCase));
         foreach (var id in declared)
             Assert.Equal(pinned[id], dependencies[id]);
+    }
+
+    private static void AssertProps(ZipArchive zip, string packageDir)
+    {
+        const string path = "buildTransitive/Winshell.props";
+        var entry = zip.GetEntry(path);
+        Assert.NotNull(entry);
+        using var stream = entry.Open();
+        using var reader = new StreamReader(stream);
+        var packed = reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
+        var source = File.ReadAllText(Path.Combine(packageDir, "buildTransitive", "Winshell.props"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Equal(source, packed);
     }
 
     private static string InformationalVersion(string path)
