@@ -170,9 +170,10 @@ public sealed class TomlLimitsTests
             {
                 var blocked = TomlDocument.Load(bad);
                 Assert.Equal(TomlRead.Unreadable, blocked.Kind);
-                Assert.Equal(
-                    $"The process cannot access the file '{bad}' because it is being used by another process.",
-                    blocked.Message);
+                Assert.Equal(0, blocked.Line);
+                Assert.Equal(0, blocked.Column);
+                Assert.Contains("bad.toml", blocked.Message, StringComparison.Ordinal);
+                Assert.Equal($"{bad}: {blocked.Message}", blocked.Describe(bad));
             }
 
             var withMark = new byte[] { 0xEF, 0xBB, 0xBF };
