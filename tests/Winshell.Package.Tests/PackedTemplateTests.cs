@@ -263,22 +263,30 @@ public sealed class PackedTemplates : IDisposable
 
     private static void AssertPackage(string nupkg, string version)
     {
+        var packageProject = XDocument.Load(Path.Combine(Repo(), "src", "Winshell.Package", "Winshell.Package.csproj"));
+        var lib = "lib/" + packageProject.Descendants("TargetFramework").Single().Value + "/";
+        var libraries = packageProject.Descendants("ProjectReference")
+            .Select(reference => lib + Path.GetFileNameWithoutExtension(reference.Attribute("Include")!.Value) + ".dll")
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
         using var zip = ZipFile.OpenRead(nupkg);
         var names = zip.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
-        var lib = "lib/net10.0-windows10.0.22621.0/";
-        Assert.Equal(
-        [
-            lib + "Winshell.Core.dll", lib + "Winshell.Native.dll", lib + "Winshell.Services.dll",
-            lib + "Winshell.Shell.dll"
-        ], names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order());
+        Assert.Equal(libraries,
+            names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
 
-        var services = zip.GetEntry(lib + "Winshell.Services.dll")!;
         var extracted = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(extracted);
-        var dll = Path.Combine(extracted, "Winshell.Services.dll");
-        services.ExtractToFile(dll);
-        Assert.Equal(version, InformationalVersion(dll));
-        Assert.False(IsPublic(dll, "Winshell", "ConfigurationProject"));
+        foreach (var library in libraries)
+        {
+            var dll = Path.Combine(extracted, Path.GetFileName(library));
+            zip.GetEntry(library)!.ExtractToFile(dll);
+            Assert.Equal(version, InformationalVersion(dll));
+            // ConfigurationProject stays internal. It lives in Services, so that assembly is the one to read.
+            if (Path.GetFileName(library) == "Winshell.Services.dll")
+                Assert.False(IsPublic(dll, "Winshell", "ConfigurationProject"));
+        }
+
         Directory.Delete(extracted, true);
 
         var nuspec =
@@ -290,14 +298,13 @@ public sealed class PackedTemplates : IDisposable
         var pinned = XDocument.Load(Path.Combine(Repo(), "Directory.Packages.props")).Descendants("PackageVersion")
             .ToDictionary(element => element.Attribute("Include")!.Value,
                 element => element.Attribute("Version")!.Value);
-        Assert.Equal(pinned["Microsoft.WindowsAppSDK.WinUI"], dependencies["Microsoft.WindowsAppSDK.WinUI"]);
-        Assert.Equal(pinned["Microsoft.WindowsAppSDK.Foundation"], dependencies["Microsoft.WindowsAppSDK.Foundation"]);
-        Assert.Equal(
-            [
-                "Microsoft.Win32.SystemEvents", "Microsoft.WindowsAppSDK.Foundation", "Microsoft.WindowsAppSDK.WinUI",
-                "System.Management", "Tomlyn", "Vortice.Direct3D11", "Vortice.DXGI"
-            ],
-            dependencies.Keys.Order(StringComparer.OrdinalIgnoreCase));
+        var declared = packageProject.Descendants("PackageReference")
+            .Select(reference => reference.Attribute("Include")!.Value)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Assert.Equal(declared, dependencies.Keys.Order(StringComparer.OrdinalIgnoreCase));
+        foreach (var id in declared)
+            Assert.Equal(pinned[id], dependencies[id]);
     }
 
     private static string InformationalVersion(string path)
