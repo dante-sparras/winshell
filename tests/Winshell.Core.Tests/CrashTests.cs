@@ -131,20 +131,4 @@ public sealed class CrashTests : IDisposable
     {
         return $"crash-{utc.ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-1-{slug}.txt";
     }
-
-    [Fact]
-    public void Work_that_throws_on_the_loop_is_logged_and_raised_and_the_loop_goes_on()
-    {
-        var loop = new ManualEventLoop { Log = new Log { Sink = (_, _, _) => { } } };
-        var failed = new List<Exception>();
-        loop.Failed += failed.Add;
-        var ran = false;
-
-        loop.Post(() => throw new InvalidOperationException("posted"));
-        loop.Post(() => ran = true);
-        loop.Process();
-
-        Assert.Equal("posted", Assert.Single(failed).Message);
-        Assert.True(ran);
-    }
 }

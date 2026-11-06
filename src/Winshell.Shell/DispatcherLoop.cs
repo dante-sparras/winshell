@@ -48,11 +48,6 @@ internal sealed class DispatcherLoop(DispatcherQueue queue, Log log) : IEventLoo
         }
     }
 
-    public void RequestFrame(Action action)
-    {
-        queue.TryEnqueue(DispatcherQueuePriority.Low, () => Run(action));
-    }
-
     private void Run(Action action)
     {
         try

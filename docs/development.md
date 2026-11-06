@@ -353,15 +353,15 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 │   ├── BannedSymbols.txt            # Clock calls that don't build; time comes through a TimeProvider
 │   ├── Winshell/                    # winshell.exe: the CLI, which builds and supervises a configuration
 │   ├── Winshell.Native/             # Shared Win32/COM declarations, process/hook support and session locking; migration in progress
-│   ├── Winshell.Core/               # The event loop, the log, ObservableObject, TOML files, crash reports, and the file helpers they use
+│   ├── Winshell.Core/               # The event loop contract, the log, ObservableObject, TOML files, crash reports, and the file helpers they use
 │   ├── Winshell.Services/           # Windows services, instances, and the control pipe
 │   ├── Winshell.Shell/              # Shell.Run and WinUI windows
 │   └── Winshell.Package/            # Packs Native, Core, Services and Shell as the single Winshell package
 ├── tests/
 │   ├── Winshell.Architecture.Tests/ # The layer and feature backend boundaries, and no hand-written unsafe code in WinUI projects
-│   ├── Winshell.Core.Tests/         # The shared infrastructure: the event loop, the log, TOML files, crash reports and file helpers
+│   ├── Winshell.Core.Tests/         # The log, TOML files, crash reports and file helpers
 │   ├── Winshell.Services.Tests/     # The services, with no window
-│   ├── Winshell.Shell.Tests/        # Boots a real shell and opens real windows
+│   ├── Winshell.Shell.Tests/        # Boots a real shell, opens real windows, and proves the event-loop contract
 │   ├── Winshell.Tests/              # Runs winshell.exe instances side by side
 │   ├── Winshell.Package.Tests/      # Packs the template and runs its shell; Category=Package, left out of the main run
 │   ├── Scripts/                     # PowerShell tooling tests and their fixtures

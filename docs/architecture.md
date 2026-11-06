@@ -15,9 +15,9 @@ A project may reference a lower layer directly when it needs that layer's contra
 | Owner | Responsibility |
 | --- | --- |
 | `Winshell.Native` | Native declarations, COM contracts, unsafe interop, marshaling, native resource ownership and safe managed operations. |
-| `Winshell.Core` | `IEventLoop`/`EventQueue`, `Log`, `ObservableObject`, TOML and Crashes, with the file and version helpers they use. Shared infrastructure has no dependency on a service feature or WinUI. |
+| `Winshell.Core` | `IEventLoop`, `Log`, `ObservableObject`, TOML and Crashes, with the file and version helpers they use. Shared infrastructure has no dependency on a service feature or WinUI. |
 | `Winshell.Services` | One assembly of feature folders. Services apply policy and publish state on the event loop; feature backends perform platform work. |
-| `Winshell.Shell` | WinUI hosting, window lifecycle and composition through the existing public Shell API. |
+| `Winshell.Shell` | WinUI hosting, the production event loop, window lifecycle and composition through the existing public Shell API. |
 | CLI (`src/Winshell`) | Commands, configuration builds and shell process supervision. |
 
 Keep the existing public Shell API. Moving an implementation does not justify compatibility shims, forwarding assemblies or duplicate implementations. Keep shared infrastructure in Core and feature policy in its owning Services folder.
@@ -42,7 +42,7 @@ Services remains one assembly. Each feature folder owns its `I*Backend` seam and
 
 Only a feature may consume its own backend contracts and implementations. Another feature uses the service's managed contract, events or shared Core infrastructure. It must not construct, resolve, reference or call a neighboring feature's backend. Composition belongs with the feature that owns the backend.
 
-Test service policy against fake backends on a real `EventQueue`. Fakes supply platform results and signals; the real service supplies the behavior under test. Keep tests that own distinct platform, transport or lifecycle contracts. Preserve assertion strength when moving tests to their new owner.
+Test service policy against fake backends on the test event loop in `tests/TestSupport` (`ManualEventLoop`, or `EventQueue` when the test pumps posted work itself). Fakes supply platform results and signals; the real service supplies the behavior under test. Keep tests that own distinct platform, transport or lifecycle contracts. Preserve assertion strength when moving tests to their new owner.
 
 Media keeps one type per job, the split from #1102. `ISmtcLink` (#1306) stays the seam `SmtcSession` uses to reach Windows' session.
 
