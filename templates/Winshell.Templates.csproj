@@ -23,42 +23,21 @@
     <Compile Include="TemplatePackage.cs" />
   </ItemGroup>
 
-  <Target Name="StageTemplates" BeforeTargets="_GetPackageFiles">
+  <!-- Pack the template where it lives. Only MyShell.csproj is written into obj, with the package version stamped in.
+       Property functions cannot write a file. WriteLinesToFile splits on ';' and would expand $(...) in the project,
+       so the text is escaped first: % then $ then ;. -->
+  <Target Name="StampTemplateProject" BeforeTargets="_GetPackageFiles">
     <PropertyGroup>
-      <_Stage>$(IntermediateOutputPath)stage\</_Stage>
+      <_TemplateSource>$(MSBuildThisFileDirectory)winshell\MyShell.csproj</_TemplateSource>
+      <_StampedProject>$(IntermediateOutputPath)MyShell.csproj</_StampedProject>
+      <_StampedText>$([System.IO.File]::ReadAllText('$(_TemplateSource)').Replace('__WINSHELL_VERSION__', '$(Version)').Replace('%', '%25').Replace('$', '%24').Replace(';', '%3B'))</_StampedText>
     </PropertyGroup>
-    <RemoveDir Directories="$(_Stage)" />
+    <WriteLinesToFile File="$(_StampedProject)" Lines="$(_StampedText)" Overwrite="true" />
     <ItemGroup>
-      <_SmallSource Include="$(MSBuildThisFileDirectory)winshell\**\*" />
-      <_SmallSource Remove="$(MSBuildThisFileDirectory)winshell\**\bin\**\*" />
-      <_SmallSource Remove="$(MSBuildThisFileDirectory)winshell\**\obj\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_SmallSource)" DestinationFiles="@(_SmallSource->'$(_Stage)winshell\%(RecursiveDir)%(Filename)%(Extension)')" />
-    <ItemGroup>
-      <_Versioned Include="$(_Stage)winshell\MyShell.csproj" />
-    </ItemGroup>
-    <StampTemplateVersion Version="$(Version)" Files="@(_Versioned)" />
-    <ItemGroup>
-      <_Staged Include="$(_Stage)**\*" />
-      <Content Include="@(_Staged)" Pack="true" PackagePath="content\%(RecursiveDir)%(Filename)%(Extension)" />
+      <_TemplateContent Include="$(MSBuildThisFileDirectory)winshell\**\*"
+                        Exclude="$(MSBuildThisFileDirectory)winshell\MyShell.csproj;$(MSBuildThisFileDirectory)winshell\**\bin\**\*;$(MSBuildThisFileDirectory)winshell\**\obj\**\*" />
+      <Content Include="@(_TemplateContent)" Pack="true" PackagePath="content\winshell\%(RecursiveDir)%(Filename)%(Extension)" />
+      <Content Include="$(_StampedProject)" Pack="true" PackagePath="content\winshell\MyShell.csproj" />
     </ItemGroup>
   </Target>
-
-  <UsingTask TaskName="StampTemplateVersion" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
-    <ParameterGroup>
-      <Version ParameterType="System.String" Required="true" />
-      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
-    </ParameterGroup>
-    <Task>
-      <Using Namespace="System.IO" />
-      <Code Type="Fragment" Language="cs"><![CDATA[
-        foreach (var file in Files)
-        {
-            var path = file.ItemSpec;
-            var text = File.ReadAllText(path).Replace("__WINSHELL_VERSION__", Version);
-            File.WriteAllText(path, text);
-        }
-      ]]></Code>
-    </Task>
-  </UsingTask>
 </Project>
