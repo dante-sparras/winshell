@@ -378,7 +378,7 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
     {
         try
         {
-            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIndex.AppsFolderPrefix + appUserModelId)
+            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIdentity.AppsFolderPath(appUserModelId))
                 { UseShellExecute = true });
             return null;
         }

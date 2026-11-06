@@ -6,10 +6,12 @@ namespace Winshell.Media;
 public sealed class MediaService : ObservableObject, IDisposable
 {
     private readonly IMediaSessions _sessions;
+    private readonly IEventLoop _loop;
     private readonly Log _log;
 
     internal MediaService(IEventLoop loop, Log log, IMediaSessions? sessions = null)
     {
+        _loop = loop;
         _log = log;
         _sessions = sessions ?? SmtcSessions.Get(loop, log);
         Refresh(null);
@@ -22,8 +24,8 @@ public sealed class MediaService : ObservableObject, IDisposable
 
     private void Refresh(SmtcSession? _)
     {
-        Sessions.Sync(_sessions.Sessions, s => s.Native, n => n, n => new MediaSession(n, _log), static (_, _) => { },
-            s => s.Detach());
+        Sessions.Sync(_sessions.Sessions, s => s.Native, n => n, n => new MediaSession(n, _loop, _log),
+            static (_, _) => { }, s => s.Detach());
     }
 
     /// <summary>Stops following the Windows media sessions. The ones in <see cref="Sessions"/> stop updating.</summary>

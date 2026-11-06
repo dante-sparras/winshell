@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using Winshell.Apps;
 using Winshell.Native;
 
 namespace Winshell.Media;
@@ -8,45 +9,27 @@ namespace Winshell.Media;
 internal static class AppDisplayName
 {
     /// <summary>
-    /// The name the Start menu shows for an AppUserModelID, or the program name when it has none. It asks the
-    /// shell and can scan processes, so call it off the UI thread.
+    /// The name the Start menu shows for an AppUserModelID, or else the running program's description, or else
+    /// <see cref="AppIdentity.FallbackName"/>. It asks the shell and can scan processes, so call it off the UI thread.
     /// </summary>
     public static string Find(string appId)
     {
-        var name = StartMenuName(appId);
-        if (string.IsNullOrWhiteSpace(name) && IsProgram(appId))
-            name = ProgramDescription(appId[..^4]);
-        return string.IsNullOrWhiteSpace(name) ? Fallback(appId) : name;
+        var name = appId.Length == 0 ? null : ShellItemName.Find(AppIdentity.AppsFolderPath(appId));
+        if (string.IsNullOrWhiteSpace(name) && AppIdentity.ProgramName(appId) is { } program)
+            name = RunningProgramDescription(program);
+        return string.IsNullOrWhiteSpace(name) ? AppIdentity.FallbackName(appId) : name;
     }
 
-    /// <summary>The exe or app id, before <see cref="Find"/> replaces it.</summary>
-    public static string Fallback(string appId)
-    {
-        return IsProgram(appId) ? appId[..^4] : appId;
-    }
-
-    private static bool IsProgram(string appId)
-    {
-        return appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>The name the Start menu shows for an AppUserModelID.</summary>
-    private static string? StartMenuName(string appId)
-    {
-        return appId.Length == 0 ? null : ShellItemName.Find($"shell:AppsFolder\\{appId}");
-    }
-
-    private static string? ProgramDescription(string processName)
+    private static string? RunningProgramDescription(string processName)
     {
         foreach (var process in Process.GetProcessesByName(processName))
             using (process)
             {
                 try
                 {
-                    var path = process.MainModule?.FileName;
-                    if (path is not null && FileVersionInfo.GetVersionInfo(path).FileDescription is
-                            { Length: > 0 } description)
-                        return description.Trim();
+                    if (process.MainModule?.FileName is { } path &&
+                        AppIdentity.ProgramDescription(path) is { } description)
+                        return description;
                 }
                 catch (Exception e) when (e is Win32Exception or InvalidOperationException)
                 {

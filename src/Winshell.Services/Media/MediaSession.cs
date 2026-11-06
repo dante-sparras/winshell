@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Winshell.Apps;
 using Winshell.Native;
 
 namespace Winshell.Media;
@@ -8,16 +9,16 @@ namespace Winshell.Media;
 public sealed class MediaSession : ObservableObject
 {
     private readonly SmtcSession _session;
+    private readonly IEventLoop _loop;
     private readonly Log _log;
     private bool _canControl;
-    private bool _canSwitchTo;
 
-    internal MediaSession(SmtcSession session, Log log)
+    internal MediaSession(SmtcSession session, IEventLoop loop, Log log)
     {
         _session = session;
+        _loop = loop;
         _log = log;
         _canControl = AcceptsControl();
-        _canSwitchTo = FindCanSwitchTo();
         session.Changed += OnChanged;
         session.Seeked += RefreshPosition;
     }
@@ -51,8 +52,11 @@ public sealed class MediaSession : ObservableObject
     /// <summary>True when the session accepts at least one playback command.</summary>
     public bool CanControl => _canControl;
 
-    /// <summary>True when Windows can bring the app's window forward. It is worked out on each read.</summary>
-    public bool CanSwitchTo => _canSwitchTo = FindCanSwitchTo();
+    /// <summary>
+    /// True when <see cref="SwitchTo"/> knows how to find the app: a Store app, or a program whose
+    /// <see cref="AppId"/> is its file name.
+    /// </summary>
+    public bool CanSwitchTo => AppIdentity.IsPackaged(AppId) || AppIdentity.ProgramName(AppId) is not null;
 
     /// <summary>The name Windows shows for the app.</summary>
     public string AppName => _session.AppName;
@@ -325,24 +329,37 @@ public sealed class MediaSession : ObservableObject
         _session.SetPosition(_session.PositionNow() + offset);
     }
 
-    /// <summary>Brings the app's window forward.</summary>
+    /// <summary>
+    /// Brings the app's window forward. A program's window is looked for off the UI thread, so it comes forward
+    /// a moment later, and a warning is logged when the program has none.
+    /// </summary>
     public void SwitchTo()
     {
-        if (MainWindow() is var window and not 0)
-        {
-            if (Win32.IsIconic(window))
-                Win32.ShowWindow(window, Win32.SW_RESTORE);
-            Win32.SetForegroundWindow(window);
-        }
-        else if (_session.AppId.Contains('!'))
-        {
+        if (AppIdentity.IsPackaged(AppId))
             // A Store app is single-instance: starting it again brings its window forward.
-            Process.Start(new ProcessStartInfo("explorer.exe", $"shell:AppsFolder\\{_session.AppId}"))?.Dispose();
-        }
+            Process.Start(new ProcessStartInfo("explorer.exe", AppIdentity.AppsFolderPath(AppId)))?.Dispose();
+        else if (AppIdentity.ProgramName(AppId) is { } program)
+            _ = Task.Run(() =>
+            {
+                // An exception in this task would be lost, so it is reported on the loop.
+                nint window;
+                try
+                {
+                    window = MainWindow(program);
+                }
+#pragma warning disable CA1031
+                catch (Exception e)
+#pragma warning restore CA1031
+                {
+                    var message = e.Message;
+                    _loop.Post(() => Warn($"Cannot call SwitchTo() on {{0}}: {message}"));
+                    return;
+                }
+
+                _loop.Post(() => Raise(window));
+            });
         else
-        {
             Warn("Cannot call SwitchTo() on {0} because CanSwitchTo is false.");
-        }
     }
 
     /// <summary>Raises a change of <see cref="Position"/>, so a binding reads where playback has got to.</summary>
@@ -365,18 +382,9 @@ public sealed class MediaSession : ObservableObject
                || _session.CanSeek || _session.CanGoNext || _session.CanGoPrevious;
     }
 
-    private bool FindCanSwitchTo()
+    private static nint MainWindow(string program)
     {
-        return _session.AppId.Contains('!') || MainWindow() != 0;
-    }
-
-    /// <summary>The main window of the program behind the session, when its id is a program name.</summary>
-    private nint MainWindow()
-    {
-        var appId = _session.AppId;
-        if (!appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            return 0;
-        foreach (var process in Process.GetProcessesByName(appId[..^4]))
+        foreach (var process in Process.GetProcessesByName(program))
             using (process)
             {
                 if (process.MainWindowHandle != 0)
@@ -384,6 +392,19 @@ public sealed class MediaSession : ObservableObject
             }
 
         return 0;
+    }
+
+    private void Raise(nint window)
+    {
+        if (window == 0)
+        {
+            Warn("Cannot call SwitchTo() on {0} because it has no window.");
+            return;
+        }
+
+        if (Win32.IsIconic(window))
+            Win32.ShowWindow(window, Win32.SW_RESTORE);
+        Win32.SetForegroundWindow(window);
     }
 
     private void Warn(string message)
@@ -398,7 +419,6 @@ public sealed class MediaSession : ObservableObject
         foreach (var name in names)
             Changed(char.ToUpperInvariant(name[0]) + name[1..]);
         Set(ref _canControl, AcceptsControl(), nameof(CanControl));
-        Set(ref _canSwitchTo, FindCanSwitchTo(), nameof(CanSwitchTo));
         if (trackChanged)
             PostTrackChanged?.Invoke();
     }

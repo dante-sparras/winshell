@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
+using Winshell.Apps;
 
 namespace Winshell.Tray;
 
@@ -254,16 +254,9 @@ public sealed class SystemTrayItem : ObservableObject
         Executable = icon.ProgramPath;
         ProcessId = icon.ProcessId;
         Id = Executable.Length > 0 ? Path.GetFileNameWithoutExtension(Executable) : icon.Key;
-        AppName = Id;
-        if (Executable.Length > 0)
-            try
-            {
-                if (FileVersionInfo.GetVersionInfo(Executable).FileDescription is { Length: > 0 } description)
-                    AppName = description;
-            }
-            catch (FileNotFoundException)
-            {
-            }
+        AppName = Executable.Length > 0 && AppIdentity.ProgramDescription(Executable) is { } description
+            ? description
+            : Id;
     }
 
     /// <summary>Raised once, just after the icon is added to <see cref="SystemTray.Items"/>.</summary>

@@ -87,13 +87,11 @@ internal sealed class SmtcSessions : IMediaSessions
                 kept[existing] = true;
                 held[existing].Retarget(incoming[i]);
                 // The shell name arrives after the session. The UI thread does not wait for that lookup.
-                if (_names.Get(ids[i]) is { } name)
-                    held[existing].Rename(name);
+                held[existing].Rename(_names.Get(ids[i]));
                 continue;
             }
 
-            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++,
-                _names.Get(ids[i]) ?? AppDisplayName.Fallback(ids[i]), _time);
+            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, _names.Get(ids[i]), _time);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();

@@ -169,8 +169,6 @@ internal static class AppRank
 /// <summary>Builds the Start menu index and answers find, search, recent, and frequent.</summary>
 internal static class AppIndex
 {
-    public const string AppsFolderPrefix = @"shell:AppsFolder\";
-
     public static string CommandLine(string target, string arguments)
     {
         if (target.Length == 0)
@@ -208,7 +206,7 @@ internal static class AppIndex
         if (display.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) ||
             display.StartsWith("@{", StringComparison.Ordinal))
             return null;
-        var launch = AppsFolderPrefix + id;
+        var launch = AppIdentity.AppsFolderPath(id);
         var text = (description ?? "").Trim();
         return new AppRecord(id, display, text, launch, launch, "", launch, "", id, [], false, true, id);
     }
