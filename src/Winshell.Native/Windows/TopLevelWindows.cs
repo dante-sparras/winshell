@@ -20,33 +20,13 @@ internal static unsafe class TopLevelWindows
     /// <summary>Every top-level window, in z-order from the top.</summary>
     internal static List<nint> List()
     {
-        var windows = new List<nint>();
-        var handle = GCHandle.Alloc(windows);
-        try
-        {
-            Win32.EnumWindows(&Collect, GCHandle.ToIntPtr(handle));
-        }
-        finally
-        {
-            handle.Free();
-        }
-
-        return windows;
+        return Callback.Collect(context => Win32.EnumWindows(&Collect, context));
     }
 
     [UnmanagedCallersOnly]
-    private static int Collect(nint hwnd, nint windows)
+    private static int Collect(nint hwnd, nint context)
     {
-        try
-        {
-            ((List<nint>)GCHandle.FromIntPtr(windows).Target!).Add(hwnd);
-            return 1;
-        }
-        catch (OutOfMemoryException)
-        {
-            // An exception must not reach Windows. Stop with the windows listed so far.
-            return 0;
-        }
+        return Callback.Collected(context, hwnd);
     }
 
     /// <summary>The window's title, cut at <see cref="MaxTitle"/> characters. Empty when it has none.</summary>

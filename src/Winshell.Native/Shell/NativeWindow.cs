@@ -52,9 +52,8 @@ internal delegate nint? WindowMessageHandler(WindowMessage message);
 
 /// <summary>
 /// The one window procedure in Native. A class is registered once, and each window's messages go to its handler on
-/// the thread that made it. The class carries the logo embedded in the program. A handler's exception does not reach
-/// Windows: the message goes to Windows' default handling, so a handler reports its own. <c>WM_NCDESTROY</c> drops
-/// the handler, including a window nobody released.
+/// the thread that made it. The class carries the logo embedded in the program. A message whose handler throws goes
+/// to Windows' default handling. <c>WM_NCDESTROY</c> drops the handler, including a window nobody released.
 /// </summary>
 internal sealed unsafe class NativeWindow
 {
@@ -64,20 +63,24 @@ internal sealed unsafe class NativeWindow
     private static readonly ConcurrentDictionary<string, byte> Registered = new();
 
     private readonly WindowMessageHandler _handler;
+    private readonly Action<Exception> _failed;
 
-    private NativeWindow(nint handle, WindowMessageHandler handler)
+    private NativeWindow(nint handle, WindowMessageHandler handler, Action<Exception> failed)
     {
         Handle = handle;
         _handler = handler;
+        _failed = failed;
     }
 
     /// <summary>The window, or 0 once released or destroyed.</summary>
     internal nint Handle { get; private set; }
 
     /// <summary>Makes a window of <paramref name="className"/>, registered once in the process. Throws when Windows would not.</summary>
-    internal static NativeWindow Create(string className, uint style, uint exStyle, WindowMessageHandler handler)
+    /// <param name="failed">Gets each exception <paramref name="handler"/> throws.</param>
+    internal static NativeWindow Create(string className, uint style, uint exStyle, WindowMessageHandler handler,
+        Action<Exception> failed)
     {
-        return Make(className, style, exStyle, handler, 0, 1)
+        return Make(className, style, exStyle, handler, failed, 0, 1)
                ?? throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
     }
 
@@ -85,15 +88,16 @@ internal sealed unsafe class NativeWindow
     /// Makes a window of <paramref name="className"/>, registered once in the process. Null when Windows would not.
     /// <paramref name="messageOnly"/> keeps it off the desktop: only messages sent to it arrive.
     /// </summary>
+    /// <param name="failed">Gets each exception <paramref name="handler"/> throws.</param>
     internal static NativeWindow? TryCreate(string className, uint style, uint exStyle, WindowMessageHandler handler,
-        bool messageOnly)
+        Action<Exception> failed, bool messageOnly)
     {
         var parent = messageOnly ? Win32.HWND_MESSAGE : 0;
-        return Make(className, style, exStyle, handler, parent, 0);
+        return Make(className, style, exStyle, handler, failed, parent, 0);
     }
 
     private static NativeWindow? Make(string className, uint style, uint exStyle, WindowMessageHandler handler,
-        nint parent, int size)
+        Action<Exception> failed, nint parent, int size)
     {
         if (Registered.TryAdd(className, 0))
             Register(className);
@@ -101,7 +105,7 @@ internal sealed unsafe class NativeWindow
             Win32.GetModuleHandleW(null), 0);
         if (hwnd == 0)
             return null;
-        var window = new NativeWindow(hwnd, handler);
+        var window = new NativeWindow(hwnd, handler, failed);
         Live[hwnd] = window;
         return window;
     }
@@ -165,14 +169,9 @@ internal sealed unsafe class NativeWindow
         if (Live.TryGetValue(hwnd, out var window))
             try
             {
-                if (window._handler(new WindowMessage(msg, wParam, lParam)) is { } result)
+                if (Callback.Run(window._failed, () => window._handler(new WindowMessage(msg, wParam, lParam)), null)
+                    is { } result)
                     return result;
-            }
-#pragma warning disable CA1031
-            // Windows called in; nothing above this frame can catch it.
-            catch (Exception)
-#pragma warning restore CA1031
-            {
             }
             finally
             {

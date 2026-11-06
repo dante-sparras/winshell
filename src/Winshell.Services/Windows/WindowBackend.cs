@@ -153,28 +153,30 @@ internal sealed class WindowBackend : IWindowBackend
             (Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED)
         ];
         foreach (var (min, max) in ranges)
-            if (WinEventHook.Start(min, max, OnWinEvent) is null)
+            if (WinEventHook.Start(min, max, OnWinEvent, Failed) is null)
                 log.Warn("windows",
                     $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
         // window flashes.
-        if (!ShellHookWindow.Start(OnShellHook))
+        if (!ShellHookWindow.Start(OnShellHook, Failed))
             log.Warn("windows",
                 "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
     }
 
+    private static void Failed(Exception e)
+    {
+        Log.Default.Warn("windows", e.Message);
+    }
+
     private void OnShellHook(nint code, nint hwnd)
     {
-        NativeCallback.Guard(Log.Default, "windows", () =>
-        {
-            if (WindowRules.IsFlash(code) && hwnd != 0)
-                Flashed?.Invoke(hwnd);
-        });
+        if (WindowRules.IsFlash(code) && hwnd != 0)
+            Flashed?.Invoke(hwnd);
     }
 
     private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
-        NativeCallback.Guard(Log.Default, "windows", () => WinEvent?.Invoke(eventType, hwnd, idObject, idChild));
+        WinEvent?.Invoke(eventType, hwnd, idObject, idChild);
     }
 
     public TaskbarWindowFacts TaskbarFacts(nint hwnd)

@@ -25,18 +25,23 @@ internal sealed class OutsideClicks : IDisposable
     public OutsideClicks(ShellPlatform platform)
     {
         _platform = platform;
-        _watch = WinEventHook.Start(Win32.EVENT_OBJECT_SHOW, OnWinEvent);
+        _watch = WinEventHook.Start(Win32.EVENT_OBJECT_SHOW, OnWinEvent, Failed);
     }
 
     private void OnWinEvent(uint evt, nint hwnd, int idObject, int idChild)
     {
         if (idObject != 0 || !IsPopupWindow(hwnd))
             return;
-        NativeCallback.Guard(_platform.Log, "shell", () => _platform.Loop.Post(() =>
+        _platform.Loop.Post(() =>
         {
             _flyouts = true;
             Update();
-        }));
+        });
+    }
+
+    private void Failed(Exception e)
+    {
+        _platform.Log.Warn("shell", e.Message);
     }
 
     /// <summary>A flyout's window in this process. The hook sees every process's windows.</summary>
@@ -61,7 +66,7 @@ internal sealed class OutsideClicks : IDisposable
     {
         if (_grabbing.Count > 0 || _flyouts)
         {
-            _mouse ??= LowLevelMouse.Start(OnPress);
+            _mouse ??= LowLevelMouse.Start(OnPress, Failed);
             return;
         }
 
@@ -72,7 +77,7 @@ internal sealed class OutsideClicks : IDisposable
     // This runs on the hook thread, so it only posts the click to the loop.
     private void OnPress(POINT pt)
     {
-        NativeCallback.Guard(_platform.Log, "shell", () => _platform.Loop.Post(() => Click(pt)));
+        _platform.Loop.Post(() => Click(pt));
     }
 
     /// <summary>

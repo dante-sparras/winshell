@@ -46,11 +46,11 @@ internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
     /// <summary>The callback runs once immediately with the current mode, then on each change.</summary>
     private static void Listen()
     {
-        PowerMode.ListenEffective(mode => NativeCallback.Guard(Log.Default, "power", () =>
+        PowerMode.ListenEffective(mode =>
         {
             Volatile.Write(ref _effective, mode);
             Instance.Refresh();
-        }));
+        }, e => Log.Default.Warn("power", e.Message));
     }
 
     protected override Task<PowerModeSnapshot> ReadAsync()

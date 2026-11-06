@@ -17,28 +17,26 @@ internal static unsafe class LowLevelKeyboard
 {
     private static readonly Lock Gate = new();
     private static Slot? Owner;
-    private static Func<HookedKey, bool>? Handler;
 
     /// <summary>
     /// Installs the hook. Null when one is already installed or Windows refused it. Disposing the result removes it.
     /// </summary>
     /// <param name="onKey">
-    /// Runs on the hook thread with each key, and returns true to swallow it. Its exception lets the key through and
-    /// does not reach Windows, so it logs its own.
+    /// Runs on the hook thread with each key, and returns true to swallow it. Its exception lets the key through.
     /// </param>
+    /// <param name="failed">Gets each exception <paramref name="onKey"/> throws, on the hook thread.</param>
     /// <param name="lost">
     /// Runs on the hook thread when that thread ends without the hook being disposed. Windows can also remove the
     /// hook and leave the thread running, and then this does not run.
     /// </param>
-    internal static IDisposable? Start(Func<HookedKey, bool> onKey, Action? lost = null)
+    internal static IDisposable? Start(Func<HookedKey, bool> onKey, Action<Exception> failed, Action? lost = null)
     {
-        var slot = new Slot(lost);
+        var slot = new Slot(onKey, failed, lost);
         lock (Gate)
         {
             if (Owner is not null)
                 return null;
-            Owner = slot;
-            Volatile.Write(ref Handler, onKey);
+            Volatile.Write(ref Owner, slot);
         }
 
         // The procedure can run before Start returns. Do not hold the gate while waiting for the thread.
@@ -48,10 +46,7 @@ internal static unsafe class LowLevelKeyboard
             if (!ReferenceEquals(Owner, slot) || thread is null)
             {
                 if (ReferenceEquals(Owner, slot))
-                {
-                    Owner = null;
-                    Volatile.Write(ref Handler, null);
-                }
+                    Volatile.Write(ref Owner, null);
 
                 thread?.Stop();
                 return null;
@@ -69,8 +64,7 @@ internal static unsafe class LowLevelKeyboard
         {
             if (!ReferenceEquals(Owner, slot))
                 return;
-            Owner = null;
-            Volatile.Write(ref Handler, null);
+            Volatile.Write(ref Owner, null);
             lost = slot.Lost;
         }
 
@@ -80,28 +74,25 @@ internal static unsafe class LowLevelKeyboard
     [UnmanagedCallersOnly]
     private static nint Proc(int code, nint wParam, nint lParam)
     {
-        if (code >= 0 && lParam != 0 && Volatile.Read(ref Handler) is { } handler)
+        if (code >= 0 && lParam != 0 && Volatile.Read(ref Owner) is { } owner)
         {
             var info = (KBDLLHOOKSTRUCT*)lParam;
-            try
-            {
-                if (handler(new HookedKey((int)info->vkCode, (info->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) != 0,
-                        (nint)info->dwExtraInfo)))
-                    return 1;
-            }
-#pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
-            catch (Exception)
-#pragma warning restore CA1031
-            {
-            }
+            var key = new HookedKey((int)info->vkCode, (info->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) != 0,
+                (nint)info->dwExtraInfo);
+            if (Callback.Run(owner.Failed, () => owner.OnKey(key), false))
+                return 1;
         }
 
         return Win32.CallNextHookEx(0, code, wParam, lParam);
     }
 
-    private sealed class Slot(Action? lost) : IDisposable
+    private sealed class Slot(Func<HookedKey, bool> onKey, Action<Exception> failed, Action? lost) : IDisposable
     {
         private HookThread? _thread;
+
+        public Func<HookedKey, bool> OnKey { get; } = onKey;
+
+        public Action<Exception> Failed { get; } = failed;
 
         public Action? Lost { get; } = lost;
 
@@ -118,8 +109,7 @@ internal static unsafe class LowLevelKeyboard
                 if (!ReferenceEquals(Owner, this))
                     return;
                 thread = _thread;
-                Owner = null;
-                Volatile.Write(ref Handler, null);
+                Volatile.Write(ref Owner, null);
             }
 
             thread?.Stop();

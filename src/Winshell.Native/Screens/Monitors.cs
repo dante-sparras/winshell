@@ -10,30 +10,16 @@ internal readonly record struct MonitorInfo(string Device, RECT Bounds, RECT Wor
 /// <summary>Reads the connected monitors from Windows.</summary>
 internal static unsafe class Monitors
 {
-    [ThreadStatic] private static List<nint>? _found;
-
     /// <summary>The handle of every connected monitor, in the order Windows lists them.</summary>
     internal static List<nint> List()
     {
-        var found = new List<nint>();
-        _found = found;
-        try
-        {
-            Win32.EnumDisplayMonitors(0, 0, &Collect, 0);
-        }
-        finally
-        {
-            _found = null;
-        }
-
-        return found;
+        return Callback.Collect(context => Win32.EnumDisplayMonitors(0, 0, &Collect, context));
     }
 
     [UnmanagedCallersOnly]
-    private static int Collect(nint monitor, nint hdc, RECT* rect, nint data)
+    private static int Collect(nint monitor, nint hdc, RECT* rect, nint context)
     {
-        _found?.Add(monitor);
-        return 1;
+        return Callback.Collected(context, monitor);
     }
 
     /// <summary>The monitor's device name and rectangles. False once the monitor is gone.</summary>

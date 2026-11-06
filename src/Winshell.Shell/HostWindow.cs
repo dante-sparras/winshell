@@ -26,7 +26,7 @@ internal sealed class HostWindow : IDisposable
         Focus = new WindowFocus(kind, new HostFocusEffects(this, platform));
         Messages = new HostMessages(this, platform, dismissMenu);
         var (style, exStyle) = Styles(kind);
-        _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage);
+        _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage, Fail);
         Handle = _window.Handle;
         // The handler gets no message until Create returns, and the placement's constructor sends and pumps none, so
         // every part exists before the first message.
@@ -78,17 +78,7 @@ internal sealed class HostWindow : IDisposable
     private nint? OnWindowMessage(WindowMessage message)
     {
         // A window that threw handles nothing more; its client is making another.
-        if (_failed)
-            return null;
-        try
-        {
-            return Messages.OnMessage(message);
-        }
-        catch (Exception e)
-        {
-            Fail(e);
-            return null;
-        }
+        return _failed ? null : Messages.OnMessage(message);
     }
 
     /// <summary>

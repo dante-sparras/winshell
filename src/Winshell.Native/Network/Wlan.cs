@@ -26,6 +26,7 @@ internal static unsafe class Wlan
     private static HANDLE _handle;
     private static bool _opened;
     private static Action? _changed;
+    private static Action<Exception>? _failed;
 
     /// <summary>The wlanapi client handle, opened once for the process. Null when there is no WLAN service.</summary>
     private static HANDLE Handle
@@ -52,11 +53,12 @@ internal static unsafe class Wlan
     }
 
     /// <summary>
-    /// Calls <paramref name="changed"/> on a wlanapi thread when a WLAN connection or scan changes.
-    /// An exception it throws stops here, because it must not reach wlanapi; <paramref name="changed"/> reports its own failures.
+    /// Calls <paramref name="changed"/> on a wlanapi thread when a WLAN connection or scan changes, and hands
+    /// <paramref name="failed"/> each exception it throws.
     /// </summary>
-    internal static void Listen(Action changed)
+    internal static void Listen(Action changed, Action<Exception> failed)
     {
+        _failed = failed;
         _changed = changed;
         var handle = Handle;
         if (handle.IsNull)
@@ -69,15 +71,8 @@ internal static unsafe class Wlan
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static void OnNotification(L2_NOTIFICATION_DATA* data, void* context)
     {
-#pragma warning disable CA1031 // wlanapi called in; nothing above this frame can catch it.
-        try
-        {
-            _changed?.Invoke();
-        }
-        catch (Exception)
-        {
-        }
-#pragma warning restore CA1031
+        if (_changed is { } changed && _failed is { } failed)
+            Callback.Run(failed, changed);
     }
 
     /// <summary>The state of each WLAN interface by its GUID.</summary>

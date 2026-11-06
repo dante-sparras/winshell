@@ -22,11 +22,9 @@ internal sealed class HotkeyTarget : IDisposable
     internal nint Handle { get; }
 
     /// <summary>Makes the window, or returns null when Windows would not.</summary>
-    /// <param name="onHotkey">
-    /// Runs on the window's thread with the id Windows saw pressed. Its exception does not reach Windows, so it logs
-    /// its own.
-    /// </param>
-    internal static HotkeyTarget? Create(Action<int> onHotkey)
+    /// <param name="onHotkey">Runs on the window's thread with the id Windows saw pressed.</param>
+    /// <param name="failed">Gets each exception <paramref name="onHotkey"/> throws.</param>
+    internal static HotkeyTarget? Create(Action<int> onHotkey, Action<Exception> failed)
     {
         var window = NativeWindow.TryCreate(ClassName, 0, 0, message =>
         {
@@ -34,7 +32,7 @@ internal sealed class HotkeyTarget : IDisposable
                 return null;
             onHotkey((int)message.WParam);
             return null;
-        }, true);
+        }, failed, true);
         return window is null ? null : new HotkeyTarget(window);
     }
 
