@@ -88,26 +88,6 @@ public sealed class TomlFileWatchTests
     }
 
     [Fact]
-    public void A_hand_save_that_lands_before_the_replace_is_kept_and_the_assigned_value_goes_into_it()
-    {
-        using var fixture = new TomlFixture("name = \"file\"\n");
-        using var settings = Open(fixture);
-        settings.BeforeReplace = () =>
-        {
-            settings.BeforeReplace = null;
-            File.WriteAllText(fixture.FilePath, "name = \"by hand\"\n");
-        };
-
-        settings.On = false;
-        fixture.Loop.Process();
-
-        Assert.Equal("by hand", settings.Name);
-        Assert.Contains("name = \"by hand\"", fixture.Text, StringComparison.Ordinal);
-        Assert.Contains("on = false", fixture.Text, StringComparison.Ordinal);
-        Assert.Equal([fixture.FilePath], Directory.GetFiles(fixture.Directory));
-    }
-
-    [Fact]
     public void A_hand_save_before_the_watch_is_armed_becomes_the_properties()
     {
         using var fixture = new TomlFixture();

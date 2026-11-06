@@ -104,9 +104,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
         private set => Set(ref _loaded, value);
     }
 
-    /// <summary>Tests only. Runs after the new text is ready and before it replaces the file, so a test can land a hand save.</summary>
-    internal Action? BeforeReplace { get; set; }
-
     /// <summary>Writes the file now, adding the keys it does not have, or making it and its folder when there is none.</summary>
     public void Save()
     {
@@ -223,15 +220,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
     {
         try
         {
-            var destination = AtomicFile.SaveTarget(_path, out var hardLink);
-            if (Path.GetDirectoryName(destination) is { } folder)
-                Directory.CreateDirectory(folder);
-            AtomicFile.DeleteStaleTemps(destination);
-            var written = AtomicFile.Write(destination, next, bom, hardLink, () =>
-            {
-                BeforeReplace?.Invoke();
-                return AtomicFile.HandSaveWins(ReadFile().Text, read, next);
-            });
+            var written = AtomicFile.Save(_path, next, bom, read) == AtomicSave.Saved;
             // A hand save landed during this write. The next pass reads it and writes the assigned values into it.
             if (!written)
                 PostWrite();

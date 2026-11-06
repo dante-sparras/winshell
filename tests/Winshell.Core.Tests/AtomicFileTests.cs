@@ -6,40 +6,29 @@ public sealed class AtomicFileTests
     [Fact]
     public void A_hand_save_wins_only_when_the_disk_matches_neither_side_of_the_write()
     {
-        Assert.False(AtomicFile.HandSaveWins(null, "a", "b"));
-        Assert.False(AtomicFile.HandSaveWins("a", "a", "b"));
-        Assert.False(AtomicFile.HandSaveWins("b", "a", "b"));
-        Assert.True(AtomicFile.HandSaveWins("c", "a", "b"));
-        Assert.True(AtomicFile.HandSaveWins("c", null, "b"));
-    }
-
-    [Fact]
-    public void A_hand_save_that_lands_before_the_replace_is_not_overwritten()
-    {
-        var dir = Directory.CreateTempSubdirectory("winshell-atomic-");
-        var path = Path.Combine(dir.FullName, "settings.toml");
-        const string Hand = "name = \"by hand\"\n";
-        File.WriteAllText(path, "name = \"file\"\n");
-        var diskAtStart = File.ReadAllText(path);
+        using var dir = Temp();
+        var path = Path.Combine(dir.Path, "settings.toml");
         const string Incoming = "name = \"file\"\non = false\n";
-        try
-        {
-            var wrote = AtomicFile.Write(path, Incoming, false, false, () =>
-            {
-                File.WriteAllText(path, Hand);
-                return AtomicFile.HandSaveWins(File.ReadAllText(path), diskAtStart, Incoming);
-            });
+        const string Read = "name = \"file\"\n";
+        const string Hand = "name = \"by hand\"\n";
 
-            Assert.False(wrote);
-            var text = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
-            Assert.Equal(Hand, text);
-            Assert.False(File.Exists(path + ".tmp-" + Environment.ProcessId));
-            Assert.Empty(Directory.GetFiles(dir.FullName, "settings.toml.tmp-*"));
-        }
-        finally
-        {
-            dir.Delete(true);
-        }
+        Assert.Equal(AtomicSave.Saved, AtomicFile.Save(path, Incoming, false, null));
+        Assert.Equal(Incoming, Text(path));
+
+        File.WriteAllText(path, Read);
+        Assert.Equal(AtomicSave.Saved, AtomicFile.Save(path, Incoming, false, Text(path)));
+        Assert.Equal(Incoming, Text(path));
+
+        Assert.Equal(AtomicSave.Saved, AtomicFile.Save(path, Incoming, false, Read));
+        Assert.Equal(Incoming, Text(path));
+
+        File.WriteAllText(path, Hand);
+        Assert.Equal(AtomicSave.HandSaveWon, AtomicFile.Save(path, Incoming, false, Read));
+        Assert.Equal(Hand, Text(path));
+        Assert.Empty(Directory.GetFiles(dir.Path, "settings.toml.tmp-*"));
+
+        Assert.Equal(AtomicSave.HandSaveWon, AtomicFile.Save(path, Incoming, false, null));
+        Assert.Equal(Hand, Text(path));
     }
 
     [Fact]
@@ -62,7 +51,7 @@ public sealed class AtomicFileTests
         File.WriteAllText(junk, "junk");
         try
         {
-            AtomicFile.DeleteStaleTemps(path);
+            Assert.Equal(AtomicSave.Saved, AtomicFile.Save(path, "kept\n", false, null));
 
             Assert.False(File.Exists(dead));
             Assert.False(File.Exists(deadGuid));
@@ -91,8 +80,6 @@ public sealed class AtomicFileTests
 
             Assert.Contains(text, File.ReadAllText(real), StringComparison.Ordinal);
             Assert.Contains(text, File.ReadAllText(link), StringComparison.Ordinal);
-            Assert.True(AtomicFile.SaveTarget(link, out var hardLink).Length > 0);
-            Assert.True(hardLink);
         }
     }
 
@@ -120,8 +107,13 @@ public sealed class AtomicFileTests
 
     private static bool Save(string path, string text)
     {
-        var target = AtomicFile.SaveTarget(path, out var hardLink);
-        return AtomicFile.Write(target, text, false, hardLink, () => false);
+        var expected = File.Exists(path) ? File.ReadAllText(path) : null;
+        return AtomicFile.Save(path, text, false, expected) == AtomicSave.Saved;
+    }
+
+    private static string Text(string path)
+    {
+        return File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
     private static TempDirectory Temp()
