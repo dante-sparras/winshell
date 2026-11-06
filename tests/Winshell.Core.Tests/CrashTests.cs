@@ -5,6 +5,9 @@ namespace Winshell.Core.Tests;
 /// <summary>Crash reports. Every report goes to a temp folder this class creates.</summary>
 public sealed class CrashTests : IDisposable
 {
+    /// <summary>How many reports the folder keeps, as docs/development.md says.</summary>
+    private const int Keep = 50;
+
     private readonly string _folder =
         Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
 
@@ -32,8 +35,8 @@ public sealed class CrashTests : IDisposable
         Directory.CreateDirectory(_folder);
         var log = Path.Combine(_folder, "log.txt");
         File.WriteAllLines(log, Enumerable.Range(1, 100).Select(i => $"12:00:00.000  INFO window: line {i}"));
-        var crashes = new CrashReports(Path.Combine(_folder, "crashes"))
-            { ShellId = "my-shell", ConfigPath = @"C:\config\MyShell.exe", LogPath = log };
+        var crashes = new CrashReports(Path.Combine(_folder, "crashes"), shellId: "my-shell",
+            configPath: @"C:\config\MyShell.exe", logPath: log);
         CrashReport? raised = null;
         crashes.Written += r => raised = r;
 
@@ -80,12 +83,13 @@ public sealed class CrashTests : IDisposable
     [Fact]
     public void The_folder_keeps_the_newest_reports()
     {
-        var crashes = new CrashReports(_folder) { Keep = 3 };
-        var paths = Enumerable.Range(1, 5).Select(i => crashes.Write($"report {i}", Thrown("x"))!.Path).ToList();
+        var crashes = new CrashReports(_folder);
+        var paths = Enumerable.Range(1, Keep + 2)
+            .Select(i => crashes.Write($"report {i}", Thrown("x"))!.Path).ToList();
 
         var kept = Directory.GetFiles(_folder).Order(StringComparer.Ordinal).ToList();
 
-        Assert.Equal(paths.TakeLast(3).Order(StringComparer.Ordinal), kept);
+        Assert.Equal(paths.TakeLast(Keep).Order(StringComparer.Ordinal), kept);
     }
 
     [Fact]

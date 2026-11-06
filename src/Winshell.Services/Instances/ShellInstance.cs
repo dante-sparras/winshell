@@ -15,22 +15,24 @@ internal sealed class ShellInstance
     private readonly object _logGate = new();
     private readonly InstanceLog _file;
     private readonly string _dir;
+    private readonly string _shellId;
     private readonly string _configPath;
     private NamedPipeServerStream? _listening;
     private IpcServer? _server;
     private bool _logClosed;
     private Exception? _fatal;
 
-    private ShellInstance(string id, string dir, string configPath, Log log)
+    private ShellInstance(string id, string dir, string shellId, string configPath, Log log)
     {
         Id = id;
         _dir = dir;
+        _shellId = shellId;
         _configPath = configPath;
         Log = log;
         LogPath = Path.Combine(dir, "log.txt");
         Pipe = $"winshell-{id}";
         _file = new InstanceLog(LogPath);
-        Crashes = new CrashReports(ShellLocations.CrashRoot) { ConfigPath = configPath, LogPath = LogPath, Log = log };
+        Crashes = new CrashReports(ShellLocations.CrashRoot, log, shellId, configPath, LogPath);
     }
 
     public string Id { get; }
@@ -54,13 +56,13 @@ internal sealed class ShellInstance
     /// Makes this process's folder and log, and reports crashes from here on. <paramref name="log"/> writes to that
     /// log from now on. <paramref name="configPath"/> is what <c>winshell list</c> shows as the configuration.
     /// </summary>
-    public static ShellInstance Open(string configPath, Log log, bool verbose = false)
+    public static ShellInstance Open(string shellId, string configPath, Log log, bool verbose = false)
     {
         Instances.Clean();
         var id = Instances.NewId();
         var dir = Instances.DirOf(id);
         Directory.CreateDirectory(dir);
-        var instance = new ShellInstance(id, dir, configPath, log);
+        var instance = new ShellInstance(id, dir, shellId, configPath, log);
         // Objects with no engine log through Log.Default. That is this process's log.
         log.MinimumLevel = verbose ? LogLevel.Debug : LogLevel.Info;
         log.Sink = instance.WriteLog;
@@ -112,7 +114,7 @@ internal sealed class ShellInstance
     }
 
     /// <summary>Writes the record, after which <c>winshell list</c> shows this process.</summary>
-    public void Publish(string shellId)
+    public void Publish()
     {
         // What the startup logged lands first, so a listed shell always has a log to show.
         _file.Flush();
@@ -120,7 +122,7 @@ internal sealed class ShellInstance
         Instances.Write(new InstanceInfo(
             Id,
             Environment.ProcessId,
-            shellId,
+            _shellId,
             _configPath,
             TimeProvider.System.GetLocalNow().LocalDateTime,
             Pipe,

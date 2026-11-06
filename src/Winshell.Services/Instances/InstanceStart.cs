@@ -96,7 +96,7 @@ internal sealed class InstanceSession
     public void Serve(IEventLoop loop, IInstanceControl control, Action? dismissNotice = null)
     {
         Instance.Listen(loop, control, dismissNotice);
-        Instance.Publish(Identity.ShellId);
+        Instance.Publish();
     }
 }
 
@@ -144,8 +144,7 @@ internal static class InstanceStart
         if (arguments.NoDuplicate && !duplicate.Acquired)
             return InstanceResult.Duplicate;
 
-        var instance = ShellInstance.Open(launch.Program, launch.Log, arguments.Verbose);
-        instance.Crashes.ShellId = identity.ShellId;
+        var instance = ShellInstance.Open(identity.ShellId, launch.Program, launch.Log, arguments.Verbose);
         launch.Prepare?.Invoke(instance);
         launch.Log.Info("shell",
             $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{launch.Program}\"");

@@ -160,6 +160,12 @@ internal sealed partial class TomlDocument
         return TomlLoad.Parsed(new TomlDocument(path, syntax, table), text, bom);
     }
 
+    /// <summary>A document with nothing in it, for a file that does not exist yet. <paramref name="where"/> is its path.</summary>
+    public static TomlDocument Empty(string where)
+    {
+        return new TomlDocument(where, new DocumentSyntax(), []);
+    }
+
     /// <summary><c>path[line:column]</c> of where <paramref name="key"/> is first defined, or the path when it is not.</summary>
     public string LocationOf(string key)
     {
