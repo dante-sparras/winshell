@@ -6,14 +6,6 @@ namespace Winshell.Native;
 internal static class DisplayDevice
 {
     /// <summary>
-    /// The device ID of the monitor on a display such as <c>\\.\DISPLAY1</c>, or "" when Windows has none.
-    /// </summary>
-    internal static string MonitorId(string deviceName)
-    {
-        return Monitor(deviceName).Id;
-    }
-
-    /// <summary>
     /// The model Windows names for the monitor on a display such as <c>\\.\DISPLAY1</c>, and its device ID, such as
     /// <c>\\?\DISPLAY#AUS32A8#5&amp;15335277&amp;0&amp;UID184582#{...}</c>. Both "" when Windows has none.
     /// </summary>
