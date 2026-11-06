@@ -27,7 +27,7 @@ internal static class ReloadCommand
             if (reason is not null)
             {
                 Console.Error.WriteLine(reason);
-                await ShowBuildErrorAsync(info, reason, project.ProjectFile);
+                await BuildNotice.Show(info, reason, project.ProjectFile);
                 return 1;
             }
         }
@@ -73,25 +73,5 @@ internal static class ReloadCommand
         return answer.Response is { Ok: false } refused
             ? $"Instance {info.Id} did not reload: {refused.Error}"
             : answer.Failure;
-    }
-
-    /// <summary>Asks the instance to show the build error. The instance keeps running either way.</summary>
-    private static async Task ShowBuildErrorAsync(InstanceInfo info, string error, string projectFile)
-    {
-        try
-        {
-            await foreach (var response in IpcClient.Request(info.Pipe, IpcRequest.ForBuild(error, projectFile)))
-            {
-                if (!response.Ok)
-                    Console.Error.WriteLine($"Instance {info.Id} could not show the notice: {response.Error}");
-                return;
-            }
-
-            Console.Error.WriteLine($"Instance {info.Id} could not show the notice.");
-        }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            Console.Error.WriteLine($"Instance {info.Id} could not show the notice: {e.Message}");
-        }
     }
 }

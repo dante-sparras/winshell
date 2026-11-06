@@ -4,26 +4,18 @@ namespace Winshell;
 internal static class InstanceCall
 {
     /// <summary>
-    /// The instance's first answer, or why there is none: it closed the pipe without one, or could not be reached.
+    /// The instance's first answer, or why there is none. The client names a rejection, a timeout and a pipe that
+    /// could not be reached. A pipe that closes with no line is named here.
     /// </summary>
     internal static async Task<Answer> AskAsync(InstanceInfo info, IpcRequest request,
         CancellationToken cancel = default)
     {
-        try
-        {
-            await foreach (var response in IpcClient.Request(info.Pipe, request, cancel))
-                return new Answer(response, null);
-            return new Answer(null, $"Instance {info.Id} closed the control pipe without answering.");
-        }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            return new Answer(null, CouldNotReach(info, e));
-        }
-    }
+        await foreach (var reply in IpcClient.Request(info.Pipe, request, cancel))
+            return reply.Failure is { } failure
+                ? new Answer(null, failure.Sentence(info.Id))
+                : new Answer(reply.Response, null);
 
-    internal static string CouldNotReach(InstanceInfo info, Exception e)
-    {
-        return $"Could not reach instance {info.Id}: {e.Message}";
+        return new Answer(null, $"Instance {info.Id} closed the control pipe without answering.");
     }
 
     /// <summary>An instance's answer, or the sentence that says why there is none.</summary>
