@@ -21,11 +21,32 @@ internal sealed record CrashReport(string Path, string Where, Exception Error, b
 }
 
 /// <summary>
-/// Writes crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent anywhere.
-/// A report says where the runtime failed, the exception with its stack, and the end of the instance's log, with
-/// the secrets <see cref="CrashRedaction"/> recognizes taken out. Several instances
+/// A report read back from its file. <see cref="Written"/> is the UTC instant in the file name.
+/// <see cref="ExceptionLine"/> is the first line of the exception, or empty when the report has none.
+/// </summary>
+internal readonly record struct CrashRecord(string Path, DateTimeOffset Written, bool Closed, string ExceptionLine);
+
+/// <summary>
+/// A file named as a report that could not be read. <see cref="Written"/> is the UTC instant in its name.
+/// </summary>
+internal readonly record struct CrashFileError(string Path, DateTimeOffset Written, string Message);
+
+/// <summary>
+/// The reports in a folder, newest first. <see cref="FolderError"/> is set when the folder cannot be listed.
+/// <see cref="FileError"/> is the newest file named as a report that could not be read. A missing folder has neither.
+/// </summary>
+internal readonly record struct CrashList(
+    IReadOnlyList<CrashRecord> Reports,
+    string? FolderError,
+    CrashFileError? FileError);
+
+/// <summary>
+/// Writes and reads crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent
+/// anywhere. A report says where the runtime failed, the exception with its stack, and the end of the instance's log,
+/// with the secrets <see cref="CrashRedaction"/> recognizes taken out. Several instances
 /// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted. A
-/// report shows up in the folder only once it is whole and closed.
+/// report shows up in the folder only once it is whole and closed. The UTC instant in the file name is when the
+/// report says it was written.
 /// </summary>
 internal sealed partial class CrashReports(string folder)
 {
@@ -374,14 +395,96 @@ internal sealed partial class CrashReports(string folder)
         }
     }
 
+    /// <summary>
+    /// The reports in <paramref name="folder"/>, newest first. A report's name carries a UTC instant and its first
+    /// line is the heading. A missing folder has none. A file whose name is not a report is left out.
+    /// </summary>
+    public static CrashList List(string folder)
+    {
+        if (!Directory.Exists(folder))
+            return new CrashList([], null, null);
+        try
+        {
+            var found = new List<(CrashRecord Record, long Ticks, long Pid, string Name)>();
+            var failed =
+                new List<(string Path, DateTimeOffset Written, long Ticks, long Pid, string Name, string Why)>();
+            foreach (var file in new DirectoryInfo(folder).EnumerateFiles("crash-*.txt"))
+            {
+                if (OrderOf(file.Name) is not { } order)
+                    continue;
+                var written = new DateTimeOffset(order.Ticks, TimeSpan.Zero);
+                var read = ReadRecord(file.FullName, written);
+                if (read.Error is { } why)
+                    failed.Add((file.FullName, written, order.Ticks, order.Pid, file.Name, why));
+                else if (read.Record is { } record)
+                    found.Add((record, order.Ticks, order.Pid, file.Name));
+            }
+
+            var reports = found
+                .OrderByDescending(r => r.Ticks)
+                .ThenByDescending(r => r.Pid)
+                .ThenByDescending(r => r.Name, StringComparer.Ordinal)
+                .Select(r => r.Record)
+                .ToList();
+            CrashFileError? fileError = null;
+            if (failed.Count > 0)
+            {
+                var newest = failed
+                    .OrderByDescending(r => r.Ticks)
+                    .ThenByDescending(r => r.Pid)
+                    .ThenByDescending(r => r.Name, StringComparer.Ordinal)
+                    .First();
+                fileError = new CrashFileError(newest.Path, newest.Written, newest.Why);
+            }
+
+            return new CrashList(reports, null, fileError);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new CrashList([], $"{folder}: {e.Message}", null);
+        }
+    }
+
+    private readonly record struct RecordRead(CrashRecord? Record, string? Error);
+
+    /// <summary>The report in <paramref name="path"/>, or why it cannot be read. A file that is not a report has neither.</summary>
+    private static RecordRead ReadRecord(string path, DateTimeOffset written)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            if (!IsHeading(reader.ReadLine()))
+                return default;
+            var closed = false;
+            string? exception = null;
+            var afterException = false;
+            for (var i = 0; i < 40 && reader.ReadLine() is { } line; i++)
+            {
+                if (line == "Winshell closed: yes")
+                    closed = true;
+                if (afterException && exception is null && line.Length > 0)
+                    exception = line;
+                afterException = line == "Exception";
+            }
+
+            return new RecordRead(new CrashRecord(path, written, closed, exception ?? ""), null);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new RecordRead(null, e.Message);
+        }
+    }
+
     /// <summary>Whether a line is the heading a report starts with. The whole line must match.</summary>
-    internal static bool IsHeading([NotNullWhen(true)] string? line)
+    private static bool IsHeading([NotNullWhen(true)] string? line)
     {
         return line == Heading;
     }
 
     /// <summary>Whether the file's first line is the report heading. A file that cannot be read is not one.</summary>
-    internal static bool StartsWithHeading(string path)
+    private static bool StartsWithHeading(string path)
     {
         try
         {

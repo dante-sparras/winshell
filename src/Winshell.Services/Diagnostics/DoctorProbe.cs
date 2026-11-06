@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Security;
-using System.Text;
 using Microsoft.Win32;
 using Winshell.Native;
 using Winshell.Session;
@@ -189,50 +188,5 @@ internal static class DoctorProbe
     public static string ResolveLinks(string path)
     {
         return SignInEntry.Resolve(path);
-    }
-
-    /// <summary>Lists crash reports. A missing folder has none. A folder that cannot be listed says why.</summary>
-    public static DoctorCrashes.CrashFolderRead ReadCrashReports(string folder)
-    {
-        if (!Directory.Exists(folder))
-            return new DoctorCrashes.CrashFolderRead([], null);
-        try
-        {
-            var reports = new DirectoryInfo(folder).EnumerateFiles("crash-*.txt")
-                .Select(f => (f.FullName, f.LastWriteTimeUtc)).ToList();
-            return new DoctorCrashes.CrashFolderRead(reports, null);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new DoctorCrashes.CrashFolderRead([], $"{folder}: {e.Message}");
-        }
-    }
-
-    /// <summary>The first lines of a crash report. A file that does not start with the report heading is ignored.</summary>
-    public static DoctorCrashes.CrashPeek PeekCrash(string path)
-    {
-        try
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream);
-            var first = reader.ReadLine();
-            if (!CrashReports.IsHeading(first))
-                return default;
-            var text = new StringBuilder(first.Length + 256);
-            text.Append(first);
-            text.Append('\n');
-            for (var i = 0; i < 40 && reader.ReadLine() is { } line; i++)
-            {
-                text.Append(line);
-                text.Append('\n');
-            }
-
-            return new DoctorCrashes.CrashPeek(text.ToString(), null);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new DoctorCrashes.CrashPeek(null, $"{path}: {e.Message}");
-        }
     }
 }

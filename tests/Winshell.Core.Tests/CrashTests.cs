@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Winshell.Core.Tests;
 
 /// <summary>Crash reports. Every report goes to a temp folder this class creates.</summary>
@@ -84,6 +86,50 @@ public sealed class CrashTests : IDisposable
         var kept = Directory.GetFiles(_folder).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(paths.TakeLast(3).Order(StringComparer.Ordinal), kept);
+    }
+
+    [Fact]
+    public void A_report_is_read_back_by_the_time_in_its_name()
+    {
+        Directory.CreateDirectory(_folder);
+        var older = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var newer = older.AddMinutes(5);
+        var olderPath = Path.Combine(_folder, Name(older, "old"));
+        var newerPath = Path.Combine(_folder, Name(newer, "new"));
+        File.WriteAllText(olderPath, """
+                                     Winshell crash report
+                                     Winshell closed: yes
+                                     Exception
+                                     System.Exception: old
+                                     """);
+        File.WriteAllText(newerPath, """
+                                     Winshell crash report
+                                     Winshell closed: no
+                                     Exception
+                                     System.Exception: new
+                                     """);
+        File.WriteAllText(Path.Combine(_folder, "crash-stray.txt"), """
+                                                                    Winshell crash report
+                                                                    Winshell closed: yes
+                                                                    """);
+        File.SetLastWriteTimeUtc(olderPath, newer.AddHours(1));
+        File.SetLastWriteTimeUtc(newerPath, older);
+
+        var list = CrashReports.List(_folder);
+
+        Assert.Null(list.FolderError);
+        Assert.Equal(newerPath, list.Reports[0].Path);
+        Assert.False(list.Reports[0].Closed);
+        Assert.Equal("System.Exception: new", list.Reports[0].ExceptionLine);
+        Assert.Equal(olderPath, list.Reports[1].Path);
+        Assert.True(list.Reports[1].Closed);
+        Assert.Equal("System.Exception: old", list.Reports[1].ExceptionLine);
+        Assert.Equal(new DateTimeOffset(older, TimeSpan.Zero), list.Reports[1].Written);
+    }
+
+    private static string Name(DateTime utc, string slug)
+    {
+        return $"crash-{utc.ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-1-{slug}.txt";
     }
 
     [Fact]

@@ -399,17 +399,18 @@ public sealed class DoctorTests : IDisposable
 
         var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
 
-        CrashPeek Report(string _)
+        static CrashRecord Report(string path, DateTime written)
         {
-            return new CrashPeek("Winshell crash report\n", null);
+            return new CrashRecord(path, new DateTimeOffset(written.Ticks, TimeSpan.Zero), false, "");
         }
 
-        Assert.Equal(CheckStatus.Pass, Crashes([(@"C:\r\old.txt", now.AddDays(-8))], now, Report).Status);
+        Assert.Equal(CheckStatus.Pass, Crashes([Report(@"C:\r\old.txt", now.AddDays(-8))], now, null).Status);
         var recent =
             Crashes(
             [
-                (@"C:\r\old.txt", now.AddDays(-8)), (@"C:\r\a.txt", now.AddDays(-2)), (@"C:\r\b.txt", now.AddHours(-1))
-            ], now, Report);
+                Report(@"C:\r\b.txt", now.AddHours(-1)), Report(@"C:\r\a.txt", now.AddDays(-2)),
+                Report(@"C:\r\old.txt", now.AddDays(-8))
+            ], now, null);
         Assert.Equal(CheckStatus.Warn, recent.Status);
         Assert.Equal(@"2 crash reports in the last 7 days. The newest is C:\r\b.txt.", recent.Message);
     }
