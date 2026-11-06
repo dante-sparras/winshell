@@ -14,7 +14,6 @@ internal static unsafe class PowerMode
     private const uint ProcedureNotFound = 127;
 
     private static Action<int>? _effectiveChanged;
-    private static Action<Exception>? _failed;
 
     /// <summary>The mode set for battery or mains power. Returns a Windows error, or 0.</summary>
     internal static uint GetUserConfigured(bool battery, out Guid mode)
@@ -54,8 +53,7 @@ internal static unsafe class PowerMode
     /// </summary>
     internal static void ListenEffective(Action<int> changed, Action<Exception> failed)
     {
-        _failed = failed;
-        _effectiveChanged = changed;
+        _effectiveChanged = mode => Callback.Run(failed, () => changed(mode));
         try
         {
             _ = PInvoke.PowerRegisterForEffectivePowerModeNotifications(PInvoke.EFFECTIVE_POWER_MODE_V2,
@@ -69,7 +67,6 @@ internal static unsafe class PowerMode
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static void OnEffectiveChanged(EFFECTIVE_POWER_MODE mode, void* context)
     {
-        if (_effectiveChanged is { } changed && _failed is { } failed)
-            Callback.Run(failed, () => changed((int)mode));
+        _effectiveChanged?.Invoke((int)mode);
     }
 }

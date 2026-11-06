@@ -26,7 +26,6 @@ internal static unsafe class Wlan
     private static HANDLE _handle;
     private static bool _opened;
     private static Action? _changed;
-    private static Action<Exception>? _failed;
 
     /// <summary>The wlanapi client handle, opened once for the process. Null when there is no WLAN service.</summary>
     private static HANDLE Handle
@@ -58,8 +57,7 @@ internal static unsafe class Wlan
     /// </summary>
     internal static void Listen(Action changed, Action<Exception> failed)
     {
-        _failed = failed;
-        _changed = changed;
+        _changed = () => Callback.Run(failed, changed);
         var handle = Handle;
         if (handle.IsNull)
             return;
@@ -71,8 +69,7 @@ internal static unsafe class Wlan
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static void OnNotification(L2_NOTIFICATION_DATA* data, void* context)
     {
-        if (_changed is { } changed && _failed is { } failed)
-            Callback.Run(failed, changed);
+        _changed?.Invoke();
     }
 
     /// <summary>The state of each WLAN interface by its GUID.</summary>
