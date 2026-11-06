@@ -37,12 +37,14 @@ public sealed class FocusTakeoverTests
         var steadyName = @"Local\WinshellFocusSteady" + suffix;
         var tappedName = @"Local\WinshellFocusTapped" + suffix;
         var blockedName = @"Local\WinshellFocusBlocked" + suffix;
+        var imposedName = @"Local\WinshellFocusImposed" + suffix;
         var errors = new StringBuilder();
         using var stop = new EventWaitHandle(false, EventResetMode.ManualReset, stopName);
         using var steady = new EventWaitHandle(false, EventResetMode.ManualReset, steadyName);
         using var tapped = new EventWaitHandle(false, EventResetMode.ManualReset, tappedName);
         using var blocked = new EventWaitHandle(false, EventResetMode.ManualReset, blockedName);
-        using var holder = StartHolder(stopName, steadyName, tappedName, blockedName, errors);
+        using var imposed = new EventWaitHandle(false, EventResetMode.ManualReset, imposedName);
+        using var holder = StartHolder(stopName, steadyName, tappedName, blockedName, imposedName, errors);
         PumpedWindow? window = null;
         var passed = false;
         try
@@ -83,28 +85,38 @@ public sealed class FocusTakeoverTests
         }
         finally
         {
-            await ReleaseHolder(stop, holder, previous, window, passed, errors);
+            await ReleaseHolder(stop, holder, imposed, previous, window, passed, errors);
         }
     }
 
     /// <summary>
     /// Stops the holder and puts the previous window back. This still runs when opening the test window throws,
     /// and when the test deadline has already cancelled the wait: that wait would return at once and leave the
-    /// holder's session lock held.
+    /// holder's session lock held. Killing the holder releases that lock and skips the timeout restore, so a
+    /// timeout this test imposed is put back here.
     /// </summary>
-    private static async Task ReleaseHolder(EventWaitHandle stop, Process holder, nint previous, PumpedWindow? window,
-        bool passed, StringBuilder errors)
+    private static async Task ReleaseHolder(EventWaitHandle stop, Process holder, EventWaitHandle imposed,
+        nint previous, PumpedWindow? window, bool passed, StringBuilder errors)
     {
         stop.Set();
+        var killed = false;
+        var restoreFailed = false;
         try
         {
             // Leaving the loop unlocks the session and restores the timeout. Kill is only for a holder that
             // never notices stop; process exit still releases the foreground lock.
             if (!holder.HasExited && !holder.WaitForExit(5000))
+            {
+                killed = true;
                 holder.Kill(true);
+                holder.WaitForExit(2000);
+            }
         }
         finally
         {
+            // The timeout is session state. It survives the kill that releases the foreground lock.
+            if (imposed.WaitOne(0) && (killed || !holder.HasExited || holder.ExitCode != 0))
+                restoreFailed = !RestoreZeroTimeout(errors);
             try
             {
                 if (previous != 0 && (window == null || previous != window.Handle) && Win32.IsWindow(previous))
@@ -117,8 +129,42 @@ public sealed class FocusTakeoverTests
             }
         }
 
+        if (restoreFailed)
+            Assert.Fail("The foreground lock timeout was left at 10 seconds. " + errors);
         if (passed && holder.HasExited && holder.ExitCode != 0)
             Assert.Fail("The focus holder did not restore the foreground lock (" + holder.ExitCode + "). " + errors);
+    }
+
+    /// <summary>Puts a timeout of zero back after the holder was killed or its own restore failed.</summary>
+    private static bool RestoreZeroTimeout(StringBuilder errors)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(RestoreTimeoutProgram));
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = powershell,
+                Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + encoded,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
+        process.OutputDataReceived += (_, e) => Append(errors, e.Data);
+        process.ErrorDataReceived += (_, e) => Append(errors, e.Data);
+        if (!process.Start())
+            return false;
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        if (!process.WaitForExit(15000))
+        {
+            process.Kill(true);
+            return false;
+        }
+
+        return process.ExitCode == 0;
     }
 
     /// <summary>
@@ -197,11 +243,11 @@ public sealed class FocusTakeoverTests
     }
 
     private static Process StartHolder(string stopName, string steadyName, string tappedName, string blockedName,
-        StringBuilder errors)
+        string imposedName, StringBuilder errors)
     {
         var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(
-            HolderScript(stopName, steadyName, tappedName, blockedName)));
+            HolderScript(stopName, steadyName, tappedName, blockedName, imposedName)));
         var holder = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -232,12 +278,29 @@ public sealed class FocusTakeoverTests
         }
     }
 
-    private static string HolderScript(string stopName, string steadyName, string tappedName, string blockedName)
+    private static string HolderScript(string stopName, string steadyName, string tappedName, string blockedName,
+        string imposedName)
     {
         return HolderProgram + "\n[Holder]::Run('" + stopName + "', '" + steadyName + "', '" + tappedName + "', '" +
-               blockedName + "')\n" +
+               blockedName + "', '" + imposedName + "')\n" +
                "} catch {\n[Console]::Error.WriteLine($_.Exception.ToString())\nexit 1\n}\n";
     }
+
+    // Encoded so the timeout can be put back from this process when the holder is killed. Killing skips the
+    // holder's finally, and the timeout is session state.
+    private const string RestoreTimeoutProgram = """
+                                                 $ErrorActionPreference = 'Stop'
+                                                 $ProgressPreference = 'SilentlyContinue'
+                                                 Add-Type -TypeDefinition '
+                                                 using System;
+                                                 using System.Runtime.InteropServices;
+                                                 public static class ForegroundLockTimeout {
+                                                     [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+                                                     public static extern bool Set(uint action, uint param, System.IntPtr value, uint flags);
+                                                 }
+                                                 '
+                                                 if (-not [ForegroundLockTimeout]::Set(0x2001, 0, [IntPtr]::Zero, 0)) { exit 1 }
+                                                 """;
 
     // Windows PowerShell 5 compiles this with the C# 5 compiler. A second process has to be the one that last sent
     // input, or this process would be allowed to take focus without the key tap. The single-quoted program keeps the
@@ -253,16 +316,17 @@ public sealed class FocusTakeoverTests
                                          using System.Threading;
                                          public static class Holder
                                          {
-                                             public static void Run(string stopName, string steadyName, string tappedName, string blockedName)
+                                             public static void Run(string stopName, string steadyName, string tappedName, string blockedName, string imposedName)
                                              {
                                                  var stop = EventWaitHandle.OpenExisting(stopName);
                                                  var steady = EventWaitHandle.OpenExisting(steadyName);
                                                  var tapped = EventWaitHandle.OpenExisting(tappedName);
                                                  var blocked = EventWaitHandle.OpenExisting(blockedName);
+                                                 var imposed = EventWaitHandle.OpenExisting(imposedName);
                                                  Exception error = null;
                                                  var thread = new Thread(delegate()
                                                  {
-                                                     try { Window(stop, steady, tapped, blocked); }
+                                                     try { Window(stop, steady, tapped, blocked, imposed); }
                                                      catch (Exception ex) { error = ex; }
                                                  });
                                                  thread.SetApartmentState(ApartmentState.STA);
@@ -273,14 +337,16 @@ public sealed class FocusTakeoverTests
                                                      throw error;
                                              }
 
-                                             static void Window(EventWaitHandle stop, EventWaitHandle steady, EventWaitHandle tapped, EventWaitHandle blocked)
+                                             static void Window(EventWaitHandle stop, EventWaitHandle steady, EventWaitHandle tapped, EventWaitHandle blocked, EventWaitHandle imposed)
                                              {
                                                  // A timeout of zero lets every process take the foreground, so the refusal this test
-                                                 // exists for never happens. Ten seconds covers this run. Restore zero on every exit,
-                                                 // including a failure to create the window. A timeout that is still zero must not
-                                                 // reach the foreground lock: that lock alone would look like the refusal.
+                                                 // exists for never happens. Ten seconds covers this run. This finally puts zero back,
+                                                 // including when the window cannot be created. A kill skips this finally; the test
+                                                 // sees the imposed event and puts zero back, because the timeout is session state.
+                                                 // A timeout that is still zero must not reach the foreground lock: that lock alone
+                                                 // would look like the refusal.
                                                  uint previous = 0;
-                                                 bool imposed = false;
+                                                 bool imposedFlag = false;
                                                  bool canLock = false;
                                                  IntPtr hwnd = IntPtr.Zero;
                                                  try
@@ -293,15 +359,16 @@ public sealed class FocusTakeoverTests
                                                      }
                                                      if (previous == 0)
                                                      {
-                                                         imposed = WriteLock(10000);
-                                                         if (!imposed)
+                                                         imposedFlag = WriteLock(10000);
+                                                         if (!imposedFlag)
                                                          {
                                                              var error = Marshal.GetLastWin32Error();
                                                              Console.WriteLine("could not set the foreground lock timeout: " + error);
                                                              throw new Win32Exception(error);
                                                          }
+                                                         imposed.Set();
                                                      }
-                                                     canLock = previous != 0 || imposed;
+                                                     canLock = previous != 0 || imposedFlag;
                                                      Console.WriteLine("foreground-lock-timeout=" + previous);
                                                      hwnd = CreateWindowExW(0, "STATIC", "winshell-focus-holder", 0x00CF0000 | 0x10000000,
                                                          0, 0, 80, 40, IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(null), IntPtr.Zero);
@@ -342,7 +409,7 @@ public sealed class FocusTakeoverTests
                                                      LockSetForegroundWindow(2);
                                                      if (hwnd != IntPtr.Zero)
                                                          DestroyWindow(hwnd);
-                                                     if (imposed && !WriteLock(0))
+                                                     if (imposedFlag && !WriteLock(0))
                                                          throw new Win32Exception(Marshal.GetLastWin32Error());
                                                  }
                                              }
